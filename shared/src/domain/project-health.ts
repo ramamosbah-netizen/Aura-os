@@ -66,6 +66,16 @@
  * UNKNOWN it would sit at PARTIAL coverage forever, and PARTIAL would come to mean "normal" —
  * which would make it useless on the day a provider genuinely fails. So NOT_APPLICABLE touches
  * neither axis: it is recorded, and it is not counted.
+ *
+ * WHY THIS LIVES IN `shared` AND NOT IN `projects`
+ *
+ * Every domain has to be able to phrase its own verdict, and under ADR-0004 no module may import
+ * another — Quality importing `@aura/projects` to say "CRITICAL" is exactly the edge the
+ * architecture fitness test refuses. So the vocabulary sits where `assessment-state` and
+ * `project-assessment` already sit: shared, framework-free, owned by nobody.
+ *
+ * That placement is also the honest description of what this is. It is a language for domains to
+ * report health in, not a thing Projects owns and lends out.
  */
 
 /** The domains a project's health is answerable to. Each owns the meaning of its own signal. */
@@ -97,6 +107,24 @@ export type HealthSignalState = HealthSeverity | 'UNKNOWN' | 'NOT_APPLICABLE';
 export type HealthCoverage = 'COMPLETE' | 'PARTIAL';
 
 /**
+ * WHY a signal came back UNKNOWN. One state, three quite different situations.
+ *
+ * All three degrade coverage identically — that is the point of the axis — but they call for
+ * entirely different responses, and collapsing them would hide which. "Engineering has not decided
+ * what blocks delivery" is a conversation with Engineering; "the Quality provider threw" is an
+ * incident; "nobody wired the provider" is a defect in the composition root. A single "no data"
+ * would have all three read as the same shrug.
+ */
+export type HealthUnknownCause =
+  /** The owning domain has not declared what its facts MEAN for project health. No provider is
+   *  expected yet, so its absence is a known state rather than a fault. */
+  | 'SEMANTICS_UNDECLARED'
+  /** A provider exists, was asked, and could not answer. */
+  | 'PROVIDER_UNAVAILABLE'
+  /** A provider is expected and was never bound — a composition-root defect, not a domain gap. */
+  | 'PROVIDER_UNBOUND';
+
+/**
  * The severity ordering. UNKNOWN and NOT_APPLICABLE are absent by construction — they are not
  * points on this scale, so they cannot accidentally be compared against one.
  */
@@ -123,6 +151,12 @@ export interface HealthSignal {
   state: HealthSignalState;
   /** The owning domain's own words for what is wrong. Absent when the state is CLEAR. */
   reason?: string;
+  /**
+   * Present only when `state` is UNKNOWN. Additive to the frozen aggregation — it changes no
+   * verdict, it records why a verdict was impossible, so "the domain has not decided yet" is never
+   * mistaken for "the provider is down".
+   */
+  cause?: HealthUnknownCause;
   /** Where the work that clears it lives. Never a Project 360 route: the owner is elsewhere. */
   href?: string;
   /** A count or value, where the domain has one worth showing. */

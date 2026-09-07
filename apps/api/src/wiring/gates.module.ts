@@ -3,7 +3,7 @@ import { QualityModule, QualityService } from '@aura/quality';
 import { CommissioningModule, CommissioningService } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { QUALITY_GATE } from '@aura/procurement';
-import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE } from '@aura/projects';
+import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH } from '@aura/projects';
 
 /**
  * App-layer wiring for cross-module gates (ADR-0004: modules don't import each other; the
@@ -44,7 +44,19 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // COMMISSIONING_READINESS above, asked by a different gate — bound separately so either can
     // change without dragging the other with it.
     { provide: COMMISSIONING_LIFECYCLE, useExisting: CommissioningService },
+
+    // ── Cross-domain health (§24) ────────────────────────────────────────────────────────────
+    // Distinct from the readiness ports above even though the same two services answer them.
+    // Readiness hands Projects COUNTS for §27 to gate on; health hands it a JUDGEMENT, because
+    // §24 is barred from deciding what another domain means by serious. Same fact, two questions,
+    // and each domain answers the one it owns.
+    //
+    // HSE, Engineering and Procurement are absent on purpose — they have not declared health
+    // semantics, so no provider is expected and the registry reports them UNKNOWN rather than
+    // letting a project read as clear on evidence nobody supplied.
+    { provide: QUALITY_HEALTH, useExisting: QualityService },
+    { provide: COMMISSIONING_HEALTH, useExisting: CommissioningService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH],
 })
 export class GatesModule {}

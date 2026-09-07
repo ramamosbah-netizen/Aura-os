@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
+import { type HealthSignal, type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr } from './domain/ncr';
@@ -433,6 +433,59 @@ export class QualityService {
       criticalOpenNcrs: projectNcrs.filter((n) => n.severity === 'major').length,
       openSnags: projectSnags.length,
     };
+  }
+
+  /**
+   * Quality's own verdict on a project's health — §24.
+   *
+   * Distinct from the readiness reading above, and deliberately so. That one hands Projects COUNTS
+   * and lets §27 decide what they mean for a closeout. This one hands Projects a JUDGEMENT, because
+   * §24 is explicitly barred from deciding what Quality means by serious.
+   *
+   * The mapping is an extension of a threshold this domain has already declared rather than a new
+   * one: §27 blocks a closeout on an open `major` NCR, so an open `major` is what Quality calls
+   * critical, and the same fact reads the same way in both places. Quality changes this line when
+   * Quality changes its mind; Projects never does.
+   *
+   * Note the vocabulary: `major` is this domain's highest NCR severity. The readiness field above
+   * is named `criticalOpenNcrs`, which renames a Quality term on its way out — worth correcting at
+   * that boundary one day, but not by propagating it into new code here.
+   */
+  async readProjectQualityHealth(tenantId: Id, projectId: Id): Promise<HealthSignal> {
+    const base = `/project/${encodeURIComponent(projectId)}/workspace/quality`;
+    const { openNcrs, criticalOpenNcrs: openMajorNcrs, openSnags } = await this.readProjectQualityReadiness(tenantId, projectId);
+
+    if (openMajorNcrs > 0) {
+      return {
+        id: 'quality-ncr',
+        domain: 'quality',
+        state: 'CRITICAL',
+        reason: `${openMajorNcrs} major non-conformance${openMajorNcrs === 1 ? '' : 's'} still open.`,
+        href: base,
+        measure: { value: openMajorNcrs },
+      };
+    }
+    if (openNcrs > 0) {
+      return {
+        id: 'quality-ncr',
+        domain: 'quality',
+        state: 'AT_RISK',
+        reason: `${openNcrs} non-conformance${openNcrs === 1 ? '' : 's'} still open.`,
+        href: base,
+        measure: { value: openNcrs },
+      };
+    }
+    if (openSnags > 0) {
+      return {
+        id: 'quality-ncr',
+        domain: 'quality',
+        state: 'WATCH',
+        reason: `${openSnags} snag${openSnags === 1 ? '' : 's'} outstanding.`,
+        href: base,
+        measure: { value: openSnags },
+      };
+    }
+    return { id: 'quality-ncr', domain: 'quality', state: 'CLEAR' };
   }
 
   listSnags(tenantId: Id): Promise<Snag[]> {

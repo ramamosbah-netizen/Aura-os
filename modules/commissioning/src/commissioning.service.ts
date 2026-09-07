@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type HealthSignal, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { COMMISSIONING_STORE, type CommissioningStore } from './store.interface';
 import {
@@ -60,6 +60,56 @@ export class CommissioningService {
    * Zero systems is reported as zero, not smoothed to a pass. Projects turns that into UNKNOWN,
    * because a project that never tested anything has demonstrated nothing.
    */
+  /**
+   * Commissioning's own verdict on a project's health — §24.
+   *
+   * The counterpart to the readiness reading below, and the split is deliberate: that one hands
+   * Projects counts for §27 to gate on, this one hands Projects a judgement, because §24 must not
+   * decide what this domain means by serious.
+   *
+   * ONE DIFFERENCE FROM READINESS IS INTENTIONAL AND WORTH STATING. With no commissioning records
+   * at all, readiness answers UNKNOWN and refuses the close — a project that never tested anything
+   * has not demonstrated readiness. Health answers NOT_APPLICABLE for the same fact, because a
+   * supply-only project has nothing to commission and reporting it as UNKNOWN would leave it at
+   * partial coverage forever, until partial meant nothing at all.
+   *
+   * That is not an inconsistency: a gate must be satisfied, a lens must be honest about what there
+   * was to look at.
+   */
+  async readProjectCommissioningHealth(tenantId: string, projectId: string): Promise<HealthSignal> {
+    const href = `/project/${encodeURIComponent(projectId)}/workspace/testing`;
+    const records = await this.list(tenantId, projectId);
+    if (records.length === 0) {
+      return { id: 'commissioning-readiness', domain: 'commissioning', state: 'NOT_APPLICABLE', reason: 'No systems are registered for commissioning on this project.' };
+    }
+
+    const punchLists = await Promise.all(records.map((r) => this.store.listPunchItems(r.id, tenantId)));
+    const openPunch = punchLists.flat().filter((p) => p.status === 'open');
+    const failed = records.filter((r) => r.status === 'failed').length;
+    const criticalPunch = openPunch.filter((p) => p.severity === 'critical').length;
+    const majorPunch = openPunch.filter((p) => p.severity === 'major').length;
+
+    // A failed test and a critical punch item are this domain's two hard stops.
+    if (failed > 0 || criticalPunch > 0) {
+      const parts = [
+        ...(failed > 0 ? [`${failed} system${failed === 1 ? '' : 's'} failed testing`] : []),
+        ...(criticalPunch > 0 ? [`${criticalPunch} critical punch item${criticalPunch === 1 ? '' : 's'} open`] : []),
+      ];
+      return { id: 'commissioning-readiness', domain: 'commissioning', state: 'CRITICAL', reason: `${parts.join(', ')}.`, href, measure: { value: failed + criticalPunch } };
+    }
+    if (majorPunch > 0) {
+      return { id: 'commissioning-readiness', domain: 'commissioning', state: 'AT_RISK', reason: `${majorPunch} major punch item${majorPunch === 1 ? '' : 's'} open.`, href, measure: { value: majorPunch } };
+    }
+    if (openPunch.length > 0) {
+      return { id: 'commissioning-readiness', domain: 'commissioning', state: 'WATCH', reason: `${openPunch.length} punch item${openPunch.length === 1 ? '' : 's'} open.`, href, measure: { value: openPunch.length } };
+    }
+
+    const outstanding = records.length - records.filter((r) => r.status === 'commissioned').length;
+    return outstanding > 0
+      ? { id: 'commissioning-readiness', domain: 'commissioning', state: 'WATCH', reason: `${outstanding} of ${records.length} system${records.length === 1 ? '' : 's'} not yet commissioned.`, href, measure: { value: outstanding } }
+      : { id: 'commissioning-readiness', domain: 'commissioning', state: 'CLEAR' };
+  }
+
   async readProjectCommissioningReadiness(
     tenantId: string,
     projectId: string,

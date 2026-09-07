@@ -55,6 +55,7 @@ export * from './domain/deal-findings';
 export * from './domain/deal-rules';
 export * from './domain/deal-assessment';
 export * from './domain/project-assessment';
+export * from './domain/project-health';
 export * from './domain/forecast-snapshot';
 export * from './domain/account-growth';
 export * from './domain/crm';

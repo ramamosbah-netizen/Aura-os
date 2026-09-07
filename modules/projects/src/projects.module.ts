@@ -38,6 +38,7 @@ import { CLOSEOUT_STORE } from './closeout-store';
 import { CloseoutReadinessService } from './closeout-readiness.service';
 import { CLOSEOUT_READINESS_GATE } from './closeout.service';
 import { CLOSEOUT_LIFECYCLE } from './project.service';
+import { ProjectHealthService } from './project-health.service';
 import { InMemoryCloseoutStore } from './in-memory-closeout-store';
 import { PostgresCloseoutStore } from './postgres-closeout-store';
 import { CloseoutService } from './closeout.service';
@@ -141,6 +142,7 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     VariationService,
     CloseoutService,
     CloseoutReadinessService,
+    ProjectHealthService,
     // Bound HERE rather than at the composition root, because the port and its implementation are
     // both inside this module — the gate is Projects governing itself. The cross-module readings it
     // assembles still arrive through ports bound in GatesModule, so the ADR-0004 boundary holds.
@@ -154,6 +156,6 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     ScheduleService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

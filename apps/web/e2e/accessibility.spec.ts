@@ -31,6 +31,14 @@ test.describe('WCAG 2.1 AA — login', () => {
     await expect(username).toBeFocused();
     await page.keyboard.press('Tab');
     await expect(password).toBeFocused();
+
+    // The reveal toggle sits between the field and the submit, and belongs in the tab order rather
+    // than being skipped with tabIndex={-1}. A sighted keyboard user needs to check what they typed
+    // at least as much as anyone — that is the whole reason the control exists — and a control that
+    // only a mouse can reach is an accessibility defect dressed as a passing test.
+    await page.keyboard.press('Tab');
+    await expect(page.getByTestId('login-reveal')).toBeFocused();
+
     await page.keyboard.press('Tab');
     await expect(submit).toBeFocused();
   });

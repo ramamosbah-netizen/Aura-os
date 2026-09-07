@@ -45,6 +45,44 @@ test.describe('optimistic auth gate on', () => {
     });
   });
 
+  /**
+   * Signing in THROUGH THE FORM, with the gate on. This crossing was untested.
+   *
+   * `web-auth-gate` asserted an authenticated session reaches a page, but it reuses the cookie
+   * global-setup obtained elsewhere — its own comment says so. `spine-journey` does drive the real
+   * form, but on the gate-OFF server. So the one configuration a developer actually runs, the one
+   * `pnpm auth:configure-local` writes into apps/web/.env.local, had no coverage at the seam where
+   * it is most likely to break: the form succeeds, the cookie is set on the response, and then
+   * `land()` calls router.push — a client navigation the optimistic gate evaluates. If the gate
+   * cannot see the cookie that navigation just earned, the user is returned to /login having done
+   * everything right, and reports that they cannot sign in.
+   */
+  test.describe('signing in with the gate on', () => {
+    test.use({ storageState: { cookies: [], origins: [] } });
+
+    test('the real form lands the user past the gate, not back at it', async ({ page }) => {
+      await page.goto('/login?next=%2Fcrm%2Faccounts', { waitUntil: 'domcontentloaded' });
+
+      const username = page.getByTestId('login-username');
+      await expect(username, 'the form must be usable before it is driven').toBeEnabled();
+      await username.fill(process.env.E2E_USERNAME ?? 'u-admin');
+      await page.getByTestId('login-password').fill(process.env.E2E_PASSWORD ?? 'e2e-password');
+      await page.getByRole('button', { name: /^Sign in/ }).click();
+
+      // Landed where it was asked to land, and stayed there — a bounce back to /login is the
+      // failure this test exists for, and it looks identical to a rejected password from the
+      // outside.
+      await expect(page).toHaveURL(/\/crm\/accounts/, { timeout: 20_000 });
+      await expect(page).not.toHaveURL(/\/login/);
+      await expect(page.getByTestId('login-error')).toHaveCount(0);
+
+      // And the session survives a reload, so what landed is a real cookie and not just a
+      // client-side route change the next request would undo.
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page).not.toHaveURL(/\/login/);
+    });
+  });
+
   test('lets an authenticated session through to the page', async ({ page }) => {
     // Uses the shared storage state from global-setup. Cookies ignore the port, so the session
     // established against the gate-off server is the same session here.

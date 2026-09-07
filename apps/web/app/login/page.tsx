@@ -18,6 +18,19 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Reveal the password.
+   *
+   * A masked field cannot be checked, and the failure it hides is indistinguishable from a wrong
+   * password: the API answers "Invalid credentials" either way. The cases this makes visible are
+   * ordinary — a keyboard left on another layout, so `e2e-password` arrives as characters from a
+   * different script; caps lock; a password manager overwriting the field after it was typed. All
+   * of them look to the person like the system rejecting something they can see they got right,
+   * and no amount of retyping the same way helps.
+   *
+   * Off by default, and never persisted: revealing is a deliberate act for one attempt.
+   */
+  const [revealed, setRevealed] = useState(false);
 
   // The form is not usable until React owns it.
   //
@@ -146,17 +159,33 @@ export default function LoginPage() {
               <label style={s.label} htmlFor="login-pass">
                 Password
               </label>
-              <input
-                id="login-pass"
-                data-testid="login-password"
-                style={s.input}
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Password"
-                disabled={!ready}
-                autoComplete="current-password"
-              />
+              <div style={s.passwordRow}>
+                <input
+                  id="login-pass"
+                  data-testid="login-password"
+                  style={{ ...s.input, paddingRight: 76 }}
+                  type={revealed ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Password"
+                  disabled={!ready}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  data-testid="login-reveal"
+                  style={s.reveal}
+                  onClick={() => setRevealed((on) => !on)}
+                  // Gated with the rest of the form: before hydration this button has no handler,
+                  // and one that looks pressable and does nothing is the failure this page already
+                  // carries `useHydrated` to avoid.
+                  disabled={!ready}
+                  aria-pressed={revealed}
+                  aria-label={revealed ? 'Hide password' : 'Show password'}
+                >
+                  {revealed ? 'Hide' : 'Show'}
+                </button>
+              </div>
             </>
           ) : challenge.kind === 'mfa' ? (
             <>
@@ -253,6 +282,18 @@ const s = {
     minHeight: 420,
   } as CSSProperties,
   brand: { fontWeight: 700, fontSize: 20, letterSpacing: 0.5, marginBottom: 28 } as CSSProperties,
+  passwordRow: { position: 'relative', display: 'flex', alignItems: 'center' } as CSSProperties,
+  reveal: {
+    position: 'absolute',
+    right: 8,
+    background: 'transparent',
+    border: 'none',
+    color: 'var(--muted)',
+    fontSize: 12.5,
+    fontWeight: 600,
+    padding: '6px 8px',
+    cursor: 'pointer',
+  } as CSSProperties,
   brandMark: { color: 'var(--accent)' } as CSSProperties,
   tagline: { fontSize: 24, lineHeight: 1.3, margin: '0 0 14px', letterSpacing: -0.3 } as CSSProperties,
   taglineSub: { color: 'var(--muted)', fontSize: 14, lineHeight: 1.6, margin: 0, maxWidth: 320 } as CSSProperties,

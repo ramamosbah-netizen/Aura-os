@@ -3,6 +3,7 @@ import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleAlert, ExternalLink, 
 import type { ComponentProps, ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { fetchJson, getJson } from '@/lib/api';
+import { filterAreaRows } from '@/lib/project-areas';
 import { ProjectEdit } from '@/components/project-create';
 import styles from './project-section-dashboard.module.css';
 import setupStyles from './project-setup.module.css';
@@ -217,8 +218,14 @@ function projectRows(data: unknown, projectId: string): Row[] {
 function statusOf(row: Row): string { return String(row.status ?? row.state ?? row.approvalStatus ?? '').toLowerCase(); }
 function timestampOf(row: Row): string { return String(row.updatedAt ?? row.createdAt ?? row.date ?? row.dueDate ?? ''); }
 
-export default async function ProjectSectionDashboardPage({ params }: { params: Promise<{ projectId: string; section: string }> }) {
-  const { projectId, section: slug } = await params;
+export default async function ProjectSectionDashboardPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ projectId: string; section: string }>;
+  searchParams: Promise<{ discipline?: string }>;
+}) {
+  const [{ projectId, section: slug }, query] = await Promise.all([params, searchParams]);
   const definition = sections[slug];
   if (!definition) notFound();
   const section: Section = { slug, sources: definition.sources ?? [], capabilities: definition.capabilities ?? [], actions: definition.actions ?? [], ...definition };
@@ -237,7 +244,20 @@ export default async function ProjectSectionDashboardPage({ params }: { params: 
     if (!endpoint) return { source, result: null };
     return { source, result: await fetchJson<unknown>(endpoint) };
   }));
-  const records = sourceResults.flatMap(({ result }) => result?.ok ? projectRows(result.data, projectId) : []);
+  // The discipline lens, honoured HERE — where the control that sets it actually lives.
+  //
+  // `setDiscipline` is rendered by the Project 360 shell, and that shell's navigation links to
+  // these workspace sections. `scoped()` was already re-attaching ?discipline= to every one of
+  // those hrefs, so the parameter arrived on this page and was then dropped: an engineer could
+  // pick "CCTV", watch the URL change, and read counts computed over every discipline. The Project
+  // Setup section even advertises the capability — "Use the project lens to focus delivery" —
+  // while nothing downstream of the control read it.
+  //
+  // Same `filterAreaRows` the /[area] register uses, so one selection cannot mean two things. It
+  // keeps rows carrying no discipline/system field at all, which is why the note below says
+  // project-wide records remain visible.
+  const allRecords = sourceResults.flatMap(({ result }) => result?.ok ? projectRows(result.data, projectId) : []);
+  const records = filterAreaRows(allRecords, query.discipline);
   const availableSources = sourceResults.filter(({ result }) => result?.ok).length;
   const unavailableSources = sourceResults.length - availableSources;
   const statusRows = records.filter((row) => statusOf(row));
@@ -260,6 +280,12 @@ export default async function ProjectSectionDashboardPage({ params }: { params: 
         </div>
         <div className={styles.heroActions}><span className={styles.sourceBadge}>{sourceState}</span>{section.actions[0] ? <Link className={styles.primaryAction} href={contextHref(section.actions[0].href, projectId)}>{section.actions[0].label}<ArrowRight size={14} aria-hidden /></Link> : null}</div>
       </header>
+
+      {query.discipline ? (
+        <p className={styles.scopeNote} data-testid="project-section-lens">
+          System lens is active. Project-wide records remain visible alongside matching system records.
+        </p>
+      ) : null}
 
       <section className={styles.metricGrid} aria-label={`${section.label} summary`}>
         <article className={styles.metric}><span>Connected evidence</span><strong className={availableSources ? styles.toneGood : styles.toneMuted}>{recordState}</strong><small>{availableSources} of {sourceResults.length || 'no'} sources responding</small></article>

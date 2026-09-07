@@ -96,13 +96,36 @@ test('the system lens survives moving between areas', async ({ page }) => {
 });
 
 /**
- * The discipline lens itself lives on `/project/<id>/<area>` — that page reads `?discipline=`,
- * filters through `filterAreaRows()` and says so. The workspace sections the shell links to do
- * NOT read it: they carry the parameter and ignore it.
+ * The lens now has EFFECT where it has a CONTROL.
  *
- * So this asserts a capability that is currently reachable only by typing the URL. Nothing in the
- * Project 360 navigation links to it. Keeping the assertion means the lens stays covered while
- * that is true, and the test starts failing honestly if the page is removed rather than wired up.
+ * It used to be honoured only on `/project/<id>/<area>`, which the Project 360 navigation does not
+ * link to — the shell links to `workspace/<section>`, and those sections carried `?discipline=`
+ * and ignored it. So the select sat in the shell, the URL changed, and every number on the page
+ * stayed computed over every discipline. This asserts the parameter reaches something that reads
+ * it, rather than merely surviving the navigation.
+ */
+test('the lens the shell offers actually narrows the section it lands on', async ({ page }) => {
+  await page.goto(`/project/${projectId}?discipline=cctv`, { waitUntil: 'domcontentloaded' });
+
+  const projectNav = page.getByRole('navigation', { name: 'Project 360 navigation' });
+  await projectNav.getByRole('link', { name: /^Quality/ }).first().click();
+
+  // Reached through the shell, carrying the selection...
+  await expect(page).toHaveURL(new RegExp(`/project/${projectId}/workspace/quality[?]discipline=cctv`));
+  // ...and the section says it is filtering, which is the part that was missing. Asserting the
+  // banner rather than a count keeps this honest on an empty fixture project: a count assertion
+  // would pass for the wrong reason when there is nothing to filter.
+  await expect(page.getByTestId('project-section-lens')).toBeVisible();
+
+  // And without a lens there is no such claim — otherwise the banner would be decoration.
+  await page.goto(`/project/${projectId}/workspace/quality`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('project-section-lens')).toHaveCount(0);
+});
+
+/**
+ * The register at `/project/<id>/<area>` reads the same parameter through the same helper. It is
+ * reached from Operations -> Overview -> Active execution rather than from the Project 360 nav,
+ * so it keeps its own coverage.
  */
 /**
  * The readiness contract, proven rather than assumed.

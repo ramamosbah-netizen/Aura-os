@@ -19,3 +19,15 @@
 .footerNote { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; color:var(--muted); font-size:10px; }.footerNote a { display:inline-flex; align-items:center; gap:5px; color:var(--accent); font-weight:800; text-decoration:none; white-space:nowrap; }
 @media (max-width:900px) { .metricGrid { grid-template-columns:repeat(2,minmax(0,1fr)); }.capabilityGrid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:640px) { .page { padding-bottom:24px; }.hero { align-items:flex-start; flex-direction:column; }.heroActions { align-items:flex-start; }.metricGrid,.capabilityGrid { grid-template-columns:1fr; }.sectionHeading,.footerNote { align-items:flex-start; flex-direction:column; }.sectionHint { text-align:left; } }
+
+/* Says the numbers below are a filtered view. Without it the lens changes every metric on the page
+   silently, which is the same defect in a quieter form: a reader cannot tell a small count from a
+   narrowed one. Matches the /[area] register's note so the two surfaces read the same. */
+.scopeNote {
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  color: var(--muted);
+  font-size: 12px;
+}

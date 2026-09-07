@@ -2,7 +2,7 @@
   "name": "aura-os",
   "version": "0.0.0",
   "private": true,
-  "description": "AURA OS — Tier-1 ERP Operating System (modular monolith). See docs/AURA-OS-V2-BLUEPRINT.md.",
+  "description": "AURA OS \u2014 Tier-1 ERP Operating System (modular monolith). See docs/AURA-OS-V2-BLUEPRINT.md.",
   "packageManager": "pnpm@11.8.0",
   "engines": {
     "node": ">=20"
@@ -24,7 +24,8 @@
     "adr:list": "node scripts/adr-list.mjs",
     "adr:graph": "node scripts/adr-graph.mjs",
     "migrations:check": "node scripts/migration-policy-check.mjs",
-    "hooks:install": "git config core.hooksPath .githooks && echo \"pre-commit hook enabled (.githooks)\""
+    "hooks:install": "git config core.hooksPath .githooks && echo \"pre-commit hook enabled (.githooks)\"",
+    "dist:check": "node scripts/stale-dist-check.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.4",

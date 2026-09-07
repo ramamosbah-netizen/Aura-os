@@ -12,7 +12,7 @@
     "db:archive": "node scripts/archive-events.mjs",
     "seed:demo": "node scripts/seed-demo.mjs",
     "perf": "node scripts/perf-baseline.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "node ../../scripts/stale-dist-check.mjs && tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:e2e": "vitest run --config vitest.config.e2e.ts"
   },

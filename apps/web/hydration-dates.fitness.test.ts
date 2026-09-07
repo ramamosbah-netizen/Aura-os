@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
+import { uiSourceFiles } from './test-support/source-files';
 
 /**
  * Hydration-safe date formatting (regression gate for PR #213).
@@ -24,7 +24,6 @@ import { join, relative, resolve } from 'node:path';
  */
 
 const WEB = resolve(__dirname);
-const ROOTS = ['app', 'components', 'lib'];
 
 /**
  * A locale-sensitive formatting call of any kind.
@@ -79,18 +78,6 @@ const DATE_ON_LINE = /new Date\(/;
  */
 const NOW_BUDGET = 0;
 
-function walk(dir: string, out: string[] = []): string[] {
-  let entries: string[];
-  try { entries = readdirSync(dir); } catch { return out; }
-  for (const e of entries) {
-    const p = join(dir, e);
-    if (e === 'node_modules' || e === '.next' || e === 'e2e') continue;
-    if (statSync(p).isDirectory()) walk(p, out);
-    else if (/\.tsx?$/.test(p) && !/\.(test|spec)\.tsx?$/.test(p)) out.push(p);
-  }
-  return out;
-}
-
 function isClientComponent(src: string): boolean {
   return /^(['"])use client\1/m.test(src.split('\n').slice(0, 3).join('\n'));
 }
@@ -99,29 +86,29 @@ function scan() {
   const unpinned: string[] = [];
   const now: string[] = [];
 
-  for (const root of ROOTS) {
-    for (const file of walk(join(WEB, root))) {
-      const src = readFileSync(file, 'utf8');
-      if (!isClientComponent(src)) continue;
+  // Both tests in this file call scan(). Reading the shared, cached scan means the tree is walked
+  // once for the file rather than once per test — and with no stat call per entry, which is what
+  // kept blowing the 5s budget under a full parallel turbo run.
+  for (const { path: file, source: src } of uiSourceFiles()) {
+    if (!isClientComponent(src)) continue;
 
-      const lines = src.split('\n');
-      lines.forEach((line, i) => {
-        if (!CALL.test(line)) return;
-        // Money formatting: a .toLocaleString() with no Date anywhere on the line.
-        if (!DATE_ON_LINE.test(line) && !/(?:\.toLocale(?:Date|Time)String|Intl\.DateTimeFormat)\(/.test(line)) return;
-        // The reason may sit on the call itself or on the line above it.
-        if (EXEMPT.test(line) || EXEMPT.test(lines[i - 1] ?? '')) return;
+    const lines = src.split('\n');
+    lines.forEach((line, i) => {
+      if (!CALL.test(line)) return;
+      // Money formatting: a .toLocaleString() with no Date anywhere on the line.
+      if (!DATE_ON_LINE.test(line) && !/(?:\.toLocale(?:Date|Time)String|Intl\.DateTimeFormat)\(/.test(line)) return;
+      // The reason may sit on the call itself or on the line above it.
+      if (EXEMPT.test(line) || EXEMPT.test(lines[i - 1] ?? '')) return;
 
-        const where = `${relative(WEB, file).replace(/\\/g, '/')}:${i + 1}`;
-        if (NOW.test(line)) { now.push(where); return; }
-        // Judge each call from where it starts, so a pinned call cannot vouch for a bare one
-        // sharing the line or sitting just above it. A line may hold more than one call.
-        const rest = lines.slice(i).join('\n');
-        const offsets: number[] = [];
-        for (const m of line.matchAll(new RegExp(CALL, 'g'))) offsets.push(m.index ?? 0);
-        if (offsets.some((offset) => !PINNED.test(rest.slice(offset, offset + CALL_SLICE)))) unpinned.push(where);
-      });
-    }
+      const where = `${relative(WEB, file).replace(/\\/g, '/')}:${i + 1}`;
+      if (NOW.test(line)) { now.push(where); return; }
+      // Judge each call from where it starts, so a pinned call cannot vouch for a bare one
+      // sharing the line or sitting just above it. A line may hold more than one call.
+      const rest = lines.slice(i).join('\n');
+      const offsets: number[] = [];
+      for (const m of line.matchAll(new RegExp(CALL, 'g'))) offsets.push(m.index ?? 0);
+      if (offsets.some((offset) => !PINNED.test(rest.slice(offset, offset + CALL_SLICE)))) unpinned.push(where);
+    });
   }
   return { unpinned, now };
 }

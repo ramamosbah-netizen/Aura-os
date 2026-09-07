@@ -1,32 +1,26 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { uiSourceFiles } from './test-support/source-files';
 import { join, relative, resolve } from 'node:path';
 
 const WEB = resolve(__dirname);
-const ROOTS = ['app', 'components', 'lib'];
 const LEGACY_ROUTE = join(WEB, 'app', 'crm', 'my-day', 'page.tsx');
 const CANONICAL_ROUTE = join(WEB, 'app', 'my-work', 'my-day', 'page.tsx');
 const LEGACY_LINK = /(?<!\/api)\/crm\/my-day/;
 
-function walk(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === '.next' || entry === 'e2e') continue;
-    const file = join(dir, entry);
-    if (statSync(file).isDirectory()) walk(file, out);
-    else if (/\.tsx?$/.test(file) && !/\.(test|spec)\.tsx?$/.test(file)) out.push(file);
-  }
-  return out;
-}
+const API_DIR = join(WEB, 'app', 'api');
 
 function legacyLinkFindings(): string[] {
   const findings: string[] = [];
-  for (const root of ROOTS) {
-    for (const file of walk(join(WEB, root))) {
-      if (file === LEGACY_ROUTE || file.startsWith(join(WEB, 'app', 'api'))) continue;
-      readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
-        if (LEGACY_LINK.test(line)) findings.push(`${relative(WEB, file).replace(/\\/g, '/')}:${index + 1}`);
-      });
-    }
+  // Reads the shared scan instead of walking the tree again: same files, same assertion, one pass.
+  // The API check is kept even though the shared scan already omits `app/api`. That omission is a
+  // COST decision and could be revisited; this line is the RULE — the API namespace keeps
+  // `/crm/my-day` legitimately — and it must not depend on the scan continuing to skip it.
+  for (const { path: file, source } of uiSourceFiles()) {
+    if (file === LEGACY_ROUTE || file.startsWith(API_DIR)) continue;
+    source.split('\n').forEach((line, index) => {
+      if (LEGACY_LINK.test(line)) findings.push(`${relative(WEB, file).replace(/\\/g, '/')}:${index + 1}`);
+    });
   }
   return findings;
 }

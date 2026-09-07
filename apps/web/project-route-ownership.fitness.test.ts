@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { uiSourceFiles } from './test-support/source-files';
 
 /**
  * ADR-0019 architecture fitness function.
@@ -10,35 +11,25 @@ import { join, relative, resolve } from 'node:path';
  * namespace did not move and remains the source of truth for Project data.
  */
 const WEB = resolve(__dirname);
-const ROOTS = ['app', 'components', 'lib'];
 const LEGACY_ROUTE = join(WEB, 'app', 'projects', 'projects', '[id]', 'page.tsx');
 const CANONICAL_CONTROLS = join(WEB, 'app', 'project', '[projectId]', 'controls', 'page.tsx');
 const LEGACY_DETAIL_LINK = /(?<!\/api)\/projects\/projects\//;
 
-function walk(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    if (entry === 'node_modules' || entry === '.next' || entry === 'e2e') continue;
-    const file = join(dir, entry);
-    // API route paths intentionally keep `/api/v1/projects/projects/...`; they are excluded from
-    // the ownership rule, so do not traverse 400+ BFF files only to discard every result later.
-    if (file === join(WEB, 'app', 'api')) continue;
-    if (statSync(file).isDirectory()) walk(file, out);
-    else if (/\.tsx?$/.test(file) && !/\.(test|spec)\.tsx?$/.test(file)) out.push(file);
-  }
-  return out;
-}
+const API_DIR = join(WEB, 'app', 'api');
 
 function legacyLinkFindings(): string[] {
   const findings: string[] = [];
-  for (const root of ROOTS) {
-    for (const file of walk(join(WEB, root))) {
-      if (file === LEGACY_ROUTE) continue;
-      readFileSync(file, 'utf8').split('\n').forEach((line, index) => {
-        if (LEGACY_DETAIL_LINK.test(line)) {
-          findings.push(`${relative(WEB, file).replace(/\\/g, '/')}:${index + 1}`);
-        }
-      });
-    }
+  // Reads the shared scan rather than walking the tree again. The walk this replaced skipped
+  // `app/api` for cost; the shared scan does that now. The check below is kept regardless, because
+  // it says something different — that the API namespace is EXEMPT from the ownership rule, being
+  // the source of truth for Project data — and that must not rest on a performance decision.
+  for (const { path: file, source } of uiSourceFiles()) {
+    if (file === LEGACY_ROUTE || file.startsWith(API_DIR)) continue;
+    source.split('\n').forEach((line, index) => {
+      if (LEGACY_DETAIL_LINK.test(line)) {
+        findings.push(`${relative(WEB, file).replace(/\\/g, '/')}:${index + 1}`);
+      }
+    });
   }
   return findings;
 }

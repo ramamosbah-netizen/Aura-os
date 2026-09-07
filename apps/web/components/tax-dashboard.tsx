@@ -275,7 +275,7 @@ const s = {
   rowInputs: { display: 'flex', gap: 10 } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -300,9 +300,9 @@ const s = {
   tdMuted: { padding: '11px 12px', verticalAlign: 'middle', color: 'var(--muted)' } as CSSProperties,
   empty: { color: 'var(--muted)', padding: '30px 0', textAlign: 'center' } as CSSProperties,
   error: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,
@@ -311,8 +311,8 @@ const s = {
     fontSize: 11.5,
     fontWeight: 600,
     color: 'var(--accent)',
-    background: 'rgba(255,193,7,0.1)',
-    border: '1px solid rgba(255,193,7,0.2)',
+    background: 'var(--warn-soft)',
+    border: '1px solid var(--warn-soft)',
     borderRadius: 6,
     padding: '2px 8px',
     width: 'fit-content',
@@ -321,7 +321,7 @@ const s = {
     fontSize: 10.5,
     fontWeight: 600,
     color: 'var(--good)',
-    background: 'rgba(40,167,69,0.1)',
+    background: 'var(--good-soft)',
     borderRadius: 5,
     padding: '2px 6px',
   } as CSSProperties,
@@ -334,16 +334,16 @@ const s = {
     padding: '2px 6px',
   } as CSSProperties,
   categoryTag: (type: string): CSSProperties => {
-    let background = 'rgba(255,255,255,0.05)';
+    let background = 'var(--border)';
     let color = 'var(--text)';
     if (type === 'standard') {
-      background = 'rgba(0,123,255,0.1)';
-      color = '#007bff';
+      background = 'var(--info-soft)';
+      color = 'var(--info)';
     } else if (type === 'reverse_charge') {
-      background = 'rgba(111,66,193,0.1)';
-      color = '#6f42c1';
+      background = 'var(--accent-soft)';
+      color = 'var(--accent)';
     } else if (type === 'zero_rated' || type === 'exempt') {
-      background = 'rgba(40,167,69,0.1)';
+      background = 'var(--good-soft)';
       color = 'var(--good)';
     }
     return {

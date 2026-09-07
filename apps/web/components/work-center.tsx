@@ -404,19 +404,19 @@ const s = {
   } as CSSProperties,
   itemHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } as CSSProperties,
   moduleTag: (mod: string): CSSProperties => {
-    let background = 'rgba(255,255,255,0.05)';
+    let background = 'var(--border)';
     let color = 'var(--text)';
     if (mod === 'Procurement') {
-      background = 'rgba(0,123,255,0.1)';
-      color = '#007bff';
+      background = 'var(--info-soft)';
+      color = 'var(--info)';
     } else if (mod === 'Finance') {
-      background = 'rgba(40,167,69,0.1)';
+      background = 'var(--good-soft)';
       color = 'var(--good)';
     } else if (mod === 'Subcontract') {
-      background = 'rgba(23,162,184,0.1)';
-      color = '#17a2b8';
+      background = 'var(--info-soft)';
+      color = 'var(--info)';
     } else if (mod === 'Subcontract Claim') {
-      background = 'rgba(255,193,7,0.1)';
+      background = 'var(--warn-soft)';
       color = 'var(--accent)';
     }
     return {
@@ -437,7 +437,7 @@ const s = {
   actions: { display: 'flex', gap: 8, marginTop: 'auto' } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 6,
@@ -460,7 +460,7 @@ const s = {
   } as CSSProperties,
   btnPay: {
     background: 'var(--good)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 6,
@@ -471,9 +471,9 @@ const s = {
     textAlign: 'center',
   } as CSSProperties,
   error: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,

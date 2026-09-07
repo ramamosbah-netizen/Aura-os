@@ -110,7 +110,7 @@ export default function AmcClient() {
     const secs = Math.floor((diff % 60000) / 1000);
     return {
       text: `${hrs}h ${mins}m ${secs}s`,
-      color: diff < 7200000 ? '#f0a040' : 'var(--good)', // Yellow under 2 hours
+      color: diff < 7200000 ? 'var(--warn)' : 'var(--good)', // Yellow under 2 hours
     };
   }
 
@@ -174,7 +174,7 @@ export default function AmcClient() {
                     <div key={t.id} style={s.ticketRow}>
                       <div style={s.ticketMeta}>
                         <span style={s.ticketNum}>{t.ticketNumber}</span>
-                        <span style={{ ...s.priorityTag, backgroundColor: t.priority === 'critical' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(240, 160, 64, 0.2)', color: t.priority === 'critical' ? 'var(--bad)' : '#f0a040' }}>
+                        <span style={{ ...s.priorityTag, backgroundColor: t.priority === 'critical' ? 'var(--bad-soft)' : 'var(--warn-soft)', color: t.priority === 'critical' ? 'var(--bad)' : 'var(--warn)' }}>
                           {t.priority}
                         </span>
                       </div>
@@ -244,7 +244,7 @@ export default function AmcClient() {
               {defaultLocations.map((loc, idx) => {
                 const pinColors: Record<string, string> = {
                   critical: 'var(--bad)',
-                  high: '#f0a040',
+                  high: 'var(--warn)',
                   medium: 'var(--accent)',
                   low: 'var(--good)',
                 };
@@ -373,7 +373,7 @@ const s = {
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 } as CSSProperties,
   title: { fontSize: 24, fontWeight: 700, margin: 0, color: 'var(--text)' } as CSSProperties,
   subtitle: { fontSize: 13, color: 'var(--muted)', margin: '4px 0 0' } as CSSProperties,
-  btnPrimary: { background: 'var(--accent)', border: 'none', borderRadius: 10, padding: '10px 20px', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(255, 61, 0, 0.2)' } as CSSProperties,
+  btnPrimary: { background: 'var(--accent)', border: 'none', borderRadius: 10, padding: '10px 20px', color: 'var(--accent-ink)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', boxShadow: '0 4px 14px var(--bad-soft)' } as CSSProperties,
   btnSecondary: { background: 'transparent', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 20px', color: 'var(--muted)', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' } as CSSProperties,
   statsGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16, marginBottom: 28 } as CSSProperties,
   statCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 18, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
@@ -383,7 +383,7 @@ const s = {
   colLeft: { display: 'flex', flexDirection: 'column', gap: 24 } as CSSProperties,
   colRight: { minHeight: 600 } as CSSProperties,
   card: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 16, padding: 24 } as CSSProperties,
-  cardTitle: { fontSize: 16, fontWeight: 600, margin: '0 0 16px', color: '#fff' } as CSSProperties,
+  cardTitle: { fontSize: 16, fontWeight: 600, margin: '0 0 16px', color: 'var(--text)' } as CSSProperties,
   cardDesc: { fontSize: 12, color: 'var(--muted)', margin: '-12px 0 16px' } as CSSProperties,
   ticketList: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
   ticketRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 12, padding: '14px 18px', gap: 12 } as CSSProperties,
@@ -401,25 +401,25 @@ const s = {
   contractNum: { fontSize: 13, fontWeight: 600, color: 'var(--accent)' } as CSSProperties,
   clientName: { fontSize: 12, color: 'var(--text)', marginTop: 2 } as CSSProperties,
   scope: { fontSize: 11, color: 'var(--muted)', marginTop: 1 } as CSSProperties,
-  contractVal: { fontSize: 14, fontWeight: 700, color: '#fff' } as CSSProperties,
+  contractVal: { fontSize: 14, fontWeight: 700, color: 'var(--text)' } as CSSProperties,
   placeholder: { padding: '30px 0', textAlign: 'center', color: 'var(--muted)', fontSize: 13 } as CSSProperties,
-  mapContainer: { position: 'relative', height: 350, background: 'rgba(10, 16, 28, 0.8)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' } as CSSProperties,
-  mapGridBg: { position: 'absolute', inset: 0, opacity: 0.1, backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)', backgroundSize: '20px 20px' } as CSSProperties,
+  mapContainer: { position: 'relative', height: 350, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' } as CSSProperties,
+  mapGridBg: { position: 'absolute', inset: 0, opacity: 0.1, backgroundImage: 'linear-gradient(var(--border) 1px, transparent 1px), linear-gradient(90deg, var(--border) 1px, transparent 1px)', backgroundSize: '20px 20px' } as CSSProperties,
   mapPin: { position: 'absolute', width: 14, height: 14, border: '3px solid', borderRadius: '50%', cursor: 'pointer' } as CSSProperties,
   pinPulse: { position: 'absolute', inset: -6, borderRadius: '50%', opacity: 0.3, animation: 'ping 2s cubic-bezier(0, 0, 0.2, 1) infinite' } as CSSProperties,
-  pinTooltip: { position: 'absolute', bottom: 22, left: -60, width: 140, background: 'var(--panel)', border: '1px solid var(--border)', padding: '6px 8px', borderRadius: 8, fontSize: 11, zIndex: 10, color: 'var(--text)', boxShadow: '0 4px 16px rgba(0,0,0,0.6)' } as CSSProperties,
-  mapWater: { position: 'absolute', top: 30, left: 30, color: 'rgba(255,255,255,0.15)', fontSize: 14, fontWeight: 700, fontStyle: 'italic' } as CSSProperties,
-  mapLand: { position: 'absolute', bottom: 30, right: 30, color: 'rgba(255,255,255,0.15)', fontSize: 14, fontWeight: 700 } as CSSProperties,
+  pinTooltip: { position: 'absolute', bottom: 22, left: -60, width: 140, background: 'var(--panel)', border: '1px solid var(--border)', padding: '6px 8px', borderRadius: 8, fontSize: 11, zIndex: 10, color: 'var(--text)', boxShadow: '0 4px 16px var(--overlay)' } as CSSProperties,
+  mapWater: { position: 'absolute', top: 30, left: 30, color: 'var(--border)', fontSize: 14, fontWeight: 700, fontStyle: 'italic' } as CSSProperties,
+  mapLand: { position: 'absolute', bottom: 30, right: 30, color: 'var(--border)', fontSize: 14, fontWeight: 700 } as CSSProperties,
   woSection: { marginTop: 24 } as CSSProperties,
-  woTitle: { fontSize: 14, fontWeight: 600, margin: '0 0 12px', color: '#fff' } as CSSProperties,
+  woTitle: { fontSize: 14, fontWeight: 600, margin: '0 0 12px', color: 'var(--text)' } as CSSProperties,
   woList: { display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
   woRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' } as CSSProperties,
   woNum: { fontFamily: 'ui-monospace, monospace', fontSize: 12, color: 'var(--accent)', marginRight: 10, fontWeight: 600 },
   woDesc: { fontSize: 12, color: 'var(--text)' } as CSSProperties,
   btnSmall: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', color: 'var(--text)', fontSize: 11, cursor: 'pointer', fontFamily: 'inherit' } as CSSProperties,
-  modalOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 } as CSSProperties,
+  modalOverlay: { position: 'fixed', inset: 0, background: 'var(--overlay)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 } as CSSProperties,
   modalCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 16, width: 480, padding: 24 } as CSSProperties,
-  modalTitle: { fontSize: 18, fontWeight: 600, margin: '0 0 20px', color: '#fff' } as CSSProperties,
+  modalTitle: { fontSize: 18, fontWeight: 600, margin: '0 0 20px', color: 'var(--text)' } as CSSProperties,
   formGroup: { marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
   label: { fontSize: 12, color: 'var(--muted)', fontWeight: 500 } as CSSProperties,
   input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', color: 'var(--text)', fontSize: 13, fontFamily: 'inherit' } as CSSProperties,

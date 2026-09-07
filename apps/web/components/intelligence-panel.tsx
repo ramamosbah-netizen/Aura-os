@@ -52,22 +52,22 @@ function timeAgo(iso: string): string {
 
 const MODE_COLORS: Record<string, string> = {
   observe: 'var(--muted)',
-  suggest: '#3b82f6',
-  assist: '#f59e0b',
-  operate: '#10b981',
+  suggest: 'var(--info)',
+  assist: 'var(--warn)',
+  operate: 'var(--good)',
 };
 
 const SEVERITY_COLORS: Record<string, string> = {
-  info: '#3b82f6',
-  warning: '#f59e0b',
-  critical: '#ef4444',
+  info: 'var(--info)',
+  warning: 'var(--warn)',
+  critical: 'var(--bad)',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b',
-  approved: '#10b981',
-  executed: '#10b981',
-  rejected: '#ef4444',
+  pending: 'var(--warn)',
+  approved: 'var(--good)',
+  executed: 'var(--good)',
+  rejected: 'var(--bad)',
 };
 
 // ── Component ────────────────────────────────────────────────────────────────
@@ -200,7 +200,7 @@ export default function IntelligencePanel({
                       </td>
                       <td style={s.cellNum}>
                         <span style={{
-                          color: c.realityGap > 5 ? 'var(--bad, #ef4444)' : c.realityGap < -5 ? '#10b981' : 'var(--muted)',
+                          color: c.realityGap > 5 ? 'var(--bad, #ef4444)' : c.realityGap < -5 ? 'var(--good)' : 'var(--muted)',
                           fontWeight: 600,
                         }}>
                           {pct(c.realityGap)}
@@ -326,7 +326,7 @@ const s = {
   } as CSSProperties,
   badge: {
     background: 'var(--accent)',
-    color: '#fff',
+    color: 'var(--accent-ink)',
     fontSize: 11,
     fontWeight: 700,
     borderRadius: 10,
@@ -354,7 +354,7 @@ const s = {
   } as CSSProperties,
   actionBtn: {
     background: 'var(--accent)',
-    color: '#fff',
+    color: 'var(--accent-ink)',
     border: 'none',
     borderRadius: 8,
     padding: '8px 18px',
@@ -418,7 +418,7 @@ const s = {
   code: {
     fontFamily: 'monospace',
     fontSize: 12,
-    background: 'rgba(255,255,255,0.06)',
+    background: 'var(--border)',
     padding: '2px 6px',
     borderRadius: 4,
     color: 'var(--accent)',
@@ -427,7 +427,7 @@ const s = {
     width: 48,
     height: 4,
     borderRadius: 2,
-    background: 'rgba(255,255,255,0.08)',
+    background: 'var(--border)',
     display: 'inline-block',
     marginRight: 6,
     verticalAlign: 'middle',
@@ -435,7 +435,7 @@ const s = {
   trustFill: {
     height: '100%',
     borderRadius: 2,
-    background: 'linear-gradient(90deg, #10b981, #3b82f6)',
+    background: 'linear-gradient(90deg, var(--good), var(--info))',
   } as CSSProperties,
   proposalGrid: {
     display: 'grid',
@@ -460,7 +460,7 @@ const s = {
   modeBadge: {
     fontSize: 10,
     fontWeight: 700,
-    color: '#fff',
+    color: 'var(--text)',
     borderRadius: 4,
     padding: '2px 8px',
     letterSpacing: 0.5,
@@ -501,9 +501,9 @@ const s = {
   } as CSSProperties,
   execBtn: {
     flex: 1,
-    background: 'rgba(16, 185, 129, 0.15)',
-    color: '#10b981',
-    border: '1px solid rgba(16, 185, 129, 0.3)',
+    background: 'var(--good-soft)',
+    color: 'var(--good)',
+    border: '1px solid var(--good-soft)',
     borderRadius: 8,
     padding: '7px 12px',
     fontSize: 13,
@@ -513,9 +513,9 @@ const s = {
   } as CSSProperties,
   rejectBtn: {
     flex: 1,
-    background: 'rgba(239, 68, 68, 0.1)',
-    color: '#ef4444',
-    border: '1px solid rgba(239, 68, 68, 0.25)',
+    background: 'var(--bad-soft)',
+    color: 'var(--bad)',
+    border: '1px solid var(--bad-soft)',
     borderRadius: 8,
     padding: '7px 12px',
     fontSize: 13,

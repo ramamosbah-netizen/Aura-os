@@ -667,7 +667,7 @@ const st = {
   channelSide: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3, flexShrink: 0 } as CSSProperties,
   channelTime: { fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' } as CSSProperties,
   unreadDot: {
-    background: 'var(--accent)', color: '#0b0e14', fontSize: 10.5, fontWeight: 800, borderRadius: 999,
+    background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 10.5, fontWeight: 800, borderRadius: 999,
     minWidth: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0 5px',
   } as CSSProperties,
   unreadBullet: { width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' } as CSSProperties,
@@ -698,7 +698,7 @@ const st = {
     color: 'var(--text)', padding: '10px 13px', fontSize: 14, outline: 'none',
   } as CSSProperties,
   sendBtn: {
-    background: 'var(--accent)', color: '#0b0e14', fontWeight: 700, border: 'none', borderRadius: 10,
+    background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 700, border: 'none', borderRadius: 10,
     padding: '10px 18px', fontSize: 13.5, cursor: 'pointer',
   } as CSSProperties,
   ghostBtn: {
@@ -706,7 +706,7 @@ const st = {
     padding: '6px 12px', fontSize: 12.5, cursor: 'pointer', whiteSpace: 'nowrap',
   } as CSSProperties,
   composeBtn: {
-    width: '100%', background: 'var(--accent)', color: '#0b0e14', fontWeight: 700, border: 'none', borderRadius: 10,
+    width: '100%', background: 'var(--accent)', color: 'var(--accent-ink)', fontWeight: 700, border: 'none', borderRadius: 10,
     padding: '10px 14px', fontSize: 13.5, cursor: 'pointer', marginBottom: 12,
   } as CSSProperties,
   folderRow: (active: boolean): CSSProperties => ({

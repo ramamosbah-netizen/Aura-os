@@ -202,7 +202,7 @@ const s = {
   row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -212,9 +212,9 @@ const s = {
     transition: 'all 0.2s',
   } as CSSProperties,
   errorBar: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,
@@ -225,21 +225,21 @@ const s = {
     let border = '1px solid var(--border)';
     let background = 'var(--panel-2)';
     if (status === 'pending_approval') {
-      color = '#f59e0b';
-      border = '1px solid rgba(245,158,11,0.25)';
-      background = 'rgba(245,158,11,0.06)';
+      color = 'var(--warn)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
     } else if (status === 'approved') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     } else if (status === 'issued') {
       color = 'var(--accent)';
-      border = '1px solid rgba(255,193,7,0.2)';
-      background = 'rgba(255,193,7,0.05)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
     } else if (status === 'received') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     }
     return {
       fontSize: 11.5,

@@ -513,7 +513,7 @@ const s = {
     borderRadius: 8,
     fontSize: 13,
     fontWeight: 700,
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     cursor: 'pointer',
   } as CSSProperties,
   closeBtn: {
@@ -598,7 +598,7 @@ const s = {
   } as CSSProperties,
   canvasContainer: {
     flex: 1,
-    background: '#090b10',
+    background: 'var(--bg)',
     padding: 40,
     overflow: 'auto',
     display: 'flex',
@@ -608,7 +608,7 @@ const s = {
     background: '#ffffff',
     color: '#000000',
     position: 'relative',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 25px 50px -12px var(--overlay)',
     border: '1px solid #d1d5db',
   } as CSSProperties,
   canvasElement: {

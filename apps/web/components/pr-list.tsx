@@ -179,7 +179,7 @@ const s = {
   subTitle: { fontSize: 18, margin: 0, fontWeight: 600 } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -198,8 +198,8 @@ const s = {
   } as CSSProperties,
   btnDanger: {
     background: 'none',
-    border: '1px solid rgba(220,53,69,0.3)',
-    color: '#dc3545',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     borderRadius: 8,
     padding: '6px 12px',
     fontSize: 12.5,
@@ -256,12 +256,12 @@ const s = {
     let background = 'var(--panel-2)';
     if (status === 'approved') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     } else if (status === 'rejected') {
-      color = '#dc3545';
-      border = '1px solid rgba(220,53,69,0.2)';
-      background = 'rgba(220,53,69,0.05)';
+      color = 'var(--bad)';
+      border = '1px solid var(--bad-soft)';
+      background = 'var(--bad-soft)';
     }
     return {
       fontSize: 11.5,
@@ -277,9 +277,9 @@ const s = {
   },
   actions: { display: 'flex', gap: 8, alignItems: 'center' } as CSSProperties,
   errorBar: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,

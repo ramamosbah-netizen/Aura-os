@@ -545,7 +545,7 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
                         {idx > 0 && <span style={{ color: 'var(--muted)', fontSize: 12 }}>➔</span>}
                         <div style={{ padding: '6px 10px', background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}>
                           <b>Step {idx + 1}:</b> {st.name} (<code style={{ fontSize: 11 }}>{st.agentKey}</code>)
-                          {st.requiresHumanApproval && <span style={{ color: '#f59e0b', marginLeft: 4 }}>⏸️ Approval Gate</span>}
+                          {st.requiresHumanApproval && <span style={{ color: 'var(--warn)', marginLeft: 4 }}>⏸️ Approval Gate</span>}
                         </div>
                       </React.Fragment>
                     ))}
@@ -562,7 +562,7 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 10 }}>
                 {workflowInstances.map((inst) => (
-                  <div key={inst.instanceId} style={{ ...st.agentCard, borderColor: inst.state === 'waiting_approval' ? '#f59e0b' : 'var(--border)' }}>
+                  <div key={inst.instanceId} style={{ ...st.agentCard, borderColor: inst.state === 'waiting_approval' ? 'var(--warn)' : 'var(--border)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <span style={{ fontWeight: 700, fontSize: 13.5 }}>Instance: <code style={st.code}>{inst.instanceId}</code> ({inst.name})</span>
                       <Pill tone={inst.state === 'completed' ? 'good' : inst.state === 'waiting_approval' ? 'warn' : 'info'}>
@@ -570,14 +570,14 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
                       </Pill>
                     </div>
                     {inst.pendingApproval && (
-                      <div style={{ padding: 10, background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: 8, marginTop: 4 }}>
-                        <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: 13 }}>⏸️ Human Approval Required Gate</div>
+                      <div style={{ padding: 10, background: 'var(--warn-soft)', border: '1px solid var(--warn-soft)', borderRadius: 8, marginTop: 4 }}>
+                        <div style={{ fontWeight: 700, color: 'var(--warn)', fontSize: 13 }}>⏸️ Human Approval Required Gate</div>
                         <div style={{ fontSize: 12, marginTop: 2 }}>{inst.pendingApproval.reason}</div>
                         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                          <button type="button" disabled={busy} onClick={() => void approveGate(inst.instanceId, true)} style={{ ...st.submitBtn, background: '#10b981' }}>
+                          <button type="button" disabled={busy} onClick={() => void approveGate(inst.instanceId, true)} style={{ ...st.submitBtn, background: 'var(--good)' }}>
                             ✓ Approve & Resume Workflow
                           </button>
-                          <button type="button" disabled={busy} onClick={() => void approveGate(inst.instanceId, false)} style={{ ...st.submitBtn, background: '#ef4444' }}>
+                          <button type="button" disabled={busy} onClick={() => void approveGate(inst.instanceId, false)} style={{ ...st.submitBtn, background: 'var(--bad)' }}>
                             ✕ Reject & Terminate
                           </button>
                         </div>
@@ -648,7 +648,7 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
                     <span style={st.toolsLabel}>RBAC Capabilities:</span>
                     <div style={st.toolPills}>
                       {(agent.grantedCapabilities ?? []).map((cap) => (
-                        <span key={cap} style={{ ...st.toolPill, borderColor: 'rgba(139, 92, 246, 0.3)', background: 'rgba(139, 92, 246, 0.08)' }}>🔐 {cap}</span>
+                        <span key={cap} style={{ ...st.toolPill, borderColor: 'var(--accent-soft)', background: 'var(--accent-soft)' }}>🔐 {cap}</span>
                       ))}
                     </div>
                   </div>
@@ -898,7 +898,7 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
               <div style={{ width: 1, height: 36, background: 'var(--border)' }} />
               <div>
                 <span style={{ fontSize: 11, textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 700 }}>Available AI Credits</span>
-                <div style={{ fontSize: 20, fontWeight: 800, color: '#10b981' }}>50,000 / 50,000 Credits</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--good)' }}>50,000 / 50,000 Credits</div>
               </div>
               <div style={{ width: 1, height: 36, background: 'var(--border)' }} />
               <div>
@@ -922,7 +922,7 @@ export default function AiAdminClient({ initialStatus }: { initialStatus: AiStat
                     <span style={{ fontWeight: 700 }}>{item.agent}</span> — <span style={{ color: 'var(--muted)' }}>{item.task}</span>
                   </div>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                    <span style={{ color: '#ef4444', fontWeight: 700 }}>-{item.credits} Credits</span>
+                    <span style={{ color: 'var(--bad)', fontWeight: 700 }}>-{item.credits} Credits</span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>{item.date}</span>
                   </div>
                 </div>
@@ -970,7 +970,7 @@ const st = {
   fieldLabel: { fontSize: 13, fontWeight: 700 } as CSSProperties,
   fieldHelp: { fontSize: 11.5, color: 'var(--muted)' } as CSSProperties,
   input: { padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--panel-2)', fontSize: 13, color: 'var(--foreground)' } as CSSProperties,
-  submitBtn: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', width: 'fit-content' } as CSSProperties,
+  submitBtn: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', width: 'fit-content' } as CSSProperties,
   registryBox: { padding: 10, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel-2)' } as CSSProperties,
   statsRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 8, marginTop: 6 } as CSSProperties,
   statBox: { display: 'flex', flexDirection: 'column', background: 'var(--panel)', padding: '6px 8px', borderRadius: 6, border: '1px solid var(--border)' } as CSSProperties,
@@ -981,5 +981,5 @@ const st = {
   explainTitle: { fontSize: 12.5, fontWeight: 700, color: 'var(--accent)' } as CSSProperties,
   explainText: { fontSize: 12.5, margin: 0, lineHeight: 1.4 } as CSSProperties,
   traceRow: { display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', background: 'var(--panel-2)', borderRadius: 6, border: '1px solid var(--border)' } as CSSProperties,
-  successBanner: { padding: '10px 14px', borderRadius: 8, background: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: 13, fontWeight: 600 } as CSSProperties,
+  successBanner: { padding: '10px 14px', borderRadius: 8, background: 'var(--good-soft)', border: '1px solid var(--good-soft)', color: 'var(--good)', fontSize: 13, fontWeight: 600 } as CSSProperties,
 };

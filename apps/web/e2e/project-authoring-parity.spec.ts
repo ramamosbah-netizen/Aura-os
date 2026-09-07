@@ -5,7 +5,8 @@ import { runId, scoped } from './fixtures';
 test('Project 360 exposes governed WBS/CBS and Delay/EOT authoring', async ({ page }) => {
   const title = scoped('Parity authoring project');
   const created = await page.request.post('/api/projects/projects', {
-    data: { title, reference: `PAR-${runId()}`, status: 'active', value: 100_000 },
+    // Authoring WBS/CBS is planning work, so a `planned` project is the honest fixture here.
+    data: { title, reference: `PAR-${runId()}`, value: 100_000 },
   });
   expect(created.ok()).toBe(true);
   const project = await created.json() as { id: string };

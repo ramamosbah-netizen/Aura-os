@@ -28,7 +28,8 @@ let projectId = '';
 
 test.beforeAll(async ({ request }) => {
   const created = await request.post('/api/projects/projects', {
-    data: { title: scoped('NCR System Lens'), reference: `NSL-${Date.now().toString().slice(-5)}`, status: 'active', value: 50_000 },
+    // No status: a project is created `planned`, and this spec only needs one to file NCRs against.
+    data: { title: scoped('NCR System Lens'), reference: `NSL-${Date.now().toString().slice(-5)}`, value: 50_000 },
   });
   expect(created.ok(), 'project fixture must exist for the lens proof to mean anything').toBe(true);
   projectId = ((await created.json()) as { id: string }).id;

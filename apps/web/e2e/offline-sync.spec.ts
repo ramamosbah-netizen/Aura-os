@@ -131,7 +131,8 @@ test.describe('offline field journey', () => {
     try {
       projectTitle = scoped('E2E Offline Fixture');
       const created = await ctx.post('/api/v1/projects/projects', {
-        data: { title: projectTitle, status: 'active' },
+        // Created `planned`; this spec needs a project in a picker, not one in execution.
+        data: { title: projectTitle },
       });
       // Fail here, loudly, rather than let every test below time out on an empty <select> and
       // leave someone guessing which of the API, the page or the engine was at fault.

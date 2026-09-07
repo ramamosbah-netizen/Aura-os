@@ -41,7 +41,6 @@ async function createProject(request: APIRequestContext): Promise<string> {
     data: {
       title: `E2E Project 360 Areas ${Date.now().toString().slice(-6)}`,
       reference: `PA-${Date.now().toString().slice(-4)}`,
-      status: 'active',
       value: 100_000,
     },
   });

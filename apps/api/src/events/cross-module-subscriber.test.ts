@@ -54,6 +54,11 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   const events = new InMemoryEventStore(bus);
   const tx = new NullTxRunner();
   const access = new AccessService();
+  // A real planner, granted the real role. Baselining a project asserts `projects.project.update`,
+  // so handing the harness a permissive access stub would have hidden whether the walk below is one
+  // a person could actually perform.
+  access.seedStandardRoles();
+  access.grant({ userId: 'u-planner', roleId: 'r-pm', scope: { kind: 'org', level: 'tenant', id: tenantId } });
   const idempotency = new IdempotencyService(null);
   const lock = new LockService();
   const commands = new CommandBus(access, idempotency, lock, tx);
@@ -89,12 +94,44 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
     audit,
   );
   const contracts = new ContractService(new InMemoryContractStore(), events, tx, commands);
-  const projects = new ProjectService(new InMemoryProjectStore(), events, tx, commands);
+  // Project and WBS share their stores here, as they do in the real composition root. Entering
+  // execution is gated on a scope structure and an approved baseline, and BOTH of those are WBS
+  // facts — a harness that gave the two services separate stores would report "no scope" for a
+  // project whose packages it had just created, and the tests below would be measuring the wiring
+  // rather than the reactors they are about.
+  const projectStore = new InMemoryProjectStore();
+  const wbsStore = new InMemoryWbsStore();
+  // The lifecycle gates read commissioning and closeout through ports. This harness has neither
+  // service, and an unbound port reads as "nothing registered, readiness unknown" — which correctly
+  // refuses completion. These specs are about what the REACTORS do once a project completes, so the
+  // ports are supplied as cleared, exactly as `project-command.test.ts` does and for the same
+  // reason: the gate has its own tests, and making every reactor spec re-assert it would mean none
+  // of them tested the reactor. What is NOT faked is the activation walk below — that runs for
+  // real, because it is cheap to do honestly here.
+  const projects = new ProjectService(
+    projectStore, events, tx, commands, null, wbsStore,
+    { readProjectCommissioningReadiness: async () => ({ systems: 1, commissioned: 1 }) },
+    { assess: async () => ({ ready: true }) },
+  );
   const cbs = new CbsService(new InMemoryCbsStore(), events);
   const quantityLedger = new QuantityLedgerService(new InMemoryQuantityLedgerStore());
-  const wbs = new WbsService(new InMemoryWbsStore(), events, access, quantityLedger);
+  const wbs = new WbsService(wbsStore, events, access, quantityLedger, undefined, null, undefined, projectStore);
   const ledger = new CostLedgerService(new InMemoryCostLedgerStore(), cbs);
   const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events, { getRate: async () => 1 } as any);
+
+  /**
+   * Walk a project to `active` the way a real one gets there.
+   *
+   * Execution now requires a costed work package and an approved opening baseline. These tests are
+   * about what the reactors do at `project.completed`, not about the activation gate — but they
+   * must not FAKE their way past it either, because then they would keep passing if the reactor
+   * chain broke for a project that had never been baselined. So the harness does the real work.
+   */
+  const activate = async (projectId: string) => {
+    await wbs.create({ tenantId, projectId, code: '01', title: 'Works', plannedValue: 100_000 });
+    await wbs.approveOpeningBaseline(projectId, 'u-planner');
+    return projects.changeStatus(projectId, 'active');
+  };
 
   // Register command handlers (Nest would call these via OnModuleInit).
   tenders.onModuleInit();
@@ -235,7 +272,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, wbs, cbs, ledger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
+  return { bus, events, opportunities, tenders, contracts, projects, activate, wbs, cbs, ledger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
 }
 
 /**
@@ -350,7 +387,7 @@ describe('reactor failure policy — the outbox is the error handler', () => {
     // fires BOTH project.completed reactors: the growth-Signal one (throws here) and the contract-close
     // one (which completes the active contract, in turn firing the renewal-Signal reactor — also a throw).
     // Every Signal write fails; the completion must still resolve, proving those swallows hold.
-    await failing.projects.changeStatus(project.id, 'active');
+    await failing.activate(project.id);
 
     await expect(failing.projects.changeStatus(project.id, 'completed')).resolves.toBeDefined();
   });
@@ -676,7 +713,7 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     const contract = (await h.contracts.list({ tenderId: tender.id }))[0];
     await h.contracts.changeStatus(contract.id, 'active');
     const project = (await h.projects.list({ contractId: contract.id }))[0];
-    await h.projects.changeStatus(project.id, 'active'); // planned → active before it can complete
+    await h.activate(project.id); // scope + baseline, then planned → active, before it can complete
 
     // Complete the project → the growth loop fires: an EXPANSION signal on the project, AND (via the
     // deal-chain close project.completed → contract completed) a RENEWAL_DUE signal on the contract.

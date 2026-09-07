@@ -59,7 +59,6 @@ export async function createProject(
       // Distinct per project but still carrying the run — a reference is what a person reads in a
       // register, and three rows sharing one is confusing to anyone looking at the data later.
       reference: `PX-${runId()}-${sequence}`,
-      status: 'active',
       value: 250_000,
     },
   });
@@ -74,6 +73,41 @@ export async function createProject(
 }
 
 /**
+ * A project in execution, reached the way a real one is.
+ *
+ * Specs used to create these with `status: 'active'` in the POST body. That is no longer possible,
+ * and the refusal is the point: entering execution requires a scope structure, a costed package and
+ * an approved baseline, so creation cannot be the way around the gate. Rather than paper over that
+ * with a seeding shortcut, this walks the same three steps a planner walks — which also means every
+ * spec that needs an active project is now, incidentally, proof that the walk works.
+ */
+export async function createActiveProject(
+  request: APIRequestContext,
+  label: string,
+  baseURL?: string,
+): Promise<string> {
+  const base = baseURL ?? '';
+  const id = await createProject(request, label, baseURL);
+
+  const node = await request.post(`${base}/api/projects/wbs`, {
+    data: { projectId: id, code: '01', title: 'Works', plannedValue: 250_000 },
+  });
+  if (!node.ok()) throw new Error(`e2e fixtures: could not give '${label}' a work package (${node.status()})`);
+
+  const baseline = await request.post(`${base}/api/projects/projects/${id}/wbs-baseline`, { data: {} });
+  if (!baseline.ok()) throw new Error(`e2e fixtures: could not baseline '${label}' (${baseline.status()})`);
+
+  const started = await request.patch(`${base}/api/projects/projects/${id}/status`, { data: { status: 'active' } });
+  if (!started.ok()) {
+    throw new Error(
+      `e2e fixtures: '${label}' has scope and a baseline but was refused execution (${started.status()}: ` +
+        `${await started.text()}). That is a lifecycle regression, not a fixture problem.`,
+    );
+  }
+  return id;
+}
+
+/**
  * A shared project for specs that need *a* project to hang records off and do not care which.
  *
  * Cached per worker. A spec that writes something the project itself then constrains — a daily
@@ -84,6 +118,6 @@ let cached: string | null = null;
 
 export async function projectFixtureId(request: APIRequestContext, baseURL?: string): Promise<string> {
   if (cached) return cached;
-  cached = await createProject(request, 'E2E Fixture Project', baseURL);
+  cached = await createActiveProject(request, 'E2E Fixture Project', baseURL);
   return cached;
 }

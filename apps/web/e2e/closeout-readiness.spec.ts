@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { runId } from './fixtures';
+import { createActiveProject, runId } from './fixtures';
 
 /**
  * §27 — closeout is a gate, not a checklist.
@@ -17,11 +17,9 @@ import { runId } from './fixtures';
 const RUN = runId();
 
 async function project(request: import('@playwright/test').APIRequestContext, title: string) {
-  const created = await request.post('/api/projects/projects', {
-    data: { title: `${title} ${RUN}`, reference: `CO-${Date.now().toString().slice(-5)}`, status: 'active', value: 750_000 },
-  });
-  expect(created.ok(), 'the project fixture must exist').toBe(true);
-  return ((await created.json()) as { id: string }).id;
+  // A project being closed out has, by definition, been executed. Reaching `active` through the
+  // gate is also the only way now — creation may only start a project before execution.
+  return await createActiveProject(request, `${title} ${RUN}`);
 }
 
 async function tickedCloseout(request: import('@playwright/test').APIRequestContext, projectId: string) {

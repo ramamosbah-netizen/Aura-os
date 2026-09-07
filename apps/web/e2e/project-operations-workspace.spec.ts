@@ -1,23 +1,17 @@
 import { expect, test } from '@playwright/test';
 
 import { apiAuthHeaders } from './api-auth';
-import { runId, scoped } from './fixtures';
+import { createActiveProject, runId, scoped } from './fixtures';
 
 const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
 
 const PROJECT_TITLE = scoped('E2E Delivery Workspace');
 
 test('project and operations share one usable delivery context', async ({ page, browser }) => {
-  const created = await page.request.post('/api/projects/projects', {
-    data: {
-      title: PROJECT_TITLE,
-      reference: `PXO-${runId()}`,
-      status: 'active',
-      value: 250_000,
-    },
-  });
-  expect(created.ok()).toBe(true);
-  const project = await created.json() as { id: string };
+  // Walked into execution rather than declared into it: a project cannot be CREATED `active` any
+  // more, and this spec genuinely needs an active one — it asserts the command centre's list of
+  // active projects further down.
+  const project = { id: await createActiveProject(page.request, PROJECT_TITLE) };
   const report = await page.request.post('/api/site/daily-reports', {
     data: {
       projectId: project.id,

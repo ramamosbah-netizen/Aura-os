@@ -6,6 +6,7 @@ import { Hash, Loader2, Mic, Paperclip, Plus, Search, Send, Square, Users } from
 import { displayName } from '@aura/shared';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import DataStateNotice from '@/components/ui/data-state';
+import { useHydrated } from '@/lib/use-hydrated';
 import type { DataError } from '@/lib/data-error';
 import styles from '@/components/internal-chat.module.css';
 
@@ -103,6 +104,12 @@ export default function InternalChat({
   const [liveState, setLiveState] = useState<'connecting' | 'connected' | 'reconnecting' | 'offline'>('connecting');
   /** A conversation is being opened; the composer belongs to no settled conversation until it lands. */
   const [opening, setOpening] = useState(false);
+  // The composer is a CONTROLLED input, so a message typed into the server-rendered markup before
+  // React attaches is written to the DOM and then discarded when it does — the box looks filled
+  // while `text` is still empty, and Send stays disabled on `!text.trim()` with no way for the
+  // person to tell why. Same failure the login form and the permit action bar already carry this
+  // guard for; see lib/use-hydrated.ts, which was written for exactly this.
+  const hydrated = useHydrated();
   const recorderRef = useRef<MediaRecorder | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -565,13 +572,13 @@ export default function InternalChat({
                 onChange={(event) => { const file = event.target.files?.[0]; if (file) attachFile(file); event.target.value = ''; }}
                 aria-label="Attach a file"
               />
-              <button type="button" className={styles.iconButton} disabled={opening} onClick={() => fileRef.current?.click()} aria-label="Attach a file">
+              <button type="button" className={styles.iconButton} disabled={!hydrated || opening} onClick={() => fileRef.current?.click()} aria-label="Attach a file">
                 <Paperclip aria-hidden />
               </button>
               <button
                 type="button"
                 className={`${styles.iconButton} ${recording ? styles.recording : ''}`}
-                disabled={opening}
+                disabled={!hydrated || opening}
                 onClick={() => void toggleRecording()}
                 aria-label={recording ? 'Stop recording' : 'Record a voice note'}
               >
@@ -586,9 +593,10 @@ export default function InternalChat({
                 aria-label="Message"
                 // Closed while a conversation is opening: the box on screen belongs to the conversation
                 // being opened, but nothing can be addressed until that one is actually active.
-                disabled={opening || messageError === 'forbidden'}
+                // Closed before hydration for a different reason: it cannot keep what is typed.
+                disabled={!hydrated || opening || messageError === 'forbidden'}
               />
-              <button type="submit" className={styles.send} disabled={opening || sending || !text.trim()} aria-label="Send message">
+              <button type="submit" className={styles.send} disabled={!hydrated || opening || sending || !text.trim()} aria-label="Send message">
                 <Send aria-hidden />
               </button>
             </form>

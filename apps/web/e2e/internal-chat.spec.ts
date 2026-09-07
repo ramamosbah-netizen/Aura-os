@@ -27,6 +27,33 @@ async function openCompanyChannel(page: Page): Promise<string> {
   return id ?? '';
 }
 
+/**
+ * The composer must arrive DISABLED, and become usable only once React owns it.
+ *
+ * `text` is React state and Send is disabled on `!text.trim()`, so a message typed into the
+ * server-rendered markup is written to the DOM, discarded when React attaches, and the button then
+ * stays disabled forever with the box still looking full. Nothing on screen says why.
+ *
+ * This is asserted against the SERVER's own HTML rather than by racing a live browser: the promise
+ * is a property of what is sent, so it does not need a race to observe. Under full-suite load the
+ * race did show up on its own — this spec's send step timed out for 60s on a disabled button — and
+ * a retry would have hidden it.
+ */
+test('the composer refuses input until it can keep it', async ({ page }) => {
+  const html = await (await page.request.get('/my-work/communication?view=chat')).text();
+  const composer = html.match(/<input[^>]*aria-label="Message"[^>]*>/)?.[0] ?? '';
+  expect(composer, 'the composer must be server-rendered').not.toBe('');
+  expect(
+    composer,
+    'a controlled input that accepts text before hydration throws that text away, and Send then ' +
+      'stays disabled on empty state — the person sees a full box and a dead button',
+  ).toContain('disabled');
+
+  // And in a live browser it becomes usable.
+  await page.goto('/my-work/communication?view=chat', { waitUntil: 'domcontentloaded' });
+  await expect(page.getByLabel('Message', { exact: true })).toBeEnabled();
+});
+
 test('Communication → Internal Chat → send → refresh → the message is still there', async ({ page }) => {
   // 1. Reached from Communication itself, not by typing the chat URL.
   await page.goto('/my-work/communication', { waitUntil: 'domcontentloaded' });

@@ -186,10 +186,14 @@ export class DemoSeeder implements OnModuleInit {
       accountId: emaar.id, accountName: emaar.name, status: 'active', value: 4_800_000,
     });
 
+    // Seeded as `planned`, not `active`. Entering execution now requires a scope structure, a
+    // costed package and an approved baseline, and this seed builds none of them — claiming the
+    // demo project is in execution would be exactly the thing the gate exists to refuse, told to
+    // ourselves. Giving it a real WBS and an approved baseline would let it pass honestly.
     const project = await this.projects.create({
       tenantId: TENANT, title: 'Marina Tower ELV Delivery', reference: 'PRJ-2026-005',
       contractId: contract.id, contractTitle: contract.title,
-      accountId: emaar.id, accountName: emaar.name, status: 'active', value: 4_800_000,
+      accountId: emaar.id, accountName: emaar.name, status: 'planned', value: 4_800_000,
     });
 
     const variation = await this.variations.create({

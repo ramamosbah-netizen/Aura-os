@@ -3,7 +3,7 @@ import { QualityModule, QualityService } from '@aura/quality';
 import { CommissioningModule, CommissioningService } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { QUALITY_GATE } from '@aura/procurement';
-import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS } from '@aura/projects';
+import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE } from '@aura/projects';
 
 /**
  * App-layer wiring for cross-module gates (ADR-0004: modules don't import each other; the
@@ -37,7 +37,14 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     { provide: QUALITY_READINESS, useExisting: QualityService },
     { provide: COMMISSIONING_READINESS, useExisting: CommissioningService },
     { provide: DOCUMENTS_READINESS, useExisting: DocControlService },
+
+    // ── Lifecycle (§2) ───────────────────────────────────────────────────────────────────────
+    // `active → testing` needs to know something is registered to test, and `→ handover` that
+    // every system is signed off. Commissioning owns both facts. Same reading as
+    // COMMISSIONING_READINESS above, asked by a different gate — bound separately so either can
+    // change without dragging the other with it.
+    { provide: COMMISSIONING_LIFECYCLE, useExisting: CommissioningService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE],
 })
 export class GatesModule {}

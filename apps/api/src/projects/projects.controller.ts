@@ -1,10 +1,11 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
-import { IsArray, IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
+  type TransitionGate,
   ProjectService,
   type WbsNode,
   type WbsNodeStatus,
@@ -52,15 +53,33 @@ class CreateProjectDto {
   @IsOptional() @IsString() contractTitle?: string | null;
   @IsOptional() @IsString() accountId?: string | null;
   @IsOptional() @IsString() accountName?: string | null;
-  @IsOptional() @IsString() status?: ProjectStatus;
+  /**
+   * Where a project may START. Not every state — reaching `active` or `completed` is a governed
+   * transition with conditions, and creation must not be the way around them. `@IsString()` alone
+   * would have accepted any text at all into a column with no CHECK constraint.
+   */
+  @IsOptional() @IsIn(['planned', 'planning']) status?: ProjectStatus;
   @IsOptional() @IsNumber() value?: number;
 }
 
 class UpdateProjectDto {
   @IsOptional() @IsString() title?: string;
   @IsOptional() @IsString() reference?: string;
+  /**
+   * Declared ONLY so it can be refused out loud.
+   *
+   * Removing it was worse: the global pipe runs `whitelist: true`, so an unknown `status` is
+   * stripped in silence and the request answers 200 — the caller is told their status change
+   * succeeded, and the project never moved. A field that is ignored quietly is a worse lie than a
+   * field that is rejected. The route below turns this into a 400 that names where the change
+   * actually belongs.
+   */
   @IsOptional() @IsString() status?: ProjectStatus;
   @IsOptional() @IsNumber() value?: number;
+}
+
+class CancelProjectDto {
+  @IsString() reason!: string;
 }
 
 class CreateWbsNodeDto {
@@ -206,11 +225,15 @@ export class ProjectsController {
   /** PATCH /api/projects/projects/:id — update mutable fields (title, reference, status, value). */
   @Patch('projects/:id')
   async updateProject(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateProjectDto): Promise<Project> {
+    if (dto?.status !== undefined) {
+      throw new BadRequestException(
+        'project status is not an editable field: use PATCH /status for a transition, or PATCH /cancel to abandon the project',
+      );
+    }
     try {
       return await this.projects.update(id, {
         title: dto.title,
         reference: dto.reference,
-        status: dto.status,
         value: dto.value,
       });
     } catch (e) {
@@ -220,14 +243,48 @@ export class ProjectsController {
     }
   }
 
-  /** Execution lifecycle: planned → active → completed (completes the contract via the reactor). */
+  /**
+   * Execution lifecycle. Every transition EXCEPT cancellation, which has its own route below
+   * because it has its own evidence: this one has no actor and no reason to give.
+   */
   @Patch('projects/:id/status')
-  async changeProjectStatus(@Param('id') id: string, @Body() dto: { status: 'active' | 'completed' | 'cancelled' }): Promise<Project> {
+  async changeProjectStatus(@Param('id') id: string, @Body() dto: { status: ProjectStatus }): Promise<Project> {
     if (!dto?.status) throw new BadRequestException('status is required');
     try {
       return await this.projects.changeStatus(id, dto.status);
     } catch (err) {
       throw new BadRequestException(err instanceof Error ? err.message : 'transition failed');
+    }
+  }
+
+  /** Every move available from here, each with its verdict — so a caller never offers a dead button. */
+  @Get('projects/:id/transitions')
+  async getProjectTransitions(@Param('id') id: string): Promise<TransitionGate[]> {
+    try {
+      return await this.projects.transitionsFor(id);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unavailable';
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
+    }
+  }
+
+  /**
+   * Abandon a project. Separate from the status route on purpose: cancellation is the one
+   * transition no facts can block, so what makes it governed is the record it leaves — the actor
+   * comes from the authenticated context, and the reason has to be typed by a person.
+   */
+  @Patch('projects/:id/cancel')
+  async cancelProject(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: CancelProjectDto): Promise<Project> {
+    const ctx = this.tenant.get();
+    if (!ctx.actorId) throw new BadRequestException('actor is required to cancel a project');
+    if (!dto?.reason?.trim()) throw new BadRequestException('a reason is required to cancel a project');
+    try {
+      return await this.projects.cancel({ projectId: id, actorId: ctx.actorId, reason: dto.reason });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'cancellation failed';
+      if (msg.includes('not found')) throw new NotFoundException(msg);
+      throw new BadRequestException(msg);
     }
   }
 

@@ -225,7 +225,10 @@ export default function CommissioningClient({
               return (
                 <div key={r.id} style={st.card}>
                   <div style={st.cardHead}>
-                    <span style={st.code}>{r.code}</span>
+                    {/* The only way into Commissioning 360, where a test is witnessed and
+                        signed off. Without it the register was a dead end: the record could be
+                        read but its workflow could not be reached from anywhere in the app. */}
+                    <a href={`/commissioning/${r.id}`} style={st.code}>{r.code}</a>
                     <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span style={st.tagMuted}>{label(r.system)}</span>
                       <span style={statusStyle(r.status)}>{r.status.replace('_', ' ')}</span>
@@ -301,7 +304,7 @@ const st = {
   list: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--panel-2)' } as CSSProperties,
   cardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 } as CSSProperties,
-  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--text)' } as CSSProperties,
+  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--text)', textDecoration: 'none', borderBottom: '1px dotted var(--border-strong)' } as CSSProperties,
   cardTitle: { fontSize: 14.5, fontWeight: 600, margin: '2px 0 4px', color: 'var(--text)' } as CSSProperties,
   meta: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 10px' } as CSSProperties,
   progressWrap: { position: 'relative', height: 20, background: 'var(--border)', borderRadius: 999, overflow: 'hidden', margin: '0 0 12px' } as CSSProperties,

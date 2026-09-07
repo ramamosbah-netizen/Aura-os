@@ -69,7 +69,7 @@ export default async function GoodsReceiptsPage() {
           <table style={st.table}>
             <thead>
               <tr>
-                {['Goods', 'Against PO', 'Supplier', 'Project', 'Status', 'Value', 'Created'].map((h) => (
+                {['Goods', 'Against PO', 'Supplier', 'Project', 'Status', 'Value', 'Created', ''].map((h) => (
                   <th key={h} style={st.th}>
                     {h}
                   </th>
@@ -88,6 +88,19 @@ export default async function GoodsReceiptsPage() {
                   </td>
                   <td style={st.td}>{money(g.value)}</td>
                   <td style={st.tdMuted}>{fmt(g.createdAt)}</td>
+                  {/* The receipt note print view was routable but unreachable — a GRN could be
+                      recorded and never produced as the document a supplier is paid against. */}
+                  <td style={st.td}>
+                    <a
+                      href={`/inventory/grns/${g.id}/print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Print goods receipt note (PDF)"
+                      style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      🖨
+                    </a>
+                  </td>
                 </tr>
               ))}
             </tbody>

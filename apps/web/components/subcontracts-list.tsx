@@ -215,6 +215,17 @@ export default function SubcontractsList({
                     </td>
                     <td style={s.td}>
                       <div style={s.actions}>
+                        {/* The subcontract agreement print view was routable but nothing offered
+                            it, so the agreement could be activated and never issued on paper. */}
+                        <a
+                          href={`/subcontracts/subcontracts/${sub.id}/print`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Print subcontract agreement (PDF)"
+                          style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, alignSelf: 'center' }}
+                        >
+                          🖨
+                        </a>
                         {sub.status === 'draft' && (
                           <button
                             type="button"

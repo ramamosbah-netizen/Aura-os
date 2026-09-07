@@ -29,9 +29,21 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         <a href={`/crm/quotations/${id}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>{q.quoteNumber}</a>
         {' · Pricing'}
       </div>
-      <h1 style={{ fontSize: 24, margin: '0 0 4px', letterSpacing: -0.5 }}>
-        Pricing workspace <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>{q.quoteNumber} · Rev {q.revision}</span>
-      </h1>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+        <h1 style={{ fontSize: 24, margin: '0 0 4px', letterSpacing: -0.5 }}>
+          Pricing workspace <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--muted)' }}>{q.quoteNumber} · Rev {q.revision}</span>
+        </h1>
+        {/* The cost-breakdown print view. It was built and routable but nothing linked it, so the
+            sheet could be worked on and never taken off the screen. */}
+        <a
+          href={`/crm/quotations/${id}/pricing/print`}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{ fontSize: 12.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+        >
+          🖨 Print cost breakdown
+        </a>
+      </div>
       <p style={{ color: 'var(--muted)', margin: '0 0 20px', fontSize: 13, maxWidth: 760, lineHeight: 1.5 }}>
         Build up each item’s cost — materials, labour by productivity, equipment, and the overhead / risk /
         warranty / contingency loadings — take a margin, and <b>save</b> to generate the quote lines. The

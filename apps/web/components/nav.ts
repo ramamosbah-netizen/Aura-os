@@ -98,6 +98,7 @@ export const NAV: NavGroup[] = [
       { label: 'Site', href: '/site/control', glyph: '▤', desc: 'Instructions, daily reports, progress, labour and site evidence' },
       { label: 'Quality', href: '/quality/control', glyph: '✓', desc: 'Inspections, NCRs, snags and corrective actions across projects' },
       { label: 'HSE', href: '/hse/control', glyph: '🛡', desc: 'Permits, incidents, observations and CAPA across projects' },
+      { label: 'Authority Compliance', href: '/compliance', glyph: '⚖', desc: 'Authority approvals — cases, submissions, decisions, certificates, inspections and renewals' },
       { label: 'Testing & Commissioning', href: '/commissioning', glyph: '✓', desc: 'Tests, witnessed sign-off and system readiness' },
       { label: 'Handover', href: '/handover', glyph: '⇥', desc: 'Acceptance packages and client sign-off across projects' },
       { label: 'Reports', href: '/operations/reports', glyph: '▤', desc: 'Cross-project operational reports from canonical sources' },

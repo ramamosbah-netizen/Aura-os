@@ -389,6 +389,17 @@ export default function HrControlClient({
                       </td>
                       <td style={st.tdMuted}>{r.processedAt || 'Pending Payout'}</td>
                       <td style={st.td}>
+                        {/* The payslip print view existed and was routable, but no row offered it —
+                            so a run could be calculated and paid and never handed to the employee. */}
+                        <a
+                          href={`/hr/payroll/${r.id}/print`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          title="Print payslip (PDF)"
+                          style={{ marginRight: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                        >
+                          🖨
+                        </a>
                         {r.status !== 'paid' && (
                           <button
                             onClick={() => handlePayPayroll(r.id)}

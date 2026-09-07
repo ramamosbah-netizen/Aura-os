@@ -455,7 +455,7 @@ const s = {
     fontSize: 13,
     marginBottom: 10,
   } as CSSProperties,
-  expandedBg: { background: 'var(--overlay)' } as CSSProperties,
+  expandedBg: { background: 'var(--panel-2)' } as CSSProperties,
   expandedCell: { padding: '14px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   payFormContainer: {
     background: 'var(--panel)',
@@ -486,7 +486,7 @@ const s = {
     outline: 'none',
   } as CSSProperties,
   previewPanel: {
-    background: 'var(--overlay)',
+    background: 'var(--panel-2)',
     border: '1px solid var(--border)',
     borderRadius: 8,
     padding: '10px 12px',
@@ -500,10 +500,10 @@ const s = {
   previewTdAlignRight: { textAlign: 'right', padding: '6px 0', borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
 
   // Audit styles
-  auditBg: { background: 'var(--overlay)', borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
+  auditBg: { background: 'var(--panel-2)', borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
   auditCell: { padding: '10px 12px 14px' } as CSSProperties,
   auditContainer: {
-    background: 'var(--overlay)',
+    background: 'var(--panel-2)',
     border: '1px solid var(--panel-2)',
     borderRadius: 10,
     padding: '10px 12px',

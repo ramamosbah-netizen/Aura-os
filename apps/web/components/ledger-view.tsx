@@ -522,7 +522,7 @@ const s = {
     fontSize: 13,
     marginBottom: 12,
   } as CSSProperties,
-  expandedBg: { background: 'var(--overlay)' } as CSSProperties,
+  expandedBg: { background: 'var(--panel-2)' } as CSSProperties,
   expandedCell: { padding: '14px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   linesContainer: {
     background: 'var(--panel)',

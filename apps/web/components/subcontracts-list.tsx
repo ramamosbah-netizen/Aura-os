@@ -536,7 +536,7 @@ const s = {
     borderRadius: 10,
     fontSize: 13,
   } as CSSProperties,
-  expandedBg: { background: 'var(--overlay)' } as CSSProperties,
+  expandedBg: { background: 'var(--panel-2)' } as CSSProperties,
   expandedCell: { padding: '16px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   claimFormCell: { padding: '14px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   claimFormContainer: {

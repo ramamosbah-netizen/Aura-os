@@ -1001,7 +1001,7 @@ const s = {
     textAlign: 'right',
   } as CSSProperties,
   tableInput: {
-    background: 'var(--overlay)',
+    background: 'var(--panel-2)',
     border: '1px solid var(--border)',
     borderRadius: 5,
     color: 'var(--text)',

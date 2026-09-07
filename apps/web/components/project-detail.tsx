@@ -1788,7 +1788,7 @@ const s = {
     fontWeight: 600,
   } as CSSProperties,
   parentLabel: { fontSize: 11, color: 'var(--muted)', background: 'var(--panel-2)', borderRadius: 5, padding: '2px 5px', textTransform: 'uppercase' } as CSSProperties,
-  addTaskRow: { background: 'var(--overlay)' } as CSSProperties,
+  addTaskRow: { background: 'var(--panel-2)' } as CSSProperties,
   addTaskFormInline: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',

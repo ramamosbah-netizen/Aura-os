@@ -836,7 +836,7 @@ const st = {
   tabs: { display: 'inline-flex', gap: 4, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 10, padding: 4 } as CSSProperties,
   tab: { border: 'none', background: 'transparent', color: 'var(--muted)', fontSize: 12.5, fontWeight: 600, padding: '6px 12px', borderRadius: 7, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 } as CSSProperties,
   tabOn: { background: 'var(--accent-grad)', color: 'var(--accent-ink)', fontWeight: 700 } as CSSProperties,
-  tabBadge: { fontSize: 10, fontWeight: 800, background: 'var(--overlay)', borderRadius: 999, padding: '1px 6px' } as CSSProperties,
+  tabBadge: { fontSize: 10, fontWeight: 800, background: 'var(--tint-ink)', borderRadius: 999, padding: '1px 6px' } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 14, padding: 18, background: 'var(--panel)', boxShadow: 'var(--shadow-sm)' } as CSSProperties,
   scroll: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 } as CSSProperties,
   kind: { display: 'block', fontFamily: 'ui-monospace, monospace', fontSize: 10, color: 'var(--muted)', fontWeight: 400 } as CSSProperties,

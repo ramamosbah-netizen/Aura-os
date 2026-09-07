@@ -28,5 +28,9 @@ test('Communication Meetings: schedule → minutes → decision/action → close
   await expect(page.getByText(/Action · Submit revised drawing/)).toBeVisible();
   await page.getByLabel('Meeting minutes').fill('Client approved the direction.');
   await page.getByRole('button', { name: 'Complete meeting' }).click();
-  await expect(page.getByText('completed', { exact: true })).toBeVisible();
+  // Scoped to THIS run's row, for the same reason the title filter above is: the bare phrase
+  // matched every completed meeting any previous run left behind, so this assertion passed once
+  // against a virgin database and then failed strict mode on the second run — a test that can only
+  // tell the truth once is not evidence.
+  await expect(meetingRow.getByText('completed', { exact: true })).toBeVisible();
 });

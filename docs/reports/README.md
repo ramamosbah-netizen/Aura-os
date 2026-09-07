@@ -1,6 +1,6 @@
 # AURA OS — Report Index
 
-95 reports, newest first within each section. **Index last reviewed: 2026-09-07.**
+96 reports, newest first within each section. **Index last reviewed: 2026-09-07.**
 
 > **The current authority on platform state is [`docs/aura-audit/`](../aura-audit/README.md)** (24 documents, revision 2.6, 2026-08-13) — not this folder. It supersedes the readiness figure below and carries its own gap register (G-01…G-20). Reports here remain useful as dated records and for the journey scores, which the audit does not measure.
 
@@ -46,6 +46,7 @@ The audit's **dimension** scores (architecture, security, ERP functionality and 
 
 | Date | Report | Status |
 |---|---|:--:|
+| 2026-09-07 | [Project 360 — Business Logic Conformance](2026-09-07-project-360-business-logic-conformance.md) | 🟢 *29 sections vs domain, BFF, schema and UI — 9 ✅, 12 🟡, 3 ❌* |
 | 2026-09-07 | [Master Task 2 — Closure](2026-09-07-master-task-2-closure.md) | 🟢 *theme, navigation and the discipline lens; suite 95/0/1 from a zero-built database* |
 | 2026-09-07 | [Master Task 2 — Gap findings](2026-09-07-master-task-2-gap-findings.md) | 🟢 *4 closed, 1 withdrawn, 6 open — not the master register, see its header* |
 | 2026-08-05 | [Consolidated Gap Register](2026-08-05-consolidated-gap-register.md) | 🟢 *the umbrella list — every open gap, stable IDs* |

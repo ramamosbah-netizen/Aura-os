@@ -33,6 +33,11 @@ coverage/
 # Playwright
 /apps/web/playwright-report/
 /apps/web/test-results/
+# The suite writes per-phase output dirs when E2E_SERVER selects one (playwright.config.ts adds a
+# `-gate-off` / `-gate-on` suffix), which is how CI runs it. Without these two lines a phased run
+# leaves its traces and screenshots as untracked files.
+/apps/web/playwright-report-*/
+/apps/web/test-results-*/
 .claude/
 
 # Operational recovery artifacts from scripts/merge-duplicate-accounts.mjs — specific to one

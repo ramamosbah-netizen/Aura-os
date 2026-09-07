@@ -6,6 +6,11 @@ database schema and the UI — not against how the screen looks.
 **Revision 2 (same day):** §27 moved 🟡 → ✅ after the vertical slice landed — rules, ports, service,
 endpoint, UI, enforcement inside finalization, and audit evidence. Nothing else was re-measured.
 
+**Revision 3 (same day):** §2 moved ❌ → ✅. Rules, cumulative gates, governed cancellation, port
+wiring, `transitionsFor`, UI, write-boundary proofs at the HTTP edge and a browser spec. The audit
+it required — every writer of `projects.status` — found and closed two authority bypasses, and is
+recorded separately in `2026-09-07-project-status-writer-inventory.md`. Nothing else was re-measured.
+
 > The authority is the 29-section Project 360 business model supplied in review. This document does
 > not restate it; it records, for each claim it makes, **what exists**, **where it lives**, and
 > **what is missing** — with the evidence that established it.
@@ -22,9 +27,9 @@ requires · ❌ absent.
 
 | | Sections |
 |---|---|
-| ✅ | §3 handover provenance · §4 DeliveryItemMap · §5 WBS/CBS separation · §10 execution truth · §11 progress governance · §17 certified ≠ installed · §18 cost authority + FX provenance · §19 variation lifecycle · §20 delay/EOT records · **§27 closeout readiness** |
+| ✅ | **§2 lifecycle states** · §3 handover provenance · §4 DeliveryItemMap · §5 WBS/CBS separation · §10 execution truth · §11 progress governance · §17 certified ≠ installed · §18 cost authority + FX provenance · §19 variation lifecycle · §20 delay/EOT records · **§27 closeout readiness** |
 | 🟡 | §6 baseline · §7 system lens · §9 engineering · §12 NCR · §14 T&C · §15 punch · §16 documents · §23 overview · §24 health · §25 permissions · §26 audit |
-| ❌ | §2 lifecycle states · §21 risks & issues · §22 resource allocation |
+| ❌ | §21 risks & issues · §22 resource allocation |
 
 The spine the model calls load-bearing — commercial truth in, quantity and cost semantics, change
 control — is **implemented and governed**. What is thin is the **governance around the edges**:
@@ -34,20 +39,39 @@ lifecycle, closeout gating, health explanation, and the two capabilities that do
 
 ## ❌ Absent
 
-### §2 — Project lifecycle is four states, not ten
+### §2 — Project lifecycle ✅ *(was ❌)*
 
 ```
-Domain:  'planned' | 'active' | 'completed' | 'cancelled'        (project.ts:9)
-Model:   Award → Handover → Created → Mobilization → Planning/Baseline →
-         Execution → T&C → Handover → Closeout → Closed
+planned → planning → active → testing → handover → closeout → completed
+                        ↖───────────────┘   (a failed acceptance returns to delivery)
 ```
 
-Mobilization, Planning/Baseline, T&C and Handover have no state, so no transition between them can
-carry a gate. The model's rule — *"لا يجب أن يكون الانتقال مجرد تغيير status"* — cannot hold for
-stages that are not states.
+Eight states, from one list (`PROJECT_STATES` in `project.ts`) that both `ProjectStatus` and the
+machine derive from, so the type and the transitions cannot disagree. The four original names keep
+their meanings, so no data migration and no stranded rows.
 
-What exists: `Planning → Execution` has no gate at all; `Execution → Completed` is gated only in the
-UI, by the rebuilt record's `WorkflowGateView`, and the *domain* does not enforce it.
+**Mobilization is deliberately NOT a state.** It appears in this system twice — a preliminaries cost
+line and a schedule activity — and nowhere as a fact. A state whose gate can read nothing either
+always passes (teaching people the gate is theatre) or always blocks (teaching them to route around
+it). Recorded as an architectural decision, with what would have to exist to revisit it:
+
+> Mobilization is not a Project lifecycle state in the current authority model. It is represented as
+> planned/executed work within Planning. It may be promoted to a governed lifecycle state only when
+> distinct queryable entry/exit facts and business gates exist.
+
+**Conditions attach to the state being entered, never to an edge.** That is what makes the legacy
+`planned → active` safe to keep: it and `planning → active` call the same gate because there is only
+one, so they cannot drift. Edges that skip states declare what they skip and accumulate those
+states' conditions. Asserted as an invariant over all 216 fact combinations, plus a general one that
+holds for edges nobody has added yet — *skip representation, never governance.*
+
+**Cancellation is a command, not a field change.** `cancel({ projectId, actorId, reason })` requires
+both, refuses a blank reason, and emits `projects.project.cancelled` carrying `fromStatus`, reason,
+actor and time. `changeStatus` refuses `'cancelled'` outright, so the ungoverned road is absent
+rather than merely discouraged.
+
+Evidence: 181 unit tests in `@aura/projects`; 13 write-boundary proofs at the HTTP edge; 5 browser
+tests including a mouse-only journey from an unplanned project to one in execution.
 
 ### §21 — Risks and Issues do not exist for projects
 

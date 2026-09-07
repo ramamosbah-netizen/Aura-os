@@ -52,11 +52,11 @@ const STATUS_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '3px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700 };
   const map: Record<string, CSSProperties> = {
-    completed: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    cancelled: { background: 'rgba(100,116,139,.18)', color: 'var(--muted)' },
-    in_progress: { background: 'rgba(59,130,246,.15)', color: '#2563eb' },
-    assigned: { background: 'rgba(59,130,246,.12)', color: '#2563eb' },
-    open: { background: 'rgba(245,158,11,.16)', color: '#d97706' },
+    completed: { background: 'var(--good-soft)', color: 'var(--good)' },
+    cancelled: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    in_progress: { background: 'var(--info-soft)', color: 'var(--info)' },
+    assigned: { background: 'var(--info-soft)', color: 'var(--info)' },
+    open: { background: 'var(--warn-soft)', color: 'var(--warn)' },
   };
   return { ...base, ...(map[status] ?? map.open) };
 }
@@ -170,8 +170,8 @@ const st = {
   sub: { color: 'var(--muted)', margin: 0, maxWidth: 640, lineHeight: 1.5 } as CSSProperties,
   panel: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, padding: '18px 20px', marginBottom: 18 } as CSSProperties,
   h2: { fontSize: 16, margin: '0 0 10px' } as CSSProperties,
-  slaOk: { color: '#16a34a', fontWeight: 700, fontSize: 14, margin: '0 0 6px' } as CSSProperties,
-  slaBad: { color: '#dc2626', fontWeight: 700, fontSize: 14, margin: '0 0 6px' } as CSSProperties,
+  slaOk: { color: 'var(--good)', fontWeight: 700, fontSize: 14, margin: '0 0 6px' } as CSSProperties,
+  slaBad: { color: 'var(--bad)', fontWeight: 700, fontSize: 14, margin: '0 0 6px' } as CSSProperties,
   note: { color: 'var(--muted)', fontSize: 12.5, margin: 0 } as CSSProperties,
   raHead: { fontSize: 14, marginBottom: 4 } as CSSProperties,
   raMeta: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,

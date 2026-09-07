@@ -241,7 +241,7 @@ const s = {
     border: '1px solid var(--border)',
     borderRadius: 20,
     overflow: 'hidden',
-    boxShadow: '0 16px 48px rgba(0,0,0,0.45)',
+    boxShadow: '0 16px 48px var(--overlay)',
   } as CSSProperties,
   brandPane: {
     flex: '1 1 340px',
@@ -285,7 +285,7 @@ const s = {
   } as CSSProperties,
   btn: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 10,

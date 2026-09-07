@@ -19,10 +19,10 @@ const STATUS_LABEL: Record<string, string> = { draft: 'Draft', sent: 'Sent', rec
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600 };
   const map: Record<string, CSSProperties> = {
-    acknowledged: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    received: { background: 'rgba(59,130,246,.15)', color: '#2563eb' },
-    sent: { background: 'rgba(59,130,246,.12)', color: '#2563eb' },
-    draft: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
+    acknowledged: { background: 'var(--good-soft)', color: 'var(--good)' },
+    received: { background: 'var(--info-soft)', color: 'var(--info)' },
+    sent: { background: 'var(--info-soft)', color: 'var(--info)' },
+    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }

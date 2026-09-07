@@ -22,11 +22,11 @@ const STATUS_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' };
   const map: Record<string, CSSProperties> = {
-    for_construction: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    as_built: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    for_review: { background: 'rgba(59,130,246,.14)', color: '#2563eb' },
-    superseded: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
-    draft: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
+    for_construction: { background: 'var(--good-soft)', color: 'var(--good)' },
+    as_built: { background: 'var(--good-soft)', color: 'var(--good)' },
+    for_review: { background: 'var(--info-soft)', color: 'var(--info)' },
+    superseded: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }

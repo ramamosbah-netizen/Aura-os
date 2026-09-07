@@ -16,7 +16,7 @@ interface Detail { record: Record_; testItems: TestItem[]; punchItems: Punch[] }
 
 const STATUS_LABEL: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', tested: 'Tested', commissioned: 'Commissioned', failed: 'Failed' };
 const LIFECYCLE = ['pending', 'in_progress', 'tested', 'commissioned'];
-const resultStyle = (r: string): CSSProperties => ({ fontWeight: 600, color: r === 'pass' ? '#16a34a' : r === 'fail' ? '#dc2626' : 'var(--muted)' });
+const resultStyle = (r: string): CSSProperties => ({ fontWeight: 600, color: r === 'pass' ? 'var(--good)' : r === 'fail' ? 'var(--bad)' : 'var(--muted)' });
 
 export default async function Commissioning360({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -89,7 +89,7 @@ export default async function Commissioning360({ params }: { params: Promise<{ i
                   <tr key={p.id}>
                     <td style={st.td}>{p.description}</td>
                     <td style={st.tdMuted}>{p.severity}</td>
-                    <td style={{ ...st.td, color: p.status === 'open' ? '#d97706' : '#16a34a', fontWeight: 600 }}>{p.status}</td>
+                    <td style={{ ...st.td, color: p.status === 'open' ? 'var(--warn)' : 'var(--good)', fontWeight: 600 }}>{p.status}</td>
                     <td style={st.tdMuted}>{p.resolution ?? '—'}</td>
                   </tr>
                 ))}
@@ -115,13 +115,13 @@ const st = {
   sys: { fontSize: 13, color: 'var(--muted)', fontWeight: 500, textTransform: 'uppercase' } as CSSProperties,
   title: { margin: '0 0 4px', fontSize: 16 } as CSSProperties,
   meta: { margin: 0, color: 'var(--muted)', fontSize: 13 } as CSSProperties,
-  statusBadge: { padding: '5px 12px', borderRadius: 999, background: 'rgba(59,130,246,.14)', color: '#2563eb', fontWeight: 700, fontSize: 13 } as CSSProperties,
+  statusBadge: { padding: '5px 12px', borderRadius: 999, background: 'var(--info-soft)', color: 'var(--info)', fontWeight: 700, fontSize: 13 } as CSSProperties,
   steps: { display: 'flex', alignItems: 'center', gap: 4, margin: '18px 0', flexWrap: 'wrap' } as CSSProperties,
   step: { display: 'flex', alignItems: 'center', gap: 6 } as CSSProperties,
   dot: { width: 10, height: 10, borderRadius: 999, background: 'var(--border, #cbd5e1)', display: 'inline-block' } as CSSProperties,
-  dotOn: { background: '#2563eb' } as CSSProperties,
+  dotOn: { background: 'var(--info)' } as CSSProperties,
   stepLabel: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  stepCurrent: { color: '#2563eb', fontWeight: 700 } as CSSProperties,
+  stepCurrent: { color: 'var(--info)', fontWeight: 700 } as CSSProperties,
   stepBar: { width: 30, height: 2, background: 'var(--border, #e5e7eb)', margin: '0 2px' } as CSSProperties,
   section: { marginTop: 24 } as CSSProperties,
   h2: { fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', margin: '0 0 8px' } as CSSProperties,
@@ -131,5 +131,5 @@ const st = {
   td: { padding: '8px 12px', borderBottom: '1px solid var(--border, #f1f5f9)' } as CSSProperties,
   tdCode: { padding: '8px 12px', borderBottom: '1px solid var(--border, #f1f5f9)', fontWeight: 600, fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
   tdMuted: { padding: '8px 12px', borderBottom: '1px solid var(--border, #f1f5f9)', color: 'var(--muted)' } as CSSProperties,
-  signoff: { marginTop: 20, padding: '10px 14px', borderRadius: 8, background: 'rgba(34,197,94,.1)', color: '#16a34a', fontSize: 13 } as CSSProperties,
+  signoff: { marginTop: 20, padding: '10px 14px', borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 13 } as CSSProperties,
 };

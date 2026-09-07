@@ -166,7 +166,7 @@ function totalRow(label: string, amount: number) {
 }
 function badge(ok: boolean) {
   return (
-    <span style={{ ...st.badge, background: ok ? 'rgba(40,167,69,0.12)' : 'rgba(220,53,69,0.12)', color: ok ? 'var(--good)' : 'var(--bad)' }}>
+    <span style={{ ...st.badge, background: ok ? 'var(--good-soft)' : 'var(--bad-soft)', color: ok ? 'var(--good)' : 'var(--bad)' }}>
       {ok ? '✓ balanced' : '✗ unbalanced'}
     </span>
   );

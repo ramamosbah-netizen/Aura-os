@@ -31,15 +31,15 @@ const STATUS_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' };
   const map: Record<string, CSSProperties> = {
-    approved: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    transmitted: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    closed: { background: 'rgba(100,116,139,.18)', color: 'var(--muted)' },
-    superseded: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
-    rejected: { background: 'rgba(239,68,68,.15)', color: '#dc2626' },
-    revision_required: { background: 'rgba(245,158,11,.16)', color: '#d97706' },
-    under_review: { background: 'rgba(59,130,246,.15)', color: '#2563eb' },
-    submitted: { background: 'rgba(59,130,246,.12)', color: '#2563eb' },
-    draft: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
+    approved: { background: 'var(--good-soft)', color: 'var(--good)' },
+    transmitted: { background: 'var(--good-soft)', color: 'var(--good)' },
+    closed: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    superseded: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    rejected: { background: 'var(--bad-soft)', color: 'var(--bad)' },
+    revision_required: { background: 'var(--warn-soft)', color: 'var(--warn)' },
+    under_review: { background: 'var(--info-soft)', color: 'var(--info)' },
+    submitted: { background: 'var(--info-soft)', color: 'var(--info)' },
+    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }

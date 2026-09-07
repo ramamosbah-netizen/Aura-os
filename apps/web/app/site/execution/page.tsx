@@ -20,11 +20,11 @@ const STATUS_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' };
   const map: Record<string, CSSProperties> = {
-    approved: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    under_review: { background: 'rgba(59,130,246,.15)', color: '#2563eb' },
-    submitted: { background: 'rgba(59,130,246,.12)', color: '#2563eb' },
-    rejected: { background: 'rgba(239,68,68,.15)', color: '#dc2626' },
-    draft: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
+    approved: { background: 'var(--good-soft)', color: 'var(--good)' },
+    under_review: { background: 'var(--info-soft)', color: 'var(--info)' },
+    submitted: { background: 'var(--info-soft)', color: 'var(--info)' },
+    rejected: { background: 'var(--bad-soft)', color: 'var(--bad)' },
+    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }
@@ -84,7 +84,7 @@ export default async function SiteExecutionPage() {
 }
 
 function Kpi({ label, value, tone }: { label: string; value: number; tone?: 'good' | 'bad' | 'info' }) {
-  const color = tone === 'good' ? '#16a34a' : tone === 'bad' ? '#dc2626' : tone === 'info' ? '#2563eb' : 'inherit';
+  const color = tone === 'good' ? 'var(--good)' : tone === 'bad' ? 'var(--bad)' : tone === 'info' ? 'var(--info)' : 'inherit';
   return (
     <div style={st.kpi}>
       <div style={{ ...st.kpiValue, color }}>{value}</div>

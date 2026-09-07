@@ -62,12 +62,12 @@ const TYPE_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '3px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700 };
   const map: Record<string, CSSProperties> = {
-    approved: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    closed: { background: 'rgba(100,116,139,.18)', color: 'var(--muted)' },
-    expired: { background: 'rgba(239,68,68,.15)', color: '#dc2626' },
-    rejected: { background: 'rgba(239,68,68,.15)', color: '#dc2626' },
-    requested: { background: 'rgba(59,130,246,.15)', color: '#2563eb' },
-    draft: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
+    approved: { background: 'var(--good-soft)', color: 'var(--good)' },
+    closed: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    expired: { background: 'var(--bad-soft)', color: 'var(--bad)' },
+    rejected: { background: 'var(--bad-soft)', color: 'var(--bad)' },
+    requested: { background: 'var(--info-soft)', color: 'var(--info)' },
+    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }
@@ -234,14 +234,14 @@ const st = {
   headRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 18 } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: 0, maxWidth: 640, lineHeight: 1.5 } as CSSProperties,
-  reject: { border: '1px solid rgba(239,68,68,.4)', background: 'rgba(239,68,68,.07)', borderRadius: 10, padding: '11px 14px', marginBottom: 18, fontSize: 13.5 } as CSSProperties,
+  reject: { border: '1px solid var(--bad-soft)', background: 'var(--bad-soft)', borderRadius: 10, padding: '11px 14px', marginBottom: 18, fontSize: 13.5 } as CSSProperties,
   panel: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, padding: '18px 20px', marginBottom: 18 } as CSSProperties,
   h2: { fontSize: 16, margin: '0 0 4px' } as CSSProperties,
   panelSub: { color: 'var(--muted)', fontSize: 13, margin: '0 0 14px' } as CSSProperties,
   gateList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
   gateRow: { display: 'flex', gap: 12, alignItems: 'flex-start' } as CSSProperties,
-  gateOk: { color: '#16a34a', fontWeight: 800, fontSize: 16, lineHeight: 1.3 } as CSSProperties,
-  gateBad: { color: '#dc2626', fontWeight: 800, fontSize: 16, lineHeight: 1.3 } as CSSProperties,
+  gateOk: { color: 'var(--good)', fontWeight: 800, fontSize: 16, lineHeight: 1.3 } as CSSProperties,
+  gateBad: { color: 'var(--bad)', fontWeight: 800, fontSize: 16, lineHeight: 1.3 } as CSSProperties,
   gateLabel: { fontWeight: 600, fontSize: 14 } as CSSProperties,
   gateDetail: { color: 'var(--muted)', fontSize: 13, marginTop: 2 } as CSSProperties,
   raHead: { fontSize: 14, marginBottom: 4 } as CSSProperties,

@@ -158,7 +158,7 @@ export default function TemplatesPage() {
                 <div style={st.catBadge}>{t.category}</div>
                 <div style={{
                   ...st.statusBadge,
-                  background: t.status === 'active' ? 'rgba(62, 207, 142, 0.1)' : 'rgba(138, 147, 166, 0.1)',
+                  background: t.status === 'active' ? 'var(--good-soft)' : 'var(--panel-2)',
                   color: t.status === 'active' ? 'var(--good)' : 'var(--muted)'
                 }}>
                   {t.status}
@@ -256,7 +256,7 @@ const st = {
     borderRadius: 8,
     fontSize: 13,
     fontWeight: 700,
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     cursor: 'pointer',
   } as CSSProperties,
   loading: {
@@ -270,8 +270,8 @@ const st = {
     fontSize: 14,
   } as CSSProperties,
   errorBox: {
-    background: 'rgba(255, 107, 107, 0.1)',
-    border: '1px solid rgba(255, 107, 107, 0.2)',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
     borderRadius: 12,
     padding: 24,
     textAlign: 'center',
@@ -367,8 +367,8 @@ const st = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    background: 'rgba(255, 107, 107, 0.05)',
-    border: '1px solid rgba(255, 107, 107, 0.2)',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
     borderRadius: 6,
     padding: '6px 0',
     color: 'var(--bad)',
@@ -382,7 +382,7 @@ const st = {
     left: 0,
     right: 0,
     bottom: 0,
-    background: 'rgba(0, 0, 0, 0.65)',
+    background: 'var(--overlay)',
     backdropFilter: 'blur(4px)',
     display: 'flex',
     alignItems: 'center',
@@ -396,7 +396,7 @@ const st = {
     padding: 24,
     width: '100%',
     maxWidth: 400,
-    boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+    boxShadow: '0 20px 25px -5px var(--overlay)',
   } as CSSProperties,
   modalHeader: {
     marginBottom: 20,
@@ -459,7 +459,7 @@ const st = {
     border: 'none',
     borderRadius: 8,
     padding: '10px 20px',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 700,
     fontSize: 13,
     cursor: 'pointer',

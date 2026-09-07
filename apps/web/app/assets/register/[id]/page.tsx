@@ -51,10 +51,10 @@ const STATUS_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '3px 12px', borderRadius: 999, fontSize: 13, fontWeight: 700 };
   const map: Record<string, CSSProperties> = {
-    active: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    maintenance: { background: 'rgba(245,158,11,.16)', color: '#d97706' },
-    inactive: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
-    disposed: { background: 'rgba(100,116,139,.18)', color: 'var(--muted)' },
+    active: { background: 'var(--good-soft)', color: 'var(--good)' },
+    maintenance: { background: 'var(--warn-soft)', color: 'var(--warn)' },
+    inactive: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    disposed: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.inactive) };
 }
@@ -148,7 +148,7 @@ export default async function Asset360Page({ params }: { params: Promise<{ id: s
             <div style={st.dRow}><dt style={st.dt}>Book value</dt><dd style={st.dd}>{money(disposal.bookValue)}</dd></div>
             <div style={st.dRow}>
               <dt style={st.dt}>Gain / loss</dt>
-              <dd style={{ ...st.dd, color: disposal.gainLoss >= 0 ? '#16a34a' : '#dc2626', fontWeight: 700 }}>
+              <dd style={{ ...st.dd, color: disposal.gainLoss >= 0 ? 'var(--good)' : 'var(--bad)', fontWeight: 700 }}>
                 {money(disposal.gainLoss)}
               </dd>
             </div>
@@ -179,15 +179,15 @@ const st = {
   sub: { color: 'var(--muted)', margin: 0, maxWidth: 640, lineHeight: 1.5 } as CSSProperties,
   panel: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, padding: '18px 20px', marginBottom: 18 } as CSSProperties,
   h2: { fontSize: 16, margin: '0 0 10px' } as CSSProperties,
-  gateOk: { color: '#16a34a', fontWeight: 600, fontSize: 13.5, margin: 0 } as CSSProperties,
-  gateBad: { color: '#dc2626', fontWeight: 600, fontSize: 13.5, margin: 0 } as CSSProperties,
+  gateOk: { color: 'var(--good)', fontWeight: 600, fontSize: 13.5, margin: 0 } as CSSProperties,
+  gateBad: { color: 'var(--bad)', fontWeight: 600, fontSize: 13.5, margin: 0 } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 13.5, margin: 0 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
   th: { textAlign: 'left', padding: '8px 10px', borderBottom: '1px solid var(--border, #e5e7eb)', color: 'var(--muted)', fontWeight: 600, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.4 } as CSSProperties,
   td: { padding: '8px 10px', borderBottom: '1px solid var(--border, #f1f5f9)' } as CSSProperties,
   tdMuted: { padding: '8px 10px', borderBottom: '1px solid var(--border, #f1f5f9)', color: 'var(--muted)' } as CSSProperties,
-  chipOpen: { padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: 'rgba(245,158,11,.16)', color: '#d97706' } as CSSProperties,
-  chipDone: { padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: 'rgba(34,197,94,.15)', color: '#16a34a' } as CSSProperties,
+  chipOpen: { padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: 'var(--warn-soft)', color: 'var(--warn)' } as CSSProperties,
+  chipDone: { padding: '2px 8px', borderRadius: 999, fontSize: 11.5, fontWeight: 600, background: 'var(--good-soft)', color: 'var(--good)' } as CSSProperties,
   dl: { margin: 0, display: 'flex', flexDirection: 'column', gap: 8 } as CSSProperties,
   dRow: { display: 'flex', gap: 12 } as CSSProperties,
   dt: { width: 140, color: 'var(--muted)', fontSize: 13 } as CSSProperties,

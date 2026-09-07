@@ -102,7 +102,7 @@ export default async function Ncr360Page({ params }: { params: Promise<{ id: str
                 <tr><td style={st.tdMuted} colSpan={4}>No verification yet — QA verifies once the correction is done.</td></tr>
               ) : verifications.map((v) => (
                 <tr key={v.id}>
-                  <td style={{ ...st.td, color: v.outcome === 'accepted' ? '#16a34a' : '#dc2626', fontWeight: 600 }}>{v.outcome}</td>
+                  <td style={{ ...st.td, color: v.outcome === 'accepted' ? 'var(--good)' : 'var(--bad)', fontWeight: 600 }}>{v.outcome}</td>
                   <td style={st.tdMuted}>{v.note ?? '—'}</td>
                   <td style={st.tdMuted}>{v.verifiedBy ?? '—'}</td>
                   <td style={st.tdMuted}>{fmt(v.verifiedAt)}</td>
@@ -134,16 +134,16 @@ const st = {
   crumbSep: { opacity: 0.5 } as CSSProperties,
   headRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' } as CSSProperties,
   h1: { fontSize: 26, margin: '0 0 4px', letterSpacing: -0.5 } as CSSProperties,
-  sev: (s: string): CSSProperties => ({ fontSize: 13, fontWeight: 700, color: s === 'major' ? '#dc2626' : '#d97706' }),
+  sev: (s: string): CSSProperties => ({ fontSize: 13, fontWeight: 700, color: s === 'major' ? 'var(--bad)' : 'var(--warn)' }),
   title: { margin: '0 0 4px', fontSize: 16 } as CSSProperties,
   meta: { margin: 0, color: 'var(--muted)', fontSize: 13 } as CSSProperties,
-  statusBadge: { padding: '5px 12px', borderRadius: 999, background: 'rgba(59,130,246,.14)', color: '#2563eb', fontWeight: 700, fontSize: 13 } as CSSProperties,
+  statusBadge: { padding: '5px 12px', borderRadius: 999, background: 'var(--info-soft)', color: 'var(--info)', fontWeight: 700, fontSize: 13 } as CSSProperties,
   steps: { display: 'flex', alignItems: 'center', gap: 4, margin: '18px 0', flexWrap: 'wrap' } as CSSProperties,
   step: { display: 'flex', alignItems: 'center', gap: 6 } as CSSProperties,
   dot: { width: 10, height: 10, borderRadius: 999, background: 'var(--border, #cbd5e1)', display: 'inline-block' } as CSSProperties,
-  dotOn: { background: '#2563eb' } as CSSProperties,
+  dotOn: { background: 'var(--info)' } as CSSProperties,
   stepLabel: { fontSize: 12, color: 'var(--muted)' } as CSSProperties,
-  stepCurrent: { color: '#2563eb', fontWeight: 700 } as CSSProperties,
+  stepCurrent: { color: 'var(--info)', fontWeight: 700 } as CSSProperties,
   stepBar: { width: 26, height: 2, background: 'var(--border, #e5e7eb)', margin: '0 2px' } as CSSProperties,
   section: { marginTop: 26 } as CSSProperties,
   h2: { fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.6, color: 'var(--muted)', margin: '0 0 10px' } as CSSProperties,

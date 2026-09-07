@@ -25,10 +25,10 @@ const STATUS_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' };
   const map: Record<string, CSSProperties> = {
-    active: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    maintenance: { background: 'rgba(245,158,11,.16)', color: '#d97706' },
-    inactive: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
-    disposed: { background: 'rgba(100,116,139,.18)', color: 'var(--muted)' },
+    active: { background: 'var(--good-soft)', color: 'var(--good)' },
+    maintenance: { background: 'var(--warn-soft)', color: 'var(--warn)' },
+    inactive: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    disposed: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.inactive) };
 }
@@ -121,7 +121,7 @@ const st = {
   crumbSep: { opacity: 0.5 } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 780, lineHeight: 1.5 } as CSSProperties,
-  info: { border: '1px solid rgba(245,158,11,.4)', background: 'rgba(245,158,11,.07)', borderRadius: 10, padding: '11px 14px', marginBottom: 16, fontSize: 13.5 } as CSSProperties,
+  info: { border: '1px solid var(--warn-soft)', background: 'var(--warn-soft)', borderRadius: 10, padding: '11px 14px', marginBottom: 16, fontSize: 13.5 } as CSSProperties,
   empty: { border: '1px dashed var(--border, #d1d5db)', borderRadius: 12, padding: 28, color: 'var(--muted)', textAlign: 'center' } as CSSProperties,
   tableWrap: { overflowX: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 } as CSSProperties,

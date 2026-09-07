@@ -39,12 +39,12 @@ const TYPE_LABEL: Record<string, string> = {
 function statusStyle(status: string): CSSProperties {
   const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' };
   const map: Record<string, CSSProperties> = {
-    approved: { background: 'rgba(34,197,94,.15)', color: '#16a34a' },
-    closed: { background: 'rgba(100,116,139,.18)', color: 'var(--muted)' },
-    expired: { background: 'rgba(239,68,68,.15)', color: '#dc2626' },
-    rejected: { background: 'rgba(239,68,68,.15)', color: '#dc2626' },
-    requested: { background: 'rgba(59,130,246,.15)', color: '#2563eb' },
-    draft: { background: 'rgba(100,116,139,.14)', color: 'var(--muted)' },
+    approved: { background: 'var(--good-soft)', color: 'var(--good)' },
+    closed: { background: 'var(--panel-2)', color: 'var(--muted)' },
+    expired: { background: 'var(--bad-soft)', color: 'var(--bad)' },
+    rejected: { background: 'var(--bad-soft)', color: 'var(--bad)' },
+    requested: { background: 'var(--info-soft)', color: 'var(--info)' },
+    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }
@@ -157,7 +157,7 @@ const st = {
   crumbSep: { opacity: 0.5 } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 760, lineHeight: 1.5 } as CSSProperties,
-  warn: { border: '1px solid rgba(239,68,68,.4)', background: 'rgba(239,68,68,.07)', borderRadius: 10, padding: '11px 14px', marginBottom: 16, fontSize: 13.5 } as CSSProperties,
+  warn: { border: '1px solid var(--bad-soft)', background: 'var(--bad-soft)', borderRadius: 10, padding: '11px 14px', marginBottom: 16, fontSize: 13.5 } as CSSProperties,
   empty: { border: '1px dashed var(--border, #d1d5db)', borderRadius: 12, padding: 28, color: 'var(--muted)', textAlign: 'center' } as CSSProperties,
   tableWrap: { overflowX: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12 } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 } as CSSProperties,
@@ -165,9 +165,9 @@ const st = {
   td: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)' } as CSSProperties,
   tdCode: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)', fontWeight: 600 } as CSSProperties,
   tdMuted: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)', color: 'var(--muted)' } as CSSProperties,
-  overdueCell: { color: '#dc2626', fontWeight: 600 } as CSSProperties,
+  overdueCell: { color: 'var(--bad)', fontWeight: 600 } as CSSProperties,
   rowMuted: { opacity: 0.55 } as CSSProperties,
-  raOk: { color: '#16a34a', fontWeight: 600 } as CSSProperties,
-  raMissing: { color: '#d97706', fontWeight: 600 } as CSSProperties,
+  raOk: { color: 'var(--good)', fontWeight: 600 } as CSSProperties,
+  raMissing: { color: 'var(--warn)', fontWeight: 600 } as CSSProperties,
   open: { color: 'var(--accent, #2563eb)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
 };

@@ -8,7 +8,7 @@ import AuraDataTable, { type AuraColumn } from './ui/aura-data-table';
 import { DataDegradedNotice } from './ui/data-state';
 import {
   RecordShell, RecordHeader, RecordBand, RecordSituation, RecordNextAction, RecordHealth,
-  RecordMissing, RecordWorkflowGate, RecordCard, CardGrid, ActionButton, InsightsPanel,
+  RecordMissing, RecordWorkflowGate, RecordCard, CardGrid, ActionButton, InsightsPanel, type Tone,
   type TabDef, type KpiItem, type Insight, type HealthState, type NextBestAction,
   type WorkflowGateView, type RelatedGroup,
 } from './ui/record';
@@ -66,6 +66,27 @@ interface Evm {
 interface CertSummary { grossCertifiedToDate: number; retentionHeld: number; percentComplete: number; }
 /** One lifecycle move as the server judges it — the shape `GET /projects/:id/transitions` returns. */
 interface Transition { from: string; to: string; allowed: boolean; gaps: string[] }
+
+/** The cross-domain health read (§24). Severity and coverage are independent, deliberately. */
+interface HealthSignal {
+  id: string;
+  domain: string;
+  state: 'CLEAR' | 'WATCH' | 'AT_RISK' | 'CRITICAL' | 'UNKNOWN' | 'NOT_APPLICABLE';
+  reason?: string;
+  cause?: 'SEMANTICS_UNDECLARED' | 'PROVIDER_UNAVAILABLE' | 'PROVIDER_UNBOUND';
+  href?: string;
+  measure?: { value: number; unit?: string };
+}
+interface CrossDomainHealth {
+  severity: 'CLEAR' | 'WATCH' | 'AT_RISK' | 'CRITICAL';
+  coverage: 'COMPLETE' | 'PARTIAL';
+  applicable: boolean;
+  reassuring: boolean;
+  concerns: HealthSignal[];
+  unknown: HealthSignal[];
+  notApplicable: HealthSignal[];
+  assessedAt?: string;
+}
 
 /**
  * The schedule. It existed behind /api/projects/schedules and no project surface read it, so the
@@ -187,6 +208,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
    * button, because the person has already decided to act.
    */
   const [transitions, setTransitions] = useState<Transition[]>([]);
+  const [crossHealth, setCrossHealth] = useState<CrossDomainHealth | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
@@ -205,7 +227,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         return (await r.json()) as T;
       } catch { failures += 1; return fallback; }
     };
-    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, transitionData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
+    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, transitionData, healthData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
       j<{ impact: VariationImpact } | null>(`/api/projects/variations/summary/${project.id}`, null),
       j<EotClaim[]>(`/api/projects/eot-claims?projectId=${project.id}`, []),
@@ -216,6 +238,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       j<WbsNode[]>(`/api/projects/wbs?projectId=${project.id}`, []),
       j<CbsNode[]>(`/api/projects/cbs?projectId=${project.id}`, []),
       j<Transition[]>(`/api/projects/projects/${project.id}/transitions`, []),
+      j<CrossDomainHealth | null>(`/api/projects/projects/${project.id}/health`, null),
       j<DeliveryMap[]>(`/api/projects/delivery-item-maps?projectId=${project.id}`, []),
       j<QuantityTxn[]>(`/api/projects/quantity-ledger?projectId=${project.id}&limit=500`, []),
       j<CostTxn[]>(`/api/projects/cost-ledger?projectId=${project.id}&limit=500`, []),
@@ -246,6 +269,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     setWbs(Array.isArray(wbsData) ? wbsData : []);
     setCbs(Array.isArray(cbsData) ? cbsData : []);
     setTransitions(Array.isArray(transitionData) ? transitionData : []);
+    setCrossHealth(healthData);
     setMaps(Array.isArray(mapData) ? mapData : []);
     setQuantities(Array.isArray(quantityData) ? quantityData : []);
     setCosts(Array.isArray(costData) ? costData : []);
@@ -517,7 +541,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         aside={<InsightsPanel insights={insights} assessment={assessment.coverage} context="this project" />}
         related={related.length ? { title: 'Where this project came from', groups: related } : undefined}
       >
-        {tab === 'overview' && <ControlsOverviewPanel project={project} wbs={wbs} cbs={cbs} maps={maps} variations={variations} impact={impact} evm={evm} closeout={closeout} closeoutDone={closeoutDone} />}
+        {tab === 'overview' && <><CrossDomainHealthPanel health={crossHealth} /><ControlsOverviewPanel project={project} wbs={wbs} cbs={cbs} maps={maps} variations={variations} impact={impact} evm={evm} closeout={closeout} closeoutDone={closeoutDone} /></>}
         {tab === 'delivery' && <DeliveryPanel project={project} wbs={wbs} cbs={cbs} maps={maps} busy={busy} call={call} />}
 
         {tab === 'quantities' && <ProgressPanel projectId={project.id} schedule={schedule} wbs={wbs} quantities={quantities} maps={maps} busy={busy} call={call} />}
@@ -659,6 +683,95 @@ function ControlsOverviewPanel({
         </RecordCard>
       </CardGrid>
     </div>
+  );
+}
+
+/** The record system owns the palette; this maps a tone to its variable rather than picking colours. */
+const toneVar = (t: Tone): string =>
+  t === 'good' ? 'var(--good)' : t === 'bad' ? 'var(--bad)' : t === 'warn' ? 'var(--warn)' : t === 'accent' ? 'var(--accent)' : 'var(--text)';
+
+/**
+ * Cross-domain health (§24) — what is wrong, how serious, who owns it, and what nobody could judge.
+ *
+ * Severity and coverage are shown as two separate statements because they ARE two: a project can
+ * carry a known critical condition AND have evidence missing, and collapsing those into one badge
+ * is precisely the defect this replaced. "CRITICAL · Partial evidence" is a real and common state.
+ *
+ * Every concern keeps the owning domain's name, the owning domain's words, and a link INTO that
+ * domain. Project 360 explains and points; it is not the workshop where quality or HSE work gets
+ * done — and a reader who cannot see who owns a problem cannot act on it.
+ */
+function CrossDomainHealthPanel({ health }: { health: CrossDomainHealth | null }) {
+  if (!health) {
+    return (
+      <RecordCard title="Cross-domain health" span={2}>
+        <p style={st.muted}>Health could not be read for this project.</p>
+      </RecordCard>
+    );
+  }
+
+  const tone = (state: string): Tone =>
+    state === 'CRITICAL' ? 'bad' : state === 'AT_RISK' ? 'warn' : state === 'WATCH' ? 'warn' : state === 'CLEAR' ? 'good' : 'neutral';
+
+  const headline = !health.applicable
+    ? 'Not established'
+    : health.severity === 'CLEAR'
+      // "Clear" alone would read as a clean bill of health, which partial coverage has not earned.
+      ? (health.coverage === 'COMPLETE' ? 'Nothing outstanding' : 'Not established')
+      : health.severity === 'CRITICAL' ? 'Critical'
+        : health.severity === 'AT_RISK' ? 'At risk'
+          : 'Worth watching';
+
+  return (
+    <RecordCard title="Cross-domain health" span={2}>
+      <div data-testid="cross-domain-health">
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
+        <strong style={{ fontSize: 15, color: toneVar(tone(health.severity)) }}>{headline}</strong>
+        <span style={{ ...st.muted, fontSize: 12.5 }}>
+          {health.coverage === 'COMPLETE'
+            ? 'Every domain answered'
+            : `${health.unknown.length} domain${health.unknown.length === 1 ? '' : 's'} could not be assessed`}
+        </span>
+      </div>
+
+      {health.concerns.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 12 }}>
+          {health.concerns.map((c) => (
+            <div key={c.id} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 700, color: toneVar(tone(c.state)), minWidth: 62 }}>{c.state.replace('_', ' ')}</span>
+              <span style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--muted)', minWidth: 96 }}>{c.domain}</span>
+              <span style={{ fontSize: 13, flex: 1, minWidth: 180 }}>{c.reason}</span>
+              {c.href && <a href={c.href} style={{ ...st.link, fontSize: 12.5, flexShrink: 0 }}>Open {c.domain} →</a>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {health.unknown.length > 0 && (
+        <div data-testid="health-unknown">
+          <div style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>Could not be assessed</div>
+          {health.unknown.map((u) => (
+            <div key={u.id} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '5px 0' }}>
+              <span style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--muted)', minWidth: 96 }}>{u.domain}</span>
+              <span style={{ ...st.muted, fontSize: 12.5, flex: 1 }}>{u.reason}</span>
+            </div>
+          ))}
+          {/*
+            Said plainly, because the alternative is a reader assuming the blank means fine. This
+            is the sentence the whole two-axis design exists to make sayable.
+          */}
+          <p style={{ ...st.muted, fontSize: 12.5, marginTop: 8 }}>
+            These are not clean results. Until each owning domain declares what its facts mean for
+            project health, this project cannot be reported as fully assessed.
+          </p>
+        </div>
+      )}
+
+      {health.concerns.length === 0 && health.unknown.length === 0 && (
+        <p style={st.muted}>Every domain answered, and none raised a condition.</p>
+      )}
+      </div>
+    </RecordCard>
   );
 }
 

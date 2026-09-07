@@ -1,7 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, type ProjectHealth } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
@@ -30,6 +30,7 @@ import {
   CloseoutService,
   CloseoutReadinessService,
   type CloseoutReadiness,
+  ProjectHealthService,
   type ProjectCashflowForecast,
   type CashflowSummary,
   type NewCashflowPeriod,
@@ -152,6 +153,7 @@ export class ProjectsController {
     // silence. The endpoint then answers 503 "not configured" on a deployment that IS configured —
     // which is exactly what it did until this line named the token.
     @Optional() @Inject(CloseoutReadinessService) private readonly closeoutReadiness: CloseoutReadinessService | null = null,
+    private readonly health: ProjectHealthService,
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
     private readonly deliveryItemMaps: DeliveryItemMapService,
@@ -711,6 +713,27 @@ export class ProjectsController {
       throw new ServiceUnavailableException('closeout readiness is not configured in this deployment');
     }
     return this.closeoutReadiness.assess(ctx.tenantId, id);
+  }
+
+  /**
+   * GET /projects/:id/health — the cross-domain read (§24).
+   *
+   * One canonical assessment: overall severity, coverage, and a per-signal breakdown carrying the
+   * owning domain, its own reason and where to go next. No mutation endpoint exists or should:
+   * §2 authorises transitions, §27 authorises closeout, and this authorises nothing.
+   *
+   * Unlike the closeout endpoint above, an unconfigured provider is NOT a 503. A domain that
+   * cannot answer is a normal, reportable state here — it becomes UNKNOWN and degrades coverage —
+   * and refusing the whole read because one of nine is unavailable would hide the eight that
+   * answered.
+   */
+  @Get('projects/:id/health')
+  async projectHealth(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ProjectHealth & { assessedAt: string }> {
+    const ctx = this.tenant.get();
+    const found = await this.projects.get(id);
+    if (!found) throw new NotFoundException(`project ${id} not found`);
+    // Stamped here rather than in the rules, which stay pure and clock-free.
+    return { ...(await this.health.assess(ctx.tenantId, id)), assessedAt: new Date().toISOString() };
   }
 
   @Get('closeouts/paged')

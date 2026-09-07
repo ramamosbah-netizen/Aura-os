@@ -207,7 +207,7 @@ const s = {
   input: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 14 } as CSSProperties,
   textarea: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13, fontFamily: 'ui-monospace, monospace', resize: 'vertical' } as CSSProperties,
   miniInput: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text)', padding: '5px 8px', fontSize: 12.5, width: 120 } as CSSProperties,
-  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: '#fff', padding: '9px 16px', fontSize: 14, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: 'var(--accent-ink)', padding: '9px 16px', fontSize: 14, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   secondary: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 14px', fontSize: 14, cursor: 'pointer' } as CSSProperties,
   msg: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,
   summary: { display: 'flex', gap: 26, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)', flexWrap: 'wrap' } as CSSProperties,

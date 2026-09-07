@@ -205,7 +205,7 @@ const st = {
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
   ok: { color: 'var(--good)', fontSize: 12.5, fontWeight: 600, marginTop: 8 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
   modalBox: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 20, maxWidth: 460, width: '92%', boxShadow: 'var(--shadow-lg)' } as CSSProperties,
   input: { width: '100%', padding: '8px 12px', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text)', boxSizing: 'border-box' } as CSSProperties,
 };

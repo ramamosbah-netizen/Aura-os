@@ -406,7 +406,7 @@ const s = {
   } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -476,9 +476,9 @@ const s = {
   td: { padding: '11px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', verticalAlign: 'middle' } as CSSProperties,
   tdAlignRight: { textAlign: 'right', padding: '11px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
-  rowParent: { borderBottom: '1px solid var(--border)', background: 'rgba(255,255,255,0.015)' } as CSSProperties,
+  rowParent: { borderBottom: '1px solid var(--border)', background: 'var(--panel-2)' } as CSSProperties,
   rowLeaf: { borderBottom: '1px solid var(--border)' } as CSSProperties,
-  rowSelected: { background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  rowSelected: { background: 'var(--panel-2)', borderBottom: '1px solid var(--border)' } as CSSProperties,
   codeBadge: {
     fontFamily: 'ui-monospace, monospace',
     fontSize: 11,
@@ -495,12 +495,12 @@ const s = {
     let background = 'var(--panel-2)';
     if (type === 'asset' || type === 'revenue') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     } else if (type === 'expense' || type === 'liability') {
       color = 'var(--accent)';
-      border = '1px solid rgba(255,193,7,0.2)';
-      background = 'rgba(255,193,7,0.05)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
     }
     return {
       fontSize: 10.5,
@@ -514,15 +514,15 @@ const s = {
     };
   },
   errorBar: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,
     marginBottom: 12,
   } as CSSProperties,
-  expandedBg: { background: 'rgba(0,0,0,0.12)' } as CSSProperties,
+  expandedBg: { background: 'var(--overlay)' } as CSSProperties,
   expandedCell: { padding: '14px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   linesContainer: {
     background: 'var(--panel)',
@@ -534,6 +534,6 @@ const s = {
   linesTable: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
   linesTh: { textAlign: 'left', color: 'var(--muted)', paddingBottom: 6, borderBottom: '1px solid var(--border)' } as CSSProperties,
   linesThAlignRight: { textAlign: 'right', color: 'var(--muted)', paddingBottom: 6, borderBottom: '1px solid var(--border)' } as CSSProperties,
-  linesTd: { padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)', verticalAlign: 'middle' } as CSSProperties,
-  linesTdAlignRight: { textAlign: 'right', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)', verticalAlign: 'middle' } as CSSProperties,
+  linesTd: { padding: '6px 0', borderBottom: '1px solid var(--panel-2)', verticalAlign: 'middle' } as CSSProperties,
+  linesTdAlignRight: { textAlign: 'right', padding: '6px 0', borderBottom: '1px solid var(--panel-2)', verticalAlign: 'middle' } as CSSProperties,
 };

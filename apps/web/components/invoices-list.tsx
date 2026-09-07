@@ -391,11 +391,11 @@ const s = {
   td: { padding: '11px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
   tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', verticalAlign: 'middle' } as CSSProperties,
   row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
-  rowSelected: { background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  rowSelected: { background: 'var(--panel-2)', borderBottom: '1px solid var(--border)' } as CSSProperties,
   actions: { display: 'flex', gap: 8, alignItems: 'center' } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
-    color: '#0b0e14',
+    color: 'var(--accent-ink)',
     fontWeight: 600,
     border: 'none',
     borderRadius: 8,
@@ -418,12 +418,12 @@ const s = {
     let background = 'var(--panel-2)';
     if (status === 'approved') {
       color = 'var(--good)';
-      border = '1px solid rgba(40,167,69,0.2)';
-      background = 'rgba(40,167,69,0.05)';
+      border = '1px solid var(--good-soft)';
+      background = 'var(--good-soft)';
     } else if (status === 'paid') {
       color = 'var(--accent)';
-      border = '1px solid rgba(255,193,7,0.2)';
-      background = 'rgba(255,193,7,0.05)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
     }
     return {
       fontSize: 11.5,
@@ -440,22 +440,22 @@ const s = {
   matchTag: (ok: boolean): CSSProperties => ({
     fontSize: 11,
     fontWeight: 600,
-    background: ok ? 'rgba(40,167,69,0.05)' : 'rgba(220,53,69,0.05)',
-    border: ok ? '1px solid rgba(40,167,69,0.2)' : '1px solid rgba(220,53,69,0.2)',
+    background: ok ? 'var(--good-soft)' : 'var(--bad-soft)',
+    border: ok ? '1px solid var(--good-soft)' : '1px solid var(--bad-soft)',
     color: ok ? 'var(--good)' : 'red',
     borderRadius: 6,
     padding: '2px 6px',
   }),
   errorBar: {
-    background: 'rgba(220,53,69,0.1)',
-    border: '1px solid rgba(220,53,69,0.2)',
-    color: '#dc3545',
+    background: 'var(--bad-soft)',
+    border: '1px solid var(--bad-soft)',
+    color: 'var(--bad)',
     padding: '10px 14px',
     borderRadius: 10,
     fontSize: 13,
     marginBottom: 10,
   } as CSSProperties,
-  expandedBg: { background: 'rgba(0,0,0,0.12)' } as CSSProperties,
+  expandedBg: { background: 'var(--overlay)' } as CSSProperties,
   expandedCell: { padding: '14px 20px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   payFormContainer: {
     background: 'var(--panel)',
@@ -486,25 +486,25 @@ const s = {
     outline: 'none',
   } as CSSProperties,
   previewPanel: {
-    background: 'rgba(0,0,0,0.15)',
+    background: 'var(--overlay)',
     border: '1px solid var(--border)',
     borderRadius: 8,
     padding: '10px 12px',
   } as CSSProperties,
   previewHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11.5, color: 'var(--muted)', marginBottom: 8 } as CSSProperties,
-  balancedTag: { color: 'var(--good)', fontWeight: 600, background: 'rgba(40,167,69,0.08)', borderRadius: 4, padding: '1px 5px', fontSize: 10.5 } as CSSProperties,
+  balancedTag: { color: 'var(--good)', fontWeight: 600, background: 'var(--good-soft)', borderRadius: 4, padding: '1px 5px', fontSize: 10.5 } as CSSProperties,
   previewTable: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 } as CSSProperties,
-  previewTh: { textAlign: 'left', color: 'var(--muted)', paddingBottom: 4, borderBottom: '1px solid rgba(255,255,255,0.05)' } as CSSProperties,
-  previewThAlignRight: { textAlign: 'right', color: 'var(--muted)', paddingBottom: 4, borderBottom: '1px solid rgba(255,255,255,0.05)' } as CSSProperties,
-  previewTd: { padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' } as CSSProperties,
-  previewTdAlignRight: { textAlign: 'right', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.03)' } as CSSProperties,
+  previewTh: { textAlign: 'left', color: 'var(--muted)', paddingBottom: 4, borderBottom: '1px solid var(--border)' } as CSSProperties,
+  previewThAlignRight: { textAlign: 'right', color: 'var(--muted)', paddingBottom: 4, borderBottom: '1px solid var(--border)' } as CSSProperties,
+  previewTd: { padding: '6px 0', borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
+  previewTdAlignRight: { textAlign: 'right', padding: '6px 0', borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
 
   // Audit styles
-  auditBg: { background: 'rgba(0,0,0,0.06)', borderBottom: '1px solid rgba(255,255,255,0.02)' } as CSSProperties,
+  auditBg: { background: 'var(--overlay)', borderBottom: '1px solid var(--panel-2)' } as CSSProperties,
   auditCell: { padding: '10px 12px 14px' } as CSSProperties,
   auditContainer: {
-    background: 'rgba(0,0,0,0.1)',
-    border: '1px solid rgba(255,255,255,0.04)',
+    background: 'var(--overlay)',
+    border: '1px solid var(--panel-2)',
     borderRadius: 10,
     padding: '10px 12px',
   } as CSSProperties,
@@ -512,7 +512,7 @@ const s = {
   auditGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 } as CSSProperties,
   auditCard: (ok: boolean): CSSProperties => ({
     background: 'var(--panel)',
-    border: ok ? '1px solid rgba(40,167,69,0.1)' : '1px solid rgba(220,53,69,0.15)',
+    border: ok ? '1px solid var(--good-soft)' : '1px solid var(--bad-soft)',
     borderRadius: 8,
     padding: '8px 10px',
     display: 'flex',

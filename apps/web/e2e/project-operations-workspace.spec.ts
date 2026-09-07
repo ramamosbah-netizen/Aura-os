@@ -70,10 +70,18 @@ test('project and operations share one usable delivery context', async ({ page, 
 
   await page.goto(`/project/${project.id}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('project-command-center')).toBeVisible();
-  // The overview's section headings after the September rebuild. "Delivery pulse" and "Project
-  // delivery spine" are both gone from the source entirely — they survived only in this spec.
-  await expect(page.getByRole('heading', { name: 'Where the work is now' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Needs attention' })).toBeVisible();
+  // The overview's landmarks, updated with the Project 360 rebuild.
+  //
+  // This route used to render a second, hand-written dashboard beside the record at /controls, and
+  // these assertions named its sections. Both routes now render the SAME record, so the equivalent
+  // claims are made against the record's own structure: it composes the delivery workspaces rather
+  // than duplicating their registers, and it carries the attention rail on every tab.
+  //
+  // Asserted by landmark rather than by copy — heading text is the part most likely to be reworded
+  // next, and it is not what this test is about.
+  await expect(page.getByRole('heading', { name: 'Where the work lives' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^Engineering/ }).first()).toBeVisible();
+  await expect(page.getByTestId('project-controls-overview')).toBeVisible();
 
   // The launcher is named "Project 360 navigation" now, and Project controls was folded into
   // "Plan & Control" at /workspace/plan — see project-shell.tsx:54, which still treats the older
@@ -88,10 +96,13 @@ test('project and operations share one usable delivery context', async ({ page, 
   await expect(page).toHaveURL(new RegExp(`/project/${project.id}/controls`));
   await expect(page.getByTestId('project-controls')).toBeVisible();
   await expect(page.getByRole('heading', { name: PROJECT_TITLE })).toBeVisible();
-  const variationsTab = page.getByRole('tab', { name: /Variations/ });
-  await variationsTab.focus();
-  await variationsTab.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: /WBS \/ CBS/ })).toHaveAttribute('aria-selected', 'true');
+  // Roving-tabindex keyboard navigation, on the rebuilt tab set. The sections are now grouped by
+  // the question each answers — Change sits before Time — rather than by the artefact that happens
+  // to live there, so this walks that order instead of the old one.
+  const changeTab = page.getByRole('tab', { name: /^Change/ });
+  await changeTab.focus();
+  await changeTab.press('ArrowRight');
+  await expect(page.getByRole('tab', { name: /^Time/ })).toHaveAttribute('aria-selected', 'true');
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('project-controls')).toBeVisible();
 

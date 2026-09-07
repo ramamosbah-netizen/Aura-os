@@ -13,7 +13,9 @@ test('Project 360 exposes governed WBS/CBS and Delay/EOT authoring', async ({ pa
   await page.goto(`/project/${project.id}/controls`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('project-controls')).toBeVisible();
 
-  await page.getByRole('tab', { name: /WBS \/ CBS/ }).click();
+  // Renamed with the Project 360 rebuild: the tabs are grouped by the question each answers
+  // ('Scope & plan') rather than by the artefact that happens to live there ('WBS / CBS').
+  await page.getByRole('tab', { name: /Scope/ }).click();
   await page.getByLabel('WBS code').fill('1.1');
   await page.getByLabel('WBS title').fill('Install field devices');
   await page.getByLabel('WBS planned value').fill('25000');
@@ -29,7 +31,7 @@ test('Project 360 exposes governed WBS/CBS and Delay/EOT authoring', async ({ pa
   await expect(page.getByLabel('CBS actual')).toHaveCount(0);
   await expect(page.getByLabel('WBS progress')).toHaveCount(0);
 
-  await page.getByRole('tab', { name: /Delays & EOT/ }).click();
+  await page.getByRole('tab', { name: /^Time/ }).click();
   await page.getByLabel('Delay title').fill('Late access permit');
   await page.getByLabel('Delay start').fill('2026-09-01');
   await page.getByLabel('Delay days').fill('3');

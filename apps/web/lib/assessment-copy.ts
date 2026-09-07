@@ -21,6 +21,11 @@ export const CHECK_LABEL: Record<AssessmentCheckCode, string> = {
   LEAD_QUALIFICATION: 'the qualification assessment',
   CONTACT_CHANNEL: 'a contact channel',
   FIRST_RESPONSE_SLA: 'first-response SLA',
+  PROJECT_BASELINE: 'an approved scope baseline',
+  COST_PERFORMANCE: 'cost performance',
+  SCHEDULE_PERFORMANCE: 'schedule performance',
+  CHANGE_CONTROL: 'change control',
+  CLOSEOUT_READINESS: 'closeout readiness',
 };
 
 /** Short label for a badge/heading. */

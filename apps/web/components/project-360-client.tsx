@@ -2,14 +2,18 @@
 
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, CalendarRange, CircleDollarSign, FileCheck2, Gauge, GitBranch, ShieldAlert } from 'lucide-react';
 import ProjectTeam from './project-team';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import AuraDataTable, { type AuraColumn } from './ui/aura-data-table';
 import { DataDegradedNotice } from './ui/data-state';
-import { RecordTabs, type TabDef } from './ui/record';
+import {
+  RecordShell, RecordHeader, RecordBand, RecordSituation, RecordNextAction, RecordHealth,
+  RecordMissing, RecordWorkflowGate, RecordCard, CardGrid, ActionButton, InsightsPanel,
+  type TabDef, type KpiItem, type Insight, type HealthState, type NextBestAction,
+  type WorkflowGateView, type RelatedGroup,
+} from './ui/record';
+import { evaluateProjectRules, assessProject, type ProjectFinding, type ProjectFacts } from '@aura/shared';
 import clientStyles from './project-360-client.module.css';
-import AuraTabLink from './aura-tab-link';
 
 // Project 360 — delivery + commercial control in one place. The project
 // INHERITS its commercial context from the chain (contract value → budget),
@@ -61,6 +65,23 @@ interface Evm {
 }
 interface CertSummary { grossCertifiedToDate: number; retentionHeld: number; percentComplete: number; }
 
+/**
+ * The schedule. It existed behind /api/projects/schedules and no project surface read it, so the
+ * time half of "on plan" had no home: SPI could say a project was late while nothing on screen
+ * said which activity was late, or whether the plan had ever been baselined.
+ */
+interface ScheduleTask {
+  name: string;
+  plannedStart: string;
+  plannedEnd: string;
+  baselineStart: string | null;
+  baselineEnd: string | null;
+  actualStart: string | null;
+  actualEnd: string | null;
+  percentComplete: number;
+}
+interface ProjectSchedule { id: string; projectId: string; tasks: ScheduleTask[]; baselineSetAt: string | null; updatedAt: string }
+
 interface WbsNode { id: string; projectId: string; parentId: string | null; code: string; title: string; plannedValue: number; plannedValueKnown?: boolean; earnedValue: number; actualCost: number; progress: number; status: string; boqItemId: string | null; }
 interface CbsNode { id: string; projectId: string; parentId: string | null; code: string; title: string; category: string; budgetAmount: number; committedAmount: number; actualAmount: number; forecastAmount: number; currency: string; }
 interface DeliveryMap { id: string; projectId: string; handoverId: string; frozenItemKey: string; sourceKind: string; sourceId: string | null; sourceRevisionRef: string | null; sourceItemId: string | null; wbsNodeId: string | null; cbsNodeId: string | null; createdAt: string; }
@@ -72,15 +93,23 @@ type Tab = 'overview' | 'variations' | 'delivery' | 'quantities' | 'cost' | 'eot
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 
+/**
+ * The sections of a project, in the order a project manager needs them.
+ *
+ * The previous set was a list of the screens that happened to exist — Variations sat between
+ * Overview and WBS, and Cost sat two tabs away from the quantities that produce it. These are
+ * grouped by the QUESTION each answers: what is it, is it planned, how is it going, what is it
+ * costing, what has changed, who is doing it, can we finish.
+ */
 const CONTROL_TABS: TabDef[] = [
   { id: 'overview', label: 'Overview' },
-  { id: 'variations', label: 'Variations' },
-  { id: 'delivery', label: 'WBS / CBS' },
-  { id: 'quantities', label: 'Quantities' },
-  { id: 'cost', label: 'Cost / EVM' },
-  { id: 'eot', label: 'Delays & EOT' },
-  { id: 'closeout', label: 'Closeout' },
+  { id: 'delivery', label: 'Scope & plan' },
+  { id: 'quantities', label: 'Progress' },
+  { id: 'cost', label: 'Cost' },
+  { id: 'variations', label: 'Change' },
+  { id: 'eot', label: 'Time' },
   { id: 'team', label: 'Team' },
+  { id: 'closeout', label: 'Closeout' },
 ];
 
 const VARIATION_COLUMNS: AuraColumn<Variation>[] = [
@@ -92,13 +121,6 @@ const VARIATION_COLUMNS: AuraColumn<Variation>[] = [
   { key: 'createdAt', label: 'Raised', priority: 'muted', sortable: true, render: (row) => fmt(row.createdAt) },
 ];
 
-const EOT_COLUMNS: AuraColumn<EotClaim>[] = [
-  { key: 'title', label: 'Claim', priority: 'primary', sortable: true },
-  { key: 'submittedDays', label: 'Days requested', sortable: true },
-  { key: 'approvedDays', label: 'Days granted', sortable: true, render: (row) => row.approvedDays || '—' },
-  { key: 'status', label: 'Status', sortable: true, render: (row) => <Status value={row.status} /> },
-  { key: 'createdAt', label: 'Raised', priority: 'muted', sortable: true, render: (row) => fmt(row.createdAt) },
-];
 
 export default function Project360Client({ project, initialTab }: { project: Project360Project; initialTab?: string }) {
   const router = useRouter();
@@ -114,6 +136,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   const [maps, setMaps] = useState<DeliveryMap[]>([]);
   const [quantities, setQuantities] = useState<QuantityTxn[]>([]);
   const [costs, setCosts] = useState<CostTxn[]>([]);
+  const [schedule, setSchedule] = useState<ProjectSchedule | null>(null);
   const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
   const [tab, setTab] = useState<Tab>(validInitialTab);
   const [err, setErr] = useState('');
@@ -130,7 +153,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         return (await r.json()) as T;
       } catch { failures += 1; return fallback; }
     };
-    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, mapData, quantityData, costData] = await Promise.all([
+    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, mapData, quantityData, costData, scheduleData] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
       j<{ impact: VariationImpact } | null>(`/api/projects/variations/summary/${project.id}`, null),
       j<EotClaim[]>(`/api/projects/eot-claims?projectId=${project.id}`, []),
@@ -143,6 +166,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       j<DeliveryMap[]>(`/api/projects/delivery-item-maps?projectId=${project.id}`, []),
       j<QuantityTxn[]>(`/api/projects/quantity-ledger?projectId=${project.id}&limit=500`, []),
       j<CostTxn[]>(`/api/projects/cost-ledger?projectId=${project.id}&limit=500`, []),
+      j<ProjectSchedule[]>(`/api/projects/schedules?projectId=${project.id}`, []),
     ]);
     setVariations(Array.isArray(vs) ? vs : []);
     setImpact(imp?.impact ?? null);
@@ -156,6 +180,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     setMaps(Array.isArray(mapData) ? mapData : []);
     setQuantities(Array.isArray(quantityData) ? quantityData : []);
     setCosts(Array.isArray(costData) ? costData : []);
+    setSchedule((Array.isArray(scheduleData) ? scheduleData : [])[0] ?? null);
     setLoadFailures(failures);
   }, [project.id, project.contractId]);
 
@@ -187,109 +212,198 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       : undefined);
   };
 
+  // -- The record's verdict, computed from facts by the shared rules --------------------------
+  //
+  // Nothing below decides a project question. `evaluateProjectRules` owns every threshold and
+  // `assessProject` owns coverage; this maps their codes to words and handlers, exactly as
+  // opportunity-360 does with the deal rules. A rule that lived here would be one nobody can test
+  // and one the server never sees.
+  const facts: ProjectFacts = useMemo(() => ({
+    status: project.status,
+    wbsNodes: wbs.length,
+    wbsCosted: wbs.filter((n) => n.plannedValueKnown !== false && n.plannedValue > 0).length,
+    cbsNodes: cbs.length,
+    cpi: evm?.cpi ?? null,
+    spi: evm?.spi ?? null,
+    variationsPending: variations.filter((v) => v.status === 'pending' || v.status === 'submitted').length,
+    delaysOpen: delays.filter((x) => x.status !== 'closed' && x.status !== 'rejected').length,
+    eotsAwaitingDecision: eots.filter((e) => e.status === 'submitted').length,
+    closeoutExists: closeout !== null,
+    closeoutItems: closeout?.items.length ?? 0,
+    closeoutDone,
+    closeoutFinalized: closeout?.status === 'finalized',
+  }), [project.status, wbs, cbs, evm, variations, delays, eots, closeout, closeoutDone]);
+
+  const assessment = useMemo(() => assessProject(evaluateProjectRules(facts), facts), [facts]);
+
+  const FINDING_UI: Record<ProjectFinding['code'], (p: ProjectFinding['data']) => Insight> = {
+    NO_SCOPE_BASELINE: () => ({ tone: 'warn', title: 'No scope baseline', detail: 'Nothing is planned yet, so progress and cost performance have nothing to measure against.', action: { label: 'Build the WBS', onClick: () => setTab('delivery') } }),
+    SCOPE_NOT_COSTED: (d) => ({ tone: 'warn', title: 'Scope is not costed', detail: `${String(d?.nodes ?? '')} work packages carry no planned value, so earned value cannot be computed.`, action: { label: 'Allocate budget', onClick: () => setTab('delivery') } }),
+    COST_OVERRUN: (d) => ({ tone: 'bad', title: 'Spending ahead of value earned', detail: `CPI ${Number(d?.cpi ?? 0).toFixed(2)} — every dirham of work earned has cost more than planned.`, action: { label: 'Open cost', onClick: () => setTab('cost') } }),
+    SCHEDULE_SLIPPING: (d) => ({ tone: 'warn', title: 'Behind the plan', detail: `SPI ${Number(d?.spi ?? 0).toFixed(2)} — less has been earned than the schedule called for by now.`, action: { label: 'Open progress', onClick: () => setTab('quantities') } }),
+    CHANGE_PENDING_DECISION: (d) => ({ tone: 'warn', title: 'Change awaiting a decision', detail: `${String(d?.count ?? '')} variation(s) are neither approved nor rejected, so the revised value is provisional.`, action: { label: 'Open change', onClick: () => setTab('variations') } }),
+    DELAY_UNRESOLVED: (d) => ({ tone: 'warn', title: 'Delay events still open', detail: `${String(d?.count ?? '')} recorded delay(s) have no resolution, and entitlement expires with the notice period.`, action: { label: 'Open time', onClick: () => setTab('eot') } }),
+    EOT_AWAITING_DECISION: (d) => ({ tone: 'warn', title: 'Extension of time submitted', detail: `${String(d?.count ?? '')} claim(s) are with the engineer and unanswered.`, action: { label: 'Open time', onClick: () => setTab('eot') } }),
+    CLOSEOUT_INCOMPLETE: (d) => ({ tone: 'neutral', title: 'Closeout in progress', detail: `${String(d?.remaining ?? '')} of ${String(d?.total ?? '')} handover items remain.`, action: { label: 'Open closeout', onClick: () => setTab('closeout') } }),
+    READY_TO_CLOSE: () => ({ tone: 'good', title: 'Ready to close', detail: 'Every closeout item is done. Finalizing closes the source contract on the deal chain.', action: { label: 'Finalize', onClick: () => setTab('closeout') } }),
+  };
+  const insights: Insight[] = assessment.findings.map((f) => FINDING_UI[f.code](f.data));
+
+  const money = (n: number | null | undefined): string => (n === null || n === undefined ? '—' : `AED ${aed(n)}`);
+  const revised = impact?.revisedValue ?? project.value;
+  const progressPct = wbs.length
+    ? Math.round(wbs.reduce((sum, n) => sum + (Number.isFinite(n.progress) ? n.progress : 0), 0) / wbs.length)
+    : null;
+
+  const kpis: KpiItem[] = [
+    { label: 'Contract value', value: money(project.value), hint: 'Inherited from the awarded contract' },
+    { label: 'Revised value', value: money(revised), tone: revised !== project.value ? 'accent' : undefined, hint: 'After approved variations' },
+    { label: 'Certified', value: certs ? money(certs.grossCertifiedToDate) : '—', hint: certs ? `${certs.percentComplete}% of contract` : 'No certificates issued' },
+    { label: 'CPI', value: evm?.cpi != null ? evm.cpi.toFixed(2) : 'Not established', tone: evm?.cpi == null ? undefined : evm.cpi < 1 ? 'bad' : 'good', hint: 'Earned value / actual cost' },
+    { label: 'SPI', value: evm?.spi != null ? evm.spi.toFixed(2) : 'Not established', tone: evm?.spi == null ? undefined : evm.spi < 1 ? 'warn' : 'good', hint: 'Earned value / planned value' },
+    { label: 'Progress', value: progressPct === null ? 'Not established' : `${progressPct}%`, hint: 'Mean WBS completion' },
+  ];
+
+  // Health reads the assessment rather than re-deriving it, so the band and the rail can never
+  // disagree about the same project.
+  const health: HealthState = assessment.needsAttention
+    ? { label: 'Needs attention', tone: (evm?.cpi != null && evm.cpi < 1) ? 'bad' : 'warn', reasons: insights.filter((i) => i.tone === 'bad' || i.tone === 'warn').map((i) => i.title) }
+    : facts.closeoutFinalized || project.status === 'completed'
+      ? { label: 'Closed', tone: 'neutral' }
+      : { label: 'On plan', tone: 'good' };
+
+  const situationText = project.status === 'planned'
+    ? `Awarded${project.contractTitle ? ` under ${project.contractTitle}` : ''} and not yet started.`
+    : project.status === 'completed' ? 'Delivered and closed on the deal chain.'
+    : project.status === 'cancelled' ? 'Cancelled before completion.'
+    : `In execution${progressPct === null ? '' : ` at ${progressPct}% of scope`}${certs ? `, ${certs.percentComplete}% certified` : ''}.`;
+
+  // The first insight that demands action IS the next action - one source, so the band cannot
+  // advertise something the rail does not list.
+  const firstActionable = insights.find((i) => i.tone === 'warn' || i.tone === 'bad') ?? insights.find((i) => i.action);
+  const nba: NextBestAction | undefined = firstActionable?.action
+    ? { label: firstActionable.action.label, hint: firstActionable.title, onClick: firstActionable.action.onClick }
+    : undefined;
+
+  // What the record cannot answer, named. Taken from declared coverage, not from a hand-list that
+  // would drift from what the rules actually ran.
+  const missing = (assessment.coverage.unverifiable ?? []).map((code) => (
+    code === 'COST_PERFORMANCE' ? 'Cost performance — no earned value recorded yet'
+      : code === 'SCHEDULE_PERFORMANCE' ? 'Schedule performance — no planned value to compare against'
+        : code === 'CLOSEOUT_READINESS' ? 'Closeout — no checklist has been started'
+          : String(code)
+  ));
+
+  // The lifecycle gate, rendered from the same conditions the action buttons obey, so the page
+  // cannot offer a transition it then refuses.
+  const gate: WorkflowGateView | undefined =
+    project.status === 'planned' ? { nextStage: 'Active', label: 'Start execution', allowed: true, gaps: [] }
+      : project.status === 'active' ? {
+        nextStage: 'Completed',
+        label: 'Complete the project',
+        allowed: facts.closeoutExists && facts.closeoutItems > 0 && facts.closeoutDone === facts.closeoutItems,
+        gaps: [
+          ...(!facts.closeoutExists ? ['No closeout checklist has been started'] : []),
+          ...(facts.closeoutExists && facts.closeoutDone < facts.closeoutItems ? [`${facts.closeoutItems - facts.closeoutDone} closeout item(s) outstanding`] : []),
+          ...(facts.variationsPending > 0 ? [`${facts.variationsPending} variation(s) awaiting decision`] : []),
+          ...(facts.eotsAwaitingDecision > 0 ? [`${facts.eotsAwaitingDecision} EOT claim(s) awaiting decision`] : []),
+        ],
+      }
+        : undefined;
+
+  // Delivery lives in the project shell's own workspace sections; the record links to them rather
+  // than duplicating registers that already have an owner.
+  const related: RelatedGroup[] = [
+    {
+      label: 'Delivery',
+      icon: '▥',
+      items: [
+        { code: 'Engineering', href: `/project/${project.id}/workspace/engineering`, meta: 'Drawings, RFIs, submittals' },
+        { code: 'Quality', href: `/project/${project.id}/workspace/quality`, meta: 'Inspections, NCRs, snags' },
+        { code: 'HSE', href: `/project/${project.id}/workspace/hse`, meta: 'Permits, incidents, CAPA' },
+        { code: 'Site', href: `/project/${project.id}/workspace/site`, meta: 'Instructions, daily reports, progress' },
+        { code: 'Testing & commissioning', href: `/project/${project.id}/workspace/testing`, meta: 'System readiness and sign-off' },
+        { code: 'Documents', href: `/project/${project.id}/workspace/documents`, meta: 'Controlled project information' },
+      ],
+    },
+    {
+      label: 'Commercial context',
+      icon: '◈',
+      items: [
+        ...(project.contractId ? [{ code: project.contractTitle ?? 'Contract', href: `/contracts/contracts/${project.contractId}`, meta: 'The awarded agreement this project inherits' }] : []),
+        ...(project.accountId ? [{ code: project.accountName ?? 'Account', href: `/crm/accounts/${project.accountId}`, meta: 'The customer' }] : []),
+      ],
+    },
+  ].filter((g) => g.items.length > 0);
+
+  const actions = (
+    <>
+      {project.status === 'planned' && (
+        <ActionButton onClick={() => setStatus('active')} disabled={busy}>Start execution</ActionButton>
+      )}
+      {project.status === 'active' && (
+        <ActionButton onClick={() => setStatus('completed')} disabled={busy}>Complete project</ActionButton>
+      )}
+      {(project.status === 'planned' || project.status === 'active') && (
+        <ActionButton kind="ghost" onClick={() => setStatus('cancelled')} disabled={busy}>Cancel</ActionButton>
+      )}
+      {tab === 'variations' && <ActionButton kind="ghost" href="/projects/variations">Variations register</ActionButton>}
+      {tab === 'closeout' && !closeout && (
+        <ActionButton onClick={() => void call('/api/projects/closeouts', 'POST', { projectId: project.id, projectName: project.title }, 'Closeout checklist started.')} disabled={busy}>
+          Start closeout checklist
+        </ActionButton>
+      )}
+    </>
+  );
+
   return (
     <div data-testid="project-controls-client" className={clientStyles.root}>
       {err && <div role="alert" style={st.err}>{err}</div>}
       {msg && <div role="status" style={st.ok}>{msg}</div>}
       {loadFailures > 0 ? <DataDegradedNotice message={`${loadFailures} project-control data source${loadFailures === 1 ? ' is' : 's are'} unavailable. Available sections remain live.`} /> : null}
 
-      {/* header */}
-      <div style={st.header}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h1 style={st.h1}>{project.title}</h1>
-            <span className={project.status === 'active' ? 'badge badge-good' : project.status === 'completed' ? 'badge badge-accent' : project.status === 'cancelled' ? 'badge badge-bad' : 'badge'}>{project.status}</span>
-          </div>
-          <div style={st.subline}>
-            {project.reference && <span style={{ fontFamily: 'ui-monospace, monospace' }}>{project.reference}</span>}
-            {project.accountId
-              ? <a href={`/crm/accounts/${project.accountId}`} style={st.link}>{project.accountName ?? 'Account'}</a>
-              : project.accountName && <span>{project.accountName}</span>}
-            <span>Created {fmt(project.createdAt)}</span>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href={`/project/${project.id}`} className="btn btn-primary" style={st.actBtn}>▦ Command center</a>
-          {project.status === 'planned' && (
-            <button className="btn btn-primary" style={st.actBtn} disabled={busy} onClick={() => setStatus('active')}>▶ Start execution</button>
-          )}
-          {project.status === 'active' && (
-            <button
-              className="btn btn-primary"
-              style={st.actBtn}
-              disabled={busy}
-              title={closeout && closeout.status !== 'finalized' ? 'Tip: finalize the closeout checklist first' : undefined}
-              onClick={() => setStatus('completed')}
-            >
-              Complete ✓ → closes contract
-            </button>
-          )}
-          {(project.status === 'planned' || project.status === 'active') && (
-            <button className="btn btn-ghost" style={st.actBtn} disabled={busy} onClick={() => setStatus('cancelled')}>Cancel</button>
-          )}
-          <a href="/projects/schedule" style={st.linkBtn}>▤ Schedule</a>
-        </div>
-      </div>
-
-      {/* commercial control — inherited from the chain */}
-      <div style={st.stats}>
-        <Stat label="Budget (contract)" value={`AED ${aed(project.value)}`} strong />
-        <Stat label="Approved variations" value={impact ? `AED ${aed(impact.approvedAdditions - impact.approvedOmissions)}` : '—'} />
-        <Stat label="Revised value" value={impact ? `AED ${aed(impact.revisedValue)}` : '—'} strong accent />
-        <Stat label="Pending variations" value={impact ? `AED ${aed(impact.pendingValue)}` : '—'} />
-        <Stat label="Certified to date" value={certs ? `AED ${aed(certs.grossCertifiedToDate)}` : '—'} />
-        <Stat label="Certified %" value={certs ? `${certs.percentComplete}%` : '—'} />
-        {evm && <Stat label="BAC" value={evm.budgetAtCompletion === null ? 'Unavailable' : `AED ${aed(evm.budgetAtCompletion)}`} />}
-        {evm && <Stat label="Earned value" value={evm.earnedValue === null ? 'Unavailable' : `AED ${aed(evm.earnedValue)}`} />}
-        {evm && <Stat label="AC" value={evm.actualCost === null ? 'Unavailable' : `AED ${aed(evm.actualCost)}`} />}
-        {evm && <Stat label="CPI" value={evm.cpi === null ? 'Unavailable' : evm.cpi.toFixed(2)} accent bad={evm.cpi !== null && evm.cpi < 1} />}
-        <Stat label="Closeout" value={closeout ? `${closeoutDone}/${closeout.items.length}${closeout.status === 'finalized' ? ' ✓' : ''}` : 'not started'} />
-      </div>
-
-      {/* deal-chain strip */}
-      <div style={st.chain}>
-        {project.accountId
-          ? <a href={`/crm/accounts/${project.accountId}`} style={{ ...st.chainNode, ...st.chainOn }}>◆ {project.accountName ?? 'Account'}</a>
-          : <span style={st.chainNode}>◆ no account</span>}
-        <span style={st.arrow}>→</span>
-        {project.contractId
-          ? <a href={`/contracts/contracts/${project.contractId}`} style={{ ...st.chainNode, ...st.chainOn }}>▤ {project.contractTitle ?? 'Contract'}</a>
-          : <span style={st.chainNode}>▤ no contract (direct)</span>}
-        <span style={st.arrow}>→</span>
-        <span style={{ ...st.chainNode, borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 800 }}>▦ PROJECT</span>
-        <span style={st.arrow}>→</span>
-        <span style={{ ...st.chainNode, ...(project.status === 'completed' ? { color: 'var(--good)', borderColor: 'var(--good)' } : {}) }}>
-          ✓ {project.status === 'completed' ? 'delivered & closed' : 'delivery in progress'}
-        </span>
-      </div>
-
-      {/* tabs */}
-      <div style={st.controlRow}>
-        <RecordTabs
-          baseId="project-controls"
-          tabs={CONTROL_TABS.map((item) => ({
-            ...item,
-            count: item.id === 'variations' ? variations.length : item.id === 'eot' ? eots.length : undefined,
-          }))}
-          active={tab}
-          onChange={(id) => setTab(id as Tab)}
-        />
-        <div style={st.controlActions}>
-        {tab === 'variations' && <a href="/projects/variations" style={st.linkBtn}>Variations register →</a>}
-        {tab === 'closeout' && !closeout && (
-          <button className="btn btn-primary" style={st.actBtn} disabled={busy}
-            onClick={() => void call('/api/projects/closeouts', 'POST', { projectId: project.id, projectName: project.title }, 'Closeout checklist started.')}>
-            Start closeout checklist
-          </button>
-        )}
-        </div>
-      </div>
-
-      <section id="project-controls-panel" role="tabpanel" aria-labelledby={`project-controls-tab-${tab}`} tabIndex={0} className="panel">
+      <RecordShell
+        header={
+          <RecordHeader
+            title={project.title}
+            status={project.status}
+            statusTone={project.status === 'active' ? 'good' : project.status === 'completed' ? 'accent' : project.status === 'cancelled' ? 'bad' : 'neutral'}
+            meta={[
+              ...(project.reference ? [{ label: 'Ref', value: <span style={{ fontFamily: 'ui-monospace, monospace' }}>{project.reference}</span> }] : []),
+              ...(project.accountName ? [{ label: 'Customer', value: project.accountId ? <a href={`/crm/accounts/${project.accountId}`} style={st.link}>{project.accountName}</a> : project.accountName }] : []),
+              ...(project.contractTitle ? [{ label: 'Contract', value: project.contractId ? <a href={`/contracts/contracts/${project.contractId}`} style={st.link}>{project.contractTitle}</a> : project.contractTitle }] : []),
+              { label: 'Started', value: fmt(project.createdAt) },
+            ]}
+            score={progressPct === null ? undefined : { value: `${progressPct}%`, label: 'Scope complete', badge: health.label, badgeTone: health.tone }}
+            actions={actions}
+          />
+        }
+        kpis={kpis}
+        situation={
+          <RecordBand tone={health.tone}>
+            <RecordSituation situation={situationText} />
+            {nba && <RecordNextAction action={nba} />}
+            <RecordHealth health={health} />
+            <RecordMissing items={missing} />
+            {gate && <RecordWorkflowGate gate={gate} />}
+          </RecordBand>
+        }
+        tabs={CONTROL_TABS.map((item) => ({
+          ...item,
+          count: item.id === 'variations' ? variations.length || undefined
+            : item.id === 'eot' ? (delays.length + eots.length) || undefined
+              : item.id === 'delivery' ? wbs.length || undefined
+                : undefined,
+        }))}
+        activeTab={tab}
+        onTab={(id) => setTab(id as Tab)}
+        aside={<InsightsPanel insights={insights} assessment={assessment.coverage} context="this project" />}
+        related={{ title: 'Where the work lives', groups: related }}
+      >
         {tab === 'overview' && <ControlsOverviewPanel project={project} wbs={wbs} cbs={cbs} maps={maps} variations={variations} impact={impact} evm={evm} closeout={closeout} closeoutDone={closeoutDone} />}
         {tab === 'delivery' && <DeliveryPanel project={project} wbs={wbs} cbs={cbs} maps={maps} busy={busy} call={call} />}
 
-        {tab === 'quantities' && <QuantityPanel quantities={quantities} maps={maps} />}
+        {tab === 'quantities' && <ProgressPanel projectId={project.id} schedule={schedule} wbs={wbs} quantities={quantities} maps={maps} busy={busy} call={call} />}
 
         {tab === 'cost' && <CostPanel costs={costs} evm={evm} />}
 
@@ -341,7 +455,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         )}
 
         {tab === 'team' && <ProjectTeam projectId={project.id} />}
-      </section>
+      </RecordShell>
     </div>
   );
 }
@@ -364,43 +478,90 @@ function Status({ value }: { value: string }) {
 
 type Action = (url: string, method: string, body?: unknown, note?: string) => Promise<boolean>;
 
-function ControlsOverviewPanel({ project, wbs, cbs, maps, variations, impact, evm, closeout, closeoutDone }: { project: Project360Project; wbs: WbsNode[]; cbs: CbsNode[]; maps: DeliveryMap[]; variations: Variation[]; impact: VariationImpact | null; evm: Evm | null; closeout: Closeout | null; closeoutDone: number }) {
-  const base = `/project/${encodeURIComponent(project.id)}/controls`;
-  const pendingChanges = impact ? `AED ${aed(impact.pendingValue)}` : variations.length ? `${variations.length} records` : 'Not established';
-  const closeoutValue = closeout ? `${closeoutDone}/${closeout.items.length}` : 'Not established';
+/**
+ * Overview — what is NOT already said above it.
+ *
+ * The previous overview restated the numbers: a hero, a row of control counts, a health strip.
+ * All three now live in the KPI row and the situation band, computed by the shared rules, so
+ * repeating them here would give a reader two renderings of one fact and no way to tell which is
+ * current. What is left is the part nothing else carries — the governed actions, and the delivery
+ * chain's own state.
+ *
+ * The action links open the CANONICAL OWNER with this project's context, rather than authoring a
+ * variation or an RFI inside Project 360. That is the boundary the whole page is built on: this
+ * record composes other modules' work, it does not take ownership of it.
+ */
+function ControlsOverviewPanel({
+  project, wbs, cbs, maps, variations, impact, evm, closeout, closeoutDone,
+}: {
+  project: Project360Project;
+  wbs: WbsNode[];
+  cbs: CbsNode[];
+  maps: DeliveryMap[];
+  variations: Variation[];
+  impact: VariationImpact | null;
+  evm: Evm | null;
+  closeout: Closeout | null;
+  closeoutDone: number;
+}) {
+  const id = encodeURIComponent(project.id);
+  const base = `/project/${id}`;
+
+  const ACTIONS: Array<{ group: string; links: Array<[string, string]> }> = [
+    { group: 'Plan & control', links: [['Add task or milestone', `/projects/schedule?projectId=${id}`], ['Baseline the schedule', `${base}/controls?tab=quantities`], ['Allocate scope value', `${base}/controls?tab=delivery`]] },
+    { group: 'Engineering', links: [['Drawing or technical action', `/engineering?projectId=${id}`], ['RFI or submittal', `/engineering/drawings?projectId=${id}`]] },
+    { group: 'Procurement & subcontracts', links: [['Material requirement', `/procurement/purchase-requests?projectId=${id}`], ['New package or RFQ', `/subcontracts/subcontracts?projectId=${id}`]] },
+    { group: 'Site & quality', links: [['Work instruction', `/site/instructions?projectId=${id}`], ['Daily report', `/site/daily-reports?projectId=${id}`], ['Inspection or NCR', `/quality/ncrs?projectId=${id}`]] },
+    { group: 'Commercial & evidence', links: [['Raise a variation', `/projects/variations?projectId=${id}`], ['Documents', `${base}/workspace/documents`], ['Team & ownership', `${base}/controls?tab=team`]] },
+  ];
+
+  // The delivery chain, stated as evidence rather than as progress. "Not established" is a real
+  // answer here: it says nobody has connected that stage yet, which is different from saying the
+  // stage is empty.
+  const chain: Array<{ label: string; state: string; ok: boolean }> = [
+    { label: 'Scope structured', state: wbs.length ? `${wbs.length} work packages · ${cbs.length} cost nodes` : 'Not established', ok: wbs.length > 0 },
+    { label: 'Handover mapped', state: maps.length ? `${maps.length} frozen items traced` : 'Not established', ok: maps.length > 0 },
+    { label: 'Earned value', state: evm?.earnedValue != null ? `AED ${aed(evm.earnedValue)} earned` : 'Not established', ok: evm?.earnedValue != null },
+    { label: 'Change controlled', state: variations.length ? `${variations.length} variation(s)${impact ? ` · AED ${aed(impact.pendingValue)} pending` : ''}` : 'No change raised', ok: true },
+    { label: 'Closeout', state: closeout ? `${closeoutDone}/${closeout.items.length} items done` : 'Not established', ok: closeout !== null },
+  ];
+
   return (
-    <div className={clientStyles.controlsOverview} data-testid="project-controls-overview">
-      <section className={clientStyles.controlsHero}>
-        <div><span className={clientStyles.kicker}>PROJECT CONTROLS / OVERVIEW</span><h2>The signals that keep delivery governed</h2><p>One concise control view for structure, schedule, cost, change and closeout. Open a domain workspace to author the next decision.</p></div>
-        <span className={clientStyles.authorityBadge}>Projects authority</span>
-      </section>
+    <div data-testid="project-controls-overview">
+      <CardGrid>
+        <RecordCard title="Delivery chain" span={2}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {chain.map((step) => (
+              <div key={step.label} style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '7px 0', borderBottom: '1px solid var(--border)' }}>
+                <span aria-hidden style={{ color: step.ok ? 'var(--good)' : 'var(--muted)' }}>{step.ok ? '●' : '○'}</span>
+                <strong style={{ fontSize: 13, minWidth: 150 }}>{step.label}</strong>
+                <span style={{ fontSize: 13, color: step.ok ? 'var(--text)' : 'var(--muted)' }}>{step.state}</span>
+              </div>
+            ))}
+          </div>
+        </RecordCard>
 
-      <section className={clientStyles.controlSummary} aria-label="Project control health">
-        <div><span>WBS / CBS</span><strong>{wbs.length || '—'}</strong><small>{wbs.length ? `${wbs.length} WBS · ${cbs.length} CBS nodes` : 'Not established'}</small></div>
-        <div><span>Schedule health</span><strong className={clientStyles.muted}>Unavailable</strong><small>No trusted SPI or time-phased baseline</small></div>
-        <div><span>Pending change</span><strong>{pendingChanges}</strong><small>{impact ? 'Awaiting governed decision' : 'No impact projection'}</small></div>
-        <div><span>Closeout</span><strong>{closeoutValue}</strong><small>{closeout ? closeout.status.replace(/_/g, ' ') : 'Not started'}</small></div>
-      </section>
-
-      <section className={clientStyles.controlAreas} aria-labelledby="control-areas-title">
-        <div className={clientStyles.sectionHeading}><div><span className={clientStyles.kicker}>CONTROL AREAS</span><h2 id="control-areas-title">Open the source workspace</h2></div><span className={clientStyles.sectionHint}>Each area remains owned by its canonical authority.</span></div>
-        <div className={clientStyles.controlAreaGrid}>
-          <ControlArea icon={GitBranch} title="WBS / CBS" detail={wbs.length ? `${wbs.length} WBS nodes · ${cbs.length} CBS nodes` : 'Structure not established'} links={[['Open WBS & CBS', `${base}?tab=delivery`, 'WBS / CBS'], ['Open schedule', `/projects/schedule?projectId=${project.id}`, 'Plan & schedule']]} />
-          <ControlArea icon={CalendarRange} title="Plan & schedule" detail="Gantt, baseline and progress evidence" links={[["Open Gantt schedule", `/projects/schedule?projectId=${project.id}`, 'Plan & schedule']]} />
-          <ControlArea icon={GitBranch} title="Changes & claims" detail={variations.length ? `${variations.length} variation record${variations.length === 1 ? '' : 's'}` : 'No change records established'} links={[["Review variations", `${base}?tab=variations`, 'Variations'], ["Open delays & EOT", `${base}?tab=eot`, 'Delays & EOT']]} />
-          <ControlArea icon={CircleDollarSign} title="Cost & EVM" detail={evm?.actualCost == null ? 'Cost ledger not established' : `Actual AED ${aed(evm.actualCost)}`} links={[["Open cost ledger", `${base}?tab=cost`, 'Cost / EVM']]} />
-          <ControlArea icon={FileCheck2} title="Quantities & certification" detail="Trace executed quantities to source records" links={[["Open quantity ledger", `${base}?tab=quantities`, 'Quantities']]} />
-          <ControlArea icon={ShieldAlert} title="Closeout & decisions" detail={closeout ? `${closeoutDone}/${closeout.items.length} checklist items complete` : 'Closeout not started'} links={[["Open closeout", `${base}?tab=closeout`, 'Closeout'], ["Open approvals", `${base}?tab=team`, 'Approvals']]} />
-        </div>
-      </section>
-
-      <div className={clientStyles.controlTruth}><Gauge size={16} aria-hidden /><span>Health signals are projections from connected authorities. Unavailable means the source cannot prove a schedule or cost status.</span></div>
+        <RecordCard title="Governed actions" span={2}>
+          <p style={st.muted}>
+            Each opens the module that owns the record, carrying this project as context. Project 360
+            composes their work; it does not take ownership of it.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 14, marginTop: 10 }}>
+            {ACTIONS.map((section) => (
+              <div key={section.group}>
+                <div style={{ fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--muted)', fontWeight: 700, marginBottom: 6 }}>{section.group}</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {section.links.map(([label, href]) => (
+                    <a key={label} href={href} style={{ ...st.link, fontSize: 13 }}>{label}</a>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </RecordCard>
+      </CardGrid>
     </div>
   );
-}
-
-function ControlArea({ icon: Icon, title, detail, links }: { icon: typeof GitBranch; title: string; detail: string; links: Array<[string, string, string]> }) {
-  return <article className={clientStyles.controlArea}><span className={clientStyles.controlAreaIcon}><Icon size={16} /></span><div><h3>{title}</h3><p>{detail}</p></div><div className={clientStyles.controlAreaLinks}>{links.map(([label, href, tabTitle]) => <AuraTabLink key={label} href={href} tabTitle={tabTitle} tabType="Project Controls">{label}<ArrowRight size={13} /></AuraTabLink>)}</div></article>;
 }
 
 function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Project360Project; wbs: WbsNode[]; cbs: CbsNode[]; maps: DeliveryMap[]; busy: boolean; call: Action }) {
@@ -559,6 +720,157 @@ function DelayEotPanel({ projectId, delays, eots, busy, call }: { projectId: str
       {eots.map((claim) => <tr key={claim.id}><td>{claim.title}</td><td>{claim.submittedDays}</td><td>{claim.approvedDays || '—'}</td><td><Status value={claim.status} /></td><td>{claim.status === 'draft' && <button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/submit`, 'POST', undefined, 'EOT claim submitted.')}>Submit</button>}{(claim.status === 'submitted' || claim.status === 'under_review') && <><button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'approved', approvedDays: claim.submittedDays }, 'EOT claim approved.')}>Approve</button><button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'rejected', approvedDays: 0 }, 'EOT claim rejected.')}>Reject</button></>}</td></tr>)}
     </SimpleTable>}</div>
   </div>;
+}
+
+/**
+ * Progress — the tab that answers "how far along, against what plan".
+ *
+ * It brings together three things that were previously in different places or nowhere at all:
+ * the schedule (which no project surface read, so SPI could report lateness with nothing on
+ * screen saying WHICH activity was late), the per-package progress that produces earned value,
+ * and the quantity ledger.
+ *
+ * Progress is EDITABLE here because it is the one input earned value cannot be computed without,
+ * and the previous UI said so in a footnote — "no progress or actual-cost editing is exposed here"
+ * — while the record's own CPI/SPI depended on it. A number the product demands and refuses to let
+ * anyone enter is not a gap in a screen, it is a gap in the method.
+ */
+function ProgressPanel({
+  projectId, schedule, wbs, quantities, maps, busy, call,
+}: {
+  projectId: string;
+  schedule: ProjectSchedule | null;
+  wbs: WbsNode[];
+  quantities: QuantityTxn[];
+  maps: DeliveryMap[];
+  busy: boolean;
+  call: Action;
+}) {
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const tasks = schedule?.tasks ?? [];
+  const slip = tasks.reduce((worst, t) => {
+    if (!t.baselineEnd) return worst;
+    const days = Math.round((Date.parse(t.plannedEnd) - Date.parse(t.baselineEnd)) / 86_400_000);
+    return days > worst ? days : worst;
+  }, 0);
+
+  return (
+    <div data-testid="project-progress-panel">
+      <CardGrid>
+        <RecordCard title="Schedule" span={2}>
+          {!schedule || tasks.length === 0 ? (
+            <p style={st.muted}>
+              No schedule is established for this project. Without one there is no baseline to
+              measure against, and schedule performance stays unverifiable rather than green.
+            </p>
+          ) : (
+            <>
+              <div style={st.stats}>
+                <Stat label="Activities" value={String(tasks.length)} />
+                <Stat label="Baseline" value={schedule.baselineSetAt ? fmt(schedule.baselineSetAt) : 'Not set'} accent={!schedule.baselineSetAt} />
+                <Stat label="Worst slippage" value={schedule.baselineSetAt ? `${slip} day(s)` : 'No baseline'} bad={slip > 0} />
+              </div>
+              <table className="table" style={{ marginTop: 10 }}>
+                <thead>
+                  <tr><th>Activity</th><th>Planned</th><th>Baseline</th><th>Actual</th><th style={{ textAlign: 'right' }}>Complete</th></tr>
+                </thead>
+                <tbody>
+                  {tasks.map((t) => {
+                    const late = t.baselineEnd ? Date.parse(t.plannedEnd) > Date.parse(t.baselineEnd) : false;
+                    return (
+                      <tr key={t.name}>
+                        <td>{t.name}</td>
+                        <td style={{ color: late ? 'var(--bad)' : undefined }}>{t.plannedStart} - {t.plannedEnd}</td>
+                        <td style={{ color: 'var(--muted)' }}>{t.baselineStart ? `${t.baselineStart} - ${t.baselineEnd}` : 'Not baselined'}</td>
+                        <td style={{ color: 'var(--muted)' }}>{t.actualStart ? `${t.actualStart} - ${t.actualEnd ?? 'open'}` : 'Not started'}</td>
+                        <td style={{ textAlign: 'right' }}>{t.percentComplete}%</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {!schedule.baselineSetAt && (
+                <div style={{ marginTop: 10 }}>
+                  <ActionButton
+                    disabled={busy}
+                    onClick={() => void call(`/api/projects/schedules/${projectId}/baseline`, 'POST', {}, 'Schedule baselined.')}
+                  >
+                    Set the baseline
+                  </ActionButton>
+                  <p style={st.muted}>
+                    Freezing the plan is what makes slippage measurable. Until then every date is
+                    just the current intention.
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </RecordCard>
+
+        <RecordCard title="Work package progress" span={2}>
+          {wbs.length === 0 ? (
+            <p style={st.muted}>No work packages yet. Build the WBS under Scope &amp; plan first.</p>
+          ) : (
+            <table className="table">
+              <thead>
+                <tr><th>Code</th><th>Work package</th><th style={{ textAlign: 'right' }}>Planned</th><th style={{ textAlign: 'right' }}>Earned</th><th>Progress</th><th /></tr>
+              </thead>
+              <tbody>
+                {wbs.map((node) => {
+                  const pending = draft[node.id];
+                  return (
+                    <tr key={node.id}>
+                      <td style={cellMono}>{node.code}</td>
+                      <td>{node.title}</td>
+                      <td style={{ textAlign: 'right' }}>{node.plannedValueKnown === false ? 'Unknown' : `AED ${aed(node.plannedValue)}`}</td>
+                      <td style={{ textAlign: 'right' }}>AED {aed(node.earnedValue)}</td>
+                      <td>
+                        <input
+                          aria-label={`${node.code} progress`}
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          disabled={busy}
+                          value={pending ?? String(node.progress)}
+                          onChange={(e) => setDraft((d) => ({ ...d, [node.id]: e.target.value }))}
+                          style={{ width: 80 }}
+                        />
+                        <span style={st.muted}> %</span>
+                      </td>
+                      <td>
+                        {pending !== undefined && pending !== String(node.progress) && (
+                          <ActionButton
+                            disabled={busy}
+                            onClick={async () => {
+                              const value = Number(pending);
+                              if (!Number.isFinite(value) || value < 0 || value > 100) return;
+                              if (await call(`/api/projects/wbs/${node.id}/progress`, 'PUT', { progress: value }, `${node.code} progress updated.`)) {
+                                setDraft((d) => { const next = { ...d }; delete next[node.id]; return next; });
+                              }
+                            }}
+                          >
+                            Save
+                          </ActionButton>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+          <p style={st.muted}>
+            Progress drives earned value, and earned value drives CPI and SPI. Actual cost is not
+            editable here on purpose: it is a Cost Ledger projection, and typing over a projection
+            would make the two disagree.
+          </p>
+        </RecordCard>
+      </CardGrid>
+
+      <QuantityPanel quantities={quantities} maps={maps} />
+    </div>
+  );
 }
 
 function QuantityPanel({ quantities, maps }: { quantities: QuantityTxn[]; maps: DeliveryMap[] }) {

@@ -42,7 +42,15 @@ export type AssessmentCheckCode =
   // Lead 360
   | 'LEAD_QUALIFICATION'
   | 'CONTACT_CHANNEL'
-  | 'FIRST_RESPONSE_SLA';
+  | 'FIRST_RESPONSE_SLA'
+  // Project 360. A project is judged on whether it is PLANNED, whether it is PERFORMING against
+  // that plan, whether change to it is CONTROLLED, and whether it can be CLOSED. Each code is a
+  // question a project manager is answerable for, not a screen that happens to exist.
+  | 'PROJECT_BASELINE'
+  | 'COST_PERFORMANCE'
+  | 'SCHEDULE_PERFORMANCE'
+  | 'CHANGE_CONTROL'
+  | 'CLOSEOUT_READINESS';
 
 export interface AssessmentInput {
   /**

@@ -1,22 +1,44 @@
 import { type Id, newId } from './id';
-import { type RiskImpact, type RiskLikelihood, type RiskSeverity, type RiskStatus, riskSeverity } from './risk';
+import { type RiskImpact, type RiskLikelihood, type RiskSeverity, riskSeverity, worstSeverity } from './risk';
 
 // Opportunity Risk register — the PERSISTED, editable counterpart to the derived AT_RISK health
 // bands (S7 delivered health; this makes risk a first-class record you can own and mitigate).
 // An explicit risk carries a likelihood × impact severity, an owner, a mitigation and a lifecycle.
 //
-// The vocabulary and the arithmetic now live in `./risk`, because Projects speaks the same language
-// about a different subject. What stays here is what is genuinely about an OPPORTUNITY: the record,
-// its foreign key, and a type taxonomy whose members describe threats to a sale.
+// The severity ARITHMETIC now lives in `./risk`, because Projects computes severity the same way.
+// The LIFECYCLE does not, and deliberately: a deal risk has no state for "it occurred", and moving
+// this one into a file named generically would have pulled Projects onto CRM's process one helper
+// at a time. What stays here is everything genuinely about an OPPORTUNITY — the record, its foreign
+// key, a taxonomy describing threats to a sale, and the lifecycle with the rollups that read it.
 //
-// Re-exported below so every existing import of this file keeps resolving unchanged.
+// The arithmetic is re-exported below, so every existing import of this file resolves unchanged.
 
-export type {
-  RiskLikelihood, RiskImpact, RiskSeverity, RiskStatus, RiskLike, RiskSummary,
-} from './risk';
-export {
-  RISK_OPEN_STATUSES, RISK_SEVERITY_RANK, riskSeverity, riskIsOpen, riskSummary, worstOpenSeverity,
-} from './risk';
+export type { RiskLikelihood, RiskImpact, RiskSeverity } from './risk';
+export { RISK_SEVERITY_RANK, riskSeverity, worstSeverity } from './risk';
+
+/**
+ * The OPPORTUNITY risk lifecycle. Deliberately NOT in `./risk`.
+ *
+ * It has no word for a risk that OCCURRED, because a deal risk that lands ends the deal
+ * conversation rather than opening a new record. Projects needs that word — a delivery risk that
+ * lands becomes a live issue, and the register must tell that apart from "it went away" — so
+ * Projects declares `ProjectRiskStatus` for itself instead of widening this one.
+ *
+ * Everything below depends on this lifecycle and therefore belongs to this register, not to the
+ * shared arithmetic.
+ */
+export type RiskStatus = 'OPEN' | 'MITIGATING' | 'RESOLVED' | 'ACCEPTED';
+
+/** Statuses where the risk is still live and weighs on the deal. */
+export const RISK_OPEN_STATUSES: readonly RiskStatus[] = ['OPEN', 'MITIGATING'];
+
+/** The shape the rollups below need. Structural, so a caller need not hold a whole risk. */
+export interface RiskLike {
+  severity: RiskSeverity;
+  status: RiskStatus;
+}
+
+export const riskIsOpen = (r: RiskLike): boolean => (RISK_OPEN_STATUSES as readonly string[]).includes(r.status);
 
 /** What kind of threat this is — to a DEAL. Projects has its own taxonomy for threats to delivery. */
 export type RiskType =
@@ -94,6 +116,34 @@ export function updateRisk(
 
 export function setRiskStatus(r: OpportunityRisk, status: RiskStatus): OpportunityRisk {
   return { ...r, status, updatedAt: new Date().toISOString() };
+}
+
+export interface RiskSummary {
+  total: number;
+  /** OPEN or MITIGATING. */
+  open: number;
+  mitigating: number;
+  /** Open risks at each high severity — the ones that should drive attention. */
+  openCritical: number;
+  openHigh: number;
+  needsAttention: boolean;
+}
+
+export function riskSummary(risks: readonly RiskLike[]): RiskSummary {
+  let open = 0, mitigating = 0, openCritical = 0, openHigh = 0;
+  for (const r of risks) {
+    if (!riskIsOpen(r)) continue;
+    open++;
+    if (r.status === 'MITIGATING') mitigating++;
+    if (r.severity === 'CRITICAL') openCritical++;
+    else if (r.severity === 'HIGH') openHigh++;
+  }
+  return { total: risks.length, open, mitigating, openCritical, openHigh, needsAttention: openCritical + openHigh > 0 };
+}
+
+/** Highest open severity across a set — used to floor the health "risks" dimension. */
+export function worstOpenSeverity(risks: readonly RiskLike[]): RiskSeverity | null {
+  return worstSeverity(risks.filter(riskIsOpen).map((r) => r.severity));
 }
 
 export const CRM_RISK_EVENT = {

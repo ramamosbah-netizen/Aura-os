@@ -33,12 +33,17 @@ test('an unassessable domain says WHY, in that domain\'s terms', async ({ page }
   await page.goto(`/project/${id}/controls`, { waitUntil: 'domcontentloaded' });
 
   const unknown = page.getByTestId('health-unknown');
-  // Each of the three names itself and its reason. "No data" would have been the easy answer and
-  // the useless one — these are three different conversations with three different teams.
-  for (const domain of ['hse', 'engineering', 'procurement']) {
+  // Each names itself and its reason. "No data" would have been the easy answer and the useless
+  // one — these are separate conversations with separate teams.
+  //
+  // HSE used to be in this list and is deliberately no longer: once it declared what its incidents
+  // and corrective actions mean, it started answering. This assertion moving is the intended
+  // direction of travel, and it caught its own staleness on the first run after HSE landed.
+  for (const domain of ['engineering', 'procurement']) {
     await expect(unknown).toContainText(domain);
   }
-  await expect(unknown).toContainText('has not declared');
+  await expect(unknown, 'HSE answers now; it must not still be reported as unassessable').not.toContainText('hse');
+  await expect(unknown).toContainText('cannot yet say');
   // And the sentence that stops a reader assuming the blanks mean fine.
   await expect(unknown).toContainText('These are not clean results');
 });

@@ -73,6 +73,48 @@ so nobody will go looking for a binding that was never supposed to exist yet.
 
 ---
 
+## Separate finding — surfaced by §21, owned by the platform
+
+**`FORCE ROW LEVEL SECURITY` is missing on ten pre-existing `aura_projects_*` tables.**
+
+Found while reviewing the §21 migration, which had the same omission. `ENABLE ROW LEVEL SECURITY`
+does not apply a policy to the table's **owner**; only `FORCE` does. Across the schema, ~65 tables
+carry FORCE — every table created after the 0163/0164 RLS closure work. Inside Projects, only three
+do:
+
+| Has FORCE | ENABLE only |
+|---|---|
+| `aura_projects_cost_ledger` | `aura_projects_projects` ← the parent every hierarchical policy joins through |
+| `aura_projects_delivery_item_maps` | `aura_projects_wbs_nodes`, `aura_projects_cbs_nodes` |
+| `aura_projects_quantity_ledger` | `aura_projects_delay_events`, `aura_projects_eot_claims` |
+| | `aura_projects_variations`, `aura_projects_closeouts` |
+| | `aura_projects_schedules`, `aura_projects_cashflow_forecasts` |
+| | `aura_projects_eot_delay_links` — **and it carries no policy at all** |
+
+### What this is, and what it is not
+
+It is **not** a production hole. CI's "R1 activation" step connects the API as `aura_app`
+(NOSUPERUSER, NOBYPASSRLS, and not the table owner), and for a non-owner role `ENABLE` is
+sufficient — the policy applies. Two independent controls guard the same boundary and one of them
+holds.
+
+It **is** a live weakness in every other posture. `apps/api/.env.local` points `DATABASE_URL` at the
+compose superuser, which owns these tables, so on the local dev database and the disposable e2e
+database the ENABLE-only tables have **no** row-level isolation at all.
+
+The consequence that matters for evidence: **an RLS proof run as the owner passes vacuously on an
+ENABLE-only table.** It observes no denial and reports success. That is precisely why a genuine
+proof must assert `pg_class.relforcerowsecurity` and run its cross-tenant attempts under a
+NOBYPASSRLS non-owner role, rather than reading the migration text and trusting the policy name.
+
+**Remediation** is a single migration adding `FORCE` to the ten, plus a policy for
+`aura_projects_eot_delay_links`. It is deliberately not folded into §21: that would bury a
+schema-wide correction inside a feature branch, and the link table needs its own isolation decision
+(it has no `tenant_id`, so it must isolate through its parent claim the way `aura_document_versions`
+does).
+
+---
+
 ## Separate finding — not §24, not owned here
 
 **E2E interaction-readiness instability under full-suite execution.**

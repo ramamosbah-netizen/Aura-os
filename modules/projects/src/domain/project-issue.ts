@@ -1,5 +1,5 @@
 import { type Id, newId } from '@aura/shared';
-import type { ProjectDeliveryArea, ProjectRisk } from './project-risk';
+import { type ProjectDeliveryArea, type ProjectRisk, markRiskMaterialised } from './project-risk';
 
 /**
  * §21 — the PROJECT issue register: a condition that EXISTS NOW and requires resolution.
@@ -11,9 +11,9 @@ import type { ProjectDeliveryArea, ProjectRisk } from './project-risk';
  *
  * WHAT AN ISSUE IS NOT. It is never a second copy of a problem another register already owns — an
  * NCR, a snag, a punch item, a safety incident, a CAPA, a delay event, an EOT claim, a design
- * change, an RFI, a submittal or a variation. Each of those has a canonical owner and its own
- * lifecycle. An issue may REFERENCE them (see `ProjectIssueLink`); it never absorbs them, and
- * resolving an issue never resolves a record it points at.
+ * change, an RFI, a submittal or a variation. Each has a canonical owner and its own lifecycle. An
+ * issue may REFERENCE them (see `ProjectIssueReference`); it never absorbs them, and resolving an
+ * issue never resolves a record it points at.
  *
  * What it does own is the cross-domain or management problem with no better home: the workfront the
  * client has not released, the access restriction blocking several disciplines at once, the
@@ -47,7 +47,7 @@ const SEVERITY_RANK: Record<ProjectIssueSeverity, number> = { minor: 0, major: 1
 
 /**
  * The lifecycle, taken from how this system already models a problem that must be worked rather
- * than mirrored from `RiskStatus`.
+ * than mirrored from a risk's.
  *
  * NCR runs `raised → action_planned → corrected → closed`, an HSE incident
  * `reported → investigating → closed` and reopenable, a CAPA `pending → in_progress → completed`.
@@ -60,8 +60,8 @@ const SEVERITY_RANK: Record<ProjectIssueSeverity, number> = { minor: 0, major: 1
  * them would inflate every "issues resolved" figure with problems that merely stopped being asked
  * about.
  *
- * Both endings are reopenable, because a coordination problem declared solved and then recurring is
- * normal, and forcing a new record would lose the history of the first attempt.
+ * Both endings reopen, and reopen only to `open`: a coordination problem declared solved and then
+ * recurring is normal, and forcing a new record would lose the history of the first attempt.
  */
 export type ProjectIssueStatus = 'open' | 'in_progress' | 'resolved' | 'withdrawn';
 
@@ -79,11 +79,19 @@ export const issueTransitionsFor = (from: ProjectIssueStatus): readonly ProjectI
 /**
  * A pointer from an issue to a record another domain owns.
  *
- * REFERENCE ≠ OWNERSHIP. This carries an address and a label so a reader can navigate, and nothing
- * else — no status, no due date, no copy of the record's own fields. Nothing here is written back,
- * and closing the issue leaves every linked record exactly as it was.
+ * NAMED `Reference`, NOT `Link` OR ANYTHING SUGGESTING INTEGRITY. `module + recordType + recordId`
+ * is an ADDRESS. There is no foreign key behind it and there cannot be one: the target lives in
+ * another module's table, and a database-level reference across that boundary would couple two
+ * modules' migrations. A pointer here can therefore dangle, and nothing in §21 detects that.
+ *
+ * Whether these still resolve is **Lineage Referential Integrity**'s question, in the Master Gap
+ * register. §21 must never be described as providing it.
+ *
+ * It carries an address and a label so a reader can navigate, and nothing else — no status, no due
+ * date, no copy of the record's own fields. Anything more would be a second, staler copy of a
+ * record another module owns, which is what §28 exists to prevent.
  */
-export interface ProjectIssueLink {
+export interface ProjectIssueReference {
   /** The owning module, in its own name: 'quality', 'engineering', 'procurement', 'hse', … */
   module: string;
   /** What kind of record it is, in that module's words: 'ncr', 'rfi', 'purchase-order', … */
@@ -120,9 +128,15 @@ export interface ProjectIssue {
   resolution: string | null;
   resolvedAt: string | null;
   resolvedBy: Id | null;
-  /** The risk this issue materialised from, when it came from the risk register. */
+  /**
+   * The risk this issue materialised from — THE canonical provenance fact, stored once.
+   *
+   * `UNIQUE` in the schema, so a risk materialises at most once, and part of a composite foreign
+   * key `(tenantId, projectId, originRiskId) → risk(tenantId, projectId, id)`, so the database
+   * itself refuses provenance that crosses a project or a tenant.
+   */
   originRiskId: Id | null;
-  links: ProjectIssueLink[];
+  references: ProjectIssueReference[];
   createdAt: string;
   createdBy: Id | null;
   updatedAt: string;
@@ -141,18 +155,18 @@ export interface NewProjectIssue {
   raisedBy?: Id | null;
   dueDate?: string | null;
   originRiskId?: Id | null;
-  links?: ProjectIssueLink[];
+  references?: ProjectIssueReference[];
   createdBy?: Id | null;
 }
 
-const cleanLinks = (links: ProjectIssueLink[] | undefined): ProjectIssueLink[] =>
-  (links ?? [])
-    .filter((l) => l.module?.trim() && l.recordType?.trim() && l.recordId?.trim())
-    .map((l) => ({
-      module: l.module.trim(),
-      recordType: l.recordType.trim(),
-      recordId: l.recordId.trim(),
-      label: l.label?.trim() || null,
+const cleanReferences = (refs: ProjectIssueReference[] | undefined): ProjectIssueReference[] =>
+  (refs ?? [])
+    .filter((r) => r.module?.trim() && r.recordType?.trim() && r.recordId?.trim())
+    .map((r) => ({
+      module: r.module.trim(),
+      recordType: r.recordType.trim(),
+      recordId: r.recordId.trim(),
+      label: r.label?.trim() || null,
     }));
 
 export function makeProjectIssue(input: NewProjectIssue): ProjectIssue {
@@ -180,7 +194,7 @@ export function makeProjectIssue(input: NewProjectIssue): ProjectIssue {
     resolvedAt: null,
     resolvedBy: null,
     originRiskId: input.originRiskId ?? null,
-    links: cleanLinks(input.links),
+    references: cleanReferences(input.references),
     createdAt: now,
     createdBy: input.createdBy ?? null,
     updatedAt: now,
@@ -189,7 +203,7 @@ export function makeProjectIssue(input: NewProjectIssue): ProjectIssue {
 
 export type ProjectIssuePatch = Partial<Pick<ProjectIssue,
   'reference' | 'title' | 'description' | 'area' | 'severity' | 'owner' | 'dueDate' | 'raisedAt'>> & {
-    links?: ProjectIssueLink[];
+    references?: ProjectIssueReference[];
   };
 
 export function updateProjectIssue(issue: ProjectIssue, patch: ProjectIssuePatch): ProjectIssue {
@@ -197,7 +211,7 @@ export function updateProjectIssue(issue: ProjectIssue, patch: ProjectIssuePatch
   const next: ProjectIssue = { ...issue, ...defined, updatedAt: new Date().toISOString() };
   if (!next.title.trim()) throw new Error('issue title is required');
   next.title = next.title.trim();
-  if (patch.links !== undefined) next.links = cleanLinks(patch.links);
+  if (patch.references !== undefined) next.references = cleanReferences(patch.references);
   return next;
 }
 
@@ -239,6 +253,26 @@ export function setProjectIssueStatus(
 
 export const issueIsOpen = (i: ProjectIssue): boolean => ISSUE_OPEN_STATUSES.includes(i.status);
 
+export interface MaterialiseInput {
+  /**
+   * The project the CALLER believes this risk belongs to — typically taken from the URL.
+   *
+   * Checked against the risk rather than trusted, and never used to place the issue: the issue is
+   * always created on the risk's own project. Without this guard, a request that named project B
+   * while addressing a risk in project A would silently succeed and produce an issue on A, so the
+   * caller would be told the wrong thing about what it had just done.
+   */
+  expectedProjectId?: Id | null;
+  title?: string;
+  description?: string | null;
+  severity?: ProjectIssueSeverity;
+  owner?: string | null;
+  dueDate?: string | null;
+  raisedAt?: string | null;
+  actorId?: Id | null;
+  references?: ProjectIssueReference[];
+}
+
 /**
  * Materialise a risk that occurred into a live issue.
  *
@@ -246,34 +280,32 @@ export const issueIsOpen = (i: ProjectIssue): boolean => ISSUE_OPEN_STATUSES.inc
  * this exposure was identified, owned and mitigated before it landed, and the register could then
  * no longer answer whether the risk process worked at all.
  *
- * The risk becomes `RESOLVED` — the honest reading of that status is "no longer carried as a live
- * exposure", which is true either way — and `linkedIssueId` is what distinguishes a risk that went
- * away from one that arrived. `summariseProjectRisks` counts the two separately for exactly that
- * reason, so nothing reports a failed forecast as a success.
+ * PROVENANCE IS STORED ONCE, on the issue, as `originRiskId`. The risk says `MATERIALISED`, which
+ * is a different fact — what happened to it, not where the issue came from. Nothing points both
+ * ways, so nothing can disagree.
+ *
+ * Pure: it returns the pair and writes nothing. The caller commits both inside one transaction, so
+ * a risk can never read as landed without the issue it landed into existing.
  */
 export function materialiseRiskAsIssue(
   risk: ProjectRisk,
-  input: {
-    title?: string;
-    description?: string | null;
-    severity?: ProjectIssueSeverity;
-    owner?: string | null;
-    dueDate?: string | null;
-    raisedAt?: string | null;
-    actorId?: Id | null;
-    links?: ProjectIssueLink[];
-  } = {},
+  input: MaterialiseInput = {},
 ): { risk: ProjectRisk; issue: ProjectIssue } {
-  if (risk.linkedIssueId) throw new Error('this risk has already materialised into an issue');
-  // A resolved risk did not occur — it went away. Only a live exposure can land.
-  if (risk.status === 'RESOLVED') throw new Error('only a risk that is still live can materialise into an issue');
+  if (input.expectedProjectId && input.expectedProjectId !== risk.projectId) {
+    throw new Error(`risk ${risk.id} does not belong to project ${input.expectedProjectId}`);
+  }
+  // Throws unless the risk is a live exposure — which also makes double materialisation impossible
+  // in the domain, before the database's UNIQUE constraint is ever reached.
+  const materialisedRisk = markRiskMaterialised(risk);
   const issue = makeProjectIssue({
     tenantId: risk.tenantId,
+    // Never from the caller. The issue belongs where the risk belongs, and the composite foreign
+    // key on (tenantId, projectId, originRiskId) makes the database enforce the same thing.
     projectId: risk.projectId,
     title: input.title?.trim() || risk.title,
     description: input.description ?? risk.description,
-    // The area travels with it: a procurement risk that lands is a procurement issue, and forcing a
-    // re-categorisation here would break the link between the forecast and what it became.
+    // The area travels with it: a procurement risk that lands is a procurement issue, and forcing
+    // a re-categorisation here would break the link between the forecast and what it became.
     area: risk.area,
     // Severity is NOT carried across. The risk's was computed from a likelihood that no longer
     // exists, so translating CRITICAL into an issue grade would be arithmetic on a fact that has
@@ -284,13 +316,10 @@ export function materialiseRiskAsIssue(
     raisedAt: input.raisedAt ?? null,
     raisedBy: input.actorId ?? null,
     originRiskId: risk.id,
-    links: input.links,
+    references: input.references,
     createdBy: input.actorId ?? null,
   });
-  return {
-    issue,
-    risk: { ...risk, status: 'RESOLVED', linkedIssueId: issue.id, updatedAt: new Date().toISOString() },
-  };
+  return { risk: materialisedRisk, issue };
 }
 
 export interface ProjectIssueSummary {

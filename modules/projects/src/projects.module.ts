@@ -52,10 +52,16 @@ import { SCHEDULE_STORE } from './schedule-store';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { PostgresScheduleStore } from './postgres-schedule-store';
 import { ScheduleService } from './schedule.service';
-import { PROJECT_ISSUE_STORE, PROJECT_RISK_STORE } from './risk-issue-store';
-import { InMemoryProjectIssueStore, InMemoryProjectRiskStore } from './in-memory-risk-issue-store';
-import { PostgresProjectIssueStore, PostgresProjectRiskStore } from './postgres-risk-issue-store';
-import { RiskIssueService } from './risk-issue.service';
+// §21 — two registers, two ports, two services, plus the one command that spans them.
+import { PROJECT_RISK_STORE } from './project-risk-store';
+import { PROJECT_ISSUE_STORE } from './project-issue-store';
+import { InMemoryProjectRiskStore } from './in-memory-project-risk-store';
+import { InMemoryProjectIssueStore } from './in-memory-project-issue-store';
+import { PostgresProjectRiskStore } from './postgres-project-risk-store';
+import { PostgresProjectIssueStore } from './postgres-project-issue-store';
+import { ProjectRiskService } from './project-risk.service';
+import { ProjectIssueService } from './project-issue.service';
+import { ProjectRiskMaterialisationService } from './project-risk-materialisation.service';
 
 import { DELIVERY_ITEM_MAP_STORE } from './delivery-item-map-store';
 import { InMemoryDeliveryItemMapStore } from './in-memory-delivery-item-map-store';
@@ -157,7 +163,9 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     QuantityLedgerService,
     DelayEotService,
     VariationService,
-    RiskIssueService,
+    ProjectRiskService,
+    ProjectIssueService,
+    ProjectRiskMaterialisationService,
     CloseoutService,
     CloseoutReadinessService,
     ProjectHealthService,
@@ -174,6 +182,6 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     ScheduleService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, RiskIssueService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

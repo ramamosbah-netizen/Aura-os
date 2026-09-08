@@ -6,6 +6,11 @@ database schema and the UI — not against how the screen looks.
 **Revision 2 (same day):** §27 moved 🟡 → ✅ after the vertical slice landed — rules, ports, service,
 endpoint, UI, enforcement inside finalization, and audit evidence. Nothing else was re-measured.
 
+**Revision 4 (2026-09-08):** §24 recorded **CORE VERIFIED / COVERAGE PARTIAL** — nine signals
+answering, two explicitly UNKNOWN. Deliberately not driven to green: the two remaining are missing
+capabilities in Engineering and Procurement, and building them inside §24 would pull their scope
+into Health. Moved to `docs/master-task-3/project-health-gap-register.md`.
+
 **Revision 3 (same day):** §2 moved ❌ → ✅. Rules, cumulative gates, governed cancellation, port
 wiring, `transitionsFor`, UI, write-boundary proofs at the HTTP edge and a browser spec. The audit
 it required — every writer of `projects.status` — found and closed two authority bypasses, and is
@@ -28,7 +33,7 @@ requires · ❌ absent.
 | | Sections |
 |---|---|
 | ✅ | **§2 lifecycle states** · §3 handover provenance · §4 DeliveryItemMap · §5 WBS/CBS separation · §10 execution truth · §11 progress governance · §17 certified ≠ installed · §18 cost authority + FX provenance · §19 variation lifecycle · §20 delay/EOT records · **§27 closeout readiness** |
-| 🟡 | §6 baseline · §7 system lens · §9 engineering · §12 NCR · §14 T&C · §15 punch · §16 documents · §23 overview · §24 health · §25 permissions · §26 audit |
+| 🟡 | §6 baseline · §7 system lens · §9 engineering · §12 NCR · §14 T&C · §15 punch · §16 documents · §23 overview · **§24 health (core verified, coverage partial)** · §25 permissions · §26 audit |
 | ❌ | §21 risks & issues · §22 resource allocation |
 
 The spine the model calls load-bearing — commercial truth in, quantity and cost semantics, change
@@ -157,19 +162,57 @@ which is exactly the state a closeout gate would need to read.
 *"Project 360 must show the current controlled revision, not the last file uploaded"* holds for
 drawings and not for documents.
 
-### §23 / §24 — Health is a rule set, but not the model's rule set
+### §23 / §24 — Cross-domain health: CORE VERIFIED / COVERAGE PARTIAL
 
-The rebuild replaced an average with declared rules (`shared/src/domain/project-assessment.ts`) and
-declared coverage, so "not assessed" can never read as "healthy". That is the model's core demand
-and it is met.
+Health read five signals, all project-module facts, so a project with three critical NCRs and two
+HSE incidents read "On plan". It now reads eleven, from the domains that own them.
 
-What is not met: the rules read **five** signals (baseline, CPI, SPI, change, closeout). The model
-asks for schedule variance, critical delays, cost exposure, open critical NCRs, HSE incidents,
-engineering blockers, procurement blockers, commissioning blockers and commercial exposure — a
-cross-domain read. Project 360 currently computes health from project-module facts only, so a
-project with three critical NCRs and two HSE incidents can still read "On plan".
+**Two axes, computed from disjoint inputs.** Severity reads only the signals that returned a
+verdict; coverage reads only the ones that could not. So a known critical can never hide an
+unknown, and an unknown can never hide a known critical — the collapse `resolveAssessment` makes,
+where ATTENTION_REQUIRED outranks UNABLE_TO_VERIFY, is not inherited.
 
-The four-level scale (`Healthy | Attention | At Risk | Critical`) is a two-level one.
+```
+severity   CLEAR · WATCH · AT_RISK · CRITICAL     the worst thing we could judge
+coverage   COMPLETE · PARTIAL                     whether we could judge it all
+```
+
+`UNKNOWN` is deliberately outside the severity ordering: it is not worse than CRITICAL nor better
+than CLEAR, it is the absence of the ability to judge. `NOT_APPLICABLE` is a third thing again and
+touches neither axis — returned by a provider at runtime for a project that genuinely has nothing
+to assess, never a registry flag.
+
+**Nine answering:** schedule · delay/EOT · cost · commercial · quality · commissioning · HSE ·
+engineering delivery impact · procurement sourcing readiness.
+
+**Two explicitly UNKNOWN:** engineering approval readiness · procurement delivery exposure.
+
+Coverage therefore cannot reach COMPLETE, and that is the correct answer rather than a shortfall.
+Neither is a wiring defect — both are capabilities missing from the owning domains, recorded in
+`docs/master-task-3/project-health-gap-register.md`. Building them here to make §24 green would
+pull Engineering's and Procurement's scope into Health.
+
+**§24 prevents false reassurance, provably:**
+
+```
+UNKNOWN                        → coverage PARTIAL
+CLEAR + PARTIAL                → "Not established", never "Nothing outstanding"
+known severity + UNKNOWN       → severity preserved AND coverage PARTIAL
+every registry signal          → present in the report, or the test fails
+```
+
+The last line is enforced rather than described: a signal cannot be dropped from the assessment,
+and an undeclared one must drag coverage down. False completeness is a test failure, not a
+convention.
+
+**No domain's vocabulary is interpreted by Projects.** Each owner declares what its own facts mean,
+in its own module — Quality's `major`, Commissioning's failed test and critical punch item, HSE's
+open fatal incident and overdue corrective action, Engineering's self-declared `timeImpact`,
+Procurement's own RFQ deadline. Projects aggregates; it never re-derives.
+
+Evidence: 198 unit tests in `@aura/projects`, 42 in `@aura/procurement`, exhaustive invariants over
+all 216 arrangements of three signals, authority-consistency proofs against the live API, and four
+browser tests.
 
 ### §25 — Permissions are enforced, granularity unverified
 

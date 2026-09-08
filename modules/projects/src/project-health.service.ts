@@ -32,15 +32,26 @@ export interface HseHealthPort {
   readProjectHseHealth(tenantId: Id, projectId: Id): Promise<HealthSignal>;
 }
 
+/**
+ * What Engineering can PROVE about delivery impact — a technical query declaring a time impact, or
+ * a drawing review past its agreed date. Deliberately narrower than "engineering blockers": the
+ * half Engineering cannot yet judge is a separate signal that says so.
+ */
+export interface EngineeringHealthPort {
+  readProjectEngineeringDeliveryImpact(tenantId: Id, projectId: Id): Promise<HealthSignal>;
+}
+
 export const QUALITY_HEALTH = Symbol('QUALITY_HEALTH');
 export const COMMISSIONING_HEALTH = Symbol('COMMISSIONING_HEALTH');
 export const HSE_HEALTH = Symbol('HSE_HEALTH');
+export const ENGINEERING_HEALTH = Symbol('ENGINEERING_HEALTH');
 
 /** Every signal a provider is expected for, and the token that must be bound to answer it. */
 export const EXPECTED_HEALTH_PROVIDERS: ReadonlyArray<{ signalId: string; token: symbol }> = [
   { signalId: 'quality-ncr', token: QUALITY_HEALTH },
   { signalId: 'commissioning-readiness', token: COMMISSIONING_HEALTH },
   { signalId: 'hse-exposure', token: HSE_HEALTH },
+  { signalId: 'engineering-delivery-impact', token: ENGINEERING_HEALTH },
 ];
 
 const decl = (id: string): HealthSignalDeclaration =>
@@ -63,6 +74,7 @@ export class ProjectHealthService {
     @Optional() @Inject(QUALITY_HEALTH) private readonly quality: QualityHealthPort | null = null,
     @Optional() @Inject(COMMISSIONING_HEALTH) private readonly commissioning: CommissioningHealthPort | null = null,
     @Optional() @Inject(HSE_HEALTH) private readonly hse: HseHealthPort | null = null,
+    @Optional() @Inject(ENGINEERING_HEALTH) private readonly engineering: EngineeringHealthPort | null = null,
   ) {}
 
   /**
@@ -73,7 +85,7 @@ export class ProjectHealthService {
    * module could start lying again.
    */
   async assess(tenantId: Id, projectId: Id): Promise<ProjectHealth> {
-    const [owned, quality, commissioning, hse] = await Promise.all([
+    const [owned, quality, commissioning, hse, engineering] = await Promise.all([
       this.ownSignals(tenantId, projectId),
       this.fromProvider(decl('quality-ncr'), this.quality
         ? () => (this.quality as QualityHealthPort).readProjectQualityHealth(tenantId, projectId)
@@ -84,15 +96,18 @@ export class ProjectHealthService {
       this.fromProvider(decl('hse-exposure'), this.hse
         ? () => (this.hse as HseHealthPort).readProjectHseHealth(tenantId, projectId)
         : null),
+      this.fromProvider(decl('engineering-delivery-impact'), this.engineering
+        ? () => (this.engineering as EngineeringHealthPort).readProjectEngineeringDeliveryImpact(tenantId, projectId)
+        : null),
     ]);
 
     // The domains that have facts but no declared meaning for them. Reported, never omitted: their
     // absence is the difference between PARTIAL and a clean bill of health nobody earned.
     const undeclared = HEALTH_SIGNALS
-      .filter((s) => !s.providerExpected)
+      .filter((s) => !s.semanticsDeclared)
       .map((s) => unknownSignal(s, 'SEMANTICS_UNDECLARED'));
 
-    return assessProjectHealth([...owned, quality, commissioning, hse, ...undeclared]);
+    return assessProjectHealth([...owned, quality, commissioning, hse, engineering, ...undeclared]);
   }
 
   /**

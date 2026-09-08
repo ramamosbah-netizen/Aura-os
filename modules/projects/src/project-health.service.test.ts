@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { HealthSignal } from '@aura/shared';
 import { ProjectHealthService, EXPECTED_HEALTH_PROVIDERS } from './project-health.service';
 import { HEALTH_SIGNALS } from './domain/health-signals';
+import { assessProjectHealth } from '@aura/shared';
 
 /**
  * §24 assembly — what the service reports once every domain has answered, or failed to.
@@ -28,6 +29,7 @@ function build(over: {
   quality?: HealthSignal | Error | null;
   commissioning?: HealthSignal | Error | null;
   hse?: HealthSignal | Error | null;
+  engineering?: HealthSignal | Error | null;
   wbsThrows?: boolean;
 } = {}) {
   const answer = (v: HealthSignal | Error | null | undefined, fallback: HealthSignal) =>
@@ -36,6 +38,7 @@ function build(over: {
   const q = answer(over.quality, { id: 'quality-ncr', domain: 'quality', state: 'CLEAR' });
   const c = answer(over.commissioning, { id: 'commissioning-readiness', domain: 'commissioning', state: 'CLEAR' });
   const h = answer(over.hse, { id: 'hse-exposure', domain: 'hse', state: 'CLEAR' });
+  const e = answer(over.engineering, { id: 'engineering-delivery-impact', domain: 'engineering', state: 'CLEAR' });
 
   return new ProjectHealthService(
     {
@@ -50,13 +53,14 @@ function build(over: {
     q ? ({ readProjectQualityHealth: q.read } as never) : null,
     c ? ({ readProjectCommissioningHealth: c.read } as never) : null,
     h ? ({ readProjectHseHealth: h.read } as never) : null,
+    e ? ({ readProjectEngineeringDeliveryImpact: e.read } as never) : null,
   );
 }
 
 const byId = (v: { signals: HealthSignal[] }, id: string) => v.signals.find((s) => s.id === id);
 
 describe('project health assembly', () => {
-  it('1. seven readable and clear, two undeclared → CLEAR · PARTIAL, and not reassuring', async () => {
+  it('1. eight readable and clear, two undeclared → CLEAR · PARTIAL, and not reassuring', async () => {
     // The state the two axes were designed for. Nothing is wrong in anything we could judge, and
     // two domains have not said what their facts mean — so the project is NOT given a clean bill of
     // health it has not earned.
@@ -66,11 +70,14 @@ describe('project health assembly', () => {
     expect(v.coverage).toBe('PARTIAL');
     expect(v.reassuring).toBe(false);
 
-    expect(v.unknown.map((s) => s.domain).sort()).toEqual(['engineering', 'procurement']);
+    expect(v.unknown.map((s) => s.id).sort()).toEqual(['engineering-approval-readiness', 'procurement-blockers']);
     // And each says WHY, in terms of the owning domain — not "no data".
     for (const s of v.unknown) {
       expect(s.cause, s.domain).toBe('SEMANTICS_UNDECLARED');
-      expect(s.reason, s.domain).toMatch(/has not declared/);
+      // Must NAME the domain that owes the answer. "No data" would be the easy sentence and the
+      // useless one: an unanswered signal is a conversation with somebody, and the reader needs to
+      // know who. Matched on the domain rather than on a phrasing, so the wording can improve.
+      expect(s.reason?.toLowerCase(), s.id).toContain(s.domain);
     }
   });
 
@@ -127,7 +134,20 @@ describe('project health assembly', () => {
 
     expect(v.severity).toBe('CRITICAL');
     expect(v.concerns.find((c) => c.domain === 'hse')?.reason).toBe('1 fatal incident under investigation.');
-    expect(v.unknown.map((s) => s.domain).sort()).toEqual(['engineering', 'procurement']);
+    expect(v.unknown.map((s) => s.id).sort()).toEqual(['engineering-approval-readiness', 'procurement-blockers']);
+  });
+  it('6. Engineering reports the impact it can prove, while admitting the half it cannot', async () => {
+    // The split, end to end. A declared time impact raises severity; the approvals half stays
+    // UNKNOWN because RFIs and submittals carry no date to be late against. Neither substitutes
+    // for the other, which is the whole reason the signal was split rather than forced.
+    const v = await build({
+      engineering: { id: 'engineering-delivery-impact', domain: 'engineering', state: 'AT_RISK', reason: '2 technical queries declaring a time impact.', href: '/project/p1/workspace/engineering' },
+    }).assess(tenantId, projectId);
+
+    expect(v.severity).toBe('AT_RISK');
+    expect(v.concerns.find((c) => c.id === 'engineering-delivery-impact')?.reason).toBe('2 technical queries declaring a time impact.');
+    expect(byId(v, 'engineering-approval-readiness')).toMatchObject({ state: 'UNKNOWN', cause: 'SEMANTICS_UNDECLARED' });
+    expect(v.coverage).toBe('PARTIAL');
   });
 });
 
@@ -146,7 +166,7 @@ describe('composition completeness', () => {
   it('declares a provider token for every signal that expects one, and none for those that do not', () => {
     // Guards the registry against the two ways it can rot: a signal marked answerable with nothing
     // able to answer it, and a token left behind for a signal that no longer expects one.
-    const expectsProvider = HEALTH_SIGNALS.filter((s) => s.providerExpected).map((s) => s.id);
+    const expectsProvider = HEALTH_SIGNALS.filter((s) => s.semanticsDeclared).map((s) => s.id);
     const ownedByProjects = ['schedule-performance', 'delay-entitlement', 'cost-performance', 'commercial-exposure'];
     const needsPort = expectsProvider.filter((id) => !ownedByProjects.includes(id));
 
@@ -155,9 +175,9 @@ describe('composition completeness', () => {
 
   it('gives every undeclared signal a reason in the owning domain\'s terms', () => {
     // An undeclared signal with no explanation would read as an oversight rather than a decision.
-    for (const s of HEALTH_SIGNALS.filter((d) => !d.providerExpected)) {
+    for (const s of HEALTH_SIGNALS.filter((d) => !d.semanticsDeclared)) {
       expect(s.undeclaredReason, s.id).toBeTruthy();
-      expect(s.undeclaredReason, s.id).toMatch(/declare/i);
+      expect(s.undeclaredReason?.toLowerCase(), s.id).toContain(s.domain);
     }
   });
 });

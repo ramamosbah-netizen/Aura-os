@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
@@ -592,6 +592,92 @@ export class EngineeringService {
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async getTechnicalQuery(id: Id): Promise<TechnicalQuery | null> {
     return sameTenantOrNull(await this.tqStore.get(id), this.tenant?.boundTenantId());
+  }
+
+  /**
+   * Engineering's own verdict on the delivery impact it can PROVE — §24-Engineering.
+   *
+   * Deliberately narrow, and named for what it covers rather than for the domain. Engineering has
+   * six kinds of record and only two of them carry evidence that a state threatens delivery:
+   *
+   *   A technical query declares `timeImpact` for itself. That is Engineering asserting the
+   *   schedule is at stake — not Projects inferring it from a status name.
+   *
+   *   A drawing submission carries an agreed `dueDate`. Overdue against a revision still awaiting
+   *   a decision is a fact with a date on it.
+   *
+   * RFIs, submittals, BIM models and engineering documents carry a status and nothing else — no
+   * due date, no priority, no impact flag, no reference to the work they hold up. Confirmed at the
+   * schema as well as the model. Nothing there proves an open RFI threatens anything, so nothing
+   * here claims it does; that half is reported separately as approval readiness, which says openly
+   * that it cannot be judged.
+   *
+   * DESIGN CHANGES ARE DELIBERATELY ABSENT. An approved design change with a cost impact becomes a
+   * Variation, and Variations are already counted as commercial exposure. Counting them here too
+   * would make one problem appear as two, which is the one thing a health rollup must never do.
+   *
+   * THE LINEAGE THAT MAKES `dueDate` SAFE. A submission is an immutable audit row, so an old late
+   * one must not raise a phantom blocker on a drawing since approved. It cannot: each
+   * (project, code, revision) is its own row carrying its own status, `submitted` is reachable only
+   * from `draft`, and revising marks the source `superseded`. So a revision is submitted at most
+   * once, and outstanding-ness is read from the REVISION's status — never from the submission's
+   * age. The submission contributes only the date.
+   *
+   * `dueDate` is optional, so an undated submission can never be overdue. CLEAR here therefore
+   * means "no query declares time impact and no DATED review is overdue" — not "every review is on
+   * time". The undated ones belong to approval readiness, which reports UNKNOWN rather than
+   * pretending.
+   */
+  async readProjectEngineeringDeliveryImpact(
+    tenantId: Id,
+    projectId: Id,
+    today = new Date().toISOString().slice(0, 10),
+  ): Promise<HealthSignal> {
+    const href = `/project/${encodeURIComponent(projectId)}/workspace/engineering`;
+
+    const queries = await this.listTechnicalQueries({ tenantId, projectId });
+    // `open` only: a responded query has its answer and is awaiting closure, not awaiting a
+    // decision the project is held up by.
+    const impacting = queries.filter((q) => q.status === 'open' && q.timeImpact);
+    const urgent = impacting.filter((q) => q.priority === 'high');
+
+    const outstanding = (await this.listDrawings({ tenantId, projectId }))
+      .filter((d) => d.status === 'submitted' || d.status === 'under_review');
+    const overdue: string[] = [];
+    for (const revision of outstanding) {
+      const submissions = await this.submissionStore.listByDrawing(tenantId, revision.id);
+      if (submissions.some((sub) => sub.dueDate !== null && sub.dueDate < today)) {
+        overdue.push(`${revision.code} Rev ${revision.revision}`);
+      }
+    }
+
+    if (urgent.length > 0) {
+      return {
+        id: 'engineering-delivery-impact',
+        domain: 'engineering',
+        state: 'CRITICAL',
+        reason: `${urgent.length} high-priority technical quer${urgent.length === 1 ? 'y' : 'ies'} declaring a time impact and still unanswered.`,
+        href,
+        measure: { value: urgent.length },
+      };
+    }
+
+    if (impacting.length > 0 || overdue.length > 0) {
+      const parts = [
+        ...(impacting.length > 0 ? [`${impacting.length} technical quer${impacting.length === 1 ? 'y' : 'ies'} declaring a time impact`] : []),
+        ...(overdue.length > 0 ? [`${overdue.length} drawing review${overdue.length === 1 ? '' : 's'} past the agreed date (${overdue.slice(0, 3).join(', ')}${overdue.length > 3 ? '…' : ''})`] : []),
+      ];
+      return {
+        id: 'engineering-delivery-impact',
+        domain: 'engineering',
+        state: 'AT_RISK',
+        reason: `${parts.join('; ')}.`,
+        href,
+        measure: { value: impacting.length + overdue.length },
+      };
+    }
+
+    return { id: 'engineering-delivery-impact', domain: 'engineering', state: 'CLEAR' };
   }
 
   listTechnicalQueries(filter?: TqFilter): Promise<TechnicalQuery[]> {

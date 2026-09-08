@@ -17,9 +17,11 @@ import type { HealthDomain, HealthSignal, HealthUnknownCause } from '@aura/share
  * HSE, Engineering and Procurement have data. What they do not have is a declared meaning for it,
  * and those are different problems:
  *
- *   Engineering has seven status vocabularies — RFI, TQ, submittal, drawing, design change — and
- *   not one of them says which state blocks delivery. Is an open RFI a blocker? After how long? Is
- *   a rejected submittal worse than an unanswered TQ?
+ *   Engineering turned out not to be one signal at all. A technical query declares `timeImpact` for
+ *   itself and a drawing submission carries an agreed due date — both are evidence. RFIs and
+ *   submittals carry a status and nothing else, at the schema as well as the model. So it is split:
+ *   what Engineering can prove is reported, what it cannot is reported as unproven, and neither is
+ *   allowed to stand in for the other.
  *
  *   Procurement is the same shape. A `submitted` PR is awaiting approval, which is normal until it
  *   isn't, and nothing declares the threshold.
@@ -40,7 +42,7 @@ import type { HealthDomain, HealthSignal, HealthUnknownCause } from '@aura/share
  *
  * There is deliberately no stub provider inside Projects returning UNKNOWN. The CONTRACT carries
  * the unavailability, so when Engineering declares its rules the only thing that changes is that a
- * provider appears — `providerExpected` flips, a port gets bound, and the aggregation model,
+ * provider appears — `semanticsDeclared` flips, a port gets bound, and the aggregation model,
  * the vocabulary and every consumer stay exactly as they are.
  */
 
@@ -53,49 +55,66 @@ export type HealthSignalId =
   | 'quality-ncr'
   | 'commissioning-readiness'
   | 'hse-exposure'
-  | 'engineering-blockers'
+  | 'engineering-delivery-impact'
+  | 'engineering-approval-readiness'
   | 'procurement-blockers';
 
 export interface HealthSignalDeclaration {
   id: HealthSignalId;
   domain: HealthDomain;
   /**
-   * Whether a provider SHOULD exist today.
+   * Whether the owning domain has declared what its facts MEAN for project health.
    *
-   * False means the owning domain has not declared its health semantics, so nothing is expected
-   * and nothing is broken. True means one is expected — and if it is not bound, that is a
-   * composition-root defect the runtime proof must catch, not a domain gap to shrug at.
+   * Renamed from `providerExpected`, which read like a switch for skipping a signal. It never was
+   * one and must never become one: BOTH values leave the signal in the assessment. True means a
+   * provider exists and must be bound — an unbound one is a composition defect the runtime proof
+   * catches. False means the domain has not decided yet, so the signal reports UNKNOWN and drags
+   * coverage to PARTIAL.
+   *
+   * Neither value removes a signal from the report. A signal that genuinely does not apply to a
+   * particular project is NOT_APPLICABLE returned by its provider at RUNTIME — a per-project fact,
+   * the way Commissioning already answers for a project with nothing to commission. It is never a
+   * registry flag, because a flag would apply to every project at once and could not be evidenced
+   * for any of them.
    */
-  providerExpected: boolean;
+  semanticsDeclared: boolean;
   /** Stated in the owning domain's terms, for the report a reader actually sees. */
   undeclaredReason?: string;
 }
 
 export const HEALTH_SIGNALS: readonly HealthSignalDeclaration[] = [
   // ── Owned by Projects. It may interpret its own facts, and only its own. ────────────────────
-  { id: 'schedule-performance', domain: 'schedule', providerExpected: true },
-  { id: 'delay-entitlement', domain: 'delay', providerExpected: true },
-  { id: 'cost-performance', domain: 'cost', providerExpected: true },
-  { id: 'commercial-exposure', domain: 'commercial', providerExpected: true },
+  { id: 'schedule-performance', domain: 'schedule', semanticsDeclared: true },
+  { id: 'delay-entitlement', domain: 'delay', semanticsDeclared: true },
+  { id: 'cost-performance', domain: 'cost', semanticsDeclared: true },
+  { id: 'commercial-exposure', domain: 'commercial', semanticsDeclared: true },
 
   // ── Owned elsewhere, and answerable: these domains have declared their own semantics. ───────
-  { id: 'quality-ncr', domain: 'quality', providerExpected: true },
-  { id: 'commissioning-readiness', domain: 'commissioning', providerExpected: true },
-  { id: 'hse-exposure', domain: 'hse', providerExpected: true },
+  { id: 'quality-ncr', domain: 'quality', semanticsDeclared: true },
+  { id: 'commissioning-readiness', domain: 'commissioning', semanticsDeclared: true },
+  { id: 'hse-exposure', domain: 'hse', semanticsDeclared: true },
+
+  // ── Engineering, split in two because discovery proved it is not one thing. ─────────────────
+  //
+  // Two of its six record types carry evidence that a state threatens delivery; four carry none.
+  // Answering as a single signal would have forced a choice between hiding a declared time impact
+  // and reporting CLEAR for a project with forty unassessed open RFIs. Splitting keeps both true.
+  { id: 'engineering-delivery-impact', domain: 'engineering', semanticsDeclared: true },
+  {
+    id: 'engineering-approval-readiness',
+    domain: 'engineering',
+    semanticsDeclared: false,
+    undeclaredReason:
+      'Engineering cannot yet say whether its approvals are on time. RFIs and submittals carry a status '
+      + 'and nothing else — no due date, no priority, no reference to the work they hold up — and a drawing '
+      + 'review is only measurable when someone agreed a date for it.',
+  },
 
   // ── Owned elsewhere, and NOT yet answerable. Visible as partial coverage, never as clear. ───
   {
-    id: 'engineering-blockers',
-    domain: 'engineering',
-    providerExpected: false,
-    undeclaredReason:
-      'Engineering has not declared which of its states block delivery. RFIs, technical queries and '
-      + 'submittals each have their own status, and none of them says which one holds a project up.',
-  },
-  {
     id: 'procurement-blockers',
     domain: 'procurement',
-    providerExpected: false,
+    semanticsDeclared: false,
     undeclaredReason:
       'Procurement has not declared which of its states block delivery. A submitted request awaiting '
       + 'approval is routine until it is late, and no threshold for that exists yet.',

@@ -52,6 +52,11 @@ import { SCHEDULE_STORE } from './schedule-store';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { PostgresScheduleStore } from './postgres-schedule-store';
 import { ScheduleService } from './schedule.service';
+import { PROJECT_ISSUE_STORE, PROJECT_RISK_STORE } from './risk-issue-store';
+import { InMemoryProjectIssueStore, InMemoryProjectRiskStore } from './in-memory-risk-issue-store';
+import { PostgresProjectIssueStore, PostgresProjectRiskStore } from './postgres-risk-issue-store';
+import { RiskIssueService } from './risk-issue.service';
+
 import { DELIVERY_ITEM_MAP_STORE } from './delivery-item-map-store';
 import { InMemoryDeliveryItemMapStore } from './in-memory-delivery-item-map-store';
 import { PostgresDeliveryItemMapStore } from './postgres-delivery-item-map-store';
@@ -122,6 +127,18 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
         pool ? new PostgresDeliveryItemMapStore(pool) : new InMemoryDeliveryItemMapStore(),
     },
     {
+      provide: PROJECT_RISK_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresProjectRiskStore(pool) : new InMemoryProjectRiskStore(),
+    },
+    {
+      provide: PROJECT_ISSUE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresProjectIssueStore(pool) : new InMemoryProjectIssueStore(),
+    },
+    {
       provide: COST_LEDGER_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -140,6 +157,7 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     QuantityLedgerService,
     DelayEotService,
     VariationService,
+    RiskIssueService,
     CloseoutService,
     CloseoutReadinessService,
     ProjectHealthService,
@@ -156,6 +174,6 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
     ScheduleService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, RiskIssueService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

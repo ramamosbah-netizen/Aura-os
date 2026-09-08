@@ -1,22 +1,27 @@
 import { type Id, newId } from './id';
+import { type RiskImpact, type RiskLikelihood, type RiskSeverity, type RiskStatus, riskSeverity } from './risk';
 
 // Opportunity Risk register — the PERSISTED, editable counterpart to the derived AT_RISK health
 // bands (S7 delivered health; this makes risk a first-class record you can own and mitigate).
 // An explicit risk carries a likelihood × impact severity, an owner, a mitigation and a lifecycle.
-// Framework-free; deterministic severity + summary live here so API, UI, tests and the health
-// engine share one rule set.
+//
+// The vocabulary and the arithmetic now live in `./risk`, because Projects speaks the same language
+// about a different subject. What stays here is what is genuinely about an OPPORTUNITY: the record,
+// its foreign key, and a type taxonomy whose members describe threats to a sale.
+//
+// Re-exported below so every existing import of this file keeps resolving unchanged.
 
+export type {
+  RiskLikelihood, RiskImpact, RiskSeverity, RiskStatus, RiskLike, RiskSummary,
+} from './risk';
+export {
+  RISK_OPEN_STATUSES, RISK_SEVERITY_RANK, riskSeverity, riskIsOpen, riskSummary, worstOpenSeverity,
+} from './risk';
+
+/** What kind of threat this is — to a DEAL. Projects has its own taxonomy for threats to delivery. */
 export type RiskType =
   | 'COMMERCIAL' | 'RELATIONSHIP' | 'COMPETITIVE' | 'TECHNICAL' | 'TIMELINE'
   | 'COMPLIANCE' | 'CUSTOMER' | 'DELIVERY' | 'OTHER';
-
-export type RiskLikelihood = 'low' | 'medium' | 'high';
-export type RiskImpact = 'low' | 'medium' | 'high';
-export type RiskSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
-export type RiskStatus = 'OPEN' | 'MITIGATING' | 'RESOLVED' | 'ACCEPTED';
-
-/** Statuses where the risk is still live and weighs on the deal. */
-export const RISK_OPEN_STATUSES: readonly RiskStatus[] = ['OPEN', 'MITIGATING'];
 
 export interface OpportunityRisk {
   id: Id;
@@ -50,17 +55,6 @@ export interface NewOpportunityRisk {
   owner?: string | null;
   mitigation?: string | null;
   targetDate?: string | null;
-}
-
-const RANK: Record<RiskLikelihood, number> = { low: 1, medium: 2, high: 3 };
-
-/** likelihood × impact → severity (a 3×3 matrix). */
-export function riskSeverity(likelihood: RiskLikelihood, impact: RiskImpact): RiskSeverity {
-  const product = RANK[likelihood] * RANK[impact];
-  if (product >= 9) return 'CRITICAL';
-  if (product >= 6) return 'HIGH';
-  if (product >= 3) return 'MEDIUM';
-  return 'LOW';
 }
 
 export function makeRisk(input: NewOpportunityRisk): OpportunityRisk {
@@ -100,42 +94,6 @@ export function updateRisk(
 
 export function setRiskStatus(r: OpportunityRisk, status: RiskStatus): OpportunityRisk {
   return { ...r, status, updatedAt: new Date().toISOString() };
-}
-
-export interface RiskSummary {
-  total: number;
-  /** OPEN or MITIGATING. */
-  open: number;
-  mitigating: number;
-  /** Open risks at each high severity — the ones that should drive attention. */
-  openCritical: number;
-  openHigh: number;
-  needsAttention: boolean;
-}
-
-const SEV_RANK: Record<RiskSeverity, number> = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
-export const riskIsOpen = (r: OpportunityRisk): boolean => (RISK_OPEN_STATUSES as readonly string[]).includes(r.status);
-
-export function riskSummary(risks: OpportunityRisk[]): RiskSummary {
-  let open = 0, mitigating = 0, openCritical = 0, openHigh = 0;
-  for (const r of risks) {
-    if (!riskIsOpen(r)) continue;
-    open++;
-    if (r.status === 'MITIGATING') mitigating++;
-    if (r.severity === 'CRITICAL') openCritical++;
-    else if (r.severity === 'HIGH') openHigh++;
-  }
-  return { total: risks.length, open, mitigating, openCritical, openHigh, needsAttention: openCritical + openHigh > 0 };
-}
-
-/** Highest open severity across a set — used to floor the health "risks" dimension. */
-export function worstOpenSeverity(risks: OpportunityRisk[]): RiskSeverity | null {
-  let worst: RiskSeverity | null = null;
-  for (const r of risks) {
-    if (!riskIsOpen(r)) continue;
-    if (worst === null || SEV_RANK[r.severity] > SEV_RANK[worst]) worst = r.severity;
-  }
-  return worst;
 }
 
 export const CRM_RISK_EVENT = {

@@ -30,6 +30,7 @@ function build(over: {
   commissioning?: HealthSignal | Error | null;
   hse?: HealthSignal | Error | null;
   engineering?: HealthSignal | Error | null;
+  procurement?: HealthSignal | Error | null;
   wbsThrows?: boolean;
 } = {}) {
   const answer = (v: HealthSignal | Error | null | undefined, fallback: HealthSignal) =>
@@ -39,6 +40,7 @@ function build(over: {
   const c = answer(over.commissioning, { id: 'commissioning-readiness', domain: 'commissioning', state: 'CLEAR' });
   const h = answer(over.hse, { id: 'hse-exposure', domain: 'hse', state: 'CLEAR' });
   const e = answer(over.engineering, { id: 'engineering-delivery-impact', domain: 'engineering', state: 'CLEAR' });
+  const pr = answer(over.procurement, { id: 'procurement-sourcing-readiness', domain: 'procurement', state: 'CLEAR' });
 
   return new ProjectHealthService(
     {
@@ -54,13 +56,14 @@ function build(over: {
     c ? ({ readProjectCommissioningHealth: c.read } as never) : null,
     h ? ({ readProjectHseHealth: h.read } as never) : null,
     e ? ({ readProjectEngineeringDeliveryImpact: e.read } as never) : null,
+    pr ? ({ readProjectProcurementSourcingReadiness: pr.read } as never) : null,
   );
 }
 
 const byId = (v: { signals: HealthSignal[] }, id: string) => v.signals.find((s) => s.id === id);
 
 describe('project health assembly', () => {
-  it('1. eight readable and clear, two undeclared → CLEAR · PARTIAL, and not reassuring', async () => {
+  it('1. nine readable and clear, two undeclared → CLEAR · PARTIAL, and not reassuring', async () => {
     // The state the two axes were designed for. Nothing is wrong in anything we could judge, and
     // two domains have not said what their facts mean — so the project is NOT given a clean bill of
     // health it has not earned.
@@ -70,7 +73,7 @@ describe('project health assembly', () => {
     expect(v.coverage).toBe('PARTIAL');
     expect(v.reassuring).toBe(false);
 
-    expect(v.unknown.map((s) => s.id).sort()).toEqual(['engineering-approval-readiness', 'procurement-blockers']);
+    expect(v.unknown.map((s) => s.id).sort()).toEqual(['engineering-approval-readiness', 'procurement-delivery-exposure']);
     // And each says WHY, in terms of the owning domain — not "no data".
     for (const s of v.unknown) {
       expect(s.cause, s.domain).toBe('SEMANTICS_UNDECLARED');
@@ -134,7 +137,7 @@ describe('project health assembly', () => {
 
     expect(v.severity).toBe('CRITICAL');
     expect(v.concerns.find((c) => c.domain === 'hse')?.reason).toBe('1 fatal incident under investigation.');
-    expect(v.unknown.map((s) => s.id).sort()).toEqual(['engineering-approval-readiness', 'procurement-blockers']);
+    expect(v.unknown.map((s) => s.id).sort()).toEqual(['engineering-approval-readiness', 'procurement-delivery-exposure']);
   });
   it('6. Engineering reports the impact it can prove, while admitting the half it cannot', async () => {
     // The split, end to end. A declared time impact raises severity; the approvals half stays
@@ -147,6 +150,20 @@ describe('project health assembly', () => {
     expect(v.severity).toBe('AT_RISK');
     expect(v.concerns.find((c) => c.id === 'engineering-delivery-impact')?.reason).toBe('2 technical queries declaring a time impact.');
     expect(byId(v, 'engineering-approval-readiness')).toMatchObject({ state: 'UNKNOWN', cause: 'SEMANTICS_UNDECLARED' });
+    expect(v.coverage).toBe('PARTIAL');
+  });
+  it('7. a sourcing concern survives alongside an unassessable delivery question', async () => {
+    // The pair Procurement discovery produced. What it can prove is reported; the question that
+    // matters most about supply — will material arrive when the work needs it — has no data behind
+    // it anywhere, so it reports UNKNOWN rather than being answered by the half that is knowable.
+    const v = await build({
+      procurement: { id: 'procurement-sourcing-readiness', domain: 'procurement', state: 'WATCH', reason: '2 requests for quotation past the quote deadline and still out to suppliers.' },
+    }).assess(tenantId, projectId);
+
+    expect(v.severity).toBe('WATCH');
+    expect(v.concerns.find((c) => c.id === 'procurement-sourcing-readiness')?.reason).toMatch(/past the quote deadline/);
+    expect(byId(v, 'procurement-delivery-exposure')).toMatchObject({ state: 'UNKNOWN', cause: 'SEMANTICS_UNDECLARED' });
+    // The known concern does not answer the unknown question, and the unknown does not erase it.
     expect(v.coverage).toBe('PARTIAL');
   });
 });

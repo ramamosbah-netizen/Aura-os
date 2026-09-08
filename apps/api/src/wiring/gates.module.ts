@@ -4,8 +4,8 @@ import { CommissioningModule, CommissioningService } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
-import { QUALITY_GATE } from '@aura/procurement';
-import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH } from '@aura/projects';
+import { QUALITY_GATE, ProcurementModule, RfqService } from '@aura/procurement';
+import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH } from '@aura/projects';
 
 /**
  * App-layer wiring for cross-module gates (ADR-0004: modules don't import each other; the
@@ -31,7 +31,7 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
  */
 @Global()
 @Module({
-  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule],
+  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule],
   providers: [
     { provide: QUALITY_GATE, useExisting: QualityService },
     { provide: ITP_GATE, useExisting: QualityService },
@@ -60,7 +60,8 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     { provide: COMMISSIONING_HEALTH, useExisting: CommissioningService },
     { provide: HSE_HEALTH, useExisting: HseService },
     { provide: ENGINEERING_HEALTH, useExisting: EngineeringService },
+    { provide: PROCUREMENT_HEALTH, useExisting: RfqService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH],
 })
 export class GatesModule {}

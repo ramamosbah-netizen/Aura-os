@@ -57,7 +57,8 @@ export type HealthSignalId =
   | 'hse-exposure'
   | 'engineering-delivery-impact'
   | 'engineering-approval-readiness'
-  | 'procurement-blockers';
+  | 'procurement-sourcing-readiness'
+  | 'procurement-delivery-exposure';
 
 export interface HealthSignalDeclaration {
   id: HealthSignalId;
@@ -110,14 +111,20 @@ export const HEALTH_SIGNALS: readonly HealthSignalDeclaration[] = [
       + 'review is only measurable when someone agreed a date for it.',
   },
 
-  // ── Owned elsewhere, and NOT yet answerable. Visible as partial coverage, never as clear. ───
+  // ── Procurement, split for the same reason Engineering was. ─────────────────────────────────
+  //
+  // Procurement can prove exactly one thing: an RFQ is past the date Procurement itself set for
+  // it. It cannot say anything about delivery, because it models no required-on-site date, no
+  // promised or expected delivery, no lead time and no long-lead flag — checked at the schema.
+  { id: 'procurement-sourcing-readiness', domain: 'procurement', semanticsDeclared: true },
   {
-    id: 'procurement-blockers',
+    id: 'procurement-delivery-exposure',
     domain: 'procurement',
     semanticsDeclared: false,
     undeclaredReason:
-      'Procurement has not declared which of its states block delivery. A submitted request awaiting '
-      + 'approval is routine until it is late, and no threshold for that exists yet.',
+      'Procurement cannot yet say whether materials will arrive when the work needs them. No required-on-site '
+      + 'date, promised delivery, expected delivery or lead time is recorded anywhere, so the question that '
+      + 'matters most about supply has no data behind it.',
   },
 ];
 

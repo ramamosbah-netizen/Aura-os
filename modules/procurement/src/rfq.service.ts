@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   RFQ_EVENT,
@@ -12,6 +12,7 @@ import {
   lowestQuote,
 } from './domain/rfq';
 import { RFQ_STORE, type RfqFilter, type RfqStore } from './rfq-store';
+import { PURCHASE_REQUEST_STORE, type PurchaseRequestStore } from './purchase-request-store';
 
 /**
  * RFQ service — the sourcing step (PR → RFQ → quotes → award → PO). Owns
@@ -29,6 +30,9 @@ export class RfqService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    // Needed only to resolve an RFQ to a project: an RFQ carries `prId`, never `projectId`.
+    // Same module, so no ADR-0004 edge — Procurement reading its own request register.
+    @Optional() @Inject(PURCHASE_REQUEST_STORE) private readonly requests: PurchaseRequestStore | null = null,
   ) {}
 
   async create(input: NewRfq): Promise<Rfq> {
@@ -136,6 +140,69 @@ export class RfqService {
     if (!rfq) return null;
     const quotes = await this.store.listQuotes(id);
     return { rfq, quotes, recommended: lowestQuote(quotes) };
+  }
+
+  /**
+   * Procurement's own verdict on SOURCING readiness — §24-Procurement.
+   *
+   * Deliberately narrow, and the narrowness is the point. This reports one thing only:
+   *
+   *   A request for quotation is past the date Procurement itself set for it, and is still out.
+   *
+   * It does NOT say material will arrive late, and it must never be read that way. Procurement
+   * models no required-on-site date, no promised or expected delivery date, no lead time and no
+   * long-lead flag — checked at the schema, not just the model. So nothing here can support a
+   * claim about delivery, and the signal that would make that claim reports UNKNOWN rather than
+   * guessing. This one says only that a sourcing step is late against its own plan.
+   *
+   * NO INVENTED THRESHOLDS. Procurement declares no rule distinguishing one day overdue from
+   * thirty, so none is invented here. Every overdue RFQ reports at the same level, and that level
+   * is WATCH — the lowest that can be justified. An overdue quote deadline is worth knowing;
+   * calling it AT_RISK would assert a consequence for delivery that the data cannot support.
+   *
+   * WHY THE STATUS CHECK MATTERS. `sent` is what proves the RFQ is still outstanding. An awarded
+   * or closed RFQ whose date passed long ago is finished business, and counting it would produce a
+   * phantom concern that never clears — the same trap the drawing-submission lineage avoids.
+   *
+   * TWO NULLABLE HOPS, STATED OPENLY. An RFQ reaches a project only through `prId → PR.projectId`,
+   * and both `prId` and `dueDate` are nullable. So CLEAR here means "no DATED RFQ RAISED FOR THIS
+   * PROJECT is past its date" — not "all sourcing is on time". An RFQ with no request behind it
+   * belongs to no project and is evidence about none.
+   */
+  async readProjectProcurementSourcingReadiness(
+    tenantId: Id,
+    projectId: Id,
+    today = new Date().toISOString().slice(0, 10),
+  ): Promise<HealthSignal> {
+    const href = `/procurement/rfqs?projectId=${encodeURIComponent(projectId)}`;
+    if (!this.requests) {
+      // Cannot resolve RFQ → project without the request register, and guessing is not an option.
+      return {
+        id: 'procurement-sourcing-readiness',
+        domain: 'procurement',
+        state: 'UNKNOWN',
+        cause: 'PROVIDER_UNAVAILABLE',
+        reason: 'The purchase-request register could not be read, and an RFQ reaches a project only through its request.',
+      };
+    }
+
+    const mine = new Set(
+      (await this.requests.list({ tenantId })).filter((pr) => pr.projectId === projectId).map((pr) => pr.id),
+    );
+    const overdue = (await this.store.list({ tenantId }))
+      .filter((r) => r.status === 'sent' && r.dueDate !== null && r.dueDate < today && r.prId !== null && mine.has(r.prId));
+
+    if (overdue.length === 0) {
+      return { id: 'procurement-sourcing-readiness', domain: 'procurement', state: 'CLEAR' };
+    }
+    return {
+      id: 'procurement-sourcing-readiness',
+      domain: 'procurement',
+      state: 'WATCH',
+      reason: `${overdue.length} request${overdue.length === 1 ? '' : 's'} for quotation past the quote deadline and still out to suppliers.`,
+      href,
+      measure: { value: overdue.length },
+    };
   }
 
   list(filter?: RfqFilter): Promise<Rfq[]> {

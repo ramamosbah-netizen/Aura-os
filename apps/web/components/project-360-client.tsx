@@ -248,6 +248,14 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   const [transitions, setTransitions] = useState<Transition[]>([]);
   const [crossHealth, setCrossHealth] = useState<CrossDomainHealth | null>(null);
   const [register, setRegister] = useState<RiskRegister | null>(null);
+  /**
+   * Whether the register READ has happened yet — distinct from whether it succeeded.
+   *
+   * Without this, `register === null` means both "not fetched yet" and "could not be read",
+   * and the panel announces a failure on first paint that has not happened. A screen that
+   * claims an absence it has not established is the exact failure §24 exists to prevent.
+   */
+  const [registerRead, setRegisterRead] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
@@ -311,6 +319,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     setTransitions(Array.isArray(transitionData) ? transitionData : []);
     setCrossHealth(healthData);
     setRegister(registerData);
+    setRegisterRead(true);
     setMaps(Array.isArray(mapData) ? mapData : []);
     setQuantities(Array.isArray(quantityData) ? quantityData : []);
     setCosts(Array.isArray(costData) ? costData : []);
@@ -606,7 +615,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
 
         {tab === 'eot' && <DelayEotPanel projectId={project.id} delays={delays} eots={eots} busy={busy} call={call} />}
 
-        {tab === 'risks' && <RiskIssuePanel projectId={project.id} register={register} busy={busy} call={call} />}
+        {tab === 'risks' && <RiskIssuePanel projectId={project.id} register={register} read={registerRead} busy={busy} call={call} />}
 
         {tab === 'closeout' && (
           <ClosePanel
@@ -1035,8 +1044,8 @@ const RISK_CLOSED = ['RESOLVED', 'MATERIALISED'];
  * risk into an issue, because that would erase the forecast.
  */
 function RiskIssuePanel({
-  projectId, register, busy, call,
-}: { projectId: string; register: RiskRegister | null; busy: boolean; call: Action }) {
+  projectId, register, read, busy, call,
+}: { projectId: string; register: RiskRegister | null; read: boolean; busy: boolean; call: Action }) {
   const [riskTitle, setRiskTitle] = useState('');
   const [riskArea, setRiskArea] = useState<string>('OTHER');
   const [likelihood, setLikelihood] = useState('medium');
@@ -1100,7 +1109,8 @@ function RiskIssuePanel({
   };
 
   return <div style={{ display: 'grid', gap: 20 }} data-testid="project-risks-panel">
-    {register === null && (
+    {!read && <p style={st.muted} data-testid="risk-register-loading">Reading the register…</p>}
+    {read && register === null && (
       <p style={st.muted} data-testid="risk-register-unavailable">
         The risk register could not be read. Nothing is claimed about this project&apos;s exposure.
       </p>
@@ -1206,7 +1216,8 @@ function RiskIssuePanel({
 
     <div>
       <h3 style={panelTitle}>Risk register</h3>
-      {risks.length === 0 ? <p style={st.muted}>No risks identified. That is not the same as no risk.</p> : (
+      {register === null ? <p style={st.muted}>—</p>
+        : risks.length === 0 ? <p style={st.muted}>No risks identified. That is not the same as no risk.</p> : (
         <SimpleTable ariaLabel="Project risk register" headers={['Risk', 'Area', 'Severity', 'Owner', 'Target', 'Status', 'Actions']}>
           {risks.map((r) => {
             const closed = RISK_CLOSED.includes(r.status);
@@ -1246,7 +1257,8 @@ function RiskIssuePanel({
 
     <div>
       <h3 style={panelTitle}>Issue register</h3>
-      {issues.length === 0 ? <p style={st.muted}>No issues raised.</p> : (
+      {register === null ? <p style={st.muted}>—</p>
+        : issues.length === 0 ? <p style={st.muted}>No issues raised.</p> : (
         <SimpleTable ariaLabel="Project issue register" headers={['Issue', 'Area', 'Severity', 'Owner', 'Raised', 'Due', 'Status', 'Actions']}>
           {issues.map((i) => {
             const open = i.status === 'open' || i.status === 'in_progress';

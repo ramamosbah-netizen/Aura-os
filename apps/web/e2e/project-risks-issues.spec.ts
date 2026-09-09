@@ -33,6 +33,28 @@ test('the Risks & issues link lands on the register, not silently on Overview', 
   await expect(page.getByRole('heading', { name: 'Issue register' })).toBeVisible();
 });
 
+test('never claims the register is unreadable while it is still being read', async ({ page }) => {
+  // Found by looking at a screenshot, not by a test: the panel treated its own initial state as a
+  // failed read, so the first paint announced "could not be read" — beside an empty table saying
+  // "No risks identified". Two contradictory claims, neither of them established.
+  //
+  // Asserted on a project that HAS a risk, so a genuinely empty register cannot make this pass.
+  const id = await createProject(page.request, `Risk load state ${RUN}`);
+  const seeded = await page.request.post('/api/projects/risks', {
+    data: { projectId: id, title: `Seeded before load ${RUN}`, likelihood: 'high', impact: 'high' },
+  });
+  expect(seeded.ok(), 'the fixture must exist for this to mean anything').toBe(true);
+
+  await page.goto(`/project/${id}/controls?tab=risks`, { waitUntil: 'domcontentloaded' });
+  const row = page.getByTestId('risk-row').filter({ hasText: `Seeded before load ${RUN}` });
+  await expect(row).toBeVisible();
+
+  // Once the read has landed and succeeded, the failure notice must be absent — and must never
+  // have been the resting state of a screen whose fetch simply had not returned.
+  await expect(page.getByTestId('risk-register-unavailable')).toHaveCount(0);
+  await expect(page.getByTestId('project-risks-panel')).not.toContainText('No risks identified');
+});
+
 test('a risk is graded by the matrix, never by what someone types', async ({ page }) => {
   const id = await createProject(page.request, `Risk severity ${RUN}`);
   await openRegister(page, id);

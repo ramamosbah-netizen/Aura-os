@@ -145,6 +145,32 @@ have to reach through a parent claim the way `aura_document_versions` does.
 
 ---
 
+## AURA-PM-002 — Resource Actual Lineage Gap
+
+Site's actual labour and plant usage carries no stable reference to the resource it consumed, so
+plan-vs-actual reconciliation cannot be made deterministic.
+
+| Actual record | Identifies the resource as | A stable id exists in |
+|---|---|---|
+| `PlantUsage.equipment` | free text — *"description **or** asset code"* | Assets `Asset`, Fleet `Vehicle` |
+| `LabourAllocation.trade` | free text | nowhere — no trade register exists |
+| `LabourAllocation.subcontractorName` | free text | Procurement `Supplier` (`category: 'subcontractor'`) |
+
+So `TC-01`, `Tower Crane TC-01` and `Tower crane 1` are three resources, and a plan that books
+`Asset:9f3c…` can never be matched against the day it was used.
+
+**What this does and does not block.** It does **not** block cross-project double-booking
+prevention — that works entirely on the planning side, where stable ids already exist. It means §22
+will be able to answer *"is this crane double-booked?"* and unable to answer *"did we use the crane
+we planned?"*, which is a different and later question.
+
+**Deliberately not fixed inside §22.** Adding `assetId` / `employeeId` / `supplierId` to Site's
+records changes a module §22 does not own, sideways, to make a Projects feature tidier. It belongs
+to the PM final capability audit, alongside the same lineage shape already recorded as PROC-GAP-03
+and PROC-GAP-07.
+
+---
+
 ## AURA-PM-001 — a project risk has an owner's NAME, not an owner
 
 Surfaced by wiring §21 into My Work, which is where it first cost something.

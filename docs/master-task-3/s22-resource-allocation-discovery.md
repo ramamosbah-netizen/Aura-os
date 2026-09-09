@@ -294,3 +294,254 @@ branches, and `aura_projects_projects` carries `branch_id`. A crew that cannot t
 emirates is not one pool.
 
 Still discovery. Nothing designed, nothing built.
+
+---
+
+# Phase 2 (continued) — decisions recorded, and the last four checks
+
+## Decisions recorded
+
+**DG-22.8 — a booking is a governed commitment, not a hard lock.** Neither extreme:
+
+```
+A) Advisory only    leave approved → resource unavailable, booking stays green silently   ✗
+B) Hard reservation booking exists → HR cannot approve leave                              ✗
+```
+
+**The invariant, to be carried into the Design Gate verbatim:**
+
+> A booking is valid **at creation** only if capacity is available at that time. A later
+> availability change does not rewrite history and does not reject the owning domain's change; it
+> changes the booking's **current feasibility** and creates a visible resource conflict requiring
+> resolution.
+
+So two distinct properties, and conflating them is the trap:
+
+```
+booking creation validity     settled once, at creation, and never revised
+booking current feasibility   recomputed continuously against today's availability
+```
+
+A booking that was valid yesterday can be conflicted today **without the record becoming invalid**.
+
+Authority follows from it:
+
+```
+HR owns employee availability
+Projects owns project demand and bookings
+Neither may silently rewrite the other's truth.
+```
+
+Projects must not become a hidden HR approval authority — there are legitimate reasons to be absent
+that outrank a project plan — and HR must not delete a booking to make the numbers agree. The
+conflict surfaces; a responsible planner resolves it (replace resource, raise subcontract capacity,
+move the task, reduce the requirement, reschedule, approve overtime, or accept the exposure), and
+that resolution is itself a visible, auditable decision.
+
+**The rule this establishes:**
+
+```
+Demand  ≠  Capacity  ≠  Booking  ≠  Actual
+```
+
+Four different facts, four different owners. Example:
+
+```
+Capacity   12 electricians available Tuesday
+Demand     Project A needs 8 · Project B needs 6
+Bookings   A booked 8 · B booked 6      →  14 booked > 12 available  →  CONFLICT
+Actual     A used 7 · B used 5
+```
+
+**DG-22.7 — approved leave reduces availability automatically, for NAMED employees only.** If §22
+plans a named person, it cannot call them available while HR says they are on approved leave.
+Projects **reads** the HR fact; it never copies it and never reinterprets the leave lifecycle — only
+what HR itself treats as approved counts. That is a dependency, not an authority violation.
+
+For pooled trades it does **not** apply, and must not be faked. Subtracting an employee's leave from
+an "Electricians = 12" pool requires a lineage that does not exist:
+
+```
+Employee X  ──belongs to──►  Electrician Pool     ← no such link in the system today
+```
+
+So Phase 1: named-employee bookings consume leave automatically; pool capacity is governed
+explicitly, with no automatic HR subtraction until membership lineage exists.
+
+**DG-22.9 — a pool is never global by default.** Capacity binds to an explicit organizational or
+resource scope, and the taxonomy is not to be invented (see check D).
+
+**Supplier ≠ Crew.** `Supplier(category='subcontractor')` gives a stable identity for the *company*,
+not for a *crew*. One subcontractor may field several:
+
+```
+ABC MEP  ├─ Crew A × 8   ├─ Crew B × 12   └─ Testing Team × 3
+```
+
+So `supplierId == resourcePoolId` is wrong. A pool references its origin instead —
+`sourceType: 'subcontractor'`, `sourceId: <supplierId>` — leaving Supplier the owner of the
+subcontractor's identity and Resource Planning the owner of the planning pool.
+
+---
+
+## Check A — planner characterization
+
+`planSchedule(tasks, projectStart, capacity)` is a pure function. What it actually does and assumes:
+
+| Property | Reality |
+|---|---|
+| Dependencies | Finish-to-start only, with `lagDays`. No SS/FF/SF, no leads |
+| Duration unit | **Whole calendar days.** A 1-day task starts and finishes the same day |
+| Working calendar | **None.** Saturdays, Fridays and Eid are working days |
+| Resources per task | **Exactly one.** `resource?: string \| null` |
+| Resource identity | A **free string**, matched to `capacity` by string equality |
+| Capacity | `Record<string, number>` — one number per resource, supplied per request |
+| Levelling | Walks days in order; on an over-capacity day, delays the latest-starting task by one day; repeats |
+| Critical path | Computed on the levelled plan |
+
+Three consequences that matter for design:
+
+**A task can need only one resource.** "2 electricians and a crane" is inexpressible. Any real
+requirement model will therefore not map 1:1 onto `PlanTaskInput`.
+
+**Resource identity is string equality**, so the calculator already contains the identity problem
+Phase 2 found in the data — `TC-01` and `Tower Crane TC-01` are two resources to it as well.
+
+**Missing capacity degrades to a false negative, not to UNKNOWN.** Two lines do it:
+
+```ts
+if (!res || !(res in capacity)) continue;     // levelling skips the resource entirely
+const cap = capacity[res] ?? Infinity;        // peaks: absent capacity becomes Infinity
+peaks.push({ resource: res, peakUnits: peak, capacity: Number.isFinite(cap) ? cap : 0,
+             overallocated: peak > cap });
+```
+
+With no capacity supplied — which is *always*, since nothing stores it — the output is:
+
+```
+{ resource: 'Electrician', peakUnits: 8, capacity: 0, overallocated: false }
+```
+
+**Capacity 0 and not overallocated, in the same object.** It is not merely unhelpful, it is the
+§24 mistake in miniature: an unanswerable question reported as a clean answer. §22 must return
+UNKNOWN where capacity is unknown, and the existing calculator needs correcting rather than
+wrapping.
+
+One thing it gets right and should be kept: a single task that alone exceeds capacity is *not*
+delayed — delaying it could never help — but it **is** reported as `overallocated` when a capacity
+exists. That is the correct split between "levellable" and "reportable".
+
+## Check B — Working Calendar authority
+
+**Already owned, by the kernel.** `core/src/time/calendar.service.ts`, migration `0030_kernel_calendar`,
+tables `aura_calendar_holidays` and `aura_calendar_adjustments`. It offers exactly what a scheduler
+needs:
+
+```
+getWorkingHoursForDay(calendarId, date)      addWorkingDays(calendarId, start, days)
+getWorkingDays(calendarId, start, end)       holidays · adjustments · multiple named calendars
+```
+
+**And the planner does not use it.** Not one reference in `schedule-planning.ts` or
+`schedule.service.ts`.
+
+This is the good kind of finding: the capability exists in `@aura/core`, which every module may
+import, so consuming it is not an ADR-0004 problem and needs no new ownership decision. What it does
+need is a decision about *which* calendar a project plans against — the service supports several per
+tenant, and nothing links a project to one.
+
+*(Related: these two tables carry no `tenant_id`, which is why they appeared in AURA-RLS-001's list
+of tables invisible to both isolation controls. Not §22's to fix; worth knowing before depending
+on them.)*
+
+## Check C — trade and resource classification
+
+| Vocabulary | Controlled? | Describes |
+|---|---|---|
+| `Discipline` (shared) | **Yes**, 18 values | **Work** — `cctv`, `bms`, `fire_alarm` |
+| `SupplierCategory` | **Yes**, 5 values | A **company** — includes `subcontractor`, `equipment` |
+| `Employee.role` | No — free text | A person's job title |
+| `Employee.department` | No — free text | Where they sit |
+| `Asset.category` | No — free text, defaults `'General'` | What an asset is |
+| `LabourAllocation.trade` | No — free text | The trade that worked |
+
+**Nothing controlled describes a worker or a machine.** The two real vocabularies are about work and
+about companies. So a trade taxonomy — Electrician, ELV Technician, Rigger, Foreman, Helper — has to
+be created by §22 or acquired from a module willing to own it, and it should not be borrowed from
+`Discipline` for the reason given in 4b.
+
+## Check D — organization, branch and location
+
+Two organizational notions exist, and they are **not the same tree**.
+
+**1. The org tree, in `shared/src/identity/org.ts`:**
+
+```
+ORG_LEVELS = ['tenant', 'company', 'business_unit', 'department', 'team']
+OrgNode { id, level, tenantId, parentId, name }
+```
+
+Real, hierarchical, and already the basis of access containment — a grant on an ancestor covers
+everything beneath it. **This is the taxonomy DG-22.9 should reuse**: a pool's scope is a reference
+to an `OrgNode`, not a new enum, and containment semantics come free.
+
+**2. `branch_id`, which is not in that tree.** Added by `0049` as:
+
+```sql
+ALTER TABLE public.aura_projects_projects ADD COLUMN IF NOT EXISTS branch_id text;
+```
+
+A bare `text` column. There is **no branch table, no `Branch` record, and `branch` is not an
+`ORG_LEVEL`** — yet `current_branch_id()` narrows every project RLS policy by it. So the system
+filters by an organizational unit that has no register and no name.
+
+**Consequence for DG-22.9:** "company + branch scoped" cannot be built on `branch_id` as it stands,
+because a branch is not a thing that exists — only a string on a project row. Either the pool scopes
+to an `OrgNode` (which exists, and nests), or `branch` gets promoted into the org model first. That
+is a decision, and it is larger than §22.
+
+No location/site/geography model was found beyond this.
+
+---
+
+## Recorded separately, not fixed here
+
+**Resource Actual Lineage Gap** — Site's actual labour and plant usage lacks the stable resource and
+pool references needed for deterministic plan-vs-actual reconciliation. `PlantUsage.equipment` and
+`LabourAllocation.trade` / `subcontractorName` are free text; nothing joins them to `Asset`,
+`Vehicle`, `Employee` or `Supplier`.
+
+It does **not** block cross-project double-booking prevention, which works on the planning side
+alone. It does mean §22 can answer *"is this crane double-booked?"* and not *"did we use the crane
+we planned?"*. Site is not to be modified sideways from inside §22; this belongs to the PM final
+capability audit, and is logged in the gap register so it cannot be lost.
+
+---
+
+## The four layers, as they now stand
+
+```
+RESOURCE IDENTITY          HR Employee · Fleet Vehicle · Assets Asset · Procurement Supplier
+        │ referenced by                                    (all have stable ids today)
+        ▼
+CAPACITY & AVAILABILITY    named availability · resource pools · working calendar (core)
+        │                  · approved leave · capacity adjustments        (none of this exists yet)
+        ▼
+PROJECT DEMAND & COMMITMENT   schedule task · resource requirement · resource booking
+        │                                          (task model lacks duration and dependencies)
+        ▼
+EXECUTION ACTUALS          LabourAllocation · PlantUsage        (free text — lineage gap above)
+
+                    ┌─────────────────────────────────────┐
+                    │  Cross-project Capacity Engine      │
+                    │  required vs available vs committed │
+                    └─────────────────────────────────────┘
+```
+
+## Still open for the Design Gate
+
+DG-22.1 (planning granularity) · DG-22.2 (identified references vs pooled register) ·
+DG-22.3 (what a capacity *is* per kind) · DG-22.4 (persisting assignments and durations) ·
+DG-22.5 (naming the forward plan).
+
+Discovery complete. No schema, no migration, nothing designed.

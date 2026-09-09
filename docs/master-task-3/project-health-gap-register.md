@@ -170,10 +170,16 @@ So the system filters row visibility by an organizational unit that has no name,
 register, and no validation. A typo in a branch claim silently narrows a user's world to nothing;
 nothing can enumerate the branches that exist; nothing can rename one.
 
-**Why this is not urgent and still matters.** The policy is written to be inert when unset
-(`current_branch_id() IS NULL OR …`), and the runtime does not currently set it — which is why no
-one has noticed. It becomes live the moment a deployment starts issuing branch claims, and at that
-point it is a data-visibility control resting on an unmanaged string.
+**What is actually evidenced, stated narrowly.** `current_branch_id()` reads
+`app.current_branch_id`, falling back to a `branch_id` JWT claim. Searching `core/src`,
+`apps/api/src` and `modules` returns **no writer for either** — no code path in this repository sets
+the GUC or issues that claim. The policy is written to be inert when unset
+(`current_branch_id() IS NULL OR …`), so on any deployment running this code alone it does not bite.
+
+That is a claim about **this repository**, not about every deployment. The claim can arrive from
+outside it — a JWT minted by an external identity provider, or an operator setting the GUC on a
+session — and nothing validates it when it does. At that moment row visibility across every
+`aura_projects_*` table depends on an unmanaged string with no register to check it against.
 
 **Not fixed in §22, which routes around it.** DG-22.9 scopes resource pools to an `OrgNode`, which
 exists and nests, rather than to `branch_id`. Promoting branch into the org model — or removing it —

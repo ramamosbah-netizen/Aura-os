@@ -1,64 +1,82 @@
-# §22 Resource Allocation — Design Gate
+# §22 Resource Allocation — Design Gate (Authority Document)
 
-**Status:** `AWAITING APPROVAL — no schema, no migration, no implementation`
-**Date:** 2026-09-09 · Follows `s22-resource-allocation-discovery.md` (Phase 1 + Phase 2)
+**Status:** `APPROVED 2026-09-09 — implementation authorised`
+**Revision 2** · incorporates the two required amendments · supersedes Revision 1
+**Follows:** `s22-resource-allocation-discovery.md` (Phase 1 + Phase 2)
 
-Five proposals, the invariants they rest on, the authority boundaries they assume, and a correction
-contract the existing planner must satisfy before it is allowed to answer anything.
+This is the authority document for §22. Everything below is normative unless explicitly marked as
+rationale.
 
 ---
 
-## 0. Two reclassifications, before anything else
+## 0. Two reclassifications
 
 **The existing planner is not "core, awaiting wiring".** It is:
 
 > **Reusable but semantically unsafe and incomplete.**
 
 It computes the right shape of answer and reports a dangerous one when it cannot. It is a starting
-point, not an authority, and §22 does not ship on top of it unchanged.
+point, not an authority.
 
-**`resource?: string` is a limitation of that calculator, not an architecture to preserve.** The new
-persistence model does not inherit it. A resource is a reference; a task may need several.
+**`resource?: string` is a limitation of that calculator, not an architecture to preserve.** The
+persistence model does not inherit it. A resource is a typed reference; a task may need several.
 
 ---
 
-## 1. Invariants
+## 1. Invariants — NORMATIVE
 
-### 1.1 Four facts, four owners
+These are rules, not explanatory notes. A change that violates one is a design regression.
+
+```
+Requirement          ≠  Booking
+Booking              ≠  Availability
+Availability         ≠  Actual
+
+Proposal             ≠  Current Plan
+Current Plan         ≠  Baseline
+
+Project Membership   ≠  Resource Assignment
+Resource Reference   ≠  Resource Ownership
+
+Discipline           ≠  Trade / Resource Class
+
+Later availability change  ≠  historical booking deletion
+```
+
+### 1.1 The temporal invariant
+
+> A booking may have been valid when committed and become infeasible later. **The original
+> commitment remains auditable; its current feasibility changes to `CONFLICTED` or `UNKNOWN`.**
+
+Two distinct properties, and conflating them is the trap:
+
+```
+creation validity     settled once, at commitment, never revised
+current feasibility   recomputed continuously against today's availability
+```
+
+This governs leave, breakdowns, capacity reductions, calendar changes and competing project
+commitments alike. A later availability change never rewrites history and never rejects the owning
+domain's change; it raises a visible conflict for a planner to resolve — replace the resource, raise
+capacity, move the task, reduce the requirement, reschedule, approve overtime, or accept the
+exposure. That resolution is itself recorded.
+
+### 1.2 The four facts
 
 ```
 Demand  ≠  Capacity  ≠  Booking  ≠  Actual
 ```
 
 ```
-Capacity   12 electricians available Tuesday          ← a resource authority states it
-Demand     Project A needs 8 · Project B needs 6      ← each project's plan states it
-Bookings   A booked 8 · B booked 6   →  14 > 12       ← CONFLICT
-Actual     A used 7 · B used 5                        ← Site records it, afterwards
+Capacity   12 electricians available Tuesday      ← a resource authority states it
+Demand     Project A needs 8 · Project B needs 6  ← each project's plan states it
+Bookings   A booked 8 · B booked 6  →  14 > 12    ← CONFLICT
+Actual     A used 7 · B used 5                    ← Site records it, afterwards
 ```
 
-No layer may be inferred from another. In particular: a booking is not evidence of capacity, and an
-actual is not evidence that a booking was honoured.
-
-### 1.2 Booking validity is not booking feasibility
-
-> A booking is valid **at creation** only if capacity was available at that time. A later
-> availability change does not rewrite history and does not reject the owning domain's change; it
-> changes the booking's **current feasibility** and creates a visible resource conflict requiring
-> resolution.
-
-```
-creation validity     settled once, at creation, never revised
-current feasibility   recomputed continuously against today's availability
-```
-
-A booking valid yesterday may be conflicted today **without the record becoming invalid**. Resolution
-is a human decision — replace the resource, raise capacity, move the task, reduce the requirement,
-reschedule, approve overtime, or accept the exposure — and it is recorded as such.
+No layer may be inferred from another.
 
 ### 1.3 The three prohibited false confidences
-
-These are the failures §22 exists to prevent, and every proposal below is shaped by them:
 
 ```
 Unknown capacity      ≠  Available
@@ -80,39 +98,85 @@ Each has a concrete form in today's code or data:
 HR owns employee availability.  Projects owns project demand and bookings.
 ```
 
-Projects must never become a hidden HR approval authority — there are legitimate absences that
-outrank a project plan. HR must never delete a booking to make numbers agree. The conflict surfaces;
-a planner resolves it.
+Projects must never become a hidden HR approval authority; HR must never delete a booking to make
+numbers agree.
 
 ---
 
-## 2. Authority boundaries
+## 2. Feasibility is TRI-STATE — NORMATIVE (Amendment 2)
+
+`overallocated: boolean` is retired as an authority contract. Feasibility is:
+
+```
+AVAILABLE    known capacity is sufficient for known demand
+CONFLICTED   known capacity is insufficient — includes capacity 0 with positive demand
+UNKNOWN      capacity or identity could not be established
+```
+
+Resolution rules:
+
+```
+UNKNOWN capacity              →  UNKNOWN feasibility
+0 capacity + positive demand  →  CONFLICTED
+sufficient known capacity     →  AVAILABLE
+unresolved resource identity  →  UNKNOWN        (never "a different resource", never AVAILABLE)
+```
+
+`UNKNOWN` and a known zero are different facts and must never collapse into one another.
+
+**This tri-state propagates end to end:**
+
+```
+domain  →  capacity engine  →  proposal  →  API  →  UI
+```
+
+**A proposal containing any `UNKNOWN` may not render a reassuring "resources available" state.**
+This is the same rule §24 established for health coverage: a verdict that could not be reached is
+reported as unreached, never as clean.
+
+---
+
+## 3. Authority boundaries
 
 ```
 RESOURCE IDENTITY        HR Employee · Fleet Vehicle · Assets Asset · Procurement Supplier
                          Owned there. §22 REFERENCES, never copies.
 WORKING CALENDAR         @aura/core CalendarService. Consumed, not re-implemented.
 EMPLOYEE AVAILABILITY    HR Leave. Read as a fact; its lifecycle is never reinterpreted.
-CAPACITY & POOLS         Resource Planning (in Projects) — see the note below.
+POOLS & CAPACITY         ResourcePool — see 3.1.
 DEMAND & COMMITMENT      Projects: requirements, bookings, conflict detection.
 EXECUTION ACTUALS        Site: LabourAllocation, PlantUsage. Untouched by §22.
 ```
 
-**A note that should not be skipped.** The pool and capacity register is **company-scoped, not
-project-scoped**, yet it is proposed to live inside the Projects module. That is a deliberate tension:
-it avoids inventing a module for one consumer, and it is exactly what makes cross-project detection
-possible at all. It follows this codebase's own Rule of Three (as `Discipline` did): if a second
-bounded context needs resource capacity, the register is extracted to `@aura/shared` or its own
-module then, not speculatively now. Recorded so the decision is visible rather than discovered later.
+### 3.1 ResourcePool authority — NORMATIVE (Amendment 1)
+
+> **`ResourcePool` is an organization-scoped planning authority, currently implemented within the
+> Projects bounded implementation because Resource Planning is its only proven consumer. It is not
+> project-owned and carries no `projectId` ownership semantics. A Rule-of-Three review is required
+> when another bounded context becomes a genuine consumer.**
+
+```
+              ResourcePool
+              tenant / org scoped
+                    │
+          ┌─────────┴─────────┐
+      Project A            Project B
+      bookings              bookings
+```
+
+This is what makes cross-project capacity truthful without prematurely creating another module.
+
+**A `ResourcePool` row carries no `projectId`.** Any future column, filter or API that scopes a pool
+to a project is a violation of this statement, not an extension of it.
 
 ---
 
-## 3. The five proposals
+## 4. The five decisions
 
-### DG-22.1 — Granularity: hybrid, anchored on a requirement
+### DG-22.1 — Granularity: hybrid, anchored on a requirement — APPROVED
 
-**The unit of planning is a `ResourceRequirement`, not a person assignment.** A task declares as many
-as it needs:
+The unit of planning is a `ResourceRequirement`, not a person assignment. **Multiple requirements per
+task are mandatory**, not optional:
 
 ```
 Task "Pull cables — level 4"
@@ -121,158 +185,183 @@ Task "Pull cables — level 4"
 └─ requirement   identified  Asset CR-01       × 1 unit
 ```
 
-This dissolves the person-versus-trade conflict rather than choosing a side: you plan at the
-granularity you actually know, and identified and pooled resources enter one model without forcing
-everything down to named people.
+`ResourceRequirement` is **demand**. `ResourceBooking` is **commitment**. They are separate records,
+because §1.2 requires it and because unsatisfiable demand must stay visible rather than silently not
+existing.
 
-It also removes the calculator's one-resource-per-task limit, which no real ELV task respects.
+### DG-22.2 — Identity: typed references, no duplicated masters — APPROVED
 
-**A requirement is demand; a booking is the commitment that satisfies it.** They are separate records,
-because §1.1 requires it — and because a requirement that *cannot* be satisfied must remain visible
-as unmet demand rather than silently not existing (§1.3, third prohibition).
-
-### DG-22.2 — Identity: two kinds, one reference type, no duplicated masters
+**`ResourceRef` equality is typed. Bare ids are never compared.**
 
 ```
-ResourceRef
-  | { kind: 'identified'; sourceType: 'employee' | 'vehicle' | 'asset'; sourceId: Id }
-  | { kind: 'pool';       poolId: Id }
+ResourceRef {
+  resourceType         'employee' | 'vehicle' | 'asset' | 'pool'
+  canonicalResourceId  Id         the id in the OWNING register
+}
+
+equal(a, b)  ⇔  a.resourceType === b.resourceType && a.canonicalResourceId === b.canonicalResourceId
 ```
 
-**Identified** resources reference the canonical register and nothing else. §22 stores no employee
-name, no plate number, no serial. Labels are read through at display time, so a renamed asset is
-renamed everywhere and there is no second master to drift.
+A vehicle and an asset that happen to share a uuid are not the same resource. Comparing bare ids
+would make that indistinguishable.
 
-**Pooled** resources are owned by Resource Planning, and may declare where they came from without
-being keyed by it:
+**Copied names, plates and serials are never persisted as identity.** §22 stores no employee name,
+no plate number, no asset serial. Labels are read through the owning register at display time, so a
+renamed record is renamed everywhere and no second master can drift.
+
+**Pools** are owned by Resource Planning and may declare their origin without being keyed by it:
 
 ```
 ResourcePool { id, name: 'ELV Installation Crew A', unit: 'persons',
                sourceType: 'subcontractor' | 'internal', sourceId: <supplierId> | null, scope }
 ```
 
-`supplierId ≠ poolId`, because one subcontractor fields several crews. Supplier stays the owner of
-the subcontractor's identity; Resource Planning owns the planning pool.
+`supplierId ≠ poolId` — one subcontractor fields several crews. Supplier owns the subcontractor's
+identity; Resource Planning owns the planning pool.
 
-**Cross-project conflict detection works on `ResourceRef` equality** — which is why identified
-resources must be ids and not strings (§1.3, second prohibition).
+Cross-project conflict detection works on `ResourceRef` equality, which is why identified resources
+must be typed ids and not strings.
 
-### DG-22.3 — Capacity: unify the measurement contract, not the meaning
-
-Do not try to make a person, a crew and a crane mean the same thing. Make them *measurable the same
-way*:
+### DG-22.3 — Capacity: unify the measurement contract, not the meaning — APPROVED
 
 ```
 ResourceCapacity {
   resourceRef
   unit       'hours' | 'persons' | 'crews' | 'units'
-  quantity   number | UNKNOWN          ← first-class, never 0, never Infinity
+  quantity   number | UNKNOWN          ← first-class; never 0, never Infinity
   interval   { from, to } or recurring
   calendarId which working calendar this quantity is expressed against
-  scope      OrgNode reference          ← DG-22.9
+  scope      OrgNode reference
 }
 ```
 
-**Rules, each enforcing an invariant:**
+- Quantities in different units are **never summed**.
+- A requirement whose unit does not match its resource's capacity unit **fails**. Implicit
+  conversion is forbidden — it is how "4 persons" becomes "4 hours".
+- `UNKNOWN` capacity yields `UNKNOWN` feasibility (§2), distinct from a known zero.
 
-- Quantities in different units are **never summed**. Comparison happens within a unit or not at all.
-- A requirement whose unit does not match its resource's capacity unit is **refused, not coerced**.
-  Silent coercion is how "4 persons" becomes "4 hours".
-- `UNKNOWN` capacity yields an `UNKNOWN` feasibility verdict — never "available" (§1.3, first
-  prohibition).
+**Scope is an `OrgNode` reference.** The org tree exists, nests, and carries containment semantics.
+§22 does **not** build on `branch_id` and does **not** create a Branch model.
 
-**Scope is an `OrgNode` reference (DG-22.9, settled).** The org tree already exists, already nests,
-and already carries containment semantics. §22 does **not** build on `branch_id` and does not create
-a Branch model.
-
-### DG-22.4 — Persistence: three layers, deliberately kept apart
+### DG-22.4 — Persistence: the governed chain — APPROVED
 
 ```
-PLANNING INPUT      duration · dependencies · requirements     authored; survives rescheduling
-COMPUTED RESULT     levelled dates · critical path · peaks     derived; disposable; recomputable
-COMMITMENT          bookings                                   governed; audited; never derived
+Authored schedule
+      ↓
+Planning Run
+      ↓
+Solver Proposal
+      ↓  explicit governed acceptance
+Current Plan
+      ↓  separately governed
+Baseline
 ```
 
-**Yes: durations, dependencies, requirements and bookings are persisted.** Without them there is
-nothing to plan from and a levelled plan cannot be saved, re-opened or compared.
+> **A solver run must never mutate current or baseline dates merely because it executed.**
 
-**But a computed result is not the plan's truth.** A levelling run is a *proposal* until accepted.
-Writing levelled dates straight over the schedule would destroy the distinction between what was
-planned, what was baselined, and what a solver suggested — and §2/§27 already depend on
-`baselineSetAt` meaning something exact. Provenance is preserved: a date carries whether it was
-authored, levelled, or baselined.
+Durations, dependencies, requirements and bookings are persisted — without them there is nothing to
+plan from and no proposal can be saved, re-opened or compared. A computed result is not the plan's
+truth: it is a proposal until accepted, and acceptance is a governed act. Dates carry their
+provenance — authored, proposed, accepted, or baselined.
 
-### DG-22.5 — Naming
+### DG-22.5 — Naming — APPROVED
 
 ```
 Resource Pool          a governed pool of interchangeable capacity
 Resource Capacity      what is available — per unit, per interval, per scope
 Resource Availability  capacity minus known absences (leave, maintenance)
-Resource Requirement   what a task needs                      (demand)
+Resource Requirement   what a task needs                       (demand)
 Resource Booking       a project's committed claim on capacity (commitment)
 Resource Plan          the per-project picture of the above
 Resource Conflict      committed > available, for one resource in one interval
 ```
 
-`LabourAllocation` and `PlantUsage` remain **Site actuals**, are not renamed, and are never reused
-for planning. The word "allocation" is not used for anything forward-looking.
+`LabourAllocation` and `PlantUsage` are **reserved for Site actuals**, are not renamed, and are never
+reused for planning. "Allocation" is never used for anything forward-looking.
 
 ---
 
-## 4. Planner Correction Contract
+## 5. Planner Correction Contract
 
-The existing engine may be reused **only after** it demonstrably satisfies all nine. Until then it is
-a calculator, not an authority, and nothing may present its output as a feasibility verdict.
+### 5.1 Layering — NORMATIVE
+
+Cross-project capacity is **outside** the pure levelling function.
+
+```
+HR / Assets / Fleet / Pools · Calendars · existing bookings across projects
+                              ↓
+                Capacity / Availability Resolver          ← does the querying
+                              ↓
+                    resolved planning facts               ← plain data
+                              ↓
+              Pure Planning / Levelling Engine            ← stays pure and deterministic
+                              ↓
+                          Proposal
+```
+
+> **`schedule-planning.ts` must not query HR, Fleet, Assets or other projects.** It receives resolved
+> facts and returns a proposal. The existing engine is corrected and generalised; the cross-project
+> capacity engine is a separate capability.
+
+### 5.2 The nine requirements
+
+The engine may present a feasibility verdict only once all nine hold. Each is a test, not a claim.
 
 | # | Requirement | What it prevents |
 |---|---|---|
-| 1 | **Missing capacity → UNKNOWN**, never `capacity: 0, overallocated: false` | The false negative shipped today |
-| 2 | **Unstable or missing identity is never silently matched** — two references are the same resource only when their `ResourceRef` is equal | `TC-01` vs `Tower Crane TC-01` reading as two non-conflicting cranes |
+| 1 | **Missing capacity → `UNKNOWN`**, never `capacity: 0, overallocated: false` | The false negative shipped today |
+| 2 | **Unresolved identity is never silently matched** — same resource ⇔ equal typed `ResourceRef` | `TC-01` vs `Tower Crane TC-01` reading as two non-conflicting cranes |
 | 3 | **Multiple requirements per task** | A task needing a crew *and* a crane being unrepresentable |
-| 4 | **Cross-project commitments are included** in the demand it levels against | "Available ✓" on two screens for one crane |
+| 4 | **Cross-project commitments included** — via the Resolver, not by the engine querying | "Available ✓" on two screens for one crane |
 | 5 | **The working calendar is consumed** (`@aura/core`), not assumed | Plans that work through Fridays and Eid |
-| 6 | **Dependency cycles are detected and reported** | Already present; must survive the rewrite |
-| 7 | **Unschedulable demand is reported, not dropped** — a requirement that cannot be met within capacity surfaces as unmet | A silently ignored requirement reading as satisfied |
-| 8 | **Deterministic**: identical input yields identical output, including tie-breaks | A plan that changes when nothing changed |
-| 9 | **No false "available"** under any combination of missing capacity, missing identity or missing requirement | §1.3, as a single end-to-end assertion |
+| 6 | **Dependency cycles detected and reported** | Already present; must survive the rewrite |
+| 7 | **Unschedulable demand reported, not dropped** | A silently ignored requirement reading as satisfied |
+| 8 | **Deterministic** — identical input yields identical output, tie-breaks included | A plan that changes when nothing changed |
+| 9 | **No false "available"** under any combination of missing capacity, unresolved identity or missing requirement | §1.3, as one end-to-end assertion |
 
-Each is a test, not a claim. #4 is the one that cannot be satisfied by correcting the existing
-function alone — it needs the cross-project capacity engine — and it is the reason §22 is not
-"add a UI over the existing calculator".
+### 5.3 Existing behaviour to retain
+
+The current engine gets one thing right and it must survive: **a requirement greater than known
+capacity is `CONFLICTED`, and delaying it indefinitely is not a solution.** A single task that alone
+exceeds capacity is not delayed — delaying could never help — but it *is* reported. That is the
+correct split between "levellable" and "reportable".
 
 ---
 
-## 5. What "done" means for §22
+## 6. Implementation sequence — APPROVED
 
 ```
-Domain semantics (pools · capacity · requirements · bookings · conflicts)
-  → DB + migration + RLS  →  Planner Correction Contract (all nine, tested)
-  → cross-project capacity engine  →  API  →  BFF  →  Project 360 UI
-  → permissions  →  audit / events  →  conflict surfacing and resolution
-  → fresh-PostgreSQL proof  →  browser E2E
+planner correction
+  → persisted duration / dependencies
+  → ResourceRef
+  → ResourcePool / capacity
+  → Requirements
+  → Bookings
+  → cross-project capacity engine
+  → calendar integration
+  → Planning Run / Proposal
+  → governed acceptance
+  → API / BFF
+  → Project 360 UI
+  → permissions / events / audit
+  → browser evidence
 ```
 
-The browser proof must walk the failure this section exists for: two projects, one crane, the same
-Tuesday, and a conflict that appears on both.
+The browser proof must walk the failure §22 exists for: two projects, one crane, the same Tuesday,
+and a conflict visible on both.
 
 ---
 
-## 6. Out of scope, recorded elsewhere
+## 7. Explicitly out of scope
 
-- **AURA-PM-002** Resource Actual Lineage Gap — Site actuals carry no stable resource reference.
-  Blocks plan-vs-actual reconciliation; does **not** block double-booking prevention.
-- **AURA-ORG-001** `branch_id` narrows every Projects RLS policy while no branch register exists.
-  Cross-cutting organizational and RLS modelling gap; §22 routes around it via `OrgNode`.
-- **Employee → pool membership lineage** does not exist, so approved leave reduces availability for
-  **named employees only**. Pool capacity is governed explicitly, with no automatic HR subtraction,
-  until that lineage exists.
+**AURA-PM-002 — plan-vs-actual reconciliation is NOT part of §22.** Site's free-text trade and
+equipment actuals cannot prove deterministic reconciliation. **The gap stays open rather than being
+closed with manufactured string-based lineage.** §22 will answer *"is this crane double-booked?"* and
+will not answer *"did we use the crane we planned?"*.
 
----
+**AURA-ORG-001 — the `branch_id` finding stays separate.** No branch model is invented as part of
+Resource Planning. `OrgNode` is the approved scope mechanism.
 
-## 7. Awaiting
-
-Approval or amendment of **DG-22.1 … DG-22.5**, the invariants in §1, the authority boundaries in §2
-(including the Rule-of-Three note on where the pool register lives), and the Planner Correction
-Contract in §4.
-
-No schema. No migration. No implementation.
+**Employee → pool membership lineage does not exist**, so approved leave reduces availability for
+**named employees only**. Pool capacity is governed explicitly, with no automatic HR subtraction,
+until that lineage exists.

@@ -261,3 +261,9 @@ passed against the same route.
 The recurrence on `admin-control-center` makes this more than chance. It is not diagnosed, and it is not a §24
 defect. Recorded here so it is not lost, and so nobody attempts to close it by re-running the suite until it
 goes green.
+
+**Update 2026-09-09.** A full suite run — 118 passed, 1 skipped, exit 0, first attempt, no retries and
+no reruns — had all three of these pass, alongside nine new §21 specs and a database recreated from
+zero. That is a data point, **not a resolution**: the failures were always intermittent, so one
+clean run is exactly what a latent flake looks like on a good day. The finding stays OPEN and
+undiagnosed. Closing it needs a cause, not a green run.

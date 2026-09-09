@@ -145,6 +145,43 @@ have to reach through a parent claim the way `aura_document_versions` does.
 
 ---
 
+## AURA-ORG-001 — every Projects RLS policy narrows by a branch that has no register
+
+Surfaced by §22 Phase-2 discovery, while looking for an organizational scope for resource pools.
+
+Migration `0049` added:
+
+```sql
+ALTER TABLE public.aura_projects_projects ADD COLUMN IF NOT EXISTS branch_id text;
+```
+
+and defined `current_branch_id()`, which now appears in the `USING` clause of the hierarchical RLS
+policy on **every** `aura_projects_*` table — including the two §21 added:
+
+```sql
+AND (public.current_branch_id() IS NULL OR p.branch_id = public.current_branch_id())
+```
+
+**There is no branch table, no `Branch` record, and `branch` is not an `ORG_LEVEL`.** The real org
+tree is `tenant → company → business_unit → department → team` (`shared/src/identity/org.ts`), with
+`OrgNode` and containment semantics. `branch_id` is a bare `text` column belonging to nothing.
+
+So the system filters row visibility by an organizational unit that has no name, no parent, no
+register, and no validation. A typo in a branch claim silently narrows a user's world to nothing;
+nothing can enumerate the branches that exist; nothing can rename one.
+
+**Why this is not urgent and still matters.** The policy is written to be inert when unset
+(`current_branch_id() IS NULL OR …`), and the runtime does not currently set it — which is why no
+one has noticed. It becomes live the moment a deployment starts issuing branch claims, and at that
+point it is a data-visibility control resting on an unmanaged string.
+
+**Not fixed in §22, which routes around it.** DG-22.9 scopes resource pools to an `OrgNode`, which
+exists and nests, rather than to `branch_id`. Promoting branch into the org model — or removing it —
+is a cross-cutting organizational and RLS decision, larger than resource planning and owned by
+neither §21 nor §22.
+
+---
+
 ## AURA-PM-002 — Resource Actual Lineage Gap
 
 Site's actual labour and plant usage carries no stable reference to the resource it consumed, so

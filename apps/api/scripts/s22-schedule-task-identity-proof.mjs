@@ -112,10 +112,16 @@ check(
   uq.some((r) => r.conname === 'uq_aura_projects_schedule_tasks_lineage'),
   'composite lineage UNIQUE (tenant_id, project_id, schedule_id, id) exists for Step 2B to key on',
 );
+// Step 2A asserted that no duration column existed yet. Step 2B added one, legitimately, so that
+// assertion is retired rather than kept passing by accident. What 2A guaranteed and still
+// guarantees is the part that mattered: it neither invented a duration nor backfilled one, so
+// every task promoted from JSONB carries NULL until a person authors it.
 const { rows: dur } = await owner.query(`
-  select column_name from information_schema.columns
-   where table_name='aura_projects_schedule_tasks' and column_name like 'duration%'`);
-check(dur.length === 0, 'no duration column — that is Step 2B, and inferring it here would fabricate authored input');
+  select is_nullable from information_schema.columns
+   where table_name='aura_projects_schedule_tasks' and column_name='duration_working_days'`);
+check(dur.length === 0 || dur[0].is_nullable === 'YES',
+  'duration remains NULLABLE — 2A promoted tasks without inferring a duration from their dates',
+  dur.length === 0 ? 'column not present (pre-2B)' : `is_nullable=${dur[0].is_nullable}`);
 say();
 
 // ── 2. Lossless backfill of a SYNTHETIC LEGACY schedule ───────────────────
@@ -265,7 +271,11 @@ if (!reachable) {
     body: JSON.stringify({ username: 'u-admin', password: process.env.AUTH_DEV_PASSWORD ?? 'e2e-password' }),
   }).then((r) => r.json()).catch(() => null);
   const token = login?.token;
-  check(!!token, 'authenticated as u-admin');
+  if (!token) {
+    // Bail rather than cascade. Without a token every later check fails for one reason, and a wall
+    // of red says "the schema is broken" when the truth is "the API is pointed elsewhere".
+    check(false, 'authenticated as u-admin — runtime section skipped', 'no token returned');
+  } else {
 
   const H = { 'content-type': 'application/json', authorization: `Bearer ${token}` };
   const post = (path, body) =>
@@ -332,6 +342,7 @@ if (!reachable) {
   await owner.query('delete from public.aura_projects_schedules where project_id = $1', [projectId]).catch(() => {});
   await owner.query('delete from public.aura_projects_projects where id = $1', [projectId]).catch(() => {});
   await setTenant(owner, null);
+  }
 }
 
 await cleanup();

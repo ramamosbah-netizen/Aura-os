@@ -16,8 +16,9 @@
  * false }` whenever capacity was unknown — which was always, since nothing stored capacity. Zero
  * capacity and "not overallocated" in the same breath is an unanswerable question dressed as a
  * clean answer, and a plan built on it says "available" about a crane already booked on another
- * site. Feasibility is therefore TRI-STATE, and `UNKNOWN` is a first-class outcome that can never
- * collapse into `AVAILABLE`.
+ * site. So a resource that cannot be judged reports `UNKNOWN`, and the plan carries TWO independent
+ * axes — `feasibility` (is anything judged in conflict) and `coverage` (was everything judged) —
+ * with `established` as the only combination a screen may present as "resourced".
  *
  * Dates are YYYY-MM-DD; durations are whole WORKING days (a 1-day task starts and finishes on the
  * same working day).
@@ -54,10 +55,22 @@ export type ResourceUnit = 'hours' | 'persons' | 'crews' | 'units';
 // ── Tri-state feasibility (Design Gate §2) ─────────────────────────────────
 
 /**
- * `UNKNOWN` is not a degraded `AVAILABLE`. It says the question could not be answered, and it must
- * never be presented as reassurance.
+ * One resource's verdict. `UNKNOWN` is not a degraded `AVAILABLE` — it says the question could not
+ * be answered about this resource, and it is what drags the plan's coverage to PARTIAL.
  */
-export type Feasibility = 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN';
+export type ResourceFeasibility = 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN';
+
+/**
+ * The plan's verdict. Deliberately only two values.
+ *
+ * Not-knowing is carried by `coverage`, not smuggled into this axis — the §24 rule, applied here:
+ * a roll-up that had to express "conflicted" and "unassessed" in one value would let either
+ * swallow the other. So `AVAILABLE` here means "nothing that could be judged is in conflict", and
+ * says nothing at all about how much could be judged.
+ *
+ * Which is why `AVAILABLE` alone must never be presented as availability — see `established`.
+ */
+export type PlanFeasibility = 'AVAILABLE' | 'CONFLICTED';
 
 /**
  * Whether every resource could be judged — the second axis, borrowed from §24 for the same reason.
@@ -163,7 +176,7 @@ export interface ResourceVerdict {
   peakTotalDemand: number;
   /** `null` when unknown — never 0-for-unknown. */
   capacity: number | null;
-  feasibility: Feasibility;
+  feasibility: ResourceFeasibility;
   /** Present when the verdict is not AVAILABLE, in the engine's own words. */
   reason?: string;
   /** The days on which total demand exceeded a known capacity. */
@@ -188,10 +201,19 @@ export interface SchedulePlan {
   criticalPath: string[];
   resourceVerdicts: ResourceVerdict[];
   unmetDemand: UnmetDemand[];
-  /** Worst verdict across resources. Never AVAILABLE while any resource is UNKNOWN. */
-  feasibility: Feasibility;
+  /** Whether anything that COULD be judged is in conflict. Says nothing about how much was. */
+  feasibility: PlanFeasibility;
   /** PARTIAL when any resource could not be judged. Independent of `feasibility`. */
   coverage: FeasibilityCoverage;
+  /**
+   * The ONE combination a screen may present as "resourced": nothing in conflict, and nothing
+   * left unjudged.
+   *
+   * Exists so the rule lives in the domain rather than being re-derived by every consumer — the
+   * same reason §24 puts `reassuring` on its payload. `AVAILABLE` + `PARTIAL` is not availability;
+   * it is not established, and a caller that reads `feasibility` alone would call it available.
+   */
+  established: boolean;
 }
 
 // ── Date arithmetic over a working calendar ───────────────────────────────
@@ -352,7 +374,8 @@ export function planSchedule(input: PlanInput): SchedulePlan {
   if (tasks.length === 0) {
     return {
       projectStart, projectFinish: projectStart, durationDays: 0, tasks: [], criticalPath: [],
-      resourceVerdicts: [], unmetDemand: [], feasibility: 'AVAILABLE', coverage: 'COMPLETE',
+      resourceVerdicts: [], unmetDemand: [],
+      feasibility: 'AVAILABLE', coverage: 'COMPLETE', established: true,
     };
   }
 
@@ -490,7 +513,7 @@ export function planSchedule(input: PlanInput): SchedulePlan {
       if (known !== null && total > known) conflictDays.push(d);
     }
 
-    let feasibility: Feasibility;
+    let feasibility: ResourceFeasibility;
     let reason: string | undefined;
     if (mismatched.has(k)) {
       feasibility = 'UNKNOWN';
@@ -558,8 +581,9 @@ export function planSchedule(input: PlanInput): SchedulePlan {
     criticalPath: planned.filter((t) => t.critical).map((t) => t.id),
     resourceVerdicts: verdicts,
     unmetDemand: unmet,
-    feasibility: anyConflict ? 'CONFLICTED' : anyUnknown ? 'UNKNOWN' : 'AVAILABLE',
+    feasibility: anyConflict ? 'CONFLICTED' : 'AVAILABLE',
     coverage: anyUnknown ? 'PARTIAL' : 'COMPLETE',
+    established: !anyConflict && !anyUnknown,
   };
 }
 

@@ -74,8 +74,11 @@ describe('[#1] missing capacity is UNKNOWN, never available', () => {
     expect(v.feasibility).toBe('UNKNOWN');
     expect(v.capacity).toBeNull();          // null, NOT 0 — a different fact
     expect(v.reason).toMatch(/no capacity has been declared/);
-    expect(p.feasibility).toBe('UNKNOWN');
+    // Not-knowing lives on `coverage`; `feasibility` says only that nothing judged is in conflict.
+    expect(p.feasibility).toBe('AVAILABLE');
     expect(p.coverage).toBe('PARTIAL');
+    // …and `established` is what stops that reading as availability.
+    expect(p.established).toBe(false);
   });
 
   it('keeps a known zero apart from an unknown', () => {
@@ -97,6 +100,7 @@ describe('[#1] missing capacity is UNKNOWN, never available', () => {
     });
     expect(p.feasibility).toBe('AVAILABLE');
     expect(p.coverage).toBe('COMPLETE');
+    expect(p.established).toBe(true);
     expect(p.unmetDemand).toEqual([]);
   });
 });
@@ -277,9 +281,11 @@ describe('[#9] no false available', () => {
       })],
       capacities: [{ resource: pool('known'), unit: 'persons', quantity: 10 }],
     });
-    expect(p.feasibility).not.toBe('AVAILABLE');
-    expect(p.feasibility).toBe('UNKNOWN');
+    // AVAILABLE + PARTIAL is NOT availability. `established` is the single value a screen reads,
+    // so no consumer can reach "resources available" by looking at one axis.
+    expect(p.feasibility).toBe('AVAILABLE');
     expect(p.coverage).toBe('PARTIAL');
+    expect(p.established).toBe(false);
   });
 
   it('keeps a known conflict and an unjudged resource visible at the same time', () => {
@@ -298,6 +304,7 @@ describe('[#9] no false available', () => {
     });
     expect(p.feasibility).toBe('CONFLICTED');
     expect(p.coverage).toBe('PARTIAL');
+    expect(p.established).toBe(false);
     const states = p.resourceVerdicts.map((v) => v.feasibility).sort();
     expect(states).toEqual(['CONFLICTED', 'UNKNOWN']);
   });

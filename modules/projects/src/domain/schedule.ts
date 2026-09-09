@@ -6,6 +6,16 @@ import { type Id, newId, roundDecimal } from '@aura/shared';
  * computes the project span, weighted % complete, and schedule variance vs the baseline finish.
  */
 export interface ScheduleTask {
+  /**
+   * Immutable identity (DG-22.10). Assigned once and never derived from anything a person edits.
+   *
+   * Before this existed, a task's de facto identity was its NAME: `setScheduleTasks` rebuilt every
+   * task and re-attached baselines through `Map<name, baseline>`. Two tasks called "Install CCTV"
+   * collided, and renaming one silently dropped its baseline — the schedule forgot what it had
+   * committed to, and nothing said so.
+   */
+  id: Id;
+  /** Display and business data. Mutable, and never identity. */
   name: string;
   plannedStart: string; // YYYY-MM-DD
   plannedEnd: string;
@@ -30,6 +40,15 @@ export interface ProjectSchedule {
 }
 
 export interface NewScheduleTask {
+  /**
+   * The task being edited. Absent means "a new task" and a fresh id is minted.
+   *
+   * This is what makes a save an edit rather than a replacement: a caller that round-trips ids
+   * keeps every task's identity, its baseline and anything later keyed to it. A caller that omits
+   * them is understood to be replacing the schedule, and the old tasks are gone — deliberately,
+   * because resurrecting a deleted task by matching its name is the defect this replaces.
+   */
+  id?: Id;
   name: string;
   plannedStart: string;
   plannedEnd: string;
@@ -56,6 +75,7 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
   const pct = Number(input.percentComplete ?? 0);
   if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new Error('percentComplete must be 0..100');
   return {
+    id: input.id ?? newId(),
     name: input.name.trim(),
     plannedStart: input.plannedStart,
     plannedEnd: input.plannedEnd,
@@ -69,7 +89,8 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
 
 export function makeProjectSchedule(input: NewProjectSchedule): ProjectSchedule {
   if (!input.projectId) throw new Error('projectId is required');
-  const tasks = (input.tasks ?? []).map(buildTask).sort((a, b) => (a.plannedStart < b.plannedStart ? -1 : 1));
+  const tasks = (input.tasks ?? []).map(buildTask)
+    .sort((a, b) => (a.plannedStart < b.plannedStart ? -1 : a.plannedStart > b.plannedStart ? 1 : (a.id < b.id ? -1 : 1)));
   const now = new Date().toISOString();
   return {
     id: newId(),
@@ -85,13 +106,22 @@ export function makeProjectSchedule(input: NewProjectSchedule): ProjectSchedule 
   };
 }
 
-/** Replace tasks (baseline dates preserved by name where they already exist). */
+/**
+ * Replace the task set, carrying each surviving task's baseline forward BY IDENTITY.
+ *
+ * Previously this matched on name, which had two consequences worth naming because tests now pin
+ * them: two tasks sharing a name were one key, so one stole the other's baseline; and renaming a
+ * task lost the baseline entirely, because the old key no longer resolved.
+ *
+ * A task the caller does not send back is deleted. It is not resurrected later by a same-named
+ * task — a new task gets a new id, and the baseline it never had stays absent.
+ */
 export function setScheduleTasks(sch: ProjectSchedule, tasks: NewScheduleTask[]): ProjectSchedule {
-  const priorBaseline = new Map(sch.tasks.map((t) => [t.name, { s: t.baselineStart, e: t.baselineEnd }]));
+  const priorBaseline = new Map(sch.tasks.map((t) => [t.id, { s: t.baselineStart, e: t.baselineEnd }]));
   const next = tasks.map(buildTask).map((t) => {
-    const b = priorBaseline.get(t.name);
+    const b = priorBaseline.get(t.id);
     return b ? { ...t, baselineStart: b.s, baselineEnd: b.e } : t;
-  }).sort((a, b) => (a.plannedStart < b.plannedStart ? -1 : 1));
+  }).sort((a, b) => (a.plannedStart < b.plannedStart ? -1 : a.plannedStart > b.plannedStart ? 1 : (a.id < b.id ? -1 : 1)));
   return { ...sch, tasks: next, updatedAt: new Date().toISOString() };
 }
 

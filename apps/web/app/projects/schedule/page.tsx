@@ -8,6 +8,8 @@ import styles from './projects-schedule.module.css';
 export const dynamic = 'force-dynamic';
 
 interface ScheduleTask {
+  /** Stable task identity — carried through to the Gantt so an edit stays an edit. */
+  id: string;
   name: string; plannedStart: string; plannedEnd: string;
   baselineStart: string | null; baselineEnd: string | null;
   actualStart: string | null; actualEnd: string | null; percentComplete: number;

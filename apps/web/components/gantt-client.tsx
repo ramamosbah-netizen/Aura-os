@@ -8,6 +8,12 @@ import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from './gantt-client.module.css';
 
 interface ScheduleTask {
+  /**
+   * Stable task identity. Round-tripped on every save — that is what tells the server this is an
+   * EDIT rather than a replacement, and what keeps each task's baseline attached to it through a
+   * rename. Omitting it would silently mint new tasks and drop their baselines.
+   */
+  id: string;
   name: string; plannedStart: string; plannedEnd: string;
   baselineStart: string | null; baselineEnd: string | null;
   actualStart: string | null; actualEnd: string | null; percentComplete: number;
@@ -47,6 +53,8 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
   function toTask(nt: NewTask): ScheduleTask | null {
     if (!nt.name.trim() || !nt.plannedStart || !nt.plannedEnd) return null;
     return {
+      // No id: this task does not exist yet, and the server mints one.
+      id: '',
       name: nt.name.trim(), plannedStart: nt.plannedStart, plannedEnd: nt.plannedEnd,
       baselineStart: null, baselineEnd: null, actualStart: null, actualEnd: null,
       percentComplete: Math.min(100, Math.max(0, Number(nt.percentComplete) || 0)),

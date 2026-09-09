@@ -29,8 +29,10 @@ describe('project schedule domain', () => {
     let s = setBaseline(makeProjectSchedule({ ...base, tasks }));
     expect(s.baselineSetAt).not.toBeNull();
     expect(summariseSchedule(s).scheduleVarianceDays).toBe(0);
-    // slip commissioning end by 5 days (baseline preserved by name)
-    s = setScheduleTasks(s, tasks.map((t) => t.name === 'Commission' ? { ...t, plannedEnd: '2026-02-15' } : t));
+    // Slip commissioning by 5 days. The task ids are round-tripped, which is what makes this an
+    // EDIT — baselines follow identity now, not the name. (Before §22 Step 2A this matched on
+    // `t.name`, so renaming a task silently lost its baseline and two same-named tasks collided.)
+    s = setScheduleTasks(s, s.tasks.map((t) => (t.name === 'Commission' ? { ...t, plannedEnd: '2026-02-15' } : t)));
     expect(summariseSchedule(s).scheduleVarianceDays).toBe(5);
   });
 });

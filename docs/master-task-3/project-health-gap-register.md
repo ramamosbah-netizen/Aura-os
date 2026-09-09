@@ -188,6 +188,47 @@ neither §21 nor §22.
 
 ---
 
+## AURA-PM-003 — Schedule Task Identity Integrity — ADDRESSED by §22 Step 2A
+
+**The defect.** Persisted schedule tasks were embedded JSONB objects inside
+`aura_projects_schedules.tasks` with no stable identity. `setScheduleTasks` rebuilt every task on
+save and re-attached baselines through a map keyed by NAME, so a task's de facto identity was its
+name. Two consequences, both silent:
+
+- **Duplicate-name collision.** Two tasks called "Install CCTV" were one key; one took the other's
+  baseline.
+- **Baseline lineage loss on rename.** Renaming a task dropped its baseline entirely, because the
+  old key no longer resolved. The schedule forgot what it had committed to, and nothing said so.
+
+A test named *"baseline snapshots planned; slipping a task shows positive variance"* pinned that
+behaviour with the comment *"(baseline preserved by name)"* — the defect was documented as intent.
+
+**Why a uuid inside the JSON was not enough.** It would have fixed the collision and still left no
+relational integrity for dependencies, requirements, bookings or planning proposals to key on: a
+foreign key cannot reference an element of a JSONB array. Tasks became rows.
+
+**Fixed by** migration `0284_schedule_task_identity.sql` plus the domain change carrying baselines
+forward by id. Non-destructive: the JSONB column is retained as a pre-cutover snapshot and kept in
+sync as a mirror; a later migration drops it once the row model is proven in use.
+
+**Evidence** — [`s22-step2a-proof-2026-09-09.md`](./s22-step2a-proof-2026-09-09.md), all checks
+passing against a fresh database at 284/284: a **synthetic legacy schedule** built in the pre-2A
+shape (an empty database proves nothing about a backfill), duplicate names surviving as distinct
+ids, baselines copied exactly rather than recomputed, `ENABLE` + `FORCE` RLS with cross-tenant read,
+update, delete and forged insert all denied from `aura_app`, and — decisively — a task row mutated
+directly in the database and observed through the HTTP API, proving reads come from **rows** and not
+from the JSONB mirror.
+
+Ten domain regression tests pin the semantics that matter more than the migration: duplicate names
+stay distinct, rename preserves id and baseline, reorder preserves ids, one task cannot steal a
+same-named task's baseline, and delete-then-recreate yields a NEW identity rather than resurrection
+by name.
+
+**Not closed until** the JSONB column is dropped and no writer depends on it. The row model is
+authoritative today; the mirror is a rollback affordance.
+
+---
+
 ## AURA-PM-002 — Resource Actual Lineage Gap
 
 Site's actual labour and plant usage carries no stable reference to the resource it consumed, so
@@ -270,7 +311,16 @@ Not attributed to §21: a forced full run on the §21 branch passes 51/51, and t
 ~10 sources among thousands. What §21 did was surface it, by making enough packages cache-miss at
 once.
 
-**Deliberately not fixed here.** The obvious change — an explicit timeout for these three — is
+**Update 2026-09-09, and it widens the finding.** It recurred during §22 Step 2A — this time
+`hydration-dates.fitness.test.ts` in **`@aura/web`**, not `@aura/api`: 5583 ms under turbo,
+**215 ms** run alone moments later, and `Test timed out in 5000ms` rather than any assertion. The
+immediately following forced full run was 51/51 with zero timeouts.
+
+So this is not a quirk of one package's fitness tests. **Any repo-walking test with vitest's 5 s
+default is exposed**, and which one loses is decided by disk contention. Four occurrences across two
+sessions now, in two different packages.
+
+**Deliberately not fixed here.** The obvious change — an explicit timeout for these tests — is
 adjacent to "make it green by relaxing the check", and that call is not mine to make silently.
 Stated as the choice it is: these are I/O-bound scans rather than behavioural tests, so a longer
 timeout would arguably be describing them correctly rather than weakening them. Recorded for a

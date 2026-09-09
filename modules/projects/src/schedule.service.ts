@@ -13,7 +13,7 @@ import {
   summariseSchedule,
 } from './domain/schedule';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
-import { type PlanTaskInput, type SchedulePlan, planSchedule } from './domain/schedule-planning';
+import { type PlanInput, type SchedulePlan, planSchedule } from './domain/schedule-planning';
 
 /** Project schedule (Gantt) service — one per project; owns `aura_projects_schedules`. */
 @Injectable()
@@ -75,11 +75,17 @@ export class ScheduleService {
   }
 
   /**
-   * Compute a resource-leveled, dependency-driven plan (CPM forward pass + resource levelling).
-   * Stateless planning tool — returns computed start/finish, critical path, and resource peaks
-   * without mutating the stored schedule. `capacity` maps a resource name → its daily unit limit.
+   * Compute a resource-levelled, dependency-driven plan (CPM forward pass + levelling).
+   *
+   * Stateless by design, and stateless in the strong sense the §22 gate requires: the engine is
+   * handed RESOLVED facts — capacities, other projects' commitments, non-working days — and never
+   * queries for them. A Capacity/Availability Resolver will supply them; until it exists, the
+   * caller does, and an unsupplied capacity is reported as UNKNOWN rather than as available.
+   *
+   * The result is a PROPOSAL. It does not touch the stored schedule, and accepting it is a
+   * separate, governed act (DG-22.4).
    */
-  plan(tasks: PlanTaskInput[], projectStart: string, capacity?: Record<string, number>): SchedulePlan {
-    return planSchedule(tasks, projectStart, capacity ?? {});
+  plan(input: PlanInput): SchedulePlan {
+    return planSchedule(input);
   }
 }

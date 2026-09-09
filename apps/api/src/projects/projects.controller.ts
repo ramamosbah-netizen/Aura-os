@@ -38,7 +38,7 @@ import {
   type ProjectSchedule,
   type ScheduleSummary,
   type NewScheduleTask,
-  type PlanTaskInput,
+  type PlanInput,
   type SchedulePlan,
   ScheduleService,
   type DeliveryItemMap,
@@ -1108,13 +1108,19 @@ export class ProjectsController {
   }
 
   // Reactive planning: CPM forward-pass reschedule + resource levelling (stateless compute).
+  /**
+   * Compute a levelled plan from RESOLVED facts. Returns a proposal; stores nothing.
+   *
+   * A capacity omitted here comes back as UNKNOWN feasibility, never as available — which is the
+   * §22 correction. Cross-project commitments are supplied by the caller until the Capacity
+   * Resolver exists; without them this answers about one project only, and says so by reporting
+   * only what it was given.
+   */
   @Post('schedules/plan')
-  planSchedule(
-    @Body() dto: { projectStart: string; tasks: PlanTaskInput[]; capacity?: Record<string, number> },
-  ): SchedulePlan {
+  planSchedule(@Body() dto: PlanInput): SchedulePlan {
     if (!dto?.projectStart) throw new BadRequestException('projectStart (YYYY-MM-DD) is required');
     if (!Array.isArray(dto?.tasks) || dto.tasks.length === 0) throw new BadRequestException('at least one task is required');
-    return this.schedule.plan(dto.tasks, dto.projectStart, dto.capacity);
+    return this.schedule.plan(dto);
   }
 
   @Post('schedules/:projectId/baseline')

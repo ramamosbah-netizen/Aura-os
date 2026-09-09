@@ -18,6 +18,8 @@ export interface ProjectRiskFilter {
   area?: string;
   /** Only risks still carried as a live exposure (OPEN, MITIGATING or ACCEPTED). */
   openOnly?: boolean;
+  /** Cap the read. Tenant-wide callers (My Work) must not pull an unbounded register. */
+  limit?: number;
 }
 
 export interface ProjectRiskStore {

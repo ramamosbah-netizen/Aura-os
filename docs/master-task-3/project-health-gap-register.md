@@ -145,6 +145,40 @@ have to reach through a parent claim the way `aura_document_versions` does.
 
 ---
 
+## AURA-PM-001 — a project risk has an owner's NAME, not an owner
+
+Surfaced by wiring §21 into My Work, which is where it first cost something.
+
+`ProjectRisk.owner` and `ProjectIssue.owner` are free text. That was deliberate — the shape was
+taken from `aura_crm_opportunity_risks`, where it is also free text — and it is fine for a register
+you read one project at a time. It stops being fine the moment the record has to answer *"is this
+mine?"*.
+
+Every other My Work source carries a real user id for assignment:
+
+| Source | Assignment field |
+|---|---|
+| Engineering drawing | `ownerId` |
+| Engineering RFI | `assignedTo`, `ownerId` |
+| Quality NCR | `assignedTo` |
+| HSE CAPA | `assignedTo` |
+| Procurement PO | `ownerId` |
+| **Project risk / issue** | **`owner` — free text** |
+
+So My Work can answer *"risks I raised"* and cannot answer *"risks assigned to me"* — and the
+second is the half a project manager actually opens My Work for. Matching a typed name against an
+actor id would be a guess presented as a fact, and is refused: a test pins that someone else's risk
+does not appear merely because the actor's id resembles the owner text.
+
+**Consequence today:** §21 items reach My Work with `scopes: ['created']` only. Real, useful, and
+half the feature.
+
+**Fix:** an `owner_id` column beside `owner_name` on both tables, nullable, with the free-text field
+kept for people who are not users of the system — a subcontractor's engineer, say. That is a schema
+decision and a UI decision, so it is recorded rather than slipped in alongside the aggregation.
+
+---
+
 ## AURA-FIT-001 — three fitness tests are timeout-flaky under parallel load
 
 `architecture.fitness.test.ts`, `error-taxonomy.fitness.test.ts` and `money-rounding.fitness.test.ts`

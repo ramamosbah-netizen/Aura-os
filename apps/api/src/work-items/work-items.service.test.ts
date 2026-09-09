@@ -24,8 +24,11 @@ function harness() {
   const quality = { listNcrs: empty, listSnags: empty };
   const hse = { listCapas: empty };
   const prs = { list: empty }, rfqs = { list: empty }, pos = { list: empty };
+  // §21 registers. Empty here on purpose: these tests are about the personal-task half of My
+  // Work, and a source that returns nothing must not change any of their answers.
+  const projectRisks = { list: empty }, projectIssues = { list: empty };
   const notifications = { record: vi.fn(async () => ({})) };
-  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, notifications as never);
+  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, notifications as never);
   return { service, activities, notifications };
 }
 

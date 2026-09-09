@@ -53,6 +53,7 @@ export class InMemoryProjectIssueStore implements ProjectIssueStore {
     if (filter.severity) arr = arr.filter((i) => i.severity === filter.severity);
     if (filter.openOnly) arr = arr.filter(issueIsOpen);
     if (filter.fromRiskOnly) arr = arr.filter((i) => i.originRiskId !== null);
-    return arr.sort((a, b) => b.raisedAt.localeCompare(a.raisedAt));
+    arr.sort((a, b) => b.raisedAt.localeCompare(a.raisedAt));
+    return filter.limit ? arr.slice(0, filter.limit) : arr;
   }
 }

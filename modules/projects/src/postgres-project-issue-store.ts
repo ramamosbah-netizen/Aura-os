@@ -167,8 +167,9 @@ export class PostgresProjectIssueStore implements ProjectIssueStore {
     if (filter.openOnly) where.push(`status IN ('open', 'in_progress')`);
     if (filter.fromRiskOnly) where.push('origin_risk_id IS NOT NULL');
     const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const lim = filter.limit ? ` LIMIT ${Number(filter.limit)}` : '';
     const res = await this.pool.query<IssueRow>(
-      `SELECT * FROM public.aura_projects_issues ${w} ORDER BY raised_at DESC`, params,
+      `SELECT * FROM public.aura_projects_issues ${w} ORDER BY raised_at DESC${lim}`, params,
     );
     if (!res.rows.length) return [];
 

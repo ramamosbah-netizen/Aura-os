@@ -15,6 +15,8 @@ export interface ProjectIssueFilter {
   severity?: string;
   /** Only issues still live (open or in_progress). */
   openOnly?: boolean;
+  /** Cap the read. Tenant-wide callers (My Work) must not pull an unbounded register. */
+  limit?: number;
   /** Issues that came from the risk register. */
   fromRiskOnly?: boolean;
 }

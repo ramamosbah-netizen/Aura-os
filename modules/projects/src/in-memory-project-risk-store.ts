@@ -39,6 +39,7 @@ export class InMemoryProjectRiskStore implements ProjectRiskStore {
     if (filter.status) arr = arr.filter((r) => r.status === filter.status);
     if (filter.area) arr = arr.filter((r) => r.area === filter.area);
     if (filter.openOnly) arr = arr.filter(projectRiskIsOpen);
-    return arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    arr.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return filter.limit ? arr.slice(0, filter.limit) : arr;
   }
 }

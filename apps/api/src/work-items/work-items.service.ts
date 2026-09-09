@@ -5,6 +5,7 @@ import { EngineeringService, type Drawing, type Rfi, type TechnicalQuery } from 
 import { HseService, type CapaAction } from '@aura/hse';
 import { PurchaseOrderService, PurchaseRequestService, RfqService, type PurchaseOrder, type PurchaseRequest, type Rfq } from '@aura/procurement';
 import { QualityService, type Ncr, type Snag } from '@aura/quality';
+import { ProjectRiskService, ProjectIssueService, type ProjectRisk, type ProjectIssue } from '@aura/projects';
 
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
 export type WorkItemPriority = 'critical' | 'high' | 'medium' | 'low' | 'normal';
@@ -110,11 +111,13 @@ export class WorkItemsService {
     private readonly prs: PurchaseRequestService,
     private readonly rfqs: RfqService,
     private readonly pos: PurchaseOrderService,
+    private readonly projectRisks: ProjectRiskService,
+    private readonly projectIssues: ProjectIssueService,
     private readonly notifications: NotificationService,
   ) {}
 
   async list(tenantId: string, actorId: string): Promise<WorkItemsPayload> {
-    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, snags, capas, prs, rfqs, pos] = await Promise.all([
+    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, snags, capas, prs, rfqs, pos, projectRisks, projectIssues] = await Promise.all([
       this.activities.list({ tenantId, assigneeId: actorId, limit: 1000 }),
       this.activities.list({ tenantId, createdBy: actorId, limit: 1000 }),
       this.engineering.listDrawings({ tenantId, limit: 1000 }),
@@ -126,6 +129,11 @@ export class WorkItemsService {
       this.prs.list({ tenantId, limit: 1000 }),
       this.rfqs.list({ tenantId, limit: 1000 }),
       this.pos.list({ tenantId, limit: 1000 }),
+      // §21. Read openOnly: a closed register is history, not work, and My Work is a to-do
+      // list. The limit matters here in a way it does not on a project page — this is every
+      // register in the tenant.
+      this.projectRisks.list({ openOnly: true, limit: 1000 }),
+      this.projectIssues.list({ openOnly: true, limit: 1000 }),
     ]);
 
     const items = new Map<string, WorkItem>();
@@ -153,6 +161,8 @@ export class WorkItemsService {
     for (const pr of prs) this.addPr(put, pr, actorId);
     for (const rfq of rfqs) this.addRfq(put, rfq, actorId);
     for (const po of pos) this.addPo(put, po, actorId);
+    for (const risk of projectRisks) this.addProjectRisk(put, risk, actorId);
+    for (const issue of projectIssues) this.addProjectIssue(put, issue, actorId);
 
     return {
       generatedAt: new Date().toISOString(),
@@ -160,7 +170,7 @@ export class WorkItemsService {
         .filter((item) => item.status !== 'cancelled')
         .sort((a, b) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') || b.updatedAt.localeCompare(a.updatedAt)),
       coverage: {
-        connected: ['Activities', 'Engineering', 'Quality', 'HSE', 'Procurement'],
+        connected: ['Activities', 'Engineering', 'Quality', 'HSE', 'Procurement', 'Projects'],
         notConnected: [
           { module: 'Site Execution', reason: 'No user-assignment contract is exposed yet.' },
           { module: 'Commissioning', reason: 'No user-assignment contract is exposed yet.' },
@@ -436,6 +446,58 @@ export class WorkItemsService {
     if (!assigned && !created) return;
     const status: WorkItemStatus = ['awarded', 'closed'].includes(r.status) ? 'done' : r.status === 'sent' ? 'waiting' : 'todo';
     put({ id: `procurement-rfq:${r.id}`, source: 'procurement-rfq', sourceId: r.id, module: 'Procurement', kind: 'RFQ', title: r.title, detail: r.reference, href: `/procurement/rfqs?record=${r.id}`, projectId: null, projectName: null, status, sourceStatus: r.status, priority: derivedPriority(r.dueDate), dueAt: r.dueDate, createdAt: r.createdAt, updatedAt: r.createdAt, scopes: scopes(assigned, created), isFollowUp: false, actions: [], origin: origin(r.createdBy, actor) });
+  }
+
+  /**
+   * §21 risks and issues — the fourteenth and fifteenth sources.
+   *
+   * ONLY THE `created` SCOPE IS COMPUTABLE, and that is a data gap rather than a choice. Every
+   * other source here carries a real user id for assignment (`assignedTo`, `ownerId`); a project
+   * risk's `owner` is FREE TEXT, matching the CRM register it borrowed the shape from. So "risks
+   * assigned to me" cannot be answered — only "risks I raised" — and matching a typed name against
+   * an actor id would be a guess dressed as a fact.
+   *
+   * Recorded as a gap rather than papered over. The fix is an `owner_id` beside `owner_name`, and
+   * it is a schema decision, not one to slip in here.
+   */
+  private addProjectRisk(put: (item: WorkItem) => void, r: ProjectRisk, actor: string): void {
+    const created = r.createdBy === actor;
+    if (!created) return;
+    // ACCEPTED carries no outstanding action — the decision was to carry the exposure — so it
+    // reads as done on a to-do list even though the risk is still live on the register. The two
+    // surfaces answer different questions and are allowed to differ.
+    const status: WorkItemStatus = r.status === 'MITIGATING' ? 'in_progress'
+      : r.status === 'OPEN' ? 'todo' : 'done';
+    const priority: WorkItemPriority = r.severity === 'CRITICAL' ? 'critical'
+      : r.severity === 'HIGH' ? 'high' : derivedPriority(r.targetDate);
+    put({
+      id: `project-risk:${r.id}`, source: 'project-risk', sourceId: r.id, module: 'Projects',
+      kind: 'Risk', title: r.title, detail: r.mitigation,
+      href: `/project/${r.projectId}/controls?tab=risks`,
+      projectId: r.projectId, projectName: null, status, sourceStatus: r.status, priority,
+      // The date the mitigation was promised for — the only date a risk has.
+      dueAt: r.targetDate, createdAt: r.createdAt, updatedAt: r.updatedAt,
+      scopes: scopes(false, created), isFollowUp: false, actions: [],
+      origin: origin(r.createdBy, actor),
+    });
+  }
+
+  private addProjectIssue(put: (item: WorkItem) => void, i: ProjectIssue, actor: string): void {
+    const created = i.createdBy === actor || i.raisedBy === actor;
+    if (!created) return;
+    const status: WorkItemStatus = i.status === 'in_progress' ? 'in_progress'
+      : i.status === 'open' ? 'todo' : 'done';
+    const priority: WorkItemPriority = i.severity === 'critical' ? 'critical'
+      : derivedPriority(i.dueDate, i.severity === 'major' ? 'major' : 'minor');
+    put({
+      id: `project-issue:${i.id}`, source: 'project-issue', sourceId: i.id, module: 'Projects',
+      kind: 'Issue', title: i.title, detail: i.description,
+      href: `/project/${i.projectId}/controls?tab=risks`,
+      projectId: i.projectId, projectName: null, status, sourceStatus: i.status, priority,
+      dueAt: i.dueDate, createdAt: i.createdAt, updatedAt: i.updatedAt,
+      scopes: scopes(false, created), isFollowUp: false, actions: [],
+      origin: origin(i.createdBy, actor),
+    });
   }
 
   private addPo(put: (item: WorkItem) => void, p: PurchaseOrder, actor: string): void {

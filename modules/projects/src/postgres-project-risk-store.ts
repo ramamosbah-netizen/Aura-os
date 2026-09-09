@@ -114,8 +114,9 @@ export class PostgresProjectRiskStore implements ProjectRiskStore {
     // cannot drift on what "still carried as an exposure" means.
     if (filter.openOnly) where.push(`status IN ('OPEN', 'MITIGATING', 'ACCEPTED')`);
     const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
+    const lim = filter.limit ? ` LIMIT ${Number(filter.limit)}` : '';
     const res = await this.pool.query<RiskRow>(
-      `SELECT * FROM public.aura_projects_risks ${w} ORDER BY created_at DESC`, params,
+      `SELECT * FROM public.aura_projects_risks ${w} ORDER BY created_at DESC${lim}`, params,
     );
     return res.rows.map(rowToRisk);
   }

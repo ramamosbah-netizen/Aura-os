@@ -67,6 +67,7 @@ export * from './cashflow-forecast-store';
 export * from './in-memory-cashflow-forecast-store';
 export * from './postgres-cashflow-forecast-store';
 export * from './cashflow-forecast.service';
+export * from './domain/resource-ref';
 export * from './domain/schedule';
 export * from './domain/schedule-network';
 export * from './domain/schedule-planning';

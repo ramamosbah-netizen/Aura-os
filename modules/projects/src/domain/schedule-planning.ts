@@ -25,32 +25,21 @@
  */
 
 // ── Resource identity (DG-22.2) ────────────────────────────────────────────
+//
+// The vocabulary lives in `resource-ref.ts`, not here. It was introduced for the planner and is
+// not a planner detail: capacity, requirements, bookings and the cross-project conflict check all
+// key on the same reference, and a second definition would be a second answer to "is this the same
+// crane?". Re-exported so existing importers of this module keep resolving.
 
-export type ResourceType = 'employee' | 'vehicle' | 'asset' | 'pool';
+import {
+  type ResourceRef, type ResourceType, type ResourceUnit, resourceKey, sameResource,
+} from './resource-ref';
 
-/**
- * A typed reference to a resource in its OWNING register.
- *
- * Typed because equality decides whether two projects are fighting over the same crane. Comparing
- * bare ids would make a vehicle and an asset that happen to share a uuid indistinguishable, and
- * comparing names would make `TC-01` and `Tower Crane TC-01` two cranes that conflict with nothing.
- *
- * Never carries a name, a plate or a serial: those live in the owning register and are read through
- * at display time, so nothing here can drift out of date.
- */
-export interface ResourceRef {
-  resourceType: ResourceType;
-  canonicalResourceId: string;
-}
+export type { ResourceRef, ResourceType, ResourceUnit };
+export { sameResource, resourceKey };
 
-export const sameResource = (a: ResourceRef, b: ResourceRef): boolean =>
-  a.resourceType === b.resourceType && a.canonicalResourceId === b.canonicalResourceId;
-
-/** Stable map key for a reference. Internal — equality is `sameResource`, not string comparison. */
-const key = (r: ResourceRef): string => `${r.resourceType}:${r.canonicalResourceId}`;
-
-/** What a quantity counts. Quantities of different units are never summed or compared. */
-export type ResourceUnit = 'hours' | 'persons' | 'crews' | 'units';
+/** Local alias for the grouping key — equality is `sameResource`, never string comparison. */
+const key = resourceKey;
 
 // ── Tri-state feasibility (Design Gate §2) ─────────────────────────────────
 

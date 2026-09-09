@@ -121,7 +121,41 @@ interface DeliveryMap { id: string; projectId: string; handoverId: string; froze
 interface QuantityTxn { id: string; boqItemId: string; type: string; quantity: number; unit: string | null; source: string; sourceRef: string | null; semantic: string | null; occurredAt: string; dedupeKey: string | null; }
 interface CostTxn { id: string; cbsNodeId: string | null; wbsNodeId: string | null; type: 'budget' | 'committed' | 'actual'; amount: number; baseAmount?: number | null; baseCurrency?: string | null; source: string; sourceRef: string | null; occurredAt: string; dedupeKey: string | null; }
 
-type Tab = 'overview' | 'variations' | 'delivery' | 'quantities' | 'cost' | 'eot' | 'closeout' | 'team';
+/**
+ * §21 — two registers, kept as two on screen for the same reason they are two tables.
+ *
+ * A risk is uncertain and forward-looking; an issue exists now. Blending them into one list would
+ * make the screen answer neither "what might go wrong" nor "what is going wrong".
+ */
+interface ProjectIssueReference { module: string; recordType: string; recordId: string; label: string | null }
+interface RiskRecord {
+  id: string; projectId: string; reference: string | null; title: string; description: string | null;
+  area: string; likelihood: string; impact: string; severity: string;
+  mitigation: string | null; acceptanceReason: string | null; owner: string | null;
+  targetDate: string | null; status: string; createdAt: string;
+}
+interface IssueRecord {
+  id: string; projectId: string; reference: string | null; title: string; description: string | null;
+  area: string; severity: string; status: string; owner: string | null;
+  raisedAt: string; dueDate: string | null; resolution: string | null;
+  originRiskId: string | null; references: ProjectIssueReference[];
+}
+interface RiskSummary {
+  total: number; open: number; mitigating: number; accepted: number; resolved: number;
+  materialised: number; openCritical: number; openHigh: number; overdueMitigations: number; needsAttention: boolean;
+}
+interface IssueSummary {
+  total: number; open: number; inProgress: number; resolved: number; withdrawn: number;
+  openCritical: number; openMajor: number; overdue: number; fromRisk: number; needsAttention: boolean;
+}
+interface RiskRegister {
+  risks: RiskRecord[]; issues: IssueRecord[];
+  riskSummary: RiskSummary; issueSummary: IssueSummary;
+  /** One date for both halves, stamped by the API — so "overdue" cannot mean two different days. */
+  asOf: string;
+}
+
+type Tab = 'overview' | 'variations' | 'delivery' | 'quantities' | 'cost' | 'eot' | 'risks' | 'closeout' | 'team';
 
 const aed = (n: number): string => (Number.isFinite(n) ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
@@ -141,6 +175,10 @@ const CONTROL_TABS: TabDef[] = [
   { id: 'cost', label: 'Cost' },
   { id: 'variations', label: 'Change' },
   { id: 'eot', label: 'Time' },
+  // Plan & Control has linked here since before anything answered: `/controls?tab=risks` fell
+  // through `validInitialTab` to Overview, so the person landed somewhere plausible and never
+  // learned the screen did not exist. A 404 tells the truth; a silent fallback does not.
+  { id: 'risks', label: 'Risks & issues' },
   { id: 'team', label: 'Team' },
   { id: 'closeout', label: 'Closeout' },
 ];
@@ -209,6 +247,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
    */
   const [transitions, setTransitions] = useState<Transition[]>([]);
   const [crossHealth, setCrossHealth] = useState<CrossDomainHealth | null>(null);
+  const [register, setRegister] = useState<RiskRegister | null>(null);
   const [cancelReason, setCancelReason] = useState('');
   const [cancelling, setCancelling] = useState(false);
   const validInitialTab = CONTROL_TABS.some((item) => item.id === initialTab) ? initialTab as Tab : 'overview';
@@ -227,7 +266,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         return (await r.json()) as T;
       } catch { failures += 1; return fallback; }
     };
-    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, transitionData, healthData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
+    const [vs, imp, eot, delayData, cls, evmData, certSummary, wbsData, cbsData, transitionData, healthData, registerData, mapData, quantityData, costData, scheduleData, readinessData] = await Promise.all([
       j<Variation[]>(`/api/projects/variations?projectId=${project.id}`, []),
       j<{ impact: VariationImpact } | null>(`/api/projects/variations/summary/${project.id}`, null),
       j<EotClaim[]>(`/api/projects/eot-claims?projectId=${project.id}`, []),
@@ -239,6 +278,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
       j<CbsNode[]>(`/api/projects/cbs?projectId=${project.id}`, []),
       j<Transition[]>(`/api/projects/projects/${project.id}/transitions`, []),
       j<CrossDomainHealth | null>(`/api/projects/projects/${project.id}/health`, null),
+      j<RiskRegister | null>(`/api/projects/projects/${project.id}/risk-register`, null),
       j<DeliveryMap[]>(`/api/projects/delivery-item-maps?projectId=${project.id}`, []),
       j<QuantityTxn[]>(`/api/projects/quantity-ledger?projectId=${project.id}&limit=500`, []),
       j<CostTxn[]>(`/api/projects/cost-ledger?projectId=${project.id}&limit=500`, []),
@@ -270,6 +310,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     setCbs(Array.isArray(cbsData) ? cbsData : []);
     setTransitions(Array.isArray(transitionData) ? transitionData : []);
     setCrossHealth(healthData);
+    setRegister(registerData);
     setMaps(Array.isArray(mapData) ? mapData : []);
     setQuantities(Array.isArray(quantityData) ? quantityData : []);
     setCosts(Array.isArray(costData) ? costData : []);
@@ -564,6 +605,8 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         )}
 
         {tab === 'eot' && <DelayEotPanel projectId={project.id} delays={delays} eots={eots} busy={busy} call={call} />}
+
+        {tab === 'risks' && <RiskIssuePanel projectId={project.id} register={register} busy={busy} call={call} />}
 
         {tab === 'closeout' && (
           <ClosePanel
@@ -962,6 +1005,284 @@ function DelayEotPanel({ projectId, delays, eots, busy, call }: { projectId: str
     <div><h3 style={panelTitle}>EOT claim ledger</h3>{eots.length === 0 ? <p style={st.muted}>No EOT claims.</p> : <SimpleTable ariaLabel="Project EOT claims" headers={['Claim', 'Requested', 'Approved', 'Status', 'Actions']}>
       {eots.map((claim) => <tr key={claim.id}><td>{claim.title}</td><td>{claim.submittedDays}</td><td>{claim.approvedDays || '—'}</td><td><Status value={claim.status} /></td><td>{claim.status === 'draft' && <button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/submit`, 'POST', undefined, 'EOT claim submitted.')}>Submit</button>}{(claim.status === 'submitted' || claim.status === 'under_review') && <><button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'approved', approvedDays: claim.submittedDays }, 'EOT claim approved.')}>Approve</button><button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'rejected', approvedDays: 0 }, 'EOT claim rejected.')}>Reject</button></>}</td></tr>)}
     </SimpleTable>}</div>
+  </div>;
+}
+
+const AREA_OPTIONS = [
+  'DESIGN', 'PROCUREMENT', 'SCHEDULE', 'COST', 'QUALITY', 'SAFETY',
+  'RESOURCE', 'CLIENT', 'AUTHORITY', 'SUBCONTRACTOR', 'INTERFACE', 'OTHER',
+] as const;
+
+const areaLabel = (a: string): string => a.charAt(0) + a.slice(1).toLowerCase().replace(/_/g, ' ');
+
+/** Terminal risk states, where the register is read-only. */
+const RISK_CLOSED = ['RESOLVED', 'MATERIALISED'];
+
+/**
+ * §21 — Risks & Issues.
+ *
+ * TWO REGISTERS, NOT ONE LIST. A risk is an uncertain future event; an issue is a condition that
+ * exists now. They have different lifecycles, different severity vocabularies and different
+ * questions, so they get different tables. Blending them would answer neither question.
+ *
+ * THE SEVERITY SCALES ARE DELIBERATELY DIFFERENT. A risk shows LOW/MEDIUM/HIGH/CRITICAL, which is
+ * COMPUTED from likelihood x impact and cannot be typed in. An issue shows minor/major/critical,
+ * which is DECLARED, because an issue has already happened and has no likelihood to compute from.
+ * The forms reflect that: the risk form has no severity field at all.
+ *
+ * WHAT "IT HAPPENED" DOES. It creates an issue and retires the risk as MATERIALISED — two records,
+ * so the register can still say afterwards whether the problem was foreseen. It never edits the
+ * risk into an issue, because that would erase the forecast.
+ */
+function RiskIssuePanel({
+  projectId, register, busy, call,
+}: { projectId: string; register: RiskRegister | null; busy: boolean; call: Action }) {
+  const [riskTitle, setRiskTitle] = useState('');
+  const [riskArea, setRiskArea] = useState<string>('OTHER');
+  const [likelihood, setLikelihood] = useState('medium');
+  const [impact, setImpact] = useState('medium');
+  const [riskOwner, setRiskOwner] = useState('');
+  const [riskTarget, setRiskTarget] = useState('');
+  const [riskMitigation, setRiskMitigation] = useState('');
+
+  const [issueTitle, setIssueTitle] = useState('');
+  const [issueArea, setIssueArea] = useState<string>('OTHER');
+  const [issueSeverity, setIssueSeverity] = useState('major');
+  const [issueOwner, setIssueOwner] = useState('');
+  const [issueDue, setIssueDue] = useState('');
+
+  /** The actions that cannot proceed without a sentence, gathered in one place. */
+  const [pending, setPending] = useState<{ kind: 'accept' | 'materialise' | 'resolve' | 'withdraw'; id: string; label: string } | null>(null);
+  const [note, setNote] = useState('');
+
+  const risks = register?.risks ?? [];
+  const issues = register?.issues ?? [];
+  const rs = register?.riskSummary;
+  const is = register?.issueSummary;
+  const issueByOriginRisk = useMemo(
+    () => new Map(issues.filter((i) => i.originRiskId).map((i) => [i.originRiskId as string, i])),
+    [issues],
+  );
+
+  const raiseRisk = async (): Promise<void> => {
+    if (!riskTitle.trim()) return;
+    if (await call('/api/projects/risks', 'POST', {
+      projectId, title: riskTitle.trim(), area: riskArea, likelihood, impact,
+      owner: riskOwner.trim() || undefined, targetDate: riskTarget || undefined,
+      mitigation: riskMitigation.trim() || undefined,
+    }, 'Risk added to the register.')) {
+      setRiskTitle(''); setRiskOwner(''); setRiskTarget(''); setRiskMitigation('');
+    }
+  };
+
+  const raiseIssue = async (): Promise<void> => {
+    if (!issueTitle.trim()) return;
+    if (await call('/api/projects/issues', 'POST', {
+      projectId, title: issueTitle.trim(), area: issueArea, severity: issueSeverity,
+      owner: issueOwner.trim() || undefined, dueDate: issueDue || undefined,
+    }, 'Issue raised.')) {
+      setIssueTitle(''); setIssueOwner(''); setIssueDue('');
+    }
+  };
+
+  const submitPending = async (): Promise<void> => {
+    if (!pending || !note.trim()) return;
+    const ok = pending.kind === 'accept'
+      ? await call(`/api/projects/risks/${pending.id}/status`, 'PATCH', { status: 'ACCEPTED', note: note.trim() }, 'Risk accepted, with the reason recorded.')
+      : pending.kind === 'materialise'
+        ? await call(`/api/projects/projects/${projectId}/risks/${pending.id}/materialise`, 'POST', { severity: note.trim() }, 'Risk materialised into a live issue.')
+        : await call(`/api/projects/issues/${pending.id}/status`, 'PATCH', { status: pending.kind === 'resolve' ? 'resolved' : 'withdrawn', note: note.trim() }, pending.kind === 'resolve' ? 'Issue resolved.' : 'Issue withdrawn.');
+    if (ok) { setPending(null); setNote(''); }
+  };
+
+  const ask = (kind: 'accept' | 'materialise' | 'resolve' | 'withdraw', id: string, label: string): void => {
+    setPending({ kind, id, label }); setNote('');
+  };
+
+  return <div style={{ display: 'grid', gap: 20 }} data-testid="project-risks-panel">
+    {register === null && (
+      <p style={st.muted} data-testid="risk-register-unavailable">
+        The risk register could not be read. Nothing is claimed about this project&apos;s exposure.
+      </p>
+    )}
+
+    {rs && is && (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }} data-testid="risk-register-summary">
+        <Stat label="Open risks" value={String(rs.open)} strong bad={rs.openCritical > 0} />
+        <Stat label="Critical / high" value={`${rs.openCritical} / ${rs.openHigh}`} bad={rs.openCritical > 0} />
+        <Stat label="Mitigations overdue" value={String(rs.overdueMitigations)} bad={rs.overdueMitigations > 0} />
+        {/* Counted apart from resolved on purpose: a risk that LANDED is a failed forecast, and a
+            register that reports it as a success teaches nobody anything. */}
+        <Stat label="Risks that occurred" value={String(rs.materialised)} />
+        <Stat label="Open issues" value={String(is.open)} strong bad={is.openCritical > 0} />
+        <Stat label="Critical issues" value={String(is.openCritical)} bad={is.openCritical > 0} />
+        <Stat label="Issues overdue" value={String(is.overdue)} bad={is.overdue > 0} />
+        <Stat label="Foreseen as risks" value={String(is.fromRisk)} />
+      </div>
+    )}
+
+    {pending && (
+      <form
+        data-testid="risk-issue-note-form"
+        onSubmit={(e) => { e.preventDefault(); void submitPending(); }}
+        style={{ ...authoringCard, borderColor: 'var(--accent)' }}
+      >
+        <h3 style={formTitle}>{pending.label}</h3>
+        {pending.kind === 'materialise' ? (
+          <>
+            <label style={st.muted} htmlFor="materialise-severity">
+              How much is this hurting delivery now? The risk&apos;s severity is not carried over — it was
+              computed from a likelihood that has already resolved.
+            </label>
+            <select id="materialise-severity" aria-label="Issue severity" value={note} onChange={(e) => setNote(e.target.value)}>
+              <option value="">Choose…</option>
+              <option value="minor">Minor — must be resolved, delivery unchanged if it waits</option>
+              <option value="major">Major — delivery is being damaged</option>
+              <option value="critical">Critical — delivery is stopped, or will stop</option>
+            </select>
+          </>
+        ) : (
+          <>
+            <label style={st.muted} htmlFor="governance-note">
+              {pending.kind === 'accept'
+                ? 'Why is this exposure being carried? An acceptance nobody had to justify is indistinguishable from an unattended risk.'
+                : pending.kind === 'resolve'
+                  ? 'What actually resolved it?'
+                  : 'Why is this being withdrawn — duplicate, overtaken, or not a real issue?'}
+            </label>
+            <input id="governance-note" aria-label="Reason" value={note} onChange={(e) => setNote(e.target.value)} />
+          </>
+        )}
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={busy || !note.trim()}>Confirm</button>
+          <button className="btn btn-ghost" type="button" onClick={() => { setPending(null); setNote(''); }}>Cancel</button>
+        </div>
+      </form>
+    )}
+
+    <div style={authoringGrid}>
+      <form data-testid="risk-authoring-form" onSubmit={(e) => { e.preventDefault(); void raiseRisk(); }} style={authoringCard}>
+        <h3 style={formTitle}>Identify a risk</h3>
+        <input aria-label="Risk title" placeholder="What might go wrong?" value={riskTitle} onChange={(e) => setRiskTitle(e.target.value)} />
+        <select aria-label="Risk area" value={riskArea} onChange={(e) => setRiskArea(e.target.value)}>
+          {AREA_OPTIONS.map((a) => <option key={a} value={a}>{areaLabel(a)}</option>)}
+        </select>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <select aria-label="Likelihood" value={likelihood} onChange={(e) => setLikelihood(e.target.value)}>
+            <option value="low">Likelihood: low</option><option value="medium">Likelihood: medium</option><option value="high">Likelihood: high</option>
+          </select>
+          <select aria-label="Impact" value={impact} onChange={(e) => setImpact(e.target.value)}>
+            <option value="low">Impact: low</option><option value="medium">Impact: medium</option><option value="high">Impact: high</option>
+          </select>
+        </div>
+        <input aria-label="Risk owner" placeholder="Owner (optional)" value={riskOwner} onChange={(e) => setRiskOwner(e.target.value)} />
+        <input aria-label="Mitigation target date" type="date" value={riskTarget} onChange={(e) => setRiskTarget(e.target.value)} />
+        <input aria-label="Mitigation" placeholder="Mitigation (optional)" value={riskMitigation} onChange={(e) => setRiskMitigation(e.target.value)} />
+        <button className="btn btn-primary" type="submit" disabled={busy}>Add to register</button>
+        {/* No severity field, deliberately: it is the OUTPUT of likelihood x impact. A typed-in
+            severity would be a number the matrix never produced. */}
+        <small style={st.muted}>Severity is calculated from likelihood &times; impact — it is not entered.</small>
+      </form>
+
+      <form data-testid="issue-authoring-form" onSubmit={(e) => { e.preventDefault(); void raiseIssue(); }} style={authoringCard}>
+        <h3 style={formTitle}>Raise an issue</h3>
+        <input aria-label="Issue title" placeholder="What is going wrong now?" value={issueTitle} onChange={(e) => setIssueTitle(e.target.value)} />
+        <select aria-label="Issue area" value={issueArea} onChange={(e) => setIssueArea(e.target.value)}>
+          {AREA_OPTIONS.map((a) => <option key={a} value={a}>{areaLabel(a)}</option>)}
+        </select>
+        <select aria-label="Issue severity" value={issueSeverity} onChange={(e) => setIssueSeverity(e.target.value)}>
+          <option value="minor">Minor — delivery unchanged if it waits</option>
+          <option value="major">Major — delivery is being damaged</option>
+          <option value="critical">Critical — delivery is stopped, or will stop</option>
+        </select>
+        <input aria-label="Issue owner" placeholder="Owner (optional)" value={issueOwner} onChange={(e) => setIssueOwner(e.target.value)} />
+        <input aria-label="Issue due date" type="date" value={issueDue} onChange={(e) => setIssueDue(e.target.value)} />
+        <button className="btn btn-primary" type="submit" disabled={busy}>Raise issue</button>
+        <small style={st.muted}>
+          Not for an NCR, snag, RFI, incident, delay or variation — each of those has its own register that owns it.
+        </small>
+      </form>
+    </div>
+
+    <div>
+      <h3 style={panelTitle}>Risk register</h3>
+      {risks.length === 0 ? <p style={st.muted}>No risks identified. That is not the same as no risk.</p> : (
+        <SimpleTable ariaLabel="Project risk register" headers={['Risk', 'Area', 'Severity', 'Owner', 'Target', 'Status', 'Actions']}>
+          {risks.map((r) => {
+            const closed = RISK_CLOSED.includes(r.status);
+            const became = issueByOriginRisk.get(r.id);
+            const overdue = !closed && r.targetDate !== null && register !== null && r.targetDate < register.asOf;
+            return <tr key={r.id} data-testid="risk-row">
+              <td>
+                {r.title}
+                {r.mitigation && <div style={st.muted}>Mitigation: {r.mitigation}</div>}
+                {r.acceptanceReason && <div style={st.muted}>Accepted: {r.acceptanceReason}</div>}
+                {became && <div style={st.muted}>Occurred — now issue &ldquo;{became.title}&rdquo;</div>}
+              </td>
+              <td>{areaLabel(r.area)}</td>
+              <td>
+                <span className={r.severity === 'CRITICAL' ? 'badge badge-bad' : 'badge'}>{r.severity}</span>
+                <div style={st.muted}>{r.likelihood} &times; {r.impact}</div>
+              </td>
+              <td>{r.owner ?? '—'}</td>
+              <td style={overdue ? { color: 'var(--bad)' } : undefined}>{r.targetDate ?? '—'}{overdue ? ' (overdue)' : ''}</td>
+              <td><Status value={r.status} /></td>
+              <td>
+                {closed ? <span style={st.muted}>Closed</span> : (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {r.status !== 'MITIGATING' && <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/risks/${r.id}/status`, 'PATCH', { status: 'MITIGATING' }, 'Risk moved to mitigating.')}>Mitigate</button>}
+                    {r.status !== 'ACCEPTED' && <button className="btn btn-ghost" disabled={busy} onClick={() => ask('accept', r.id, `Accept: ${r.title}`)}>Accept</button>}
+                    <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/risks/${r.id}/status`, 'PATCH', { status: 'RESOLVED' }, 'Risk closed — the exposure went away.')}>No longer a risk</button>
+                    {/* The one path to MATERIALISED. It creates a record rather than editing one. */}
+                    <button className="btn btn-primary" disabled={busy} onClick={() => ask('materialise', r.id, `This has happened: ${r.title}`)}>It happened</button>
+                  </div>
+                )}
+              </td>
+            </tr>;
+          })}
+        </SimpleTable>
+      )}
+    </div>
+
+    <div>
+      <h3 style={panelTitle}>Issue register</h3>
+      {issues.length === 0 ? <p style={st.muted}>No issues raised.</p> : (
+        <SimpleTable ariaLabel="Project issue register" headers={['Issue', 'Area', 'Severity', 'Owner', 'Raised', 'Due', 'Status', 'Actions']}>
+          {issues.map((i) => {
+            const open = i.status === 'open' || i.status === 'in_progress';
+            const overdue = open && i.dueDate !== null && register !== null && i.dueDate < register.asOf;
+            return <tr key={i.id} data-testid="issue-row">
+              <td>
+                {i.title}
+                {i.originRiskId && <div style={st.muted}>Foreseen — materialised from the risk register</div>}
+                {i.resolution && <div style={st.muted}>{i.status === 'resolved' ? 'Resolved' : 'Withdrawn'}: {i.resolution}</div>}
+                {/* References POINT. Resolving this issue closes none of them. */}
+                {i.references.length > 0 && (
+                  <div style={st.muted}>
+                    References: {i.references.map((ref) => ref.label ?? `${ref.module}/${ref.recordType}`).join(', ')}
+                    {' — resolving this issue does not close them.'}
+                  </div>
+                )}
+              </td>
+              <td>{areaLabel(i.area)}</td>
+              <td><span className={i.severity === 'critical' ? 'badge badge-bad' : 'badge'}>{i.severity}</span></td>
+              <td>{i.owner ?? '—'}</td>
+              <td>{i.raisedAt.slice(0, 10)}</td>
+              <td style={overdue ? { color: 'var(--bad)' } : undefined}>{i.dueDate ?? '—'}{overdue ? ' (overdue)' : ''}</td>
+              <td><Status value={i.status} /></td>
+              <td>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {i.status === 'open' && <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/issues/${i.id}/status`, 'PATCH', { status: 'in_progress' }, 'Issue taken on.')}>Start work</button>}
+                  {open && <button className="btn btn-primary" disabled={busy} onClick={() => ask('resolve', i.id, `Resolve: ${i.title}`)}>Resolve</button>}
+                  {open && <button className="btn btn-ghost" disabled={busy} onClick={() => ask('withdraw', i.id, `Withdraw: ${i.title}`)}>Withdraw</button>}
+                  {!open && <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/issues/${i.id}/status`, 'PATCH', { status: 'open' }, 'Issue reopened.')}>Reopen</button>}
+                </div>
+              </td>
+            </tr>;
+          })}
+        </SimpleTable>
+      )}
+    </div>
   </div>;
 }
 

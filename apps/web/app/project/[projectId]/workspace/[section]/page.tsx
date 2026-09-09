@@ -51,7 +51,7 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
       { label: 'Plan & schedule', description: 'Gantt, baseline and actual schedule', href: '/projects/schedule' },
       { label: 'WBS & progress', description: 'Work breakdown and earned progress', href: '/controls?tab=wbs' },
       { label: 'Project controls', description: 'CBS, quantities, cost and EVM', href: '/controls' },
-      { label: 'Risks & issues', description: 'Record and review project constraints', href: '/controls?tab=risks' },
+      { label: 'Risks & issues', description: 'What might go wrong, and what already has', href: '/controls?tab=risks' },
       { label: 'Changes & claims', description: 'Governed variations and time impact', href: '/controls?tab=variations' },
     ],
     actions: [{ label: 'Add task / milestone', href: '/projects/schedule' }, { label: 'Open controls', href: '/controls' }],

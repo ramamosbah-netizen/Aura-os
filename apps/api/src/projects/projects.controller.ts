@@ -1,7 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { parsePageParams, type ProjectHealth } from '@aura/shared';
+import { parsePageParams, type ProjectHealth, type RiskImpact, type RiskLikelihood } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
@@ -43,6 +43,19 @@ import {
   ScheduleService,
   type DeliveryItemMap,
   DeliveryItemMapService,
+  // §21 — three authorities: one per register, plus the command that spans them.
+  type ProjectRisk,
+  type ProjectRiskStatus,
+  type ProjectRiskSummary,
+  type ProjectIssue,
+  type ProjectIssueReference,
+  type ProjectIssueSeverity,
+  type ProjectIssueStatus,
+  type ProjectIssueSummary,
+  type ProjectDeliveryArea,
+  ProjectRiskService,
+  ProjectIssueService,
+  ProjectRiskMaterialisationService,
 } from '@aura/projects';
 import { AccountService } from '@aura/crm';
 import { resolveAccountSnapshot } from '../common/account-snapshot';
@@ -136,6 +149,103 @@ class CreateEotDto {
   @IsOptional() @IsArray() delayEventIds?: string[];
 }
 
+// ── §21 Risks & Issues ─────────────────────────────────────────────────────
+//
+// Two registers, two sets of DTOs. They are never one endpoint with a `kind` parameter, for the
+// same reason they are never one table: a risk is uncertain and forward-looking, an issue has
+// already happened, and each has a lifecycle the other cannot express.
+
+class IssueReferenceDto {
+  @IsString() module!: string;
+  @IsString() recordType!: string;
+  @IsString() recordId!: string;
+  @IsOptional() @IsString() label?: string;
+}
+
+const AREAS = [
+  'DESIGN', 'PROCUREMENT', 'SCHEDULE', 'COST', 'QUALITY', 'SAFETY',
+  'RESOURCE', 'CLIENT', 'AUTHORITY', 'SUBCONTRACTOR', 'INTERFACE', 'OTHER',
+] as const;
+
+class CreateRiskDto {
+  @IsString() projectId!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsIn(AREAS) area?: ProjectDeliveryArea;
+  @IsOptional() @IsIn(['low', 'medium', 'high']) likelihood?: RiskLikelihood;
+  @IsOptional() @IsIn(['low', 'medium', 'high']) impact?: RiskImpact;
+  @IsOptional() @IsString() mitigation?: string;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() targetDate?: string;
+}
+
+class UpdateRiskDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsIn(AREAS) area?: ProjectDeliveryArea;
+  @IsOptional() @IsIn(['low', 'medium', 'high']) likelihood?: RiskLikelihood;
+  @IsOptional() @IsIn(['low', 'medium', 'high']) impact?: RiskImpact;
+  @IsOptional() @IsString() mitigation?: string;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() targetDate?: string;
+}
+
+class RiskStatusDto {
+  /**
+   * MATERIALISED is absent on purpose, and the domain refuses it a second time.
+   *
+   * A risk is marked as having occurred only by materialising it into an issue, in one
+   * transaction. Accepting it here would be a second writer for that state, and could leave a risk
+   * reading as landed with no live problem to point at.
+   */
+  @IsIn(['OPEN', 'MITIGATING', 'ACCEPTED', 'RESOLVED']) status!: ProjectRiskStatus;
+  /** Required by the domain for ACCEPTED — an acceptance nobody justified is not governance. */
+  @IsOptional() @IsString() note?: string;
+}
+
+class MaterialiseRiskDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsIn(['minor', 'major', 'critical']) severity?: ProjectIssueSeverity;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() dueDate?: string;
+  @IsOptional() @IsString() raisedAt?: string;
+  @IsOptional() @IsArray() references?: IssueReferenceDto[];
+}
+
+class CreateIssueDto {
+  @IsString() projectId!: string;
+  @IsString() title!: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsIn(AREAS) area?: ProjectDeliveryArea;
+  @IsOptional() @IsIn(['minor', 'major', 'critical']) severity?: ProjectIssueSeverity;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() raisedAt?: string;
+  @IsOptional() @IsString() dueDate?: string;
+  @IsOptional() @IsArray() references?: IssueReferenceDto[];
+}
+
+class UpdateIssueDto {
+  @IsOptional() @IsString() title?: string;
+  @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsIn(AREAS) area?: ProjectDeliveryArea;
+  @IsOptional() @IsIn(['minor', 'major', 'critical']) severity?: ProjectIssueSeverity;
+  @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() raisedAt?: string;
+  @IsOptional() @IsString() dueDate?: string;
+  @IsOptional() @IsArray() references?: IssueReferenceDto[];
+}
+
+class IssueStatusDto {
+  @IsIn(['open', 'in_progress', 'resolved', 'withdrawn']) status!: ProjectIssueStatus;
+  /** Required by the domain to reach either ending. */
+  @IsOptional() @IsString() note?: string;
+}
+
 /** Projects API — stamps tenant/actor from context, delegates to Services. */
 @Controller('projects')
 export class ProjectsController {
@@ -147,6 +257,12 @@ export class ProjectsController {
     private readonly quantityLedger: QuantityLedgerService,
     private readonly delayEot: DelayEotService,
     private readonly variations: VariationService,
+    // Three, not one. Neither register service can write the other's table, and only the
+    // materialisation command holds both — see DG-21.4. The controller is allowed to READ from
+    // both to compose the Project 360 register view; that creates no new business authority.
+    private readonly risks: ProjectRiskService,
+    private readonly issues: ProjectIssueService,
+    private readonly riskMaterialisation: ProjectRiskMaterialisationService,
     private readonly closeouts: CloseoutService,
     // @Inject explicitly, for the reason CloseoutService already documents: a union-typed ctor
     // param emits `Object` for design:paramtypes, so Nest resolves nothing and injects null in
@@ -608,6 +724,170 @@ export class ProjectsController {
   @Post('eot-claims/:id/submit')
   submitEotClaim(@Param('id') id: string): Promise<EotClaim> {
     return this.delayEot.submitEotClaim(id, this.tenant.get().actorId);
+  }
+
+  // ── §21 RISKS ────────────────────────────────────────────────────────────
+
+  @Post('risks')
+  raiseRisk(@Body() dto: CreateRiskDto): Promise<ProjectRisk> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    const ctx = this.tenant.get();
+    return this.risks.raise({
+      tenantId: ctx.tenantId,
+      projectId: dto.projectId,
+      title: dto.title,
+      reference: dto.reference,
+      description: dto.description,
+      area: dto.area,
+      likelihood: dto.likelihood,
+      impact: dto.impact,
+      mitigation: dto.mitigation,
+      owner: dto.owner,
+      targetDate: dto.targetDate,
+      actorId: ctx.actorId,
+    });
+  }
+
+  @Get('risks')
+  listRisks(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('area') area?: string,
+    @Query('openOnly') openOnly?: string,
+  ): Promise<ProjectRisk[]> {
+    return this.risks.list({ projectId, status, area, openOnly: openOnly === 'true' });
+  }
+
+  @Get('risks/:id')
+  async getRisk(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ProjectRisk> {
+    const found = await this.risks.get(id);
+    if (!found) throw new NotFoundException(`risk ${id} not found`);
+    return found;
+  }
+
+  @Patch('risks/:id')
+  updateRisk(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateRiskDto): Promise<ProjectRisk> {
+    return this.risks.update(id, dto, this.tenant.get().actorId);
+  }
+
+  @Patch('risks/:id/status')
+  setRiskStatus(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: RiskStatusDto): Promise<ProjectRisk> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    return this.risks.setStatus(id, dto.status, { note: dto.note, actorId: this.tenant.get().actorId });
+  }
+
+  /**
+   * The risk OCCURRED. Creates an ISSUE and retires the risk as MATERIALISED, in one transaction.
+   *
+   * A POST rather than a PATCH on status, because the meaningful outcome is a new record — and
+   * because `PATCH /risks/:id/status` deliberately cannot reach MATERIALISED at all. Returns both
+   * so the caller can navigate straight to the live problem without a second read.
+   *
+   * `projectId` is taken from the URL and checked against the risk rather than trusted. A request
+   * naming project B while addressing a risk in project A is refused instead of quietly succeeding
+   * and producing an issue on A.
+   */
+  @Post('projects/:projectId/risks/:id/materialise')
+  materialiseRisk(
+    @Param('projectId', ParseUuidOr404Pipe) projectId: string,
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: MaterialiseRiskDto,
+  ): Promise<{ risk: ProjectRisk; issue: ProjectIssue }> {
+    return this.riskMaterialisation.materialise(id, {
+      ...dto,
+      expectedProjectId: projectId,
+      references: dto?.references as ProjectIssueReference[] | undefined,
+      actorId: this.tenant.get().actorId,
+    });
+  }
+
+  // ── §21 ISSUES ───────────────────────────────────────────────────────────
+
+  @Post('issues')
+  raiseIssue(@Body() dto: CreateIssueDto): Promise<ProjectIssue> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    const ctx = this.tenant.get();
+    return this.issues.raise({
+      tenantId: ctx.tenantId,
+      projectId: dto.projectId,
+      title: dto.title,
+      reference: dto.reference,
+      description: dto.description,
+      area: dto.area,
+      severity: dto.severity,
+      owner: dto.owner,
+      raisedAt: dto.raisedAt,
+      dueDate: dto.dueDate,
+      references: dto.references as ProjectIssueReference[] | undefined,
+      actorId: ctx.actorId,
+    });
+  }
+
+  @Get('issues')
+  listIssues(
+    @Query('projectId') projectId?: string,
+    @Query('status') status?: string,
+    @Query('area') area?: string,
+    @Query('severity') severity?: string,
+    @Query('openOnly') openOnly?: string,
+    @Query('fromRiskOnly') fromRiskOnly?: string,
+  ): Promise<ProjectIssue[]> {
+    return this.issues.list({
+      projectId, status, area, severity,
+      openOnly: openOnly === 'true',
+      fromRiskOnly: fromRiskOnly === 'true',
+    });
+  }
+
+  @Get('issues/:id')
+  async getIssue(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ProjectIssue> {
+    const found = await this.issues.get(id);
+    if (!found) throw new NotFoundException(`issue ${id} not found`);
+    return found;
+  }
+
+  @Patch('issues/:id')
+  updateIssue(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateIssueDto): Promise<ProjectIssue> {
+    return this.issues.update(id, {
+      ...dto,
+      references: dto.references as ProjectIssueReference[] | undefined,
+    }, this.tenant.get().actorId);
+  }
+
+  @Patch('issues/:id/status')
+  setIssueStatus(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: IssueStatusDto): Promise<ProjectIssue> {
+    if (!dto?.status) throw new BadRequestException('status is required');
+    return this.issues.setStatus(id, dto.status, { note: dto.note, actorId: this.tenant.get().actorId });
+  }
+
+  /**
+   * Both registers for one project, with their rollups.
+   *
+   * Composed HERE rather than in a fourth service, because concatenating two reads creates no new
+   * business authority (DG-21.4). What it does create is one `asOf` date for both halves — so
+   * "overdue" cannot mean two different days on the two sides of the same screen. Stamped at the
+   * boundary, because the domain rules stay clock-free.
+   */
+  @Get('projects/:id/risk-register')
+  async riskRegister(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{
+    risks: ProjectRisk[];
+    issues: ProjectIssue[];
+    riskSummary: ProjectRiskSummary;
+    issueSummary: ProjectIssueSummary;
+    asOf: string;
+  }> {
+    const found = await this.projects.get(id);
+    if (!found) throw new NotFoundException(`project ${id} not found`);
+    const asOf = new Date().toISOString().slice(0, 10);
+    const [risks, issues, riskSummary, issueSummary] = await Promise.all([
+      this.risks.list({ projectId: id }),
+      this.issues.list({ projectId: id }),
+      this.risks.summaryFor(id, asOf),
+      this.issues.summaryFor(id, asOf),
+    ]);
+    return { risks, issues, riskSummary, issueSummary, asOf };
   }
 
   // ── VARIATION ORDERS (change orders) ─────────────────────────────────────

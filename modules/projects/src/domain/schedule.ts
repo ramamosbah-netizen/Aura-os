@@ -1,4 +1,5 @@
 import { type Id, newId, roundDecimal } from '@aura/shared';
+import { type NewScheduleDependency, type ScheduleDependency, validateDependencies } from './schedule-network';
 
 /**
  * Project Schedule (Gantt data) — one per project: an ordered list of tasks with planned dates,
@@ -24,6 +25,15 @@ export interface ScheduleTask {
   actualStart: string | null;
   actualEnd: string | null;
   percentComplete: number; // 0..100
+  /**
+   * AUTHORED planning input: how many WORKING days the task takes. `null` means nobody has said.
+   *
+   * Never derived from `plannedEnd - plannedStart`. Those are calendar days and they are where the
+   * task currently SITS, not a decision about how long it takes — inferring one from the other
+   * would let the schedule claim somebody authored a duration when all they did was drag a bar.
+   * The planner reports a null as an explicit planning deficiency rather than guessing.
+   */
+  durationWorkingDays: number | null;
 }
 
 export interface ProjectSchedule {
@@ -33,6 +43,15 @@ export interface ProjectSchedule {
   projectId: Id;
   projectName: string | null;
   tasks: ScheduleTask[];
+  /**
+   * The authored dependency network — finish-to-start edges between this schedule's own tasks.
+   *
+   * Held on the aggregate because validity is a property of the whole graph: a cycle cannot be
+   * judged one edge at a time, which is why the database refuses only what a single row can be
+   * judged on (self-edge, duplicate, an endpoint in another project) and the domain refuses the
+   * rest.
+   */
+  dependencies: ScheduleDependency[];
   baselineSetAt: string | null;
   createdBy: Id | null;
   createdAt: string;
@@ -55,6 +74,8 @@ export interface NewScheduleTask {
   actualStart?: string | null;
   actualEnd?: string | null;
   percentComplete?: number;
+  /** Working days. Omitted or null means not authored; it is not inferred from the dates. */
+  durationWorkingDays?: number | null;
 }
 
 export interface NewProjectSchedule {
@@ -74,6 +95,10 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
   if (input.plannedEnd < input.plannedStart) throw new Error('plannedEnd must be on/after plannedStart');
   const pct = Number(input.percentComplete ?? 0);
   if (!Number.isFinite(pct) || pct < 0 || pct > 100) throw new Error('percentComplete must be 0..100');
+  const duration = input.durationWorkingDays ?? null;
+  if (duration !== null && (!Number.isInteger(duration) || duration < 1)) {
+    throw new Error('durationWorkingDays must be a whole number of working days, at least 1');
+  }
   return {
     id: input.id ?? newId(),
     name: input.name.trim(),
@@ -84,6 +109,7 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
     actualStart: input.actualStart ?? null,
     actualEnd: input.actualEnd ?? null,
     percentComplete: pct,
+    durationWorkingDays: duration,
   };
 }
 
@@ -99,6 +125,7 @@ export function makeProjectSchedule(input: NewProjectSchedule): ProjectSchedule 
     projectId: input.projectId,
     projectName: input.projectName ?? null,
     tasks,
+    dependencies: [],
     baselineSetAt: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
@@ -122,7 +149,40 @@ export function setScheduleTasks(sch: ProjectSchedule, tasks: NewScheduleTask[])
     const b = priorBaseline.get(t.id);
     return b ? { ...t, baselineStart: b.s, baselineEnd: b.e } : t;
   }).sort((a, b) => (a.plannedStart < b.plannedStart ? -1 : a.plannedStart > b.plannedStart ? 1 : (a.id < b.id ? -1 : 1)));
-  return { ...sch, tasks: next, updatedAt: new Date().toISOString() };
+  // An edge whose endpoint was just deleted goes with it. The database cascades on the same
+  // condition; if this did not, a save would mean two different things on the two paths.
+  const surviving = new Set(next.map((t) => t.id));
+  const dependencies = sch.dependencies.filter(
+    (d) => surviving.has(d.predecessorTaskId) && surviving.has(d.successorTaskId),
+  );
+  return { ...sch, tasks: next, dependencies, updatedAt: new Date().toISOString() };
+}
+
+/**
+ * Replace the dependency network.
+ *
+ * Refuses rather than repairs. An edge naming a task that is not in this schedule is not an
+ * instruction to create one, and a cycle is not something to break by dropping an edge the author
+ * did not choose — the caller is told which edges form the loop and decides.
+ */
+export function setScheduleDependencies(
+  sch: ProjectSchedule,
+  edges: NewScheduleDependency[],
+): ProjectSchedule {
+  const verdict = validateDependencies(sch.tasks.map((t) => t.id), edges);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  return {
+    ...sch,
+    dependencies: edges.map((e) => ({
+      id: newId(),
+      tenantId: sch.tenantId,
+      projectId: sch.projectId,
+      scheduleId: sch.id,
+      predecessorTaskId: e.predecessorTaskId,
+      successorTaskId: e.successorTaskId,
+    })),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 /** Snapshot current planned dates into the baseline for every task. */

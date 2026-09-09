@@ -123,7 +123,15 @@ export interface ExternalCommitment {
 export interface PlanTaskInput {
   id: string;
   name: string;
-  durationDays: number;
+  /**
+   * AUTHORED working days. `null` means nobody has stated one.
+   *
+   * It is NOT inferred from planned dates: those are calendar days and they say where a task
+   * currently sits, not how long it takes. A task with no authored duration cannot be placed, and
+   * saying so is the whole point — the previous version quietly substituted 1 day, which produced
+   * a confident plan built on a number no one had chosen.
+   */
+  durationWorkingDays: number | null;
   /** Finish-to-start predecessors by task id. */
   dependencies?: string[];
   /** Lag (working days) applied after the latest predecessor finish. */
@@ -158,13 +166,26 @@ export interface PlanInput {
 export interface PlannedTask {
   id: string;
   name: string;
-  durationDays: number;
+  durationWorkingDays: number | null;
   dependencies: string[];
-  start: string;
-  end: string;
+  /**
+   * Null when the task could not be placed. It stays in the list rather than being filtered out:
+   * a caller iterating `tasks` must see everything it asked about, or an absent task reads as no
+   * task at all.
+   */
+  start: string | null;
+  end: string | null;
+  scheduled: boolean;
   requirements: PlanRequirement[];
   /** True when the task has zero total float (drives project finish). */
   critical: boolean;
+}
+
+/** Why a task could not be placed. Reported, never guessed around. */
+export interface PlanningDeficiency {
+  taskId: string;
+  reason: 'DURATION_NOT_AUTHORED' | 'BLOCKED_BY_UNSCHEDULABLE';
+  detail: string;
 }
 
 export interface ResourceVerdict {
@@ -201,6 +222,11 @@ export interface SchedulePlan {
   criticalPath: string[];
   resourceVerdicts: ResourceVerdict[];
   unmetDemand: UnmetDemand[];
+  /**
+   * Tasks that could not be placed, and why. Drags `coverage` to PARTIAL for the same reason an
+   * unjudged resource does: the plan is not a complete answer, and must not read as one.
+   */
+  planningDeficiencies: PlanningDeficiency[];
   /** Whether anything that COULD be judged is in conflict. Says nothing about how much was. */
   feasibility: PlanFeasibility;
   /** PARTIAL when any resource could not be judged. Independent of `feasibility`. */
@@ -279,7 +305,47 @@ function topoOrder(tasks: PlanTaskInput[]): PlanTaskInput[] {
   return out;
 }
 
-const dur = (t: PlanTaskInput): number => Math.max(1, Math.floor(Number(t.durationDays) || 1));
+/** The authored duration, or null. Never a default — a missing duration is a reportable fact. */
+const dur = (t: PlanTaskInput): number | null => {
+  const d = t.durationWorkingDays;
+  return typeof d === 'number' && Number.isInteger(d) && d > 0 ? d : null;
+};
+
+/**
+ * Tasks that cannot be placed: those with no authored duration, plus everything that transitively
+ * waits on one.
+ *
+ * The cascade matters. A successor of an unplaceable task has no earliest start, and giving it one
+ * anyway would put a date on the screen that nothing supports.
+ */
+function unschedulableSet(tasks: PlanTaskInput[]): Map<string, PlanningDeficiency> {
+  const out = new Map<string, PlanningDeficiency>();
+  for (const t of tasks) {
+    if (dur(t) === null) {
+      out.set(t.id, {
+        taskId: t.id, reason: 'DURATION_NOT_AUTHORED',
+        detail: `no duration has been authored for "${t.name}", so it cannot be placed. Planned dates are not a duration.`,
+      });
+    }
+  }
+  // Propagate to dependents until nothing new is found.
+  for (let pass = 0; pass < tasks.length + 1; pass++) {
+    let grew = false;
+    for (const t of tasks) {
+      if (out.has(t.id)) continue;
+      const blocker = (t.dependencies ?? []).find((d) => out.has(d));
+      if (blocker) {
+        out.set(t.id, {
+          taskId: t.id, reason: 'BLOCKED_BY_UNSCHEDULABLE',
+          detail: `"${t.name}" waits on a task that could not be placed (${blocker}), so it has no earliest start.`,
+        });
+        grew = true;
+      }
+    }
+    if (!grew) break;
+  }
+  return out;
+}
 
 /**
  * Forward pass: each task starts on the first working day after its latest predecessor finishes,
@@ -292,8 +358,11 @@ export function reschedule(
 ): Map<string, { start: string; end: string }> {
   const cal = makeCalendar(nonWorkingDays);
   const ordered = topoOrder(tasks);
+  const blocked = unschedulableSet(tasks);
   const out = new Map<string, { start: string; end: string }>();
   for (const t of ordered) {
+    // Absent from the map rather than given a fabricated date. Callers check membership.
+    if (blocked.has(t.id)) continue;
     let earliest = cal.nextWorking(projectStart);
     for (const dep of t.dependencies ?? []) {
       const d = out.get(dep);
@@ -302,7 +371,7 @@ export function reschedule(
     const lag = Math.max(0, Math.floor(Number(t.lagDays) || 0));
     const delay = Math.max(0, Math.floor(Number(t.delayDays) || 0));
     const start = cal.advance(earliest, lag + delay);
-    const days = cal.span(start, dur(t));
+    const days = cal.span(start, dur(t)!);
     out.set(t.id, { start: days[0], end: days[days.length - 1] });
   }
   return out;
@@ -348,8 +417,11 @@ function dailyDemand(
   const load = new Map<string, Map<string, number>>();
   for (const t of tasks) {
     const s = sched.get(t.id);
-    if (!s) continue;
-    const days = cal.span(s.start, dur(t));
+    const d = dur(t);
+    // An unplaceable task consumes nothing, because it occupies no days. Its requirement is still
+    // reported as unmet, so it does not vanish.
+    if (!s || d === null) continue;
+    const days = cal.span(s.start, d);
     for (const req of requirementsOf(t)) {
       const k = key(req.resource);
       const byDay = load.get(k) ?? new Map<string, number>();
@@ -374,7 +446,7 @@ export function planSchedule(input: PlanInput): SchedulePlan {
   if (tasks.length === 0) {
     return {
       projectStart, projectFinish: projectStart, durationDays: 0, tasks: [], criticalPath: [],
-      resourceVerdicts: [], unmetDemand: [],
+      resourceVerdicts: [], unmetDemand: [], planningDeficiencies: [],
       feasibility: 'AVAILABLE', coverage: 'COMPLETE', established: true,
     };
   }
@@ -448,7 +520,8 @@ export function planSchedule(input: PlanInput): SchedulePlan {
         // Candidates: tasks active on this day that need this resource.
         const active = tasks
           .filter((t) => requirementsOf(t).some((r) => key(r.resource) === k))
-          .filter((t) => cal.span(sched.get(t.id)!.start, dur(t)).includes(d));
+          .filter((t) => sched.has(t.id) && dur(t) !== null)
+          .filter((t) => cal.span(sched.get(t.id)!.start, dur(t)!).includes(d));
         if (active.length < 2) break; // one task alone over capacity — reportable, not levellable
         // Delay the latest-starting task; ties broken by id so the result is deterministic.
         const victim = [...active].sort((a, b) => {
@@ -465,6 +538,10 @@ export function planSchedule(input: PlanInput): SchedulePlan {
   }
 
   const finalSched = runForward();
+  const deficiencies = [...unschedulableSet(tasks).values()]
+    .sort((a, b) => (a.taskId < b.taskId ? -1 : 1));
+  // The finish is the latest PLACED task. A plan with unplaceable work has no honest finish date,
+  // which is what `planningDeficiencies` and PARTIAL coverage are there to say.
   const finish = [...finalSched.values()].reduce(
     (mx, v) => (toDate(v.end) > toDate(mx) ? v.end : mx), projectStart,
   );
@@ -474,17 +551,27 @@ export function planSchedule(input: PlanInput): SchedulePlan {
   );
 
   const planned: PlannedTask[] = tasks
-    .map((t) => ({
-      id: t.id,
-      name: t.name,
-      durationDays: dur(t),
-      dependencies: t.dependencies ?? [],
-      start: finalSched.get(t.id)!.start,
-      end: finalSched.get(t.id)!.end,
-      requirements: requirementsOf(t),
-      critical: critical.has(t.id),
-    }))
-    .sort((a, b) => (a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1));
+    .map((t) => {
+      const placed = finalSched.get(t.id) ?? null;
+      return {
+        id: t.id,
+        name: t.name,
+        durationWorkingDays: dur(t),
+        dependencies: t.dependencies ?? [],
+        start: placed?.start ?? null,
+        end: placed?.end ?? null,
+        scheduled: placed !== null,
+        requirements: requirementsOf(t),
+        critical: critical.has(t.id),
+      };
+    })
+    // Unplaceable tasks sort last, so a reader meets the plan before the gaps in it.
+    .sort((a, b) => {
+      if (a.start === null && b.start === null) return a.id < b.id ? -1 : 1;
+      if (a.start === null) return 1;
+      if (b.start === null) return -1;
+      return a.start === b.start ? (a.id < b.id ? -1 : 1) : a.start < b.start ? -1 : 1;
+    });
 
   // ── Verdicts ────────────────────────────────────────────────────────────
   const finalLoad = dailyDemand(tasks, finalSched, cal);
@@ -570,7 +657,8 @@ export function planSchedule(input: PlanInput): SchedulePlan {
   // Two independent axes, for the reason §24 established: a known conflict must not swallow the
   // resources nobody could judge, and an unjudged resource must never read as available.
   const anyConflict = verdicts.some((v) => v.feasibility === 'CONFLICTED');
-  const anyUnknown = verdicts.some((v) => v.feasibility === 'UNKNOWN');
+  // An unplaceable task leaves the plan incomplete in exactly the sense `coverage` measures.
+  const anyUnknown = verdicts.some((v) => v.feasibility === 'UNKNOWN') || deficiencies.length > 0;
 
   return {
     projectStart,
@@ -581,6 +669,7 @@ export function planSchedule(input: PlanInput): SchedulePlan {
     criticalPath: planned.filter((t) => t.critical).map((t) => t.id),
     resourceVerdicts: verdicts,
     unmetDemand: unmet,
+    planningDeficiencies: deficiencies,
     feasibility: anyConflict ? 'CONFLICTED' : 'AVAILABLE',
     coverage: anyUnknown ? 'PARTIAL' : 'COMPLETE',
     established: !anyConflict && !anyUnknown,

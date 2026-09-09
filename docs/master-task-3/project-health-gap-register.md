@@ -317,8 +317,23 @@ once.
 immediately following forced full run was 51/51 with zero timeouts.
 
 So this is not a quirk of one package's fitness tests. **Any repo-walking test with vitest's 5 s
-default is exposed**, and which one loses is decided by disk contention. Four occurrences across two
-sessions now, in two different packages.
+default is exposed**, and which one loses is decided by disk contention.
+
+**Update, later the same day: a fifth occurrence**, `hydration-dates` again at 5484 ms, on the
+Step 2B verification run. `@aura/web` passed 182/182 standalone immediately afterwards and every
+other package passed 50/50 forced.
+
+Five occurrences now, and the character has changed: it is no longer an occasional surprise but a
+**recurring tax on every full-suite run**, and the honest consequence is that `pnpm test` no longer
+gives a clean signal in one attempt. That is worth saying plainly, because the workaround — running
+packages separately — is what people quietly start doing instead of fixing it, and then a real
+failure hides among the expected ones.
+
+**Recommendation, for a decision rather than for silent action.** Give these scans an explicit
+`testTimeout` naming what they are. They are filesystem walks over the whole repository, not
+behavioural tests; a 5 s budget describes neither their work nor their variance. That is not
+relaxing a check — the assertions are untouched — but it is adjacent enough to "make it green" that
+it should be chosen, not slipped in.
 
 **Deliberately not fixed here.** The obvious change — an explicit timeout for these tests — is
 adjacent to "make it green by relaxing the check", and that call is not mine to make silently.

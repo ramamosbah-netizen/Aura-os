@@ -5,7 +5,7 @@ import type { ScheduleStore } from './schedule-store';
 export class InMemoryScheduleStore implements ScheduleStore {
   private readonly rows = new Map<string, ProjectSchedule>();
   private clone(s: ProjectSchedule): ProjectSchedule {
-    return { ...s, tasks: s.tasks.map((t) => ({ ...t })) };
+    return { ...s, tasks: s.tasks.map((t) => ({ ...t })), dependencies: s.dependencies.map((d) => ({ ...d })) };
   }
   async create(s: ProjectSchedule): Promise<void> { this.rows.set(s.id, this.clone(s)); }
   async update(s: ProjectSchedule): Promise<void> { this.rows.set(s.id, this.clone(s)); }

@@ -16,15 +16,15 @@ const pool = (id: string): ResourceRef => ({ resourceType: 'pool', canonicalReso
 
 const plan = (input: PlanInput) => planSchedule(input);
 const task = (over: Partial<PlanTaskInput> & { id: string }): PlanTaskInput =>
-  ({ name: over.id, durationDays: 1, ...over });
+  ({ name: over.id, durationWorkingDays: 1, ...over });
 
 describe('CPM forward pass', () => {
   it('reschedules finish-to-start dependencies', () => {
     const p = plan({
       projectStart: '2026-07-01',
       tasks: [
-        task({ id: 'a', durationDays: 2 }),
-        task({ id: 'b', durationDays: 2, dependencies: ['a'] }),
+        task({ id: 'a', durationWorkingDays: 2 }),
+        task({ id: 'b', durationWorkingDays: 2, dependencies: ['a'] }),
       ],
     });
     const a = p.tasks.find((t) => t.id === 'a')!;
@@ -38,9 +38,9 @@ describe('CPM forward pass', () => {
     const p = plan({
       projectStart: '2026-07-01',
       tasks: [
-        task({ id: 'a', durationDays: 1 }),
-        task({ id: 'short', durationDays: 1, dependencies: ['a'] }),
-        task({ id: 'long', durationDays: 3, dependencies: ['a'], lagDays: 2 }),
+        task({ id: 'a', durationWorkingDays: 1 }),
+        task({ id: 'short', durationWorkingDays: 1, dependencies: ['a'] }),
+        task({ id: 'long', durationWorkingDays: 3, dependencies: ['a'], lagDays: 2 }),
       ],
     });
     expect(p.tasks.find((t) => t.id === 'long')!.start).toBe('2026-07-04');
@@ -66,8 +66,8 @@ describe('[#1] missing capacity is UNKNOWN, never available', () => {
     const p = plan({
       projectStart: '2026-07-01',
       tasks: [
-        task({ id: 't1', durationDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
-        task({ id: 't2', durationDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
+        task({ id: 't1', durationWorkingDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
+        task({ id: 't2', durationWorkingDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
       ],
     });
     const v = p.resourceVerdicts[0];
@@ -190,7 +190,7 @@ describe('[#5] the working calendar is consumed, not assumed', () => {
     // 2026-07-03 is a Friday. A two-day task starting Thursday finishes Saturday, not Friday.
     const p = plan({
       projectStart: '2026-07-02',
-      tasks: [task({ id: 'a', durationDays: 2 })],
+      tasks: [task({ id: 'a', durationWorkingDays: 2 })],
       nonWorkingDays: ['2026-07-03'],
     });
     expect(p.tasks[0].start).toBe('2026-07-02');
@@ -209,7 +209,7 @@ describe('[#5] the working calendar is consumed, not assumed', () => {
   it('measures duration in working days', () => {
     const p = plan({
       projectStart: '2026-07-02',
-      tasks: [task({ id: 'a', durationDays: 2 })],
+      tasks: [task({ id: 'a', durationWorkingDays: 2 })],
       nonWorkingDays: ['2026-07-03'],
     });
     // Thursday and Saturday — two days of work, not three.
@@ -256,9 +256,9 @@ describe('[#8] deterministic', () => {
     const build = (): PlanInput => ({
       projectStart: '2026-07-01',
       tasks: [
-        task({ id: 'b', durationDays: 2, requirements: [{ resource: pool('p'), quantity: 1, unit: 'persons' }] }),
-        task({ id: 'a', durationDays: 2, requirements: [{ resource: pool('p'), quantity: 1, unit: 'persons' }] }),
-        task({ id: 'c', durationDays: 2, requirements: [{ resource: pool('p'), quantity: 1, unit: 'persons' }] }),
+        task({ id: 'b', durationWorkingDays: 2, requirements: [{ resource: pool('p'), quantity: 1, unit: 'persons' }] }),
+        task({ id: 'a', durationWorkingDays: 2, requirements: [{ resource: pool('p'), quantity: 1, unit: 'persons' }] }),
+        task({ id: 'c', durationWorkingDays: 2, requirements: [{ resource: pool('p'), quantity: 1, unit: 'persons' }] }),
       ],
       capacities: [{ resource: pool('p'), unit: 'persons', quantity: 1 }],
     });
@@ -315,8 +315,8 @@ describe('levelling', () => {
     const p = plan({
       projectStart: '2026-07-01',
       tasks: [
-        task({ id: 't1', durationDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
-        task({ id: 't2', durationDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
+        task({ id: 't1', durationWorkingDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
+        task({ id: 't2', durationWorkingDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
       ],
       capacities: [{ resource: asset('crane'), unit: 'units', quantity: 1 }],
     });
@@ -324,15 +324,15 @@ describe('levelling', () => {
     expect(p.resourceVerdicts[0].peakDemand).toBe(1);
     // Sequenced, not overlapped.
     const [first, second] = p.tasks;
-    expect(second.start > first.end).toBe(true);
+    expect(second.start! > first.end!).toBe(true);
   });
 
   it('does not level a resource whose capacity is unknown, and says so', () => {
     const p = plan({
       projectStart: '2026-07-01',
       tasks: [
-        task({ id: 't1', durationDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
-        task({ id: 't2', durationDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
+        task({ id: 't1', durationWorkingDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
+        task({ id: 't2', durationWorkingDays: 2, requirements: [{ resource: asset('crane'), quantity: 1, unit: 'units' }] }),
       ],
     });
     // Both still start on day one — nothing was levelled, because there was no capacity to level

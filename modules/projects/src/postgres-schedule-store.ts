@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
 import type { ProjectSchedule, ScheduleTask } from './domain/schedule';
+import type { ScheduleDependency } from './domain/schedule-network';
 import type { ScheduleStore } from './schedule-store';
 
 /**
@@ -26,6 +27,12 @@ interface TaskRow {
   baseline_start: Date | string | null; baseline_end: Date | string | null;
   actual_start: Date | string | null; actual_end: Date | string | null;
   percent_complete: string | number;
+  duration_working_days: number | null;
+}
+
+interface DepRow {
+  id: string; tenant_id: string; project_id: string; schedule_id: string;
+  predecessor_task_id: string; successor_task_id: string;
 }
 
 const COLS = 'id, tenant_id, company_id, project_id, project_name, baseline_set_at, created_by, created_at, updated_at';
@@ -43,12 +50,19 @@ const rowToTask = (r: TaskRow): ScheduleTask => ({
   actualStart: day(r.actual_start),
   actualEnd: day(r.actual_end),
   percentComplete: Number(r.percent_complete),
+  // NULL stays null. A missing authored duration is a fact to report, not a gap to fill.
+  durationWorkingDays: r.duration_working_days === null ? null : Number(r.duration_working_days),
 });
 
-function rowTo(r: Row, tasks: ScheduleTask[]): ProjectSchedule {
+const rowToDep = (r: DepRow): ScheduleDependency => ({
+  id: r.id, tenantId: r.tenant_id, projectId: r.project_id, scheduleId: r.schedule_id,
+  predecessorTaskId: r.predecessor_task_id, successorTaskId: r.successor_task_id,
+});
+
+function rowTo(r: Row, tasks: ScheduleTask[], dependencies: ScheduleDependency[] = []): ProjectSchedule {
   return {
     id: r.id, tenantId: r.tenant_id, companyId: r.company_id, projectId: r.project_id,
-    projectName: r.project_name, tasks,
+    projectName: r.project_name, tasks, dependencies,
     baselineSetAt: r.baseline_set_at ? iso(r.baseline_set_at) : null,
     createdBy: r.created_by, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
   };
@@ -87,12 +101,42 @@ export class PostgresScheduleStore implements ScheduleStore {
       await executor.query(
         `INSERT INTO public.aura_projects_schedule_tasks
            (id, tenant_id, project_id, schedule_id, name, planned_start, planned_end,
-            baseline_start, baseline_end, actual_start, actual_end, percent_complete, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12, now())`,
+            baseline_start, baseline_end, actual_start, actual_end, percent_complete,
+            duration_working_days, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())`,
         [t.id, s.tenantId, s.projectId, s.id, t.name, t.plannedStart, t.plannedEnd,
-         t.baselineStart, t.baselineEnd, t.actualStart, t.actualEnd, t.percentComplete],
+         t.baselineStart, t.baselineEnd, t.actualStart, t.actualEnd, t.percentComplete,
+         t.durationWorkingDays],
       );
     }
+    // Edges are written AFTER the tasks they point at, because the composite foreign keys require
+    // both endpoints to exist. Deleting the tasks above already cascaded the old edges away.
+    for (const d of s.dependencies) {
+      await executor.query(
+        `INSERT INTO public.aura_projects_schedule_dependencies
+           (id, tenant_id, project_id, schedule_id, predecessor_task_id, successor_task_id)
+         VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+        [d.id, s.tenantId, s.projectId, s.id, d.predecessorTaskId, d.successorTaskId],
+      );
+    }
+  }
+
+  private async depsFor(scheduleIds: string[]): Promise<Map<string, ScheduleDependency[]>> {
+    const out = new Map<string, ScheduleDependency[]>();
+    if (scheduleIds.length === 0) return out;
+    const res = await this.pool.query<DepRow>(
+      `SELECT id, tenant_id, project_id, schedule_id, predecessor_task_id, successor_task_id
+         FROM public.aura_projects_schedule_dependencies
+        WHERE schedule_id = ANY($1::uuid[])
+        ORDER BY predecessor_task_id, successor_task_id`,
+      [scheduleIds],
+    );
+    for (const r of res.rows) {
+      const bucket = out.get(r.schedule_id) ?? [];
+      bucket.push(rowToDep(r));
+      out.set(r.schedule_id, bucket);
+    }
+    return out;
   }
 
   private async tasksFor(scheduleIds: string[]): Promise<Map<string, ScheduleTask[]>> {
@@ -101,7 +145,7 @@ export class PostgresScheduleStore implements ScheduleStore {
     // One query for every schedule in the result, not one per schedule.
     const res = await this.pool.query<TaskRow>(
       `SELECT id, schedule_id, name, planned_start, planned_end, baseline_start, baseline_end,
-              actual_start, actual_end, percent_complete
+              actual_start, actual_end, percent_complete, duration_working_days
          FROM public.aura_projects_schedule_tasks
         WHERE schedule_id = ANY($1::uuid[])
         ORDER BY planned_start, id`,
@@ -118,8 +162,8 @@ export class PostgresScheduleStore implements ScheduleStore {
   async get(id: Id): Promise<ProjectSchedule | null> {
     const res = await this.pool.query<Row>(`SELECT ${COLS} FROM public.aura_projects_schedules WHERE id = $1`, [id]);
     if (!res.rows.length) return null;
-    const tasks = await this.tasksFor([res.rows[0].id]);
-    return rowTo(res.rows[0], tasks.get(res.rows[0].id) ?? []);
+    const [tasks, deps] = await Promise.all([this.tasksFor([res.rows[0].id]), this.depsFor([res.rows[0].id])]);
+    return rowTo(res.rows[0], tasks.get(res.rows[0].id) ?? [], deps.get(res.rows[0].id) ?? []);
   }
 
   async getByProject(tenantId: Id, projectId: Id): Promise<ProjectSchedule | null> {
@@ -128,8 +172,8 @@ export class PostgresScheduleStore implements ScheduleStore {
       [tenantId, projectId],
     );
     if (!res.rows.length) return null;
-    const tasks = await this.tasksFor([res.rows[0].id]);
-    return rowTo(res.rows[0], tasks.get(res.rows[0].id) ?? []);
+    const [tasks, deps] = await Promise.all([this.tasksFor([res.rows[0].id]), this.depsFor([res.rows[0].id])]);
+    return rowTo(res.rows[0], tasks.get(res.rows[0].id) ?? [], deps.get(res.rows[0].id) ?? []);
   }
 
   async list(tenantId: Id): Promise<ProjectSchedule[]> {
@@ -137,7 +181,8 @@ export class PostgresScheduleStore implements ScheduleStore {
       `SELECT ${COLS} FROM public.aura_projects_schedules WHERE tenant_id = $1 ORDER BY created_at DESC LIMIT 200`,
       [tenantId],
     );
-    const tasks = await this.tasksFor(res.rows.map((r) => r.id));
-    return res.rows.map((r) => rowTo(r, tasks.get(r.id) ?? []));
+    const ids = res.rows.map((r) => r.id);
+    const [tasks, deps] = await Promise.all([this.tasksFor(ids), this.depsFor(ids)]);
+    return res.rows.map((r) => rowTo(r, tasks.get(r.id) ?? [], deps.get(r.id) ?? []));
   }
 }

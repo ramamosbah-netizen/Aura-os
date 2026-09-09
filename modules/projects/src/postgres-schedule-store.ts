@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
-import type { ProjectSchedule, ScheduleTask } from './domain/schedule';
+import type { ProjectSchedule, ScheduleTask, TaskResourceRequirement } from './domain/schedule';
+import type { ResourceType, ResourceUnit } from './domain/resource-ref';
 import type { ScheduleDependency } from './domain/schedule-network';
 import type { ScheduleStore } from './schedule-store';
 
@@ -30,6 +31,11 @@ interface TaskRow {
   duration_working_days: number | null;
 }
 
+interface ReqRow {
+  id: string; task_id: string; resource_type: string; canonical_resource_id: string;
+  unit: string; quantity: string | number;
+}
+
 interface DepRow {
   id: string; tenant_id: string; project_id: string; schedule_id: string;
   predecessor_task_id: string; successor_task_id: string;
@@ -40,7 +46,14 @@ const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() :
 const day = (v: Date | string | null): string | null =>
   v === null ? null : typeof v === 'string' ? v.slice(0, 10) : v.toISOString().slice(0, 10);
 
-const rowToTask = (r: TaskRow): ScheduleTask => ({
+const rowToReq = (r: ReqRow): TaskResourceRequirement => ({
+  id: r.id,
+  resource: { resourceType: r.resource_type as ResourceType, canonicalResourceId: r.canonical_resource_id },
+  unit: r.unit as ResourceUnit,
+  quantity: Number(r.quantity),
+});
+
+const rowToTask = (r: TaskRow, requirements: TaskResourceRequirement[] = []): ScheduleTask => ({
   id: r.id,
   name: r.name,
   plannedStart: day(r.planned_start)!,
@@ -52,6 +65,7 @@ const rowToTask = (r: TaskRow): ScheduleTask => ({
   percentComplete: Number(r.percent_complete),
   // NULL stays null. A missing authored duration is a fact to report, not a gap to fill.
   durationWorkingDays: r.duration_working_days === null ? null : Number(r.duration_working_days),
+  requirements,
 });
 
 const rowToDep = (r: DepRow): ScheduleDependency => ({
@@ -109,6 +123,19 @@ export class PostgresScheduleStore implements ScheduleStore {
          t.durationWorkingDays],
       );
     }
+    // Requirements are written after their task, for the same composite-FK reason as the edges
+    // below. Deleting the tasks above cascaded the old requirements away with them.
+    for (const t of s.tasks) {
+      for (const req of t.requirements) {
+        await executor.query(
+          `INSERT INTO public.aura_projects_task_requirements
+             (id, tenant_id, project_id, schedule_id, task_id, resource_type, canonical_resource_id, unit, quantity)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [req.id, s.tenantId, s.projectId, s.id, t.id,
+           req.resource.resourceType, req.resource.canonicalResourceId, req.unit, req.quantity],
+        );
+      }
+    }
     // Edges are written AFTER the tasks they point at, because the composite foreign keys require
     // both endpoints to exist. Deleting the tasks above already cascaded the old edges away.
     for (const d of s.dependencies) {
@@ -119,6 +146,25 @@ export class PostgresScheduleStore implements ScheduleStore {
         [d.id, s.tenantId, s.projectId, s.id, d.predecessorTaskId, d.successorTaskId],
       );
     }
+  }
+
+  private async reqsFor(scheduleIds: string[]): Promise<Map<string, TaskResourceRequirement[]>> {
+    const out = new Map<string, TaskResourceRequirement[]>();
+    if (scheduleIds.length === 0) return out;
+    const res = await this.pool.query<ReqRow>(
+      `SELECT id, task_id, resource_type, canonical_resource_id, unit, quantity
+         FROM public.aura_projects_task_requirements
+        WHERE schedule_id = ANY($1::uuid[])
+        ORDER BY resource_type, canonical_resource_id`,
+      [scheduleIds],
+    );
+    // Keyed by TASK, because that is how they are read back onto the aggregate.
+    for (const r of res.rows) {
+      const bucket = out.get(r.task_id) ?? [];
+      bucket.push(rowToReq(r));
+      out.set(r.task_id, bucket);
+    }
+    return out;
   }
 
   private async depsFor(scheduleIds: string[]): Promise<Map<string, ScheduleDependency[]>> {
@@ -142,6 +188,7 @@ export class PostgresScheduleStore implements ScheduleStore {
   private async tasksFor(scheduleIds: string[]): Promise<Map<string, ScheduleTask[]>> {
     const out = new Map<string, ScheduleTask[]>();
     if (scheduleIds.length === 0) return out;
+    const reqs = await this.reqsFor(scheduleIds);
     // One query for every schedule in the result, not one per schedule.
     const res = await this.pool.query<TaskRow>(
       `SELECT id, schedule_id, name, planned_start, planned_end, baseline_start, baseline_end,
@@ -153,7 +200,7 @@ export class PostgresScheduleStore implements ScheduleStore {
     );
     for (const r of res.rows) {
       const bucket = out.get(r.schedule_id) ?? [];
-      bucket.push(rowToTask(r));
+      bucket.push(rowToTask(r, reqs.get(r.id) ?? []));
       out.set(r.schedule_id, bucket);
     }
     return out;

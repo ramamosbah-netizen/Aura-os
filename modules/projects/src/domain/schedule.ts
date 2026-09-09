@@ -1,5 +1,6 @@
 import { type Id, newId, roundDecimal } from '@aura/shared';
 import { type NewScheduleDependency, type ScheduleDependency, validateDependencies } from './schedule-network';
+import { type ResourceRef, type ResourceUnit, isResourceUnit, resourceKey, toResourceRef } from './resource-ref';
 
 /**
  * Project Schedule (Gantt data) — one per project: an ordered list of tasks with planned dates,
@@ -25,6 +26,14 @@ export interface ScheduleTask {
   actualStart: string | null;
   actualEnd: string | null;
   percentComplete: number; // 0..100
+  /**
+   * What this task NEEDS. Demand, never a commitment and never an assignment (DG-22.1).
+   *
+   * Several, because a real task needs a crew AND a crane, and one resource per task made that
+   * inexpressible. A requirement is not satisfied by existing: whether the capacity is there is a
+   * separate question, answered by the planner and reported as its own verdict.
+   */
+  requirements: TaskResourceRequirement[];
   /**
    * AUTHORED planning input: how many WORKING days the task takes. `null` means nobody has said.
    *
@@ -58,6 +67,27 @@ export interface ProjectSchedule {
   updatedAt: string;
 }
 
+/**
+ * One line of demand on a task.
+ *
+ * Deliberately minimal: the tenant, project and schedule are the task's, and repeating them here
+ * would create four places for the same fact to disagree. The store adds them as columns so the
+ * database can enforce lineage; the aggregate does not carry them twice.
+ */
+export interface TaskResourceRequirement {
+  id: Id;
+  resource: ResourceRef;
+  quantity: number;
+  unit: ResourceUnit;
+}
+
+export interface NewTaskResourceRequirement {
+  id?: Id;
+  resource: ResourceRef;
+  quantity: number;
+  unit: ResourceUnit;
+}
+
 export interface NewScheduleTask {
   /**
    * The task being edited. Absent means "a new task" and a fresh id is minted.
@@ -76,6 +106,8 @@ export interface NewScheduleTask {
   percentComplete?: number;
   /** Working days. Omitted or null means not authored; it is not inferred from the dates. */
   durationWorkingDays?: number | null;
+  /** What the task needs. Round-tripped by an editing caller, like every other authored field. */
+  requirements?: NewTaskResourceRequirement[];
 }
 
 export interface NewProjectSchedule {
@@ -99,6 +131,7 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
   if (duration !== null && (!Number.isInteger(duration) || duration < 1)) {
     throw new Error('durationWorkingDays must be a whole number of working days, at least 1');
   }
+  const requirements = buildRequirements(input.requirements ?? [], input.name);
   return {
     id: input.id ?? newId(),
     name: input.name.trim(),
@@ -109,8 +142,50 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
     actualStart: input.actualStart ?? null,
     actualEnd: input.actualEnd ?? null,
     percentComplete: pct,
+    requirements,
     durationWorkingDays: duration,
   };
+}
+
+/**
+ * Validate and normalise a task's demand.
+ *
+ * Refuses rather than repairs, and refuses loudly: a requirement quietly dropped for being
+ * malformed is demand the plan will never mention again, and "missing requirement ≠ zero demand"
+ * is one of the three false confidences the §22 gate forbids.
+ */
+function buildRequirements(
+  inputs: readonly NewTaskResourceRequirement[],
+  taskName: string,
+): TaskResourceRequirement[] {
+  const out: TaskResourceRequirement[] = [];
+  const seen = new Set<string>();
+  for (const r of inputs) {
+    const resource = toResourceRef(r?.resource);
+    if (!resource) {
+      // Phrased with "must" deliberately: the global filter classifies by message shape, and this
+      // is bad input the caller can fix — a 400, not an opaque 500.
+      throw new Error(`a resource requirement on "${taskName}" must name a valid resource: a known type and a non-empty id`);
+    }
+    if (!isResourceUnit(r.unit)) {
+      throw new Error(`a resource requirement on "${taskName}" must be measured in hours, persons, crews or units`);
+    }
+    const quantity = Number(r.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      // Zero demand is not a requirement, it is the absence of one. Storing it would put a line on
+      // the screen claiming the task needs something it does not.
+      throw new Error(`a resource requirement on "${taskName}" must be for more than zero`);
+    }
+    const k = resourceKey(resource);
+    if (seen.has(k)) {
+      // Two lines for one resource are one requirement recorded twice, and the planner would
+      // count both — inflating demand against a capacity that never changed.
+      throw new Error(`"${taskName}" requires ${k} twice; combine them into one requirement`);
+    }
+    seen.add(k);
+    out.push({ id: r.id ?? newId(), resource, quantity, unit: r.unit });
+  }
+  return out.sort((a, b) => (resourceKey(a.resource) < resourceKey(b.resource) ? -1 : 1));
 }
 
 export function makeProjectSchedule(input: NewProjectSchedule): ProjectSchedule {

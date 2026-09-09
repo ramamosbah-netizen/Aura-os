@@ -145,6 +145,68 @@ have to reach through a parent claim the way `aura_document_versions` does.
 
 ---
 
+## AURA-FIT-001 — three fitness tests are timeout-flaky under parallel load
+
+`architecture.fitness.test.ts`, `error-taxonomy.fitness.test.ts` and `money-rounding.fitness.test.ts`
+each failed with `Test timed out in 5000ms` on three consecutive full `pnpm test` runs, then passed
+on a fourth forced run of the same commit. The pre-§21 baseline passed both cached and forced.
+
+All three walk the whole repository filesystem. Measured on the same machine, same commit:
+
+| Test | Standalone | Under full turbo load |
+|---|---|---|
+| `architecture.fitness` | 572 ms | 17 951 ms |
+| `error-taxonomy.fitness` | 787 ms | 20 016 ms |
+| `money-rounding.fitness` | 566 ms | 5 981 ms |
+
+**Not assertion failures.** Nothing was found wrong; the scans did not finish. Against vitest's
+5 s default they hold a 6–9× margin idle, and that margin is being consumed in practice when tsc
+builds, a Postgres container on tmpfs and 50 concurrent turbo tasks compete for the same disk.
+
+Not attributed to §21: a forced full run on the §21 branch passes 51/51, and the added files are
+~10 sources among thousands. What §21 did was surface it, by making enough packages cache-miss at
+once.
+
+**Deliberately not fixed here.** The obvious change — an explicit timeout for these three — is
+adjacent to "make it green by relaxing the check", and that call is not mine to make silently.
+Stated as the choice it is: these are I/O-bound scans rather than behavioural tests, so a longer
+timeout would arguably be describing them correctly rather than weakening them. Recorded for a
+decision, not actioned.
+
+---
+
+## AURA-MIG-001 — the migration gate reports history drift as a contradiction
+
+`GET /health` returned:
+
+```json
+{"code":"SCHEMA_MIGRATION_PENDING",
+ "message":"database schema is behind the application; 0 migration(s) pending",
+ "pending":[]}
+```
+
+Behind, with nothing pending, naming nothing. An operator cannot act on that.
+
+`MigrationGateService` tracks two independent kinds of drift and logs them as separate incidents:
+
+- `pending` — files on disk not in the ledger → *"SCHEMA BEHIND CODE"*
+- `appliedButAbsent` — ledger rows with no file on disk → *"MIGRATION HISTORY DRIFT"* (G-09)
+
+Both set `degraded`, and the HTTP body collapses both into `SCHEMA_MIGRATION_PENDING` with the
+`pending` array — which is empty in the second case. So the direction of drift, and the migration
+names that would identify it, are lost at exactly the boundary an operator reads.
+
+The internal model is right; the response shape discards half of it. A distinct code
+(`SCHEMA_MIGRATION_DRIFT`) carrying `appliedButAbsent` would fix it.
+
+**How it was observed:** by causing it. Checking out a pre-§21 commit to compare test behaviour
+removed `0283_project_risks_issues.sql` from disk while the database still had it applied, and the
+API evaluated in that window. The gate runs once at `onModuleInit`, so the verdict is held until
+restart. That part is correct behaviour — deploys migrate before serving — and the file is back;
+the API needs a restart, and the reporting defect stands on its own.
+
+---
+
 ## Separate finding — not §24, not owned here
 
 **E2E interaction-readiness instability under full-suite execution.**

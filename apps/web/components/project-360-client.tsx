@@ -1064,6 +1064,55 @@ function RiskIssuePanel({
   const [pending, setPending] = useState<{ kind: 'accept' | 'materialise' | 'resolve' | 'withdraw'; id: string; label: string } | null>(null);
   const [note, setNote] = useState('');
 
+  /**
+   * Editing an existing record.
+   *
+   * Correcting a register entry is not a lifecycle move, and the two are kept apart all the way
+   * down: this writes through PATCH, which carries no `status` at any layer, so a state change can
+   * never ride in on a title correction and go unlogged.
+   */
+  const [editing, setEditing] = useState<{ kind: 'risk' | 'issue'; id: string } | null>(null);
+  const [edit, setEdit] = useState<Record<string, string>>({});
+
+  const startEdit = (kind: 'risk' | 'issue', record: RiskRecord | IssueRecord): void => {
+    setPending(null);
+    setEditing({ kind, id: record.id });
+    setEdit(kind === 'risk'
+      ? {
+        title: record.title, owner: record.owner ?? '', area: record.area,
+        likelihood: (record as RiskRecord).likelihood, impact: (record as RiskRecord).impact,
+        targetDate: (record as RiskRecord).targetDate ?? '', mitigation: (record as RiskRecord).mitigation ?? '',
+      }
+      : {
+        title: record.title, owner: record.owner ?? '', area: record.area,
+        severity: (record as IssueRecord).severity, dueDate: (record as IssueRecord).dueDate ?? '',
+        description: (record as IssueRecord).description ?? '',
+      });
+  };
+
+  const saveEdit = async (): Promise<void> => {
+    if (!editing || !edit.title?.trim()) return;
+    const path = editing.kind === 'risk' ? 'risks' : 'issues';
+    const body = editing.kind === 'risk'
+      ? {
+        title: edit.title.trim(), owner: edit.owner, area: edit.area,
+        likelihood: edit.likelihood, impact: edit.impact,
+        targetDate: edit.targetDate || undefined, mitigation: edit.mitigation,
+      }
+      : {
+        title: edit.title.trim(), owner: edit.owner, area: edit.area,
+        severity: edit.severity, dueDate: edit.dueDate || undefined, description: edit.description,
+      };
+    if (await call(`/api/projects/${path}/${editing.id}`, 'PATCH', body, 'Register entry corrected.')) {
+      setEditing(null); setEdit({});
+    }
+  };
+
+  const field = (k: string) => ({
+    value: edit[k] ?? '',
+    onChange: (e: { target: { value: string } }) => setEdit((prev) => ({ ...prev, [k]: e.target.value })),
+  });
+
   const risks = register?.risks ?? [];
   const issues = register?.issues ?? [];
   const rs = register?.riskSummary;
@@ -1170,6 +1219,53 @@ function RiskIssuePanel({
       </form>
     )}
 
+    {editing && (
+      <form
+        data-testid="register-edit-form"
+        onSubmit={(e) => { e.preventDefault(); void saveEdit(); }}
+        style={{ ...authoringCard, borderColor: 'var(--accent)' }}
+      >
+        <h3 style={formTitle}>{editing.kind === 'risk' ? 'Correct this risk' : 'Correct this issue'}</h3>
+        <input aria-label="Edit title" {...field('title')} />
+        <select aria-label="Edit area" {...field('area')}>
+          {AREA_OPTIONS.map((a) => <option key={a} value={a}>{areaLabel(a)}</option>)}
+        </select>
+        {editing.kind === 'risk' ? (
+          <>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {/* Re-grading is done through the two axes, never by naming a severity — the same
+                  rule as raising one. Severity is recomputed server-side from these. */}
+              <select aria-label="Edit likelihood" {...field('likelihood')}>
+                <option value="low">Likelihood: low</option><option value="medium">Likelihood: medium</option><option value="high">Likelihood: high</option>
+              </select>
+              <select aria-label="Edit impact" {...field('impact')}>
+                <option value="low">Impact: low</option><option value="medium">Impact: medium</option><option value="high">Impact: high</option>
+              </select>
+            </div>
+            <input aria-label="Edit target date" type="date" {...field('targetDate')} />
+            <input aria-label="Edit mitigation" placeholder="Mitigation" {...field('mitigation')} />
+          </>
+        ) : (
+          <>
+            <select aria-label="Edit severity" {...field('severity')}>
+              <option value="minor">Minor — delivery unchanged if it waits</option>
+              <option value="major">Major — delivery is being damaged</option>
+              <option value="critical">Critical — delivery is stopped, or will stop</option>
+            </select>
+            <input aria-label="Edit due date" type="date" {...field('dueDate')} />
+            <input aria-label="Edit description" placeholder="Description" {...field('description')} />
+          </>
+        )}
+        <input aria-label="Edit owner" placeholder="Owner" {...field('owner')} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-primary" type="submit" disabled={busy || !edit.title?.trim()}>Save</button>
+          <button className="btn btn-ghost" type="button" onClick={() => { setEditing(null); setEdit({}); }}>Cancel</button>
+        </div>
+        {/* Status is absent from this form at every layer — the BFF does not forward it either. */}
+        <small style={st.muted}>Correcting an entry never moves its status; that is a separate, recorded action.</small>
+      </form>
+    )}
+
     <div style={authoringGrid}>
       <form data-testid="risk-authoring-form" onSubmit={(e) => { e.preventDefault(); void raiseRisk(); }} style={authoringCard}>
         <h3 style={formTitle}>Identify a risk</h3>
@@ -1241,6 +1337,7 @@ function RiskIssuePanel({
               <td>
                 {closed ? <span style={st.muted}>Closed</span> : (
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button className="btn btn-ghost" disabled={busy} onClick={() => startEdit('risk', r)}>Edit</button>
                     {r.status !== 'MITIGATING' && <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/risks/${r.id}/status`, 'PATCH', { status: 'MITIGATING' }, 'Risk moved to mitigating.')}>Mitigate</button>}
                     {r.status !== 'ACCEPTED' && <button className="btn btn-ghost" disabled={busy} onClick={() => ask('accept', r.id, `Accept: ${r.title}`)}>Accept</button>}
                     <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/risks/${r.id}/status`, 'PATCH', { status: 'RESOLVED' }, 'Risk closed — the exposure went away.')}>No longer a risk</button>
@@ -1284,6 +1381,7 @@ function RiskIssuePanel({
               <td><Status value={i.status} /></td>
               <td>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button className="btn btn-ghost" disabled={busy} onClick={() => startEdit('issue', i)}>Edit</button>
                   {i.status === 'open' && <button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/issues/${i.id}/status`, 'PATCH', { status: 'in_progress' }, 'Issue taken on.')}>Start work</button>}
                   {open && <button className="btn btn-primary" disabled={busy} onClick={() => ask('resolve', i.id, `Resolve: ${i.title}`)}>Resolve</button>}
                   {open && <button className="btn btn-ghost" disabled={busy} onClick={() => ask('withdraw', i.id, `Withdraw: ${i.title}`)}>Withdraw</button>}

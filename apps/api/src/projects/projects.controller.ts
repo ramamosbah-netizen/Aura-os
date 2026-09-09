@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe, Permissions } from '@aura/core';
 import { parsePageParams, type ProjectHealth, type RiskImpact, type RiskLikelihood } from '@aura/shared';
 import {
   type Project,
@@ -771,6 +771,15 @@ export class ProjectsController {
     return this.risks.update(id, dto, this.tenant.get().actorId);
   }
 
+  /**
+   * Declared explicitly rather than derived.
+   *
+   * `derivePermissionFromRoute` would read the trailing verb and require `projects.risk.status`,
+   * while the service asserts `projects.risk.update` — two different permissions guarding one
+   * operation. A tenant holding `projects.*` never notices; a role scoped precisely to
+   * `projects.risk.update` would pass the service check and be refused at the door.
+   */
+  @Permissions('projects.risk.update')
   @Patch('risks/:id/status')
   setRiskStatus(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: RiskStatusDto): Promise<ProjectRisk> {
     if (!dto?.status) throw new BadRequestException('status is required');
@@ -788,6 +797,15 @@ export class ProjectsController {
    * naming project B while addressing a risk in project A is refused instead of quietly succeeding
    * and producing an issue on A.
    */
+  /**
+   * Both permissions, declared where the guard can see them.
+   *
+   * Derivation would have required `projects.project.materialise` — the wrong entity entirely,
+   * because the route is nested under `projects/:projectId`. Materialising is not an operation on
+   * a project; it retires a risk AND creates an issue, which is why the service demands both, and
+   * why holding one of the two must not open this door.
+   */
+  @Permissions('projects.risk.update', 'projects.issue.create')
   @Post('projects/:projectId/risks/:id/materialise')
   materialiseRisk(
     @Param('projectId', ParseUuidOr404Pipe) projectId: string,
@@ -856,6 +874,8 @@ export class ProjectsController {
     }, this.tenant.get().actorId);
   }
 
+  /** Explicit for the same reason as the risk status route above. */
+  @Permissions('projects.issue.update')
   @Patch('issues/:id/status')
   setIssueStatus(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: IssueStatusDto): Promise<ProjectIssue> {
     if (!dto?.status) throw new BadRequestException('status is required');

@@ -175,6 +175,80 @@ test('ending an issue demands a note, and resolved is kept apart from withdrawn'
   await expect(row).not.toContainText('Main contractor cleared the riser');
 });
 
+test('a register entry can be corrected, and correcting it never moves its status', async ({ page }) => {
+  const id = await createProject(page.request, `Risk edit ${RUN}`);
+  await openRegister(page, id);
+
+  const form = page.getByTestId('risk-authoring-form');
+  await form.getByLabel('Risk title').fill(`Switchgear delivery slipping ${RUN}`);
+  await form.getByLabel('Likelihood').selectOption('low');
+  await form.getByLabel('Impact').selectOption('low');
+  await form.getByRole('button', { name: 'Add to register' }).click();
+
+  const row = page.getByTestId('risk-row').filter({ hasText: `Switchgear delivery slipping ${RUN}` });
+  await expect(row).toBeVisible();
+  await expect(row).toContainText('LOW');
+
+  // Move it out of OPEN first, so the edit has a status it could plausibly disturb.
+  await row.getByRole('button', { name: 'Mitigate' }).click();
+  await expect(row).toContainText('MITIGATING');
+
+  await row.getByRole('button', { name: 'Edit' }).click();
+  const editForm = page.getByTestId('register-edit-form');
+  await editForm.getByLabel('Edit title').fill(`Switchgear delivery slipping badly ${RUN}`);
+  // Re-grading goes through the two axes. There is no severity field to type into, on the edit
+  // form any more than on the create form.
+  await expect(editForm.getByLabel('Edit severity')).toHaveCount(0);
+  await editForm.getByLabel('Edit likelihood').selectOption('high');
+  await editForm.getByLabel('Edit impact').selectOption('high');
+  await editForm.getByLabel('Edit owner').fill('Procurement lead');
+  await editForm.getByRole('button', { name: 'Save' }).click();
+
+  const edited = page.getByTestId('risk-row').filter({ hasText: `Switchgear delivery slipping badly ${RUN}` });
+  await expect(edited).toBeVisible();
+  // Severity is RECOMPUTED from the new axes, not carried and not typed.
+  await expect(edited).toContainText('CRITICAL');
+  await expect(edited).toContainText('Procurement lead');
+  // And the lifecycle is exactly where it was. A status change riding in on a correction would be
+  // an unlogged move — which is why no layer forwards `status` on this path.
+  await expect(edited).toContainText('MITIGATING');
+});
+
+test('a reader without permission is refused in the domain\'s own words', async ({ page, browser }) => {
+  const viewer = process.env.E2E_VIEWER_USERNAME;
+  const apiBase = process.env.AURA_API_URL;
+  test.skip(!viewer || !apiBase, 'needs a restricted viewer and an API base to mean anything');
+
+  const id = await createProject(page.request, `Risk forbidden ${RUN}`);
+
+  const ctx = await browser.newContext();
+  const login = await ctx.request.post(`${apiBase}/api/v1/auth/login`, {
+    data: { username: viewer, password: process.env.E2E_PASSWORD ?? 'e2e-password' },
+  });
+  expect(login.ok(), await login.text()).toBe(true);
+  const token = (await login.json() as { token: string }).token;
+
+  // Refused, and refused by NAME. "Action failed" would leave an administrator guessing which
+  // grant to add; naming the permission is the difference between a dead end and a next step.
+  const denied = await ctx.request.post(`${apiBase}/api/v1/projects/risks`, {
+    headers: { authorization: `Bearer ${token}` },
+    data: { projectId: id, title: 'should not exist' },
+  });
+  expect(denied.status()).toBe(403);
+  expect(await denied.text()).toContain('projects.risk.create');
+
+  // The guard and the service must demand the SAME permission for a status move. Route derivation
+  // would have asked for `projects.risk.status` while the service asserts `projects.risk.update`,
+  // so a role scoped precisely to the latter would pass the service and be refused at the door.
+  const deniedMove = await ctx.request.patch(
+    `${apiBase}/api/v1/projects/risks/11111111-1111-4111-8111-111111111111/status`,
+    { headers: { authorization: `Bearer ${token}` }, data: { status: 'MITIGATING' } },
+  );
+  expect(deniedMove.status()).toBe(403);
+  expect(await deniedMove.text()).toContain('projects.risk.update');
+  await ctx.close();
+});
+
 test('the register never changes the project it reports on', async ({ page }) => {
   // §21 records; §2 and §27 decide. Reading and writing the register must leave the lifecycle gate
   // exactly as it was — asserted rather than assumed from the absence of a button.

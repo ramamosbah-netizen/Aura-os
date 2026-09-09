@@ -401,3 +401,61 @@ no reruns — had all three of these pass, alongside nine new §21 specs and a d
 zero. That is a data point, **not a resolution**: the failures were always intermittent, so one
 clean run is exactly what a latent flake looks like on a good day. The finding stays OPEN and
 undiagnosed. Closing it needs a cause, not a green run.
+
+---
+
+## AURA-PM-004 — Schedule saves delete every task row before re-inserting it — OPEN, data-loss
+
+**Severity: data-loss.** Not a lineage inconvenience. This is a defect in code written in §22 Step
+2A, surfaced while designing Step 6's foreign keys.
+
+**The defect.** `PostgresScheduleStore.writeTasks` (`modules/projects/src/postgres-schedule-store.ts`)
+begins every save with
+
+```sql
+DELETE FROM public.aura_projects_schedule_tasks WHERE schedule_id = $1
+```
+
+and then re-inserts each surviving task by the same id. It is called as `this.writeTasks(this.pool, s)`
+from both `create` and `update`, and `ScheduleService` wraps neither in a transaction — so the
+statements run on pooled connections in implicit autocommit.
+
+**First consequence — data loss.** The DELETE commits on its own, before any insert runs. A failed
+insert, a dropped connection or a process restart part way through a save leaves the schedule with
+**no tasks at all**, permanently, and the JSONB mirror is written from the same non-atomic path. The
+window is small and the loss is total and silent.
+
+**Second consequence — no cross-aggregate reference to a task can be enforced.** Task IDENTITY
+survives a save (that was Step 2A's purpose) but the ROW's lifetime does not. Any foreign key onto
+`aura_projects_schedule_tasks` from outside the schedule aggregate must choose between
+
+- `ON DELETE CASCADE` — destroying rows in the referencing table as a side effect of an unrelated
+  plan edit, and for bookings that means deleting a commitment because somebody renamed a task; and
+- `ON DELETE RESTRICT` — refusing every schedule save for as long as any such row exists.
+
+`DEFERRABLE INITIALLY DEFERRED` does not rescue it, because there is no transaction to defer to.
+
+**What Step 6 did about it.** Nothing, deliberately. `aura_projects_resource_bookings.task_id` and
+`.schedule_id` are recorded as ADDRESSES with no foreign key, documented in migration 0288 and
+proven in the Step 6 database proof (§6, "a task reference is an ADDRESS, not an integrity claim"),
+so the missing constraint reads as a decision rather than an oversight. That is the same treatment
+§21 gives `ProjectIssueReference` and §22 gives every resource it does not own: the reference may
+stop resolving, and it reports `found: false` rather than disappearing.
+
+It is also the right domain answer independently of the defect — deleting a task does not un-commit
+a crane, and a commitment should outlive the plan that motivated it.
+
+**Recommended fix**, as its own step with its own evidence, not folded into a §22 step:
+
+1. Thread `TX_RUNNER` through `ScheduleService` into `ScheduleStore.create`/`update` so a save is
+   one transaction. This alone removes the data-loss window.
+2. Replace delete-all with `INSERT ... ON CONFLICT (id) DO UPDATE` for the tasks that survive, plus
+   a targeted `DELETE ... WHERE id <> ALL($ids)` for those the caller actually removed. Requirements
+   and dependencies currently rely on the blanket cascade to clear, so they need explicit deletes
+   scoped to the schedule.
+3. Only then is a composite foreign key from bookings onto `(tenant_id, project_id, schedule_id,
+   task_id)` safe, with `ON DELETE RESTRICT` — which is the correct governance: a task with a crane
+   still committed to it should not be deletable until the booking is released.
+
+Until step 1 lands, every schedule save carries the data-loss window. It is worth doing before the
+§22 API layer, which will multiply the number of saves.

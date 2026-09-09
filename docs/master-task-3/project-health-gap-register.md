@@ -73,34 +73,75 @@ so nobody will go looking for a binding that was never supposed to exist yet.
 
 ---
 
-## Withdrawn — a §21 finding that was wrong
+## AURA-RLS-001 — tables outside both tenant-isolation controls
 
-An earlier revision of this file claimed ten `aura_projects_*` tables were `ENABLE`-only and lacked
-`FORCE ROW LEVEL SECURITY`. **That claim was false and is withdrawn.**
+**Read from `pg_class` on a fresh database migrated 283/283, not from migration text.** Full run:
+[`s21-db-proof-2026-09-09.md`](./s21-db-proof-2026-09-09.md) ·
+harness `apps/api/scripts/s21-risks-issues-db-proof.mjs`.
 
-It came from grepping the migrations for literal `ALTER TABLE … FORCE ROW LEVEL SECURITY`
-statements. Migration 0163 does not write them that way: it applies `ENABLE` + `FORCE` through a
-dynamic loop over every `aura_*` table carrying a `tenant_id` column —
+### First, a withdrawal
 
-```sql
-EXECUTE format('ALTER TABLE public.%I FORCE ROW LEVEL SECURITY', r.relname);
-```
+An earlier revision of this file claimed ten `aura_projects_*` tables were `ENABLE`-only. **That was
+false.** It came from grepping for literal `ALTER TABLE … FORCE ROW LEVEL SECURITY`; migration 0163
+applies it through `EXECUTE format(...)` in a loop over every `aura_*` table with a `tenant_id`, so
+the grep saw none of it. The live read settles it: **15 of the 16 `aura_projects_*` tables are
+ENABLE + FORCE with a policy.** Grepping source proves nothing about a database.
 
-— so a grep for the literal statement sees none of it. Tables created *before* 0163 were swept by
-that loop; only tables created *after* it need their own explicit `FORCE`, which is why 0281 writes
-one per table and why the §21 migration genuinely needs one.
+### The finding that survives
 
-**Grepping source for a database property proves nothing about the database.** The posture is a fact
-in `pg_class`, and the audit that replaces this section reads it there.
+| Table | ENABLE | FORCE | policies | Why both controls missed it |
+|---|---|---|---|---|
+| `aura_projects_eot_delay_links` | ✗ | ✗ | 0 | **No `tenant_id` column** |
 
-Two things from the withdrawn entry are worth carrying forward as questions for that audit, neither
-asserted here:
+0163's loop selects on the presence of `tenant_id`, and `rls-fitness.mjs` — the CI gate that
+enforces "enabled, FORCED, at least one policy" — discovers the same way. A table with no
+`tenant_id` is invisible to both, which is the exact blind spot that script's own header warns
+about. It is a link table between EOT claims and delay events, so it is not itself sensitive, but
+it joins two tables that are.
 
-- `aura_projects_eot_delay_links` has **no `tenant_id` column**, so 0163's loop could not have seen
-  it, and no migration attaches a policy to it by name.
-- `apps/api/scripts/rls-fitness.mjs` already enforces "enabled, FORCED, and at least one policy" for
-  every `tenant_id` table as a CI gate, with a small justified allowlist. Whether anything in
-  Projects reaches that allowlist is a fact to read, not to infer.
+Eleven other `aura_*` tables share the shape and were each read rather than assumed:
+
+- **No RLS, and worth a decision:** `aura_access_grants`, `aura_access_roles` — RBAC data, keyed by
+  user rather than tenant. Possibly correct; not verified here, and not assumed either way.
+- **No RLS, and plainly fine:** `aura_migrations`, `aura_environment`, `aura_webhook_deliveries`.
+- **ENABLE + policy, no FORCE — isolating through a parent:** `aura_calendar_adjustments`,
+  `aura_calendar_holidays`, `aura_feature_flags`, `aura_finance_journal_lines`,
+  `aura_projection_status`. `aura_document_versions` does the same and *is* forced, so the pattern
+  is inconsistent rather than absent.
+
+Across the whole schema, the only tables carrying `tenant_id` without ENABLE + FORCE + a policy are
+the five on `rls-fitness.mjs`'s own allowlist — `aura_events`, `aura_service_accounts`,
+`aura_users`, `aura_vector_store`, `aura_webhook_subscriptions`. **No unexplained gap exists among
+tenant-scoped tables.**
+
+### AURA-RLS-002 — the dev and migration connection is a SUPERUSER
+
+`aura` is `rolsuper = true, rolbypassrls = true`. `aura_app` is `NOSUPERUSER, NOBYPASSRLS`, owns no
+table, and is a member of no role, so it cannot `SET ROLE` to the owner.
+
+This is the correction to something stated loosely earlier, and it is sharper than the original
+claim. It is **not** that "local dev connects as the owner, so `ENABLE`-only tables are
+unprotected". It is that local dev connects as a **superuser**, which bypasses RLS entirely —
+neither `ENABLE` nor `FORCE` binds one, because `FORCE` binds a non-superuser *owner*.
+
+Two consequences worth separating, since conflating them is how a vacuous proof gets believed:
+
+- **Policy enforcement for the runtime role.** `aura_app` is a non-owner NOBYPASSRLS role, so
+  `ENABLE` alone already applies the policy to it. This is the control actually doing the work, and
+  it is proven live in section B4 of the report.
+- **Defence against owner execution.** `FORCE` is what would bind a non-superuser owner. Since this
+  deployment's owner is a superuser, FORCE cannot be exercised from here at all — it is
+  defence-in-depth for a posture not currently in use, not today's protection.
+
+The operational rule that follows: **any RLS proof run on the `aura` connection passes vacuously.**
+Isolation must be attacked from `aura_app`, which is what the harness does.
+
+### Remediation — deliberately not done here
+
+A migration adding a claim path for `aura_projects_eot_delay_links`, and a decision on the RBAC
+tables. Folding either into §21 would bury a schema-wide correction inside a feature branch, and the
+link table needs its own isolation decision because it has no `tenant_id` to isolate on — it would
+have to reach through a parent claim the way `aura_document_versions` does.
 
 ---
 

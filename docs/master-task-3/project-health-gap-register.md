@@ -404,17 +404,22 @@ undiagnosed. Closing it needs a cause, not a green run.
 
 ---
 
-## AURA-PM-004 — Schedule saves delete every task row before re-inserting it — data-loss FIXED; FK-enablement OPEN
+## AURA-PM-004 — Schedule saves delete every task row before re-inserting it — RESOLVED
 
-**Severity: data-loss (the window is now closed).** Not a lineage inconvenience. This is a defect in
-code written in §22 Step 2A, surfaced while designing Step 6's foreign keys.
+**Severity: data-loss (the window is closed).** Not a lineage inconvenience. This was a defect in
+code written in §22 Step 2A, surfaced while designing Step 6's foreign keys. **All three steps of the
+recommended fix have now landed (2026-09-11).**
 
-> **Status.** The data-loss window is **CLOSED** — step 1 of the recommended fix below has landed:
-> `create` and `update` now run the schedule-row write and `writeTasks` in one transaction on a
-> single checked-out client, so a mid-save failure rolls the DELETE back with everything else and the
-> prior tasks survive whole. The delete-all-then-reinsert churn (steps 2–3) is **still open** as its
-> own tracked work, because it is what a booking foreign key would need and it overturns migration
-> 0288's proven non-guarantee — a governed change, not a fold-in. Proven by
+> **Status.** RESOLVED. Step 1 closed the data-loss window (one transaction per save). Step 2 replaced
+> the delete-all-then-reinsert with a DIFF: a surviving task is UPSERTED in place, so its row lives
+> across an edit. Step 3 (migration `0290`) added the composite foreign key from a booking onto that
+> row, `ON DELETE RESTRICT` — the reference is no longer an address that may quietly stop resolving,
+> and a task with a live booking cannot be silently removed from the plan (the store translates the
+> refusal into a clear domain error). Proven by
+> `modules/projects/src/postgres-schedule-store.test.ts` (transaction boundary + diff-upsert, in-suite),
+> `modules/projects/src/resource-booking-task-fk.pg-int.test.ts` (a booked task survives an edit, its
+> removal is refused, and frees once the booking is gone — real PostgreSQL under the enforced role),
+> and
 > `modules/projects/src/postgres-schedule-store.test.ts` (transaction boundary, in-suite) and
 > `modules/projects/src/schedule-store-atomicity.pg-int.test.ts` (a failed save preserves every task,
 > against real PostgreSQL under the enforced `aura_app` role — **green** on the rebuilt local
@@ -466,16 +471,17 @@ a crane, and a commitment should outlive the plan that motivated it.
    use, and `TenantScopedPool.connect()` binds the tenant GUC on that client, so it stays RLS-correct
    under the enforced role. (No `TX_RUNNER` threading was needed: the store owns its own transaction,
    which is simpler than routing one through `ScheduleService` and matches the other stores.)
-2. **OPEN.** Replace delete-all with `INSERT ... ON CONFLICT (id) DO UPDATE` for the tasks that
-   survive, plus a targeted `DELETE ... WHERE id <> ALL($ids)` for those the caller actually removed.
-   Requirements and dependencies currently rely on the blanket cascade to clear, so they need
-   explicit deletes scoped to the schedule. This ends the row-lifetime churn so a task that survives
-   an edit keeps its row, not just its id.
-3. **OPEN, and governed.** Only after step 2 is a composite foreign key from bookings onto
-   `(tenant_id, project_id, schedule_id, task_id)` safe, with `ON DELETE RESTRICT` — the correct
-   governance: a task with a crane still committed to it should not be deletable until the booking is
-   released. This reverses the deliberate non-guarantee proven in migration 0288 and the Step 6 DB
-   proof, so it is its own step with its own gate, not a silent schema edit.
+2. ~~Replace delete-all with an upsert + a targeted diff-delete.~~ **DONE.** `writeTasks` clears the
+   child rows (requirements, dependencies — they carry no external FK), UPSERTS each surviving task
+   (`INSERT ... ON CONFLICT (id) DO UPDATE`), then `DELETE ... WHERE id <> ALL($ids)` for those the
+   caller dropped, then re-inserts the child rows. A task that survives an edit keeps its row, not
+   just its id — which is what makes step 3 safe.
+3. ~~Add the composite foreign key from bookings onto the task row.~~ **DONE (governed, migration
+   `0290`).** `(tenant_id, project_id, schedule_id, task_id)` references the tasks' lineage unique key,
+   `ON DELETE RESTRICT` — a task with a crane still committed cannot be removed until the booking is
+   gone; the store's diff-delete catches the `23503` and throws a clear domain error. NULL task keys
+   (a directly made booking) are unaffected. This deliberately reverses the non-guarantee 0288 stated,
+   which is why it landed as its own governed migration with a DB proof rather than a silent edit.
 
 Step 1 has landed, so no schedule save carries the data-loss window any longer. Steps 2–3 remain and
 are worth doing before or alongside the booking foreign key, independent of the §22 API layer.

@@ -123,44 +123,48 @@ describe('PostgresScheduleStore — AURA-PM-004 save atomicity', () => {
     const commit = log.length - 1;
     for (const stmt of [
       'INSERT INTO public.aura_projects_schedules',
-      'DELETE FROM public.aura_projects_schedule_tasks',
-      'INSERT INTO public.aura_projects_schedule_tasks', // the task re-insert (DELETE uses DELETE FROM)
+      'DELETE FROM public.aura_projects_task_requirements',    // child rows cleared first
+      'DELETE FROM public.aura_projects_schedule_dependencies',
+      'INSERT INTO public.aura_projects_schedule_tasks',        // the task UPSERT
+      'DELETE FROM public.aura_projects_schedule_tasks',        // the diff-delete of dropped tasks
       'aura_projects_task_requirements',
-      'aura_projects_schedule_dependencies',
     ]) {
       const at = indexOf(log, stmt);
       expect(at, `"${stmt}" must be issued`).toBeGreaterThan(begin);
       expect(at, `"${stmt}" must be before COMMIT`).toBeLessThan(commit);
     }
 
-    // The DELETE precedes the re-inserts — the whole reason it must not auto-commit on its own.
-    expect(indexOf(log, 'DELETE FROM public.aura_projects_schedule_tasks'))
-      .toBeLessThan(indexOf(log, 'aura_projects_schedule_dependencies'));
+    // Tasks are UPSERTED, not blanket-deleted — a surviving task keeps its row (AURA-PM-004 step 2).
+    expect(has(log, 'ON CONFLICT (id) DO UPDATE'), 'tasks must be upserted').toBe(true);
+    // The diff-delete of dropped tasks runs AFTER the survivors are upserted, and is scoped by id.
+    expect(has(log, 'id <> ALL($2::uuid[])'), 'dropped tasks are diff-deleted, not all deleted').toBe(true);
+    expect(indexOf(log, 'INSERT INTO public.aura_projects_schedule_tasks'))
+      .toBeLessThan(indexOf(log, 'DELETE FROM public.aura_projects_schedule_tasks'));
 
     // Nothing was routed through the auto-committing pool.query path.
     expect(pool.directQueries).toHaveLength(0);
   });
 
-  it('rolls the entire save back — DELETE included — when a later statement fails', async () => {
-    // Fail on the dependency INSERT: it is issued after the DELETE and the task/requirement inserts,
-    // so a store that auto-committed would already have destroyed the task rows by the time it threw.
-    const pool = new FakePool((sql) => sql.includes('aura_projects_schedule_dependencies'));
+  it('rolls the entire save back when a later statement fails', async () => {
+    // Fail on the final dependency INSERT — issued after the task upserts and the diff-delete, so a
+    // store that auto-committed would already have mutated the task rows by the time it threw.
+    const pool = new FakePool((sql) => sql.includes('INSERT INTO public.aura_projects_schedule_dependencies'));
     const store = new PostgresScheduleStore(pool as unknown as Pool);
 
     await expect(store.update(scheduleWithNetwork())).rejects.toThrow(/simulated failure/);
 
     const log = pool.txLog;
-    // The transaction was opened, the DELETE was issued inside it, and then it was rolled back —
-    // never committed. Because the DELETE shares the rolled-back transaction, Postgres discards it,
-    // so the schedule keeps the tasks it had. That is the data-loss the defect caused.
+    // The transaction was opened, the task rows were reconciled inside it, and then it was rolled
+    // back — never committed. Because those writes share the rolled-back transaction, Postgres
+    // discards them, so the schedule keeps exactly the tasks it had.
     expect(has(log, 'BEGIN')).toBe(true);
-    expect(has(log, 'DELETE FROM public.aura_projects_schedule_tasks')).toBe(true);
+    expect(has(log, 'INSERT INTO public.aura_projects_schedule_tasks')).toBe(true); // upsert was issued
     expect(has(log, 'ROLLBACK')).toBe(true);
     expect(has(log, 'COMMIT')).toBe(false);
-    expect(indexOf(log, 'DELETE FROM public.aura_projects_schedule_tasks'))
+    expect(indexOf(log, 'INSERT INTO public.aura_projects_schedule_tasks'))
       .toBeLessThan(indexOf(log, 'ROLLBACK'));
 
-    // The DELETE never took the auto-committing path, and the client was released after the failure.
+    // Nothing took the auto-committing path, and the client was released after the failure.
     expect(pool.directQueries).toHaveLength(0);
     expect(pool.clients[0].released).toBe(true);
   });

@@ -131,28 +131,66 @@ export class PostgresScheduleStore implements ScheduleStore {
   }
 
   /**
-   * Replace the schedule's task rows.
+   * Reconcile the schedule's task rows by DIFF, not delete-and-reinsert (AURA-PM-004 steps 2–3).
    *
-   * Delete-then-insert rather than a diff: the domain has already decided which tasks survive and
-   * what their ids are, so a task absent from `s.tasks` is one the caller deleted. Re-inserting by
-   * the SAME id is what preserves identity across a save — nothing here mints one.
+   * A surviving task is UPSERTED — its ROW is kept and its columns updated in place — so a foreign
+   * key onto it from a booking (migration 0290) stays valid across a plan edit. The previous
+   * delete-all-then-reinsert recreated every row on every save; a task's identity survived but its
+   * row's lifetime did not, so no external reference to a task could ever be enforced. That is what
+   * this ends.
+   *
+   * Requirements and dependencies carry no external foreign key, so they are still fully re-derived
+   * from the aggregate each save — cleared first (which frees a removed task of its child rows), then
+   * re-inserted. Only TASKS need stable rows, and only tasks get the diff.
    */
   private async writeTasks(executor: Pool | PoolClient, s: ProjectSchedule): Promise<void> {
-    await executor.query('DELETE FROM public.aura_projects_schedule_tasks WHERE schedule_id = $1', [s.id]);
+    // Clear the child rows first: they are re-derived below, and clearing them frees any task the
+    // caller dropped of references, so the diff-delete's only remaining barrier is a real booking.
+    await executor.query('DELETE FROM public.aura_projects_task_requirements WHERE schedule_id = $1', [s.id]);
+    await executor.query('DELETE FROM public.aura_projects_schedule_dependencies WHERE schedule_id = $1', [s.id]);
+
     for (const t of s.tasks) {
       await executor.query(
         `INSERT INTO public.aura_projects_schedule_tasks
            (id, tenant_id, project_id, schedule_id, name, planned_start, planned_end,
             baseline_start, baseline_end, actual_start, actual_end, percent_complete,
             duration_working_days, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+         ON CONFLICT (id) DO UPDATE SET
+           name = EXCLUDED.name,
+           planned_start = EXCLUDED.planned_start, planned_end = EXCLUDED.planned_end,
+           baseline_start = EXCLUDED.baseline_start, baseline_end = EXCLUDED.baseline_end,
+           actual_start = EXCLUDED.actual_start, actual_end = EXCLUDED.actual_end,
+           percent_complete = EXCLUDED.percent_complete,
+           duration_working_days = EXCLUDED.duration_working_days,
+           updated_at = now()`,
         [t.id, s.tenantId, s.projectId, s.id, t.name, t.plannedStart, t.plannedEnd,
          t.baselineStart, t.baselineEnd, t.actualStart, t.actualEnd, t.percentComplete,
          t.durationWorkingDays],
       );
     }
-    // Requirements are written after their task, for the same composite-FK reason as the edges
-    // below. Deleting the tasks above cascaded the old requirements away with them.
+
+    // Remove the tasks the caller dropped — those no longer in the aggregate. The booking foreign
+    // key's ON DELETE RESTRICT (0290) refuses this when a task still has a live commitment: a task
+    // with a crane booked cannot be silently removed from the plan. The address-only reference could
+    // not say that; now the database does. The refusal is translated to a clear domain error.
+    const survivingIds = s.tasks.map((t) => t.id);
+    try {
+      await executor.query(
+        'DELETE FROM public.aura_projects_schedule_tasks WHERE schedule_id = $1 AND id <> ALL($2::uuid[])',
+        [s.id, survivingIds],
+      );
+    } catch (err) {
+      if ((err as { code?: string }).code === '23503') {
+        throw new Error(
+          'a task in this plan cannot be removed while it has an active resource booking — release the booking first',
+        );
+      }
+      throw err;
+    }
+
+    // Requirements and edges are inserted AFTER the tasks they reference, because the composite
+    // foreign keys require both endpoints to exist.
     for (const t of s.tasks) {
       for (const req of t.requirements) {
         await executor.query(
@@ -164,8 +202,6 @@ export class PostgresScheduleStore implements ScheduleStore {
         );
       }
     }
-    // Edges are written AFTER the tasks they point at, because the composite foreign keys require
-    // both endpoints to exist. Deleting the tasks above already cascaded the old edges away.
     for (const d of s.dependencies) {
       await executor.query(
         `INSERT INTO public.aura_projects_schedule_dependencies

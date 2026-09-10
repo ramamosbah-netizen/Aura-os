@@ -8,6 +8,7 @@ import {
   externalCommitmentsFor,
   resolveResourceLoad,
 } from './resource-facts';
+import { workingCalendarOf } from './working-calendar';
 
 /**
  * §22 Step 7 — the cross-project capacity engine, proven at the unit boundary.
@@ -174,6 +175,43 @@ describe('resolveResourceLoad — the arithmetic underneath', () => {
     const b = booking({ projectId: PROJECT_A, from: TUE, to: TUE });
     const report = assessResourceAcrossProjects(CRANE, [capacity({ quantity: 1 })], [a, b], { from: TUE, to: TUE });
     expect(report.projectsInvolved).toEqual([PROJECT_A, PROJECT_B]); // sorted, regardless of input order
+  });
+});
+
+describe('the working calendar (Step 8) restricts the engine to working days', () => {
+  // Week of 2026-03-09: Thu 12, Fri 13, Sat 14. Fri/Sat are the Gulf weekend.
+  const THU = '2026-03-12';
+  const FRI = '2026-03-13';
+  const SAT = '2026-03-14';
+  const weekend = workingCalendarOf([FRI, SAT]);
+
+  it('a clash that only overlaps on a non-working day is not a conflict', () => {
+    const a = booking({ projectId: PROJECT_A, from: THU, to: FRI });
+    const b = booking({ projectId: PROJECT_B, from: FRI, to: SAT });
+    const windows = [capacity()];
+    const interval = { from: THU, to: SAT };
+
+    // Calendar-blind: they overlap on Friday and that reads as a conflict.
+    expect(assessResourceAcrossProjects(CRANE, windows, [a, b], interval).feasibility).toBe('CONFLICTED');
+
+    // With the weekend resolved in, Friday is not worked, so there is no real clash.
+    const withCal = assessResourceAcrossProjects(CRANE, windows, [a, b], interval, weekend);
+    expect(withCal.feasibility).toBe('AVAILABLE');
+    expect(withCal.conflictDays).toEqual([]);
+    expect(withCal.days.map((d) => d.day)).toEqual([THU]); // only the working day is assessed
+  });
+
+  it('a weekend does not drag a booking to UNKNOWN when capacity is only declared on working days', () => {
+    const a = booking({ projectId: PROJECT_A, from: THU, to: SAT });
+    const capThuOnly = [capacity({ from: THU, to: THU, quantity: 1 })];
+
+    // Calendar-blind: Fri and Sat have no declared capacity, so the booking reads as UNKNOWN.
+    const blind = assessBooking(a, dayLoadsForBooking(a, capThuOnly, [a]));
+    expect(blind.feasibility).toBe('UNKNOWN');
+
+    // With the weekend resolved in, only Thursday is expected, and it fits.
+    const withCal = assessBooking(a, dayLoadsForBooking(a, capThuOnly, [a], weekend), weekend);
+    expect(withCal.feasibility).toBe('AVAILABLE');
   });
 });
 

@@ -5,9 +5,9 @@ import {
   type DayLoad,
   type ResourceBooking,
   bookingCovers,
-  bookingDays,
   bookingIsHeld,
 } from './resource-booking';
+import { type WorkingCalendar, ALL_DAYS_WORKING, workingDaysInRange } from './working-calendar';
 // `ResourceFeasibility` is defined once, in `schedule-planning.ts`, and imported here — a second
 // declaration would be a second answer to a question §22 keeps to one.
 import type { ExternalCommitment, ResourceFeasibility } from './schedule-planning';
@@ -152,16 +152,22 @@ const sum = (bookings: readonly ResourceBooking[]): number =>
  *
  * PURE. `bookings` is every held booking for the resource, from every project — the caller (a store
  * behind `ResourceFactsStore`) does the cross-project query; this function does the arithmetic.
+ *
+ * `calendar` (Step 8) restricts the assessment to WORKING days: a crane double-booked on a Friday
+ * nobody works is not a conflict, the same reason the planner does not place task work on non-working
+ * days. Supplied as data, defaulting to every-day-working so a caller with no calendar is unchanged.
  */
 export function resolveResourceLoad(
   resource: ResourceRef,
   windows: readonly ResourceCapacity[],
   bookings: readonly ResourceBooking[],
   interval: { from: string; to: string },
+  calendar: WorkingCalendar = ALL_DAYS_WORKING,
 ): ResourceLoadDay[] {
   const myWindows = windows.filter((w) => sameResource(w.resource, resource));
   const held = heldForResource(bookings, resource);
-  return bookingDays(interval.from, interval.to).map((day) => loadOnDay(resource, myWindows, held, day));
+  return workingDaysInRange(interval.from, interval.to, calendar)
+    .map((day) => loadOnDay(resource, myWindows, held, day));
 }
 
 /**
@@ -177,8 +183,9 @@ export function assessResourceAcrossProjects(
   windows: readonly ResourceCapacity[],
   bookings: readonly ResourceBooking[],
   interval: { from: string; to: string },
+  calendar: WorkingCalendar = ALL_DAYS_WORKING,
 ): ResourceConflictReport {
-  const days = resolveResourceLoad(resource, windows, bookings, interval);
+  const days = resolveResourceLoad(resource, windows, bookings, interval, calendar);
   const conflictDays = days.filter((d) => d.overBy !== null).map((d) => d.day);
   const projectsInvolved = [
     ...new Set(days.flatMap((d) => d.contributors.map((c) => c.projectId))),
@@ -224,9 +231,11 @@ export function dayLoadsForBooking(
   booking: Pick<ResourceBooking, 'resource' | 'from' | 'to'>,
   windows: readonly ResourceCapacity[],
   bookings: readonly ResourceBooking[],
+  calendar: WorkingCalendar = ALL_DAYS_WORKING,
 ): DayLoad[] {
-  return resolveResourceLoad(booking.resource, windows, bookings, { from: booking.from, to: booking.to })
-    .map((d) => ({ day: d.day, capacity: d.capacity, committed: d.committed, unit: d.unit }));
+  return resolveResourceLoad(
+    booking.resource, windows, bookings, { from: booking.from, to: booking.to }, calendar,
+  ).map((d) => ({ day: d.day, capacity: d.capacity, committed: d.committed, unit: d.unit }));
 }
 
 /**

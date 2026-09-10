@@ -1,5 +1,6 @@
 import { type Id, newId } from '@aura/shared';
 import { type ResourceRef, type ResourceUnit, isResourceUnit, toResourceRef } from './resource-ref';
+import { type WorkingCalendar, ALL_DAYS_WORKING, eachDay } from './working-calendar';
 
 /**
  * §22 Step 6 — bookings: a project's committed claim on capacity.
@@ -120,15 +121,11 @@ export interface DayAvailability {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Every date in an inclusive range. Calendar days: which of them are working days is Step 8. */
-export function bookingDays(from: string, to: string): string[] {
-  const out: string[] = [];
-  const end = new Date(`${to}T00:00:00Z`).getTime();
-  for (const d = new Date(`${from}T00:00:00Z`); d.getTime() <= end; d.setUTCDate(d.getUTCDate() + 1)) {
-    out.push(d.toISOString().slice(0, 10));
-  }
-  return out;
-}
+/**
+ * Every CALENDAR date in an inclusive range. Which of them are working days is a calendar's answer
+ * (Step 8) — `assessBooking` takes a `WorkingCalendar` and asks; this stays the raw enumeration.
+ */
+export const bookingDays = (from: string, to: string): string[] => eachDay(from, to);
 
 function validate(input: NewResourceBooking): { resource: ResourceRef; quantity: number } {
   const resource = toResourceRef(input.resource);
@@ -305,15 +302,26 @@ export interface DayLoad {
  * included — so this stays a pure function, for the same reason the planner is one: a rule that
  * queries is a rule you cannot test at every edge.
  *
+ * `calendar` is the working calendar (Step 8), also supplied as data. Only WORKING days are expected
+ * to carry a load: a non-working day the caller did not resolve is not "unknown", it is a day nobody
+ * works, and counting it as unknown would drag an otherwise clean booking to UNKNOWN over a weekend.
+ * The default is every-day-working, so a caller that passes no calendar behaves exactly as before.
+ *
  * A released booking is not assessed. It holds nothing, so it can conflict with nothing, and
  * reporting it would put a resolved problem back on a planner's screen.
  */
-export function assessBooking(b: ResourceBooking, days: readonly DayLoad[]): BookingAssessment {
+export function assessBooking(
+  b: ResourceBooking,
+  days: readonly DayLoad[],
+  calendar: WorkingCalendar = ALL_DAYS_WORKING,
+): BookingAssessment {
   if (b.status === 'released') {
     return { feasibility: 'AVAILABLE', conflictDays: [], becameInfeasible: false };
   }
-  const covered = days.filter((d) => bookingCovers(b, d.day));
-  const missing = bookingDays(b.from, b.to).filter((d) => !covered.some((c) => c.day === d));
+  const covered = days.filter((d) => bookingCovers(b, d.day) && calendar.isWorkingDay(d.day));
+  // Only working days are expected. A non-working day is not missing information — it is not worked.
+  const expected = bookingDays(b.from, b.to).filter((d) => calendar.isWorkingDay(d));
+  const missing = expected.filter((d) => !covered.some((c) => c.day === d));
 
   // Units that disagree are not a smaller number or a larger one; they are not comparable at all.
   // Adding 4 persons to 40 hours produces a figure that means nothing, and the gate forbids the

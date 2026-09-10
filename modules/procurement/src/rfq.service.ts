@@ -13,6 +13,8 @@ import {
 } from './domain/rfq';
 import { RFQ_STORE, type RfqFilter, type RfqStore } from './rfq-store';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestStore } from './purchase-request-store';
+import { PurchaseOrderService } from './purchase-order.service';
+import type { PurchaseOrder } from './domain/purchase-order';
 
 /**
  * RFQ service — the sourcing step (PR → RFQ → quotes → award → PO). Owns
@@ -33,6 +35,10 @@ export class RfqService {
     // Needed only to resolve an RFQ to a project: an RFQ carries `prId`, never `projectId`.
     // Same module, so no ADR-0004 edge — Procurement reading its own request register.
     @Optional() @Inject(PURCHASE_REQUEST_STORE) private readonly requests: PurchaseRequestStore | null = null,
+    // Awarding an RFQ raises the PO that closes the sourcing chain (PROC-GAP-03). Same module, so no
+    // ADR-0004 edge. Optional so an RFQ test without the PO service still runs; bound in the module,
+    // it is what makes a competitively sourced spend trace back to the RFQ and PR it came from.
+    @Optional() @Inject(PurchaseOrderService) private readonly purchaseOrders: PurchaseOrderService | null = null,
   ) {}
 
   async create(input: NewRfq): Promise<Rfq> {
@@ -99,8 +105,11 @@ export class RfqService {
     return quote;
   }
 
-  /** Award the RFQ to a quote: the winner is marked awarded, the rest rejected, the RFQ closed-out. */
-  async award(rfqId: Id, quoteId: Id, actorId?: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[] }> {
+  /**
+   * Award the RFQ to a quote: the winner is marked awarded, the rest rejected, the RFQ closed-out —
+   * and a purchase order is raised from the winning quote, closing the sourcing chain (PROC-GAP-03).
+   */
+  async award(rfqId: Id, quoteId: Id, actorId?: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[]; po: PurchaseOrder | null }> {
     const rfq = assertSameTenant(await this.store.get(rfqId), this.tenant?.boundTenantId(), 'RFQ', rfqId);
     const quotes = await this.store.listQuotes(rfqId);
     const winner = quotes.find((q) => q.id === quoteId);
@@ -113,6 +122,26 @@ export class RfqService {
     const updated: Rfq = { ...rfq, status: 'awarded' };
     await this.store.update(updated);
 
+    // Raise the PO from the winning quote, carrying the lineage the chain lacked. The RFQ knows only
+    // its purchase request; the project comes from that request's snapshot, not a cross-module join.
+    let po: PurchaseOrder | null = null;
+    if (this.purchaseOrders) {
+      const pr = rfq.prId && this.requests ? await this.requests.get(rfq.prId) : null;
+      po = await this.purchaseOrders.create({
+        tenantId: rfq.tenantId,
+        companyId: rfq.companyId,
+        title: `PO — ${rfq.title}`,
+        supplierName: winner.supplierName,
+        projectId: pr?.projectId ?? null,
+        projectName: pr?.projectName ?? null,
+        rfqId: rfq.id,
+        prId: rfq.prId ?? null,
+        value: winner.amount,
+        status: 'draft',
+        createdBy: actorId ?? null,
+      });
+    }
+
     await this.events.append([
       makeEvent({
         type: RFQ_EVENT.rfqAwarded,
@@ -122,12 +151,12 @@ export class RfqService {
         aggregateType: 'procurement.rfq',
         aggregateId: rfq.id,
         // quoteId lets the tendering estimate-sourcing reactor restamp components sourced from
-        // this RFQ to the awarded price (R5 / G-P1-4).
-        payload: { title: rfq.title, quoteId: winner.id, supplier: winner.supplierName, amount: winner.amount },
+        // this RFQ to the awarded price (R5 / G-P1-4). poId records the spend the award raised.
+        payload: { title: rfq.title, quoteId: winner.id, supplier: winner.supplierName, amount: winner.amount, poId: po?.id ?? null },
       }),
     ]);
-    this.logger.log(`RFQ ${rfq.title} (${rfq.id}) awarded to ${winner.supplierName} @ ${winner.amount}`);
-    return { rfq: updated, quotes: await this.store.listQuotes(rfqId) };
+    this.logger.log(`RFQ ${rfq.title} (${rfq.id}) awarded to ${winner.supplierName} @ ${winner.amount}${po ? ` → PO ${po.id}` : ''}`);
+    return { rfq: updated, quotes: await this.store.listQuotes(rfqId), po };
   }
 
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */

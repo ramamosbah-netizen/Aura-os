@@ -20,6 +20,13 @@ export interface PurchaseOrder {
   /** The project this PO is spent against — reference + snapshot, not a join. */
   projectId: Id | null;
   projectName: string | null;
+  /**
+   * Sourcing lineage (PROC-GAP-03). The RFQ this PO was awarded from, and the purchase request that
+   * RFQ answered — so the chain PR → RFQ → PO → GRN is traceable end to end. Both null for a PO
+   * raised directly (no competitive sourcing), which stays valid.
+   */
+  rfqId: Id | null;
+  prId: Id | null;
   /** The CBS cost line this PO is coded to — where its committed cost accrues (source of truth). */
   cbsNodeId: Id | null;
   /** The BOQ (measured) item this PO orders against — where its ORDERED quantity accrues on the
@@ -45,6 +52,8 @@ export interface NewPurchaseOrder {
   supplierName?: string | null;
   projectId?: Id | null;
   projectName?: string | null;
+  rfqId?: Id | null;
+  prId?: Id | null;
   cbsNodeId?: Id | null;
   boqItemId?: Id | null;
   orderedQuantity?: number | null;
@@ -67,6 +76,8 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     supplierName: input.supplierName?.trim() || null,
     projectId: input.projectId ?? null,
     projectName: input.projectName ?? null,
+    rfqId: input.rfqId ?? null,
+    prId: input.prId ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
     boqItemId: input.boqItemId ?? null,
     orderedQuantity: input.orderedQuantity != null ? Number(input.orderedQuantity) : null,

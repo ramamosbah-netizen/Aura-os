@@ -417,7 +417,9 @@ code written in §22 Step 2A, surfaced while designing Step 6's foreign keys.
 > 0288's proven non-guarantee — a governed change, not a fold-in. Proven by
 > `modules/projects/src/postgres-schedule-store.test.ts` (transaction boundary, in-suite) and
 > `modules/projects/src/schedule-store-atomicity.pg-int.test.ts` (a failed save preserves every task,
-> against real PostgreSQL under the enforced role; gated on `SCHEDULE_PG_TEST_URL`).
+> against real PostgreSQL under the enforced `aura_app` role — **green** on the rebuilt local
+> disposable database, 2026-09-10; gated on `SCHEDULE_PG_TEST_URL` + `SCHEDULE_PG_OWNER_URL`, the
+> latter seeding the fixture project the task RLS policy requires).
 
 **The defect.** `PostgresScheduleStore.writeTasks` (`modules/projects/src/postgres-schedule-store.ts`)
 begins every save with

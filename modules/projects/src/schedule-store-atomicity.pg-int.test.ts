@@ -24,10 +24,15 @@ import type { ScheduleDependency } from './domain/schedule-network';
  */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 const URL = process.env.SCHEDULE_PG_TEST_URL;
-const run = URL ? describe : describe.skip;
+// The task RLS policy requires a real aura_projects_projects row for the schedule's project, so the
+// fixture project is seeded through the OWNER role (which bypasses RLS). Point SCHEDULE_PG_OWNER_URL
+// at the migration/owner role (the local database's `aura`).
+const OWNER_URL = process.env.SCHEDULE_PG_OWNER_URL;
+const run = URL && OWNER_URL ? describe : describe.skip;
 
 run('PostgresScheduleStore — a failed save preserves the prior tasks (AURA-PM-004)', () => {
   let rawPool: Pool;
+  let ownerPool: Pool;
   let store: PostgresScheduleStore;
   const tenant = new TenantContext();
   const tenantId = `pm004-${Date.now()}`;
@@ -49,17 +54,25 @@ run('PostgresScheduleStore — a failed save preserves the prior tasks (AURA-PM-
     expect(current.rolsuper, `role ${current.rolname} must not be superuser`).toBe(false);
     expect(current.rolbypassrls, `role ${current.rolname} must not bypass RLS`).toBe(false);
 
+    // Seed the fixture project through the owner role — the task RLS policy requires it to exist.
+    ownerPool = new Pool({ connectionString: OWNER_URL });
+    await ownerPool.query(
+      `INSERT INTO public.aura_projects_projects (id, tenant_id, title) VALUES ($1, $2, $3)
+       ON CONFLICT (id) DO NOTHING`,
+      [projectId, tenantId, 'PM-004 live proof'],
+    );
+
     store = new PostgresScheduleStore(new TenantScopedPool(rawPool, tenant) as unknown as Pool);
   });
 
   afterAll(async () => {
-    if (!rawPool) return;
-    const c = await rawPool.connect();
-    await c.query("SELECT set_config('app.current_tenant_id', $1, false)", [tenantId]);
-    // The schedule cascades to its tasks, requirements and dependencies.
-    await c.query('DELETE FROM public.aura_projects_schedules WHERE id = $1', [scheduleId]).catch(() => undefined);
-    c.release();
-    await rawPool.end();
+    // Clean up through the owner: the schedule cascades to tasks/requirements/dependencies, then the project.
+    if (ownerPool) {
+      await ownerPool.query('DELETE FROM public.aura_projects_schedules WHERE id = $1', [scheduleId]).catch(() => undefined);
+      await ownerPool.query('DELETE FROM public.aura_projects_projects WHERE id = $1', [projectId]).catch(() => undefined);
+      await ownerPool.end();
+    }
+    if (rawPool) await rawPool.end();
   });
 
   it('rolls back a save whose dependency insert violates the task FK, keeping every task', async () => {

@@ -1144,6 +1144,7 @@ export class ProjectsController {
   // separate, governed act that promotes a proposal to the current plan (DG-22.4); a run never does.
 
   /** Run the solver against resolved facts and persist a proposal. Returns it and what it would change. */
+  @Permissions('projects.schedule.plan')
   @Post('schedules/:projectId/planning-runs')
   async runPlanning(@Param('projectId') projectId: string): Promise<PlanningRunView> {
     const ctx = this.tenant.get();
@@ -1151,12 +1152,14 @@ export class ProjectsController {
   }
 
   /** A schedule's runs, newest first. */
+  @Permissions('projects.schedule.read')
   @Get('schedules/:projectId/planning-runs')
   listPlanningRuns(@Param('projectId') projectId: string): Promise<PlanningRun[]> {
     return this.schedule.listRuns(this.tenant.get().tenantId, projectId);
   }
 
   /** One run and the change accepting it would make to the current plan. */
+  @Permissions('projects.schedule.read')
   @Get('planning-runs/:runId')
   getPlanningRun(@Param('runId') runId: string): Promise<PlanningRunView> {
     return this.schedule.getRun(this.tenant.get().tenantId, runId);
@@ -1166,7 +1169,12 @@ export class ProjectsController {
    * Promote a proposal to the current plan. A NOT-established proposal (a known conflict, or
    * something unjudged) requires `acknowledgeReason` — the same governance a booking's over-capacity
    * commitment carries. The domain refuses it otherwise, surfacing a 400 through the taxonomy.
+   *
+   * A DISTINCT permission from `plan`: running a proposal and PROMOTING one to the current plan are
+   * different privileges, so a narrower role can be granted the first without the second. Both fall
+   * under a `projects.*` grant, so the delivery roles already hold them.
    */
+  @Permissions('projects.schedule.accept')
   @Post('planning-runs/:runId/accept')
   async acceptPlanningRun(
     @Param('runId') runId: string,
@@ -1179,7 +1187,8 @@ export class ProjectsController {
     });
   }
 
-  /** Reject a proposal outright. The reason is required. */
+  /** Reject a proposal outright. The reason is required. Part of planning, not the consequential promote. */
+  @Permissions('projects.schedule.plan')
   @Post('planning-runs/:runId/discard')
   async discardPlanningRun(
     @Param('runId') runId: string,

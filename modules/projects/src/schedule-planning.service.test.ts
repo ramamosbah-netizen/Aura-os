@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { EventStore } from '@aura/core';
+import type { EventStore, AuditService } from '@aura/core';
 import { ScheduleService } from './schedule.service';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
@@ -35,6 +35,7 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
   let facts: InMemoryResourceFactsStore;
   let runs: InMemoryPlanningRunStore;
   let events: EventStore;
+  let audit: AuditService;
   let svc: ScheduleService;
 
   const twoContendingTasks = () => ({
@@ -52,7 +53,8 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
     facts = new InMemoryResourceFactsStore();
     runs = new InMemoryPlanningRunStore();
     events = { append: vi.fn(async () => undefined), appendWithClient: vi.fn(async () => undefined) } as unknown as EventStore;
-    svc = new ScheduleService(store, events, facts, runs, null);
+    audit = { log: vi.fn(async () => undefined) } as unknown as AuditService;
+    svc = new ScheduleService(store, events, facts, runs, null, audit);
   });
 
   it('runs the solver against resolved capacity, persists a proposal, and moves no stored date', async () => {
@@ -133,5 +135,24 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
     await expect(svc.runPlanning(TENANT, PROJECT)).rejects.toThrow(/no schedule/);
     await seed(makeProjectSchedule({ tenantId: TENANT, projectId: PROJECT }));
     await expect(svc.runPlanning(TENANT, PROJECT)).rejects.toThrow(/empty schedule/);
+  });
+
+  it('writes an audit entry for each governed act (run, accept, discard)', async () => {
+    await seed(makeProjectSchedule(twoContendingTasks()));
+    facts.addCapacity(capacity(1));
+    const logged = (action: string) =>
+      (audit.log as ReturnType<typeof vi.fn>).mock.calls.some(
+        (c) => c[3] === 'projects' && c[4] === 'planning_run' && c[6] === action,
+      );
+
+    const { run } = await svc.runPlanning(TENANT, PROJECT);
+    expect(logged('ran')).toBe(true);
+
+    await svc.acceptRun(TENANT, run.id, { acceptedBy: 'pm-1' });
+    expect(logged('accepted')).toBe(true);
+
+    const { run: r2 } = await svc.runPlanning(TENANT, PROJECT);
+    await svc.discardRun(TENANT, r2.id, 'superseded by a re-plan');
+    expect(logged('discarded')).toBe(true);
   });
 });

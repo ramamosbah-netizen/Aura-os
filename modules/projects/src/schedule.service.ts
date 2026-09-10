@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, PG_POOL } from '@aura/core';
+import { EVENT_STORE, type EventStore, PG_POOL, AuditService } from '@aura/core';
 import {
   SCHEDULE_EVENT,
   type ProjectSchedule,
@@ -47,6 +47,9 @@ export class ScheduleService {
     // Present in Postgres mode; when bound, acceptance persists atomically via `persistAcceptedPlan`.
     // Absent in in-memory/dev mode, where the store updates are applied sequentially.
     @Optional() @Inject(PG_POOL) private readonly pool: Pool | null = null,
+    // The immutable audit trail for the governed acts — run, accept, discard (Step 13). Optional for
+    // the same reason every other seam is: it is a no-op (logs to memory) until Postgres is bound.
+    @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
@@ -163,6 +166,11 @@ export class ScheduleService {
         payload: { projectId, runId: run.id, feasibility: run.proposal.feasibility, coverage: run.proposal.coverage },
       }),
     ]);
+    await this.audit?.log(
+      tenantId, schedule.companyId, opts.ranBy ?? null, 'projects', 'planning_run', run.id, 'ran',
+      { feasibility: run.proposal.feasibility, coverage: run.proposal.coverage, established: run.proposal.established },
+      { projectId, scheduleId: schedule.id, source: 'projects.schedule.planning_ran' },
+    );
     return { run, comparison: compareProposalToCurrent(schedule, run.proposal) };
   }
 
@@ -217,6 +225,11 @@ export class ScheduleService {
         },
       }),
     ]);
+    await this.audit?.log(
+      tenantId, schedule.companyId, decision.acceptedBy ?? null, 'projects', 'planning_run', runId, 'accepted',
+      { established: run.proposal.established, acknowledgeReason: accepted.run.acceptanceReason },
+      { projectId: schedule.projectId, scheduleId: schedule.id, source: 'projects.schedule.proposal_accepted' },
+    );
     this.logger.log(`Proposal ${runId} accepted for project ${schedule.projectId}`);
     return { schedule: accepted.schedule, run: accepted.run };
   }
@@ -234,6 +247,11 @@ export class ScheduleService {
         payload: { runId, reason: discarded.discardedReason },
       }),
     ]);
+    await this.audit?.log(
+      tenantId, null, null, 'projects', 'planning_run', runId, 'discarded',
+      { reason: discarded.discardedReason },
+      { projectId: run.projectId, scheduleId: run.scheduleId, source: 'projects.schedule.proposal_discarded' },
+    );
     return discarded;
   }
 

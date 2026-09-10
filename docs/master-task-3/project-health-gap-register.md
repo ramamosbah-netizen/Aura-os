@@ -404,10 +404,20 @@ undiagnosed. Closing it needs a cause, not a green run.
 
 ---
 
-## AURA-PM-004 — Schedule saves delete every task row before re-inserting it — OPEN, data-loss
+## AURA-PM-004 — Schedule saves delete every task row before re-inserting it — data-loss FIXED; FK-enablement OPEN
 
-**Severity: data-loss.** Not a lineage inconvenience. This is a defect in code written in §22 Step
-2A, surfaced while designing Step 6's foreign keys.
+**Severity: data-loss (the window is now closed).** Not a lineage inconvenience. This is a defect in
+code written in §22 Step 2A, surfaced while designing Step 6's foreign keys.
+
+> **Status.** The data-loss window is **CLOSED** — step 1 of the recommended fix below has landed:
+> `create` and `update` now run the schedule-row write and `writeTasks` in one transaction on a
+> single checked-out client, so a mid-save failure rolls the DELETE back with everything else and the
+> prior tasks survive whole. The delete-all-then-reinsert churn (steps 2–3) is **still open** as its
+> own tracked work, because it is what a booking foreign key would need and it overturns migration
+> 0288's proven non-guarantee — a governed change, not a fold-in. Proven by
+> `modules/projects/src/postgres-schedule-store.test.ts` (transaction boundary, in-suite) and
+> `modules/projects/src/schedule-store-atomicity.pg-int.test.ts` (a failed save preserves every task,
+> against real PostgreSQL under the enforced role; gated on `SCHEDULE_PG_TEST_URL`).
 
 **The defect.** `PostgresScheduleStore.writeTasks` (`modules/projects/src/postgres-schedule-store.ts`)
 begins every save with
@@ -447,15 +457,23 @@ a crane, and a commitment should outlive the plan that motivated it.
 
 **Recommended fix**, as its own step with its own evidence, not folded into a §22 step:
 
-1. Thread `TX_RUNNER` through `ScheduleService` into `ScheduleStore.create`/`update` so a save is
-   one transaction. This alone removes the data-loss window.
-2. Replace delete-all with `INSERT ... ON CONFLICT (id) DO UPDATE` for the tasks that survive, plus
-   a targeted `DELETE ... WHERE id <> ALL($ids)` for those the caller actually removed. Requirements
-   and dependencies currently rely on the blanket cascade to clear, so they need explicit deletes
-   scoped to the schedule.
-3. Only then is a composite foreign key from bookings onto `(tenant_id, project_id, schedule_id,
-   task_id)` safe, with `ON DELETE RESTRICT` — which is the correct governance: a task with a crane
-   still committed to it should not be deletable until the booking is released.
+1. ~~Thread a transaction through the save so it is atomic. This alone removes the data-loss window.~~
+   **DONE.** `PostgresScheduleStore.create`/`update` now check out one client, `BEGIN`, write the
+   schedule row and call `writeTasks` on that client, then `COMMIT` — rolling back whole on any
+   failure. It follows the same self-managed-transaction pattern the finance journal/document stores
+   use, and `TenantScopedPool.connect()` binds the tenant GUC on that client, so it stays RLS-correct
+   under the enforced role. (No `TX_RUNNER` threading was needed: the store owns its own transaction,
+   which is simpler than routing one through `ScheduleService` and matches the other stores.)
+2. **OPEN.** Replace delete-all with `INSERT ... ON CONFLICT (id) DO UPDATE` for the tasks that
+   survive, plus a targeted `DELETE ... WHERE id <> ALL($ids)` for those the caller actually removed.
+   Requirements and dependencies currently rely on the blanket cascade to clear, so they need
+   explicit deletes scoped to the schedule. This ends the row-lifetime churn so a task that survives
+   an edit keeps its row, not just its id.
+3. **OPEN, and governed.** Only after step 2 is a composite foreign key from bookings onto
+   `(tenant_id, project_id, schedule_id, task_id)` safe, with `ON DELETE RESTRICT` — the correct
+   governance: a task with a crane still committed to it should not be deletable until the booking is
+   released. This reverses the deliberate non-guarantee proven in migration 0288 and the Step 6 DB
+   proof, so it is its own step with its own gate, not a silent schema edit.
 
-Until step 1 lands, every schedule save carries the data-loss window. It is worth doing before the
-§22 API layer, which will multiply the number of saves.
+Step 1 has landed, so no schedule save carries the data-loss window any longer. Steps 2–3 remain and
+are worth doing before or alongside the booking foreign key, independent of the §22 API layer.

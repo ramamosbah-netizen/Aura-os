@@ -85,21 +85,49 @@ function rowTo(r: Row, tasks: ScheduleTask[], dependencies: ScheduleDependency[]
 export class PostgresScheduleStore implements ScheduleStore {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * One transaction per save (AURA-PM-004).
+   *
+   * `writeTasks` deletes every task row before re-inserting it, and that DELETE cascades the
+   * schedule's requirements and dependencies with it. Run on the pool, each statement auto-commits:
+   * the DELETE lands alone, so a failure or crash before the re-inserts leaves the schedule with no
+   * tasks — permanently, on an ordinary edit. Wrapping the row write and `writeTasks` in one
+   * transaction makes the save atomic: it either replaces the tasks whole or leaves the prior ones
+   * untouched. Nothing partial survives.
+   */
+  private async tx(fn: (client: PoolClient) => Promise<void>): Promise<void> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await fn(client);
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
   async create(s: ProjectSchedule): Promise<void> {
-    await this.pool.query(
-      `INSERT INTO public.aura_projects_schedules (${COLS}, tasks) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
-      [s.id, s.tenantId, s.companyId, s.projectId, s.projectName, s.baselineSetAt, s.createdBy,
-       s.createdAt, s.updatedAt, JSON.stringify(s.tasks)],
-    );
-    await this.writeTasks(this.pool, s);
+    await this.tx(async (client) => {
+      await client.query(
+        `INSERT INTO public.aura_projects_schedules (${COLS}, tasks) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
+        [s.id, s.tenantId, s.companyId, s.projectId, s.projectName, s.baselineSetAt, s.createdBy,
+         s.createdAt, s.updatedAt, JSON.stringify(s.tasks)],
+      );
+      await this.writeTasks(client, s);
+    });
   }
 
   async update(s: ProjectSchedule): Promise<void> {
-    await this.pool.query(
-      `UPDATE public.aura_projects_schedules SET baseline_set_at=$2, updated_at=$3, tasks=$4::jsonb WHERE id=$1`,
-      [s.id, s.baselineSetAt, s.updatedAt, JSON.stringify(s.tasks)],
-    );
-    await this.writeTasks(this.pool, s);
+    await this.tx(async (client) => {
+      await client.query(
+        `UPDATE public.aura_projects_schedules SET baseline_set_at=$2, updated_at=$3, tasks=$4::jsonb WHERE id=$1`,
+        [s.id, s.baselineSetAt, s.updatedAt, JSON.stringify(s.tasks)],
+      );
+      await this.writeTasks(client, s);
+    });
   }
 
   /**

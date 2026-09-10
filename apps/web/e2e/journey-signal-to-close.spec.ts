@@ -84,6 +84,85 @@ test('the pre-award spine: a radar signal becomes a qualified opportunity with a
   expect(selfApprove.status(), 'the preparer must not approve their own quotation (SoD)').toBe(403);
 });
 
+/**
+ * The direct-sale middle, walked to a contract — the one commercial path the demo seed does not
+ * exercise (it uses tenders). Driven against the API DIRECTLY, because it needs TWO principals: the
+ * preparer cannot approve their own quotation (segregation of duties), and a governed quotation's
+ * approval is blocked until its evidence-readiness checklist is settled. Both are real gates; the
+ * test satisfies them the honest way — a second permissioned approver, and waived evidence rows —
+ * rather than relaxing the rule.
+ *
+ * Skips cleanly when the API base or the second actor is not configured for this run.
+ */
+const API_BASE = process.env.AURA_API_URL;
+const PASSWORD = process.env.E2E_PASSWORD ?? 'e2e-password';
+const CHECKER = process.env.E2E_ALT_USERNAME; // a second principal, distinct from the session user
+
+async function apiLogin(ctx: import('@playwright/test').APIRequestContext, username: string): Promise<string> {
+  const r = await ctx.post('/api/v1/auth/login', { data: { username, password: PASSWORD } });
+  expect(r.ok(), `login ${username} must succeed`).toBe(true);
+  return ((await r.json()) as { token: string }).token;
+}
+const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+test('the direct-sale middle: a quotation clears SoD and evidence readiness and becomes a contract', async ({ playwright }) => {
+  test.skip(!API_BASE || !CHECKER, 'AURA_API_URL and a second actor (E2E_ALT_USERNAME) are required to exercise SoD approval');
+  const api = await playwright.request.newContext({ baseURL: API_BASE });
+  const admin = await apiLogin(api, process.env.E2E_USERNAME ?? 'u-admin');
+  const checker = await apiLogin(api, CHECKER!);
+
+  // Pre-award, as the preparer (admin): signal → lead → qualified → opportunity (direct sale).
+  const sig = await api.post('/api/v1/crm/signals', { headers: bearer(admin), data: { title: `DS ${RUN}`, source: 'INBOUND', type: 'NEW_PROJECT', confidence: 80, accountName: `DS Client ${RUN}` } });
+  const signalId = ((await sig.json()) as { id: string }).id;
+  const prom = await api.post(`/api/v1/crm/signals/${signalId}/promote`, { headers: bearer(admin), data: {} });
+  const promBody = (await prom.json()) as { lead?: { id: string }; leadId?: string; id?: string };
+  const leadId = promBody.lead?.id ?? promBody.leadId ?? promBody.id!;
+  expect(leadId, 'promotion must yield a lead id').toBeTruthy();
+  await api.patch(`/api/v1/crm/leads/${leadId}/qualification`, { headers: bearer(admin), data: { dimensions: { budget: 4, authority: 4, need: 5, timing: 4 } } });
+  await api.patch(`/api/v1/crm/leads/${leadId}`, { headers: bearer(admin), data: { status: 'qualified' } });
+  const conv = await api.post(`/api/v1/crm/leads/${leadId}/convert`, { headers: bearer(admin), data: { title: `DS opp ${RUN}`, value: 800_000, requiresTender: false, closeDate: '2026-09-30' } });
+  const c = (await conv.json()) as { opportunityId?: string; opportunity?: { id: string }; id?: string };
+  const oppId = c.opportunityId ?? c.opportunity?.id ?? c.id!;
+  expect(oppId, 'the lead must convert to an opportunity').toBeTruthy();
+
+  // Open a quotation and submit it for review.
+  const q = await api.post(`/api/v1/crm/opportunities/${oppId}/convert-to-quotation`, { headers: bearer(admin), data: {} });
+  expect(q.status()).toBe(201);
+  const quoteId = ((await q.json()) as { id: string }).id;
+  const submitted = await api.patch(`/api/v1/crm/quotations/${quoteId}/status`, { headers: bearer(admin), data: { action: 'submit_review' } });
+  expect(submitted.ok(), 'a quotation must submit for review').toBe(true);
+
+  // Give the approver the crm authority they need (they are still not the preparer, so SoD holds).
+  await api.post('/api/v1/admin/access/grants', { headers: bearer(admin), data: { userId: CHECKER, roleId: 'r-sales-manager' } });
+
+  // Settle the evidence-readiness checklist: seed it, then waive each still-required row.
+  const seeded = await api.post('/api/v1/document-requirements/seed', { headers: bearer(admin), data: { entityType: 'crm.quotation', entityId: quoteId } });
+  const rows = (await seeded.json()) as Array<{ id: string; status: string }>;
+  for (const row of rows) {
+    if (row.status === 'REQUIRED') {
+      const w = await api.post(`/api/v1/document-requirements/${row.id}/waive`, { headers: bearer(admin), data: { reason: 'e2e journey proof — evidence waived' } });
+      expect(w.ok(), 'a required evidence row must be waivable with a reason').toBe(true);
+    }
+  }
+
+  // Approve as the SECOND actor — SoD (not the preparer) and readiness (checklist settled) both pass.
+  const approved = await api.patch(`/api/v1/crm/quotations/${quoteId}/status`, { headers: bearer(checker), data: { action: 'approve' } });
+  expect(approved.status(), `approval must pass once SoD and readiness are satisfied — got ${await approved.text()}`).toBe(200);
+  expect(((await approved.json()) as { status: string }).status).toBe('approved');
+
+  // Send and accept (the preparer may), then the accepted quotation becomes a contract.
+  await api.patch(`/api/v1/crm/quotations/${quoteId}/status`, { headers: bearer(admin), data: { action: 'send' } });
+  const accepted = await api.patch(`/api/v1/crm/quotations/${quoteId}/status`, { headers: bearer(admin), data: { action: 'accept' } });
+  expect(((await accepted.json()) as { status: string }).status).toBe('accepted');
+
+  const contract = await api.post(`/api/v1/crm/quotations/${quoteId}/convert-to-contract`, { headers: bearer(admin), data: {} });
+  expect(contract.status(), 'an accepted quotation must convert to a contract').toBe(201);
+  const contractId = ((await contract.json()) as { id?: string; contractId?: string });
+  expect(contractId.id ?? contractId.contractId, 'the direct-sale path must yield a contract').toBeTruthy();
+
+  await api.dispose();
+});
+
 /** Tick every item of a freshly started closeout checklist. */
 async function tickedCloseout(request: import('@playwright/test').APIRequestContext, projectId: string): Promise<string> {
   const started = await request.post('/api/projects/closeouts', { data: { projectId, projectName: `Closeout ${RUN}` } });

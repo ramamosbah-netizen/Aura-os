@@ -79,6 +79,20 @@ export interface PlanningRun {
   /** A fresh run is `proposed`. Promotion (`accepted`) and retirement are Step 10's governed acts. */
   status: PlanningRunStatus;
   proposal: SolverProposal;
+
+  // -- Acceptance provenance (Step 10): null until a governed act sets them ---
+  /** When the proposal was promoted to the current plan. Null while `proposed`/`superseded`. */
+  acceptedAt?: string | null;
+  acceptedBy?: Id | null;
+  /**
+   * The acknowledgement recorded when a NOT-established proposal was accepted — a known conflict, or
+   * a plan with something left unjudged. Governed, not blocked (DG-22.8): making such a plan current
+   * is permitted, but it costs a sentence. Null when the accepted plan was established, or not yet
+   * accepted.
+   */
+  acceptanceReason?: string | null;
+  /** Why a proposal was discarded, when a planner rejects it outright. */
+  discardedReason?: string | null;
 }
 
 /**

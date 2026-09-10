@@ -52,6 +52,13 @@ import { SCHEDULE_STORE } from './schedule-store';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { PostgresScheduleStore } from './postgres-schedule-store';
 import { ScheduleService } from './schedule.service';
+// §22 Step 7/9 — the cross-project capacity resolver's store, and planning-run persistence.
+import { RESOURCE_FACTS_STORE } from './resource-facts-store';
+import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
+import { PostgresResourceFactsStore } from './postgres-resource-facts-store';
+import { PLANNING_RUN_STORE } from './planning-run-store';
+import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
+import { PostgresPlanningRunStore } from './postgres-planning-run-store';
 // §21 — two registers, two ports, two services, plus the one command that spans them.
 import { PROJECT_RISK_STORE } from './project-risk-store';
 import { PROJECT_ISSUE_STORE } from './project-issue-store';
@@ -125,6 +132,18 @@ import { DeliveryItemMapService } from './delivery-item-map.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresScheduleStore(pool) : new InMemoryScheduleStore(),
+    },
+    {
+      provide: RESOURCE_FACTS_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresResourceFactsStore(pool) : new InMemoryResourceFactsStore(),
+    },
+    {
+      provide: PLANNING_RUN_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPlanningRunStore(pool) : new InMemoryPlanningRunStore(),
     },
     {
       provide: DELIVERY_ITEM_MAP_STORE,

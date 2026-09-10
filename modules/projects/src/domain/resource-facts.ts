@@ -10,7 +10,7 @@ import {
 import { type WorkingCalendar, ALL_DAYS_WORKING, workingDaysInRange } from './working-calendar';
 // `ResourceFeasibility` is defined once, in `schedule-planning.ts`, and imported here — a second
 // declaration would be a second answer to a question §22 keeps to one.
-import type { ExternalCommitment, ResourceFeasibility } from './schedule-planning';
+import type { ExternalCommitment, ResolvedCapacity, ResourceFeasibility } from './schedule-planning';
 
 /**
  * §22 Step 7 — the cross-project capacity engine (Design Gate §5.1, §5.2 #4).
@@ -261,4 +261,75 @@ export function externalCommitmentsFor(
       to: b.to,
       projectId: b.projectId,
     }));
+}
+
+/**
+ * Collapse a resource's day-by-day capacity windows into the ONE flat quantity the planner consumes.
+ *
+ * The planner's `ResolvedCapacity` is a single number per resource — the levelling engine is flat by
+ * design (Step 1). This resolves that number as the tightest capacity that holds across the interval:
+ * the MINIMUM known daily total. A day nobody declared a window for is outside this resource's
+ * availability and does not lower the floor; a day with an UNKNOWN quantity or a unit conflict poisons
+ * it to `null`, because "known on four days out of five" is not known. If nothing is ever declared,
+ * the answer is `null` — UNKNOWN, never a fabricated zero or infinity.
+ */
+function flatCapacity(
+  refWindows: readonly ResourceCapacity[],
+  interval: { from: string; to: string },
+  calendar: WorkingCalendar,
+): { unit: ResourceUnit; quantity: number | null } {
+  const unit = refWindows[0].unit;
+  let min = Infinity;
+  let known = false;
+  for (const day of workingDaysInRange(interval.from, interval.to, calendar)) {
+    const c = capacityOn(refWindows, day);
+    if (c.quantity === null) {
+      // A day no window covers is simply outside this resource's availability — not a gap in
+      // knowledge. Only a declared-but-unknown quantity, or a unit conflict, poisons the floor.
+      if (c.unknownReason && c.unknownReason !== 'NONE_DECLARED') return { unit, quantity: null };
+      continue;
+    }
+    known = true;
+    min = Math.min(min, c.quantity);
+  }
+  return { unit, quantity: known ? min : null };
+}
+
+/** The facts a project's plan is resolved against: flat capacities and OTHER projects' commitments. */
+export interface ResolvedPlanFacts {
+  capacities: ResolvedCapacity[];
+  externalCommitments: ExternalCommitment[];
+}
+
+/**
+ * Assemble the resolved facts a planning run consumes, from stored windows and cross-project bookings.
+ *
+ * This is the bridge the Resolver (Step 7) hands the planner: a flat capacity per resource that has a
+ * declared window, plus every OTHER project's held commitment as a per-day external claim. A resource
+ * with no window at all is omitted, so the planner reports it UNKNOWN ("none declared") rather than
+ * available — the §22 correction, preserved end to end.
+ */
+export function resolvePlanFacts(
+  projectId: Id,
+  refs: readonly ResourceRef[],
+  windows: readonly ResourceCapacity[],
+  bookings: readonly ResourceBooking[],
+  interval: { from: string; to: string },
+  calendar: WorkingCalendar = ALL_DAYS_WORKING,
+): ResolvedPlanFacts {
+  const capacities: ResolvedCapacity[] = [];
+  for (const resource of dedupeRefs(refs)) {
+    const refWindows = windows.filter((w) => sameResource(w.resource, resource));
+    if (refWindows.length === 0) continue; // no window → planner reports UNKNOWN, never available
+    const flat = flatCapacity(refWindows, interval, calendar);
+    capacities.push({ resource, unit: flat.unit, quantity: flat.quantity });
+  }
+  return { capacities, externalCommitments: externalCommitmentsFor(projectId, bookings) };
+}
+
+/** Distinct references by typed identity — the refs a schedule's requirements name, without repeats. */
+export function dedupeRefs(refs: readonly ResourceRef[]): ResourceRef[] {
+  const out: ResourceRef[] = [];
+  for (const r of refs) if (!out.some((o) => sameResource(o, r))) out.push(r);
+  return out;
 }

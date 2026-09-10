@@ -309,4 +309,8 @@ export function summariseSchedule(sch: ProjectSchedule): ScheduleSummary {
 export const SCHEDULE_EVENT = {
   saved: 'projects.schedule.saved',
   baselineSet: 'projects.schedule.baseline_set',
+  // §22 Step 11 — the governed planning chain, as events.
+  planningRan: 'projects.schedule.planning_ran',
+  proposalAccepted: 'projects.schedule.proposal_accepted',
+  proposalDiscarded: 'projects.schedule.proposal_discarded',
 } as const;

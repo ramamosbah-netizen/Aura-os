@@ -40,6 +40,8 @@ import {
   type NewScheduleTask,
   type PlanInput,
   type SchedulePlan,
+  type PlanningRun,
+  type PlanningRunView,
   ScheduleService,
   type DeliveryItemMap,
   DeliveryItemMapService,
@@ -1133,6 +1135,58 @@ export class ProjectsController {
     const s = await this.schedule.summary(this.tenant.get().tenantId, projectId);
     if (!s) throw new NotFoundException(`no schedule for project ${projectId}`);
     return s;
+  }
+
+  // ── §22 — planning runs and governed acceptance ─────────────────────────────
+  //
+  // Unlike `schedules/plan` (a stateless compute over caller-supplied facts), these RESOLVE the facts
+  // from the cross-project capacity engine and PERSIST the result as a proposal. Acceptance is a
+  // separate, governed act that promotes a proposal to the current plan (DG-22.4); a run never does.
+
+  /** Run the solver against resolved facts and persist a proposal. Returns it and what it would change. */
+  @Post('schedules/:projectId/planning-runs')
+  async runPlanning(@Param('projectId') projectId: string): Promise<PlanningRunView> {
+    const ctx = this.tenant.get();
+    return await this.schedule.runPlanning(ctx.tenantId, projectId, { ranBy: ctx.actorId });
+  }
+
+  /** A schedule's runs, newest first. */
+  @Get('schedules/:projectId/planning-runs')
+  listPlanningRuns(@Param('projectId') projectId: string): Promise<PlanningRun[]> {
+    return this.schedule.listRuns(this.tenant.get().tenantId, projectId);
+  }
+
+  /** One run and the change accepting it would make to the current plan. */
+  @Get('planning-runs/:runId')
+  getPlanningRun(@Param('runId') runId: string): Promise<PlanningRunView> {
+    return this.schedule.getRun(this.tenant.get().tenantId, runId);
+  }
+
+  /**
+   * Promote a proposal to the current plan. A NOT-established proposal (a known conflict, or
+   * something unjudged) requires `acknowledgeReason` — the same governance a booking's over-capacity
+   * commitment carries. The domain refuses it otherwise, surfacing a 400 through the taxonomy.
+   */
+  @Post('planning-runs/:runId/accept')
+  async acceptPlanningRun(
+    @Param('runId') runId: string,
+    @Body() dto: { acknowledgeReason?: string } = {},
+  ): Promise<{ schedule: ProjectSchedule; run: PlanningRun }> {
+    const ctx = this.tenant.get();
+    return await this.schedule.acceptRun(ctx.tenantId, runId, {
+      acceptedBy: ctx.actorId,
+      acknowledgeReason: dto?.acknowledgeReason ?? null,
+    });
+  }
+
+  /** Reject a proposal outright. The reason is required. */
+  @Post('planning-runs/:runId/discard')
+  async discardPlanningRun(
+    @Param('runId') runId: string,
+    @Body() dto: { reason?: string } = {},
+  ): Promise<PlanningRun> {
+    if (!dto?.reason?.trim()) throw new BadRequestException('a discard reason is required');
+    return await this.schedule.discardRun(this.tenant.get().tenantId, runId, dto.reason);
   }
 }
 

@@ -2,6 +2,7 @@ import { CalendarRange, CheckCircle2, Clock3, Gauge, Layers3, ListChecks } from 
 import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
+import PlanningRunPanel from '../../../components/planning-run-panel';
 import ProjectsSuiteChrome from '../../../components/projects-suite-chrome';
 import styles from './projects-schedule.module.css';
 
@@ -121,6 +122,19 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <GanttClient schedules={rows} projects={scopedProjects ?? []} selectedProjectId={projectId} />
         )}
       </section>
+
+      {projectId && !unavailable && (
+        <section className={styles.workspace} aria-label="Resource planning">
+          <div className={styles.workspaceHead}>
+            <div>
+              <span className={styles.sectionKicker}>Resource planning</span>
+              <h2>Level the plan, then accept it</h2>
+              <p>Run the solver against capacity and every other project&rsquo;s commitments; review the proposal and promote it to the current plan when it holds.</p>
+            </div>
+          </div>
+          <PlanningRunPanel projectId={projectId} projectName={projectName} />
+        </section>
+      )}
     </main>
     </ProjectsSuiteChrome>
   );

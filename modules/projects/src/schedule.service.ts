@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, Optional, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, PG_POOL, AuditService } from '@aura/core';
+import { EVENT_STORE, type EventStore, PG_POOL, AuditService, CalendarService } from '@aura/core';
 import {
   SCHEDULE_EVENT,
   type ProjectSchedule,
@@ -27,6 +27,7 @@ import { type AcceptanceDecision, acceptProposal, discardProposal } from './doma
 import { RESOURCE_FACTS_STORE, type ResourceFactsStore } from './resource-facts-store';
 import { PLANNING_RUN_STORE, type PlanningRunStore } from './planning-run-store';
 import { persistAcceptedPlan } from './postgres-planning-run-store';
+import { resolveNonWorkingDays } from './resource-calendar';
 
 /** A planning run paired with what accepting it would change against the current plan. */
 export interface PlanningRunView {
@@ -50,6 +51,9 @@ export class ScheduleService {
     // The immutable audit trail for the governed acts — run, accept, discard (Step 13). Optional for
     // the same reason every other seam is: it is a no-op (logs to memory) until Postgres is bound.
     @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
+    // The working calendar (Step 8). When bound and the tenant has a calendar, a planning run counts
+    // working days rather than raw calendar days; absent, every day is worked (the prior behaviour).
+    @Optional() @Inject(CalendarService) private readonly calendars: CalendarService | null = null,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
@@ -130,6 +134,21 @@ export class ScheduleService {
   }
 
   /**
+   * The non-working days over the horizon, from the tenant's working calendar (Step 8).
+   *
+   * The tenant's calendar is used (its first, by name) until a per-project calendar ASSIGNMENT
+   * exists — a deliberate, documented interim: one calendar is the common ELV case, and it is far
+   * better than planning through Fridays and Eid. With no calendar service or no calendar, the result
+   * is `undefined` and the planner treats every day as worked, exactly as before.
+   */
+  private async resolveCalendar(tenantId: Id, interval: { from: string; to: string }): Promise<string[] | undefined> {
+    if (!this.calendars) return undefined;
+    const calendars = await this.calendars.listCalendars(tenantId);
+    if (calendars.length === 0) return undefined;
+    return resolveNonWorkingDays(this.calendars, calendars[0].id, interval);
+  }
+
+  /**
    * Run the solver for a project and persist the result as a PROPOSAL (DG-22.4).
    *
    * The facts are RESOLVED here, not queried by the engine: capacity windows and every OTHER
@@ -155,8 +174,9 @@ export class ScheduleService {
       this.facts.heldBookingsFor(tenantId, refs, interval),
     ]);
     const resolved = resolvePlanFacts(projectId, refs, windows, bookings, interval);
+    const nonWorkingDays = await this.resolveCalendar(tenantId, interval);
 
-    const run = runPlanning(schedule, { projectStart, ...resolved }, { ranBy: opts.ranBy ?? null });
+    const run = runPlanning(schedule, { projectStart, ...resolved, nonWorkingDays }, { ranBy: opts.ranBy ?? null });
     await this.runs.create(run);
     await this.events.append([
       makeEvent({

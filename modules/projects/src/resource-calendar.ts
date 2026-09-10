@@ -34,10 +34,23 @@ export async function resolveWorkingCalendar(
   calendarId: string,
   interval: { from: string; to: string },
 ): Promise<WorkingCalendar> {
+  return workingCalendarOf(await resolveNonWorkingDays(source, calendarId, interval));
+}
+
+/**
+ * The non-working dates in `[from, to]` under a calendar — the list the pure planner consumes as
+ * `nonWorkingDays`. Same probe as {@link resolveWorkingCalendar}; this returns the raw days so a
+ * caller feeding `planSchedule` does not have to round-trip through the predicate.
+ */
+export async function resolveNonWorkingDays(
+  source: WorkingHoursSource,
+  calendarId: string,
+  interval: { from: string; to: string },
+): Promise<string[]> {
   const nonWorking: string[] = [];
   for (const day of eachDay(interval.from, interval.to)) {
     const hours = await source.getWorkingHoursForDay(calendarId, new Date(`${day}T12:00:00Z`));
     if (!(hours > 0)) nonWorking.push(day);
   }
-  return workingCalendarOf(nonWorking);
+  return nonWorking;
 }

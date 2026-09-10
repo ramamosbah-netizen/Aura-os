@@ -78,6 +78,7 @@ export * from './resource-calendar';
 export * from './domain/schedule';
 export * from './domain/schedule-network';
 export * from './domain/schedule-planning';
+export * from './domain/planning-run';
 export * from './schedule-store';
 export * from './in-memory-schedule-store';
 export * from './postgres-schedule-store';

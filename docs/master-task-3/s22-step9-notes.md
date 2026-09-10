@@ -1,8 +1,22 @@
-# §22 Step 9 — Planning Run / Solver Proposal (domain landed; persistence deferred)
+# §22 Step 9 — Planning Run / Solver Proposal (COMPLETE — domain + persistence)
 
-**Status:** the domain is complete and proven at the unit boundary. Persistence — a migration, a
-Postgres store for runs/proposals, and its DB proof — is the deferred half, alongside the
-resolver-fact wiring that needs Step 7 part 2. Nothing here claims persistence it does not have.
+**Status:** complete. The domain landed first (part 1); part 2 — migration `0289_planning_runs.sql`,
+`PostgresPlanningRunStore`, and its DB proof — landed on the rebuilt local database (2026-09-10).
+
+## Part 2 — persistence (green)
+
+- `infrastructure/migrations/0289_planning_runs.sql` — `aura_projects_planning_runs`: the proposal is
+  one JSONB document (a computed snapshot, read back whole), status + acceptance/discard provenance
+  are columns with CHECKs binding them to the right status; hierarchical RLS + FORCE; composite
+  project lineage.
+- `modules/projects/src/planning-run-store.ts` / `in-memory-planning-run-store.ts` /
+  `postgres-planning-run-store.ts` — the port and both implementations.
+- `modules/projects/src/planning-run-store.pg-int.test.ts` (Step 9 case) — under the enforced role:
+  a run persists, its proposal round-trips through JSONB intact (placements + verdicts), and
+  persisting the run changes **no** schedule date. Green.
+
+The `ScheduleService` wiring that assembles resolved facts from the Step 7 store is the Step 11 API
+concern; the persistence it will call is now in place. The rest of this note (part 1) is below.
 
 ## What Step 9 is
 

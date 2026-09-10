@@ -1,8 +1,22 @@
-# §22 Step 10 — governed acceptance (domain landed; persistence deferred)
+# §22 Step 10 — governed acceptance (COMPLETE — domain + persistence)
 
-**Status:** the domain is complete and proven at the unit boundary. Persistence — the service act that
-loads the schedule and its run, accepts, and writes the promoted schedule plus the run's new status —
-is the deferred half, since it needs the Step 9 `PlanningRunStore` and the database.
+**Status:** complete. The domain landed first (part 1); part 2 — the transactional acceptance
+persistence and its DB proof — landed on the rebuilt local database (2026-09-10).
+
+## Part 2 — persistence (green)
+
+- `persistAcceptedPlan(pool, accepted)` in `modules/projects/src/postgres-planning-run-store.ts` — one
+  transaction promotes the accepted plan: the schedule's task rows get the proposed dates **UPDATED in
+  place** (never the delete-and-reinsert of a save, so AURA-PM-004's churn is off this path and no
+  booking reference is disturbed), the run row is marked accepted, and every other outstanding
+  proposal for the schedule is superseded — all or nothing. Only `planned_*` moves.
+- `modules/projects/src/planning-run-store.pg-int.test.ts` (Step 10 case) — under the enforced role:
+  acceptance moves `planned_*`, leaves `baseline_*` untouched, marks the run `accepted`, and
+  supersedes a sibling proposal. Green.
+
+The Nest `ScheduleService.accept(...)` that loads run+schedule, calls the domain `acceptProposal`, and
+invokes `persistAcceptedPlan` is the Step 11 API wiring; the atomic persistence it needs is in place.
+The rest of this note (part 1) is below.
 
 ## What Step 10 is
 

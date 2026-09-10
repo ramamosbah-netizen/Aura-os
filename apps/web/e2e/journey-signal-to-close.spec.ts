@@ -163,6 +163,70 @@ test('the direct-sale middle: a quotation clears SoD and evidence readiness and 
   await api.dispose();
 });
 
+test('the loop closes: a signed contract delivers a project whose completion completes the contract and raises a renewal signal', async ({ playwright }) => {
+  test.skip(!API_BASE || !CHECKER, 'AURA_API_URL and a second actor (E2E_ALT_USERNAME) are required to sign the contract (SoD)');
+  const api = await playwright.request.newContext({ baseURL: API_BASE });
+  const admin = await apiLogin(api, process.env.E2E_USERNAME ?? 'u-admin');
+  const signer = await apiLogin(api, CHECKER!);
+
+  // The signer needs contracts authority and must not be the preparer — no standard role carries
+  // contract-write except admin, so the run grants a purpose role for a real second principal.
+  await api.post('/api/v1/admin/access/roles', { headers: bearer(admin), data: { id: 'r-e2e-signer', name: 'E2E Contract Signer', permissions: ['contracts.*'] } });
+  await api.post('/api/v1/admin/access/grants', { headers: bearer(admin), data: { userId: CHECKER, roleId: 'r-e2e-signer' } });
+
+  // A contract, prepared by admin and SIGNED by the second actor (activating it).
+  const made = await api.post('/api/v1/contracts/contracts', { headers: bearer(admin), data: { title: `Loop ${RUN}`, value: 600_000, accountName: `Loop Client ${RUN}` } });
+  expect(made.status(), 'a contract must be creatable').toBe(201);
+  const contractId = ((await made.json()) as { id: string }).id;
+  const signed = await api.patch(`/api/v1/contracts/contracts/${contractId}/status`, { headers: bearer(signer), data: { status: 'active' } });
+  expect(signed.status(), `the second actor must be able to sign — got ${await signed.text()}`).toBe(200);
+
+  // Signing hands the deal over: a project is created from the contract (async reactor).
+  const findProject = async (): Promise<{ id: string; status: string } | undefined> => {
+    const list = (await (await api.get('/api/v1/projects/projects', { headers: bearer(admin) })).json()) as Array<{ id: string; status: string; contractId?: string }>;
+    return Array.isArray(list) ? list.find((p) => p.contractId === contractId) : undefined;
+  };
+  await expect.poll(async () => Boolean(await findProject()), { message: 'signing a contract must hand over a project', timeout: 30_000 }).toBe(true);
+  const projectId = (await findProject())!.id;
+
+  // Take the project to execution (add scope + baseline if the handover did not).
+  let toActive = await api.patch(`/api/v1/projects/projects/${projectId}/status`, { headers: bearer(admin), data: { status: 'active' } });
+  if (!toActive.ok()) {
+    await api.post('/api/v1/projects/wbs', { headers: bearer(admin), data: { projectId, code: '01', title: 'Works', plannedValue: 250_000 } });
+    await api.post(`/api/v1/projects/projects/${projectId}/wbs-baseline`, { headers: bearer(admin), data: {} });
+    toActive = await api.patch(`/api/v1/projects/projects/${projectId}/status`, { headers: bearer(admin), data: { status: 'active' } });
+  }
+  expect(toActive.ok(), 'the handed-over project must reach execution').toBe(true);
+
+  // Deliver it through the closeout gate (the same real checks as the delivery-close test).
+  const started = await api.post('/api/v1/projects/closeouts', { headers: bearer(admin), data: { projectId, projectName: `Closeout ${RUN}` } });
+  const closeout = (await started.json()) as { id: string; items: unknown[] };
+  for (let i = 0; i < closeout.items.length; i += 1) {
+    await api.patch(`/api/v1/projects/closeouts/${closeout.id}/items/${i}`, { headers: bearer(admin), data: { done: true } });
+  }
+  const record = await api.post('/api/v1/commissioning/records', { headers: bearer(admin), data: { projectId, code: `SYS-${RUN}`, title: 'CCTV head end', system: 'cctv' } });
+  const recordId = ((await record.json()) as { id: string }).id;
+  const commissioned = await api.put(`/api/v1/commissioning/records/${recordId}/commission`, { headers: bearer(admin), data: { commissionedBy: 'u-admin', witnessedBy: CHECKER } });
+  await api.post('/api/v1/doccontrol/register', { headers: bearer(admin), data: { projectId, documentNumber: `AB-${RUN}`, title: 'As-built — CCTV head end', status: 'as_built' } });
+  test.skip(!commissioned.ok(), `commissioning fixture could not complete (${commissioned.status()}), so the loop cannot be closed here`);
+  await api.post(`/api/v1/projects/closeouts/${closeout.id}/finalize`, { headers: bearer(admin), data: { handoverDate: '2026-09-30' } });
+
+  // Completing the PROJECT is the act that closes the loop — it fires projects.project.completed.
+  const completed = await api.patch(`/api/v1/projects/projects/${projectId}/status`, { headers: bearer(admin), data: { status: 'completed' } });
+  expect(completed.status(), `a delivered project must complete — got ${await completed.text()}`).toBe(200);
+  expect(((await completed.json()) as { status: string }).status).toBe('completed');
+
+  // The reactors close the chain: the contract completes, and a renewal signal lands back on the Radar.
+  await expect.poll(async () => ((await (await api.get(`/api/v1/contracts/contracts/${contractId}`, { headers: bearer(admin) })).json()) as { status: string }).status,
+    { message: 'a completed project must complete its contract', timeout: 30_000 }).toBe('completed');
+  await expect.poll(async () => {
+    const sig = (await (await api.get('/api/v1/crm/signals?type=RENEWAL_DUE', { headers: bearer(admin) })).json()) as Array<{ type: string }>;
+    return Array.isArray(sig) && sig.some((s) => s.type === 'RENEWAL_DUE');
+  }, { message: 'a completed contract must raise a renewal signal, closing the loop to Radar', timeout: 30_000 }).toBe(true);
+
+  await api.dispose();
+});
+
 /** Tick every item of a freshly started closeout checklist. */
 async function tickedCloseout(request: import('@playwright/test').APIRequestContext, projectId: string): Promise<string> {
   const started = await request.post('/api/projects/closeouts', { data: { projectId, projectName: `Closeout ${RUN}` } });

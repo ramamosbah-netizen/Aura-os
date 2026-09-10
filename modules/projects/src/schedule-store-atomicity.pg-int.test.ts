@@ -23,11 +23,12 @@ import type { ScheduleDependency } from './domain/schedule-network';
  * schedule migrations applied.
  */
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
-const URL = process.env.SCHEDULE_PG_TEST_URL;
+// AURA_PG_APP_URL / AURA_PG_OWNER_URL is the shared pg-int convention; SCHEDULE_PG_* remains as a
+// fallback so this proof's original run command still works.
+const URL = process.env.AURA_PG_APP_URL ?? process.env.SCHEDULE_PG_TEST_URL;
 // The task RLS policy requires a real aura_projects_projects row for the schedule's project, so the
-// fixture project is seeded through the OWNER role (which bypasses RLS). Point SCHEDULE_PG_OWNER_URL
-// at the migration/owner role (the local database's `aura`).
-const OWNER_URL = process.env.SCHEDULE_PG_OWNER_URL;
+// fixture project is seeded through the OWNER role (which bypasses RLS).
+const OWNER_URL = process.env.AURA_PG_OWNER_URL ?? process.env.SCHEDULE_PG_OWNER_URL;
 const run = URL && OWNER_URL ? describe : describe.skip;
 
 run('PostgresScheduleStore — a failed save preserves the prior tasks (AURA-PM-004)', () => {

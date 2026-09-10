@@ -1,9 +1,21 @@
-# §22 Step 7 — cross-project capacity engine (pure engine landed; DB proof deferred)
+# §22 Step 7 — cross-project capacity engine (COMPLETE — pure engine + DB proof)
 
-**Status:** the pure engine and its port are complete and proven at the unit boundary. The database
-proof — the two-projects-one-crane walk against real PostgreSQL — is deliberately deferred: the local
-disposable database was down this session (`localhost:55432` unreachable, the same failure as the
-tail of the Step 6 session). Nothing here claims DB evidence it does not have.
+**Status:** complete. The pure engine and port landed first (part 1); part 2 — the
+`PostgresResourceFactsStore` and its cross-project / cross-tenant proof against real PostgreSQL —
+landed once the local disposable database was rebuilt (2026-09-10).
+
+## Part 2 — the Postgres store and its proof (green)
+
+- `modules/projects/src/postgres-resource-facts-store.ts` — two tenant-scoped reads, typed-pair
+  reference match (`(resource_type, canonical_resource_id)` via `unnest`), no project filter so the
+  read genuinely spans projects.
+- `modules/projects/src/resource-facts-store.pg-int.test.ts` — under the enforced `aura_app` role
+  (gated on `AURA_PG_APP_URL` + `AURA_PG_OWNER_URL`): two projects book one crane on the same Tuesday
+  → `CONFLICTED`, both named, `committed 2 > capacity 1`; a **third project in another tenant** on the
+  same crane id is never returned (RLS keeps "across every project" inside the tenant); a released
+  booking holds nothing and returns the crane to `AVAILABLE`. 3 tests green.
+
+The rest of this note (part 1) is unchanged below.
 
 ## What Step 7 is
 

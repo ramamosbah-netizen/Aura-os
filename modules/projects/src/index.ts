@@ -74,6 +74,7 @@ export * from './domain/working-calendar';
 export * from './domain/resource-facts';
 export * from './resource-facts-store';
 export * from './in-memory-resource-facts-store';
+export * from './postgres-resource-facts-store';
 export * from './resource-calendar';
 export * from './domain/schedule';
 export * from './domain/schedule-network';

@@ -71,7 +71,7 @@ export function makePlantUsage(input: NewPlantUsage): PlantUsage {
   const resourceType = input.resourceType ?? null;
   const resourceId = input.resourceId?.trim() || null;
   if ((resourceType === null) !== (resourceId === null)) {
-    throw new Error('a plant resource reference needs both a type and an id, or neither');
+    throw new Error('a plant resource reference requires both a type and an id, or neither');
   }
   if (resourceType !== null && !PLANT_RESOURCE_TYPES.includes(resourceType)) {
     throw new Error(`unknown plant resource type: ${resourceType}`);

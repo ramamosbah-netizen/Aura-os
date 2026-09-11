@@ -145,7 +145,7 @@ have to reach through a parent claim the way `aura_document_versions` does.
 
 ---
 
-## AURA-ORG-001 — every Projects RLS policy narrows by a branch that has no register
+## AURA-ORG-001 — every Projects RLS policy narrows by a branch that has no register — RESOLVED
 
 Surfaced by §22 Phase-2 discovery, while looking for an organizational scope for resource pools.
 
@@ -185,6 +185,25 @@ session — and nothing validates it when it does. At that moment row visibility
 exists and nests, rather than to `branch_id`. Promoting branch into the org model — or removing it —
 is a cross-cutting organizational and RLS decision, larger than resource planning and owned by
 neither §21 nor §22.
+
+**Resolved 2026-09-11 (migration 0294) — removed, not promoted.** Promoting `branch` would have
+meant inventing an org concept nothing in this system writes or reads. The honest fix was to delete
+it. All 13 `hierarchical_isolation_policy` policies across `aura_projects_*` were recreated WITHOUT
+the branch predicate — tenant, project and company scoping preserved byte-for-byte minus that one
+line — then `current_branch_id()` and the `branch_id` column were dropped (no CASCADE; verified no
+index, no other policy and no other function depended on them first). `current_project_id()` is
+untouched: same shape, but it names an aggregate that exists and is a real scope.
+
+**How the rewrite was made safe.** The 13 replacement policies were generated from the live `qual`
+of each current policy with the branch predicate stripped, so the new USING clause is provably the
+old one minus branch — no hand-reconstruction of security DDL. Proven after applying: 0 policies
+reference `current_branch_id`, the column and function are gone, all 13 policies remain in place, and
+isolation still binds — the 7 projects pg-int RLS tests pass under the non-bypassing `aura_app` role,
+and a foreign-tenant GUC sees 0 rows. The `@DOWN` restores branch exactly as 0049 left it.
+
+This also retires the latent hazard the finding named: an external `branch_id` JWT claim or an
+operator-set GUC can no longer narrow row visibility through an unvalidated string, because nothing
+reads it any more.
 
 ---
 

@@ -48,8 +48,8 @@ export interface ResourcePool {
    * The organisational node this pool belongs to — the approved scope mechanism (DG-22.9).
    *
    * An `OrgNode` reference, because that tree exists, nests, and already carries containment
-   * semantics. NOT `branch_id`: that is a bare text column with no register, no name and no
-   * parent, recorded separately as AURA-ORG-001 and deliberately routed around here.
+   * semantics. NOT `branch_id`: that was a bare text column with no register, no name and no
+   * parent — §22 routed around it, and AURA-ORG-001 has since removed it entirely (migration 0294).
    *
    * `null` means tenant-wide. A pool is never global by DEFAULT — this is a stated choice.
    */

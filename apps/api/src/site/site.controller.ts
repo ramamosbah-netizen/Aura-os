@@ -355,7 +355,7 @@ export class SiteController {
 
   @Post('labour')
   createLabour(
-    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; costRate?: number; cbsNodeId?: string | null; subcontractorName?: string; notes?: string },
+    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; costRate?: number; cbsNodeId?: string | null; subcontractorName?: string; subcontractorId?: string | null; notes?: string },
   ): Promise<LabourAllocation> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.trade?.trim()) throw new BadRequestException('trade is required');
@@ -373,6 +373,7 @@ export class SiteController {
       costRate: dto.costRate !== undefined ? Number(dto.costRate) : undefined,
       cbsNodeId: dto.cbsNodeId ?? null,
       subcontractorName: dto.subcontractorName,
+      subcontractorId: dto.subcontractorId ?? null,
       notes: dto.notes,
       createdBy: ctx.actorId ?? undefined,
     });
@@ -397,7 +398,7 @@ export class SiteController {
 
   @Post('plant')
   createPlant(
-    @Body() dto: { projectId: string; projectName?: string; cbsNodeId?: string | null; date: string; equipment: string; hours: number; rate?: number; notes?: string },
+    @Body() dto: { projectId: string; projectName?: string; cbsNodeId?: string | null; date: string; equipment: string; resourceType?: 'asset' | 'vehicle' | null; resourceId?: string | null; hours: number; rate?: number; notes?: string },
   ): Promise<PlantUsage> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.equipment?.trim()) throw new BadRequestException('equipment is required');
@@ -411,6 +412,8 @@ export class SiteController {
       cbsNodeId: dto.cbsNodeId ?? null,
       date: dto.date,
       equipment: dto.equipment,
+      resourceType: dto.resourceType ?? null,
+      resourceId: dto.resourceId ?? null,
       hours: Number(dto.hours) || 0,
       rate: dto.rate !== undefined ? Number(dto.rate) : undefined,
       notes: dto.notes,

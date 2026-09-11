@@ -17,13 +17,14 @@ export class PostgresLabourAllocationStore implements LabourAllocationStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_site_labour_allocations (
-        id, tenant_id, company_id, project_id, project_name, date, trade, headcount, hours, man_hours, subcontractor_name, notes, created_by, created_at, updated_at, cost_rate, labour_cost, cbs_node_id
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+        id, tenant_id, company_id, project_id, project_name, date, trade, headcount, hours, man_hours, subcontractor_name, notes, created_by, created_at, updated_at, cost_rate, labour_cost, cbs_node_id, subcontractor_id
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       on conflict (id) do update set
         headcount = excluded.headcount, hours = excluded.hours, man_hours = excluded.man_hours,
         notes = excluded.notes, updated_at = excluded.updated_at,
-        cost_rate = excluded.cost_rate, labour_cost = excluded.labour_cost, cbs_node_id = excluded.cbs_node_id`,
-      [a.id, a.tenantId, a.companyId, a.projectId, a.projectName, a.date, a.trade, a.headcount, a.hours, a.manHours, a.subcontractorName, a.notes, a.createdBy, a.createdAt, a.updatedAt, a.costRate, a.labourCost, a.cbsNodeId],
+        cost_rate = excluded.cost_rate, labour_cost = excluded.labour_cost, cbs_node_id = excluded.cbs_node_id,
+        subcontractor_id = excluded.subcontractor_id`,
+      [a.id, a.tenantId, a.companyId, a.projectId, a.projectName, a.date, a.trade, a.headcount, a.hours, a.manHours, a.subcontractorName, a.notes, a.createdBy, a.createdAt, a.updatedAt, a.costRate, a.labourCost, a.cbsNodeId, a.subcontractorId],
     );
   }
 
@@ -62,6 +63,7 @@ export class PostgresLabourAllocationStore implements LabourAllocationStore {
       labourCost: Number(row.labour_cost ?? 0),
       cbsNodeId: row.cbs_node_id ?? null,
       subcontractorName: row.subcontractor_name,
+      subcontractorId: row.subcontractor_id ?? null,
       notes: row.notes,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
@@ -77,12 +79,13 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_site_plant_usage (
-        id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at, resource_type, resource_id
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       on conflict (id) do update set
         hours = excluded.hours, rate = excluded.rate, cost = excluded.cost,
-        notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, updated_at = excluded.updated_at`,
-      [u.id, u.tenantId, u.companyId, u.projectId, u.projectName, u.cbsNodeId, u.date, u.equipment, u.hours, u.rate, u.cost, u.notes, u.createdBy, u.createdAt, u.updatedAt],
+        notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, updated_at = excluded.updated_at,
+        resource_type = excluded.resource_type, resource_id = excluded.resource_id`,
+      [u.id, u.tenantId, u.companyId, u.projectId, u.projectName, u.cbsNodeId, u.date, u.equipment, u.hours, u.rate, u.cost, u.notes, u.createdBy, u.createdAt, u.updatedAt, u.resourceType, u.resourceId],
     );
   }
 
@@ -115,6 +118,8 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
       cbsNodeId: row.cbs_node_id ?? null,
       date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
       equipment: row.equipment,
+      resourceType: row.resource_type ?? null,
+      resourceId: row.resource_id ?? null,
       hours: Number(row.hours),
       rate: Number(row.rate ?? 0),
       cost: Number(row.cost ?? 0),

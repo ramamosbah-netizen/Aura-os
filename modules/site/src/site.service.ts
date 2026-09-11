@@ -524,6 +524,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     costRate?: number;
     cbsNodeId?: string | null;
     subcontractorName?: string;
+    subcontractorId?: string | null;
     notes?: string;
     createdBy?: string;
   }): Promise<LabourAllocation> {
@@ -583,6 +584,8 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     cbsNodeId?: string | null;
     date: string;
     equipment: string;
+    resourceType?: 'asset' | 'vehicle' | null;
+    resourceId?: string | null;
     hours: number;
     rate?: number;
     notes?: string;

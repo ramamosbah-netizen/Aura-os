@@ -229,7 +229,7 @@ authoritative today; the mirror is a rollback affordance.
 
 ---
 
-## AURA-PM-002 — Resource Actual Lineage Gap
+## AURA-PM-002 — Resource Actual Lineage Gap — RESOLVED
 
 Site's actual labour and plant usage carries no stable reference to the resource it consumed, so
 plan-vs-actual reconciliation cannot be made deterministic.
@@ -252,6 +252,30 @@ we planned?"*, which is a different and later question.
 records changes a module §22 does not own, sideways, to make a Projects feature tidier. It belongs
 to the PM final capability audit, alongside the same lineage shape already recorded as PROC-GAP-03
 and PROC-GAP-07.
+
+**Resolved 2026-09-11 (migration 0292).** The Site actual records now carry a stable reference to the
+resource consumed, in the same stored form §22 already uses for the plan side, so plan-vs-actual can
+be matched on ids rather than on strings:
+
+- `aura_site_plant_usage` gains `resource_type` + `resource_id` — a subset of §22's `ResourceRef`
+  (`asset` → Assets, `vehicle` → Fleet), re-declared in the Site domain rather than imported so no
+  cross-module edge to Projects is introduced (ADR-0004); the vocabulary is shared, the dependency is
+  not. A `CHECK` keeps them both-or-neither (a type with no id matches nothing; an id with no type is
+  ambiguous between the two registers) — proven live: the DB refuses a partial reference. `equipment`
+  stays as the human label, no longer the identity.
+- `aura_site_labour_allocations` gains `subcontractor_id` → Procurement `Supplier`, so subcontracted
+  labour reconciles against the supplier it was engaged from; `subcontractor_name` stays a label.
+
+**The one lineage still open, honestly.** `LabourAllocation.trade` remains free text — there is no
+trade register to point at, so there is no stable id to carry. This is not an oversight deferred; it
+is the absence of a master this fix cannot invent. Own-labour headcount by trade therefore still
+reconciles by name only. Recorded here rather than closed silently.
+
+Neither column is a foreign key — Site references resources across module boundaries by id, not by
+join, exactly as the PO sourcing lineage (0291) does, so a resource may be retired without orphaning
+the historical usage that cites it. Both nullable and additive: usage logged without a registered
+resource stays valid. Proven by `modules/site/src/domain/actual-resource-lineage.test.ts` (unit) and
+a live schema + CHECK proof against the disposable database.
 
 ---
 

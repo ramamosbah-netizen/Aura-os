@@ -142,7 +142,7 @@ export default async function SiteControlPage() {
 
   return (
     <div style={st.page}>
-      <DeliveryOperationsWorkspaceHeader active="site" title="Site execution workspace" owner="Site" description="Coordinate field work through controlled instructions, daily reports, progress, delays, labour, equipment and site evidence." />
+      <DeliveryOperationsWorkspaceHeader active="site" title="Site execution workspace" description="Coordinate field work through controlled instructions, daily reports, progress, delays, labour, equipment and site evidence." />
 
       <DeliveryWorkspaceSummary eyebrow="FIELD OPERATIONS" title="Today's operating picture" description="Keep the field moving with clear work, exception and evidence signals. Actions remain owned by Site." metrics={metrics} attention={attention} emptyMessage="No site exceptions are open for the available records." />
 

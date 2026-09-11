@@ -111,7 +111,7 @@ export default async function QualityControlPage() {
 
   return (
     <div style={st.page}>
-      <DeliveryOperationsWorkspaceHeader active="quality" title="Quality control workspace" owner="Quality" description="Plan inspections, manage NCRs and snags, and close corrective actions with auditable evidence across projects." />
+      <DeliveryOperationsWorkspaceHeader active="quality" title="Quality control workspace" description="Plan inspections, manage NCRs and snags, and close corrective actions with auditable evidence across projects." />
 
       <DeliveryWorkspaceSummary eyebrow="QUALITY OPERATIONS" title="Quality operating picture" description="See the exceptions that can affect execution, then open the canonical inspection or NCR workflow to act." metrics={metrics} attention={attention} emptyMessage="No quality exceptions are open for the available records." />
 

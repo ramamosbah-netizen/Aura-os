@@ -46,7 +46,7 @@ export default async function CommissioningPage() {
 
   return (
     <div style={st.page}>
-      <DeliveryOperationsWorkspaceHeader active="commissioning" title="Testing & commissioning workspace" owner="Commissioning" description="Turn installed systems into accepted systems through test plans, point results, witnessed sign-off and commissioning evidence." />
+      <DeliveryOperationsWorkspaceHeader active="commissioning" title="Testing & commissioning workspace" description="Turn installed systems into accepted systems through test plans, point results, witnessed sign-off and commissioning evidence." />
       <DeliveryWorkspaceSummary eyebrow="TESTING & COMMISSIONING" title="Commissioning operating picture" description="Move systems from ready to test through witnessed testing, retest and final commissioning." metrics={metrics} attention={attention} emptyMessage="No failed or overdue commissioning records are open." />
       <CommissioningClient initialRecords={records ?? []} projects={projects ?? []} />
     </div>

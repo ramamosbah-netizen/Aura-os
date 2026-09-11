@@ -43,7 +43,7 @@ export default async function PreExecutionPage() {
 
   return (
     <div className="page-container" style={{ maxWidth: 1240, margin: '0 auto', padding: '28px 28px 64px' }} data-testid="pre-execution-workspace">
-      <DeliveryOperationsWorkspaceHeader active="pre-execution" title="Pre-execution" description="Decide what can start safely before the team is sent to site. This view projects readiness from the owning systems; it never stores a manual READY flag." owner="Projects + specialist domain authorities" />
+      <DeliveryOperationsWorkspaceHeader active="pre-execution" title="Pre-execution" description="Decide what can start safely before the team is sent to site. This view projects readiness from the owning systems; it never stores a manual READY flag." />
       <PreExecutionClient rows={rows} />
     </div>
   );

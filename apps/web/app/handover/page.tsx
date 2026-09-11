@@ -45,7 +45,7 @@ export default async function HandoverPage() {
 
   return (
     <div style={st.page}>
-      <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" owner="Handover" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
+      <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
       <DeliveryWorkspaceSummary eyebrow="HANDOVER OPERATIONS" title="Handover operating picture" description="See which acceptance packages are ready, blocked or waiting for a decision before close-out." metrics={metrics} attention={attention} emptyMessage="No handover exceptions are open for the available packages." />
       <HandoverClient initialPackages={packages ?? []} projects={projects ?? []} />
     </div>

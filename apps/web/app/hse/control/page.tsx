@@ -114,7 +114,7 @@ export default async function HseControlPage() {
 
   return (
     <div style={st.page}>
-      <DeliveryOperationsWorkspaceHeader active="hse" title="HSE control workspace" owner="HSE" description="Keep field activities safe through permits, risk controls, incidents, observations, training and corrective actions." />
+      <DeliveryOperationsWorkspaceHeader active="hse" title="HSE control workspace" description="Keep field activities safe through permits, risk controls, incidents, observations, training and corrective actions." />
 
       <DeliveryWorkspaceSummary eyebrow="HSE OPERATIONS" title="Safety operating picture" description="See permits, incidents and corrective actions that need attention. Safety records remain owned by HSE." metrics={metrics} attention={attention} emptyMessage="No HSE exceptions are open for the available records." />
 

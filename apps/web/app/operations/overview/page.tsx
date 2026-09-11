@@ -99,7 +99,6 @@ export default async function DeliveryOperationsOverviewPage({ searchParams }: {
         active="overview"
         title="Execution Command Center"
         description="See what is working now, what is blocked, and where your decision is needed across active projects."
-        owner="Delivery Operations composition layer"
       />
       <div className={styles.overviewActionBar}>
         <details className={styles.actionMenu}><summary className={styles.primary}>+ Delivery Action</summary><div className={styles.actionPopover}>{actions.map((group) => <div key={group.group} className={styles.actionGroup}><span>{group.group}</span>{group.items.map((item) => { const Icon = item.icon; return <Link key={item.label} href={item.href} className={styles.actionItem}><Icon size={14} aria-hidden /><span><strong>{item.label}</strong><small>{item.description}</small></span><ArrowUpRight size={13} aria-hidden /></Link>; })}</div>)}</div></details>

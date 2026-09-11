@@ -138,7 +138,7 @@ export default async function EngineeringPage() {
 
   return (
     <div style={st.page}>
-      <DeliveryOperationsWorkspaceHeader active="engineering" title="Engineering workspace" owner="Engineering" description="Prepare and release the technical information that enables field work: drawings, RFIs, submittals, design changes and controlled deliverables." />
+      <DeliveryOperationsWorkspaceHeader active="engineering" title="Engineering workspace" description="Prepare and release the technical information that enables field work: drawings, RFIs, submittals, design changes and controlled deliverables." />
 
       <EngineeringClient
         initialDrawings={drawings ?? []}

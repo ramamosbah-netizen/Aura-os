@@ -111,8 +111,16 @@ export interface ProjectIssue {
   area: ProjectDeliveryArea;
   severity: ProjectIssueSeverity;
   status: ProjectIssueStatus;
-  /** Who is accountable for getting this resolved. */
+  /**
+   * Who is accountable for getting this resolved, as a free-text NAME (AURA-PM-001). Kept because the
+   * accountable person is often not a user of the system; it is a label, never matched to an actor.
+   */
   owner: string | null;
+  /**
+   * The accountable user, when they are one (AURA-PM-001) — the stable id My Work matches on to
+   * answer "issues assigned to me". Null when the owner is only a name, or nobody is assigned.
+   */
+  ownerId: Id | null;
   /**
    * When the condition was OBSERVED — not when the row was created.
    *
@@ -151,6 +159,7 @@ export interface NewProjectIssue {
   area?: ProjectDeliveryArea;
   severity?: ProjectIssueSeverity;
   owner?: string | null;
+  ownerId?: Id | null;
   raisedAt?: string | null;
   raisedBy?: Id | null;
   dueDate?: string | null;
@@ -184,6 +193,7 @@ export function makeProjectIssue(input: NewProjectIssue): ProjectIssue {
     severity: input.severity ?? 'major',
     status: 'open',
     owner: input.owner?.trim() || null,
+    ownerId: input.ownerId ?? null,
     // Defaults to now, because an issue raised without a stated observation date was, as far as
     // anyone can prove, observed when it was written up. Never left null: a nullable date here
     // would make "how long has this been live" unanswerable for most of the register.
@@ -202,7 +212,7 @@ export function makeProjectIssue(input: NewProjectIssue): ProjectIssue {
 }
 
 export type ProjectIssuePatch = Partial<Pick<ProjectIssue,
-  'reference' | 'title' | 'description' | 'area' | 'severity' | 'owner' | 'dueDate' | 'raisedAt'>> & {
+  'reference' | 'title' | 'description' | 'area' | 'severity' | 'owner' | 'ownerId' | 'dueDate' | 'raisedAt'>> & {
     references?: ProjectIssueReference[];
   };
 
@@ -267,6 +277,7 @@ export interface MaterialiseInput {
   description?: string | null;
   severity?: ProjectIssueSeverity;
   owner?: string | null;
+  ownerId?: Id | null;
   dueDate?: string | null;
   raisedAt?: string | null;
   actorId?: Id | null;
@@ -312,6 +323,9 @@ export function materialiseRiskAsIssue(
     // already resolved. Someone states what this is doing to delivery now.
     severity: input.severity ?? 'major',
     owner: input.owner ?? risk.owner,
+    // The accountable user travels with the exposure the same way the name does: a risk owned by a
+    // user becomes an issue owned by that user, unless the materialisation names a different one.
+    ownerId: input.ownerId ?? risk.ownerId,
     dueDate: input.dueDate ?? risk.targetDate,
     raisedAt: input.raisedAt ?? null,
     raisedBy: input.actorId ?? null,

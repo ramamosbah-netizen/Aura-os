@@ -7,10 +7,10 @@ import { WorkItemsService } from './work-items.service';
  * My Work stays an AGGREGATOR. No task table is created for risks or issues, and nothing here
  * writes: the register is the authority, and this surface points at it.
  *
- * The sharpest thing these tests pin is a LIMITATION rather than a capability. Only the `created`
- * scope is computable, because a project risk's owner is free text while every other source here
- * carries a real user id. Asserting that out loud is what stops someone later "fixing" it by
- * matching a typed name against an actor id.
+ * Both scopes are computable (AURA-PM-001): a risk/issue carries `ownerId` — the accountable user —
+ * beside the free-text `owner` name, so "assigned to me" is answered by id equality. The name is
+ * still matched against nothing; these tests pin both halves — an id assigns, a lookalike name does
+ * not — so nobody later "fixes" the name into a phantom assignment.
  */
 
 const empty = () => Promise.resolve([]);
@@ -80,19 +80,41 @@ describe('project risks and issues in My Work', () => {
     expect(projectRisks.list).toHaveBeenCalledWith(expect.objectContaining({ limit: expect.any(Number) }));
   });
 
-  it('cannot answer "assigned to me", and does not pretend to', async () => {
-    // The owner is a NAME, not an id — free text, matching the CRM register this shape came from.
-    // Someone else's risk must not appear just because the actor's name resembles the owner field.
-    const { service } = harness([risk({ createdBy: 'someone-else', owner: 'user-a' })]);
+  it('does not match a lookalike NAME against an actor id', async () => {
+    // owner is free text. Someone else's risk must not appear just because the owner NAME happens to
+    // equal the actor id — only owner_id assigns. This is the guard AURA-PM-001 must not regress.
+    const { service } = harness([risk({ createdBy: 'someone-else', owner: 'user-a', ownerId: null })]);
     const { items } = await service.list('tenant-a', 'user-a');
     expect(items.find((i) => i.source === 'project-risk')).toBeUndefined();
   });
 
-  it('claims only the scope it can prove', async () => {
+  it('answers "assigned to me" from owner_id — a risk owned but not raised by me (AURA-PM-001)', async () => {
+    const { service } = harness([risk({ createdBy: 'someone-else', ownerId: 'user-a' })]);
+    const { items } = await service.list('tenant-a', 'user-a');
+    const item = items.find((i) => i.source === 'project-risk');
+    expect(item).toBeDefined();
+    expect(item?.scopes).toEqual(['assigned']);
+  });
+
+  it('answers "assigned to me" for an issue owned but not raised by me', async () => {
+    const { service } = harness([], [issue({ createdBy: 'coordinator', raisedBy: 'coordinator', ownerId: 'user-a' })]);
+    const { items } = await service.list('tenant-a', 'user-a');
+    const item = items.find((i) => i.source === 'project-issue');
+    expect(item?.scopes).toEqual(['assigned']);
+  });
+
+  it('claims both scopes when I own AND raised it', async () => {
+    const { service } = harness([risk({ ownerId: 'user-a' })], [issue({ ownerId: 'user-a' })]);
+    const { items } = await service.list('tenant-a', 'user-a');
+    for (const item of items.filter((i) => i.module === 'Projects')) {
+      expect(item.scopes).toEqual(['assigned', 'created']);
+    }
+  });
+
+  it('claims only `created` when no owner id is set — a name-only owner assigns nothing', async () => {
     const { service } = harness([risk()], [issue()]);
     const { items } = await service.list('tenant-a', 'user-a');
     for (const item of items.filter((i) => i.module === 'Projects')) {
-      // `assigned` would be a guess. Until a risk carries an owner id, `created` is the whole truth.
       expect(item.scopes).toEqual(['created']);
     }
   });

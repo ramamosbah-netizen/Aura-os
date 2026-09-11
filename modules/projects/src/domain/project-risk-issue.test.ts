@@ -259,6 +259,13 @@ describe('risk → issue materialisation', () => {
     expect(materialiseRiskAsIssue(risk({ area: 'PROCUREMENT' })).issue.area).toBe('PROCUREMENT');
   });
 
+  it('carries the accountable user across materialisation (AURA-PM-001), unless overridden', () => {
+    // The risk owned by a user becomes an issue owned by that user — so "assigned to me" survives a
+    // risk landing into an issue, which is exactly when a PM most needs to still see it.
+    expect(materialiseRiskAsIssue(risk({ ownerId: 'u-eng' })).issue.ownerId).toBe('u-eng');
+    expect(materialiseRiskAsIssue(risk({ ownerId: 'u-eng' }), { ownerId: 'u-pm' }).issue.ownerId).toBe('u-pm');
+  });
+
   it('materialises once, and never twice', () => {
     const { risk: after } = materialiseRiskAsIssue(risk());
     expect(() => materialiseRiskAsIssue(after)).toThrow(/already materialised/);

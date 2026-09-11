@@ -32,6 +32,7 @@ interface RiskRow {
   mitigation: string | null;
   acceptance_reason: string | null;
   owner_name: string | null;
+  owner_id: string | null;
   target_date: Date | string | null;
   status: string;
   created_at: Date | string;
@@ -54,6 +55,7 @@ function rowToRisk(r: RiskRow): ProjectRisk {
     mitigation: r.mitigation,
     acceptanceReason: r.acceptance_reason,
     owner: r.owner_name,
+    ownerId: r.owner_id,
     targetDate: day(r.target_date),
     status: r.status as ProjectRiskStatus,
     createdAt: ts(r.created_at) ?? '',
@@ -69,11 +71,11 @@ export class PostgresProjectRiskStore implements ProjectRiskStore {
     await this.pool.query(
       `INSERT INTO public.aura_projects_risks
         (id, tenant_id, project_id, reference, title, description, area, likelihood, impact,
-         severity, mitigation, acceptance_reason, owner_name, target_date, status,
+         severity, mitigation, acceptance_reason, owner_name, owner_id, target_date, status,
          created_at, created_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
       [r.id, r.tenantId, r.projectId, r.reference, r.title, r.description, r.area, r.likelihood,
-       r.impact, r.severity, r.mitigation, r.acceptanceReason, r.owner, r.targetDate, r.status,
+       r.impact, r.severity, r.mitigation, r.acceptanceReason, r.owner, r.ownerId, r.targetDate, r.status,
        r.createdAt, r.createdBy, r.updatedAt],
     );
   }
@@ -91,11 +93,11 @@ export class PostgresProjectRiskStore implements ProjectRiskStore {
     return executor.query(
       `UPDATE public.aura_projects_risks
        SET reference=$2, title=$3, description=$4, area=$5, likelihood=$6, impact=$7, severity=$8,
-           mitigation=$9, acceptance_reason=$10, owner_name=$11, target_date=$12, status=$13,
-           updated_at=$14
+           mitigation=$9, acceptance_reason=$10, owner_name=$11, owner_id=$12, target_date=$13, status=$14,
+           updated_at=$15
        WHERE id=$1`,
       [r.id, r.reference, r.title, r.description, r.area, r.likelihood, r.impact, r.severity,
-       r.mitigation, r.acceptanceReason, r.owner, r.targetDate, r.status, r.updatedAt],
+       r.mitigation, r.acceptanceReason, r.owner, r.ownerId, r.targetDate, r.status, r.updatedAt],
     );
   }
 

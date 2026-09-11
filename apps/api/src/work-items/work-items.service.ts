@@ -451,18 +451,15 @@ export class WorkItemsService {
   /**
    * §21 risks and issues — the fourteenth and fifteenth sources.
    *
-   * ONLY THE `created` SCOPE IS COMPUTABLE, and that is a data gap rather than a choice. Every
-   * other source here carries a real user id for assignment (`assignedTo`, `ownerId`); a project
-   * risk's `owner` is FREE TEXT, matching the CRM register it borrowed the shape from. So "risks
-   * assigned to me" cannot be answered — only "risks I raised" — and matching a typed name against
-   * an actor id would be a guess dressed as a fact.
-   *
-   * Recorded as a gap rather than papered over. The fix is an `owner_id` beside `owner_name`, and
-   * it is a schema decision, not one to slip in here.
+   * BOTH SCOPES ARE NOW COMPUTABLE (AURA-PM-001). A risk carries `ownerId` — the accountable user's
+   * stable id — beside the free-text `owner` name, so "risks assigned to me" is answerable the same
+   * way every other source answers it: id equality, never a name match. `owner` (the name) is still
+   * matched against nothing; a typed name resembling an actor id must not conjure an assignment.
    */
   private addProjectRisk(put: (item: WorkItem) => void, r: ProjectRisk, actor: string): void {
+    const assigned = r.ownerId === actor;
     const created = r.createdBy === actor;
-    if (!created) return;
+    if (!assigned && !created) return;
     // ACCEPTED carries no outstanding action — the decision was to carry the exposure — so it
     // reads as done on a to-do list even though the risk is still live on the register. The two
     // surfaces answer different questions and are allowed to differ.
@@ -477,14 +474,15 @@ export class WorkItemsService {
       projectId: r.projectId, projectName: null, status, sourceStatus: r.status, priority,
       // The date the mitigation was promised for — the only date a risk has.
       dueAt: r.targetDate, createdAt: r.createdAt, updatedAt: r.updatedAt,
-      scopes: scopes(false, created), isFollowUp: false, actions: [],
+      scopes: scopes(assigned, created), isFollowUp: false, actions: [],
       origin: origin(r.createdBy, actor),
     });
   }
 
   private addProjectIssue(put: (item: WorkItem) => void, i: ProjectIssue, actor: string): void {
+    const assigned = i.ownerId === actor;
     const created = i.createdBy === actor || i.raisedBy === actor;
-    if (!created) return;
+    if (!assigned && !created) return;
     const status: WorkItemStatus = i.status === 'in_progress' ? 'in_progress'
       : i.status === 'open' ? 'todo' : 'done';
     const priority: WorkItemPriority = i.severity === 'critical' ? 'critical'
@@ -495,7 +493,7 @@ export class WorkItemsService {
       href: `/project/${i.projectId}/controls?tab=risks`,
       projectId: i.projectId, projectName: null, status, sourceStatus: i.status, priority,
       dueAt: i.dueDate, createdAt: i.createdAt, updatedAt: i.updatedAt,
-      scopes: scopes(false, created), isFollowUp: false, actions: [],
+      scopes: scopes(assigned, created), isFollowUp: false, actions: [],
       origin: origin(i.createdBy, actor),
     });
   }

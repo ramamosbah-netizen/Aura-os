@@ -87,8 +87,21 @@ export interface ProjectRisk {
   mitigation: string | null;
   /** Why the exposure is being carried. Required to reach `ACCEPTED`. */
   acceptanceReason: string | null;
-  /** Who is accountable for the mitigation. */
+  /**
+   * Who is accountable for the mitigation, as a free-text NAME (AURA-PM-002/AURA-PM-001).
+   *
+   * Kept deliberately: the accountable person is often not a user of the system — a subcontractor's
+   * engineer, a client rep — and a name is all that exists for them. It is a label, not the
+   * identity: it cannot answer "is this mine?" and must never be matched against an actor id.
+   */
   owner: string | null;
+  /**
+   * The accountable user, when they ARE one (AURA-PM-001). This is the stable id My Work matches on
+   * to answer "risks assigned to me" — the half a project manager opens My Work for. Null when the
+   * owner is only a name, or nobody is assigned. `owner` (the name) and `ownerId` are independent:
+   * a record may carry a name with no user, an assigned user, both, or neither.
+   */
+  ownerId: Id | null;
   /** The date the mitigation is supposed to be in place by. */
   targetDate: string | null;
   status: ProjectRiskStatus;
@@ -116,6 +129,7 @@ export interface NewProjectRisk {
   impact?: RiskImpact;
   mitigation?: string | null;
   owner?: string | null;
+  ownerId?: Id | null;
   targetDate?: string | null;
   createdBy?: Id | null;
 }
@@ -140,6 +154,7 @@ export function makeProjectRisk(input: NewProjectRisk): ProjectRisk {
     mitigation: input.mitigation?.trim() || null,
     acceptanceReason: null,
     owner: input.owner?.trim() || null,
+    ownerId: input.ownerId ?? null,
     targetDate: input.targetDate ?? null,
     status: 'OPEN',
     createdAt: now,
@@ -149,7 +164,7 @@ export function makeProjectRisk(input: NewProjectRisk): ProjectRisk {
 }
 
 export type ProjectRiskPatch = Partial<Pick<ProjectRisk,
-  'reference' | 'title' | 'description' | 'area' | 'likelihood' | 'impact' | 'mitigation' | 'owner' | 'targetDate'>>;
+  'reference' | 'title' | 'description' | 'area' | 'likelihood' | 'impact' | 'mitigation' | 'owner' | 'ownerId' | 'targetDate'>>;
 
 /** Patch editable fields; severity is recomputed whenever likelihood or impact moves. */
 export function updateProjectRisk(risk: ProjectRisk, patch: ProjectRiskPatch): ProjectRisk {

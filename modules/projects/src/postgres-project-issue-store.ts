@@ -32,6 +32,7 @@ interface IssueRow {
   severity: string;
   status: string;
   owner_name: string | null;
+  owner_id: string | null;
   raised_at: Date | string;
   raised_by: string | null;
   due_date: Date | string | null;
@@ -68,6 +69,7 @@ function rowToIssue(r: IssueRow, references: ProjectIssueReference[]): ProjectIs
     severity: r.severity as ProjectIssueSeverity,
     status: r.status as ProjectIssueStatus,
     owner: r.owner_name,
+    ownerId: r.owner_id,
     raisedAt: ts(r.raised_at) ?? '',
     raisedBy: r.raised_by,
     dueDate: day(r.due_date),
@@ -101,11 +103,11 @@ export class PostgresProjectIssueStore implements ProjectIssueStore {
     await executor.query(
       `INSERT INTO public.aura_projects_issues
         (id, tenant_id, project_id, reference, title, description, area, severity, status,
-         owner_name, raised_at, raised_by, due_date, resolution, resolved_at, resolved_by,
+         owner_name, owner_id, raised_at, raised_by, due_date, resolution, resolved_at, resolved_by,
          origin_risk_id, created_at, created_by, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
       [i.id, i.tenantId, i.projectId, i.reference, i.title, i.description, i.area, i.severity,
-       i.status, i.owner, i.raisedAt, i.raisedBy, i.dueDate, i.resolution, i.resolvedAt,
+       i.status, i.owner, i.ownerId, i.raisedAt, i.raisedBy, i.dueDate, i.resolution, i.resolvedAt,
        i.resolvedBy, i.originRiskId, i.createdAt, i.createdBy, i.updatedAt],
     );
     await this.writeReferences(executor, i);
@@ -115,11 +117,11 @@ export class PostgresProjectIssueStore implements ProjectIssueStore {
     await this.pool.query(
       `UPDATE public.aura_projects_issues
        SET reference=$2, title=$3, description=$4, area=$5, severity=$6, status=$7, owner_name=$8,
-           raised_at=$9, due_date=$10, resolution=$11, resolved_at=$12, resolved_by=$13,
-           updated_at=$14
+           owner_id=$9, raised_at=$10, due_date=$11, resolution=$12, resolved_at=$13, resolved_by=$14,
+           updated_at=$15
        WHERE id=$1`,
       [i.id, i.reference, i.title, i.description, i.area, i.severity, i.status, i.owner,
-       i.raisedAt, i.dueDate, i.resolution, i.resolvedAt, i.resolvedBy, i.updatedAt],
+       i.ownerId, i.raisedAt, i.dueDate, i.resolution, i.resolvedAt, i.resolvedBy, i.updatedAt],
     );
     // `origin_risk_id`, `project_id` and `raised_by` are provenance: written once, never patched.
     // An issue that could change which risk it came from would make the risk register unauditable.

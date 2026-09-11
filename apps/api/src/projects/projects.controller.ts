@@ -179,6 +179,7 @@ class CreateRiskDto {
   @IsOptional() @IsIn(['low', 'medium', 'high']) impact?: RiskImpact;
   @IsOptional() @IsString() mitigation?: string;
   @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() targetDate?: string;
 }
 
@@ -191,6 +192,7 @@ class UpdateRiskDto {
   @IsOptional() @IsIn(['low', 'medium', 'high']) impact?: RiskImpact;
   @IsOptional() @IsString() mitigation?: string;
   @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() targetDate?: string;
 }
 
@@ -212,6 +214,7 @@ class MaterialiseRiskDto {
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsIn(['minor', 'major', 'critical']) severity?: ProjectIssueSeverity;
   @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsString() raisedAt?: string;
   @IsOptional() @IsArray() references?: IssueReferenceDto[];
@@ -225,6 +228,7 @@ class CreateIssueDto {
   @IsOptional() @IsIn(AREAS) area?: ProjectDeliveryArea;
   @IsOptional() @IsIn(['minor', 'major', 'critical']) severity?: ProjectIssueSeverity;
   @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() raisedAt?: string;
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsArray() references?: IssueReferenceDto[];
@@ -237,6 +241,7 @@ class UpdateIssueDto {
   @IsOptional() @IsIn(AREAS) area?: ProjectDeliveryArea;
   @IsOptional() @IsIn(['minor', 'major', 'critical']) severity?: ProjectIssueSeverity;
   @IsOptional() @IsString() owner?: string;
+  @IsOptional() @IsString() ownerId?: string;
   @IsOptional() @IsString() raisedAt?: string;
   @IsOptional() @IsString() dueDate?: string;
   @IsOptional() @IsArray() references?: IssueReferenceDto[];
@@ -746,6 +751,7 @@ export class ProjectsController {
       impact: dto.impact,
       mitigation: dto.mitigation,
       owner: dto.owner,
+      ownerId: dto.ownerId,
       targetDate: dto.targetDate,
       actorId: ctx.actorId,
     });
@@ -838,6 +844,7 @@ export class ProjectsController {
       area: dto.area,
       severity: dto.severity,
       owner: dto.owner,
+      ownerId: dto.ownerId,
       raisedAt: dto.raisedAt,
       dueDate: dto.dueDate,
       references: dto.references as ProjectIssueReference[] | undefined,

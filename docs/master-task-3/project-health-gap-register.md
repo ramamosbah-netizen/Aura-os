@@ -279,7 +279,7 @@ a live schema + CHECK proof against the disposable database.
 
 ---
 
-## AURA-PM-001 — a project risk has an owner's NAME, not an owner
+## AURA-PM-001 — a project risk has an owner's NAME, not an owner — RESOLVED
 
 Surfaced by wiring §21 into My Work, which is where it first cost something.
 
@@ -310,6 +310,23 @@ half the feature.
 **Fix:** an `owner_id` column beside `owner_name` on both tables, nullable, with the free-text field
 kept for people who are not users of the system — a subcontractor's engineer, say. That is a schema
 decision and a UI decision, so it is recorded rather than slipped in alongside the aggregation.
+
+**Resolved 2026-09-11 (migration 0293).** Exactly that. `owner_id` (uuid, nullable) sits beside
+`owner_name` on both `aura_projects_risks` and `aura_projects_issues`, indexed by
+`(tenant_id, owner_id)` for the "assigned to me" read. The two fields are independent: a record may
+carry a name with no user (kept for non-users), an assigned user, both, or neither. Only `owner_id`
+is ever matched to an actor — a lookalike name never conjures an assignment, and a test pins that.
+
+My Work now computes BOTH scopes for risks and issues (`assigned = ownerId === actor`, alongside
+`created`), so it answers "risks assigned to me" — the half a project manager opens My Work for —
+the same way every other source does: id equality. `ownerId` also travels across materialisation, so
+a risk owned by a user becomes an issue owned by that user; "assigned to me" survives the exposure
+landing. Wired through the domain, both stores, the create/update/materialise DTOs, and the My Work
+aggregator. Proven by `project-register-work-items.test.ts` (both scopes, and the name-not-matched
+guard), the materialisation carry test, and a live schema proof.
+
+Not a foreign key to `aura_users`, consistent with `created_by`/`raised_by` on the same tables: the
+user master is platform-owned and a register row must outlive a user being deprovisioned.
 
 ---
 

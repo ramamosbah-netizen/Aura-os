@@ -263,3 +263,53 @@ every handoff both **provenance** (the downstream record cites the upstream one)
 Only after these four domains, the method repeats over Delivery Operations, Supply Chain, Finance,
 Assets & Service, People, Admin, and Communication/My Work. Only then is "the whole app is complete
 and easy to use" a claim that can be made.
+
+---
+
+## F2 — Submittal Authority mini-discovery (determination, no fix)
+
+Done before Phase 2, from the current models only. The question: are the two submittal aggregates a
+clean *technical-approval vs document-transmission* split, or a duplicate?
+
+**Field / lifecycle / event comparison**
+
+| Aspect | Engineering `submittal.ts` | Doc Control `submittal.ts` |
+|---|---|---|
+| Role as coded | thin approve/reject tracker | formal consultant document review |
+| Distinguishing fields | `code`, `submittalType` (material/technical/sample/drawing), `ownerId` | `reference`, **`revision`** (int), **`reviewCode` A/B/C/D**, `reviewComments`, `submittedAt`/`returnedAt` |
+| Lifecycle | `draft → submitted → approved/rejected` (generic status set) | `draft → submitted → returned` (+A/B/C/D); C/D → `reviseSubmittal` → new revision draft |
+| Revisions | none | yes (revise-and-resubmit, revision incremented) |
+| Review disposition | none | A=approved · B=approved w/ comments · C=revise&resubmit · D=rejected |
+| Events | none of its own (generic status update) | `doccontrol.submittal.submitted` / `.returned` |
+| Transmittal / conveyance | none | a **separate** transmittal aggregate in the same module |
+| Lineage to the other | **none** | **none** |
+
+**Determination — the hypothesis is inverted, so the authority must be ADJUSTED, not merely
+confirmed.** The formal technical-review/approval lifecycle (revisions, A/B/C/D, revise-and-resubmit)
+that the hypothesis assigned to *Engineering* actually lives in **Doc Control**. Engineering's
+submittal is a **thin, unlinked parallel** of the same "submitted-for-approval" object at lower
+fidelity. Document *transmission* is a third, separate thing (Doc Control's transmittal aggregate),
+already distinct. And there is **no lineage** between the two submittals — a user can create one in
+each with nothing tying them together, and both look canonical. So this is a **partial duplicate of
+the review object**, not a clean REFERENCE≠OWNERSHIP layering.
+
+**Recommended authority (for your decision — NOT implemented; no remediation until after Engineering
+Phase 2):**
+- **Doc Control owns the submittal-of-record** — it already implements the real consultant-review
+  lifecycle (revision + A/B/C/D + resubmit + events) and the transmittal/conveyance beside it. This
+  matches the Doc-Control half of the hypothesis.
+- **Engineering's submittal should not remain an independent canonical register of the same object.**
+  Two coherent options, to be chosen deliberately:
+  1. **Retire it**, and have Engineering *reference* the Doc-Control submittal-of-record; or
+  2. **Redefine it narrowly** as the *internal* engineering technical-review that PRECEDES the formal
+     Doc-Control consultant submittal, with explicit lineage (`engineeringSubmittalId ↔
+     doccontrolSubmittalId`) — realising the flow the hypothesis drew (Engineering technical package
+     → Doc Control transmittal → consultant → disposition → Engineering lifecycle).
+- Either way, `REFERENCE ≠ OWNERSHIP` is honoured: one submittal-of-record (Doc Control), and
+  Engineering either references it or owns only a distinct, linked pre-step.
+
+**Consequence for Phase 2:** the Engineering audit will treat the Engineering submittal as a
+capability under question — recording *what a user can actually do with it* and whether the UI makes
+its relationship (or non-relationship) to the Doc-Control submittal clear — but will **not** change
+either aggregate. The authority decision and any remediation wait for the frozen Engineering Phase-2
+register.

@@ -73,7 +73,7 @@ so nobody will go looking for a binding that was never supposed to exist yet.
 
 ---
 
-## AURA-RLS-001 — tables outside both tenant-isolation controls
+## AURA-RLS-001 — tables outside both tenant-isolation controls — RESOLVED
 
 **Read from `pg_class` on a fresh database migrated 283/283, not from migration text.** Full run:
 [`s21-db-proof-2026-09-09.md`](./s21-db-proof-2026-09-09.md) ·
@@ -136,12 +136,31 @@ Two consequences worth separating, since conflating them is how a vacuous proof 
 The operational rule that follows: **any RLS proof run on the `aura` connection passes vacuously.**
 Isolation must be attacked from `aura_app`, which is what the harness does.
 
-### Remediation — deliberately not done here
+### Remediation — RESOLVED 2026-09-11
 
-A migration adding a claim path for `aura_projects_eot_delay_links`, and a decision on the RBAC
-tables. Folding either into §21 would bury a schema-wide correction inside a feature branch, and the
-link table needs its own isolation decision because it has no `tenant_id` to isolate on — it would
-have to reach through a parent claim the way `aura_document_versions` does.
+Both halves closed.
+
+**`aura_projects_eot_delay_links` — now isolated (migration 0295).** ENABLE + FORCE RLS with a policy
+that reaches through the parent EOT claim, exactly as `aura_document_versions` reaches through
+`aura_documents`: a link row is visible only when its `eot_claim_id` resolves to a claim in the
+current tenant, and `current_tenant_id() IS NOT NULL` keeps it fail-closed. Proven live under the
+non-bypassing `aura_app` role: the owning tenant sees the seeded link, a foreign tenant sees 0, and
+an unset GUC sees 0. One honest caveat recorded in the migration: with no `tenant_id` column the
+table stays invisible to `rls-fitness.mjs`'s automated gate — the protection is real, but the gate
+that discovers by `tenant_id` cannot confirm it. That is the blind spot this finding named, now with
+a protected table behind it rather than an open one.
+
+**RBAC tables (`aura_access_grants`, `aura_access_roles`) — decision: no RLS, and it is correct.**
+Verified against the access model rather than assumed. `AccessService.hydrate()`
+(`core/src/identity/access.service.ts`) reads ALL roles and ALL grants at boot with no tenant filter
+and no tenant GUC, into a single in-memory authorization model for the whole process. `aura_access_roles`
+is a global catalog of role → permission definitions shared across tenants; it is not tenant data.
+`aura_access_grants` has no `tenant_id` column at all — a grant's scope (and its tenant) lives inside
+the `scope`/`scope_key` jsonb, and isolation is enforced by scope-matching in `AccessService.assert`,
+not by row visibility. Adding a tenant RLS policy would be actively harmful: the boot-time hydrate,
+running as `aura_app` with no GUC bound, would read zero grants and disable authorization
+system-wide. So no RLS is the right posture — the same class as `aura_migrations` / `aura_environment`,
+platform data whose isolation is not a row-visibility question.
 
 ---
 

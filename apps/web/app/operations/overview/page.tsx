@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, CheckCircle2, CircleAlert, FileCheck2, FilePlus2, HardHat, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
 import { getJson } from '@/lib/api';
+import DeliveryOperationsWorkspaceHeader from '@/components/delivery-operations-workspace-header';
 import styles from './delivery-operations-overview.module.css';
 
 export const dynamic = 'force-dynamic';
@@ -80,10 +81,15 @@ export default async function DeliveryOperationsOverviewPage({ searchParams }: {
 
   return (
     <main className={styles.page} data-testid="delivery-operations-overview">
-      <header className={styles.hero}>
-        <div><div className={styles.eyebrow}><span aria-hidden /> AURA OS / DELIVERY OPERATIONS</div><h1>Execution <span>Command Center</span></h1><p>See what is working now, what is blocked, and where your decision is needed across active projects.</p></div>
+      <DeliveryOperationsWorkspaceHeader
+        active="overview"
+        title="Execution Command Center"
+        description="See what is working now, what is blocked, and where your decision is needed across active projects."
+        owner="Delivery Operations composition layer"
+      />
+      <div className={styles.overviewActionBar}>
         <details className={styles.actionMenu}><summary className={styles.primary}>+ Delivery Action</summary><div className={styles.actionPopover}>{actions.map((group) => <div key={group.group} className={styles.actionGroup}><span>{group.group}</span>{group.items.map((item) => { const Icon = item.icon; return <Link key={item.label} href={item.href} className={styles.actionItem}><Icon size={14} aria-hidden /><span><strong>{item.label}</strong><small>{item.description}</small></span><ArrowUpRight size={13} aria-hidden /></Link>; })}</div>)}</div></details>
-      </header>
+      </div>
 
       <form method="get" className={styles.filters} aria-label="Filter execution command center"><label><span>Project</span><select name="project" defaultValue={selectedProject}><option value="">All projects</option>{(projects ?? []).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label><label><span>Discipline</span><select name="discipline" defaultValue={selectedDiscipline}><option value="all">All disciplines</option><option value="engineering">Engineering</option><option value="site">Site</option><option value="quality">Quality</option><option value="hse">HSE</option><option value="commissioning">Testing &amp; commissioning</option></select></label><label className={styles.searchField}><span>Search</span><input name="q" defaultValue={filters.q ?? ''} placeholder="Project or reference…" /></label><button type="submit" className={styles.filterButton}>Apply</button>{(selectedProject || selectedDiscipline !== 'all' || query) && <Link href="/operations/overview" className={styles.reset}>Reset</Link>}</form>
 

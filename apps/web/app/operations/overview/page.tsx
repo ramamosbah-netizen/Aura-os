@@ -1,8 +1,22 @@
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, CheckCircle2, CircleAlert, FileCheck2, FilePlus2, HardHat, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, CircleAlert, ClipboardCheck, FileCheck2, FilePlus2, HardHat, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
 import { getJson } from '@/lib/api';
 import DeliveryOperationsWorkspaceHeader from '@/components/delivery-operations-workspace-header';
+import SuiteShortcutGrid from '@/components/suite-shortcut-grid';
+import type { SuiteShortcut } from '@/components/suite-dashboard-shell';
 import styles from './delivery-operations-overview.module.css';
+
+// Discipline shortcuts — the same tone-coloured card grid Sales uses at the foot of its cockpit,
+// so a reader can jump straight into a discipline workspace from the overview.
+const DISCIPLINE_SHORTCUTS: SuiteShortcut[] = [
+  { label: 'Engineering', description: 'Drawings, RFIs, submittals, design changes and deliverables', href: '/engineering', icon: PencilRuler, tone: 'blue' },
+  { label: 'Site', description: 'Work instructions, daily reports and field execution', href: '/site/control', icon: HardHat, tone: 'amber' },
+  { label: 'Quality', description: 'Inspections, NCRs and corrective actions', href: '/quality/control', icon: ClipboardCheck, tone: 'green' },
+  { label: 'HSE', description: 'Permits to work and safety governance', href: '/hse/control', icon: ShieldCheck, tone: 'teal' },
+  { label: 'Testing & commissioning', description: 'Test records, system readiness and commissioning', href: '/commissioning', icon: Wrench, tone: 'cyan' },
+  { label: 'Handover', description: 'Closeout evidence and client acceptance', href: '/handover', icon: FileCheck2, tone: 'violet' },
+  { label: 'Reports', description: 'Read-only cross-project delivery views', href: '/operations/reports', icon: BarChart3, tone: 'slate' },
+];
 
 export const dynamic = 'force-dynamic';
 
@@ -100,6 +114,8 @@ export default async function DeliveryOperationsOverviewPage({ searchParams }: {
       <section className={styles.section} aria-label="Active execution"><SectionHead kicker="Live delivery" title="Active execution" linkHref="/site/execution" linkLabel="View all" /><div className={styles.panel}>{executionProjects.length === 0 ? <div className={styles.empty}><HardHat size={18} aria-hidden /><strong>No active execution records</strong><span>Active projects with schedule progress will appear here. No placeholder progress has been added.</span><Link href="/projects/projects">Open Projects register <ArrowUpRight size={13} aria-hidden /></Link></div> : <div className={styles.executionList}>{executionProjects.slice(0, 6).map((project) => <Link key={project.id} href={`/project/${project.id}/site`} className={styles.executionRow}><span className={styles.executionName}><strong>{project.title}</strong><small>{project.reference ?? 'Project execution context'}</small></span><span className={styles.executionProgress}><b>{project.progress === null ? 'Unavailable' : `${project.progress}%`}</b><span><i style={{ width: `${project.progress ?? 0}%` }} /></span></span><span className={styles.executionStatus}>{project.progress === null ? 'Not established' : 'In progress'}</span><ArrowUpRight size={14} aria-hidden /></Link>)}</div>}</div></section>
 
       <section className={styles.section} aria-label="Upcoming and pre-execution"><SectionHead kicker="Start safely" title="Upcoming / pre-execution" linkHref="/operations/pre-execution" linkLabel="Pre-execution" /><div className={styles.panel}>{readinessRows === null ? <Unavailable message="Readiness projection is unavailable because the Projects source did not respond." /> : readinessRows.length === 0 ? <div className={styles.empty}><ShieldCheck size={18} aria-hidden /><strong>No upcoming work matches these filters</strong><span>Readiness appears when an authoritative project record exists.</span><Link href="/projects/projects">Open Projects register <ArrowUpRight size={13} aria-hidden /></Link></div> : <div className={styles.upcomingList}>{readinessRows.slice(0, 8).map((row) => <Link key={row.id} href={`/operations/pre-execution?project=${encodeURIComponent(row.id)}`} className={styles.upcomingRow}><span><strong>{row.title}</strong><small>{row.reference ?? 'Project preparation'}</small></span><span className={`${styles.signal} ${signalClass(row.overall)}`}>{row.overall}</span><ArrowUpRight size={14} aria-hidden /></Link>)}</div>}</div></section>
+
+      <SuiteShortcutGrid kicker="Delivery Operations workspaces" title="Discipline workspaces" items={DISCIPLINE_SHORTCUTS} itemTestId="operations-shortcut" tabType="Delivery Operations" titleId="operations-tools-title" />
 
       <footer className={styles.footerNote}><CircleAlert size={14} aria-hidden /><span>Overview is a summary and exception surface. Detailed records and actions remain in Engineering, Site, Quality, HSE, Testing &amp; Commissioning and Handover.</span></footer>
     </main>

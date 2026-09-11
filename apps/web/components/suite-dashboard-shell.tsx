@@ -2,6 +2,7 @@ import type { ComponentType, ReactNode, SVGProps } from 'react';
 import { ArrowRight, Sparkles } from 'lucide-react';
 import AuraTabLink from './aura-tab-link';
 import AuraTabAnchor from './aura-tab-anchor';
+import SuiteShortcutGrid from './suite-shortcut-grid';
 import styles from './suite-dashboard-shell.module.css';
 
 /**
@@ -182,25 +183,14 @@ export default function SuiteDashboardShell({
         </aside>
       </div>
 
-      <section className={styles.workspaces} aria-labelledby="suite-tools-title">
-        <div className={styles.sectionHead}>
-          <div><p className={styles.sectionKicker}>{shortcuts.kicker}</p><h2 id="suite-tools-title">{shortcuts.title}</h2></div>
-          <span className={styles.toolCount}>{shortcuts.countLabel ?? `${shortcuts.items.length} shortcuts`}</span>
-        </div>
-        <div className={styles.shortcutGrid}>
-          {shortcuts.items.map((shortcut) => {
-            const Icon = shortcut.icon;
-            return (
-              <AuraTabLink key={shortcut.label} href={shortcut.href} tabTitle={shortcut.label} tabType={anchor.type} className={`${styles.shortcut} ${styles[shortcut.tone]}`} data-testid={shortcuts.itemTestId}>
-                <span className={styles.shortcutIcon} aria-hidden><Icon /></span>
-                <span className={styles.shortcutCopy}><strong>{shortcut.label}</strong><small>{shortcut.description}</small></span>
-                {shortcut.count !== null && shortcut.count !== undefined ? <span className={styles.shortcutCount}>{shortcut.count}</span> : null}
-                <ArrowRight className={styles.shortcutArrow} aria-hidden />
-              </AuraTabLink>
-            );
-          })}
-        </div>
-      </section>
+      <SuiteShortcutGrid
+        kicker={shortcuts.kicker}
+        title={shortcuts.title}
+        items={shortcuts.items}
+        itemTestId={shortcuts.itemTestId}
+        countLabel={shortcuts.countLabel}
+        tabType={anchor.type}
+      />
 
       <footer className={styles.ownership}>{ownership}</footer>
     </div>

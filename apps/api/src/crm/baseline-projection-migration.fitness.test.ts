@@ -1,6 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+// AURA-FIT-001: this is an I/O-bound walk of the whole repository, not a behavioural test.
+// vitest's 5 s default describes neither its work nor its variance under parallel turbo load
+// (measured 15-20 s contended, <1 s alone). The generous budget names what it is; the assertions
+// are untouched — this relaxes nothing about the check itself.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('0270 baseline projection migration contract', () => {
   const sql = readFileSync(

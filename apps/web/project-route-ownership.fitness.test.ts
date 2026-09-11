@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { uiSourceFiles } from './test-support/source-files';
@@ -33,6 +33,12 @@ function legacyLinkFindings(): string[] {
   }
   return findings;
 }
+
+// AURA-FIT-001: this is an I/O-bound walk of the whole repository, not a behavioural test.
+// vitest's 5 s default describes neither its work nor its variance under parallel turbo load
+// (measured 15-20 s contended, <1 s alone). The generous budget names what it is; the assertions
+// are untouched — this relaxes nothing about the check itself.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('ADR-0019 canonical Project 360 ownership', () => {
   it('keeps one canonical Project controls owner', () => {

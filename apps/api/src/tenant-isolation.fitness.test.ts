@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -123,6 +123,12 @@ const RATCHET = 0;
  * merits, which is what a budget allows and a blanket sweep does not.
  */
 const KERNEL_RATCHET = 10;
+
+// AURA-FIT-001: this is an I/O-bound walk of the whole repository, not a behavioural test.
+// vitest's 5 s default describes neither its work nor its variance under parallel turbo load
+// (measured 15-20 s contended, <1 s alone). The generous budget names what it is; the assertions
+// are untouched — this relaxes nothing about the check itself.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('tenant-isolation fitness (N-08 ratchet)', () => {
   it(`has no more than ${RATCHET} services fetching by id without a tenant check`, () => {

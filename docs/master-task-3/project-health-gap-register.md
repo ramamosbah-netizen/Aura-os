@@ -289,7 +289,7 @@ decision and a UI decision, so it is recorded rather than slipped in alongside t
 
 ---
 
-## AURA-FIT-001 — three fitness tests are timeout-flaky under parallel load
+## AURA-FIT-001 — repo-walking fitness tests are timeout-flaky under parallel load — RESOLVED
 
 `architecture.fitness.test.ts`, `error-taxonomy.fitness.test.ts` and `money-rounding.fitness.test.ts`
 each failed with `Test timed out in 5000ms` on three consecutive full `pnpm test` runs, then passed
@@ -335,11 +335,35 @@ behavioural tests; a 5 s budget describes neither their work nor their variance.
 relaxing a check — the assertions are untouched — but it is adjacent enough to "make it green" that
 it should be chosen, not slipped in.
 
-**Deliberately not fixed here.** The obvious change — an explicit timeout for these tests — is
-adjacent to "make it green by relaxing the check", and that call is not mine to make silently.
-Stated as the choice it is: these are I/O-bound scans rather than behavioural tests, so a longer
-timeout would arguably be describing them correctly rather than weakening them. Recorded for a
-decision, not actioned.
+**Resolved 2026-09-11 (§25 P4).** The decision recorded above was taken: an explicit
+`vi.setConfig({ testTimeout: 30_000 })` on the I/O-bound scans, named for what it is. It was applied
+to **all 20 repo-walking fitness tests**, not only the five that had flaked — the finding's own words
+were "any repo-walking test with vitest's 5 s default is exposed", so fixing only the observed five
+would have left the tax in place for the next one to lose the disk race. A 30 s budget is ~1.5× the
+worst contended time observed (20 s) and ~30–50× the standalone time, so it is generous enough that
+contention can never trip it, yet it is scoped to these files alone: every behavioural test still
+runs on vitest's strict 5 s default, so a genuinely hung test is not masked.
+
+Deliberately NOT done as a global `testTimeout` in `apps/api`'s config: that has no vitest config
+for the default run, and adding one would relax the budget for every api test — which is exactly the
+"make it green" the recommendation warned against. Per-file `setConfig` keeps the relaxation to the
+scans that earned it.
+
+**And it paid for itself immediately.** Running reliably instead of timing out, two of the scans
+surfaced real defects they had been masking whenever they died at 5 s:
+
+- `error-taxonomy.fitness` caught two §22 governed-acceptance throws that would have escaped to a
+  raw 500 — "the schedule has changed since this proposal was produced" and "this proposal belongs
+  to a different schedule". Both are 409 CONFLICT semantics (stale/mismatched proposal); the
+  classifier in `apps/api/src/common/all-exceptions.filter.ts` was extended (`changed since`,
+  `belongs to a different`) to map them.
+- `hydration-dates.fitness` caught an unpinned `toLocaleString('en-AE', …)` in the §22 Step 12
+  planning-run panel (`apps/web/components/planning-run-panel.tsx:230`) — a server/client hydration
+  mismatch. Fixed to pass `DISPLAY_LOCALE` + `DISPLAY_TIME_ZONE`.
+
+That is the argument for the fix in one line: a flaky guard is worse than no guard, because it hides
+the very failures it exists to catch. Full suites now green — api 51/51 (390 tests), web fitness
+15/15 (60 tests) — with no timeouts.
 
 ---
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { classifyDomainMessage } from './common/all-exceptions.filter';
@@ -62,6 +62,12 @@ function extractThrowMessages(src: string): string[] {
   }
   return out;
 }
+
+// AURA-FIT-001: this is an I/O-bound walk of the whole repository, not a behavioural test.
+// vitest's 5 s default describes neither its work nor its variance under parallel turbo load
+// (measured 15-20 s contended, <1 s alone). The generous budget names what it is; the assertions
+// are untouched — this relaxes nothing about the check itself.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('Error taxonomy — every domain throw maps to a client-mappable status (no 500 escapes)', () => {
   it('classifies every throw-message literal in modules/* and apps/api', () => {

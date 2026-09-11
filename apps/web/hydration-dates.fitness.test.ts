@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { relative, resolve } from 'node:path';
 import { uiSourceFiles } from './test-support/source-files';
 
@@ -112,6 +112,12 @@ function scan() {
   }
   return { unpinned, now };
 }
+
+// AURA-FIT-001: this is an I/O-bound walk of the whole repository, not a behavioural test.
+// vitest's 5 s default describes neither its work nor its variance under parallel turbo load
+// (measured 15-20 s contended, <1 s alone). The generous budget names what it is; the assertions
+// are untouched — this relaxes nothing about the check itself.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('hydration-safe date formatting', () => {
   it('every date a client component renders is pinned to a locale AND a timezone', () => {

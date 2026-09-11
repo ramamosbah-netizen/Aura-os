@@ -33,11 +33,13 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
   if (
-    /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|is not a locked|immutable after handover|require(?:s)? a signed contract|\bonly\b.*\bcan\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another/i.test(m)
+    /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|is not a locked|immutable after handover|require(?:s)? a signed contract|\bonly\b.*\bcan\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another|belongs to a different/i.test(m)
     // Immutability and concurrency. A signed revision, an approved baseline and a certified
     // payment certificate all refuse the same way: the record is closed to further writes, or
     // someone else moved it first. The caller must re-read and use the governed correction path.
-    || /\bis immutable\b|changed concurrently|^conflicting\b|dedupe conflict/i.test(m)
+    // "…has changed since this proposal was produced" (§22 governed acceptance) is the same shape:
+    // the schedule moved after the proposal was cut, so the stale proposal cannot be promoted.
+    || /\bis immutable\b|changed concurrently|changed since\b|^conflicting\b|dedupe conflict/i.test(m)
     // Ownership boundaries between ledgers. "CBS actual cost is Cost Ledger-owned; post a
     // canonical CostTransaction" is not bad input — it is a write aimed at the wrong authority.
     || /-owned;|is not allowed for\b/i.test(m)

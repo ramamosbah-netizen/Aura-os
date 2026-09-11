@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { Play, Check, X, AlertTriangle, CircleHelp, CircleCheck } from 'lucide-react';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import styles from './planning-run-panel.module.css';
 
 // §22 Step 12 — the planning workspace. Run the solver, read the proposal and the change it would
@@ -227,7 +228,7 @@ export default function PlanningRunPanel({ projectId, projectName }: { projectId
             {history.slice(0, 8).map((r) => (
               <div key={r.id} className={styles.historyRow}>
                 <span className={`${styles.dot} ${styles[r.status]}`} />
-                <span>{new Date(r.ranAt).toLocaleString('en-AE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                <span>{new Date(r.ranAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                 <span>· {r.status}</span>
                 <span>· {r.proposal.established ? 'established' : r.proposal.feasibility === 'CONFLICTED' ? 'conflicted' : 'not established'}</span>
                 {r.acceptanceReason ? <span>· “{r.acceptanceReason}”</span> : null}

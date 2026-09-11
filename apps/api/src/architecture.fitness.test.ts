@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { DOCUMENT_DEFINITIONS, makeDrawing, makeEngineeringDocument, makeDesignChange } from '@aura/engineering';
@@ -43,6 +43,12 @@ function source(file: string): string {
   sourceCache.set(file, text);
   return text;
 }
+
+// AURA-FIT-001: this is an I/O-bound walk of the whole repository, not a behavioural test.
+// vitest's 5 s default describes neither its work nor its variance under parallel turbo load
+// (measured 15-20 s contended, <1 s alone). The generous budget names what it is; the assertions
+// are untouched — this relaxes nothing about the check itself.
+vi.setConfig({ testTimeout: 30_000 });
 
 describe('Architecture fitness — ADR-0004: modules do not import each other', () => {
   // Pre-existing debt (cross-module imports that predate this test). Baselined so the rule is

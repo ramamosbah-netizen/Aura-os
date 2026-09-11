@@ -43,6 +43,51 @@ export interface MigrationGateStatus {
   reason: string;
 }
 
+/** The 503 body the deploy-gate returns for a refused business route. */
+export interface MigrationGateResponseBody {
+  statusCode: 503;
+  error: 'Service Unavailable';
+  code: 'SCHEMA_MIGRATION_PENDING' | 'SCHEMA_MIGRATION_DRIFT';
+  message: string;
+  pending?: string[];
+  appliedButAbsent?: string[];
+}
+
+/**
+ * Shape the gate's 503 body so the DIRECTION of drift, and the migration names that identify it,
+ * reach the operator (AURA-MIG-001).
+ *
+ * The service already tracks two independent kinds of drift; the earlier response collapsed both
+ * into `SCHEMA_MIGRATION_PENDING` carrying the `pending` array — which is empty when the drift is
+ * history-only, producing the unactionable "schema is behind; 0 migration(s) pending" body that
+ * named nothing. Here they are distinct codes:
+ *
+ *   pending           →  SCHEMA_MIGRATION_PENDING  (files on disk the DB has not applied)
+ *   appliedButAbsent  →  SCHEMA_MIGRATION_DRIFT    (ledger rows with no file — G-09 history drift)
+ *
+ * When both directions have drifted at once, pending takes the code (it is the one an operator acts
+ * on first — apply the files) and the absent names ride along so neither is lost.
+ */
+export function migrationGateResponseBody(status: MigrationGateStatus): MigrationGateResponseBody {
+  if (status.pending.length > 0) {
+    return {
+      statusCode: 503,
+      error: 'Service Unavailable',
+      code: 'SCHEMA_MIGRATION_PENDING',
+      message: `database schema is behind the application; ${status.pending.length} migration(s) pending`,
+      pending: status.pending,
+      ...(status.appliedButAbsent.length > 0 ? { appliedButAbsent: status.appliedButAbsent } : {}),
+    };
+  }
+  return {
+    statusCode: 503,
+    error: 'Service Unavailable',
+    code: 'SCHEMA_MIGRATION_DRIFT',
+    message: `migration history drift; ${status.appliedButAbsent.length} applied migration(s) no longer exist on disk`,
+    appliedButAbsent: status.appliedButAbsent,
+  };
+}
+
 /**
  * Migration deploy-gate (Roadmap R2 / G-P0-2).
  *

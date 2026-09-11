@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { Pool } from 'pg';
 import { Logger } from '@nestjs/common';
-import { MigrationGateService, migrationOwnerUrl, shouldAutoMigrate, sslFor } from './migration-gate.service';
+import { MigrationGateService, migrationGateResponseBody, migrationOwnerUrl, shouldAutoMigrate, sslFor, type MigrationGateStatus } from './migration-gate.service';
 
 /** A pg-Pool stand-in whose SELECT returns the given applied filenames (or throws). */
 function fakePool(applied: string[] | Error): Pool {
@@ -133,6 +133,42 @@ describe('MigrationGateService', () => {
       if (prevFlag === undefined) delete process.env.AUTO_MIGRATE;
       else process.env.AUTO_MIGRATE = prevFlag;
     }
+  });
+});
+
+/**
+ * AURA-MIG-001 — the gate's 503 body reports the DIRECTION of drift, so an operator can act on it.
+ * The bug it fixes: history-only drift returned SCHEMA_MIGRATION_PENDING with an empty `pending`
+ * array — "schema is behind; 0 migration(s) pending", naming nothing.
+ */
+describe('migrationGateResponseBody', () => {
+  const status = (over: Partial<MigrationGateStatus>): MigrationGateStatus => ({
+    degraded: true, pending: [], appliedButAbsent: [], onDisk: null, applied: null, reason: '', ...over,
+  });
+
+  it('reports pending files as SCHEMA_MIGRATION_PENDING, naming them', () => {
+    const b = migrationGateResponseBody(status({ pending: ['0002_b.sql'] }));
+    expect(b.code).toBe('SCHEMA_MIGRATION_PENDING');
+    expect(b.pending).toEqual(['0002_b.sql']);
+    expect(b.message).toContain('1 migration(s) pending');
+    expect(b.appliedButAbsent).toBeUndefined();
+  });
+
+  it('reports history drift as SCHEMA_MIGRATION_DRIFT, naming the absent files — not a phantom "0 pending"', () => {
+    const b = migrationGateResponseBody(status({ appliedButAbsent: ['0003_renamed_away.sql'] }));
+    expect(b.code).toBe('SCHEMA_MIGRATION_DRIFT');
+    expect(b.appliedButAbsent).toEqual(['0003_renamed_away.sql']);
+    expect(b.message).toContain('no longer exist on disk');
+    // The exact defect: never a "pending" body that names nothing.
+    expect(b.pending).toBeUndefined();
+    expect(b.message).not.toContain('0 migration(s) pending');
+  });
+
+  it('when both directions drift, keeps the PENDING code but carries the absent names too', () => {
+    const b = migrationGateResponseBody(status({ pending: ['0002_b.sql'], appliedButAbsent: ['0009_gone.sql'] }));
+    expect(b.code).toBe('SCHEMA_MIGRATION_PENDING');
+    expect(b.pending).toEqual(['0002_b.sql']);
+    expect(b.appliedButAbsent).toEqual(['0009_gone.sql']);
   });
 });
 

@@ -391,7 +391,7 @@ the very failures it exists to catch. Full suites now green — api 51/51 (390 t
 
 ---
 
-## AURA-MIG-001 — the migration gate reports history drift as a contradiction
+## AURA-MIG-001 — the migration gate reports history drift as a contradiction — RESOLVED
 
 `GET /health` returned:
 
@@ -414,6 +414,20 @@ names that would identify it, are lost at exactly the boundary an operator reads
 
 The internal model is right; the response shape discards half of it. A distinct code
 (`SCHEMA_MIGRATION_DRIFT`) carrying `appliedButAbsent` would fix it.
+
+**Resolved 2026-09-11.** Exactly that. The gate's 503 body is now built by a single pure function
+(`migrationGateResponseBody`, beside the service that produces the status, unit-tested there) and
+`main.ts` calls it instead of hand-rolling the body inline:
+
+- `pending` → `SCHEMA_MIGRATION_PENDING`, naming the unapplied files (unchanged).
+- `appliedButAbsent`, with nothing pending → `SCHEMA_MIGRATION_DRIFT`, message "migration history
+  drift; N applied migration(s) no longer exist on disk", carrying the absent names. No more
+  "schema is behind; 0 migration(s) pending" body that names nothing.
+- both directions at once → keeps the `PENDING` code (the one an operator acts on first) and rides
+  the absent names along in `appliedButAbsent`, so neither half is lost.
+
+The `onModuleInit` logging already distinguished the two; only the HTTP shape had collapsed them, so
+the fix is confined to the response body. Proven by three cases in `migration-gate.service.test.ts`.
 
 **How it was observed:** by causing it. Checking out a pre-§21 commit to compare test behaviour
 removed `0283_project_risks_issues.sql` from disk while the database still had it applied, and the

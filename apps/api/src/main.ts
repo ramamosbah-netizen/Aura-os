@@ -10,7 +10,7 @@ import helmet from 'helmet';
 import { AuthService, BODY_LIMIT, EdgeRateLimitGuard, OtlpMetricsPusher, PG_POOL, TenantContext, TX_RUNNER, PostgresTxRunner, cspFor, evaluateAuthPosture, evaluateRlsPosture, evaluateTxPosture, metrics, resolveCors } from '@aura/core';
 import type { Pool } from 'pg';
 import { AppModule } from './app.module';
-import { MigrationGateService } from './health/migration-gate.service';
+import { MigrationGateService, migrationGateResponseBody } from './health/migration-gate.service';
 import { AccessDeniedFilter } from './auth/access-denied.filter';
 import { AllExceptionsFilter } from './common/all-exceptions.filter';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -200,19 +200,12 @@ async function bootstrap(): Promise<void> {
     if (!migrationGate.isDegraded()) return next();
     const path = (req.url ?? '').split('?')[0];
     if (GATE_ALLOW.some((p) => path === p || path.startsWith(`${p}/`))) return next();
-    const s = migrationGate.getStatus();
     res.statusCode = 503;
     res.setHeader('content-type', 'application/json');
     res.setHeader('retry-after', '30');
-    res.end(
-      JSON.stringify({
-        statusCode: 503,
-        error: 'Service Unavailable',
-        code: 'SCHEMA_MIGRATION_PENDING',
-        message: `database schema is behind the application; ${s.pending.length} migration(s) pending`,
-        pending: s.pending,
-      }),
-    );
+    // Distinct codes per drift direction so "0 migration(s) pending" can never name nothing again
+    // (AURA-MIG-001). The body shape is built and unit-tested beside the gate that produces it.
+    res.end(JSON.stringify(migrationGateResponseBody(migrationGate.getStatus())));
   });
 
   // OTLP metrics push (gap #6) — no-op unless OTLP_METRICS_URL is configured. Refreshes the

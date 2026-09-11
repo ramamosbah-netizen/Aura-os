@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { clickToReveal } from './hydration';
 
 /**
  * Internal Chat (C2) — the journey, driven in a browser.
@@ -167,9 +168,11 @@ test('a message typed while a conversation is opening can never reach the previo
   });
 
   const line = `c2-race-proof-${Date.now()}`;
-  await page.getByRole('button', { name: /New/ }).click();
+  // Opening the DM picker is a click-reveal on a server-rendered shell: the "New" button exists
+  // before React wires its onClick, so a pre-hydration click is dropped and the picker never opens.
+  // clickToReveal re-clicks until the picker is actually shown (interaction-readiness flake).
   const picker = page.getByRole('group', { name: 'Start a direct message' });
-  await expect(picker).toBeVisible();
+  await clickToReveal(page.getByRole('button', { name: /New/ }), picker);
   await picker.getByRole('button').first().click();
 
   // While the conversation is opening there is nothing to type into: the composer addresses no

@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { clickToReveal } from './hydration';
 
 // My Work is a PERSONAL EXECUTION center, not a launcher for links the sidebar already carries.
 // Contacts (`/crm/contacts`, a Customers entry), Files (`/documents/control`, a module register) and
@@ -77,7 +78,12 @@ test('My Work centers expose real sources and keep actions inside AURA tabs', as
   for (const view of ['All tasks', 'Assigned to me', 'Created by me', 'From system', 'From others', 'Upcoming', 'Overdue', 'Follow-ups', 'Completed']) {
     await expect(taskViews.getByRole('button', { name: new RegExp(view) })).toBeVisible();
   }
-  await page.getByRole('button', { name: 'Filters', exact: true }).click();
+  // The Filters button is server-rendered and only reveals the filter controls once React has
+  // wired it (interaction-readiness flake) — re-click until the panel is actually open.
+  await clickToReveal(
+    page.getByRole('button', { name: 'Filters', exact: true }),
+    page.getByLabel('Filter by module'),
+  );
   for (const filter of ['Filter by module', 'Filter by project', 'Filter by priority', 'Filter by status', 'Sort tasks']) {
     await expect(page.getByLabel(filter)).toBeVisible();
   }

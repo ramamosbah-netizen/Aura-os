@@ -492,7 +492,7 @@ the API needs a restart, and the reporting defect stands on its own.
 
 ---
 
-## Separate finding — not §24, not owned here
+## Separate finding — not §24, not owned here — DIAGNOSED + FIXED
 
 **E2E interaction-readiness instability under full-suite execution.**
 
@@ -518,6 +518,51 @@ no reruns — had all three of these pass, alongside nine new §21 specs and a d
 zero. That is a data point, **not a resolution**: the failures were always intermittent, so one
 clean run is exactly what a latent flake looks like on a good day. The finding stays OPEN and
 undiagnosed. Closing it needs a cause, not a green run.
+
+**Root cause, 2026-09-11 — React hydration race.** All three flaky assertions wait on an element
+revealed by the first effective CLICK on a freshly server-rendered page. The pages server-render
+their interactive shell, so the trigger button is present, visible, stable and enabled — everything
+Playwright's click actionability model checks — BEFORE React attaches its `onClick` during
+hydration. A click that lands in that window is a real DOM click that fires no React handler and is
+silently lost; the picker/panel/sub-tab it would open never appears, and the following `toBeVisible`
+times out. Hydration is CPU-bound (parse + execute the bundle) and `next dev` builds it lazily, so
+under full-suite turbo load the window widens and the drop happens intermittently; standalone,
+hydration finishes in a few ms and the same test passes.
+
+The evidence was already in the repo, not guessed:
+
+- Every failure waited on a **click-reveal**, never on navigation. A navigation wait auto-waits for
+  the load; a click-reveal waits on nothing that knows about hydration. That is the exact
+  discriminator the original finding noticed but could not name.
+- `admin-control-center.spec.ts` — the "Overview renders" test (content only, no click) passed on
+  the same `/admin` route that the click-driven Backup & Restore path failed on. Content needs only
+  server HTML; the click needs hydration.
+- Two specs already **documented the mechanism** without connecting it to this flake:
+  `admin-control-center`'s `beforeEach` ("the shell server-renders, so the buttons exist in the DOM
+  well before they respond to clicks") and `internal-chat`'s composer test ("a message typed into
+  the server-rendered markup is … discarded when React attaches … under full-suite load the race did
+  show up on its own — timed out for 60s"). The app even defends against it in one place by shipping
+  the composer disabled until hydrated.
+
+Why the old guards did not help: `waitFor({ state: 'visible' })` checks DOM visibility, which a
+server-rendered button has immediately — visibility is not interactivity. And in `internal-chat` an
+intermediate channel click whose visible effect (the default channel's messages) was already present
+in the server HTML **masked** a dropped click rather than confirming hydration, so the later "New"
+click was still effectively the first real interaction.
+
+**Fix.** A shared `clickToReveal(trigger, revealed)` helper (`apps/web/e2e/hydration.ts`) clicks,
+asserts the effect landed, and re-clicks until it does — the effect, not a timer, is the gate.
+Applied to the three spots. This is not a masked retry (the suite runs `retries: 0` on purpose): it
+is a poll for readiness, the same shape as `toBeVisible()` polling for an element, applied to the
+click that makes the element appear — and toggle-safe, so a control that opens on one click and
+closes on the next is never flipped shut. It strictly generalises the old code: everything the old
+path did, plus a re-click when the first was swallowed.
+
+**On verification, honestly.** By this finding's own standard a single green run cannot prove an
+intermittent, load-dependent flake gone — so the fix is verified by construction (it removes the
+race rather than waiting it out) and by compile, not by one clean suite run. The claim is that the
+mechanism is now addressed at every known site; if the timeout ever recurs on a click-reveal, the
+same helper is the shape of the fix for it.
 
 ---
 

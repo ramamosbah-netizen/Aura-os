@@ -12,6 +12,7 @@
 // would pass for the wrong reason. Those belong in the API e2e suite, where the verifier can be
 // switched on. Claiming them from here would repeat the mistake this row exists to correct.
 import { expect, test } from '@playwright/test';
+import { clickToReveal } from './hydration';
 
 test.describe('Admin Control Center shell', () => {
   test('/admin loads the unified shell with its six domain tabs', async ({ page }) => {
@@ -66,16 +67,13 @@ test.describe('Destructive-operation guard', () => {
   // records, so a test that navigated by URL would skip itself for the wrong reason.
   test.beforeEach(async ({ page }) => {
     await page.goto('/admin', { waitUntil: 'domcontentloaded' });
-    // Wait for hydration before driving tabs — the shell server-renders, so the buttons exist in
-    // the DOM well before they respond to clicks.
-    const ops = page.getByRole('button', { name: /Operations/i }).first();
-    await ops.waitFor({ state: 'visible', timeout: 45_000 });
-    await ops.click();
+    // The shell server-renders, so these tab buttons exist in the DOM well before React wires their
+    // onClick — waiting for `visible` proved nothing (visibility is not interactivity) and a click in
+    // that window was silently dropped, which is the interaction-readiness flake this beforeEach used
+    // to hit. clickToReveal re-clicks each tab until the control it should reveal actually appears.
     const backup = page.getByRole('button', { name: /Backup & Restore/i }).first();
-    await backup.waitFor({ state: 'visible', timeout: 30_000 });
-    await backup.click();
-    await page.getByRole('button', { name: /Restore Database$/i }).first()
-      .waitFor({ state: 'visible', timeout: 30_000 });
+    await clickToReveal(page.getByRole('button', { name: /Operations/i }).first(), backup);
+    await clickToReveal(backup, page.getByRole('button', { name: /Restore Database$/i }).first());
   });
 
   test('restore refuses to proceed without the exact typed confirmation', async ({ page }) => {

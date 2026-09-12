@@ -12,8 +12,15 @@ interface OpenPunch { id: string; description: string; severity: string }
  * surfaces that 409 rather than hiding it.
  */
 export default function CommissioningActions({
-  id, status, openPunch, allPassed,
-}: { id: string; status: string; openPunch: OpenPunch[]; allPassed: boolean }) {
+  id, status, openPunch, allPassed, onChanged,
+}: {
+  id: string;
+  status: string;
+  openPunch: OpenPunch[];
+  allPassed: boolean;
+  /** Reconciliation hook — see CommissioningTestSheet. Defaults to refreshing the server page. */
+  onChanged?: () => void | Promise<void>;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
@@ -37,7 +44,8 @@ export default function CommissioningActions({
         const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
         throw new Error(data.message || data.error || `Command failed (${res.status})`);
       }
-      router.refresh();
+      if (onChanged) await onChanged();
+      else router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Command failed');
     } finally {

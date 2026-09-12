@@ -1,7 +1,7 @@
 import {
-  BadgeCheck, Boxes, CircleAlert, ClipboardCheck, ClipboardList, FileCheck2, FileText, GraduationCap,
-  Hourglass, KeyRound, ListChecks, MessageSquareQuote, NotebookPen, Package, PencilRuler, Replace,
-  TrendingUp, TriangleAlert, Users, Wrench,
+  BadgeCheck, Boxes, CircleAlert, ClipboardCheck, ClipboardList, FileCheck2, FileText, Gauge,
+  GraduationCap, Hourglass, KeyRound, ListChecks, MessageSquareQuote, NotebookPen, Package,
+  PencilRuler, Replace, TrendingUp, TriangleAlert, Users, Wrench,
 } from 'lucide-react';
 import type { SuiteShortcut } from '@/components/suite-dashboard-shell';
 
@@ -84,6 +84,20 @@ export const QUALITY_SECTIONS = [
   { id: 'irs', label: 'Inspection Requests (IR)', description: 'Inspections raised for witness, and their outcome', icon: ClipboardCheck, tone: 'green' },
   { id: 'snags', label: 'Snagging & Punch List', description: 'Outstanding defects held against handover', icon: ListChecks, tone: 'cyan' },
   { id: 'audits', label: 'ISO Checklist Audits', description: 'Audit checklists and the findings they raise', icon: BadgeCheck, tone: 'blue' },
+] as const satisfies readonly WorkspaceSection[];
+
+export const COMMISSIONING_PATH = '/commissioning';
+/**
+ * Testing & commissioning stopped being a single register at TC-GATE-2. Its four sections are the
+ * four jobs the workspace actually has — not a register sliced by status, which would be a filter
+ * wearing a section's clothes. Certificates, pre-commissioning and ITP integration are deliberately
+ * absent: they are later gates, and an empty section would promise work the app cannot do.
+ */
+export const COMMISSIONING_SECTIONS = [
+  { id: 'overview', label: 'Overview', description: 'What is preventing these systems from being commissioned', icon: Gauge, tone: 'teal' },
+  { id: 'systems', label: 'Systems & Equipment', description: 'Commissioning scope, and the devices under each system', icon: Boxes, tone: 'blue' },
+  { id: 'testing', label: 'Testing & Commissioning', description: 'Execute test points, review run history and sign off', icon: ClipboardCheck, tone: 'green' },
+  { id: 'defects', label: 'Defects & Retests', description: 'Failing points, the defects raised from them, and retests owed', icon: TriangleAlert, tone: 'amber' },
 ] as const satisfies readonly WorkspaceSection[];
 
 export const HSE_PATH = '/hse/control';

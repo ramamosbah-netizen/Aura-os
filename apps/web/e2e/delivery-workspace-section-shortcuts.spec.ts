@@ -103,17 +103,23 @@ for (const workspace of WORKSPACES) {
 }
 
 /**
- * Testing & commissioning and Handover are SINGLE-REGISTER workspaces: a create form and one list
- * each (Handover's readiness panel is a projection of that same list, not a second place to stand).
- * They therefore get the half of the pattern that applies — their own AURA tab — and deliberately no
- * section grid, because they have no sections. Splitting either register by status would put a
- * filter on a card and call it a place.
+ * Handover is still a SINGLE-REGISTER workspace: a create form and one package list, with a
+ * readiness panel that is a projection of that same list rather than a second place to stand. It
+ * gets the half of the pattern that applies — its own AURA tab — and deliberately no sections,
+ * because it has none. Splitting its register by status would put a filter on a card and call it a
+ * place.
  *
- * The absence is asserted, not assumed: a grid appearing here later should be a decision someone
- * makes on purpose, not something that arrives by copying a neighbouring page.
+ * Testing & commissioning WAS in this list and is not any more. TC-GATE-2 gave it four real
+ * sections — Overview, Systems & Equipment, Testing & Commissioning, Defects & Retests — each
+ * backed by test evidence rather than by a status filter, and they are proved in
+ * commissioning-workspace.spec.ts. This paragraph is the record of that decision: without it the
+ * line would simply have disappeared, and a later reader could not tell a deliberate change from
+ * an accidental deletion.
+ *
+ * The absence is still asserted for Handover, so a grid appearing there later is someone's
+ * decision rather than something that arrived by copying a neighbouring page.
  */
 const SINGLE_REGISTER_WORKSPACES = [
-  { name: 'Testing & commissioning', path: '/commissioning', tabTitle: 'Testing & commissioning', heading: /Commissioning Register/i },
   { name: 'Handover', path: '/handover', tabTitle: 'Handover', heading: /Handover Packages/i },
 ];
 

@@ -52,6 +52,9 @@ class PunchDto {
   @IsString() description!: string;
   @IsOptional() @IsString() severity?: PunchSeverity;
   @IsOptional() @IsString() location?: string;
+  /** Provenance into the test evidence that found the defect (both optional — see the service). */
+  @IsOptional() @IsString() testItemId?: string;
+  @IsOptional() @IsString() sourceRunId?: string;
 }
 class ClosePunchDto {
   @IsString() resolution!: string;
@@ -102,6 +105,22 @@ export class CommissioningController {
     @Query('offset') offset?: string,
   ) {
     return this.service.listPaged(this.tenant.get().tenantId, parsePageParams(limit, offset), projectId);
+  }
+
+  /**
+   * The T&C workspace read model: every system in commissioning scope with its derived standing and
+   * the blockers between it and sign-off. Declared BEFORE `:id` so the literal segment is not
+   * swallowed by the parameter route.
+   */
+  @Get('workspace')
+  workspace(@Query('projectId') projectId?: string) {
+    return this.service.readWorkspace(this.tenant.get().tenantId, projectId || undefined);
+  }
+
+  /** Every defect on the project, with its provenance into the test evidence. */
+  @Get('punch-items')
+  projectPunch(@Query('projectId') projectId?: string): Promise<PunchItem[]> {
+    return this.service.listProjectPunchItems(this.tenant.get().tenantId, projectId || undefined);
   }
 
   @Get(':id')
@@ -202,7 +221,14 @@ export class CommissioningController {
   addPunch(@Param('id') id: string, @Body() dto: PunchDto): Promise<PunchItem> {
     if (!dto?.description?.trim()) throw new BadRequestException('description is required');
     const ctx = this.tenant.get();
-    return this.service.addPunchItem(id, ctx.tenantId, { description: dto.description, severity: dto.severity, location: dto.location ?? null, raisedBy: ctx.actorId });
+    return this.service.addPunchItem(id, ctx.tenantId, {
+      description: dto.description,
+      severity: dto.severity,
+      location: dto.location ?? null,
+      raisedBy: ctx.actorId,
+      testItemId: dto.testItemId ?? null,
+      sourceRunId: dto.sourceRunId ?? null,
+    });
   }
 
   @Put(':id/punch/:punchId/close')

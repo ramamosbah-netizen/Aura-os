@@ -22,6 +22,16 @@ export interface PunchItem {
   resolution: string | null;
   closedBy: Id | null;
   closedAt: string | null;
+  /**
+   * Provenance into T&C's own evidence: the test point whose failure raised this defect, and the
+   * specific failing run it answers. Both null for a defect found by eye on a walk-around rather
+   * than by a failing test — which is not a lesser defect, it simply has no test to point at.
+   *
+   * This is what closes the middle of `Run #1 FAILED → defect → correction → Run #2 PASSED`: without
+   * it, a failed run and an open defect on one system could not be told apart from two problems.
+   */
+  testItemId: Id | null;
+  sourceRunId: Id | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,6 +45,8 @@ export interface NewPunchItem {
   severity?: PunchSeverity;
   location?: string | null;
   raisedBy?: Id | null;
+  testItemId?: Id | null;
+  sourceRunId?: Id | null;
 }
 
 const SEVERITIES: readonly PunchSeverity[] = ['minor', 'major', 'critical'];
@@ -58,6 +70,8 @@ export function makePunchItem(input: NewPunchItem): PunchItem {
     resolution: null,
     closedBy: null,
     closedAt: null,
+    testItemId: input.testItemId ?? null,
+    sourceRunId: input.sourceRunId ?? null,
     createdAt: now,
     updatedAt: now,
   };

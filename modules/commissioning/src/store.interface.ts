@@ -30,6 +30,13 @@ export interface CommissioningStore {
   findPunchItem(id: string, tenantId: string): Promise<PunchItem | null>;
   listPunchItems(commissioningId: string, tenantId: string): Promise<PunchItem[]>;
 
+  // Workspace-wide reads. The T&C surfaces answer questions about a PROJECT ("what is stopping this
+  // project being commissioned?"), not about one record, and doing that by looping the records would
+  // be a query per system — slow, and wrong the moment a project has fifty.
+  listTestItemsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestItem[]>;
+  listTestRunsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestRun[]>;
+  listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]>;
+
   // Handover (project-level acceptance)
   saveHandover(pkg: HandoverPackage): Promise<void>;
   findHandover(id: string, tenantId: string): Promise<HandoverPackage | null>;

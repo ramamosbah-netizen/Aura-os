@@ -38,8 +38,20 @@ export interface TestSheetRun {
  * the API has: the retest half of the workflow would be invisible to the people doing the testing.
  */
 export default function CommissioningTestSheet({
-  recordId, points, runs, locked,
-}: { recordId: string; points: TestSheetPoint[]; runs: TestSheetRun[]; locked: boolean }) {
+  recordId, points, runs, locked, onChanged,
+}: {
+  recordId: string;
+  points: TestSheetPoint[];
+  runs: TestSheetRun[];
+  locked: boolean;
+  /**
+   * How to reconcile after a run is recorded. The 360 page is server-rendered, so its default is
+   * `router.refresh()`; the workspace fetches this system's detail on the client, so it passes its
+   * own refetch (which also refreshes the server page, because the totals above it just moved).
+   * Either way the reader never has to reload to see what they just did.
+   */
+  onChanged?: () => void | Promise<void>;
+}) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [busy, setBusy] = useState<string | null>(null);
@@ -66,7 +78,8 @@ export default function CommissioningTestSheet({
       setActual('');
       setRemarks('');
       setOpen(null);
-      router.refresh();
+      if (onChanged) await onChanged();
+      else router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not record the run');
     } finally {

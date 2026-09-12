@@ -50,6 +50,26 @@ export class PostgresQuantityLedgerStore implements QuantityLedgerStore {
     return { txn: toTxn(existing.rows[0]), inserted: false };
   }
 
+  /** Uncapped by design — see the contract. */
+  async findByDedupeKey(tenantId: string, dedupeKey: string): Promise<QuantityTransaction | null> {
+    const res = await this.pool.query<Row>(
+      `select ${COLS} from public.aura_projects_quantity_ledger where tenant_id = $1 and dedupe_key = $2 limit 1`,
+      [tenantId, dedupeKey],
+    );
+    return res.rows.length > 0 ? toTxn(res.rows[0]) : null;
+  }
+
+  /** Uncapped by design — see the contract. */
+  async listForBoqItem(tenantId: string, boqItemId: string): Promise<QuantityTransaction[]> {
+    const res = await this.pool.query<Row>(
+      `select ${COLS} from public.aura_projects_quantity_ledger
+        where tenant_id = $1 and boq_item_id = $2
+        order by occurred_at desc`,
+      [tenantId, boqItemId],
+    );
+    return res.rows.map(toTxn);
+  }
+
   async list(filter: QuantityLedgerFilter): Promise<QuantityTransaction[]> {
     const where: string[] = ['tenant_id = $1'];
     const params: unknown[] = [filter.tenantId];

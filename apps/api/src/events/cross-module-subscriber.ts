@@ -1113,11 +1113,14 @@ export class CrossModuleSubscriber implements OnModuleInit {
     );
 
     // ── Quantity Ledger: PO cancelled → REVERSE the ordered quantity (a negative entry) ──
-    // Append-only + idempotent (guarded on an existing reversal for this PO), mirroring the committed-
-    // cost reversal so the Ordered position drops by exactly what the PO put on it.
+    // Append-only and idempotent on a durable dedupe key, mirroring the committed-cost reversal so
+    // the Ordered position drops by exactly what the PO put on it.
     this.bus.subscribe('procurement.po.updated', (e: DomainEvent) =>
-      // RETRYABLE: guarded on an existing reversal for this PO (mirrors the committed-cost reversal), so
-      // a redelivery cannot double-reverse the ordered position.
+      // RETRYABLE, and since TC-GATE-20 that is actually true. It used to read the BOQ item's ledger
+      // and check for an existing reversal — a CAPPED read (five hundred rows) behind a check-then-act,
+      // which is two failures in one: the guard could not see far enough, and two concurrent
+      // deliveries could both pass it. The dedupe key `append` conflicts on is the durable guard the
+      // sibling `po.created` handler has used all along.
       this.retryable('reverse ordered quantity for cancelled PO', e, async () => {
         const p = e.payload as Record<string, unknown>;
         if (p.status !== 'cancelled') return;
@@ -1125,14 +1128,13 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const project = p.project as { id: string; name: string } | null;
         const qty = Number(p.orderedQuantity) || 0;
         if (!boqItemId || !project?.id || qty <= 0) return;
-        const existing = await this.quantityLedger.list({ tenantId: e.tenantId, boqItemId });
-        if (existing.some((t) => t.source === 'reversal' && t.dimensions?.poId === e.aggregateId)) return;
         await this.quantityLedger.post({
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
           boqItemId, cbsNodeId: (p.cbsNodeId as string | null) ?? null,
           type: 'ordered', quantity: -qty, unit: (p.unit as string | null) ?? null,
           source: 'reversal', sourceRef: `${(p.title as string) ?? 'PO'} — cancelled`,
           dimensions: { poId: e.aggregateId, reverses: 'po' },
+          dedupeKey: `po-ordered-reversal:${e.aggregateId}`,
         });
         this.logger.log(`↩ po.cancelled → reversed ordered ${qty} on BOQ ${boqItemId} (PO ${e.aggregateId})`);
       }),
@@ -1142,9 +1144,15 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // A goods receipt coded to a BOQ item (boqItemId + receivedQuantity) accrues the received quantity
     // so the item's Received position = SUM(this). The gap Ordered − Received is what is still in transit.
     this.bus.subscribe('inventory.grn.created', (e: DomainEvent) =>
-      // BEST-EFFORT: `quantityLedger.post` appends unconditionally, so a retry would double-count the
-      // received position. Accepted here, never retried.
-      this.bestEffort('post received quantity from grn.created', e, 'quantityLedger.post is not idempotent; a retry would double-count the received position', async () => {
+      // BEST-EFFORT, for a reason that changed in TC-GATE-20. This post is now KEYED, so the sink
+      // itself is duplicate-safe and migration 0255 — which added the dedupe key precisely "so those
+      // reactors can propagate failures to the outbox again" — is finally honoured here.
+      //
+      // What still stops it being retryable is not this sink. `EventBus.publish` fans out to every
+      // handler and the relay retries the whole EVENT, so a rethrow here re-runs the PO status
+      // transition that shares grn.created and is not replay-guarded. The blocker is the fan-out,
+      // not the ledger, and it is recorded as such rather than left looking like this post's fault.
+      this.bestEffort('post received quantity from grn.created', e, 'the keyed post is duplicate-safe, but a rethrow re-delivers grn.created to the PO status transition, which is not replay-guarded', async () => {
         const p = e.payload as Record<string, unknown>;
         const boqItemId = p.boqItemId as string | null;
         const project = p.project as { id: string; name: string } | null;
@@ -1154,6 +1162,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,
           boqItemId, type: 'received', quantity: qty, unit: (p.unit as string | null) ?? null,
           source: 'grn', sourceRef: (p.title as string) ?? null, dimensions: { grnId: e.aggregateId },
+          dedupeKey: `grn-received:${e.aggregateId}`,
         });
         this.logger.log(`📏 grn.created → posted received ${qty} on BOQ ${boqItemId} (GRN ${e.aggregateId})`);
       }),
@@ -1251,10 +1260,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
         `💡 grn.created → suggest AP invoice for "${p.title}" (PO: ${po ? po.id : 'none'}, value: ${p.value})`,
       );
       if (!po?.id) return Promise.resolve();
-      // BEST-EFFORT: the PO status transition is not guarded for replay, and this shares grn.created with
-      // the non-idempotent received-quantity reactor — so a rethrow would retry the event and double-post
-      // quantities. The transition failure is accepted here instead.
-      return this.bestEffort('auto-transition PO status on grn.created', e, 'PO transition is not replay-guarded and shares grn.created with the non-idempotent received-quantity reactor', async () => {
+      // BEST-EFFORT: the PO status transition is not guarded for replay. It used to share grn.created
+      // with a non-idempotent received-quantity reactor too; since TC-GATE-20 that one is keyed, so
+      // this handler is now the only reason a rethrow on this event is unsafe.
+      return this.bestEffort('auto-transition PO status on grn.created', e, 'the PO status transition is not replay-guarded', async () => {
         await this.pos.changeStatus(po.id, 'received');
         this.logger.log(`⚡ grn.created → auto-transitioned PO ${po.id} to 'received' status`);
       });
@@ -1399,9 +1408,11 @@ export class CrossModuleSubscriber implements OnModuleInit {
     // SUM(type='issued'). A movement can be coded to a BOQ item, a CBS node, both, or neither — this
     // fires whenever a boqItemId is present. Uncoded warehouse moves post nothing here.
     this.bus.subscribe('inventory.stock.movement_recorded', (e: DomainEvent) =>
-      // BEST-EFFORT: `quantityLedger.post` appends unconditionally, so a retry would double-count the
-      // issued position. Accepted here, never retried.
-      this.bestEffort('post material quantity txn from stock.movement_recorded', e, 'quantityLedger.post is not idempotent; a retry would double-count the issued position', async () => {
+      // BEST-EFFORT, and again the reason moved rather than went away (TC-GATE-20). The post is KEYED,
+      // so this sink is duplicate-safe. stock.movement_recorded has FOUR subscribers, and a rethrow
+      // retries the event for all of them — including the inventory GL journal post, which has no
+      // idempotency key and would double-post a real ledger entry.
+      this.bestEffort('post material quantity txn from stock.movement_recorded', e, 'the keyed post is duplicate-safe, but a rethrow re-delivers stock.movement_recorded to the inventory GL journal post, which is not', async () => {
         const p = e.payload as Record<string, unknown>;
         const boqItemId = p.boqItemId as string | null;
         const projectId = p.projectId as string | null;
@@ -1423,6 +1434,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           source: direction === 'out' ? 'material_issue' : 'material_return',
           sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
           dimensions: { movementId: e.aggregateId, itemCode: code },
+          dedupeKey: `stock-movement:${e.aggregateId}`,
         });
         this.logger.log(`📏 material ${direction === 'out' ? 'issue' : 'return'} → posted issued ${sign * quantity} on BOQ ${boqItemId}`);
       }),

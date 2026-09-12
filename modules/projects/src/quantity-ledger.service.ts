@@ -180,8 +180,12 @@ export class QuantityLedgerService {
     if (mapping.sourceId) dimensions.sourceId = mapping.sourceId;
     if (mapping.sourceItemId) dimensions.sourceItemId = mapping.sourceItemId;
 
-    const existing = (await this.store.list({ tenantId: input.tenantId, projectId: input.projectId }))
-      .find((row) => row.dedupeKey === dedupeKey);
+    // Asked for by key (TC-GATE-20). This searched a CAPPED list of the project ledger for a row
+    // whose key is unique by index — five hundred rows, newest first, on the one register that
+    // grows for the life of a project. The durable guard is `append`'s conflict, so a truncated
+    // pre-check could not double-post; what it could do is miss a conflicting replay and return
+    // the stored row as if it agreed.
+    const existing = await this.store.findByDedupeKey(input.tenantId, dedupeKey);
     if (existing) {
       if (existing.quantity !== input.quantity || existing.unit !== (input.unit ?? frozen.unit ?? null)
         || existing.sourceRef !== sourceRef || existing.boqItemId !== frozenItemId || existing.cbsNodeId !== mapping.cbsNodeId) {
@@ -272,8 +276,7 @@ export class QuantityLedgerService {
 
     // Check a keyed replay before append so a malformed/conflicting redelivery cannot be treated
     // as a silent no-op. The post-append check closes the small race with a concurrent writer.
-    const existing = (await this.store.list({ tenantId: input.tenantId, projectId: input.projectId }))
-      .find((row) => row.dedupeKey === dedupeKey);
+    const existing = await this.store.findByDedupeKey(input.tenantId, dedupeKey);
     if (existing) {
       if (existing.quantity !== input.quantity || existing.unit !== input.unit || existing.sourceRef !== sourceRef || existing.boqItemId !== frozenItemId) {
         throw new Error(`conflicting Certified replay for ${dedupeKey}`);
@@ -369,8 +372,7 @@ export class QuantityLedgerService {
     if (mapping.sourceId) dimensions.sourceId = mapping.sourceId;
     if (mapping.sourceItemId) dimensions.sourceItemId = mapping.sourceItemId;
 
-    const existing = (await this.store.list({ tenantId: input.tenantId, projectId: input.projectId }))
-      .find((row) => row.dedupeKey === dedupeKey);
+    const existing = await this.store.findByDedupeKey(input.tenantId, dedupeKey);
     if (existing) {
       if (existing.quantity !== input.quantity || existing.unit !== input.unit || existing.sourceRef !== sourceRef || existing.boqItemId !== frozenItemId) {
         throw new Error(`conflicting Billed replay for ${dedupeKey}`);
@@ -420,8 +422,15 @@ export class QuantityLedgerService {
     createdBy?: string | null;
   }): Promise<QuantityTransaction | null> {
     const reversalKey = `billed-cancellation:${input.invoiceId}:${input.invoiceLineId}`;
-    const rows = await this.store.list({ tenantId: input.tenantId, projectId: input.projectId });
-    const original = rows.find((row) => row.dedupeKey === `billed:${input.invoiceId}:${input.invoiceLineId}`);
+    // THE ONE THAT SILENTLY LOST MONEY (TC-GATE-20). This read the project ledger capped at five
+    // hundred rows, newest first, and looked for the ORIGINAL billed fact — which is older than
+    // the cancellation reversing it, and therefore first off the end. Not finding it is treated
+    // as "there was nothing to reverse" and returns null, so on a busy project cancelling an
+    // invoice line left its billed quantity standing and reported success.
+    const original = await this.store.findByDedupeKey(
+      input.tenantId,
+      `billed:${input.invoiceId}:${input.invoiceLineId}`,
+    );
     if (!original) return null; // no item-level Billed fact exists (UNKNOWN), so cancellation adds nothing.
     if (original.semantic !== 'billed') throw new Error(`invoice line ${input.invoiceLineId} is not a Billed fact`);
     if (input.quantity !== null && input.quantity !== undefined && input.quantity !== original.quantity) {
@@ -432,8 +441,7 @@ export class QuantityLedgerService {
     }
     // Re-run the immutable mapping validation without inserting a second positive fact.
     await this.postBilled({ ...input, quantity: original.quantity, unit: original.unit });
-    const existing = rows
-      .find((row) => row.dedupeKey === reversalKey);
+    const existing = await this.store.findByDedupeKey(input.tenantId, reversalKey);
     if (existing) {
       if (existing.quantity !== -original.quantity || existing.boqItemId !== original.boqItemId) {
         throw new Error(`conflicting Billed cancellation replay for ${reversalKey}`);
@@ -494,12 +502,14 @@ export class QuantityLedgerService {
       throw new Error('Certified correction delta must be a non-zero finite quantity');
     }
 
-    const rows = await this.store.list({ tenantId: input.tenantId, projectId: input.projectId });
-    const original = rows.find((row) => row.type === 'invoiced'
-      && row.semantic === 'certified'
-      && row.dimensions?.certificateId === input.certificateId
-      && row.dimensions?.ipcLineId === input.ipcLineId
-      && row.quantity > 0);
+    // By key rather than by scanning a capped list for its shape (TC-GATE-20). `postCertified` is
+    // the only writer of this fact and always stamps `certified:<certificate>:<line>`, so the key
+    // identifies exactly the row the scan was describing — and identifies it whatever the size of
+    // the ledger. The scan refused a valid correction once the source aged past five hundred rows.
+    const original = await this.store.findByDedupeKey(
+      input.tenantId,
+      `certified:${input.certificateId}:${input.ipcLineId}`,
+    );
     if (!original) throw new Error(`Certified source ${input.certificateId}/${input.ipcLineId} is unavailable`);
 
     const frozenItemKey = original.dimensions?.frozenItemKey;
@@ -530,7 +540,7 @@ export class QuantityLedgerService {
     if (mapping.sourceRevisionRef) dimensions.sourceRevisionRef = mapping.sourceRevisionRef;
     if (mapping.sourceItemId) dimensions.sourceItemId = mapping.sourceItemId;
 
-    const existing = rows.find((row) => row.dedupeKey === dedupeKey);
+    const existing = await this.store.findByDedupeKey(input.tenantId, dedupeKey);
     if (existing) {
       const same = existing.quantity === input.signedQuantityDelta
         && existing.sourceRef === sourceRef
@@ -540,8 +550,12 @@ export class QuantityLedgerService {
       return existing;
     }
 
-    const effective = rows
-      .filter((row) => row.type === 'invoiced' && row.semantic === 'certified' && row.boqItemId === original.boqItemId)
+    // The WHOLE item, because this is a sum and a partial sum is not a smaller answer — it is a
+    // wrong one. Understated, it made a legitimate correction look like it would drive the
+    // certified quantity negative, and the correction was refused (TC-GATE-20). The BOQ filter is
+    // gone because the read is already scoped to that item.
+    const effective = (await this.store.listForBoqItem(input.tenantId, original.boqItemId))
+      .filter((row) => row.type === 'invoiced' && row.semantic === 'certified')
       .reduce((sum, row) => sum + row.quantity, 0) + input.signedQuantityDelta;
     if (effective < 0) throw new Error('Certified correction would produce a negative effective quantity');
 
@@ -574,9 +588,21 @@ export class QuantityLedgerService {
     return this.store.list(filter);
   }
 
-  /** The live position of one BOQ item (the seven positions + derived gaps), from its ledger. */
+  /**
+   * The live position of one BOQ item (the seven positions + derived gaps), from its ledger.
+   *
+   * THE NUMBER, AND IT WAS WRONG (TC-GATE-20). This read the item's ledger through the capped
+   * `list` — five hundred rows, newest first — and handed the remainder to a function that SUMS
+   * them. Past five hundred transactions on one BOQ item the position was simply understated,
+   * and it was understated in the worst possible place: newest-first drops the OLDEST rows, and
+   * the `boq` baseline is posted first. Lose the baseline and every derived gap — remaining to
+   * order, progress percent — is measured against a target of zero.
+   *
+   * Nothing about that was visible. It is not a guard that fails loudly; it is a figure that
+   * quietly gets smaller, on the ledger a quantity is billed from.
+   */
   async position(tenantId: string, boqItemId: string): Promise<QuantityPosition> {
-    const txns = await this.store.list({ tenantId, boqItemId });
+    const txns = await this.store.listForBoqItem(tenantId, boqItemId);
     return quantityPosition(boqItemId, txns);
   }
 }

@@ -1,7 +1,13 @@
 import { describe, it, expect } from 'vitest';
+import { ELV_SYSTEMS, ELV_SYSTEM_DISCIPLINES, DISCIPLINES, disciplinesForElvSystem } from '@aura/shared';
 import { makeDrawingRegisterEntry, type RegisterStatus } from '@aura/doccontrol';
 import { makeDrawing, type DrawingStatus } from '@aura/engineering';
-import { AS_BUILT_STATUS, assessHandoverReadiness, type HandoverReadinessFacts } from '@aura/commissioning';
+import { ELV_DEVICE_STATUSES } from '@aura/elv';
+import { NCR_TRANSITIONS, type NcrStatus } from '@aura/quality';
+import {
+  AS_BUILT_STATUS, APPROVED_DRAWING_STATUSES, INSTALLED_STATUSES, OPEN_NCR_STATUSES,
+  assessHandoverReadiness, type HandoverReadinessFacts,
+} from '@aura/commissioning';
 
 /**
  * Port-vocabulary fitness test (TC-GATE-6).
@@ -25,8 +31,90 @@ import { AS_BUILT_STATUS, assessHandoverReadiness, type HandoverReadinessFacts }
  *
  * THE RULE: if a consumer matches on a literal from another domain's vocabulary, that literal must be
  * a value the owning domain can actually produce. Add a case here whenever a new one appears.
+ *
+ * TC-GATE-11 generalised this from the one as-built case to EVERY set of foreign literals commissioning
+ * matches on, and the generalisation immediately found a second instance of the same bug:
+ * `APPROVED_DRAWING_STATUSES` read `['approved', 'issued_for_construction', 'as_built']`, and
+ * Engineering's `DrawingStatus` has neither of the last two — `issued_for_construction` appeared
+ * nowhere else in the repository at all. Two thirds of that set could never match anything. It did not
+ * break the gate, because `approved` carried it, which is exactly why nothing noticed.
  */
 describe('TC-GATE-6 — cross-module vocabulary agreement', () => {
+  /**
+   * Every literal commissioning matches on, against the vocabulary of the domain that owns it.
+   *
+   * Each set arrives here as bare strings, because a port widens the owner's type at the boundary —
+   * that is what a port is FOR, and it is why the compiler cannot do this job. These assertions are
+   * the substitute.
+   */
+  describe('foreign literals commissioning matches on', () => {
+    it('drawing statuses are all values ENGINEERING can produce', () => {
+      const engineeringStatuses: DrawingStatus[] = [
+        'draft', 'submitted', 'under_review', 'approved', 'rejected', 'revision_required', 'transmitted', 'closed', 'superseded',
+      ];
+      for (const literal of APPROVED_DRAWING_STATUSES) {
+        expect(engineeringStatuses, `"${literal}" is not a DrawingStatus Engineering can produce`)
+          .toContain(literal as DrawingStatus);
+      }
+      // The one that used to be there and never could match. Pinned so it cannot come back.
+      expect([...APPROVED_DRAWING_STATUSES]).not.toContain('issued_for_construction');
+      expect([...APPROVED_DRAWING_STATUSES], 'as-built is document control’s word, not Engineering’s')
+        .not.toContain('as_built');
+    });
+
+    it('device statuses are all values the ELV register can produce', () => {
+      for (const literal of INSTALLED_STATUSES) {
+        expect(ELV_DEVICE_STATUSES as readonly string[], `"${literal}" is not an ElvDeviceStatus`).toContain(literal);
+      }
+    });
+
+    it('open-NCR statuses are all values QUALITY can produce, and exclude the closed one', () => {
+      const qualityStatuses = Object.keys(NCR_TRANSITIONS) as NcrStatus[];
+      for (const literal of OPEN_NCR_STATUSES) {
+        expect(qualityStatuses, `"${literal}" is not an NcrStatus`).toContain(literal as NcrStatus);
+      }
+      expect([...OPEN_NCR_STATUSES], 'a closed NCR is not open').not.toContain('closed');
+      // And the set is not quietly missing one: every non-closed status must be treated as open.
+      expect([...OPEN_NCR_STATUSES].sort()).toEqual(qualityStatuses.filter((s) => s !== 'closed').sort());
+    });
+  });
+
+  /**
+   * The ELV system ↔ discipline map (TC-GATE-11).
+   *
+   * Two axes, not one vocabulary badly spelled: a discipline is a TRADE, an ELV system is a system
+   * within one. The map lives in @aura/shared because both sides do and neither owns the relation.
+   * Typing it `Record<ElvSystem, readonly Discipline[]>` is what makes an unmapped system a compile
+   * error; these assertions cover what the type cannot — that the map stays exhaustive at runtime and
+   * that the untrusted-input path never returns nothing.
+   */
+  describe('ELV system ↔ discipline map', () => {
+    it('covers every ELV system, with disciplines that exist', () => {
+      for (const system of ELV_SYSTEMS) {
+        const disciplines = ELV_SYSTEM_DISCIPLINES[system];
+        expect(disciplines, `${system} has no discipline mapping`).toBeTruthy();
+        expect(disciplines.length, `${system} maps to nothing`).toBeGreaterThan(0);
+        for (const d of disciplines) {
+          expect(DISCIPLINES, `"${d}" is not a Discipline`).toContain(d);
+        }
+      }
+    });
+
+    it('falls back rather than returning nothing for a system it has not heard of', () => {
+      // An empty list would make the readiness gate say "no drawings recognised", which is a
+      // statement about this map rather than about the project.
+      expect(disciplinesForElvSystem('a_system_from_the_future')).toEqual(ELV_SYSTEM_DISCIPLINES.other);
+      expect(disciplinesForElvSystem(null)).toEqual(ELV_SYSTEM_DISCIPLINES.other);
+      expect(disciplinesForElvSystem('CCTV'), 'case is not a different system').toEqual(ELV_SYSTEM_DISCIPLINES.cctv);
+    });
+
+    it('includes elv for every system, because a coarse ELV package is the common case', () => {
+      for (const system of ELV_SYSTEMS) {
+        expect(ELV_SYSTEM_DISCIPLINES[system], `${system} must recognise the coarse elv package`).toContain('elv');
+      }
+    });
+  });
+
   describe('as-built status', () => {
     it('is a status DOCUMENT CONTROL can actually produce', () => {
       // Not a string comparison against a literal: the register is asked to MAKE one. If

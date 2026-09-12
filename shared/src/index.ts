@@ -4,6 +4,7 @@ export * from './domain/change-diff';
 export * from './domain/money';
 export * from './domain/cdm';
 export * from './dimensions/discipline';
+export * from './dimensions/elv-system-discipline';
 export * from './aggregate/aggregate';
 export * from './events/event';
 

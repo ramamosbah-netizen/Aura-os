@@ -18,6 +18,8 @@
  * must not silently declare systems ready.
  */
 
+import { disciplinesForElvSystem } from '@aura/shared';
+
 export type GateState = 'READY' | 'BLOCKED' | 'UNKNOWN' | 'NOT_APPLICABLE';
 
 export type GateId =
@@ -58,27 +60,39 @@ export interface SystemReadiness {
  * ELV package `elv` is not wrong, it is just coarser. A system with neither cannot be judged and
  * the gate says UNKNOWN rather than inventing a match.
  */
-const ENGINEERING_DISCIPLINES: Record<string, readonly string[]> = {
-  cctv: ['cctv', 'elv', 'security'],
-  access_control: ['access_control', 'elv', 'security'],
-  intrusion_alarm: ['security', 'elv'],
-  fire_alarm: ['fire_alarm', 'elv'],
-  public_address: ['elv'],
-  structured_cabling: ['ict', 'elv'],
-  network: ['ict', 'elv'],
-  bms: ['bms', 'elv'],
-  audio_visual: ['elv'],
-  intercom: ['elv'],
-  nurse_call: ['elv'],
-  gate_barrier: ['security', 'elv'],
-  parking_management: ['security', 'elv'],
-  other: ['elv'],
-};
+/**
+ * THE LITERALS THIS MODULE MATCHES ON, and why they are exported (TC-GATE-11).
+ *
+ * Each set holds values that belong to ANOTHER domain — ELV device statuses, Engineering drawing
+ * statuses, Quality NCR statuses — and each arrives here as a bare `string`, because a port widens
+ * the owner's type at the boundary. That is what a port is for, and it is also a blind spot: the
+ * compiler cannot tell a real status from one nobody has ever produced.
+ *
+ * `APPROVED_DRAWING_STATUSES` used to read `['approved', 'issued_for_construction', 'as_built']`.
+ * Engineering's `DrawingStatus` contains neither of the last two — `issued_for_construction`
+ * appeared NOWHERE ELSE in the repository — so two thirds of that set could never match anything. It
+ * did not break the gate, because `approved` carried it; it was a lie that looked like a rule. The
+ * same class of mistake, in the same shape, is what made handover's as-built gate unreachable until
+ * TC-GATE-6.
+ *
+ * So they are exported and asserted against the owning domains' real vocabularies in
+ * `apps/api/src/port-vocabulary.fitness.test.ts` — the one layer that can legitimately see both
+ * sides of a port.
+ */
 
 /** A device counts as installed once it is physically in and terminated, or further along. */
-const INSTALLED_STATUSES = new Set(['installed', 'terminated', 'tested', 'commissioned']);
-const APPROVED_DRAWING_STATUSES = new Set(['approved', 'issued_for_construction', 'as_built']);
-const OPEN_NCR_STATUSES = new Set(['raised', 'action_planned', 'corrected']);
+export const INSTALLED_STATUSES = new Set(['installed', 'terminated', 'tested', 'commissioned']);
+
+/**
+ * A drawing counts as released once Engineering has approved it.
+ *
+ * `transmitted` and `closed` follow approval in Engineering's lifecycle and are deliberately NOT
+ * here: this gate asks whether the design has been approved, not how far it has travelled since.
+ */
+export const APPROVED_DRAWING_STATUSES = new Set(['approved']);
+
+/** Quality's NCR lifecycle minus `closed` — everything that still stands open. */
+export const OPEN_NCR_STATUSES = new Set(['raised', 'action_planned', 'corrected']);
 
 export interface ReadinessFacts {
   system: string;
@@ -157,7 +171,9 @@ function engineeringGate(f: ReadinessFacts): ReadinessGate {
   const label = 'Engineering released';
   const src = 'Engineering' as const;
   if (f.drawings === null) return gate(id, label, src, 'UNKNOWN', 'Engineering could not be read.');
-  const accepted = ENGINEERING_DISCIPLINES[f.system] ?? ENGINEERING_DISCIPLINES.other;
+  // The map lives in @aura/shared (TC-GATE-11): both sides of it are shared dimensions, neither
+  // owns the relationship, and a private copy here was invisible to everything it described.
+  const accepted = disciplinesForElvSystem(f.system) as readonly string[];
   const mine = f.drawings.filter((d) => accepted.includes(d.discipline));
   if (mine.length === 0) {
     return gate(id, label, src, 'UNKNOWN', `No drawings on this project carry a discipline this system recognises (${accepted.join(', ')}).`);

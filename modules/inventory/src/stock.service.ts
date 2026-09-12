@@ -194,17 +194,45 @@ export class StockService {
   }
 
   /**
-   * The tenant's parts, for a domain that REFERENCES one without owning it (TC-GATE-17).
+   * The parts behind specific references, for a domain that points at one without owning it
+   * (TC-GATE-17, corrected in TC-GATE-18).
    *
-   * Implements `InventoryPort` for Handover, whose spares record points at a part so a client can be
-   * told which one they were handed. Deliberately a projection of code, name and unit: everything
-   * that makes this Inventory's — quantities, warehouse, average cost, costing method, reorder
-   * policy — stays here. A consumer that cannot see valuation cannot come to depend on it, and a
-   * spares list handed to a client has no business carrying what the contractor paid.
+   * Implements `InventoryPort` for Handover, whose spares record names a part so a client can be
+   * told which one they were handed. A projection of code, name and unit: everything that makes this
+   * Inventory's — quantities, warehouse, average cost, costing method, reorder policy — stays here.
+   * A consumer that cannot see valuation cannot come to depend on it, and a spares list handed to a
+   * client has no business carrying what the contractor paid.
+   *
+   * TARGETED, AND THAT IS THE CORRECTION. The first version listed the tenant's stock and let the
+   * caller search it — and `listItems` applies a default `LIMIT 200`. Past two hundred parts, a
+   * valid reference resolved as "not in inventory" and the write that checks it refused a real part.
+   * A resolver must not be built on a read that silently truncates.
+   *
+   * BY CODE FIRST, because a person types the code on the shelf label. The id path re-checks the
+   * tenant in application code rather than relying only on row-level security: `getItem` carries no
+   * tenant in its SQL, and a resolver is the wrong place to depend on a single layer.
    */
-  async readStockItems(tenantId: Id): Promise<Array<{ id: string; code: string; name: string; unit: string }>> {
-    const items = await this.store.listItems({ tenantId });
-    return items.map((i) => ({ id: i.id, code: i.code, name: i.name, unit: i.unit }));
+  async readStockItems(
+    tenantId: Id,
+    references: string[],
+  ): Promise<Array<{ id: string; code: string; name: string; unit: string }>> {
+    const wanted = [...new Set((references ?? []).map((r) => r?.trim()).filter((r): r is string => Boolean(r)))];
+    if (wanted.length === 0) return [];
+
+    const found = await Promise.all(
+      wanted.map(async (ref) => {
+        const byCode = await this.store.getItemByCode(tenantId, ref);
+        if (byCode) return byCode;
+        const byId = await this.store.getItem(ref).catch(() => null);
+        return byId && byId.tenantId === tenantId ? byId : null;
+      }),
+    );
+
+    const seen = new Set<string>();
+    return found
+      .filter((i): i is NonNullable<typeof i> => i !== null)
+      .filter((i) => (seen.has(i.id) ? false : (seen.add(i.id), true)))
+      .map((i) => ({ id: i.id, code: i.code, name: i.name, unit: i.unit }));
   }
 
   listItems(filter?: StockFilter): Promise<StockItem[]> {

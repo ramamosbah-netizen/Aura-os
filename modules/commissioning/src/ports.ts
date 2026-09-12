@@ -224,8 +224,19 @@ export interface StockItemFact {
 }
 
 export interface InventoryPort {
-  /** Every stock item for the tenant. One call, resolved against in memory — a spares list is small. */
-  readStockItems(tenantId: string): Promise<StockItemFact[]>;
+  /**
+   * The parts behind a specific set of references — by code or id (TC-GATE-18).
+   *
+   * TAKES THE REFERENCES, rather than returning the tenant's stock for the caller to search. The
+   * first version of this port did the latter, and Inventory's list read applies a default
+   * `LIMIT 200`: a tenant with more than two hundred parts had its two-hundred-and-first silently
+   * absent, so a valid reference resolved as "not in inventory" and the WRITE that checks it refused
+   * a real part. Invisible at test scale, certain at a real one.
+   *
+   * Asking for what is wanted designs that out: there is no list to truncate. The owner does the
+   * lookup, which is also the only place that can do it tenant-safely.
+   */
+  readStockItems(tenantId: string, references: string[]): Promise<StockItemFact[]>;
 }
 
 export const ELV_EQUIPMENT = Symbol('ELV_EQUIPMENT');

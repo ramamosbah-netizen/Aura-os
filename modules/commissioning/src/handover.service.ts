@@ -194,11 +194,20 @@ export class HandoverService {
     }
   }
 
-  /** The tenant's parts, or null when Inventory could not be read. */
-  private async readStockItems(tenantId: string): Promise<StockItemFact[] | null> {
+  /**
+   * The parts behind these references, or null when Inventory could not be read.
+   *
+   * TC-GATE-18: the references are passed IN. The first version asked for the tenant's stock and
+   * searched it here, and Inventory's list read truncates at 200 — so past two hundred parts a valid
+   * reference resolved as missing and the write refused it. Asking for what is wanted removes the
+   * list that could truncate.
+   */
+  private async readStockItems(tenantId: string, references: (string | null)[]): Promise<StockItemFact[] | null> {
     if (!this.inventory) return null;
+    const wanted = references.filter((r): r is string => Boolean(r?.trim()));
+    if (wanted.length === 0) return [];
     try {
-      return await this.inventory.readStockItems(tenantId);
+      return await this.inventory.readStockItems(tenantId, wanted);
     } catch (error) {
       this.logger.warn(`[Handover] Inventory could not be read: ${error}`);
       return null;
@@ -563,7 +572,7 @@ export class HandoverService {
     // TC-GATE-17: the typo is caught where it is typed, when Inventory can be read. The reference is
     // OPTIONAL — a spare described in words is still a spare — but one that points somewhere must
     // point at something. An unwired Inventory lets the write through and leaves the row unverified.
-    const resolved = resolveStockReference(item.stockItemId, await this.readStockItems(tenantId));
+    const resolved = resolveStockReference(item.stockItemId, await this.readStockItems(tenantId, [item.stockItemId]));
     if (resolved?.missing) {
       throw new Error(
         `validation: the stock reference "${resolved.reference}" must match a part in inventory — by code or id`,
@@ -616,10 +625,10 @@ export class HandoverService {
     tenantId: string,
     projectId?: string,
   ): Promise<Array<SpareItem & { resolved: ResolvedStockItem | null }>> {
-    const [items, stock] = await Promise.all([
-      this.store.listSpareItems(tenantId, projectId),
-      this.readStockItems(tenantId),
-    ]);
+    const items = await this.store.listSpareItems(tenantId, projectId);
+    // Only the references these rows actually carry — one lookup per distinct part, and no list to
+    // truncate. A spares list is small; the tenant's stock is not.
+    const stock = await this.readStockItems(tenantId, items.map((i) => i.stockItemId));
     return items.map((i) => ({ ...i, resolved: resolveStockReference(i.stockItemId, stock) }));
   }
 

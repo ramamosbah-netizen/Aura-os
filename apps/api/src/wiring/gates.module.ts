@@ -1,7 +1,8 @@
 import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
-import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE } from '@aura/commissioning';
+import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY } from '@aura/commissioning';
+import { InventoryModule, StockService } from '@aura/inventory';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
@@ -32,7 +33,7 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
  */
 @Global()
 @Module({
-  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule, ElvModule],
+  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule, ElvModule, InventoryModule],
   providers: [
     { provide: QUALITY_GATE, useExisting: QualityService },
     { provide: ITP_GATE, useExisting: QualityService },
@@ -91,7 +92,13 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // and owns every state the transmittal moves through afterwards. Handover supplies a list of
     // register entries and a title, and cannot send, receive or acknowledge on the client's behalf.
     { provide: DOC_CONTROL_ISSUE, useExisting: DocControlService },
+
+    // ── Spares name real parts (TC-GATE-17) ───────────────────────────────────────────────────
+    // Handover's spares record points at a part it does not own. Inventory keeps everything that
+    // makes a part a part — quantities, warehouse, cost, reorder policy — and hands over a
+    // projection of code, name and unit. Nothing here moves stock.
+    { provide: INVENTORY, useExisting: StockService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
 })
 export class GatesModule {}

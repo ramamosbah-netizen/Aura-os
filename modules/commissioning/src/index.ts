@@ -18,3 +18,4 @@ export * from './postgres-commissioning-store';
 export * from './commissioning.service';
 export * from './handover.service';
 export * from './commissioning.module';
+export * from './domain/certificate-link';

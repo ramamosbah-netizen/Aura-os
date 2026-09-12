@@ -6,6 +6,7 @@ import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { AsBuiltLink } from './domain/asbuilt-link';
+import type { CertificateLink } from './domain/certificate-link';
 import type { OmItem } from './domain/om-package';
 import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
@@ -22,6 +23,7 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly punchItems = new Map<string, PunchItem>();
   private readonly itpLinks = new Map<string, CommissioningItpLink>();
   private readonly asBuiltLinks = new Map<string, AsBuiltLink>();
+  private readonly certificateLinks = new Map<string, CertificateLink>();
   private readonly omItems = new Map<string, OmItem>();
   private readonly trainingSessions = new Map<string, TrainingSession>();
   private readonly handovers = new Map<string, HandoverPackage>();
@@ -126,6 +128,29 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   }
   async listAsBuiltLinksForProject(tenantId: string, projectId?: string): Promise<AsBuiltLink[]> {
     return [...this.asBuiltLinks.values()]
+      .filter((l) => l.tenantId === tenantId && (!projectId || l.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async saveCertificateLink(link: CertificateLink): Promise<void> {
+    const clash = [...this.certificateLinks.values()].find(
+      (l) => l.id !== link.id && l.commissioningId === link.commissioningId,
+    );
+    if (clash) throw new Error('conflict: this system already has a certificate registered');
+    this.certificateLinks.set(link.id, { ...link });
+  }
+  async deleteCertificateLink(id: string, tenantId: string): Promise<void> {
+    const found = this.certificateLinks.get(id);
+    if (found && found.tenantId === tenantId) this.certificateLinks.delete(id);
+  }
+  async findCertificateLink(commissioningId: string, tenantId: string): Promise<CertificateLink | null> {
+    const found = [...this.certificateLinks.values()].find(
+      (l) => l.commissioningId === commissioningId && l.tenantId === tenantId,
+    );
+    return found ? { ...found } : null;
+  }
+  async listCertificateLinksForProject(tenantId: string, projectId?: string): Promise<CertificateLink[]> {
+    return [...this.certificateLinks.values()]
       .filter((l) => l.tenantId === tenantId && (!projectId || l.projectId === projectId))
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }

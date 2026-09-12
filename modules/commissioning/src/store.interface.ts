@@ -4,6 +4,7 @@ import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { AsBuiltLink } from './domain/asbuilt-link';
+import type { CertificateLink } from './domain/certificate-link';
 import type { OmItem } from './domain/om-package';
 import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
@@ -55,6 +56,13 @@ export interface CommissioningStore {
   deleteAsBuiltLink(id: string, tenantId: string): Promise<void>;
   listAsBuiltLinks(commissioningId: string, tenantId: string): Promise<AsBuiltLink[]>;
   listAsBuiltLinksForProject(tenantId: string, projectId?: string): Promise<AsBuiltLink[]>;
+
+  // Certificate links — T&C's record that a controlled document IS a system's commissioning
+  // certificate (TC-GATE-10). One per system, so `save` replaces rather than accumulates.
+  saveCertificateLink(link: CertificateLink): Promise<void>;
+  deleteCertificateLink(id: string, tenantId: string): Promise<void>;
+  findCertificateLink(commissioningId: string, tenantId: string): Promise<CertificateLink | null>;
+  listCertificateLinksForProject(tenantId: string, projectId?: string): Promise<CertificateLink[]>;
 
   // O&M deliverables and client training — Handover's own authorities (TC-GATE-5). Both are scoped
   // to a system, and both are read project-wide to answer "is this package ready".

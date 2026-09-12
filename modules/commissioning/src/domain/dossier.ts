@@ -97,6 +97,12 @@ export interface DossierFacts {
     witnessedBy: string | null;
     pointsPassed: number;
     pointsTotal: number;
+    /**
+     * The controlled document this system's evidence pack is registered as (TC-GATE-10), already
+     * resolved against the register. Null when nobody has registered one — which is not a failure:
+     * the evidence pack still exists and still goes in the dossier, it simply has no document number.
+     */
+    certificate: { documentNumber: string | null; revision: string | null; current: boolean; note: string | null } | null;
   }[];
   omItems: {
     id: string;
@@ -128,19 +134,32 @@ const entry = (
 export function assembleDossier(facts: DossierFacts): DossierView {
   const codeById = facts.systemCodeById ?? Object.fromEntries(facts.systems.map((s) => [s.id, s.code]));
 
-  const certificates = facts.systems.map((s) =>
-    entry(
+  const certificates = facts.systems.map((s) => {
+    // TC-GATE-10: cite the controlled document when one has been registered. The pack is issuable
+    // either way — an unregistered pack is still the evidence — so a missing certificate is said
+    // plainly on the line rather than dropping it from the dossier.
+    const cert = s.certificate;
+    const registered = cert !== null && cert.current;
+    return entry(
       'commissioning_certificate',
       s.id,
-      s.code,
+      registered ? cert!.documentNumber : s.code,
       `${s.code} — ${s.title}`,
-      s.commissioned ? 'commissioned' : 'not commissioned',
+      s.commissioned
+        ? registered
+          ? `commissioned · ${cert!.documentNumber} rev ${cert!.revision}`
+          : 'commissioned · evidence pack only'
+        : 'not commissioned',
       s.commissioned,
       s.commissioned
-        ? null
+        ? cert === null
+          ? 'Issued as an evidence pack; no controlled certificate is registered for it.'
+          : cert.current
+            ? null
+            : cert.note
         : `${s.pointsPassed} of ${s.pointsTotal} test points passed; the system has not been signed off, so there is no evidence pack to issue.`,
-    ),
-  );
+    );
+  });
 
   const om = facts.omItems
     .filter((i) => i.required)

@@ -7,6 +7,7 @@ import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { AsBuiltLink } from './domain/asbuilt-link';
+import type { CertificateLink } from './domain/certificate-link';
 import type { OmItem, OmDeliverable, OmItemState } from './domain/om-package';
 import type { DossierItem, DossierKind } from './domain/dossier';
 import type { TrainingSession, TrainingState } from './domain/client-training';
@@ -435,6 +436,37 @@ export class PostgresCommissioningStore implements CommissioningStore {
     return res.rows.map(toAsBuiltLink);
   }
 
+  async saveCertificateLink(l: CertificateLink): Promise<void> {
+    // No ON CONFLICT DO NOTHING: the unique (commissioning_id) constraint is what stops one sign-off
+    // carrying two certificates, and swallowing it would tell the user their link took when it did
+    // not — leaving the first document standing while they believe the second one is in force.
+    await this.pool.query(
+      `insert into public.aura_commissioning_certificate_links
+        (id, tenant_id, company_id, commissioning_id, project_id, document_id, linked_by, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [l.id, l.tenantId, l.companyId, l.commissioningId, l.projectId, l.documentId, l.linkedBy, l.createdAt],
+    );
+  }
+  async deleteCertificateLink(id: string, tenantId: string): Promise<void> {
+    await this.pool.query('delete from public.aura_commissioning_certificate_links where id = $1 and tenant_id = $2', [id, tenantId]);
+  }
+  async findCertificateLink(commissioningId: string, tenantId: string): Promise<CertificateLink | null> {
+    const res = await this.pool.query(
+      'select * from public.aura_commissioning_certificate_links where commissioning_id = $1 and tenant_id = $2',
+      [commissioningId, tenantId],
+    );
+    return res.rowCount === 0 ? null : toCertificateLink(res.rows[0]);
+  }
+  async listCertificateLinksForProject(tenantId: string, projectId?: string): Promise<CertificateLink[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_certificate_links
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toCertificateLink);
+  }
+
   async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
     const res = await this.pool.query(
       `select * from public.aura_commissioning_punch_items
@@ -480,6 +512,15 @@ function toOmItem(r: Record<string, unknown>): OmItem {
     acceptedAt: tsIso(r.accepted_at), acceptedBy: (r.accepted_by as string) ?? null,
     createdBy: (r.created_by as string) ?? null,
     createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
+  };
+}
+
+function toCertificateLink(r: Record<string, unknown>): CertificateLink {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    commissioningId: r.commissioning_id as string, projectId: r.project_id as string,
+    documentId: r.document_id as string, linkedBy: (r.linked_by as string) ?? null,
+    createdAt: tsIso(r.created_at) as string,
   };
 }
 

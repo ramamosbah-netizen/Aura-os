@@ -38,6 +38,19 @@ export interface SystemView {
   itpRequirements: LinkedItpRequirement[];
   /** Drawings linked as this system's as-built, with what the register says about each now. */
   asBuiltRecords: LinkedAsBuilt[];
+  /** The controlled document this system's evidence pack is registered as, or null (TC-GATE-10). */
+  certificate: LinkedCertificate | null;
+}
+/** The controlled document a system's evidence pack is registered as. Resolved on read, never kept. */
+export interface LinkedCertificate {
+  linkId: string;
+  documentId: string;
+  documentNumber: string | null;
+  title: string | null;
+  revision: string | null;
+  status: string | null;
+  current: boolean;
+  note: string | null;
 }
 /**
  * A drawing somebody linked as this system's as-built (TC-GATE-8).

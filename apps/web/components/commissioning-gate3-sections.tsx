@@ -215,10 +215,11 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
       <p style={st.authorityNote} data-testid="certificates-authority">
         T&amp;C generates <strong>technical evidence</strong>: the test sheet, the full run history behind every point
         including the failures, and the witnessed sign-off. Issuing a <strong>controlled certificate</strong> is still
-        DocControl&rsquo;s authority — calling this &ldquo;certificate issued&rdquo; would be a second document authority.
-        What T&amp;C does own is the <strong>link</strong> below: the statement that a particular controlled drawing is a
-        particular system&rsquo;s as-built. Nothing could join those automatically, because every ELV system on a project
-        shares one discipline.
+        DocControl&rsquo;s authority — T&amp;C never creates a register entry, assigns a number or issues anything.
+        What T&amp;C owns are the two <strong>links</strong> below: that a particular controlled document is this
+        system&rsquo;s <strong>certificate</strong>, and that a particular controlled drawing is its <strong>as-built</strong>.
+        Neither could be joined automatically — every ELV system on a project shares one discipline — so each is a
+        sentence a person writes, and everything shown about the document is read from the register as it stands now.
       </p>
 
       <AsBuiltLinks systems={systems} />
@@ -240,13 +241,105 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
                 <div><dt>Test points</dt><dd>{s.pointsTotal}</dd></div>
                 <div><dt>Passed on retest</dt><dd>{s.pointsEverFailed}</dd></div>
                 <div><dt>Signed off by</dt><dd>{s.record.status === 'commissioned' ? 'recorded' : '—'}</dd></div>
-                <div><dt>Formal issue</dt><dd style={st.mutedInline}>DocControl — not linked</dd></div>
+                <div>
+                  <dt>Formal issue</dt>
+                  <dd data-testid={`certificate-issue-${s.record.code}`}>
+                    {s.certificate === null ? (
+                      <span style={st.mutedInline}>evidence pack only</span>
+                    ) : s.certificate.current ? (
+                      <span style={st.ref}>{s.certificate.documentNumber} rev {s.certificate.revision}</span>
+                    ) : (
+                      <span style={st.note}>{s.certificate.documentNumber ?? s.certificate.documentId} · {s.certificate.note}</span>
+                    )}
+                  </dd>
+                </div>
               </dl>
+              <CertificateLinkRow system={s} />
             </li>
           ))}
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * Registering the evidence pack as a controlled document (TC-GATE-10).
+ *
+ * Until now the Certificates surface said "Formal issue — DocControl — not linked", and meant it:
+ * T&C could produce the evidence and print it, but the result was a screen with no number, no
+ * revision and no place in the register a client is handed.
+ *
+ * T&C still does not create the document. A person registers it in document control, where documents
+ * are registered, and says here that the entry IS this system's certificate. One per system: a
+ * re-issue is a new revision of the same entry, which document control already models.
+ */
+function CertificateLinkRow({ system }: { system: SystemView }) {
+  const router = useRouter();
+  const hydrated = useHydrated();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [reference, setReference] = useState('');
+
+  async function call(url: string, init: RequestInit): Promise<void> {
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(url, init);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        throw new Error(data.message || data.error || `Request failed (${res.status})`);
+      }
+      setReference('');
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={st.row} data-testid={`certificate-link-${system.record.code}`}>
+      {error && <p style={st.errorInline} role="alert" data-testid={`certificate-error-${system.record.code}`}>{error}</p>}
+      {system.certificate === null ? (
+        <>
+          <input
+            style={st.input}
+            placeholder="Certificate document number"
+            value={reference}
+            onChange={(e) => setReference(e.target.value)}
+            disabled={busy}
+            data-testid={`certificate-ref-${system.record.code}`}
+          />
+          <button
+            style={st.smallBtn}
+            disabled={busy || !hydrated || !reference.trim()}
+            onClick={() => call(`/api/commissioning/records/${system.record.id}/certificate-link`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ documentId: reference.trim() }),
+            })}
+            data-testid={`certificate-link-btn-${system.record.code}`}
+          >
+            {busy ? 'Registering…' : 'Register certificate'}
+          </button>
+        </>
+      ) : (
+        <button
+          style={st.smallBtn}
+          disabled={busy || !hydrated}
+          onClick={() => call(
+            `/api/commissioning/records/${system.record.id}/certificate-link/${system.certificate!.linkId}`,
+            { method: 'DELETE' },
+          )}
+          data-testid={`certificate-unlink-${system.record.code}`}
+        >
+          {busy ? '…' : 'Withdraw registration'}
+        </button>
+      )}
+    </div>
   );
 }
 

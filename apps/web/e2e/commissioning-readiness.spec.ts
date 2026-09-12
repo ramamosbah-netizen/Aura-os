@@ -80,12 +80,16 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
   // ── Certificates: the evidence pack, and what it is not ─────────────────────────────────────────
   await page.getByTestId('cx-section-certificates').click();
   await expect(page.getByTestId('certificates-authority')).toContainText(/DocControl/i);
-  await expect(page.getByTestId(`certificate-${code}`)).toContainText('DocControl — not linked');
+  // Until TC-GATE-10 this row read "DocControl — not linked" and there was no way to change it.
+  // A certificate CAN now be registered, so an unregistered pack says what it is instead of naming a
+  // link that could not be made. Registering one is proved in commissioning-certificate-link.spec.
+  await expect(page.getByTestId(`certificate-issue-${code}`)).toHaveText('evidence pack only');
   await page.getByTestId(`certificate-open-${code}`).click();
   await page.waitForURL('**/certificate');
   await expect(page.getByText('TESTING & COMMISSIONING EVIDENCE PACK')).toBeVisible();
   await expect(page.getByText('IMG-01')).toBeVisible();
-  await expect(page.getByText(/Formal controlled issue/i)).toBeVisible();
+  // T&C still does not issue the document, and the pack still says so.
+  await expect(page.getByText(/owned by Document Control and are not performed here/i)).toBeVisible();
 });
 
 test('a Quality ITP is linked, shown with Quality’s own result, and blocks until it passes', async ({ page, baseURL }) => {

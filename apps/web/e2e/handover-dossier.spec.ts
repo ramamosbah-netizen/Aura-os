@@ -59,6 +59,9 @@ test('the dossier assembles what the client receives, and remembers what was sen
 
   // ── The register: a real as-built and a real manual ─────────────────────────────────────────────
   await registerDocument(page.request, projectId, `ELV-AB-${stamp}`, 'CCTV layout — as-built', 'as_built');
+  // TC-GATE-8: and the as-built is LINKED to the system it documents, or it answers for nobody.
+  const linked = await page.request.post(`${CX}/${system.id}/asbuilt-links`, { headers: H(), data: { documentId: `ELV-AB-${stamp}` } });
+  expect(linked.ok(), `the as-built must link — ${await linked.text()}`).toBe(true);
   const manual = await registerDocument(page.request, projectId, `DOC-OM-${stamp}`, 'CCTV O&M manual');
 
   // ── The pack, accepted against those references ─────────────────────────────────────────────────
@@ -83,11 +86,16 @@ test('the dossier assembles what the client receives, and remembers what was sen
   await expect(page.getByTestId('dossier-authority')).toContainText(/owns nothing/i);
   await expect(page.getByTestId(`dossier-${pkgCode}`)).toBeVisible();
 
+  // Scoped to THIS package's card. A project can carry more than one package — a lifecycle reactor
+  // raises one of its own when a project reaches handover — and an unscoped section testid would
+  // match both, which is a test that passes or fails depending on what else ran.
+  const card = page.getByTestId(`dossier-${pkgCode}`);
+
   // Each section names the domain that produced its lines — the dossier is an assembly, and says so.
-  await expect(page.getByTestId('dossier-section-commissioning_certificate')).toContainText(/Testing & commissioning/i);
-  await expect(page.getByTestId('dossier-section-as_built_document')).toContainText(/Document control/i);
-  await expect(page.getByTestId('dossier-section-om_deliverable')).toContainText(/O&M pack/i);
-  await expect(page.getByTestId('dossier-section-training_session')).toContainText(/client training/i);
+  await expect(card.getByTestId('dossier-section-commissioning_certificate')).toContainText(/Testing & commissioning/i);
+  await expect(card.getByTestId('dossier-section-as_built_document')).toContainText(/Document control/i);
+  await expect(card.getByTestId('dossier-section-om_deliverable')).toContainText(/O&M pack/i);
+  await expect(card.getByTestId('dossier-section-training_session')).toContainText(/client training/i);
   await expect(page.getByTestId(`dossier-no-issue-${pkgCode}`)).toContainText(/captured when the package is submitted/i);
 
   // ── Submit: the manifest is captured ────────────────────────────────────────────────────────────
@@ -108,7 +116,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
   await page.reload({ waitUntil: 'domcontentloaded' });
 
   // Today's pack notices — that is what a derived view is for.
-  await expect(page.getByTestId('dossier-section-om_deliverable')).toContainText(/superseded/i);
+  await expect(page.getByTestId(`dossier-${pkgCode}`).getByTestId('dossier-section-om_deliverable')).toContainText(/superseded/i);
   await expect(page.getByTestId(`dossier-count-${pkgCode}`)).toContainText(/outstanding/i);
 
   // The issued manifest does not — that is what the one stored thing is for.

@@ -36,6 +36,25 @@ export interface SystemView {
   /** The wider handover chain (TC-GATE-3) — distinct from `eligible`, which is T&C's own evidence. */
   readiness: { gates: ReadinessGate[]; commissioningReady: boolean; blocking: string[] };
   itpRequirements: LinkedItpRequirement[];
+  /** Drawings linked as this system's as-built, with what the register says about each now. */
+  asBuiltRecords: LinkedAsBuilt[];
+}
+/**
+ * A drawing somebody linked as this system's as-built (TC-GATE-8).
+ *
+ * Everything but the two ids is read from document control at the moment of the read and stored
+ * nowhere, so a superseded or renumbered drawing says so rather than showing what was true when it
+ * was linked.
+ */
+export interface LinkedAsBuilt {
+  linkId: string;
+  documentId: string;
+  documentNumber: string | null;
+  title: string | null;
+  revision: string | null;
+  status: string | null;
+  current: boolean;
+  note: string | null;
 }
 export interface WorkspaceView {
   systems: SystemView[];

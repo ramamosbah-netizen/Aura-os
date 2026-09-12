@@ -214,10 +214,14 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
     <section aria-label="Certificates and records" style={st.section}>
       <p style={st.authorityNote} data-testid="certificates-authority">
         T&amp;C generates <strong>technical evidence</strong>: the test sheet, the full run history behind every point
-        including the failures, and the witnessed sign-off. Issuing a <strong>controlled certificate</strong> is
-        DocControl&rsquo;s authority, and nothing links the two yet — so this shows the pack and says plainly what it does
-        not cover. Calling it &ldquo;certificate issued&rdquo; would be a second document authority.
+        including the failures, and the witnessed sign-off. Issuing a <strong>controlled certificate</strong> is still
+        DocControl&rsquo;s authority — calling this &ldquo;certificate issued&rdquo; would be a second document authority.
+        What T&amp;C does own is the <strong>link</strong> below: the statement that a particular controlled drawing is a
+        particular system&rsquo;s as-built. Nothing could join those automatically, because every ELV system on a project
+        shares one discipline.
       </p>
+
+      <AsBuiltLinks systems={systems} />
 
       {commissioned.length === 0 ? (
         <EmptyState compact title="No system has been signed off yet" description="An evidence pack is assembled once a system is commissioned with a witness on record." />
@@ -243,6 +247,128 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * As-built drawings, per system (TC-GATE-8).
+ *
+ * Handover's as-built gate used to ask one question of the whole project — "is there an entry marked
+ * as_built?" — and one drawing answered it for every system. It is asked per system now, which it
+ * could not be until somebody could SAY which drawing documents which system. That sentence is what
+ * this writes; document control still owns the drawing, and every number, title, revision and status
+ * below is read from the register at the moment it is shown.
+ *
+ * Every system is listed, not only the commissioned ones: the as-built is a document about the
+ * installation, and waiting for sign-off to record it would just move the work later.
+ */
+function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
+  const router = useRouter();
+  const hydrated = useHydrated();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reference, setReference] = useState<Record<string, string>>({});
+
+  async function call(url: string, init: RequestInit, key: string): Promise<void> {
+    if (busy) return;
+    setBusy(key);
+    setError(null);
+    try {
+      const res = await fetch(url, init);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
+        throw new Error(data.message || data.error || `Request failed (${res.status})`);
+      }
+      setReference((r) => ({ ...r, [key]: '' }));
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  if (systems.length === 0) return null;
+
+  return (
+    <div style={st.section} data-testid="asbuilt-links">
+      <h4 style={st.subHeading}>As-built drawings</h4>
+      {error && <p style={st.error} role="alert" data-testid="asbuilt-error">{error}</p>}
+      <ul style={st.list}>
+        {systems.map((s) => (
+          <li key={s.record.id} style={st.card} data-testid={`asbuilt-${s.record.code}`}>
+            <div style={st.cardHead}>
+              <span style={st.code}>{s.record.code}</span>
+              <strong style={st.grow}>{s.record.title}</strong>
+              <span
+                style={s.asBuiltRecords.some((a) => a.current) ? st.tagGood : st.tagWarn}
+                data-testid={`asbuilt-state-${s.record.code}`}
+              >
+                {s.asBuiltRecords.some((a) => a.current)
+                  ? 'as-built linked'
+                  : s.asBuiltRecords.length === 0
+                    ? 'none linked'
+                    : 'not current'}
+              </span>
+            </div>
+
+            {s.asBuiltRecords.length > 0 && (
+              <ul style={st.linkList}>
+                {s.asBuiltRecords.map((a) => (
+                  <li key={a.linkId} style={st.linkRow} data-testid={`asbuilt-link-${a.linkId}`}>
+                    <span aria-hidden style={a.current ? st.markGood : st.markWarn}>{a.current ? '✓' : '—'}</span>
+                    <span style={st.grow}>
+                      <strong style={st.ref}>{a.documentNumber ?? a.documentId}</strong>
+                      {a.revision ? ` rev ${a.revision}` : ''} {a.title ?? ''}
+                      {a.note && <small style={st.note}> {a.note}</small>}
+                    </span>
+                    <button
+                      style={st.smallBtn}
+                      disabled={busy !== null || !hydrated}
+                      onClick={() => call(
+                        `/api/commissioning/records/${s.record.id}/asbuilt-links/${a.linkId}`,
+                        { method: 'DELETE' },
+                        a.linkId,
+                      )}
+                      data-testid={`asbuilt-unlink-${a.linkId}`}
+                    >
+                      {busy === a.linkId ? '…' : 'Unlink'}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div style={st.row}>
+              <input
+                style={st.input}
+                placeholder="As-built document number"
+                value={reference[s.record.id] ?? ''}
+                onChange={(e) => setReference({ ...reference, [s.record.id]: e.target.value })}
+                disabled={busy !== null}
+                data-testid={`asbuilt-ref-${s.record.code}`}
+              />
+              <button
+                style={st.smallBtn}
+                disabled={busy !== null || !hydrated || !(reference[s.record.id] ?? '').trim()}
+                onClick={() => call(
+                  `/api/commissioning/records/${s.record.id}/asbuilt-links`,
+                  {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ documentId: (reference[s.record.id] ?? '').trim() }),
+                  },
+                  s.record.id,
+                )}
+                data-testid={`asbuilt-link-btn-${s.record.code}`}
+              >
+                {busy === s.record.id ? 'Linking…' : 'Link as-built'}
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -408,6 +534,15 @@ const st = {
   tagGood: { padding: '3px 9px', borderRadius: 999, background: 'var(--good-soft, rgba(34,197,94,.15))', color: 'var(--good)', fontSize: 11, fontWeight: 700 } as CSSProperties,
   tagWarn: { padding: '3px 9px', borderRadius: 999, background: 'var(--warn-soft, rgba(234,179,8,.15))', color: 'var(--warn)', fontSize: 11, fontWeight: 700 } as CSSProperties,
   escalate: { display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' } as CSSProperties,
+  // ── As-built links (TC-GATE-8) ───────────────────────────────────────────────────────────────
+  subHeading: { margin: '4px 0 0', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.06em', color: 'var(--muted)' } as CSSProperties,
+  linkList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
+  linkRow: { display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12 } as CSSProperties,
+  markGood: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
+  markWarn: { color: 'var(--warn)', fontWeight: 700 } as CSSProperties,
+  ref: { fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
+  note: { color: 'var(--warn)', fontSize: 11 } as CSSProperties,
+  input: { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', fontSize: 12, background: 'var(--bg, #fff)', color: 'inherit', minWidth: 200 } as CSSProperties,
   error: { color: 'var(--bad)', fontSize: 13, fontWeight: 600, margin: 0 } as CSSProperties,
   errorInline: { color: 'var(--bad)', fontSize: 11 } as CSSProperties,
 };

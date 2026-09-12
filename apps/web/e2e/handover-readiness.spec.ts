@@ -90,21 +90,31 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
     data: { projectId, documentNumber: docNumber, title: 'CCTV layout — as-built', discipline: 'elv', docType: 'drawing', currentRevision: 'A', status: 'for_construction' },
   })).json();
 
+  // TC-GATE-8: nothing is linked to the system yet, so the gate is UNKNOWN rather than BLOCKED —
+  // nobody has said anything about this system's as-built, and nothing has failed.
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('handover-item-commissioning-state')).toHaveText('READY');
-  await expect(page.getByTestId('handover-item-asBuilts-state')).toHaveText('BLOCKED');
-  await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/none marked as-built/i);
+  await expect(page.getByTestId('handover-item-asBuilts-state')).toHaveText('UNKNOWN');
+  await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/no as-built drawing linked/i);
   await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/Document control/i);
 
-  // ── Release it as the as-built, and the gate reaches READY ──────────────────────────────────────
+  // A drawing that is not yet an as-built cannot be linked as one.
+  const tooEarly = await page.request.post(`${CX}/${systemId}/asbuilt-links`, { headers: H(), data: { documentId: docNumber } });
+  expect(tooEarly.ok(), 'a for-construction drawing must not be linkable as an as-built').toBe(false);
+  expect(JSON.stringify(await tooEarly.json())).toMatch(/must be marked as-built/i);
+
+  // ── Release it as the as-built, link it, and the gate reaches READY ─────────────────────────────
   // This is the assertion TC-GATE-4 could not make: while the question went to Engineering, whose
   // drawing lifecycle has no as-built state, this item could never leave BLOCKED.
   const revised = await page.request.put(`${DC}/register/${entry.id}/revise`, { headers: H(), data: { revision: 'B', status: 'as_built' } });
   expect(revised.ok(), 'the register must accept an as-built revision').toBe(true);
 
+  const linked = await page.request.post(`${CX}/${systemId}/asbuilt-links`, { headers: H(), data: { documentId: docNumber } });
+  expect(linked.ok(), `the as-built must link once the register marks it so — ${await linked.text()}`).toBe(true);
+
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('handover-item-asBuilts-state')).toHaveText('READY');
-  await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/in the register/i);
+  await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/current as-built drawing linked/i);
 });
 
 test('the handover checklist offers only the one item nobody owns', async ({ page, baseURL }) => {

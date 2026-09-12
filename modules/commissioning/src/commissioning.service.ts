@@ -14,10 +14,12 @@ import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './doma
 import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
 import { type CommissioningItpLink, makeItpLink } from './domain/commissioning-itp-link';
+import { type AsBuiltLink, makeAsBuiltLink } from './domain/asbuilt-link';
+import { type ControlledDocumentFact, AS_BUILT_STATUS, referenceIsSound, resolveDocumentReference } from './domain/document-reference';
 import { assessSystemReadiness, type SystemReadiness } from './domain/commissioning-readiness';
 import {
-  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE,
-  type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort,
+  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL,
+  type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort, type DocControlPort,
   type EquipmentFact, type ItpFact, type NcrFact,
 } from './ports';
 
@@ -67,6 +69,28 @@ export interface CommissioningSystemView {
   readiness: SystemReadiness;
   /** The ITP requirements a person has linked to this system, with Quality's own result for each. */
   itpRequirements: LinkedItpRequirement[];
+  /** The drawings linked as this system's as-built, with what the register says about each now. */
+  asBuiltRecords: LinkedAsBuilt[];
+}
+
+/**
+ * A drawing somebody linked as this system's as-built (TC-GATE-8), resolved against the register.
+ *
+ * Everything except `linkId` and `documentId` is read from document control at the moment of the
+ * read and kept nowhere — so a drawing that has been superseded or renumbered says so, instead of
+ * showing whatever was true on the day it was linked.
+ */
+export interface LinkedAsBuilt {
+  linkId: string;
+  documentId: string;
+  documentNumber: string | null;
+  title: string | null;
+  revision: string | null;
+  status: string | null;
+  /** Resolves, is not superseded, and is actually marked as-built. */
+  current: boolean;
+  /** Why it does not count, in words a reader can act on. Null when it does. */
+  note: string | null;
 }
 
 /** One Quality ITP requirement, linked to this system by a person, shown with Quality's result. */
@@ -121,6 +145,11 @@ export class CommissioningService {
     @Optional() @Inject(ELV_EQUIPMENT) private readonly elv?: ElvEquipmentPort,
     @Optional() @Inject(QUALITY_EVIDENCE) private readonly quality?: QualityEvidencePort,
     @Optional() @Inject(ENGINEERING_RELEASE) private readonly engineering?: EngineeringReleasePort,
+    // Document control, for as-built links (TC-GATE-8). Read only to CHECK a link before it is
+    // written — the register is never copied here. Absent means the check cannot run, which lets the
+    // link be recorded and leaves the readiness chain to report it unverified. An unwired port must
+    // block proof, never work.
+    @Optional() @Inject(DOC_CONTROL) private readonly docControl?: DocControlPort,
   ) {}
 
   /** Read a neighbouring domain without letting its outage fail this request. */
@@ -517,17 +546,21 @@ export class CommissioningService {
    * round trips to answer one screen.
    */
   async readWorkspace(tenantId: string, projectId?: string): Promise<CommissioningWorkspaceView> {
-    const [records, items, runs, punch, itpLinks, equipment, qualityEvidence, drawings] = await Promise.all([
+    const [records, items, runs, punch, itpLinks, asBuiltLinks, equipment, qualityEvidence, drawings, documents] = await Promise.all([
       this.store.list(tenantId, projectId),
       this.store.listTestItemsForProject(tenantId, projectId),
       this.store.listTestRunsForProject(tenantId, projectId),
       this.store.listPunchItemsForProject(tenantId, projectId),
       this.store.listItpLinksForProject(tenantId, projectId),
+      this.store.listAsBuiltLinksForProject(tenantId, projectId),
       // The three neighbouring domains, read once for the whole project rather than once per system.
       // Each is null when its port is unbound or errors, and null becomes UNKNOWN downstream.
       projectId && this.elv ? this.readPort('ELV device register', () => this.elv!.readProjectEquipment(tenantId, projectId)) : Promise.resolve(null),
       projectId && this.quality ? this.readPort('Quality', () => this.quality!.readProjectQualityEvidence(tenantId, projectId)) : Promise.resolve(null),
       projectId && this.engineering ? this.readPort('Engineering', () => this.engineering!.readProjectDrawingRelease(tenantId, projectId)) : Promise.resolve(null),
+      // The controlled register, for resolving as-built links (TC-GATE-8). Null when unreadable,
+      // which shows on each link as "unverified" rather than as a silent pass.
+      projectId ? this.readDocuments(tenantId, projectId) : Promise.resolve(null),
     ]);
     const itpsById = new Map((qualityEvidence?.itps ?? []).map((itp) => [itp.id, itp]));
     const itemsById = new Map(items.map((item) => [item.id, item]));
@@ -550,6 +583,13 @@ export class CommissioningService {
       list.push(run);
       runsByItem.set(run.testItemId, list);
     }
+    const asBuiltByRecord = new Map<string, typeof asBuiltLinks>();
+    for (const link of asBuiltLinks) {
+      const list = asBuiltByRecord.get(link.commissioningId) ?? [];
+      list.push(link);
+      asBuiltByRecord.set(link.commissioningId, list);
+    }
+
     const punchByRecord = new Map<string, PunchItem[]>();
     for (const p of punch) {
       const list = punchByRecord.get(p.commissioningId) ?? [];
@@ -589,6 +629,32 @@ export class CommissioningService {
           lastTestedAt: last?.testedAt ?? point.createdAt,
           runCount: lineage.length,
           openPunchIds: openPunch.filter((p) => p.testItemId === point.id).map((p) => p.id),
+        };
+      });
+
+      // The drawings tied to this system as its as-built. Document control's answer is carried
+      // through untouched — T&C shows it, and never writes it.
+      const asBuiltRecords: LinkedAsBuilt[] = (asBuiltByRecord.get(record.id) ?? []).map((link) => {
+        const resolved = resolveDocumentReference(link.documentId, documents);
+        const doc = resolved?.document ?? null;
+        const current = referenceIsSound(resolved) && doc!.status === AS_BUILT_STATUS;
+        return {
+          linkId: link.id,
+          documentId: link.documentId,
+          documentNumber: doc?.documentNumber ?? null,
+          title: doc?.title ?? null,
+          revision: doc?.revision ?? null,
+          status: doc?.status ?? null,
+          current,
+          note: current
+            ? null
+            : documents === null
+              ? 'Document control could not be read, so this link is unverified.'
+              : resolved === null || resolved.missing
+                ? `No document "${link.documentId}" is in the project register.`
+                : resolved.superseded
+                  ? 'The register has superseded the revision this points at.'
+                  : `The register has this as '${doc!.status}', not an as-built.`,
         };
       });
 
@@ -645,6 +711,7 @@ export class CommissioningService {
         failingPoints,
         readiness,
         itpRequirements,
+        asBuiltRecords,
         pointsTotal: points.length,
         pointsPassed: passed.length,
         pointsFailing: failing.length,
@@ -722,6 +789,70 @@ export class CommissioningService {
   async unlinkItp(id: string, linkId: string, tenantId: string): Promise<void> {
     await this.mustFind(id, tenantId);
     await this.store.deleteItpLink(linkId, tenantId);
+  }
+
+  // ── As-built links (TC-GATE-8) ───────────────────────────────────────────────────────────────
+
+  /**
+   * Record that a controlled drawing is this system's as-built.
+   *
+   * CHECKED AT THE MOMENT IT IS MADE, when document control can be read: the entry must exist in
+   * this project's register, and it must actually be marked `as_built`. Linking a drawing that is
+   * still for-construction would put a not-yet-as-built document behind an as-built claim, which is
+   * the failure this whole link exists to prevent — so it is refused here rather than discovered
+   * later by a reader.
+   *
+   * When the port is absent the link is still recorded. The readiness chain re-checks it on every
+   * read and reports what it finds; an unwired port must not stop work being written down.
+   */
+  async linkAsBuilt(
+    id: string,
+    tenantId: string,
+    input: { documentId: string; linkedBy?: string | null },
+  ): Promise<AsBuiltLink> {
+    const rec = await this.mustFind(id, tenantId);
+    const link = makeAsBuiltLink({
+      tenantId,
+      companyId: rec.companyId,
+      commissioningId: rec.id,
+      projectId: rec.projectId,
+      documentId: input.documentId,
+      linkedBy: input.linkedBy,
+    });
+
+    const documents = await this.readDocuments(tenantId, rec.projectId);
+    const resolved = resolveDocumentReference(link.documentId, documents);
+    if (resolved?.missing) {
+      throw new Error(
+        `validation: the document reference "${resolved.reference}" must match a controlled document ` +
+          "in this project's register — by document number or id",
+      );
+    }
+    if (resolved?.document && resolved.document.status !== AS_BUILT_STATUS) {
+      throw new Error(
+        `validation: document ${resolved.document.documentNumber} must be marked as-built in the register ` +
+          `before it can be linked as one — it is currently '${resolved.document.status}'`,
+      );
+    }
+
+    await this.store.saveAsBuiltLink(link);
+    this.logger.log(`[Commissioning] ${rec.code} linked as-built ${resolved?.document?.documentNumber ?? link.documentId}`);
+    return link;
+  }
+
+  async unlinkAsBuilt(id: string, linkId: string, tenantId: string): Promise<void> {
+    await this.mustFind(id, tenantId);
+    await this.store.deleteAsBuiltLink(linkId, tenantId);
+  }
+
+  listAsBuiltLinks(id: string, tenantId: string): Promise<AsBuiltLink[]> {
+    return this.store.listAsBuiltLinks(id, tenantId);
+  }
+
+  /** The project register, or null when document control could not be read. */
+  async readDocuments(tenantId: string, projectId: string): Promise<ControlledDocumentFact[] | null> {
+    if (!this.docControl) return null;
+    return this.readPort('Document control', () => this.docControl!.readProjectDocuments(tenantId, projectId));
   }
 
   listItpLinks(id: string, tenantId: string): Promise<CommissioningItpLink[]> {

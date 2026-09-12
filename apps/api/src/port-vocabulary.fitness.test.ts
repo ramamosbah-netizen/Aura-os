@@ -56,6 +56,8 @@ describe('TC-GATE-6 — cross-module vocabulary agreement', () => {
         tenantId: 't1', projectId: 'p1', documentNumber: 'ELV-AB-001', title: 'CCTV as-built', status: 'as_built',
       });
       // The fact is built from the REAL row, not hand-written — the step the old unit test skipped.
+      // Since TC-GATE-8 the gate is per system, so the drawing is LINKED to the system it documents;
+      // a register entry sitting on the project no longer answers for a system nobody linked it to.
       const facts: HandoverReadinessFacts = {
         systemsTotal: 1,
         systemsCommissioningReady: 1,
@@ -71,7 +73,8 @@ describe('TC-GATE-6 — cross-module vocabulary agreement', () => {
         }],
         omItems: [],
         trainingSessions: [],
-        systemIds: [],
+        asBuiltLinks: [{ commissioningId: 'sys-1', documentId: entry.documentNumber }],
+        systemIds: ['sys-1'],
         asserted: { spares: true },
       };
       const asBuilts = assessHandoverReadiness(facts).items.find((i) => i.id === 'asBuilts')!;

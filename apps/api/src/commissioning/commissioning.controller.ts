@@ -282,6 +282,30 @@ export class CommissioningController {
     return { ok: true };
   }
 
+  // ── As-built links (TC-GATE-8) ───────────────────────────────────────────────────────────────
+  //
+  // The same shape as the ITP links above, and for the same reason: document control owns the
+  // drawing, and T&C owns one sentence about it — that this entry is this system's as-built. The
+  // register entry must already be marked as-built, which the service checks before writing.
+
+  @Post(':id/asbuilt-links')
+  linkAsBuilt(@Param('id') id: string, @Body() dto: { documentId?: string }) {
+    if (!dto?.documentId?.trim()) throw new BadRequestException('documentId is required');
+    const ctx = this.tenant.get();
+    return this.service.linkAsBuilt(id, ctx.tenantId, { documentId: dto.documentId, linkedBy: ctx.actorId });
+  }
+
+  @Get(':id/asbuilt-links')
+  listAsBuiltLinks(@Param('id') id: string) {
+    return this.service.listAsBuiltLinks(id, this.tenant.get().tenantId);
+  }
+
+  @Delete(':id/asbuilt-links/:linkId')
+  async unlinkAsBuilt(@Param('id') id: string, @Param('linkId') linkId: string): Promise<{ ok: true }> {
+    await this.service.unlinkAsBuilt(id, linkId, this.tenant.get().tenantId);
+    return { ok: true };
+  }
+
   /**
    * Record that a defect needs a Quality non-conformance, and the NCR that answers it.
    * T&C does not raise the NCR — Quality owns that, and this stores only a reference to it.

@@ -5,6 +5,7 @@ import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
+import type { AsBuiltLink } from './domain/asbuilt-link';
 import type { OmItem } from './domain/om-package';
 import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
@@ -20,6 +21,7 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly testRuns: CommissioningTestRun[] = [];
   private readonly punchItems = new Map<string, PunchItem>();
   private readonly itpLinks = new Map<string, CommissioningItpLink>();
+  private readonly asBuiltLinks = new Map<string, AsBuiltLink>();
   private readonly omItems = new Map<string, OmItem>();
   private readonly trainingSessions = new Map<string, TrainingSession>();
   private readonly handovers = new Map<string, HandoverPackage>();
@@ -103,6 +105,28 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
     return [...this.punchItems.values()]
       .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async saveAsBuiltLink(link: AsBuiltLink): Promise<void> {
+    const clash = [...this.asBuiltLinks.values()].find(
+      (l) => l.id !== link.id && l.commissioningId === link.commissioningId && l.documentId === link.documentId,
+    );
+    if (clash) throw new Error('conflict: this drawing is already linked to the system');
+    this.asBuiltLinks.set(link.id, { ...link });
+  }
+  async deleteAsBuiltLink(id: string, tenantId: string): Promise<void> {
+    const found = this.asBuiltLinks.get(id);
+    if (found && found.tenantId === tenantId) this.asBuiltLinks.delete(id);
+  }
+  async listAsBuiltLinks(commissioningId: string, tenantId: string): Promise<AsBuiltLink[]> {
+    return [...this.asBuiltLinks.values()]
+      .filter((l) => l.commissioningId === commissioningId && l.tenantId === tenantId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+  async listAsBuiltLinksForProject(tenantId: string, projectId?: string): Promise<AsBuiltLink[]> {
+    return [...this.asBuiltLinks.values()]
+      .filter((l) => l.tenantId === tenantId && (!projectId || l.projectId === projectId))
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }
 

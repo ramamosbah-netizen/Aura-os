@@ -48,6 +48,15 @@ async function readySystem(request: import('@playwright/test').APIRequestContext
   })).json();
   for (const step of ['submit', 'start-review']) await request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/${step}`, { headers: H(), data: {} });
   await request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved' } });
+
+  // TC-GATE-8: the as-built is linked to the system it documents. A drawing sitting in the register
+  // no longer answers for a system nobody linked it to.
+  const asBuiltNumber = `ELV-AB-${Date.now().toString().slice(-5)}`;
+  await request.post(`${DC}/register`, {
+    headers: H(),
+    data: { projectId, documentNumber: asBuiltNumber, title: 'CCTV layout — as-built', discipline: 'elv', docType: 'drawing', currentRevision: 'B', status: 'as_built' },
+  });
+  await request.post(`${CX}/${rec.id}/asbuilt-links`, { headers: H(), data: { documentId: asBuiltNumber } });
   return rec;
 }
 

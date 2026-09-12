@@ -5,6 +5,7 @@ import { parsePageParams } from '@aura/shared';
 import {
   type CommissioningRecord,
   type CommissioningTestItem,
+  type CommissioningTestRun,
   type PunchItem,
   type PunchSeverity,
   type ElvSystem,
@@ -160,11 +161,34 @@ export class CommissioningController {
     return this.service.addTestItem(id, this.tenant.get().tenantId, { pointNo: dto.pointNo, description: dto.description, expected: dto.expected ?? null });
   }
 
-  @Put(':id/test-items/:itemId/result')
-  recordResult(@Param('id') id: string, @Param('itemId') itemId: string, @Body() dto: TestResultDto): Promise<CommissioningTestItem> {
+  /**
+   * Execute a test point. POST, not PUT: this APPENDS a run to the point's lineage rather than
+   * replacing its result, so it is not idempotent — sending it twice records two executions, which
+   * is exactly what a retest is. The PUT spelling is kept below for existing callers.
+   */
+  @Post(':id/test-items/:itemId/runs')
+  recordRun(@Param('id') id: string, @Param('itemId') itemId: string, @Body() dto: TestResultDto): Promise<CommissioningTestItem> {
     if (dto?.result !== 'pass' && dto?.result !== 'fail') throw new BadRequestException('result must be pass or fail');
     const ctx = this.tenant.get();
     return this.service.recordTestResult(id, itemId, ctx.tenantId, { result: dto.result, actual: dto.actual ?? null, remarks: dto.remarks ?? null, testedBy: ctx.actorId });
+  }
+
+  /** Compatibility spelling for `POST :id/test-items/:itemId/runs`. Same append, same lineage. */
+  @Put(':id/test-items/:itemId/result')
+  recordResult(@Param('id') id: string, @Param('itemId') itemId: string, @Body() dto: TestResultDto): Promise<CommissioningTestItem> {
+    return this.recordRun(id, itemId, dto);
+  }
+
+  /** A point's full lineage, oldest run first — including the failures a later run corrected. */
+  @Get(':id/test-items/:itemId/runs')
+  listRuns(@Param('id') _id: string, @Param('itemId') itemId: string): Promise<CommissioningTestRun[]> {
+    return this.service.listTestRunsForItem(itemId, this.tenant.get().tenantId);
+  }
+
+  /** Every run on the system, for the 360 and for export. */
+  @Get(':id/test-runs')
+  listAllRuns(@Param('id') id: string): Promise<CommissioningTestRun[]> {
+    return this.service.listTestRuns(id, this.tenant.get().tenantId);
   }
 
   // ── Punch list ───────────────────────────────────────────────────────────────

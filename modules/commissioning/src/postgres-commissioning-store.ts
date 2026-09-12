@@ -4,6 +4,7 @@ import { makePage } from '@aura/shared';
 import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord, CommissioningStatus, ElvSystem } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
+import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
@@ -204,6 +205,33 @@ export class PostgresCommissioningStore implements CommissioningStore {
     const res = await this.pool.query(`select * from public.aura_commissioning_test_items where id = $1 and tenant_id = $2`, [id, tenantId]);
     return res.rowCount === 0 ? null : toTestItem(res.rows[0]);
   }
+
+  // ── Test runs (append-only; the table grants no UPDATE or DELETE — migration 0296) ────────────
+
+  async appendTestRun(r: CommissioningTestRun): Promise<void> {
+    // Plain insert, no ON CONFLICT: the (test_item_id, run_no) unique constraint is the concurrency
+    // guard, and swallowing its violation would let a second writer's run vanish silently.
+    await this.pool.query(
+      `insert into public.aura_commissioning_test_runs
+        (id, tenant_id, company_id, test_item_id, commissioning_id, project_id, run_no, result, actual, remarks, tested_by, tested_at, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [r.id, r.tenantId, r.companyId, r.testItemId, r.commissioningId, r.projectId, r.runNo, r.result, r.actual, r.remarks, r.testedBy, r.testedAt, r.createdAt],
+    );
+  }
+  async listTestRunsForItem(testItemId: string, tenantId: string): Promise<CommissioningTestRun[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_test_runs where test_item_id = $1 and tenant_id = $2 order by run_no asc`,
+      [testItemId, tenantId],
+    );
+    return res.rows.map(toTestRun);
+  }
+  async listTestRuns(commissioningId: string, tenantId: string): Promise<CommissioningTestRun[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_test_runs where commissioning_id = $1 and tenant_id = $2 order by test_item_id asc, run_no asc`,
+      [commissioningId, tenantId],
+    );
+    return res.rows.map(toTestRun);
+  }
   async listTestItems(commissioningId: string, tenantId: string): Promise<CommissioningTestItem[]> {
     const res = await this.pool.query(`select * from public.aura_commissioning_test_items where commissioning_id = $1 and tenant_id = $2 order by created_at asc`, [commissioningId, tenantId]);
     return res.rows.map(toTestItem);
@@ -231,6 +259,17 @@ export class PostgresCommissioningStore implements CommissioningStore {
 }
 
 const tsIso = (v: unknown): string | null => (v == null ? null : typeof v === 'string' ? v : new Date(v as string).toISOString());
+
+function toTestRun(r: Record<string, unknown>): CommissioningTestRun {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    testItemId: r.test_item_id as string, commissioningId: r.commissioning_id as string, projectId: r.project_id as string,
+    runNo: Number(r.run_no), result: r.result as CommissioningTestRun['result'],
+    actual: (r.actual as string) ?? null, remarks: (r.remarks as string) ?? null,
+    testedBy: (r.tested_by as string) ?? null,
+    testedAt: tsIso(r.tested_at) as string, createdAt: tsIso(r.created_at) as string,
+  };
+}
 
 function toTestItem(r: Record<string, unknown>): CommissioningTestItem {
   return {

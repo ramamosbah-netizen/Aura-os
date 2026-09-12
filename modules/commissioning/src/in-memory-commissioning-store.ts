@@ -3,6 +3,7 @@ import { makePage } from '@aura/shared';
 import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
+import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -10,8 +11,26 @@ import type { HandoverPackage } from './domain/handover';
 export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly records = new Map<string, CommissioningRecord>();
   private readonly testItems = new Map<string, CommissioningTestItem>();
+  // Append-only, like the table: this adapter offers no way to replace or remove a run either, so a
+  // test that passes here cannot be one that would fail against Postgres's refusal to update.
+  private readonly testRuns: CommissioningTestRun[] = [];
   private readonly punchItems = new Map<string, PunchItem>();
   private readonly handovers = new Map<string, HandoverPackage>();
+
+  async appendTestRun(run: CommissioningTestRun): Promise<void> {
+    if (this.testRuns.some((r) => r.testItemId === run.testItemId && r.runNo === run.runNo)) {
+      throw new Error(`conflict: run ${run.runNo} already recorded for test point ${run.testItemId}`);
+    }
+    this.testRuns.push({ ...run });
+  }
+  async listTestRunsForItem(testItemId: string, tenantId: string): Promise<CommissioningTestRun[]> {
+    return this.testRuns.filter((r) => r.testItemId === testItemId && r.tenantId === tenantId).sort((a, b) => a.runNo - b.runNo);
+  }
+  async listTestRuns(commissioningId: string, tenantId: string): Promise<CommissioningTestRun[]> {
+    return this.testRuns
+      .filter((r) => r.commissioningId === commissioningId && r.tenantId === tenantId)
+      .sort((a, b) => (a.testItemId === b.testItemId ? a.runNo - b.runNo : a.testItemId < b.testItemId ? -1 : 1));
+  }
 
   async saveTestItem(item: CommissioningTestItem): Promise<void> {
     this.testItems.set(item.id, { ...item });

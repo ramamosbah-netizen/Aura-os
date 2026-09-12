@@ -10,7 +10,8 @@ import {
   commission,
   fail,
 } from './domain/commissioning-record';
-import { type CommissioningTestItem, makeTestItem, recordResult } from './domain/commissioning-test-item';
+import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './domain/commissioning-test-item';
+import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch } from './domain/punch-item';
 
 /**
@@ -133,12 +134,35 @@ export class CommissioningService {
     return this.store.listPaged(tenantId, page, projectId);
   }
 
+  /**
+   * Record a system's test tally by hand.
+   *
+   * REFUSED once the system has an itemized test sheet. A typed `pointsPassed` used to overwrite the
+   * tally that `syncTally` derives from the test points, and `commission()` gates on that tally — so
+   * typing "12 of 12" over a sheet whose points had failed made a failed system commissionable. The
+   * evidence and the summary were two separate truths, and the weaker one won.
+   *
+   * The path stays open for systems tested WITHOUT a sheet (a supplier certificate for a small
+   * system, say): there is no itemized truth to contradict, so a tally is the only record there is.
+   * The moment a point exists, the sheet is the truth and this refuses rather than competing with it.
+   */
   async recordTest(
     id: string,
     tenantId: string,
     patch: { pointsPassed: number; pointsTotal?: number; testDate?: string | null; remarks?: string | null },
   ): Promise<CommissioningRecord> {
     const rec = await this.mustFind(id, tenantId);
+    const items = await this.store.listTestItems(id, tenantId);
+    if (items.length > 0) {
+      // Phrased as a state-transition guard on purpose: `only … can …` is the shape the error
+      // taxonomy classifies as 409, and this IS a conflict with the aggregate's state rather than
+      // bad input. The first wording read as prose and escaped to 500 until the browser proof
+      // caught it — see apps/api/src/error-taxonomy.fitness.test.ts.
+      throw new Error(
+        `only a system without an itemized test sheet can have its tally entered by hand — ` +
+          `${rec.code} has ${items.length} test point${items.length === 1 ? '' : 's'}; record results against them and the tally is derived`,
+      );
+    }
     const next = recordTest(rec, patch);
     await this.store.save(next);
     return next;
@@ -155,6 +179,24 @@ export class CommissioningService {
     if (openPunch.length > 0) {
       throw new Error(`only a system with no open punch items can be commissioned (${openPunch.length} open)`);
     }
+
+    // Eligibility is re-derived from the EVIDENCE here, not read from the stored tally. The domain
+    // guard below still checks the tally, but a tally is a number on the record — this asks the test
+    // points themselves, so a system can never be signed off while a point stands failed or was
+    // never executed, whatever the tally happens to say.
+    const items = await this.store.listTestItems(id, tenantId);
+    if (items.length > 0) {
+      const failed = items.filter((i) => i.result === 'fail');
+      const untested = items.filter((i) => i.result === 'pending');
+      if (failed.length > 0 || untested.length > 0) {
+        const parts = [
+          ...(failed.length > 0 ? [`${failed.length} test point${failed.length === 1 ? '' : 's'} still failing (${failed.map((i) => i.pointNo).join(', ')})`] : []),
+          ...(untested.length > 0 ? [`${untested.length} never executed (${untested.map((i) => i.pointNo).join(', ')})`] : []),
+        ];
+        throw new Error(`only a system whose every test point has passed can be commissioned — ${parts.join('; ')}`);
+      }
+    }
+
     const next = commission(rec, patch);
     await this.store.save(next);
     // A commissioned system is a step toward project handover; a reactor watches for the last one
@@ -197,7 +239,13 @@ export class CommissioningService {
     return item;
   }
 
-  /** Record a test point's actual result and re-sync the record's pass/total tally + status. */
+  /**
+   * Execute a test point: APPEND a run, then re-project the point and re-derive the record's tally.
+   *
+   * A retest does not replace the failure it corrects. Run #1 FAILED stays exactly as recorded, run
+   * #2 PASSED is appended beside it, and the point now reads pass because the latest run passed. The
+   * history survives review, dispute and audit, which is the only reason the sheet exists.
+   */
   async recordTestResult(
     id: string,
     itemId: string,
@@ -208,13 +256,67 @@ export class CommissioningService {
     if (rec.status === 'commissioned') throw new Error('conflict: record is already commissioned');
     const item = await this.store.findTestItem(itemId, tenantId);
     if (!item || item.commissioningId !== id) throw new Error(`not found: test item ${itemId}`);
-    const updated = recordResult(item, input);
+
+    const priorRuns = await this.store.listTestRunsForItem(itemId, tenantId);
+    const run = makeTestRun({
+      tenantId,
+      companyId: item.companyId,
+      testItemId: item.id,
+      commissioningId: rec.id,
+      projectId: item.projectId,
+      runNo: priorRuns.length + 1,
+      result: input.result,
+      actual: input.actual,
+      remarks: input.remarks,
+      testedBy: input.testedBy,
+    });
+    await this.store.appendTestRun(run);
+
+    const updated = applyLatestRun(item, run);
     await this.store.saveTestItem(updated);
     await this.syncTally(rec, tenantId);
+
+    // Audited as its own fact. The record-level events say a system was commissioned; this says what
+    // was proven, when, by whom, and — on a retest — that something had failed first.
+    await this.events.append([
+      makeEvent({
+        type: 'commissioning.test-run.recorded',
+        tenantId,
+        companyId: item.companyId,
+        actorId: input.testedBy ?? null,
+        aggregateType: 'commissioning.record',
+        aggregateId: rec.id,
+        payload: {
+          testItemId: item.id,
+          pointNo: item.pointNo,
+          runNo: run.runNo,
+          result: run.result,
+          actual: run.actual,
+          remarks: run.remarks,
+          isRetest: run.runNo > 1,
+        },
+      }),
+    ]);
+    this.logger.log(`[Commissioning] ${rec.code} point ${item.pointNo} run #${run.runNo}: ${run.result}`);
     return updated;
   }
 
-  /** Roll the itemized results up into the record's pointsTotal/pointsPassed (+ derived status). */
+  listTestRuns(id: string, tenantId: string): Promise<CommissioningTestRun[]> {
+    return this.store.listTestRuns(id, tenantId);
+  }
+
+  listTestRunsForItem(itemId: string, tenantId: string): Promise<CommissioningTestRun[]> {
+    return this.store.listTestRunsForItem(itemId, tenantId);
+  }
+
+  /**
+   * Roll the itemized results up into the record's pointsTotal/pointsPassed (+ derived status).
+   *
+   * This is the ONLY writer of the tally once a sheet exists — `recordTest` refuses in that case —
+   * so the number on the record can no longer disagree with the evidence under it. A point reading
+   * `fail` is its latest run failing, so a system whose defect has been retested and passed leaves
+   * `failed` on its own, without anyone editing history to get there.
+   */
   private async syncTally(rec: CommissioningRecord, tenantId: string): Promise<void> {
     const items = await this.store.listTestItems(rec.id, tenantId);
     if (items.length === 0) return;
@@ -259,12 +361,25 @@ export class CommissioningService {
     return this.store.listPunchItems(id, tenantId);
   }
 
-  /** The commissioning 360: the record with its test sheet + punch list. */
-  async getDetail(id: string, tenantId: string): Promise<{ record: CommissioningRecord; testItems: CommissioningTestItem[]; punchItems: PunchItem[] } | null> {
+  /**
+   * The commissioning 360: the record with its test sheet, its run lineage and its punch list.
+   *
+   * `testRuns` comes back with the rest rather than behind a per-point call, so the page that has to
+   * show "failed, then passed" can render it without N+1 requests — and so a reader cannot be shown
+   * the current results without the history that produced them.
+   */
+  async getDetail(
+    id: string,
+    tenantId: string,
+  ): Promise<{ record: CommissioningRecord; testItems: CommissioningTestItem[]; testRuns: CommissioningTestRun[]; punchItems: PunchItem[] } | null> {
     const record = await this.store.find(id, tenantId);
     if (!record) return null;
-    const [testItems, punchItems] = await Promise.all([this.store.listTestItems(id, tenantId), this.store.listPunchItems(id, tenantId)]);
-    return { record, testItems, punchItems };
+    const [testItems, testRuns, punchItems] = await Promise.all([
+      this.store.listTestItems(id, tenantId),
+      this.store.listTestRuns(id, tenantId),
+      this.store.listPunchItems(id, tenantId),
+    ]);
+    return { record, testItems, testRuns, punchItems };
   }
 
   private async mustFind(id: string, tenantId: string): Promise<CommissioningRecord> {

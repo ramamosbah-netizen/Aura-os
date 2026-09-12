@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { notFound } from 'next/navigation';
 import { getJson } from '@/lib/api';
 import CommissioningActions from '@/components/commissioning-actions';
+import CommissioningTestSheet, { type TestSheetPoint, type TestSheetRun } from '@/components/commissioning-test-sheet';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,19 +11,17 @@ interface Record_ {
   projectName: string | null; projectId: string; pointsTotal: number; pointsPassed: number;
   commissionedBy: string | null; witnessedBy: string | null; commissionedAt: string | null; createdAt: string;
 }
-interface TestItem { id: string; pointNo: string; description: string; expected: string | null; actual: string | null; result: string; remarks: string | null }
 interface Punch { id: string; description: string; severity: string; status: string; resolution: string | null; location: string | null }
-interface Detail { record: Record_; testItems: TestItem[]; punchItems: Punch[] }
+interface Detail { record: Record_; testItems: TestSheetPoint[]; testRuns: TestSheetRun[]; punchItems: Punch[] }
 
 const STATUS_LABEL: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', tested: 'Tested', commissioned: 'Commissioned', failed: 'Failed' };
 const LIFECYCLE = ['pending', 'in_progress', 'tested', 'commissioned'];
-const resultStyle = (r: string): CSSProperties => ({ fontWeight: 600, color: r === 'pass' ? 'var(--good)' : r === 'fail' ? 'var(--bad)' : 'var(--muted)' });
 
 export default async function Commissioning360({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const d = await getJson<Detail>(`/api/commissioning/records/${id}/detail`);
   if (!d?.record) notFound();
-  const { record, testItems, punchItems } = d;
+  const { record, testItems, testRuns, punchItems } = d;
   const openPunch = punchItems.filter((p) => p.status === 'open');
   const allPassed = testItems.length > 0 && testItems.every((t) => t.result === 'pass');
   const stepIndex = LIFECYCLE.indexOf(record.status);
@@ -56,27 +55,12 @@ export default async function Commissioning360({ params }: { params: Promise<{ i
 
       <CommissioningActions id={record.id} status={record.status} openPunch={openPunch.map((p) => ({ id: p.id, description: p.description, severity: p.severity }))} allPassed={allPassed} />
 
-      <section style={st.section} data-testid="tab-tests">
-        <h2 style={st.h2}>Test Sheet</h2>
-        <div style={st.tableWrap}>
-          <table style={st.table}>
-            <thead><tr>{['#', 'Description', 'Expected', 'Actual', 'Result', 'Remarks'].map((h) => <th key={h} style={st.th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {testItems.length === 0 ? <tr><td style={st.tdMuted} colSpan={6}>No test points yet.</td></tr> :
-                testItems.map((t) => (
-                  <tr key={t.id}>
-                    <td style={st.tdCode}>{t.pointNo}</td>
-                    <td style={st.td}>{t.description}</td>
-                    <td style={st.tdMuted}>{t.expected ?? '—'}</td>
-                    <td style={st.tdMuted}>{t.actual ?? '—'}</td>
-                    <td style={{ ...st.td, ...resultStyle(t.result) }}>{t.result}</td>
-                    <td style={st.tdMuted}>{t.remarks ?? '—'}</td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
+      <CommissioningTestSheet
+        recordId={record.id}
+        points={testItems}
+        runs={testRuns ?? []}
+        locked={record.status === 'commissioned'}
+      />
 
       <section style={st.section} data-testid="tab-punch">
         <h2 style={st.h2}>Punch List</h2>

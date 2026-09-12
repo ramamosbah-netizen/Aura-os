@@ -1,6 +1,7 @@
 import type { Page, PageParams } from '@aura/shared';
 import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
+import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -13,10 +14,16 @@ export interface CommissioningStore {
   list(tenantId: string, projectId?: string): Promise<CommissioningRecord[]>;
   listPaged(tenantId: string, page: PageParams, projectId?: string): Promise<Page<CommissioningRecord>>;
 
-  // Test-sheet items (the itemized test results behind the tally)
+  // Test-sheet items (the point definitions + the derived snapshot of their latest run)
   saveTestItem(item: CommissioningTestItem): Promise<void>;
   findTestItem(id: string, tenantId: string): Promise<CommissioningTestItem | null>;
   listTestItems(commissioningId: string, tenantId: string): Promise<CommissioningTestItem[]>;
+
+  // Test runs — the authoritative, append-only evidence. There is no update and no delete, here or
+  // in the database (migration 0296): a recorded run is a fact about what happened.
+  appendTestRun(run: CommissioningTestRun): Promise<void>;
+  listTestRunsForItem(testItemId: string, tenantId: string): Promise<CommissioningTestRun[]>;
+  listTestRuns(commissioningId: string, tenantId: string): Promise<CommissioningTestRun[]>;
 
   // Punch list (defects that gate sign-off)
   savePunchItem(item: PunchItem): Promise<void>;

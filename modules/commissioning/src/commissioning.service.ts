@@ -771,6 +771,13 @@ export class CommissioningService {
         })),
         drawings: drawings === null ? null : drawings,
         ncrs: qualityEvidence === null ? null : qualityEvidence.ncrs.map((n) => ({ ncrNumber: n.ncrNumber, system: n.system, status: n.status })),
+        // Inspection requests (TC-GATE-13) — matched to this system by discipline, which only
+        // became possible once TC-GATE-12 gave an IR a vocabulary that can name an ELV system.
+        irs: qualityEvidence === null
+          ? null
+          : qualityEvidence.irs.map((ir) => ({
+              irNumber: ir.irNumber, discipline: ir.discipline, status: ir.status, locationDetail: ir.locationDetail,
+            })),
         itpRequirements: itpRequirements.map((r) => ({ reference: r.reference, activity: r.activity, pointType: r.pointType, result: r.result })),
       });
 

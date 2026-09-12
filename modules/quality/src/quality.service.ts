@@ -573,8 +573,22 @@ export class QualityService {
    * which stays Quality's to set. T&C displays it and never writes it.
    */
   async readProjectQualityEvidence(tenantId: Id, projectId: Id) {
-    const [ncrs, itps, snags] = await Promise.all([this.listNcrs(tenantId), this.listItps(tenantId), this.listSnags(tenantId)]);
+    const [ncrs, itps, snags, irs] = await Promise.all([
+      this.listNcrs(tenantId), this.listItps(tenantId), this.listSnags(tenantId), this.listInspections(tenantId),
+    ]);
     return {
+      // Inspection requests (TC-GATE-13). They carry the canonical discipline since TC-GATE-12 —
+      // before that, four values that could not name an ELV system, which is why T&C could not read
+      // them. The lifecycle travels untouched: what "approved" means is Quality's to say.
+      irs: irs
+        .filter((ir) => ir.projectId === projectId)
+        .map((ir) => ({
+          id: ir.id,
+          irNumber: ir.irNumber,
+          discipline: ir.discipline as string,
+          status: ir.status as string,
+          locationDetail: ir.locationDetail,
+        })),
       // Snags (TC-GATE-9). Quality's own severity scale and its own three-state lifecycle travel
       // untouched: a consumer that re-decided what "open" means would be the drift this port exists
       // to prevent. Handover was blind to these until now — it read T&C's punch items through the

@@ -42,8 +42,9 @@ const qualityPort = (evidence: Parameters<QualityEvidencePort['readProjectQualit
   ncrs?: { id: string; ncrNumber: string; system: string | null; severity: string; status: string }[];
   itps?: { id: string; reference: string; title: string; discipline: string; status: string; points: { activity: string; pointType: string; acceptanceCriteria: string; result: string }[] }[];
   snags?: { id: string; description: string; locationDetail: string; severity: string; status: string; assignedTo: string | null }[];
+  irs?: { id: string; irNumber: string; discipline: string; status: string; locationDetail: string }[];
 }): QualityEvidencePort => ({
-  readProjectQualityEvidence: async () => ({ ncrs: evidence.ncrs ?? [], itps: evidence.itps ?? [], snags: evidence.snags ?? [] }),
+  readProjectQualityEvidence: async () => ({ ncrs: evidence.ncrs ?? [], itps: evidence.itps ?? [], snags: evidence.snags ?? [], irs: evidence.irs ?? [] }),
 });
 
 const engineeringPort = (drawings: { discipline: string; status: string }[]): EngineeringReleasePort => ({

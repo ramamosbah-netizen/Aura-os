@@ -230,7 +230,7 @@ const readyPorts = () => {
     registry,
     ports: {
       elv: { readProjectEquipment: async () => [{ id: 'd1', tag: 'CAM-001', system: 'cctv', status: 'installed', commissioningRecordId: null }] } as ElvEquipmentPort,
-      quality: { readProjectQualityEvidence: async () => ({ ncrs: [], itps: [], snags: [] }) } as QualityEvidencePort,
+      quality: { readProjectQualityEvidence: async () => ({ ncrs: [], itps: [], snags: [], irs: [] }) } as QualityEvidencePort,
       // T&C's own pre-commissioning chain still reads Engineering for drawing RELEASE — a different
       // question to the as-built one, and one Engineering can answer (TC-GATE-6).
       engineering: { readProjectDrawingRelease: async () => [{ discipline: 'cctv', status: 'approved' }] } as EngineeringReleasePort,

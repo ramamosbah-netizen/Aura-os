@@ -16,6 +16,7 @@ const base: ReadinessFacts = {
   pointsUntested: 0,
   pointsEverFailed: 0,
   openPunch: 0,
+  irs: [],
   commissioned: true,
   signedOffBy: 'Engineer',
   witnessedBy: 'Consultant',
@@ -33,8 +34,10 @@ describe('TC-GATE-3 — readiness chain', () => {
     const result = assessSystemReadiness(base);
     expect(result.commissioningReady).toBe(true);
     expect(result.blocking).toEqual([]);
+    // TC-GATE-13 added `inspections` after `engineering`: the installation is inspected before it is
+    // commissioned, so the chain reads in the order the work actually happens.
     expect(result.gates.map((g) => g.id)).toEqual([
-      'equipment', 'installation', 'engineering', 'quality', 'tests', 'defects', 'retests', 'signoff', 'certificates',
+      'equipment', 'installation', 'engineering', 'inspections', 'quality', 'tests', 'defects', 'retests', 'signoff', 'certificates',
     ]);
   });
 
@@ -133,6 +136,72 @@ describe('TC-GATE-3 — readiness chain', () => {
       const g = gate({ drawings: [{ discipline: 'cctv', status: 'approved' }, { discipline: 'cctv', status: 'submitted' }] }, 'engineering');
       expect(g.state).toBe('READY');
       expect(g.reason).toMatch(/1 still in review/);
+    });
+  });
+
+  /**
+   * TC-GATE-13 — inspection requests finally count.
+   *
+   * They contributed nothing for ten gates, recorded as F-G3-02 every time. The reason was not an
+   * oversight: an IR's discipline was civil | mechanical | electrical | plumbing, and none of those
+   * could name an ELV system. TC-GATE-12 widened it; this is what that unblocked.
+   */
+  describe('inspections', () => {
+    const ir = (over: Partial<{ irNumber: string; discipline: string; status: string; locationDetail: string }> = {}) => ({
+      irNumber: 'IR-001', discipline: 'cctv', status: 'requested', locationDetail: 'L3 riser', ...over,
+    });
+
+    it('blocks when Quality cannot be read — UNKNOWN is never a pass', () => {
+      const g = gate({ irs: null }, 'inspections');
+      expect(g.state).toBe('UNKNOWN');
+      expect(assessSystemReadiness({ ...base, irs: null }).commissioningReady).toBe(false);
+    });
+
+    /**
+     * Nothing raised is NOT_APPLICABLE, not UNKNOWN, and the difference is the whole judgement.
+     *
+     * An unreadable Quality is "we asked and could not hear". A project that has filed no inspection
+     * for this trade has been heard perfectly well — Quality was never asked, which is a legitimate
+     * contract. Blocking on it would invent a requirement nobody stated.
+     */
+    it('is NOT_APPLICABLE when no inspection was ever raised for this system’s trades', () => {
+      const g = gate({ irs: [] }, 'inspections');
+      expect(g.state).toBe('NOT_APPLICABLE');
+      expect(g.reason).toMatch(/none is owed/i);
+      expect(assessSystemReadiness({ ...base, irs: [] }).commissioningReady, 'and it must still pass').toBe(true);
+    });
+
+    it('blocks while an inspection is awaiting Quality’s decision, and names it', () => {
+      const g = gate({ irs: [ir({ irNumber: 'IR-014' })] }, 'inspections');
+      expect(g.state).toBe('BLOCKED');
+      expect(g.reason).toContain('IR-014');
+      expect(gate({ irs: [ir({ status: 'in_progress' })] }, 'inspections').state, 'in_progress is still pending').toBe('BLOCKED');
+    });
+
+    it('is READY once the inspections are approved', () => {
+      const g = gate({ irs: [ir({ status: 'approved' })] }, 'inspections');
+      expect(g.state).toBe('READY');
+      expect(g.reason).toMatch(/1 of 1 inspection approved/i);
+    });
+
+    /**
+     * A rejected inspection does NOT block here. Quality's own model makes a rejection the trigger
+     * for a non-conformance, and the quality gate already blocks on open NCRs — counting it twice
+     * would report one problem as two.
+     */
+    it('does not block on a rejection, and says which gate answers it instead', () => {
+      const g = gate({ irs: [ir({ status: 'approved' }), ir({ irNumber: 'IR-015', status: 'rejected' })] }, 'inspections');
+      expect(g.state).toBe('READY');
+      expect(g.reason).toMatch(/non-conformance rather than this gate/i);
+    });
+
+    it('ignores another trade’s inspection', () => {
+      const g = gate({ system: 'cctv', irs: [ir({ discipline: 'plumbing' })] }, 'inspections');
+      expect(g.state, 'a plumbing inspection is not a CCTV precondition').toBe('NOT_APPLICABLE');
+    });
+
+    it('counts the coarse elv package for every system, which is the map being generous on purpose', () => {
+      expect(gate({ system: 'nurse_call', irs: [ir({ discipline: 'elv' })] }, 'inspections').state).toBe('BLOCKED');
     });
   });
 

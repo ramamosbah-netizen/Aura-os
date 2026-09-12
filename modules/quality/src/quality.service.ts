@@ -573,8 +573,23 @@ export class QualityService {
    * which stays Quality's to set. T&C displays it and never writes it.
    */
   async readProjectQualityEvidence(tenantId: Id, projectId: Id) {
-    const [ncrs, itps] = await Promise.all([this.listNcrs(tenantId), this.listItps(tenantId)]);
+    const [ncrs, itps, snags] = await Promise.all([this.listNcrs(tenantId), this.listItps(tenantId), this.listSnags(tenantId)]);
     return {
+      // Snags (TC-GATE-9). Quality's own severity scale and its own three-state lifecycle travel
+      // untouched: a consumer that re-decided what "open" means would be the drift this port exists
+      // to prevent. Handover was blind to these until now — it read T&C's punch items through the
+      // commissioning chain and nothing else, while Projects' closeout has always counted snags, so
+      // the two gates could disagree about one project.
+      snags: snags
+        .filter((s) => s.projectId === projectId)
+        .map((s) => ({
+          id: s.id,
+          description: s.description,
+          locationDetail: s.locationDetail,
+          severity: s.severity as string,
+          status: s.status as string,
+          assignedTo: s.assignedTo,
+        })),
       ncrs: ncrs
         .filter((n) => n.projectId === projectId)
         .map((n) => ({ id: n.id, ncrNumber: n.ncrNumber, system: n.system, severity: n.severity, status: n.status })),

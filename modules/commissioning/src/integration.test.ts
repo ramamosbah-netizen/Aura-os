@@ -41,8 +41,9 @@ const elvPort = (devices: { tag: string; system: string; status: string; commiss
 const qualityPort = (evidence: Parameters<QualityEvidencePort['readProjectQualityEvidence']> extends never ? never : {
   ncrs?: { id: string; ncrNumber: string; system: string | null; severity: string; status: string }[];
   itps?: { id: string; reference: string; title: string; discipline: string; status: string; points: { activity: string; pointType: string; acceptanceCriteria: string; result: string }[] }[];
+  snags?: { id: string; description: string; locationDetail: string; severity: string; status: string; assignedTo: string | null }[];
 }): QualityEvidencePort => ({
-  readProjectQualityEvidence: async () => ({ ncrs: evidence.ncrs ?? [], itps: evidence.itps ?? [] }),
+  readProjectQualityEvidence: async () => ({ ncrs: evidence.ncrs ?? [], itps: evidence.itps ?? [], snags: evidence.snags ?? [] }),
 });
 
 const engineeringPort = (drawings: { discipline: string; status: string }[]): EngineeringReleasePort => ({

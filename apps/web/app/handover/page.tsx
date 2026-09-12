@@ -3,6 +3,7 @@ import { getJson } from '@/lib/api';
 import HandoverWorkspaceClient from '../../components/handover-workspace-client';
 import type { OmItemRow, SystemRow, TrainingRow } from '../../components/handover-om-training';
 import type { DossierData } from '../../components/handover-dossier';
+import type { DefectsData } from '../../components/handover-defects';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
@@ -44,13 +45,15 @@ export default async function HandoverPage({
   const project = filters.project ?? '';
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
-  const [packages, projects, workspace, omItems, trainingSessions] = await Promise.all([
+  const [packages, projects, workspace, omItems, trainingSessions, defects] = await Promise.all([
     getJson<HandoverPackage[]>(`/api/commissioning/handovers${scoped}`),
     getJson<Project[]>('/api/projects/projects'),
     // The systems an O&M pack and a training session hang off — read from T&C, which owns them.
     project ? getJson<WorkspaceView>(`/api/commissioning/records/workspace${scoped}`) : Promise.resolve(null),
     getJson<OmItemRow[]>(`/api/commissioning/handovers/om-items${scoped}`),
     getJson<TrainingRow[]>(`/api/commissioning/handovers/training${scoped}`),
+    // Both defect authorities (TC-GATE-9) — project-scoped, so only fetched with a project chosen.
+    project ? getJson<DefectsData>(`/api/commissioning/handovers/defects${scoped}`) : Promise.resolve(null),
   ]);
   const systems: SystemRow[] = (workspace?.systems ?? []).map((s) => ({ id: s.record.id, code: s.record.code, title: s.record.title }));
 
@@ -101,6 +104,7 @@ export default async function HandoverPage({
         omItems={omItems}
         trainingSessions={trainingSessions}
         dossiers={dossiers}
+        defects={defects}
         selectedProject={project}
       />
     </div>

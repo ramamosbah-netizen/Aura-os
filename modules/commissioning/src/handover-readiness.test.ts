@@ -50,6 +50,8 @@ const facts = (over: Partial<HandoverReadinessFacts> = {}): HandoverReadinessFac
   trainingSessions: [{ commissioningId: SYSTEM, state: 'acknowledged' }],
   // TC-GATE-8: as-builts are per system, so the baseline links one to the system it documents.
   asBuiltLinks: [{ commissioningId: SYSTEM, documentId: 'ELV-AB-001' }],
+  // TC-GATE-9: Quality's snags, which handover was blind to until now. A clean project has none.
+  snags: [],
   systemIds: [SYSTEM],
   asserted: { spares: true },
   ...over,
@@ -63,8 +65,8 @@ describe('TC-GATE-4 — the readiness projection', () => {
     const r = assessHandoverReadiness(facts());
     expect(r.readyToSubmit).toBe(true);
     expect(r.blocking).toEqual([]);
-    // Order matters on screen: the five derived items first, then what is still somebody's word.
-    expect(r.items.map((i) => i.id)).toEqual(['commissioning', 'asBuilts', 'omManuals', 'warrantyDocs', 'training', 'spares']);
+    // Order matters on screen: the six derived items first, then what is still somebody's word.
+    expect(r.items.map((i) => i.id)).toEqual(['commissioning', 'snags', 'asBuilts', 'omManuals', 'warrantyDocs', 'training', 'spares']);
   });
 
   it('marks which items are evidence and which are somebody’s word', () => {
@@ -258,6 +260,55 @@ describe('TC-GATE-4 — the readiness projection', () => {
     });
   });
 
+  /**
+   * TC-GATE-9 — the hole this closes.
+   *
+   * Handover read T&C's punch items through the commissioning item and nothing else. Quality's
+   * snags are a separate authority that Projects' closeout has always counted, so a client could be
+   * handed a package with snags outstanding that closeout would then refuse.
+   */
+  describe('Quality snags', () => {
+    const snag = (over: Partial<{ id: string; status: string; severity: string }> = {}) => ({
+      id: 's-1', description: 'Ceiling tile cracked at the head end', locationDetail: 'L3 riser',
+      severity: 'medium', status: 'open', assignedTo: null, ...over,
+    });
+
+    it('is UNKNOWN — never "no snags" — when Quality cannot be read', () => {
+      const item = itemOf({ snags: null }, 'snags');
+      expect(item.state).toBe('UNKNOWN');
+      expect(item.reason).toMatch(/could not be read/i);
+      expect(assessHandoverReadiness(facts({ snags: null })).readyToSubmit).toBe(false);
+    });
+
+    it('blocks while a snag is open, and names the worst severity', () => {
+      const item = itemOf({ snags: [snag(), snag({ id: 's-2', severity: 'high' })] }, 'snags');
+      expect(item.state).toBe('BLOCKED');
+      expect(item.reason).toMatch(/2 open snags/i);
+      expect(item.reason).toMatch(/most severe high/i);
+    });
+
+    it('counts what QUALITY calls open, adding no threshold of its own', () => {
+      // A low-severity snag still blocks: deciding that "low" does not count would be this consumer
+      // restating a threshold that belongs to Quality.
+      expect(itemOf({ snags: [snag({ severity: 'low' })] }, 'snags').state).toBe('BLOCKED');
+      // Resolved and closed are Quality's words for "not open", and are taken as such.
+      expect(itemOf({ snags: [snag({ status: 'resolved' }), snag({ id: 's-2', status: 'closed' })] }, 'snags').state).toBe('READY');
+    });
+
+    it('is READY when Quality holds none at all', () => {
+      const item = itemOf({ snags: [] }, 'snags');
+      expect(item.state).toBe('READY');
+      expect(item.reason).toMatch(/holds no snag/i);
+    });
+
+    it('does not double-count T&C punch items — those gate through the commissioning item', () => {
+      // The facts carry no punch at all: this item is about Quality's authority only, and the
+      // commissioning chain owns the other one. One cause, one failure.
+      expect(itemOf({ snags: [] }, 'snags').source).toBe('Quality');
+      expect(itemOf({}, 'commissioning').source).toBe('Testing & commissioning');
+    });
+  });
+
   it('an unticked assertion blocks and explains why it cannot be derived', () => {
     const item = itemOf({ asserted: { spares: false } }, 'spares');
     expect(item.state).toBe('BLOCKED');
@@ -283,7 +334,7 @@ function services(ports: {
 
 const readyPorts = {
   elv: { readProjectEquipment: async () => [{ id: 'd1', tag: 'CAM-001', system: 'cctv', status: 'installed', commissioningRecordId: null }] } as ElvEquipmentPort,
-  quality: { readProjectQualityEvidence: async () => ({ ncrs: [], itps: [] }) } as QualityEvidencePort,
+  quality: { readProjectQualityEvidence: async () => ({ ncrs: [], itps: [], snags: [] }) } as QualityEvidencePort,
   engineering: { readProjectDrawingRelease: async () => [{ discipline: 'cctv', status: 'approved' }] } as EngineeringReleasePort,
   docControl: { readProjectDocuments: async () => REGISTER } as DocControlPort,
 };

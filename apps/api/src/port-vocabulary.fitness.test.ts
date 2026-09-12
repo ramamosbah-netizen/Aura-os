@@ -74,6 +74,7 @@ describe('TC-GATE-6 — cross-module vocabulary agreement', () => {
         omItems: [],
         trainingSessions: [],
         asBuiltLinks: [{ commissioningId: 'sys-1', documentId: entry.documentNumber }],
+        snags: [],
         systemIds: ['sys-1'],
         asserted: { spares: true },
       };

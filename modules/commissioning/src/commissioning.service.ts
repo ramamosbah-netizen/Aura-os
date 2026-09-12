@@ -20,7 +20,7 @@ import { assessSystemReadiness, type SystemReadiness } from './domain/commission
 import {
   ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL,
   type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort, type DocControlPort,
-  type EquipmentFact, type ItpFact, type NcrFact,
+  type EquipmentFact, type ItpFact, type NcrFact, type SnagFact,
 } from './ports';
 
 /**
@@ -860,7 +860,7 @@ export class CommissioningService {
   }
 
   /** The project's ITPs and non-conformances, read from Quality. Null when Quality cannot be read. */
-  async readQualityEvidence(tenantId: string, projectId: string): Promise<{ ncrs: NcrFact[]; itps: ItpFact[] } | null> {
+  async readQualityEvidence(tenantId: string, projectId: string): Promise<{ ncrs: NcrFact[]; itps: ItpFact[]; snags: SnagFact[] } | null> {
     if (!this.quality) return null;
     return this.readPort('Quality', () => this.quality!.readProjectQualityEvidence(tenantId, projectId));
   }

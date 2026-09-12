@@ -7,23 +7,25 @@ import { HANDOVER_PATH, HANDOVER_SECTIONS } from '@/lib/workspace-sections';
 import HandoverClient from './handover-client';
 import { OmPackSection, TrainingSection, type OmItemRow, type SystemRow, type TrainingRow } from './handover-om-training';
 import { DossierSection, type DossierData } from './handover-dossier';
+import { DefectsSection, type DefectsData } from './handover-defects';
 
 type Section = (typeof HANDOVER_SECTIONS)[number]['id'];
 const SECTION_IDS = HANDOVER_SECTIONS.map((s) => s.id) as Section[];
 
 /**
- * The Handover workspace (TC-GATE-5, extended by TC-GATE-7).
+ * The Handover workspace (TC-GATE-5, extended by TC-GATE-7 and -9).
  *
- * Four sections, and only four, because only four have real data behind them: the acceptance
- * packages, the O&M pack, client training, and the dossier those three assemble. Scope, snags and a
- * separate acceptance surface are not here — each would need work that does not exist yet, and an
- * empty section promises something the app cannot do.
+ * Five sections, and only five, because only five have real data behind them: the acceptance
+ * packages, the O&M pack, client training, the dossier those three assemble, and the snag & punch
+ * list — which reads two other domains' defects and writes neither. Scope and a separate acceptance
+ * surface are not here — each would need work that does not exist yet, and an empty section promises
+ * something the app cannot do.
  *
  * The same URL contract as every other workspace: `?section=` addressable, `?project=` preserved
  * across a switch, and the AURA tab anchor untouched.
  */
 export default function HandoverWorkspaceClient({
-  projects, packages, systems, omItems, trainingSessions, dossiers, selectedProject,
+  projects, packages, systems, omItems, trainingSessions, dossiers, defects, selectedProject,
 }: {
   projects: { id: string; title: string }[];
   packages: Parameters<typeof HandoverClient>[0]['initialPackages'];
@@ -31,6 +33,7 @@ export default function HandoverWorkspaceClient({
   omItems: OmItemRow[] | null;
   trainingSessions: TrainingRow[] | null;
   dossiers: DossierData[] | null;
+  defects: DefectsData | null;
   selectedProject: string;
 }) {
   const router = useRouter();
@@ -89,6 +92,8 @@ export default function HandoverWorkspaceClient({
         <TrainingSection projectId={selectedProject} systems={systems} sessions={trainingSessions} />
       ) : active === 'dossier' ? (
         <DossierSection dossiers={dossiers} />
+      ) : active === 'snags' ? (
+        <DefectsSection defects={defects} systems={systems} />
       ) : (
         <HandoverClient initialPackages={packages} projects={projects} />
       )}

@@ -109,12 +109,12 @@ export const COMMISSIONING_SECTIONS = [
 
 export const HANDOVER_PATH = '/handover';
 /**
- * Handover has FOUR sections, and only four (TC-GATE-5, extended by TC-GATE-7).
+ * Handover has FIVE sections, and only five (TC-GATE-5, extended by TC-GATE-7 and -9).
  *
- * Only these have real data behind them: the acceptance packages, the O&M pack, client training, and
- * the dossier those three assemble. Scope, snags and a separate acceptance surface are still absent
- * on purpose — each needs work that does not exist yet, and an empty section promises what the app
- * cannot do.
+ * Only these have real data behind them: the acceptance packages, the O&M pack, client training, the
+ * dossier those three assemble, and the snag & punch list — which shows two OTHER domains' defects
+ * and writes neither. Scope and a separate acceptance surface are still absent on purpose: each
+ * needs work that does not exist yet, and an empty section promises what the app cannot do.
  *
  * The dossier arrived last for a reason. It owns nothing, so it could not exist before the things it
  * assembles did: the evidence packs (TC-GATE-3), the O&M pack and training record (TC-GATE-5), and
@@ -125,6 +125,7 @@ export const HANDOVER_SECTIONS = [
   { id: 'om', label: 'O&M deliverables', description: 'The manuals, schedules and licences each system owes the client', icon: NotebookPen, tone: 'blue' },
   { id: 'training', label: 'Training & demonstration', description: 'Client training, demonstrated and acknowledged by them', icon: GraduationCap, tone: 'violet' },
   { id: 'dossier', label: 'Handover dossier', description: 'Everything the client receives, and what has already been issued', icon: Library, tone: 'cyan' },
+  { id: 'snags', label: 'Snag & punch list', description: 'Quality snags and commissioning punch items still open against the project', icon: ListChecks, tone: 'amber' },
 ] as const satisfies readonly WorkspaceSection[];
 
 export const HSE_PATH = '/hse/control';

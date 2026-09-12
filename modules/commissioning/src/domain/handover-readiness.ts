@@ -1,3 +1,4 @@
+import type { SnagFact } from '../ports';
 import {
   type ControlledDocumentFact,
   type ResolvedDocument,
@@ -20,6 +21,7 @@ import {
  *
  *   commissioning  → Testing & Commissioning: every system COMMISSIONING READY (its own nine-gate
  *                    chain, unchanged from TC-GATE-3)
+ *   snags          → Quality: no snag left open on the project (TC-GATE-9)
  *   asBuilts       → Document control: a current as-built drawing linked to EVERY system (TC-GATE-8)
  *   omManuals      → Handover's own O&M pack: every required deliverable accepted, each against a
  *                    reference that resolves in DocControl's register (TC-GATE-5, -6)
@@ -46,7 +48,7 @@ import {
 
 export type HandoverItemState = 'READY' | 'BLOCKED' | 'UNKNOWN';
 
-export type HandoverItemId = 'commissioning' | 'asBuilts' | 'omManuals' | 'warrantyDocs' | 'training' | 'spares';
+export type HandoverItemId = 'commissioning' | 'snags' | 'asBuilts' | 'omManuals' | 'warrantyDocs' | 'training' | 'spares';
 
 /** The O&M deliverable that answers `warrantyDocs`, and is therefore excluded from `omManuals`. */
 export const WARRANTY_DELIVERABLE = 'warranty_certificate';
@@ -98,6 +100,14 @@ export interface HandoverReadinessFacts {
   systemIds: string[];
   /** Which controlled drawing documents which system (TC-GATE-8). T&C's own link, not a copy. */
   asBuiltLinks: { commissioningId: string; documentId: string }[];
+  /**
+   * The project's snags, as QUALITY holds them (TC-GATE-9). Null when Quality could not be read.
+   *
+   * T&C's punch items are deliberately NOT here: they already reach this assessment through the
+   * commissioning item, whose nine-gate chain has a `defects` gate of its own. Counting them again
+   * would light up two failures for one cause.
+   */
+  snags: SnagFact[] | null;
   /** The one item nobody owns yet — still the package's own checklist. */
   asserted: { spares: boolean };
 }
@@ -116,6 +126,7 @@ const plural = (n: number, one: string, many: string): string => (n === 1 ? one 
 export function assessHandoverReadiness(facts: HandoverReadinessFacts): HandoverReadiness {
   const items: HandoverReadinessItem[] = [
     commissioningItem(facts),
+    snagItem(facts),
     asBuiltItem(facts),
     omPackItem(facts, 'omManuals', 'O&M deliverables accepted', (d) => d !== WARRANTY_DELIVERABLE),
     omPackItem(facts, 'warrantyDocs', 'Warranty certificates accepted', (d) => d === WARRANTY_DELIVERABLE),
@@ -142,6 +153,44 @@ function commissioningItem(f: HandoverReadinessFacts): HandoverReadinessItem {
   }
   return item(id, label, source, 'projected', 'READY',
     `All ${f.systemsTotal} ${plural(f.systemsTotal, 'system', 'systems')} pass the full commissioning readiness chain.`);
+}
+
+/**
+ * Quality's snags (TC-GATE-9).
+ *
+ * THE HOLE THIS FILLS. Handover readiness read T&C's punch items — through the commissioning item,
+ * whose chain gates on them — and nothing else. It never read Quality's snags, which are a SEPARATE
+ * authority with its own table, its own severity scale and its own three-state lifecycle. Projects'
+ * closeout has always counted them (`readProjectQualityReadiness.openSnags`). So a client could be
+ * handed a package with snags outstanding, and the closeout gate would then refuse the same project
+ * — two gates, one project, opposite answers.
+ *
+ * WHY THIS DOES NOT COUNT PUNCH ITEMS TOO. They are already gated by the commissioning item above.
+ * One cause should produce one failure, which is the same reason the warranty certificate was
+ * excluded from the O&M count in TC-GATE-6. The Snag & Punch List surface shows BOTH, because a list
+ * is for working from; a gate is for deciding, and deciding twice on one fact helps nobody.
+ *
+ * OPEN IS QUALITY'S WORD. This counts what Quality calls open and adds no severity threshold of its
+ * own — restating a threshold in the consumer is exactly the drift the ports exist to prevent.
+ */
+function snagItem(f: HandoverReadinessFacts): HandoverReadinessItem {
+  const id: HandoverItemId = 'snags';
+  const label = 'Quality snags cleared';
+  const source = 'Quality';
+  if (f.snags === null) {
+    return item(id, label, source, 'projected', 'UNKNOWN',
+      'Quality could not be read, so it is not known whether any snag is outstanding.');
+  }
+  const open = f.snags.filter((s) => s.status === 'open');
+  if (open.length > 0) {
+    const worst = ['high', 'medium', 'low'].find((sev) => open.some((s) => s.severity === sev));
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${open.length} open ${plural(open.length, 'snag', 'snags')} on this project${worst ? `, the most severe ${worst}` : ''}.`);
+  }
+  return item(id, label, source, 'projected', 'READY',
+    f.snags.length === 0
+      ? 'Quality holds no snag for this project.'
+      : `All ${f.snags.length} ${plural(f.snags.length, 'snag is', 'snags are')} resolved or closed.`);
 }
 
 /**

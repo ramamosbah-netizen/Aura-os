@@ -1,6 +1,6 @@
 import {
   BadgeCheck, Boxes, CircleAlert, ClipboardCheck, ClipboardList, FileCheck2, FileText, Gauge,
-  GraduationCap, Hourglass, KeyRound, ListChecks, MessageSquareQuote, NotebookPen, Package,
+  GraduationCap, Hourglass, KeyRound, Library, ListChecks, MessageSquareQuote, NotebookPen, Package,
   PencilRuler, Replace, TrendingUp, TriangleAlert, Users, Wrench,
 } from 'lucide-react';
 import type { SuiteShortcut } from '@/components/suite-dashboard-shell';
@@ -109,18 +109,22 @@ export const COMMISSIONING_SECTIONS = [
 
 export const HANDOVER_PATH = '/handover';
 /**
- * Handover has THREE sections, and only three (TC-GATE-5).
+ * Handover has FOUR sections, and only four (TC-GATE-5, extended by TC-GATE-7).
  *
- * Only these have real data behind them: the acceptance packages, the O&M pack and client training —
- * the last two being the authorities that turned two of Handover's readiness assertions into
- * projections. Scope, snags, as-builts, the dossier and a separate acceptance surface are absent on
- * purpose: each needs work that does not exist yet, and an empty section promises what the app
+ * Only these have real data behind them: the acceptance packages, the O&M pack, client training, and
+ * the dossier those three assemble. Scope, snags and a separate acceptance surface are still absent
+ * on purpose — each needs work that does not exist yet, and an empty section promises what the app
  * cannot do.
+ *
+ * The dossier arrived last for a reason. It owns nothing, so it could not exist before the things it
+ * assembles did: the evidence packs (TC-GATE-3), the O&M pack and training record (TC-GATE-5), and
+ * the as-builts, which only became readable when the document-control port was added (TC-GATE-6).
  */
 export const HANDOVER_SECTIONS = [
   { id: 'packages', label: 'Acceptance packages', description: 'Compile, submit and record the governed client handover', icon: FileCheck2, tone: 'teal' },
   { id: 'om', label: 'O&M deliverables', description: 'The manuals, schedules and licences each system owes the client', icon: NotebookPen, tone: 'blue' },
   { id: 'training', label: 'Training & demonstration', description: 'Client training, demonstrated and acknowledged by them', icon: GraduationCap, tone: 'violet' },
+  { id: 'dossier', label: 'Handover dossier', description: 'Everything the client receives, and what has already been issued', icon: Library, tone: 'cyan' },
 ] as const satisfies readonly WorkspaceSection[];
 
 export const HSE_PATH = '/hse/control';

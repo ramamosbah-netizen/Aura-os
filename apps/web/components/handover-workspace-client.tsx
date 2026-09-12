@@ -6,29 +6,31 @@ import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import { HANDOVER_PATH, HANDOVER_SECTIONS } from '@/lib/workspace-sections';
 import HandoverClient from './handover-client';
 import { OmPackSection, TrainingSection, type OmItemRow, type SystemRow, type TrainingRow } from './handover-om-training';
+import { DossierSection, type DossierData } from './handover-dossier';
 
 type Section = (typeof HANDOVER_SECTIONS)[number]['id'];
 const SECTION_IDS = HANDOVER_SECTIONS.map((s) => s.id) as Section[];
 
 /**
- * The Handover workspace (TC-GATE-5).
+ * The Handover workspace (TC-GATE-5, extended by TC-GATE-7).
  *
- * Three sections, and only three, because only three have real data behind them: the acceptance
- * packages, the O&M pack, and client training. Scope, snags, as-builts, the dossier and a separate
- * acceptance surface are not here — each would need work that does not exist yet, and an empty
- * section promises something the app cannot do.
+ * Four sections, and only four, because only four have real data behind them: the acceptance
+ * packages, the O&M pack, client training, and the dossier those three assemble. Scope, snags and a
+ * separate acceptance surface are not here — each would need work that does not exist yet, and an
+ * empty section promises something the app cannot do.
  *
  * The same URL contract as every other workspace: `?section=` addressable, `?project=` preserved
  * across a switch, and the AURA tab anchor untouched.
  */
 export default function HandoverWorkspaceClient({
-  projects, packages, systems, omItems, trainingSessions, selectedProject,
+  projects, packages, systems, omItems, trainingSessions, dossiers, selectedProject,
 }: {
   projects: { id: string; title: string }[];
   packages: Parameters<typeof HandoverClient>[0]['initialPackages'];
   systems: SystemRow[];
   omItems: OmItemRow[] | null;
   trainingSessions: TrainingRow[] | null;
+  dossiers: DossierData[] | null;
   selectedProject: string;
 }) {
   const router = useRouter();
@@ -85,6 +87,8 @@ export default function HandoverWorkspaceClient({
         <OmPackSection systems={systems} items={omItems} />
       ) : active === 'training' ? (
         <TrainingSection projectId={selectedProject} systems={systems} sessions={trainingSessions} />
+      ) : active === 'dossier' ? (
+        <DossierSection dossiers={dossiers} />
       ) : (
         <HandoverClient initialPackages={packages} projects={projects} />
       )}

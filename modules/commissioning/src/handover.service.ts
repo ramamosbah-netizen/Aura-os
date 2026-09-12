@@ -20,6 +20,9 @@ import {
   type TrainingSession, makeTrainingSession, completeTraining, acknowledgeTraining,
 } from './domain/client-training';
 import { resolveDocumentReference, type ResolvedDocument } from './domain/document-reference';
+import {
+  type DossierItem, type DossierView, assembleDossier, captureDossier, groupIssues,
+} from './domain/dossier';
 import { CommissioningService } from './commissioning.service';
 import { DOC_CONTROL, type DocControlPort } from './ports';
 
@@ -119,6 +122,56 @@ export class HandoverService {
     }
   }
 
+  /**
+   * The dossier: what the client receives, assembled from the domains that own it (TC-GATE-7).
+   *
+   * `view` is derived on every read and is always "what would go out today". `issues` are the
+   * manifests actually SENT, captured at submission and never rewritten — so a package that went out
+   * in March still lists what March contained, whatever has moved since.
+   */
+  async readDossier(id: string, tenantId: string): Promise<{
+    package: HandoverPackage;
+    view: DossierView;
+    issues: ReturnType<typeof groupIssues>;
+  } | null> {
+    const pkg = await this.store.findHandover(id, tenantId);
+    if (!pkg) return null;
+    const [view, items] = await Promise.all([
+      this.assembleFor(pkg),
+      this.store.listDossierItems(pkg.id, tenantId),
+    ]);
+    return { package: pkg, view, issues: groupIssues(items) };
+  }
+
+  /** The dossier as it stands now, from the four owning domains. Reads only; stores nothing. */
+  private async assembleFor(pkg: HandoverPackage): Promise<DossierView> {
+    const [workspace, documents, omItems, trainingSessions] = await Promise.all([
+      this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
+      this.readDocuments(pkg.tenantId, pkg.projectId),
+      this.store.listOmItems(pkg.tenantId, pkg.projectId),
+      this.store.listTrainingSessions(pkg.tenantId, pkg.projectId),
+    ]);
+    return assembleDossier({
+      systems: workspace.systems.map((s) => ({
+        id: s.record.id,
+        code: s.record.code,
+        title: s.record.title,
+        commissioned: s.commissioned,
+        witnessedBy: s.record.witnessedBy ?? null,
+        pointsPassed: s.pointsPassed,
+        pointsTotal: s.pointsTotal,
+      })),
+      omItems: omItems.map((i) => ({
+        id: i.id, commissioningId: i.commissioningId, deliverable: i.deliverable,
+        required: i.required, state: i.state, documentId: i.documentId,
+      })),
+      trainingSessions: trainingSessions.map((s) => ({
+        id: s.id, title: s.title, state: s.state, acknowledgedBy: s.acknowledgedBy,
+      })),
+      documents,
+    });
+  }
+
   async create(params: {
     tenantId: string;
     companyId?: string | null;
@@ -167,13 +220,30 @@ export class HandoverService {
     return this.withStats(next);
   }
 
-  async submit(id: string, tenantId: string): Promise<HandoverView> {
+  /**
+   * Submit to the client — and capture what was sent (TC-GATE-7).
+   *
+   * The manifest is written AFTER the domain guard accepts the transition, so a refused submission
+   * leaves no phantom issue behind, and BEFORE the package is saved as submitted, so a package can
+   * never read "submitted" with no record of what it contained.
+   *
+   * A resubmission after a rejection is issue #2. Issue #1 stays exactly as it went out: the history
+   * is the record, not the latest version of it — the same rule the test-run lineage follows.
+   */
+  async submit(id: string, tenantId: string, actorId?: string | null): Promise<HandoverView> {
     const pkg = await this.mustFind(id, tenantId);
     // Assess first, then gate on the assessment: the commissioning and as-built items are derived,
     // so a tick cannot buy a submission the evidence does not support.
     const { readiness } = await this.withStats(pkg);
     const next = submit(pkg, readiness);
+
+    const existing = await this.store.listDossierItems(pkg.id, tenantId);
+    const issueNo = existing.reduce((max, i) => Math.max(max, i.issueNo), 0) + 1;
+    const manifest: DossierItem[] = captureDossier(await this.assembleFor(pkg), pkg, issueNo, actorId ?? pkg.createdBy);
+    if (manifest.length > 0) await this.store.appendDossierItems(manifest);
+
     await this.store.saveHandover(next);
+    this.logger.log(`[Handover] ${next.code} submitted — dossier issue ${issueNo}, ${manifest.length} item(s) cited`);
     return this.withStats(next);
   }
 

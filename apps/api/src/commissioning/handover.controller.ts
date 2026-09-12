@@ -174,9 +174,25 @@ export class HandoverController {
     return this.service.updateChecklist(id, this.tenant.get().tenantId, dto);
   }
 
+  /**
+   * The dossier (TC-GATE-7) — what the client receives, and what they have already been sent.
+   *
+   * Declared BEFORE `:id` routes that could swallow it is unnecessary here (the segment is fixed and
+   * follows the id), but it is a GET with no side effect and returns 404 for an unknown package
+   * rather than an empty dossier, which would read as "nothing to hand over".
+   */
+  @Get(':id/dossier')
+  async dossier(@Param('id') id: string) {
+    const found = await this.service.readDossier(id, this.tenant.get().tenantId);
+    if (!found) throw new NotFoundException(`handover package ${id} not found`);
+    return found;
+  }
+
   @Put(':id/submit')
   submit(@Param('id') id: string): Promise<HandoverView> {
-    return this.service.submit(id, this.tenant.get().tenantId);
+    const ctx = this.tenant.get();
+    // The actor is stamped on the dossier manifest: "issued by" is part of what was sent.
+    return this.service.submit(id, ctx.tenantId, ctx.actorId);
   }
 
   @Put(':id/accept')

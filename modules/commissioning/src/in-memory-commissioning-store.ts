@@ -6,6 +6,7 @@ import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { OmItem } from './domain/om-package';
+import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
@@ -22,6 +23,9 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly omItems = new Map<string, OmItem>();
   private readonly trainingSessions = new Map<string, TrainingSession>();
   private readonly handovers = new Map<string, HandoverPackage>();
+  // Append-only, like the table: this adapter offers no way to replace or remove a captured line
+  // either, so a test that passes here cannot be one that would fail against Postgres's refusal.
+  private readonly dossierItems: DossierItem[] = [];
 
   async appendTestRun(run: CommissioningTestRun): Promise<void> {
     if (this.testRuns.some((r) => r.testItemId === run.testItemId && r.runNo === run.runNo)) {
@@ -130,6 +134,22 @@ export class InMemoryCommissioningStore implements CommissioningStore {
     return [...this.trainingSessions.values()]
       .filter((s) => s.tenantId === tenantId && (!projectId || s.projectId === projectId))
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async appendDossierItems(items: DossierItem[]): Promise<void> {
+    for (const item of items) {
+      const clash = this.dossierItems.some(
+        (d) => d.handoverId === item.handoverId && d.issueNo === item.issueNo && d.kind === item.kind && d.sourceId === item.sourceId,
+      );
+      if (clash) throw new Error(`conflict: ${item.label} is already cited in issue ${item.issueNo}`);
+    }
+    this.dossierItems.push(...items.map((i) => ({ ...i })));
+  }
+  async listDossierItems(handoverId: string, tenantId: string): Promise<DossierItem[]> {
+    return this.dossierItems
+      .filter((d) => d.handoverId === handoverId && d.tenantId === tenantId)
+      .sort((a, b) => a.issueNo - b.issueNo || a.label.localeCompare(b.label))
+      .map((d) => ({ ...d }));
   }
 
   async save(record: CommissioningRecord): Promise<void> {

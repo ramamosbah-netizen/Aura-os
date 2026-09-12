@@ -72,6 +72,27 @@ export interface SnagFact {
   assignedTo: string | null;
 }
 
+/**
+ * An inspection request, as Quality describes it (TC-GATE-13).
+ *
+ * Quality owns the IR: its lifecycle (requested → in_progress → approved | rejected), who inspected
+ * and what they said. T&C reads it to answer one question — has the installation for this system
+ * been inspected and signed off before commissioning starts.
+ *
+ * `discipline` became the canonical platform vocabulary in TC-GATE-12. Before that it was four
+ * values, none of which could describe an ELV system, which is why inspection requests contributed
+ * nothing to readiness for ten gates: there was no value on them that could name the system.
+ */
+export interface IrFact {
+  id: string;
+  irNumber: string;
+  /** Canonical `Discipline` — matched to a system through ELV_SYSTEM_DISCIPLINES. */
+  discipline: string;
+  /** requested | in_progress | approved | rejected */
+  status: string;
+  locationDetail: string;
+}
+
 /** An Inspection & Test Plan and its points, owned by Quality. Results are Quality's, not T&C's. */
 export interface ItpFact {
   id: string;
@@ -86,7 +107,7 @@ export interface QualityEvidencePort {
   readProjectQualityEvidence(
     tenantId: string,
     projectId: string,
-  ): Promise<{ ncrs: NcrFact[]; itps: ItpFact[]; snags: SnagFact[] }>;
+  ): Promise<{ ncrs: NcrFact[]; itps: ItpFact[]; snags: SnagFact[]; irs: IrFact[] }>;
 }
 
 /** A drawing's release state, as Engineering describes it. Discipline is the shared dimension. */

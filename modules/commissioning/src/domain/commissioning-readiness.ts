@@ -26,6 +26,7 @@ export type GateId =
   | 'equipment'
   | 'installation'
   | 'engineering'
+  | 'inspections'
   | 'quality'
   | 'tests'
   | 'defects'
@@ -110,6 +111,13 @@ export interface ReadinessFacts {
   equipment: { tag: string; system: string; status: string; linked: boolean }[] | null;
   drawings: { discipline: string; status: string }[] | null;
   ncrs: { ncrNumber: string; system: string | null; status: string }[] | null;
+  /**
+   * Quality's inspection requests for the project (TC-GATE-13). Null when Quality cannot be read.
+   *
+   * Matched to this system by DISCIPLINE, through the shared map — the only join that exists. An IR
+   * is filed against a trade and a location, not against a commissioning record.
+   */
+  irs: { irNumber: string; discipline: string; status: string; locationDetail: string }[] | null;
   /** ITP requirements a person has linked to this system, with Quality's own result for each. */
   itpRequirements: { reference: string; activity: string; pointType: string; result: string }[];
 }
@@ -122,6 +130,7 @@ export function assessSystemReadiness(facts: ReadinessFacts): SystemReadiness {
     equipmentGate(facts),
     installationGate(facts),
     engineeringGate(facts),
+    inspectionsGate(facts),
     qualityGate(facts),
     testsGate(facts),
     defectsGate(facts),
@@ -184,6 +193,59 @@ function engineeringGate(f: ReadinessFacts): ReadinessGate {
   }
   const pending = mine.length - approved.length;
   return gate(id, label, src, 'READY', `${approved.length} approved drawing${approved.length === 1 ? '' : 's'}${pending > 0 ? `, ${pending} still in review` : ''}.`);
+}
+
+/**
+ * Has Quality inspected the installation for this system? (TC-GATE-13)
+ *
+ * THE GAP THIS CLOSES. Inspection requests have contributed nothing to readiness since TC-GATE-3,
+ * recorded as F-G3-02 in every closure since. The reason was not an oversight: an IR's `discipline`
+ * was four values — civil, mechanical, electrical, plumbing — and **none of them could name an ELV
+ * system.** There was nothing on an inspection request that could be matched to a commissioning
+ * record. TC-GATE-12 widened it to the canonical platform vocabulary; this gate is what that
+ * unblocked.
+ *
+ * MATCHED BY DISCIPLINE, which is the only join that exists. An IR is filed against a trade and a
+ * location, not against a commissioning record, so the map from TC-GATE-11 does the narrowing. That
+ * map is deliberately generous — every system recognises the coarse `elv` package — so a general ELV
+ * inspection counts for every system. Coarse, and said so in the register rather than hidden.
+ *
+ * NOTHING MATCHED IS NOT_APPLICABLE, NOT UNKNOWN, and that is the difference between this gate and
+ * the ones around it. An unreadable Quality is UNKNOWN and blocks: we asked and could not hear. A
+ * project that has filed no inspection for this trade has been heard perfectly well — Quality was
+ * never asked to inspect it, which is a legitimate contract, and blocking every system on it would
+ * invent a requirement nobody stated. The `retests` gate already uses NOT_APPLICABLE for the same
+ * shape of answer.
+ *
+ * A REJECTED IR IS NOT COUNTED HERE. Quality's own model says a rejected inspection is the trigger
+ * for an NCR, and the `quality` gate below already blocks on open NCRs. Counting the rejection too
+ * would report one problem twice — the rule this chain has followed since TC-GATE-6.
+ */
+function inspectionsGate(f: ReadinessFacts): ReadinessGate {
+  const id: GateId = 'inspections';
+  const label = 'Installation inspected';
+  const src = 'Quality' as const;
+  if (f.irs === null) return gate(id, label, src, 'UNKNOWN', 'Quality could not be read.');
+
+  const accepted = disciplinesForElvSystem(f.system) as readonly string[];
+  const mine = f.irs.filter((ir) => accepted.includes(ir.discipline));
+  if (mine.length === 0) {
+    return gate(id, label, src, 'NOT_APPLICABLE',
+      `No inspection has been raised for this system's trades (${accepted.join(', ')}), so none is owed.`);
+  }
+
+  const pending = mine.filter((ir) => ir.status === 'requested' || ir.status === 'in_progress');
+  if (pending.length > 0) {
+    const names = pending.slice(0, 3).map((ir) => ir.irNumber).join(', ');
+    return gate(id, label, src, 'BLOCKED',
+      `${pending.length} inspection${pending.length === 1 ? '' : 's'} still awaiting Quality's decision (${names}${pending.length > 3 ? '…' : ''}).`);
+  }
+
+  const approved = mine.filter((ir) => ir.status === 'approved');
+  const rejected = mine.length - approved.length;
+  return gate(id, label, src, 'READY',
+    `${approved.length} of ${mine.length} inspection${mine.length === 1 ? '' : 's'} approved` +
+      (rejected > 0 ? `; ${rejected} rejected, which Quality answers with a non-conformance rather than this gate.` : '.'));
 }
 
 function qualityGate(f: ReadinessFacts): ReadinessGate {

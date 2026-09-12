@@ -1,5 +1,13 @@
+import {
+  type ControlledDocumentFact,
+  type ResolvedDocument,
+  AS_BUILT_STATUS,
+  referenceIsSound,
+  resolveDocumentReference,
+} from './document-reference';
+
 /**
- * Is this handover package ready to go to the client? (TC-GATE-4)
+ * Is this handover package ready to go to the client? (TC-GATE-4, extended by TC-GATE-5 and -6)
  *
  * THE CHANGE THIS MAKES.
  *
@@ -8,25 +16,40 @@
  * its systems had never been tested, because the tick and the evidence lived in different places and
  * only one of them was ever looked at.
  *
- * Four of the six now come from the domain that owns the evidence, and **cannot be ticked**:
+ * FIVE of the six now come from the domain that owns the evidence, and **cannot be ticked**:
  *
  *   commissioning  → Testing & Commissioning: every system COMMISSIONING READY (its own nine-gate
  *                    chain, unchanged from TC-GATE-3)
- *   asBuilts       → Engineering: an as-built drawing released on this project
- *   omManuals      → Handover's own O&M pack (TC-GATE-5): every required deliverable accepted
- *   training       → Handover's own client training record (TC-GATE-5): every system acknowledged
+ *   asBuilts       → Document control: an as-built entry in the project register (TC-GATE-6)
+ *   omManuals      → Handover's own O&M pack: every required deliverable accepted, each against a
+ *                    reference that resolves in DocControl's register (TC-GATE-5, -6)
+ *   warrantyDocs   → the same pack's warranty certificate, on its own (TC-GATE-6)
+ *   training       → Handover's own client training record: every system acknowledged (TC-GATE-5)
  *
- * The last two — warranty documents and spares — still have no owning authority anywhere in the
- * repository, so they stay assertions and say so on the page. An assertion labelled as an assertion
- * is honest; an assertion rendered as evidence is the thing this gate exists to remove.
+ * WHY AS-BUILTS MOVED (TC-GATE-6). TC-GATE-4 asked ENGINEERING for as-builts. Engineering's
+ * `DrawingStatus` has no `as_built` value and never did, so the filter matched nothing a real
+ * project could produce: the gate could reach BLOCKED or UNKNOWN and **never READY**, which made
+ * every handover package permanently unsubmittable. The unit test hid it by handing the port a
+ * fabricated `status: 'as_built'` that type-checked only because the port widens status to `string`.
+ * DocControl's `RegisterStatus` does carry `as_built`, and Projects' closeout gate has always read
+ * it from there. Handover was asking the wrong domain.
+ *
+ * The last one — spares — still has no owning authority anywhere in the repository, so it stays an
+ * assertion and says so on the page. An assertion labelled as an assertion is honest; an assertion
+ * rendered as evidence is the thing this gate exists to remove.
  *
  * UNKNOWN IS NEVER A PASS, the same rule the T&C chain follows: a domain that cannot be read, or a
- * project with nothing to judge, blocks rather than passes.
+ * project with nothing to judge, blocks rather than passes. TC-GATE-6 extends that to references:
+ * once the pack CLAIMS its documents are real, a register it cannot read makes the claim unverified,
+ * not true.
  */
 
 export type HandoverItemState = 'READY' | 'BLOCKED' | 'UNKNOWN';
 
 export type HandoverItemId = 'commissioning' | 'asBuilts' | 'omManuals' | 'warrantyDocs' | 'training' | 'spares';
+
+/** The O&M deliverable that answers `warrantyDocs`, and is therefore excluded from `omManuals`. */
+export const WARRANTY_DELIVERABLE = 'warranty_certificate';
 
 export interface HandoverReadinessItem {
   id: HandoverItemId;
@@ -56,19 +79,26 @@ export interface HandoverReadinessFacts {
   systemsCommissioningReady: number;
   /** The blockers of the systems that are not ready, for a reason a reader can act on. */
   notReadyReasons: string[];
-  /** Engineering's drawings for the project. Null when Engineering could not be read. */
-  drawings: { discipline: string; status: string }[] | null;
-  /** Handover's own O&M pack, per system (TC-GATE-5). */
-  omItems: { commissioningId: string; deliverable: string; required: boolean; state: string }[];
+  /**
+   * The project's controlled document register (TC-GATE-6). Null when DocControl could not be read —
+   * which makes both the as-built gate and every reference check UNKNOWN, never satisfied.
+   */
+  documents: ControlledDocumentFact[] | null;
+  /** Handover's own O&M pack, per system (TC-GATE-5), each with the reference it points at. */
+  omItems: {
+    commissioningId: string;
+    deliverable: string;
+    required: boolean;
+    state: string;
+    documentId: string | null;
+  }[];
   /** Handover's own client training record (TC-GATE-5). */
   trainingSessions: { commissioningId: string | null; state: string }[];
   /** The systems the O&M pack and the training are measured against. */
   systemIds: string[];
-  /** The two items nobody owns yet — still the package's own checklist. */
-  asserted: { warrantyDocs: boolean; spares: boolean };
+  /** The one item nobody owns yet — still the package's own checklist. */
+  asserted: { spares: boolean };
 }
-
-const AS_BUILT_STATUSES = new Set(['as_built']);
 
 const item = (
   id: HandoverItemId,
@@ -79,13 +109,16 @@ const item = (
   reason: string,
 ): HandoverReadinessItem => ({ id, label, state, reason, source, evidence });
 
+const plural = (n: number, one: string, many: string): string => (n === 1 ? one : many);
+
 export function assessHandoverReadiness(facts: HandoverReadinessFacts): HandoverReadiness {
   const items: HandoverReadinessItem[] = [
     commissioningItem(facts),
     asBuiltItem(facts),
-    omItem(facts),
+    omPackItem(facts, 'omManuals', 'O&M deliverables accepted', (d) => d !== WARRANTY_DELIVERABLE),
+    omPackItem(facts, 'warrantyDocs', 'Warranty certificates accepted', (d) => d === WARRANTY_DELIVERABLE),
     trainingItem(facts),
-    ...assertedItems(facts.asserted),
+    assertedSpares(facts.asserted),
   ];
   const blocking = items.filter((i) => i.state !== 'READY').map((i) => i.id);
   return { items, blocking, readyToSubmit: blocking.length === 0 };
@@ -103,56 +136,104 @@ function commissioningItem(f: HandoverReadinessFacts): HandoverReadinessItem {
   if (outstanding > 0) {
     const why = f.notReadyReasons.slice(0, 3).join('; ');
     return item(id, label, source, 'projected', 'BLOCKED',
-      `${outstanding} of ${f.systemsTotal} system${f.systemsTotal === 1 ? '' : 's'} not commissioning ready${why ? ` — ${why}` : ''}.`);
+      `${outstanding} of ${f.systemsTotal} ${plural(f.systemsTotal, 'system', 'systems')} not commissioning ready${why ? ` — ${why}` : ''}.`);
   }
   return item(id, label, source, 'projected', 'READY',
-    `All ${f.systemsTotal} system${f.systemsTotal === 1 ? '' : 's'} pass the full commissioning readiness chain.`);
-}
-
-function asBuiltItem(f: HandoverReadinessFacts): HandoverReadinessItem {
-  const id: HandoverItemId = 'asBuilts';
-  const label = 'As-built drawings released';
-  const source = 'Engineering';
-  if (f.drawings === null) return item(id, label, source, 'projected', 'UNKNOWN', 'Engineering could not be read.');
-  if (f.drawings.length === 0) {
-    return item(id, label, source, 'projected', 'UNKNOWN', 'Engineering holds no drawings for this project, so there are no as-builts to release.');
-  }
-  const asBuilt = f.drawings.filter((d) => AS_BUILT_STATUSES.has(d.status));
-  if (asBuilt.length === 0) {
-    return item(id, label, source, 'projected', 'BLOCKED',
-      `${f.drawings.length} drawing${f.drawings.length === 1 ? '' : 's'} on the project, none marked as-built.`);
-  }
-  return item(id, label, source, 'projected', 'READY',
-    `${asBuilt.length} as-built drawing${asBuilt.length === 1 ? '' : 's'} released.`);
+    `All ${f.systemsTotal} ${plural(f.systemsTotal, 'system', 'systems')} pass the full commissioning readiness chain.`);
 }
 
 /**
- * The O&M pack, per system.
+ * As-builts, from the register that can actually say so (TC-GATE-6).
  *
- * READY only when every system has a pack and every REQUIRED deliverable on it is accepted. A system
- * with no pack at all is UNKNOWN rather than ready: nothing has been asked for, so nothing can be
- * said. Deliverables marked not required are excluded — that is what marking them is for.
+ * Still PROJECT-WIDE, not per system, and that is a limit rather than a choice: a register entry's
+ * finest dimension is `discipline` (elv, mep, civil …), and no link exists between a drawing and a
+ * commissioning system. Splitting it per system would mean inferring that link from a discipline
+ * name, which would answer confidently and sometimes wrongly.
  */
-function omItem(f: HandoverReadinessFacts): HandoverReadinessItem {
-  const id: HandoverItemId = 'omManuals';
-  const label = 'O&M deliverables accepted';
+function asBuiltItem(f: HandoverReadinessFacts): HandoverReadinessItem {
+  const id: HandoverItemId = 'asBuilts';
+  const label = 'As-built drawings released';
+  const source = 'Document control';
+  if (f.documents === null) return item(id, label, source, 'projected', 'UNKNOWN', 'Document control could not be read.');
+  if (f.documents.length === 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN',
+      'The project register holds no controlled documents, so there are no as-builts to release.');
+  }
+  const asBuilt = f.documents.filter((d) => d.status === AS_BUILT_STATUS);
+  if (asBuilt.length === 0) {
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${f.documents.length} ${plural(f.documents.length, 'document', 'documents')} in the project register, none marked as-built.`);
+  }
+  return item(id, label, source, 'projected', 'READY',
+    `${asBuilt.length} as-built ${plural(asBuilt.length, 'drawing', 'drawings')} in the register.`);
+}
+
+/**
+ * One slice of the O&M pack, per system.
+ *
+ * Used twice: for the pack as a whole, and for the warranty certificate on its own. They are
+ * DISJOINT — the warranty certificate is excluded from `omManuals` — so a missing warranty does not
+ * light up two failures for one cause, and every deliverable is counted exactly once.
+ *
+ * READY needs three things of every system: the deliverable was ASKED FOR, it was ACCEPTED, and the
+ * reference it was accepted against RESOLVES in the register. That last check is TC-GATE-6's whole
+ * point: acceptance against a document that does not exist is the failure this gate removes.
+ *
+ * A deliverable marked not required is excluded — that is what marking it is for. A system where
+ * nothing of this kind was ever listed is UNKNOWN, because nothing was asked, so nothing can be
+ * said. The two are different: one is a decision, the other is a silence.
+ */
+function omPackItem(
+  f: HandoverReadinessFacts,
+  id: HandoverItemId,
+  label: string,
+  matches: (deliverable: string) => boolean,
+): HandoverReadinessItem {
   const source = 'Handover — O&M pack';
   if (f.systemIds.length === 0) {
     return item(id, label, source, 'projected', 'UNKNOWN', 'No system is registered, so there is no O&M pack to complete.');
   }
-  const required = f.omItems.filter((i) => i.required);
-  const withoutPack = f.systemIds.filter((sid) => !required.some((i) => i.commissioningId === sid));
-  if (withoutPack.length > 0) {
+  const mine = f.omItems.filter((i) => matches(i.deliverable));
+  const unlisted = f.systemIds.filter((sid) => !mine.some((i) => i.commissioningId === sid));
+  if (unlisted.length > 0) {
     return item(id, label, source, 'projected', 'UNKNOWN',
-      `${withoutPack.length} of ${f.systemIds.length} system${f.systemIds.length === 1 ? ' has' : 's have'} no O&M deliverables listed, so the pack cannot be judged complete.`);
+      `${unlisted.length} of ${f.systemIds.length} ${plural(f.systemIds.length, 'system has', 'systems have')} nothing listed, so this cannot be judged complete.`);
+  }
+  const required = mine.filter((i) => i.required);
+  if (required.length === 0) {
+    return item(id, label, source, 'projected', 'READY',
+      `Recorded as not required on all ${f.systemIds.length} ${plural(f.systemIds.length, 'system', 'systems')}.`);
   }
   const outstanding = required.filter((i) => i.state !== 'accepted');
   if (outstanding.length > 0) {
     return item(id, label, source, 'projected', 'BLOCKED',
-      `${outstanding.length} of ${required.length} required deliverable${required.length === 1 ? '' : 's'} not accepted.`);
+      `${outstanding.length} of ${required.length} required ${plural(required.length, 'deliverable is', 'deliverables are')} not accepted.`);
+  }
+  // Accepted — but against WHAT? Every reference goes back to the register (TC-GATE-6).
+  if (f.documents === null) {
+    return item(id, label, source, 'projected', 'UNKNOWN',
+      `All ${required.length} required ${plural(required.length, 'deliverable is', 'deliverables are')} accepted, but document control could not be read, so the references behind them are unverified.`);
+  }
+  const resolved = required.map((i) => resolveDocumentReference(i.documentId, f.documents));
+  const unsound = resolved.filter((r) => !referenceIsSound(r));
+  if (unsound.length > 0) {
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${unsound.length} of ${required.length} accepted ${plural(required.length, 'deliverable', 'deliverables')} — ${describeUnsound(unsound)}.`);
   }
   return item(id, label, source, 'projected', 'READY',
-    `All ${required.length} required deliverable${required.length === 1 ? '' : 's'} accepted across ${f.systemIds.length} system${f.systemIds.length === 1 ? '' : 's'}.`);
+    `All ${required.length} required ${plural(required.length, 'deliverable', 'deliverables')} accepted against a current controlled document.`);
+}
+
+/** Say WHICH way the references are bad, because the two need different fixes. */
+function describeUnsound(resolved: (ResolvedDocument | null)[]): string {
+  const none = resolved.filter((r) => r === null).length;
+  const missing = resolved.filter((r) => r !== null && r.missing).length;
+  const superseded = resolved.filter((r) => r !== null && r.superseded).length;
+  const parts: string[] = [];
+  if (none > 0) parts.push(`${none} with no document reference at all`);
+  if (missing > 0) parts.push(`${missing} pointing at a document that is not in the project register`);
+  if (superseded > 0) parts.push(`${superseded} pointing at a superseded revision`);
+  return parts.join(', ');
 }
 
 /**
@@ -182,36 +263,35 @@ function trainingItem(f: HandoverReadinessFacts): HandoverReadinessItem {
   if (missing > 0) {
     const pending = f.trainingSessions.filter((s) => s.state !== 'acknowledged').length;
     return item(id, label, source, 'projected', 'BLOCKED',
-      `${missing} of ${f.systemIds.length} system${f.systemIds.length === 1 ? '' : 's'} without client-acknowledged training${pending > 0 ? `; ${pending} session${pending === 1 ? '' : 's'} recorded but not acknowledged` : ''}.`);
+      `${missing} of ${f.systemIds.length} ${plural(f.systemIds.length, 'system', 'systems')} without client-acknowledged training${pending > 0 ? `; ${pending} ${plural(pending, 'session', 'sessions')} recorded but not acknowledged` : ''}.`);
   }
   return item(id, label, source, 'projected', 'READY',
     projectWide
       ? 'A project-wide training session has been acknowledged by the client.'
-      : `Every system has client-acknowledged training (${acknowledged.length} session${acknowledged.length === 1 ? '' : 's'}).`);
+      : `Every system has client-acknowledged training (${acknowledged.length} ${plural(acknowledged.length, 'session', 'sessions')}).`);
 }
 
 /**
- * The two with no owner left.
+ * The one with no owner left.
  *
- * Each says WHO is asserting it and that nothing verified it. When one gains a real authority it
- * moves to `projected` and the tick goes away — the move commissioning, as-builts, O&M and training
- * have already made.
+ * It says WHO is asserting it and that nothing verified it. When spares gain a real authority this
+ * moves to `projected` and the tick goes away — the move commissioning, as-builts, O&M, warranty
+ * documents and training have all now made.
+ *
+ * Inventory holds stock, serial units and their issue to a project; none of that records spares
+ * being HANDED TO THE CLIENT, which is what this item claims. The O&M pack's recommended-spares
+ * LIST is a document, not a delivery, and reading it here would quietly redefine the item.
  */
-function assertedItems(a: HandoverReadinessFacts['asserted']): HandoverReadinessItem[] {
-  const rows: { id: HandoverItemId; label: string; ticked: boolean; missing: string }[] = [
-    { id: 'warrantyDocs', label: 'Warranty documents', ticked: a.warrantyDocs, missing: 'no warranty-document register is linked' },
-    { id: 'spares', label: 'Spares and consumables handed over', ticked: a.spares, missing: 'no spares handover record is linked' },
-  ];
-  return rows.map((row) =>
-    item(
-      row.id,
-      row.label,
-      'Asserted on the package',
-      'asserted',
-      row.ticked ? 'READY' : 'BLOCKED',
-      row.ticked
-        ? `Ticked on the package. Nothing verifies this — ${row.missing}.`
-        : `Not ticked. ${row.missing[0].toUpperCase()}${row.missing.slice(1)}, so this cannot be derived.`,
-    ),
+function assertedSpares(a: HandoverReadinessFacts['asserted']): HandoverReadinessItem {
+  const missing = 'no spares handover record is linked';
+  return item(
+    'spares',
+    'Spares and consumables handed over',
+    'Asserted on the package',
+    'asserted',
+    a.spares ? 'READY' : 'BLOCKED',
+    a.spares
+      ? `Ticked on the package. Nothing verifies this — ${missing}.`
+      : `Not ticked. ${missing[0].toUpperCase()}${missing.slice(1)}, so this cannot be derived.`,
   );
 }

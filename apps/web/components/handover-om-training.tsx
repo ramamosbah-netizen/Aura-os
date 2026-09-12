@@ -15,7 +15,20 @@ import EmptyState from '@/components/ui/empty-state';
  *
  * Neither holds a document. `documentId` is a reference into DocControl, and the submit control asks
  * for one because "submitted" with nothing to point at is a claim rather than evidence.
+ *
+ * TC-GATE-6 made that reference REAL. Every row arrives with what the project register says about it,
+ * resolved at read time and never stored — so the document number, title and revision shown here are
+ * the register's current answer, and a reference pointing at nothing says so on the row instead of
+ * looking like any other citation.
  */
+
+/** What the register said about this row's reference. Null when there was nothing to ask about. */
+export interface ResolvedDocumentRow {
+  reference: string;
+  document: { id: string; documentNumber: string; title: string; revision: string; status: string } | null;
+  missing: boolean;
+  superseded: boolean;
+}
 
 export interface OmItemRow {
   id: string;
@@ -25,6 +38,7 @@ export interface OmItemRow {
   state: 'required' | 'submitted' | 'reviewed' | 'accepted';
   documentId: string | null;
   notes: string | null;
+  resolved?: ResolvedDocumentRow | null;
 }
 
 export interface TrainingRow {
@@ -60,6 +74,35 @@ const NEXT_STATE: Record<OmItemRow['state'], OmItemRow['state'] | null> = {
   reviewed: 'accepted',
   accepted: null,
 };
+
+/**
+ * One reference, as the register answered it (TC-GATE-6).
+ *
+ * The three failure shapes are shown apart because they need different fixes: a typo is retyped, a
+ * superseded revision needs the current one, and "unverified" means document control could not be
+ * reached at all — not that anything is wrong with the reference.
+ */
+function DocumentCell({ entry }: { entry: OmItemRow }) {
+  if (!entry.documentId) return <span style={st.muted}>&mdash;</span>;
+  const resolved = entry.resolved;
+  if (!resolved) {
+    return <span style={st.docWarn} title="Document control could not be read, so this reference is unverified.">{entry.documentId} · unverified</span>;
+  }
+  if (resolved.missing) {
+    return <span style={st.docBad} title="No document with this number or id is in the project register.">{entry.documentId} · not in the register</span>;
+  }
+  const doc = resolved.document!;
+  if (resolved.superseded) {
+    return <span style={st.docWarn} title="The register has moved on from this revision.">{doc.documentNumber} rev {doc.revision} · superseded</span>;
+  }
+  return (
+    <span>
+      <strong>{doc.documentNumber}</strong> rev {doc.revision}
+      <br />
+      <small style={st.muted}>{doc.title}</small>
+    </span>
+  );
+}
 
 // ── O&M deliverables ────────────────────────────────────────────────────────────────────────────
 
@@ -105,7 +148,9 @@ export function OmPackSection({ systems, items }: { systems: SystemRow[]; items:
       <p style={st.authorityNote} data-testid="om-authority">
         The O&amp;M pack is <strong>Handover&rsquo;s own authority</strong> — nobody else holds &ldquo;is this system&rsquo;s pack
         complete&rdquo;. DocControl owns the controlled documents and each deliverable <strong>references</strong> one;
-        nothing is copied here. Handover readiness counts these rows, so the panel above and this list cannot disagree.
+        nothing is copied here. Every reference is <strong>checked against the project register</strong>, so a deliverable
+        accepted against a document that does not exist blocks rather than passes. Handover readiness counts these rows,
+        so the panel above and this list cannot disagree.
       </p>
 
       {items === null ? (
@@ -153,7 +198,9 @@ export function OmPackSection({ systems, items }: { systems: SystemRow[]; items:
                               {!entry.required && <small style={st.notRequired}> not required</small>}
                             </th>
                             <td style={{ ...st.td, ...stateStyle(entry.state) }} data-testid={`om-item-state-${system.code}-${entry.deliverable}`}>{entry.state}</td>
-                            <td style={st.tdMuted}>{entry.documentId ?? '—'}</td>
+                            <td style={st.tdMuted} data-testid={`om-doc-state-${system.code}-${entry.deliverable}`}>
+                              <DocumentCell entry={entry} />
+                            </td>
                             <td style={st.td}>
                               {entry.state === 'required' && entry.required && (
                                 <input
@@ -366,5 +413,7 @@ const st = {
   tagGood: { padding: '3px 9px', borderRadius: 999, background: 'var(--good-soft, rgba(34,197,94,.15))', color: 'var(--good)', fontSize: 11, fontWeight: 700 } as CSSProperties,
   tagWarn: { padding: '3px 9px', borderRadius: 999, background: 'var(--warn-soft, rgba(234,179,8,.15))', color: 'var(--warn)', fontSize: 11, fontWeight: 700 } as CSSProperties,
   tagMuted: { padding: '3px 9px', borderRadius: 999, background: 'var(--panel-2)', color: 'var(--muted)', fontSize: 11, fontWeight: 700 } as CSSProperties,
+  docWarn: { color: 'var(--warn)', fontWeight: 600 } as CSSProperties,
+  docBad: { color: 'var(--bad)', fontWeight: 600 } as CSSProperties,
   error: { color: 'var(--bad)', fontSize: 13, fontWeight: 600, margin: 0 } as CSSProperties,
 };

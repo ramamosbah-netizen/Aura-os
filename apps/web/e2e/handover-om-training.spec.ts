@@ -11,7 +11,27 @@ import { apiAuthHeaders } from './api-auth';
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
 const HO = `${API}/api/v1/commissioning/handovers`;
+const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
+
+/**
+ * Put a real controlled document on the project (TC-GATE-6).
+ *
+ * Since TC-GATE-6 an O&M deliverable cannot be submitted against a reference the register does not
+ * hold, so these specs have to create the documents they point at — which is the point: before the
+ * gate, every reference in this file was invented text that nothing checked.
+ */
+async function registerDocument(
+  request: import('@playwright/test').APIRequestContext,
+  projectId: string,
+  documentNumber: string,
+  title: string,
+) {
+  return (await (await request.post(`${DC}/register`, {
+    headers: H(),
+    data: { projectId, documentNumber, title, discipline: 'elv', docType: 'document', currentRevision: 'B', status: 'for_construction' },
+  })).json()) as { id: string; documentNumber: string };
+}
 
 /** A system that passes its whole T&C readiness chain, so only the Gate-5 items can block. */
 async function readySystem(request: import('@playwright/test').APIRequestContext, projectId: string, code: string) {
@@ -53,7 +73,7 @@ test('the O&M pack and client training are authorities, and readiness counts the
   // ── Nothing listed yet ⇒ UNKNOWN, not ready ─────────────────────────────────────────────────────
   await page.goto(`/handover?project=${projectId}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('handover-item-omManuals-state')).toHaveText('UNKNOWN');
-  await expect(page.getByTestId('handover-item-omManuals')).toContainText(/no O&M deliverables listed/i);
+  await expect(page.getByTestId('handover-item-omManuals')).toContainText(/nothing listed/i);
   await expect(page.getByTestId('handover-item-training-state')).toHaveText('UNKNOWN');
   await expect(page.getByTestId('handover-item-training')).toContainText(/no training session has been recorded/i);
 
@@ -75,9 +95,20 @@ test('the O&M pack and client training are authorities, and readiness counts the
   expect(noDoc.ok()).toBe(false);
   expect(JSON.stringify(await noDoc.json())).toMatch(/controlled document reference is required/i);
 
+  // TC-GATE-6: a reference the register does not hold is refused where it is typed, rather than
+  // becoming an accepted deliverable pointing at nothing.
+  const typo = await page.request.put(`${HO}/om-items/${manual!.id}/state`, { headers: H(), data: { to: 'submitted', documentId: 'DOC-OM-OOO1' } });
+  expect(typo.ok(), 'a reference that is not in the register must be refused').toBe(false);
+  expect(JSON.stringify(await typo.json())).toMatch(/must match a controlled document/i);
+
+  await registerDocument(page.request, projectId, 'DOC-OM-0001', 'CCTV operation & maintenance manual');
   await page.getByTestId(`om-doc-${code}-om_manual`).fill('DOC-OM-0001');
   await page.getByTestId(`om-advance-${code}-om_manual`).click();
   await expect(page.getByTestId(`om-item-state-${code}-om_manual`)).toHaveText('submitted', { timeout: 15_000 });
+  // The row shows what the REGISTER says, not the text that was typed — resolved on read, never stored.
+  await expect(page.getByTestId(`om-doc-state-${code}-om_manual`)).toContainText('DOC-OM-0001');
+  await expect(page.getByTestId(`om-doc-state-${code}-om_manual`)).toContainText(/CCTV operation & maintenance manual/i);
+  await expect(page.getByTestId(`om-doc-state-${code}-om_manual`)).toContainText(/rev B/i);
   await page.getByTestId(`om-advance-${code}-om_manual`).click();
   await expect(page.getByTestId(`om-item-state-${code}-om_manual`)).toHaveText('reviewed', { timeout: 15_000 });
   await page.getByTestId(`om-advance-${code}-om_manual`).click();
@@ -130,14 +161,17 @@ test('a complete pack and acknowledged training let the package submit', async (
 
   const pkgCode = `HO-G5S-${Date.now().toString().slice(-5)}`;
   const pkg = await (await page.request.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Submit path' } })).json();
-  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { warrantyDocs: true, spares: true } });
+  // Only spares is still tickable: TC-GATE-6 derived warranty documents from the pack itself.
+  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { spares: true } });
 
   // Every required deliverable accepted, for BOTH systems on the project.
   for (const systemId of [system.id, (await created.json()).id]) {
     await page.request.post(`${HO}/om-items/seed`, { headers: H(), data: { commissioningId: systemId } });
   }
+  // One controlled document per deliverable, in the register, because the reference is now checked.
+  const handoverDoc = await registerDocument(page.request, projectId, `DOC-PACK-${Date.now().toString().slice(-5)}`, 'Tower A handover pack');
   for (const item of (await listOm(page, projectId)) as { id: string; required: boolean }[]) {
-    await page.request.put(`${HO}/om-items/${item.id}/state`, { headers: H(), data: { to: 'submitted', documentId: `DOC-${item.id.slice(0, 6)}` } });
+    await page.request.put(`${HO}/om-items/${item.id}/state`, { headers: H(), data: { to: 'submitted', documentId: handoverDoc.documentNumber } });
     await page.request.put(`${HO}/om-items/${item.id}/state`, { headers: H(), data: { to: 'reviewed' } });
     await page.request.put(`${HO}/om-items/${item.id}/state`, { headers: H(), data: { to: 'accepted' } });
   }
@@ -155,6 +189,8 @@ test('a complete pack and acknowledged training let the package submit', async (
 
   await page.goto(`/handover?project=${projectId}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('handover-item-omManuals-state')).toHaveText('READY');
+  // TC-GATE-6: the warranty certificate is its own item, derived from the same pack.
+  await expect(page.getByTestId('handover-item-warrantyDocs-state')).toHaveText('READY');
   await expect(page.getByTestId('handover-item-training-state')).toHaveText('READY');
   await expect(page.getByTestId('handover-item-commissioning-state')).toHaveText('BLOCKED');
 });

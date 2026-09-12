@@ -15,6 +15,10 @@
  * nobody can answer must not read as satisfied, or an unwired port silently commissions systems.
  */
 
+import type { ControlledDocumentFact } from './domain/document-reference';
+
+export type { ControlledDocumentFact };
+
 /** One device, as the ELV register describes it. T&C copies none of this; it reads and counts. */
 export interface EquipmentFact {
   id: string;
@@ -65,6 +69,25 @@ export interface EngineeringReleasePort {
   readProjectDrawingRelease(tenantId: string, projectId: string): Promise<DrawingReleaseFact[]>;
 }
 
+/**
+ * The project's controlled document register, owned by Document Control (TC-GATE-6).
+ *
+ * Handover points at documents it does not own — an O&M manual, a warranty certificate, an as-built
+ * drawing. Until this port existed those pointers were unchecked text. DocControl is the only domain
+ * that can say whether a reference is real, what revision it is at, and whether it has been
+ * superseded, so it is the only domain that should be asked.
+ *
+ * It is also the authority for AS-BUILTS, which Handover previously asked Engineering for. Engineering
+ * cannot answer: its `DrawingStatus` has no as-built value, so the question came back "no" forever.
+ * `RegisterStatus` does have one, and Projects' closeout gate has always read it from here.
+ *
+ * One call per project, like every other port here: a project has ONE register.
+ */
+export interface DocControlPort {
+  readProjectDocuments(tenantId: string, projectId: string): Promise<ControlledDocumentFact[]>;
+}
+
 export const ELV_EQUIPMENT = Symbol('ELV_EQUIPMENT');
 export const QUALITY_EVIDENCE = Symbol('QUALITY_EVIDENCE');
 export const ENGINEERING_RELEASE = Symbol('ENGINEERING_RELEASE');
+export const DOC_CONTROL = Symbol('DOC_CONTROL');

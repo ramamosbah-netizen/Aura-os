@@ -30,6 +30,14 @@ export class InMemoryRfqStore implements RfqStore {
     return filter.limit ? out.slice(0, filter.limit) : out;
   }
 
+  async listByPrIds(tenantId: string, prIds: readonly string[]): Promise<Rfq[]> {
+    const wanted = new Set<string>(prIds);
+    return [...this.rfqs.values()]
+      .filter((r) => r.tenantId === tenantId && r.prId !== null && wanted.has(r.prId))
+      .map((r) => ({ ...r }))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
   async listPaged(filter: RfqFilter, page: PageParams): Promise<Page<Rfq>> {
     const all = await this.list({ ...filter, limit: undefined });
     return paginate(all, page);

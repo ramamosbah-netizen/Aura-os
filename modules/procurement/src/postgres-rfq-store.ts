@@ -116,6 +116,18 @@ export class PostgresRfqStore implements RfqStore {
     return res.rows.map(rowToRfq);
   }
 
+  /** Uncapped by design — see the contract. */
+  async listByPrIds(tenantId: Id, prIds: readonly string[]): Promise<Rfq[]> {
+    if (prIds.length === 0) return [];
+    const res = await this.pool.query<RfqRow>(
+      `SELECT ${RFQ_COLS} FROM public.aura_procurement_rfqs
+        WHERE tenant_id = $1 AND pr_id = ANY($2)
+        ORDER BY created_at ASC`,
+      [tenantId, [...prIds]],
+    );
+    return res.rows.map(rowToRfq);
+  }
+
   async listPaged(filter: RfqFilter, page: PageParams): Promise<Page<Rfq>> {
     const { whereSql, params } = this.buildWhere(filter);
     const countRes = await this.pool.query<{ count: string }>(

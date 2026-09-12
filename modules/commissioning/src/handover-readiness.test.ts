@@ -428,7 +428,7 @@ function services(ports: {
 const readyPorts = {
   elv: { readProjectEquipment: async () => [{ id: 'd1', tag: 'CAM-001', system: 'cctv', status: 'installed', commissioningRecordId: null }] } as ElvEquipmentPort,
   quality: { readProjectQualityEvidence: async () => ({ ncrs: [], itps: [], snags: [], irs: [] }) } as QualityEvidencePort,
-  engineering: { readProjectDrawingRelease: async () => [{ discipline: 'cctv', status: 'approved' }] } as EngineeringReleasePort,
+  engineering: { readProjectDrawingRelease: async () => [{ discipline: 'cctv', status: 'approved', count: 1 }] } as EngineeringReleasePort,
   docControl: { readProjectDocuments: async () => REGISTER, readProjectTransmittals: async () => [] } as DocControlPort,
 };
 

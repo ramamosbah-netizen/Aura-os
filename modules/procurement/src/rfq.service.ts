@@ -215,11 +215,18 @@ export class RfqService {
       };
     }
 
-    const mine = new Set(
-      (await this.requests.list({ tenantId })).filter((pr) => pr.projectId === projectId).map((pr) => pr.id),
-    );
-    const overdue = (await this.store.list({ tenantId }))
-      .filter((r) => r.status === 'sent' && r.dueDate !== null && r.dueDate < today && r.prId !== null && mine.has(r.prId));
+    // ASKED OF THE STORES, not filtered out of two capped lists (TC-GATE-19).
+    //
+    // Both reads here were `list({ tenantId })`, which stops at a HUNDRED ROWS and is scoped to
+    // the whole tenant rather than this project. Any tenant with a hundred purchase requests —
+    // which is a small tenant — lost the project's requests off the end, `mine` came back without
+    // them, no RFQ could then be matched to the project, and this signal reported CLEAR.
+    //
+    // A health signal is read as "someone looked". Reporting CLEAR because the read was truncated
+    // is the one failure mode it must not have, and it is the reason this gate exists.
+    const prIds = await this.requests.listIdsForProject(tenantId, projectId);
+    const overdue = (await this.store.listByPrIds(tenantId, prIds))
+      .filter((r) => r.status === 'sent' && r.dueDate !== null && r.dueDate < today);
 
     if (overdue.length === 0) {
       return { id: 'procurement-sourcing-readiness', domain: 'procurement', state: 'CLEAR' };

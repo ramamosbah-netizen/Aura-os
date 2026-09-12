@@ -2,7 +2,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Drawing } from './domain/drawing';
-import type { DrawingFilter, DrawingStore } from './drawing-store';
+import type { DrawingFilter, DrawingReleaseCount, DrawingStore } from './drawing-store';
 
 export class InMemoryDrawingStore implements DrawingStore {
   private readonly items = new Map<string, Drawing>();
@@ -64,7 +64,36 @@ export class InMemoryDrawingStore implements DrawingStore {
     if (filter.projectId) list = list.filter((i) => i.projectId === filter.projectId);
     if (filter.status) list = list.filter((i) => i.status === filter.status);
     list.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+    // NOTE (TC-GATE-19): no default cap here, while Postgres applies one hundred. The adapters
+    // disagreed about `list`, which is why no in-memory test could ever have caught the defect
+    // this gate fixed. The two reads below are identical in both, deliberately.
     return filter.limit ? list.slice(0, filter.limit) : list;
+  }
+
+  async summariseRelease(tenantId: Id, projectId: Id): Promise<DrawingReleaseCount[]> {
+    const counts = new Map<string, DrawingReleaseCount>();
+    for (const d of this.items.values()) {
+      if (d.tenantId !== tenantId || d.projectId !== projectId) continue;
+      const key = `${d.discipline}\u0000${d.status}`;
+      const found = counts.get(key);
+      if (found) found.count += 1;
+      else counts.set(key, { discipline: d.discipline, status: d.status, count: 1 });
+    }
+    return [...counts.values()].sort((a, b) =>
+      a.discipline === b.discipline ? a.status.localeCompare(b.status) : a.discipline.localeCompare(b.discipline),
+    );
+  }
+
+  async listByStatus(
+    tenantId: Id,
+    projectId: Id,
+    statuses: readonly Drawing['status'][],
+  ): Promise<Drawing[]> {
+    const wanted = new Set<string>(statuses);
+    return [...this.items.values()]
+      .filter((d) => d.tenantId === tenantId && d.projectId === projectId && wanted.has(d.status))
+      .map((d) => ({ ...d }))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }
 
   async listPaged(filter: DrawingFilter, page: PageParams): Promise<Page<Drawing>> {

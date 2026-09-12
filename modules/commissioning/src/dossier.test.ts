@@ -235,7 +235,7 @@ const readyPorts = () => {
       quality: { readProjectQualityEvidence: async () => ({ ncrs: [], itps: [], snags: [], irs: [] }) } as QualityEvidencePort,
       // T&C's own pre-commissioning chain still reads Engineering for drawing RELEASE — a different
       // question to the as-built one, and one Engineering can answer (TC-GATE-6).
-      engineering: { readProjectDrawingRelease: async () => [{ discipline: 'cctv', status: 'approved' }] } as EngineeringReleasePort,
+      engineering: { readProjectDrawingRelease: async () => [{ discipline: 'cctv', status: 'approved', count: 1 }] } as EngineeringReleasePort,
       docControl: registry.port,
     },
   };

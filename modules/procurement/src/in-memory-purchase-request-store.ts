@@ -29,6 +29,12 @@ export class InMemoryPurchaseRequestStore implements PurchaseRequestStore {
     return filter.limit ? out.slice(0, filter.limit) : out;
   }
 
+  async listIdsForProject(tenantId: string, projectId: string): Promise<string[]> {
+    return [...this.requests.values()]
+      .filter((r) => r.tenantId === tenantId && r.projectId === projectId)
+      .map((r) => r.id);
+  }
+
   async listPaged(filter: PurchaseRequestFilter, page: PageParams): Promise<Page<PurchaseRequest>> {
     const all = await this.list({ ...filter, limit: undefined });
     return paginate(all, page);

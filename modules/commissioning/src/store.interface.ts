@@ -4,6 +4,7 @@ import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { OmItem } from './domain/om-package';
+import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
@@ -55,6 +56,13 @@ export interface CommissioningStore {
   saveTrainingSession(session: TrainingSession): Promise<void>;
   findTrainingSession(id: string, tenantId: string): Promise<TrainingSession | null>;
   listTrainingSessions(tenantId: string, projectId?: string): Promise<TrainingSession[]>;
+
+  // Dossier manifests — what a package actually SENT, captured at issue (TC-GATE-7). Append-only
+  // here and in the database (migration 0300): an issued manifest is a record of what the client
+  // received, and a manifest that could be edited afterwards would be a draft wearing a record's
+  // clothes. There is no update and no delete.
+  appendDossierItems(items: DossierItem[]): Promise<void>;
+  listDossierItems(handoverId: string, tenantId: string): Promise<DossierItem[]>;
 
   // Handover (project-level acceptance)
   saveHandover(pkg: HandoverPackage): Promise<void>;

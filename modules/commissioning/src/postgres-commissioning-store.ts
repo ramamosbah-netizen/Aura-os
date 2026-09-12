@@ -7,6 +7,7 @@ import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { OmItem, OmDeliverable, OmItemState } from './domain/om-package';
+import type { DossierItem, DossierKind } from './domain/dossier';
 import type { TrainingSession, TrainingState } from './domain/client-training';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
@@ -173,6 +174,29 @@ export class PostgresCommissioningStore implements CommissioningStore {
       [tenantId, projectId ?? null],
     );
     return res.rows.map(toOmItem);
+  }
+
+  async appendDossierItems(items: DossierItem[]): Promise<void> {
+    // Plain inserts, no ON CONFLICT: the (handover_id, issue_no, kind, source_id) unique constraint
+    // is the concurrency guard, and swallowing its violation would let one issue quietly cite the
+    // same certificate twice — or lose a second writer's line.
+    for (const d of items) {
+      await this.pool.query(
+        `insert into public.aura_handover_dossier_items
+          (id, tenant_id, company_id, handover_id, project_id, issue_no, kind, source_id, reference, label, state, issued_at, issued_by, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+        [d.id, d.tenantId, d.companyId, d.handoverId, d.projectId, d.issueNo, d.kind, d.sourceId, d.reference, d.label, d.state, d.issuedAt, d.issuedBy, d.createdAt],
+      );
+    }
+  }
+  async listDossierItems(handoverId: string, tenantId: string): Promise<DossierItem[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_handover_dossier_items
+        where handover_id = $1 and tenant_id = $2
+        order by issue_no asc, label asc`,
+      [handoverId, tenantId],
+    );
+    return res.rows.map(toDossierItem);
   }
 
   async saveTrainingSession(s: TrainingSession): Promise<void> {
@@ -425,6 +449,17 @@ function toOmItem(r: Record<string, unknown>): OmItem {
     acceptedAt: tsIso(r.accepted_at), acceptedBy: (r.accepted_by as string) ?? null,
     createdBy: (r.created_by as string) ?? null,
     createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
+  };
+}
+
+function toDossierItem(r: Record<string, unknown>): DossierItem {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    handoverId: r.handover_id as string, projectId: r.project_id as string,
+    issueNo: Number(r.issue_no), kind: r.kind as DossierKind, sourceId: r.source_id as string,
+    reference: (r.reference as string) ?? null, label: r.label as string, state: (r.state as string) ?? null,
+    issuedAt: tsIso(r.issued_at) as string, issuedBy: (r.issued_by as string) ?? null,
+    createdAt: tsIso(r.created_at) as string,
   };
 }
 

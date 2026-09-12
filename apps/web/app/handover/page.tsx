@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import HandoverWorkspaceClient from '../../components/handover-workspace-client';
 import type { OmItemRow, SystemRow, TrainingRow } from '../../components/handover-om-training';
+import type { DossierData } from '../../components/handover-dossier';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
@@ -53,6 +54,24 @@ export default async function HandoverPage({
   ]);
   const systems: SystemRow[] = (workspace?.systems ?? []).map((s) => ({ id: s.record.id, code: s.record.code, title: s.record.title }));
 
+  /**
+   * The dossier for each package in scope (TC-GATE-7).
+   *
+   * One read per package rather than one for the project, because a dossier belongs to a PACKAGE:
+   * what was issued, and when, is a fact about the thing that was sent. Projects carry one package
+   * in practice, so this is one call; the map is here so a second package does not silently show the
+   * first one's manifest.
+   *
+   * Null when nothing could be read — the section says so rather than rendering an empty dossier,
+   * which would read as "there is nothing to hand over".
+   */
+  const dossiers: DossierData[] | null =
+    packages === null
+      ? null
+      : (await Promise.all(packages.map((p) => getJson<DossierData>(`/api/commissioning/handovers/${p.id}/dossier`)))).filter(
+          (d): d is DossierData => d !== null && Boolean(d.view),
+        );
+
   const metrics: WorkspaceMetric[] = [
     { label: 'In handover', value: packages === null ? null : packages.filter((row) => row.status === 'submitted' || row.status === 'draft').length, hint: 'Packages being compiled', tone: 'accent' },
     // Blocked comes from the ASSESSED readiness now, not from re-reading the checkboxes here — the
@@ -69,9 +88,9 @@ export default async function HandoverPage({
           survives opening something else and can be returned to. The anchor href carries no section,
           so it always returns to the packages.
 
-          It gained sections at TC-GATE-5 — three of them, because only three have real data behind
-          them. Its readiness panel is still a projection rather than a second place to stand, and two
-          of the six items it shows are now derived from these new sections. */}
+          It gained sections at TC-GATE-5 and a fourth at TC-GATE-7 — four, because only four have
+          real data behind them. Its readiness panel is still a projection rather than a second place
+          to stand, and five of the six items it shows are now derived. */}
       <AuraTabAnchor href="/handover" title="Handover" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
       <DeliveryWorkspaceSummary eyebrow="HANDOVER OPERATIONS" title="Handover operating picture" description="See which acceptance packages are ready, blocked or waiting for a decision before close-out." metrics={metrics} attention={attention} emptyMessage="No handover exceptions are open for the available packages." />
@@ -81,6 +100,7 @@ export default async function HandoverPage({
         systems={systems}
         omItems={omItems}
         trainingSessions={trainingSessions}
+        dossiers={dossiers}
         selectedProject={project}
       />
     </div>

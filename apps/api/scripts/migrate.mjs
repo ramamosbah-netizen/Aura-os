@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { config } from 'dotenv';
 import pg from 'pg';
 import { selectRollbackTargets } from './migration-rollback.mjs';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url)); // apps/api/scripts
 const apiRoot = join(here, '..'); // apps/api
@@ -101,6 +102,10 @@ const client = new pg.Client({ connectionString, ssl: sslOff ? false : { rejectU
 
 async function main() {
   await client.connect();
+  // A migration acts on every tenant at once and binds no tenant, so RLS — which FORCE extends
+  // to the table's owner — would filter it to nothing WITHOUT RAISING. This makes that case fail
+  // instead of reporting success over an empty result (TC-GATE-21).
+  await openCrossTenantSession(client, 'migrate');
   await client.query(
     `create table if not exists public.aura_migrations (
        filename   text        primary key,

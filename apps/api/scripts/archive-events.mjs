@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from 'dotenv';
 import pg from 'pg';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 config({ path: join(here, '..', '.env.local') });
@@ -46,6 +47,9 @@ const client = new pg.Client({ connectionString: url, ssl: sslOff ? false : { re
 
 async function main() {
   await client.connect();
+  // TC-GATE-21: a retention sweep deletes across every tenant, and binds no tenant. Under FORCE RLS an unprivileged owner would be
+  // filtered to nothing WITHOUT an error. This makes that raise instead of reporting success.
+  await openCrossTenantSession(client, 'archive-events');
   console.log(`Archive cutoff: rows older than ${months} month(s). Mode: ${execute ? 'EXECUTE' : 'dry-run'}.`);
   for (const [table, timeCol, extra] of TARGETS) {
     const eligible = await client.query(

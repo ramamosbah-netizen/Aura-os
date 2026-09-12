@@ -113,9 +113,45 @@ The app and the schema need different privilege, so they get different variables
 | Variable | Role | Used by |
 |---|---|---|
 | `DATABASE_URL` | `aura_app` — `NOSUPERUSER NOBYPASSRLS`, so policies apply | the API runtime, and `rls-isolation-test`'s probe derivation |
-| `MIGRATION_DATABASE_URL` | the owning role — may create, and bypasses RLS | `migrate.mjs`, `rls-fitness.mjs`, `orphan-scan.mjs`, `archive-events.mjs`, `merge-duplicate-accounts.mjs`, `rls-isolation-test.mjs` (admin half) |
+| `MIGRATION_DATABASE_URL` | the owning role — may create, and **must be superuser or `BYPASSRLS`** (see below) | `migrate.mjs`, `rls-fitness.mjs`, `orphan-scan.mjs`, `archive-events.mjs`, `merge-duplicate-accounts.mjs`, `backfill-pre-award.mjs`, `rls-isolation-test.mjs` (admin half) |
 
 Every one of those scripts resolves `MIGRATION_DATABASE_URL ?? DATABASE_URL`, so a deployment that has not split the roles yet keeps working unchanged.
+
+### The migration role must actually bypass RLS (TC-GATE-21, 2026-09-13)
+
+**This row used to read "the owning role — may create, and bypasses RLS".** That was true when it was
+written, because `FORCE ROW LEVEL SECURITY` was then set on **0 of 149** tables. **`FORCE` is the flag
+that extends RLS to a table's OWNER**, and it is now on all 254. So ownership alone no longer grants
+the cross-tenant visibility every one of these scripts assumes.
+
+A migration binds no `app.current_tenant_id` — it acts on every tenant at once. Under FORCE, an owner
+that is neither superuser nor `BYPASSRLS` matches **no rows**, and PostgreSQL **raises nothing**: it is
+a filter, not an error. Measured directly against a `NOSUPERUSER NOBYPASSRLS` owner of a table shaped
+like every business table here:
+
+```
+rows visible with no tenant bound: 0
+rows a backfill UPDATE would touch: 0
+error raised:                       none
+```
+
+Seven data backfills (`0239`, `0241`, `0249`, `0267`, `0269`, `0270`, `0305`) are plain `UPDATE`
+statements of exactly that shape. On such a deployment they report success and change nothing.
+
+**Neither local nor CI can detect this**: both create the owner as a superuser
+(`POSTGRES_USER: aura`), where the filter never engages.
+
+**The mechanism.** Every one of these scripts now opens its session through
+`scripts/lib/cross-tenant-session.mjs`, which issues `SET row_security = off`. PostgreSQL then
+**raises** — *"query would be affected by row-level security policy for table X"* — instead of
+filtering, and the setting is defined to have **no effect on roles that bypass every policy**. So it
+costs nothing where the role is already privileged and stops the job where it is not.
+
+**The operator requirement:** grant the migration role `BYPASSRLS` (or use a superuser). If a
+migration fails with a row-level-security error, that is this guard working — **do not "fix" it by
+binding a tenant**, which would make a cross-tenant backfill silently partial instead of silently
+empty. `src/migration-role-rls.pg-int.test.ts` pins both halves of the behaviour, and
+`src/migration-role-scripts.fitness.test.ts` keeps the list of scripts honest.
 
 They are cross-tenant or schema-level by nature: `orphan-scan` and `archive-events` must see every tenant's rows, `rls-fitness` reads `pg_catalog` to assert the posture that `aura_app` is precisely the subject of, and `merge-duplicate-accounts` reassigns foreign keys across tenants.
 

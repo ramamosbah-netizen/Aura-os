@@ -272,7 +272,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, activate, wbs, cbs, ledger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
+  return { bus, events, opportunities, tenders, contracts, projects, activate, wbs, cbs, ledger, quantityLedger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
 }
 
 /**
@@ -837,6 +837,82 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     // Re-signing must not double-seed the breakdown.
     await h.contracts.changeStatus(contract.id, 'active');
     expect((await h.wbs.list({ projectId: project.id })).filter((n) => n.code === '1')).toHaveLength(1);
+  });
+
+  /**
+   * TC-GATE-20. Three quantity reactors posted UNKEYED rows, so a re-delivered event counted the
+   * quantity twice. Migration 0255 had added the dedupe key for exactly this — "so those reactors
+   * can propagate failures to the outbox again" — and these three never adopted it.
+   *
+   * `EventBus.publish` fans an event out to every handler and the relay retries the whole EVENT,
+   * so a re-delivery is not hypothetical: any sibling handler failing causes one. Publishing the
+   * same event twice is precisely what the relay does after a partial failure.
+   */
+  it('does not double-count the ordered reversal when a cancelled-PO event is re-delivered', async () => {
+    const poCancelled = makeEvent({
+      type: 'procurement.po.updated',
+      tenantId,
+      companyId: null,
+      actorId: null,
+      aggregateType: 'procurement.po',
+      aggregateId: 'po-cancel-1',
+      payload: {
+        status: 'cancelled',
+        boqItemId: 'BOQ-REV-1',
+        project: { id: 'project-1', name: 'Tower A' },
+        orderedQuantity: 40,
+        unit: 'nr',
+        title: 'PO-900',
+      },
+    });
+
+    await h.bus.publish(poCancelled);
+    await h.bus.publish(poCancelled); // re-delivery
+
+    const rows = await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-REV-1' });
+    expect(rows.filter((t) => t.source === 'reversal'), 'one cancellation, one reversal').toHaveLength(1);
+    expect(rows[0].quantity).toBe(-40);
+    expect(rows[0].dedupeKey).toBe('po-ordered-reversal:po-cancel-1');
+  });
+
+  it('does not double-count the received quantity when a GRN event is re-delivered', async () => {
+    const grn = makeEvent({
+      type: 'inventory.grn.created',
+      tenantId,
+      companyId: null,
+      actorId: null,
+      aggregateType: 'inventory.grn',
+      aggregateId: 'grn-dup-1',
+      payload: { boqItemId: 'BOQ-GRN-1', project: { id: 'project-1', name: 'Tower A' }, receivedQuantity: 12, unit: 'nr', title: 'GRN-77' },
+    });
+
+    await h.bus.publish(grn);
+    await h.bus.publish(grn); // re-delivery
+
+    const rows = await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-GRN-1' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quantity).toBe(12);
+    expect(rows[0].dedupeKey).toBe('grn-received:grn-dup-1');
+  });
+
+  it('does not double-count the issued quantity when a stock movement is re-delivered', async () => {
+    const movement = makeEvent({
+      type: 'inventory.stock.movement_recorded',
+      tenantId,
+      companyId: null,
+      actorId: null,
+      aggregateType: 'inventory.stock',
+      aggregateId: 'move-dup-1',
+      payload: { boqItemId: 'BOQ-MOVE-1', projectId: 'project-1', direction: 'out', quantity: 9, unit: 'nr', code: 'CAB-01' },
+    });
+
+    await h.bus.publish(movement);
+    await h.bus.publish(movement); // re-delivery
+
+    const rows = await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-MOVE-1' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].quantity).toBe(9);
+    expect(rows[0].dedupeKey).toBe('stock-movement:move-dup-1');
   });
 
   it('does not double-bill an AR invoice when an IPC-certified event is re-delivered', async () => {

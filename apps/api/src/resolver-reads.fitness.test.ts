@@ -155,22 +155,73 @@ const RESOLVERS: Array<{ file: string; method: string; mustCall: string[]; mustN
     mustCall: ['getItemByCode('],
     mustNotCall: ['listItems('],
   },
+  {
+    // TC-GATE-20. Not a gate or a signal — the NUMBER. This summed a capped read of one BOQ item's
+    // ledger, and newest-first drops the `boq` baseline first, so a fully installed item reported a
+    // target of zero and no progress at all.
+    file: 'projects/src/quantity-ledger.service.ts',
+    method: 'position',
+    mustCall: ['listForBoqItem('],
+    mustNotCall: ['store.list('],
+  },
+  {
+    // TC-GATE-20. Searched a capped project ledger for the ORIGINAL billed fact, which is older than
+    // the cancellation reversing it. Not finding it reads as "nothing to reverse" and returns null,
+    // so the billed quantity stayed standing and the cancellation reported success.
+    file: 'projects/src/quantity-ledger.service.ts',
+    method: 'reverseBilled',
+    mustCall: ['findByDedupeKey('],
+    mustNotCall: ['store.list('],
+  },
+  {
+    // TC-GATE-20. Both the certified source and the effective-total guard came off the same capped
+    // read, so an aged source refused a valid correction outright.
+    file: 'projects/src/quantity-ledger.service.ts',
+    method: 'correctCertified',
+    mustCall: ['findByDedupeKey(', 'listForBoqItem('],
+    mustNotCall: ['store.list('],
+  },
 ];
 
 /**
- * The body of a named method, brace-matched from the brace that ENDS its signature line.
+ * The body of a named method: past the parameter list, then from the brace that ends the signature.
  *
- * Not simply the first `{`: a signature like `): Promise<Array<{ id: string }>> {` opens and closes
- * a brace inside its own RETURN TYPE, so counting from there ends the body after four words — and a
- * body cut short makes every `mustNotCall` below pass without reading anything. A brace at
- * end-of-line is what this codebase's formatting guarantees, and an empty result is asserted on
- * rather than quietly treated as a pass.
+ * Both halves are load-bearing, and both were learned by getting them wrong.
+ *
+ *   - Not the first `{`. A signature like `async reverseBilled(input: {` opens a brace inside its
+ *     own PARAMETER TYPE, so counting from there returns the parameter list and nothing else.
+ *     So the scan first walks to the `)` that closes the parameters.
+ *   - Then not simply the next `{` either: `): Promise<Array<{ id: string }>> {` opens and closes
+ *     one inside its RETURN TYPE. A brace at END OF LINE is what this codebase's formatting
+ *     guarantees for a body, so that is the anchor.
+ *
+ * A body cut short makes every `mustNotCall` pass while reading nothing, which is why each resolver
+ * above also carries a `mustCall`: that assertion is what proves the body was actually found. It is
+ * how this very bug was caught rather than shipped as eight green checks.
  */
 function bodyOf(source: string, method: string): string {
   const start = source.search(new RegExp(`^\\s{2}(?:async\\s+)?${method}\\s*\\(`, 'm'));
   if (start === -1) return '';
+
+  // Walk the parameter list to its closing paren.
+  const firstParen = source.indexOf('(', start);
+  if (firstParen === -1) return '';
+  let parens = 0;
+  let afterParams = -1;
+  for (let i = firstParen; i < source.length; i += 1) {
+    if (source[i] === '(') parens += 1;
+    else if (source[i] === ')') {
+      parens -= 1;
+      if (parens === 0) {
+        afterParams = i;
+        break;
+      }
+    }
+  }
+  if (afterParams === -1) return '';
+
   const opener = /\{\r?\n/g;
-  opener.lastIndex = start;
+  opener.lastIndex = afterParams;
   const open = opener.exec(source);
   if (!open) return '';
 

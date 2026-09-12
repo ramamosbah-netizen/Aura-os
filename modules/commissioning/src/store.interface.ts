@@ -8,6 +8,7 @@ import type { CertificateLink } from './domain/certificate-link';
 import type { OmItem } from './domain/om-package';
 import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
+import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -69,6 +70,12 @@ export interface CommissioningStore {
   saveOmItem(item: OmItem): Promise<void>;
   findOmItem(id: string, tenantId: string): Promise<OmItem | null>;
   listOmItems(tenantId: string, projectId?: string): Promise<OmItem[]>;
+
+  // Spares handed to the client (TC-GATE-16) — the authority behind the last readiness item that
+  // had none. Scoped to a system, read project-wide to answer "is this package complete".
+  saveSpareItem(item: SpareItem): Promise<void>;
+  findSpareItem(id: string, tenantId: string): Promise<SpareItem | null>;
+  listSpareItems(tenantId: string, projectId?: string): Promise<SpareItem[]>;
 
   saveTrainingSession(session: TrainingSession): Promise<void>;
   findTrainingSession(id: string, tenantId: string): Promise<TrainingSession | null>;

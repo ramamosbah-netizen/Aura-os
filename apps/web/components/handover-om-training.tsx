@@ -208,7 +208,9 @@ export function OmPackSection({ systems, items }: { systems: SystemRow[]; items:
                                   placeholder="DocControl reference"
                                   value={docRef[entry.id] ?? ''}
                                   onChange={(e) => setDocRef({ ...docRef, [entry.id]: e.target.value })}
-                                  disabled={busy !== null}
+                                  // Disabled until hydrated: a field that accepts typing before
+                                  // React attaches forgets it when hydration resets the state.
+                                  disabled={busy !== null || !hydrated}
                                   data-testid={`om-doc-${system.code}-${entry.deliverable}`}
                                 />
                               )}

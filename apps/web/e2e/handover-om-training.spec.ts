@@ -14,6 +14,16 @@ const HO = `${API}/api/v1/commissioning/handovers`;
 const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
 
+/** TC-GATE-16: spares became a record. Listed, handed over, and acknowledged by the client. */
+async function acknowledgeSpares(request: import('@playwright/test').APIRequestContext, commissioningId: string) {
+  const spare = await (await request.post(`${HO}/spares`, {
+    headers: H(), data: { commissioningId, description: 'Spare camera', quantityRequired: 2 },
+  })).json();
+  await request.put(`${HO}/spares/${spare.id}/hand-over`, { headers: H(), data: { quantity: 2 } });
+  await request.put(`${HO}/spares/${spare.id}/acknowledge`, { headers: H(), data: { acknowledgedBy: 'Client Rep' } });
+}
+
+
 /**
  * Put a real controlled document on the project (TC-GATE-6).
  *
@@ -170,8 +180,9 @@ test('a complete pack and acknowledged training let the package submit', async (
 
   const pkgCode = `HO-G5S-${Date.now().toString().slice(-5)}`;
   const pkg = await (await page.request.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Submit path' } })).json();
-  // Only spares is still tickable: TC-GATE-6 derived warranty documents from the pack itself.
-  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { spares: true } });
+  // Nothing is tickable since TC-GATE-16. Spares are a record now, listed on the ready system;
+  // the probe system has none, which is why the spares item reads UNKNOWN rather than ready here.
+  await acknowledgeSpares(page.request, system.id);
 
   // Every required deliverable accepted, for BOTH systems on the project.
   for (const systemId of [system.id, (await created.json()).id]) {

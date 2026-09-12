@@ -18,6 +18,16 @@ const HO = `${API}/api/v1/commissioning/handovers`;
 const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
 
+/** TC-GATE-16: spares became a record. Listed, handed over, and acknowledged by the client. */
+async function acknowledgeSpares(request: import('@playwright/test').APIRequestContext, commissioningId: string) {
+  const spare = await (await request.post(`${HO}/spares`, {
+    headers: H(), data: { commissioningId, description: 'Spare camera', quantityRequired: 2 },
+  })).json();
+  await request.put(`${HO}/spares/${spare.id}/hand-over`, { headers: H(), data: { quantity: 2 } });
+  await request.put(`${HO}/spares/${spare.id}/acknowledge`, { headers: H(), data: { acknowledgedBy: 'Client Rep' } });
+}
+
+
 type Req = import('@playwright/test').APIRequestContext;
 
 async function registerDocument(request: Req, projectId: string, documentNumber: string, title: string, status = 'for_construction') {
@@ -79,7 +89,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
 
   const pkgCode = `HO-G7-${stamp}`;
   const pkg = await (await page.request.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Tower A handover' } })).json();
-  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { spares: true } });
+  await acknowledgeSpares(page.request, system.id);
 
   // ── Before submission: a full pack, and nothing issued ──────────────────────────────────────────
   await page.goto(`/handover?project=${projectId}&section=dossier`, { waitUntil: 'domcontentloaded' });

@@ -27,6 +27,8 @@ import {
  *                    reference that resolves in DocControl's register (TC-GATE-5, -6)
  *   warrantyDocs   → the same pack's warranty certificate, on its own (TC-GATE-6)
  *   training       → Handover's own client training record: every system acknowledged (TC-GATE-5)
+ *   spares         → Handover's own spares record: every required part acknowledged by the client
+ *                    (TC-GATE-16)
  *
  * WHY AS-BUILTS MOVED (TC-GATE-6). TC-GATE-4 asked ENGINEERING for as-builts. Engineering's
  * `DrawingStatus` has no `as_built` value and never did, so the filter matched nothing a real
@@ -36,9 +38,11 @@ import {
  * DocControl's `RegisterStatus` does carry `as_built`, and Projects' closeout gate has always read
  * it from there. Handover was asking the wrong domain.
  *
- * The last one — spares — still has no owning authority anywhere in the repository, so it stays an
- * assertion and says so on the page. An assertion labelled as an assertion is honest; an assertion
- * rendered as evidence is the thing this gate exists to remove.
+ * ALL SEVEN ARE NOW PROJECTED (TC-GATE-16). Spares was the last item that said "nothing verifies
+ * this", and it said it in every register from TC-GATE-4 onwards. With an authority behind it, the
+ * package's stored checklist has nothing left to tick: `evidence: 'asserted'` no longer occurs, and
+ * the six booleans this whole arc started from are vestigial in the truest sense — nothing reads
+ * them, nothing writes them, and nothing can.
  *
  * UNKNOWN IS NEVER A PASS, the same rule the T&C chain follows: a domain that cannot be read, or a
  * project with nothing to judge, blocks rather than passes. TC-GATE-6 extends that to references:
@@ -108,8 +112,19 @@ export interface HandoverReadinessFacts {
    * would light up two failures for one cause.
    */
   snags: SnagFact[] | null;
-  /** The one item nobody owns yet — still the package's own checklist. */
-  asserted: { spares: boolean };
+  /**
+   * Handover's own spares record (TC-GATE-16). What the client was handed, and what they confirmed.
+   *
+   * This replaced the package's `spares` tick — the last of the six. The facts no longer carry an
+   * `asserted` field at all, because there is nothing left to assert.
+   */
+  spares: {
+    commissioningId: string;
+    required: boolean;
+    quantityRequired: number;
+    quantityHandedOver: number;
+    acknowledgedBy: string | null;
+  }[];
 }
 
 const item = (
@@ -131,7 +146,7 @@ export function assessHandoverReadiness(facts: HandoverReadinessFacts): Handover
     omPackItem(facts, 'omManuals', 'O&M deliverables accepted', (d) => d !== WARRANTY_DELIVERABLE),
     omPackItem(facts, 'warrantyDocs', 'Warranty certificates accepted', (d) => d === WARRANTY_DELIVERABLE),
     trainingItem(facts),
-    assertedSpares(facts.asserted),
+    sparesItem(facts),
   ];
   const blocking = items.filter((i) => i.state !== 'READY').map((i) => i.id);
   return { items, blocking, readyToSubmit: blocking.length === 0 };
@@ -349,26 +364,51 @@ function trainingItem(f: HandoverReadinessFacts): HandoverReadinessItem {
 }
 
 /**
- * The one with no owner left.
+ * Spares, per system (TC-GATE-16) — the last assertion to become a projection.
  *
- * It says WHO is asserting it and that nothing verified it. When spares gain a real authority this
- * moves to `projected` and the tick goes away — the move commissioning, as-builts, O&M, warranty
- * documents and training have all now made.
+ * Every register from TC-GATE-4 onwards recorded this item as "nothing verifies this", because
+ * nothing in the repository held the fact: Inventory records a part being ISSUED TO A PROJECT, which
+ * is how it gets installed, not handed to the building owner; and the O&M pack's recommended-spares
+ * list is a document, not a delivery. Handover now owns it.
  *
- * Inventory holds stock, serial units and their issue to a project; none of that records spares
- * being HANDED TO THE CLIENT, which is what this item claims. The O&M pack's recommended-spares
- * LIST is a document, not a delivery, and reading it here would quietly redefine the item.
+ * READY needs the CLIENT's acknowledgement, not ours. A part we recorded handing over is our word;
+ * the acknowledgement is theirs, and it is the one a dispute turns on — the same rule client
+ * training has followed since TC-GATE-5.
+ *
+ * A system with nothing listed is UNKNOWN, not READY: nothing was asked for, so nothing can be
+ * said. A part marked not required is excluded, because that is what marking it is for — and a
+ * system where every part is waived reads READY, since waiving is a decision rather than a silence.
  */
-function assertedSpares(a: HandoverReadinessFacts['asserted']): HandoverReadinessItem {
-  const missing = 'no spares handover record is linked';
-  return item(
-    'spares',
-    'Spares and consumables handed over',
-    'Asserted on the package',
-    'asserted',
-    a.spares ? 'READY' : 'BLOCKED',
-    a.spares
-      ? `Ticked on the package. Nothing verifies this — ${missing}.`
-      : `Not ticked. ${missing[0].toUpperCase()}${missing.slice(1)}, so this cannot be derived.`,
-  );
+function sparesItem(f: HandoverReadinessFacts): HandoverReadinessItem {
+  const id: HandoverItemId = 'spares';
+  const label = 'Spares and consumables handed over';
+  const source = 'Handover — spares';
+  if (f.systemIds.length === 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN', 'No system is registered, so there are no spares to hand over.');
+  }
+  const unlisted = f.systemIds.filter((sid) => !f.spares.some((s) => s.commissioningId === sid));
+  if (unlisted.length > 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN',
+      `${unlisted.length} of ${f.systemIds.length} ${plural(f.systemIds.length, 'system has', 'systems have')} no spares listed, so this cannot be judged complete.`);
+  }
+
+  const required = f.spares.filter((s) => s.required);
+  if (required.length === 0) {
+    return item(id, label, source, 'projected', 'READY',
+      `Recorded as not required on all ${f.systemIds.length} ${plural(f.systemIds.length, 'system', 'systems')}.`);
+  }
+  const unacknowledged = required.filter((s) => !s.acknowledgedBy);
+  if (unacknowledged.length > 0) {
+    const handed = unacknowledged.filter((s) => s.quantityHandedOver > 0).length;
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${unacknowledged.length} of ${required.length} required ${plural(required.length, 'part is', 'parts are')} not acknowledged by the client` +
+        (handed > 0 ? `; ${handed} handed over but not confirmed.` : '.'));
+  }
+  const short = required.filter((s) => s.quantityHandedOver < s.quantityRequired);
+  if (short.length > 0) {
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${short.length} of ${required.length} required ${plural(required.length, 'part was', 'parts were')} acknowledged short of the quantity asked for.`);
+  }
+  return item(id, label, source, 'projected', 'READY',
+    `All ${required.length} required ${plural(required.length, 'part', 'parts')} handed over and acknowledged by the client.`);
 }

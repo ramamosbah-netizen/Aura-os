@@ -109,6 +109,60 @@ export class HandoverController {
     return this.service.readDefects(this.tenant.get().tenantId, projectId);
   }
 
+  // ── Spares handed to the client (TC-GATE-16) ─────────────────────────────────────────────────
+  //
+  // Handover's own authority, and the last of the six readiness items to get one. The client's
+  // acknowledgement is the only thing that satisfies readiness: our record of handing a part over is
+  // our word, and the whole point of the field is that it is not ours.
+
+  @Get('spares')
+  listSpares(@Query('projectId') projectId?: string) {
+    return this.service.listSpareItems(this.tenant.get().tenantId, projectId || undefined);
+  }
+
+  @Post('spares')
+  addSpare(@Body() dto: {
+    commissioningId?: string; description?: string; stockItemId?: string; unit?: string;
+    quantityRequired?: number; required?: boolean; notes?: string;
+  }) {
+    if (!dto?.commissioningId) throw new BadRequestException('commissioningId is required');
+    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    const ctx = this.tenant.get();
+    return this.service.addSpareItem(ctx.tenantId, {
+      commissioningId: dto.commissioningId,
+      description: dto.description,
+      stockItemId: dto.stockItemId ?? null,
+      unit: dto.unit ?? null,
+      quantityRequired: dto.quantityRequired,
+      required: dto.required,
+      notes: dto.notes ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Put('spares/:id/hand-over')
+  handOverSpare(@Param('id') id: string, @Body() dto: { quantity?: number; notes?: string }) {
+    if (typeof dto?.quantity !== 'number') throw new BadRequestException('quantity is required');
+    const ctx = this.tenant.get();
+    return this.service.handOverSpareItem(id, ctx.tenantId, {
+      quantity: dto.quantity,
+      handedOverBy: ctx.actorId,
+      notes: dto.notes ?? null,
+    });
+  }
+
+  @Put('spares/:id/acknowledge')
+  acknowledgeSpare(@Param('id') id: string, @Body() dto: { acknowledgedBy?: string }) {
+    if (!dto?.acknowledgedBy?.trim()) throw new BadRequestException('acknowledgedBy is required');
+    return this.service.acknowledgeSpareItem(id, this.tenant.get().tenantId, { acknowledgedBy: dto.acknowledgedBy });
+  }
+
+  @Put('spares/:id/required')
+  setSpareRequired(@Param('id') id: string, @Body() dto: { required?: boolean; notes?: string }) {
+    if (typeof dto?.required !== 'boolean') throw new BadRequestException('required must be true or false');
+    return this.service.setSpareItemRequired(id, this.tenant.get().tenantId, dto.required, dto.notes ?? null);
+  }
+
   @Get('training')
   listTraining(@Query('projectId') projectId?: string) {
     return this.service.listTrainingSessions(this.tenant.get().tenantId, projectId || undefined);

@@ -105,6 +105,18 @@ test('the dossier assembles what the client receives, and remembers what was sen
   await page.reload({ waitUntil: 'domcontentloaded' });
   const issue1 = page.getByTestId(`dossier-issue-${pkgCode}-1`);
   await expect(issue1).toBeVisible();
+
+  // TC-GATE-14: document control was asked to open a transmittal for the controlled documents this
+  // issue carries. The manifest is our record of what was sent; the transmittal is theirs of it being
+  // conveyed — and it is what an acknowledgement later attaches to.
+  await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toHaveText(/conveyed by document control/i);
+  const transmittals = await (await page.request.get(`${API}/api/v1/doccontrol/transmittals`, { headers: H() })).json();
+  const mine = (transmittals as { code: string; status: string; projectId: string }[]).filter((t) => t.projectId === projectId);
+  expect(mine, 'document control must hold the transmittal, because it is the one that made it').toHaveLength(1);
+  expect(mine[0].code).toBe(`TR-${pkgCode}-1`);
+  // A DRAFT: sending needs a recipient, and a handover package does not know the client's document
+  // controller. DocControl completes and sends it, which is its job.
+  expect(mine[0].status, 'Handover opens it; document control sends it').toBe('draft');
   await expect(issue1).toContainText(`DOC-OM-${stamp}`);
   await expect(issue1).toContainText(/accepted · rev B/i);
   await expect(issue1).toContainText(`ELV-AB-${stamp}`);

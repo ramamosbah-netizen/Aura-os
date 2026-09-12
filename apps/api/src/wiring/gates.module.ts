@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
-import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL } from '@aura/commissioning';
+import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
@@ -84,7 +84,14 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // ENGINEERING_RELEASE stays bound above — Testing & Commissioning still reads drawing release
     // for its own pre-commissioning chain, which is a different question Engineering CAN answer.
     { provide: DOC_CONTROL, useExisting: DocControlService },
+
+    // ── The dossier's controlled conveyance (TC-GATE-14) ──────────────────────────────────────
+    // The first binding here that lets one module ASK another to write. It is still DocControl that
+    // writes: it assigns the transmittal code, applies its own permission check, emits its own event
+    // and owns every state the transmittal moves through afterwards. Handover supplies a list of
+    // register entries and a title, and cannot send, receive or acknowledge on the client's behalf.
+    { provide: DOC_CONTROL_ISSUE, useExisting: DocControlService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE],
 })
 export class GatesModule {}

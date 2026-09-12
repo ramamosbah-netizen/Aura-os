@@ -41,6 +41,8 @@ export interface DossierIssueRow {
   issueNo: number;
   issuedAt: string;
   issuedBy: string | null;
+  /** The document-control transmittal that conveyed this issue (TC-GATE-14), or null. */
+  transmittalId: string | null;
   items: { id: string; kind: string; reference: string | null; label: string; state: string | null }[];
 }
 
@@ -67,7 +69,9 @@ export function DossierSection({ dossiers }: { dossiers: DossierData[] | null })
         and training records — and is assembled here on every read, never copied. The one thing kept is the{' '}
         <strong>manifest of what was actually sent</strong>, captured when a package is submitted and never rewritten,
         because &ldquo;what would we hand over today&rdquo; and &ldquo;what did the client receive&rdquo; stop being the
-        same answer the moment anything moves.
+        same answer the moment anything moves. Each issue also asks document control to open a{' '}
+        <strong>transmittal</strong> for the controlled documents it carries — the manifest is our record of what was
+        sent, and the transmittal is theirs of it being received.
       </p>
 
       {dossiers.length === 0 ? (
@@ -146,6 +150,12 @@ function Issue({ pkgCode, issue, defaultOpen }: { pkgCode: string; issue: Dossie
           {new Date(issue.issuedAt).toISOString().slice(0, 10)}
           {issue.issuedBy ? ` · ${issue.issuedBy}` : ''} · {issue.items.length} item{issue.items.length === 1 ? '' : 's'}
         </small>
+        {/* TC-GATE-14: the manifest says what we sent; the transmittal is document control's record
+            that it was conveyed — recipient, sent date and the client's acknowledgement. Said plainly
+            either way, because "no conveyance" is a fact a reader needs as much as the code. */}
+        <small style={issue.transmittalId ? st.conveyed : st.muted} data-testid={`dossier-conveyance-${pkgCode}-${issue.issueNo}`}>
+          {issue.transmittalId ? '· conveyed by document control' : '· not conveyed through document control'}
+        </small>
         <span style={st.grow} />
         <small style={st.muted}>{open ? 'hide' : 'show'}</small>
       </button>
@@ -185,6 +195,7 @@ const st = {
   code: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, color: 'var(--accent)' } as CSSProperties,
   ref: { fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
   markGood: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
+  conveyed: { color: 'var(--good)', fontSize: 11, fontWeight: 600 } as CSSProperties,
   markWarn: { color: 'var(--warn)', fontWeight: 700 } as CSSProperties,
   tagGood: { padding: '3px 9px', borderRadius: 999, background: 'var(--good-soft, rgba(34,197,94,.15))', color: 'var(--good)', fontSize: 11, fontWeight: 700 } as CSSProperties,
   tagWarn: { padding: '3px 9px', borderRadius: 999, background: 'var(--warn-soft, rgba(234,179,8,.15))', color: 'var(--warn)', fontSize: 11, fontWeight: 700 } as CSSProperties,

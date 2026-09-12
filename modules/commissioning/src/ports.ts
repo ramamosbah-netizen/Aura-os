@@ -138,7 +138,47 @@ export interface DocControlPort {
   readProjectDocuments(tenantId: string, projectId: string): Promise<ControlledDocumentFact[]>;
 }
 
+/**
+ * Asking document control to OPEN A TRANSMITTAL for documents Handover is issuing (TC-GATE-14).
+ *
+ * THE FIRST COMMAND PORT IN THIS SERIES, and worth saying why it is still not a boundary violation.
+ * Every port before this one reads. This one asks another domain to WRITE — and the distinction that
+ * makes it legitimate is that DocControl performs the write itself: it assigns the code, it applies
+ * its own permission check, it emits its own event, and it owns every state the transmittal moves
+ * through afterwards. Handover supplies a list of register entries and a title. It does not choose a
+ * number, does not send, does not record receipt, and cannot acknowledge on the client's behalf.
+ *
+ * WHAT IT BUYS. The dossier manifest (TC-GATE-7) records what a package SAID it was sending. Nothing
+ * recorded that the client received it. A transmittal is the controlled channel that does — it has a
+ * recipient, a sent date, and an acknowledgement with who and when — and that is precisely the
+ * evidence a dispute about "we never got the O&M manuals" turns on.
+ *
+ * IT OPENS A DRAFT, deliberately. Sending is a decision with a recipient attached, and a handover
+ * package does not know the client's document controller. DocControl completes and sends it, which
+ * is its job. The draft is the handoff point: Handover assembles and asks; DocControl conveys.
+ */
+export interface TransmittalRequest {
+  projectId: string;
+  projectName: string | null;
+  code: string;
+  title: string;
+  /**
+   * Register entries only — a transmittal conveys controlled documents, not screens.
+   *
+   * The id and the revision, and nothing else: document control reads the number and title from its
+   * OWN register when it builds the line. Passing them would be this consumer restating facts it does
+   * not own, and they would be the ones that went stale.
+   */
+  items: { registerEntryId: string; revision: string }[];
+  actorId?: string | null;
+}
+
+export interface DocControlIssuePort {
+  openTransmittal(tenantId: string, request: TransmittalRequest): Promise<{ id: string; code: string }>;
+}
+
 export const ELV_EQUIPMENT = Symbol('ELV_EQUIPMENT');
 export const QUALITY_EVIDENCE = Symbol('QUALITY_EVIDENCE');
 export const ENGINEERING_RELEASE = Symbol('ENGINEERING_RELEASE');
 export const DOC_CONTROL = Symbol('DOC_CONTROL');
+export const DOC_CONTROL_ISSUE = Symbol('DOC_CONTROL_ISSUE');

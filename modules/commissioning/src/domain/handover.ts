@@ -59,6 +59,13 @@ const EMPTY_CHECKLIST: HandoverChecklist = {
 };
 
 /** The deliverables that must be attached before a package can be submitted for acceptance. */
+/**
+ * @deprecated since TC-GATE-4 — kept only so an existing caller cannot break silently.
+ *
+ * This asked three BOOLEANS whether the package was ready. Two of those three are now derived from
+ * the domains that own the evidence (see domain/handover-readiness), and a tick can no longer stand
+ * in for them. `submit` takes the assessed readiness instead.
+ */
 export function isReadyToSubmit(c: HandoverChecklist): boolean {
   return c.omManuals && c.asBuilts && c.testCertificates;
 }
@@ -98,10 +105,21 @@ export function updateChecklist(pkg: HandoverPackage, patch: Partial<HandoverChe
 }
 
 /** Submit to the client. Guard: the core deliverables must be attached first. */
-export function submit(pkg: HandoverPackage): HandoverPackage {
+/**
+ * Submit the package to the client.
+ *
+ * The gate is now the ASSESSED readiness (TC-GATE-4): the commissioning and as-built items are
+ * derived from Testing & Commissioning and Engineering and cannot be ticked around, and the four
+ * items nobody owns yet still need their tick. The refusal names what is standing in the way,
+ * because "not ready" sends a project manager hunting.
+ */
+export function submit(pkg: HandoverPackage, readiness: { readyToSubmit: boolean; items: { id: string; label: string; state: string; reason: string }[] }): HandoverPackage {
   if (pkg.status === 'accepted') throw new Error('conflict: package is already accepted');
-  if (!isReadyToSubmit(pkg.checklist)) {
-    throw new Error('only a package with O&M manuals, as-builts and test certificates can be submitted');
+  if (!readiness.readyToSubmit) {
+    const blocking = readiness.items.filter((i) => i.state !== 'READY');
+    throw new Error(
+      `only a package whose handover evidence is complete can be submitted — ${blocking.map((i) => `${i.label}: ${i.reason}`).join(' ')}`,
+    );
   }
   return {
     ...pkg,

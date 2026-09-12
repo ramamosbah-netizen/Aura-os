@@ -1,66 +1,77 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import CommissioningClient from '../../components/commissioning-client';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
+import CommissioningWorkspaceClient, {
+  type DeviceRow, type Project, type PunchRow, type WorkspaceView,
+} from '../../components/commissioning-workspace-client';
 
 export const dynamic = 'force-dynamic';
 
-interface Project {
-  id: string;
-  title: string;
-}
+/**
+ * Testing & commissioning (TC-GATE-2).
+ *
+ * Everything on this page is DERIVED from the test evidence by the API's workspace projection — the
+ * same calculation the sign-off guard uses — so the operating picture cannot promise a commissioning
+ * the backend will refuse, and there is no readiness flag for anyone to tick. A source that does not
+ * respond shows as unavailable rather than as a zero.
+ */
+export default async function CommissioningPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ project?: string; section?: string; filter?: string }>;
+}) {
+  const filters = (await searchParams) ?? {};
+  const project = filters.project ?? '';
+  const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
-interface CommissioningRecord {
-  id: string;
-  projectId: string;
-  projectName: string | null;
-  code: string;
-  title: string;
-  system: string;
-  location: string | null;
-  status: 'pending' | 'in_progress' | 'tested' | 'commissioned' | 'failed';
-  pointsTotal: number;
-  pointsPassed: number;
-  testDate: string | null;
-  remarks: string | null;
-  commissionedAt: string | null;
-  commissionedBy: string | null;
-  witnessedBy: string | null;
-  createdAt: string;
-}
-
-export default async function CommissioningPage() {
-  const [records, projects] = await Promise.all([
-    getJson<CommissioningRecord[]>('/api/commissioning/records'),
+  const [view, projects, punch, devices] = await Promise.all([
+    getJson<WorkspaceView>(`/api/commissioning/records/workspace${scoped}`),
     getJson<Project[]>('/api/projects/projects'),
+    getJson<PunchRow[]>(`/api/commissioning/records/punch-items${scoped}`),
+    // Equipment is read from the ELV device register, which owns it. Project-scoped only: the whole
+    // tenant's device schedule is not a T&C question.
+    project ? getJson<DeviceRow[]>(`/api/elv/devices?projectId=${encodeURIComponent(project)}`) : Promise.resolve([]),
   ]);
 
+  const totals = view?.totals;
   const metrics: WorkspaceMetric[] = [
-    { label: 'Ready to test', value: records === null ? null : records.filter((row) => row.status === 'pending').length, hint: 'Systems awaiting first test', tone: 'accent' },
-    { label: 'Testing', value: records === null ? null : records.filter((row) => row.status === 'in_progress' || row.status === 'tested').length, hint: 'Tests in progress or witnessed', tone: 'warning' },
-    { label: 'Failed / retest', value: records === null ? null : records.filter((row) => row.status === 'failed').length, hint: 'Records requiring resolution', tone: 'critical' },
-    { label: 'Commissioned', value: records === null ? null : records.filter((row) => row.status === 'commissioned').length, hint: 'Systems with witnessed sign-off', tone: 'good' },
+    { label: 'In scope', value: totals?.inScope ?? null, hint: 'Systems registered for T&C', tone: 'accent' },
+    { label: 'Failing', value: totals?.failing ?? null, hint: 'A test point stands failed', tone: 'critical' },
+    { label: 'Open defects', value: totals?.openPunch ?? null, hint: 'Punch items blocking sign-off', tone: 'warning' },
+    { label: 'Commissioned', value: totals?.commissioned ?? null, hint: 'Witnessed sign-off complete', tone: 'good' },
   ];
-  const attention: WorkspaceAttention[] | null = records === null ? null : records.filter((row) => row.status === 'failed').slice(0, 4).map((row) => ({ label: `${row.projectName ?? 'Project'} · ${row.code}`, detail: `${row.title} · retest required`, href: '/commissioning', tone: 'critical' as const }));
+  // The exception lane names the blocker, not the status: "3 test points failing" is actionable,
+  // "failed" is a label. Each row leads to the system it is about.
+  const attention: WorkspaceAttention[] | null = view === null ? null : view.systems
+    .filter((s) => !s.commissioned && s.blockers.length > 0)
+    .slice(0, 4)
+    .map((s) => ({
+      label: `${s.record.projectName ?? 'Project'} · ${s.record.code}`,
+      detail: s.blockers.join(' · '),
+      href: `/commissioning/${s.record.id}`,
+      tone: (s.pointsFailing > 0 ? 'critical' : 'warning') as 'critical' | 'warning',
+    }));
 
   return (
     <div style={st.page}>
-      {/* The workspace keeps a tab of its own, like every other Delivery Operations workspace, so it
-          survives opening something else and can be returned to. It carries NO section shortcut grid:
-          this workspace is a single register, so there are no sections for cards to open — and a card
-          per status would be a filter dressed up as a place. See the section spec. */}
+      {/* The workspace keeps a tab of its own, and the anchor href carries no section, so it always
+          returns to the command centre. Unchanged from 08fd19e4. */}
       <AuraTabAnchor href="/commissioning" title="Testing & commissioning" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="commissioning" title="Testing & commissioning workspace" description="Turn installed systems into accepted systems through test plans, point results, witnessed sign-off and commissioning evidence." />
-      <DeliveryWorkspaceSummary eyebrow="TESTING & COMMISSIONING" title="Commissioning operating picture" description="Move systems from ready to test through witnessed testing, retest and final commissioning." metrics={metrics} attention={attention} emptyMessage="No failed or overdue commissioning records are open." />
-      <CommissioningClient initialRecords={records ?? []} projects={projects ?? []} />
+      <DeliveryWorkspaceSummary eyebrow="TESTING & COMMISSIONING" title="Commissioning operating picture" description="Move systems from ready to test through witnessed testing, retest and final commissioning." metrics={metrics} attention={attention} emptyMessage="No system is blocked from commissioning." />
+      <CommissioningWorkspaceClient
+        projects={projects ?? []}
+        view={view}
+        punch={punch}
+        devices={devices}
+        selectedProject={project}
+      />
     </div>
   );
 }
 
 const st = {
   page: { maxWidth: 1100, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
-  h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
-  sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 680, lineHeight: 1.5 } as CSSProperties,
 };

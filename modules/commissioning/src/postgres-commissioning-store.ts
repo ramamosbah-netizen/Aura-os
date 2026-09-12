@@ -242,10 +242,10 @@ export class PostgresCommissioningStore implements CommissioningStore {
   async savePunchItem(i: PunchItem): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_punch_items
-        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, test_item_id, source_run_id, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
        on conflict (id) do update set status = excluded.status, resolution = excluded.resolution, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
-      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.createdAt, i.updatedAt],
+      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.testItemId, i.sourceRunId, i.createdAt, i.updatedAt],
     );
   }
   async findPunchItem(id: string, tenantId: string): Promise<PunchItem | null> {
@@ -254,6 +254,36 @@ export class PostgresCommissioningStore implements CommissioningStore {
   }
   async listPunchItems(commissioningId: string, tenantId: string): Promise<PunchItem[]> {
     const res = await this.pool.query(`select * from public.aura_commissioning_punch_items where commissioning_id = $1 and tenant_id = $2 order by created_at asc`, [commissioningId, tenantId]);
+    return res.rows.map(toPunch);
+  }
+
+  // ── Workspace-wide reads (one query each, not one per record) ─────────────────────────────────
+
+  async listTestItemsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestItem[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_test_items
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toTestItem);
+  }
+  async listTestRunsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestRun[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_test_runs
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by test_item_id asc, run_no asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toTestRun);
+  }
+  async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_punch_items
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
     return res.rows.map(toPunch);
   }
 }
@@ -287,7 +317,9 @@ function toPunch(r: Record<string, unknown>): PunchItem {
     commissioningId: r.commissioning_id as string, projectId: r.project_id as string,
     description: r.description as string, severity: r.severity as PunchItem['severity'], location: (r.location as string) ?? null,
     status: r.status as PunchItem['status'], raisedBy: (r.raised_by as string) ?? null, resolution: (r.resolution as string) ?? null,
-    closedBy: (r.closed_by as string) ?? null, closedAt: tsIso(r.closed_at), createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
+    closedBy: (r.closed_by as string) ?? null, closedAt: tsIso(r.closed_at),
+    testItemId: (r.test_item_id as string) ?? null, sourceRunId: (r.source_run_id as string) ?? null,
+    createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
   };
 }
 

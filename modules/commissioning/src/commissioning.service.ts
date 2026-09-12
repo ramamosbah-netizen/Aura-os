@@ -15,6 +15,57 @@ import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-t
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch } from './domain/punch-item';
 
 /**
+ * A test point that stands failed, with the run that failed it and any defect already raised
+ * against it. This is the Defects & Retests surface's unit of work: the failure is the evidence,
+ * the defect is the response, and showing them apart is how one problem looks like two.
+ */
+export interface FailingPointView {
+  pointId: string;
+  pointNo: string;
+  description: string;
+  expected: string | null;
+  lastRunNo: number;
+  lastActual: string | null;
+  lastRemarks: string | null;
+  lastTestedAt: string;
+  /** Runs recorded so far — a point failing on run #3 has been round the loop twice. */
+  runCount: number;
+  /** Open defects already raised FROM this failure. Empty means the failure has no response yet. */
+  openPunchIds: string[];
+}
+
+/** One system's standing in the T&C workspace — all derived, nothing stored. */
+export interface CommissioningSystemView {
+  record: CommissioningRecord;
+  pointsTotal: number;
+  pointsPassed: number;
+  pointsFailing: number;
+  pointsUntested: number;
+  /** Points whose lineage contains a failure, whatever they read now — the retest history. */
+  pointsEverFailed: number;
+  retestsRequired: number;
+  openPunch: number;
+  eligible: boolean;
+  commissioned: boolean;
+  blockers: string[];
+  failingPoints: FailingPointView[];
+}
+
+export interface CommissioningWorkspaceView {
+  systems: CommissioningSystemView[];
+  totals: {
+    inScope: number;
+    notStarted: number;
+    noTestPoints: number;
+    failing: number;
+    retestsRequired: number;
+    openPunch: number;
+    eligible: number;
+    commissioned: number;
+  };
+}
+
+/**
  * Commissioning (Test & Commission) application service. The register that proves ELV
  * systems perform to spec and captures the witnessed sign-off that unlocks handover.
  * Pure domain transitions live in domain/commissioning-record; this layer loads, applies,
@@ -333,12 +384,27 @@ export class CommissioningService {
 
   // ── Punch list (defects that gate sign-off) ──────────────────────────────────
 
+  /**
+   * Raise a defect against a system.
+   *
+   * `testItemId` / `sourceRunId` are optional provenance into T&C's own evidence: when a defect is
+   * raised from a failing run, the link is what lets the Defects surface show one problem rather
+   * than a failed test and an unrelated-looking defect. A defect raised by eye carries neither, and
+   * is not a lesser defect for it. The point must belong to this record — a defect pointing at
+   * another system's evidence would be worse than no link at all.
+   */
   async addPunchItem(
     id: string,
     tenantId: string,
-    input: { description: string; severity?: PunchSeverity; location?: string | null; raisedBy?: string | null },
+    input: { description: string; severity?: PunchSeverity; location?: string | null; raisedBy?: string | null; testItemId?: string | null; sourceRunId?: string | null },
   ): Promise<PunchItem> {
     const rec = await this.mustFind(id, tenantId);
+    if (input.testItemId) {
+      const point = await this.store.findTestItem(input.testItemId, tenantId);
+      if (!point || point.commissioningId !== rec.id) {
+        throw new Error(`not found: test point ${input.testItemId} on this commissioning record`);
+      }
+    }
     const item = makePunchItem({ tenantId, companyId: rec.companyId, commissioningId: rec.id, projectId: rec.projectId, ...input });
     await this.store.savePunchItem(item);
     return item;
@@ -380,6 +446,119 @@ export class CommissioningService {
       this.store.listPunchItems(id, tenantId),
     ]);
     return { record, testItems, testRuns, punchItems };
+  }
+
+  // ── The workspace read model (TC-GATE-2) ─────────────────────────────────────────────────────
+
+  /**
+   * What stands between a project and commissioning, computed from the authoritative evidence.
+   *
+   * A READ MODEL, not a new authority: every number here is derived from records, test points, runs
+   * and punch items at the moment it is asked. Nothing is stored, nothing is hand-ticked, and there
+   * is no "readiness" flag anyone can set — the previous generation of this kind of surface counted
+   * booleans and told people what they had typed rather than what was true.
+   *
+   * Three queries rather than one per system: a project with fifty systems must not cost fifty
+   * round trips to answer one screen.
+   */
+  async readWorkspace(tenantId: string, projectId?: string): Promise<CommissioningWorkspaceView> {
+    const [records, items, runs, punch] = await Promise.all([
+      this.store.list(tenantId, projectId),
+      this.store.listTestItemsForProject(tenantId, projectId),
+      this.store.listTestRunsForProject(tenantId, projectId),
+      this.store.listPunchItemsForProject(tenantId, projectId),
+    ]);
+
+    const itemsByRecord = new Map<string, CommissioningTestItem[]>();
+    for (const item of items) {
+      const list = itemsByRecord.get(item.commissioningId) ?? [];
+      list.push(item);
+      itemsByRecord.set(item.commissioningId, list);
+    }
+    const runsByItem = new Map<string, CommissioningTestRun[]>();
+    for (const run of runs) {
+      const list = runsByItem.get(run.testItemId) ?? [];
+      list.push(run);
+      runsByItem.set(run.testItemId, list);
+    }
+    const punchByRecord = new Map<string, PunchItem[]>();
+    for (const p of punch) {
+      const list = punchByRecord.get(p.commissioningId) ?? [];
+      list.push(p);
+      punchByRecord.set(p.commissioningId, list);
+    }
+
+    const systems: CommissioningSystemView[] = records.map((record) => {
+      const points = itemsByRecord.get(record.id) ?? [];
+      const openPunch = (punchByRecord.get(record.id) ?? []).filter((p) => p.status === 'open');
+      const failing = points.filter((p) => p.result === 'fail');
+      const untested = points.filter((p) => p.result === 'pending');
+      const passed = points.filter((p) => p.result === 'pass');
+      // A retest is owed where a point stands failed. Counting runs instead would count history.
+      const retestsRequired = failing.length;
+      const everFailed = points.filter((p) => (runsByItem.get(p.id) ?? []).some((r) => r.result === 'fail')).length;
+
+      // The blockers, in the words the person reading them can act on. Order matters: this is the
+      // sentence the Overview shows, and the first item should be the one to do next.
+      const blockers: string[] = [];
+      if (points.length === 0) blockers.push('No test points defined');
+      if (untested.length > 0) blockers.push(`${untested.length} test point${untested.length === 1 ? '' : 's'} never executed`);
+      if (failing.length > 0) blockers.push(`${failing.length} test point${failing.length === 1 ? '' : 's'} failing — retest required`);
+      if (openPunch.length > 0) blockers.push(`${openPunch.length} open punch item${openPunch.length === 1 ? '' : 's'}`);
+
+      const failingPoints: FailingPointView[] = failing.map((point) => {
+        const lineage = runsByItem.get(point.id) ?? [];
+        const last = lineage.reduce<CommissioningTestRun | null>((latest, r) => (latest && latest.runNo >= r.runNo ? latest : r), null);
+        return {
+          pointId: point.id,
+          pointNo: point.pointNo,
+          description: point.description,
+          expected: point.expected,
+          lastRunNo: last?.runNo ?? 0,
+          lastActual: last?.actual ?? null,
+          lastRemarks: last?.remarks ?? null,
+          lastTestedAt: last?.testedAt ?? point.createdAt,
+          runCount: lineage.length,
+          openPunchIds: openPunch.filter((p) => p.testItemId === point.id).map((p) => p.id),
+        };
+      });
+
+      return {
+        record,
+        failingPoints,
+        pointsTotal: points.length,
+        pointsPassed: passed.length,
+        pointsFailing: failing.length,
+        pointsUntested: untested.length,
+        pointsEverFailed: everFailed,
+        retestsRequired,
+        openPunch: openPunch.length,
+        // Eligibility asks the same question `commission()` asks, so the screen and the guard can
+        // never disagree about who is ready.
+        eligible: record.status !== 'commissioned' && points.length > 0 && failing.length === 0 && untested.length === 0 && openPunch.length === 0,
+        commissioned: record.status === 'commissioned',
+        blockers,
+      };
+    });
+
+    return {
+      systems,
+      totals: {
+        inScope: systems.length,
+        notStarted: systems.filter((s) => !s.commissioned && s.pointsTotal > 0 && s.pointsPassed === 0 && s.pointsFailing === 0).length,
+        noTestPoints: systems.filter((s) => !s.commissioned && s.pointsTotal === 0).length,
+        failing: systems.filter((s) => s.pointsFailing > 0).length,
+        retestsRequired: systems.reduce((sum, s) => sum + s.retestsRequired, 0),
+        openPunch: systems.reduce((sum, s) => sum + s.openPunch, 0),
+        eligible: systems.filter((s) => s.eligible).length,
+        commissioned: systems.filter((s) => s.commissioned).length,
+      },
+    };
+  }
+
+  /** Every defect on the project with its provenance, for the Defects & Retests surface. */
+  async listProjectPunchItems(tenantId: string, projectId?: string): Promise<PunchItem[]> {
+    return this.store.listPunchItemsForProject(tenantId, projectId);
   }
 
   private async mustFind(id: string, tenantId: string): Promise<CommissioningRecord> {

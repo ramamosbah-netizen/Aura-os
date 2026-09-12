@@ -38,14 +38,31 @@ export function useWorkspaceSection<T extends string>(
     setActive(resolved);
   }, [resolved]);
 
-  const href = useCallback((section: T) => sectionHref(path, section, fallback), [path, fallback]);
+  // Any OTHER query the page carries — a project filter, a search — is part of where the reader is,
+  // and switching section must not silently drop it. `sectionHref` still decides the section's own
+  // spelling; this only merges it into the query already on screen.
+  const query = searchParams.toString();
+  const withSection = useCallback(
+    (section: T) => {
+      const next = new URLSearchParams(query);
+      next.delete('section');
+      const base = sectionHref(path, section, fallback);
+      const [, ownQuery] = base.split('?');
+      if (ownQuery) for (const [k, v] of new URLSearchParams(ownQuery)) next.set(k, v);
+      const merged = next.toString();
+      return merged ? `${path}?${merged}` : path;
+    },
+    [path, fallback, query],
+  );
+
+  const href = useCallback((section: T) => withSection(section), [withSection]);
 
   const select = useCallback(
     (section: T) => {
       setActive(section);
-      window.history.replaceState(null, '', sectionHref(path, section, fallback));
+      window.history.replaceState(null, '', withSection(section));
     },
-    [path, fallback],
+    [withSection],
   );
 
   return { active, select, href };

@@ -58,6 +58,22 @@ export class InMemoryCommissioningStore implements CommissioningStore {
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }
 
+  async listTestItemsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestItem[]> {
+    return [...this.testItems.values()]
+      .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+  async listTestRunsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestRun[]> {
+    return this.testRuns
+      .filter((r) => r.tenantId === tenantId && (!projectId || r.projectId === projectId))
+      .sort((a, b) => (a.testItemId === b.testItemId ? a.runNo - b.runNo : a.testItemId < b.testItemId ? -1 : 1));
+  }
+  async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
+    return [...this.punchItems.values()]
+      .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
   async save(record: CommissioningRecord): Promise<void> {
     this.records.set(record.id, { ...record });
   }

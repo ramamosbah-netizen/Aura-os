@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, CircleAlert, ClipboardCheck, FileCheck2, FilePlus2, HardHat, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
 import { getJson } from '@/lib/api';
+import AuraTabAnchor from '@/components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '@/components/delivery-operations-workspace-header';
 import SuiteShortcutGrid from '@/components/suite-shortcut-grid';
 import type { SuiteShortcut } from '@/components/suite-dashboard-shell';
@@ -95,6 +96,9 @@ export default async function DeliveryOperationsOverviewPage({ searchParams }: {
 
   return (
     <main className={styles.page} data-testid="delivery-operations-overview">
+      {/* Same contract as a Sales suite dashboard: the overview keeps its own AURA tab, so opening a
+          discipline shortcut adds a tab beside it instead of losing this page. */}
+      <AuraTabAnchor href="/operations/overview" title="Execution Command Center" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader
         active="overview"
         title="Execution Command Center"
@@ -114,7 +118,7 @@ export default async function DeliveryOperationsOverviewPage({ searchParams }: {
 
       <section className={styles.section} aria-label="Upcoming and pre-execution"><SectionHead kicker="Start safely" title="Upcoming / pre-execution" linkHref="/operations/pre-execution" linkLabel="Pre-execution" /><div className={styles.panel}>{readinessRows === null ? <Unavailable message="Readiness projection is unavailable because the Projects source did not respond." /> : readinessRows.length === 0 ? <div className={styles.empty}><ShieldCheck size={18} aria-hidden /><strong>No upcoming work matches these filters</strong><span>Readiness appears when an authoritative project record exists.</span><Link href="/projects/projects">Open Projects register <ArrowUpRight size={13} aria-hidden /></Link></div> : <div className={styles.upcomingList}>{readinessRows.slice(0, 8).map((row) => <Link key={row.id} href={`/operations/pre-execution?project=${encodeURIComponent(row.id)}`} className={styles.upcomingRow}><span><strong>{row.title}</strong><small>{row.reference ?? 'Project preparation'}</small></span><span className={`${styles.signal} ${signalClass(row.overall)}`}>{row.overall}</span><ArrowUpRight size={14} aria-hidden /></Link>)}</div>}</div></section>
 
-      <SuiteShortcutGrid kicker="Delivery Operations workspaces" title="Discipline workspaces" items={DISCIPLINE_SHORTCUTS} itemTestId="operations-shortcut" tabType="Delivery Operations" titleId="operations-tools-title" newWindow />
+      <SuiteShortcutGrid kicker="Delivery Operations workspaces" title="Discipline workspaces" items={DISCIPLINE_SHORTCUTS} itemTestId="operations-shortcut" tabType="Delivery Operations" titleId="operations-tools-title" />
 
       <footer className={styles.footerNote}><CircleAlert size={14} aria-hidden /><span>Overview is a summary and exception surface. Detailed records and actions remain in Engineering, Site, Quality, HSE, Testing &amp; Commissioning and Handover.</span></footer>
     </main>

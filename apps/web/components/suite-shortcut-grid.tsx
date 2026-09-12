@@ -17,7 +17,6 @@ export default function SuiteShortcutGrid({
   countLabel,
   tabType,
   titleId = 'suite-tools-title',
-  newWindow = false,
 }: {
   kicker: string;
   title: string;
@@ -26,9 +25,6 @@ export default function SuiteShortcutGrid({
   countLabel?: string;
   tabType: string;
   titleId?: string;
-  /** Open each shortcut in a new browser tab (keeping the launching page open) rather than
-   * navigating the current window and registering an in-app AURA tab. */
-  newWindow?: boolean;
 }) {
   return (
     <section className={styles.workspaces} aria-labelledby={titleId}>
@@ -47,11 +43,8 @@ export default function SuiteShortcutGrid({
               <ArrowRight className={styles.shortcutArrow} aria-hidden />
             </>
           );
-          const className = `${styles.shortcut} ${styles[shortcut.tone]}`;
-          return newWindow ? (
-            <a key={shortcut.label} href={shortcut.href} target="_blank" rel="noopener noreferrer" className={className} data-testid={itemTestId}>{inner}</a>
-          ) : (
-            <AuraTabLink key={shortcut.label} href={shortcut.href} tabTitle={shortcut.label} tabType={tabType} className={className} data-testid={itemTestId}>{inner}</AuraTabLink>
+          return (
+            <AuraTabLink key={shortcut.label} href={shortcut.href} tabTitle={shortcut.label} tabType={tabType} className={`${styles.shortcut} ${styles[shortcut.tone]}`} data-testid={itemTestId}>{inner}</AuraTabLink>
           );
         })}
       </div>

@@ -34,13 +34,29 @@ const rfq = (over: Partial<Rfq>): Rfq => ({
   ...over,
 });
 
+/**
+ * The stubs resolve the way the real stores do (TC-GATE-19).
+ *
+ * The signal used to read `list({ tenantId })` from both stores and filter the results here. Both
+ * of those reads stop at a hundred rows in Postgres and at NO rows in memory, so this suite could
+ * never have shown the truncation — it now asks each store the targeted question instead, and
+ * these stubs answer it from the same fixtures.
+ */
 function build(rfqs: Rfq[], requests: Array<{ id: string; projectId: string | null }> = [{ id: 'pr1', projectId }]) {
   return new RfqService(
-    { list: async () => rfqs } as never,
+    {
+      list: async () => rfqs,
+      listByPrIds: async (_t: string, prIds: readonly string[]) =>
+        rfqs.filter((r) => r.prId !== null && prIds.includes(r.prId)),
+    } as never,
     { append: vi.fn(), appendWithClient: vi.fn() } as never,
     { assert: vi.fn() } as never,
     null,
-    { list: async () => requests } as never,
+    {
+      list: async () => requests,
+      listIdsForProject: async (_t: string, p: string) =>
+        requests.filter((r) => r.projectId === p).map((r) => r.id),
+    } as never,
   );
 }
 

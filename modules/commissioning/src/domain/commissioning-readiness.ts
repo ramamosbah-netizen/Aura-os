@@ -109,7 +109,7 @@ export interface ReadinessFacts {
   witnessedBy: string | null;
   /** Null when the owning domain could not be read — never an empty array standing in for it. */
   equipment: { tag: string; system: string; status: string; linked: boolean }[] | null;
-  drawings: { discipline: string; status: string }[] | null;
+  drawings: { discipline: string; status: string; count: number }[] | null;
   ncrs: { ncrNumber: string; system: string | null; status: string }[] | null;
   /**
    * Quality's inspection requests for the project (TC-GATE-13). Null when Quality cannot be read.
@@ -184,15 +184,19 @@ function engineeringGate(f: ReadinessFacts): ReadinessGate {
   // owns the relationship, and a private copy here was invisible to everything it described.
   const accepted = disciplinesForElvSystem(f.system) as readonly string[];
   const mine = f.drawings.filter((d) => accepted.includes(d.discipline));
-  if (mine.length === 0) {
+  // Summed rather than counted: since TC-GATE-19 Engineering answers with one row per
+  // (discipline, status) and the number of revisions in it, so `mine.length` would count
+  // CATEGORIES and report "2 drawings" for a project holding two hundred.
+  const total = mine.reduce((n, d) => n + d.count, 0);
+  if (total === 0) {
     return gate(id, label, src, 'UNKNOWN', `No drawings on this project carry a discipline this system recognises (${accepted.join(', ')}).`);
   }
-  const approved = mine.filter((d) => APPROVED_DRAWING_STATUSES.has(d.status));
-  if (approved.length === 0) {
-    return gate(id, label, src, 'BLOCKED', `${mine.length} drawing${mine.length === 1 ? '' : 's'} for this discipline, none approved for construction.`);
+  const approved = mine.filter((d) => APPROVED_DRAWING_STATUSES.has(d.status)).reduce((n, d) => n + d.count, 0);
+  if (approved === 0) {
+    return gate(id, label, src, 'BLOCKED', `${total} drawing${total === 1 ? '' : 's'} for this discipline, none approved for construction.`);
   }
-  const pending = mine.length - approved.length;
-  return gate(id, label, src, 'READY', `${approved.length} approved drawing${approved.length === 1 ? '' : 's'}${pending > 0 ? `, ${pending} still in review` : ''}.`);
+  const pending = total - approved;
+  return gate(id, label, src, 'READY', `${approved} approved drawing${approved === 1 ? '' : 's'}${pending > 0 ? `, ${pending} still in review` : ''}.`);
 }
 
 /**

@@ -121,6 +121,22 @@ export class PostgresTechnicalQueryStore implements TechnicalQueryStore {
     return res.rows.map(rowToTq);
   }
 
+  /** Unbounded and oldest-first — see the contract. */
+  async listByStatus(
+    tenantId: Id,
+    projectId: Id,
+    statuses: readonly TechnicalQuery['status'][],
+  ): Promise<TechnicalQuery[]> {
+    if (statuses.length === 0) return [];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_engineering_technical_queries
+        WHERE tenant_id = $1 AND project_id = $2 AND status = ANY($3)
+        ORDER BY created_at ASC`,
+      [tenantId, projectId, [...statuses]],
+    );
+    return res.rows.map(rowToTq);
+  }
+
   async listPaged(filter: TqFilter, page: PageParams): Promise<Page<TechnicalQuery>> {
     const { whereSql, params } = this.buildWhere(filter);
     const countRes = await this.pool.query<{ count: string }>(

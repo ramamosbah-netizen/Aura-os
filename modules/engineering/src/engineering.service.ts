@@ -348,10 +348,20 @@ export class EngineeringService {
    *
    * The consumer decides which disciplines count for which ELV system, because that mapping is a
    * commissioning judgement rather than an engineering fact.
+   *
+   * SUMMARISED IN THE DATABASE SINCE TC-GATE-19, and this is a correctness fix, not a speed one.
+   * It was built on `listDrawings`, which caps at a hundred rows — and a row here is a REVISION,
+   * so an ordinary project passes a hundred. Worse, the cap keeps the NEWEST, and an approved
+   * drawing that has been settled for months is old: the truncation dropped precisely the
+   * evidence the gate exists to find, then reported a confident count of what was left.
+   *
+   * The counts travel because the consumer states them ("3 approved, 2 still in review"). They
+   * count REVISION ROWS, which is what the old read counted too — this gate did not quietly
+   * change what the number means, only whether it is the true one.
    */
   async readProjectDrawingRelease(tenantId: Id, projectId: Id) {
-    const drawings = await this.listDrawings({ tenantId, projectId });
-    return drawings.map((d) => ({ discipline: d.discipline as string, status: d.status as string }));
+    const release = await this.drawingStore.summariseRelease(tenantId, projectId);
+    return release.map((r) => ({ discipline: r.discipline as string, status: r.status as string, count: r.count }));
   }
 
   listDrawings(filter?: DrawingFilter): Promise<Drawing[]> {
@@ -650,14 +660,19 @@ export class EngineeringService {
   ): Promise<HealthSignal> {
     const href = `/project/${encodeURIComponent(projectId)}/workspace/engineering`;
 
-    const queries = await this.listTechnicalQueries({ tenantId, projectId });
     // `open` only: a responded query has its answer and is awaiting closure, not awaiting a
-    // decision the project is held up by.
-    const impacting = queries.filter((q) => q.status === 'open' && q.timeImpact);
+    // decision the project is held up by. Asked of the store rather than filtered after a capped
+    // list (TC-GATE-19): both reads here used `list`, which stops at a hundred rows, so on a busy
+    // project this signal reported CLEAR because it had not seen the rest — and a health signal
+    // that says "nothing wrong" when it did not look is worse than no signal at all.
+    const queries = await this.tqStore.listByStatus(tenantId, projectId, ['open']);
+    const impacting = queries.filter((q) => q.timeImpact);
     const urgent = impacting.filter((q) => q.priority === 'high');
 
-    const outstanding = (await this.listDrawings({ tenantId, projectId }))
-      .filter((d) => d.status === 'submitted' || d.status === 'under_review');
+    // Oldest first, and that matters: the longest-outstanding review is the likeliest to be
+    // overdue and is named in the reason below, yet it was the first row a newest-first cap threw
+    // away. The truncation was biased against exactly the answer being looked for.
+    const outstanding = await this.drawingStore.listByStatus(tenantId, projectId, ['submitted', 'under_review']);
     const overdue: string[] = [];
     for (const revision of outstanding) {
       const submissions = await this.submissionStore.listByDrawing(tenantId, revision.id);

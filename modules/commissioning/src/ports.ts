@@ -110,10 +110,20 @@ export interface QualityEvidencePort {
   ): Promise<{ ncrs: NcrFact[]; itps: ItpFact[]; snags: SnagFact[]; irs: IrFact[] }>;
 }
 
-/** A drawing's release state, as Engineering describes it. Discipline is the shared dimension. */
+/**
+ * A drawing release state on the project and HOW MANY revisions are in it, as Engineering says.
+ *
+ * Discipline is the shared dimension. The count arrives because this gate states it back to a
+ * reader, and because a summary is the only shape Engineering can answer without a list that may
+ * be truncated (TC-GATE-19) — one fact per (discipline, status), not one per drawing.
+ *
+ * It counts REVISION rows: Engineering models a revision as the aggregate, so one drawing code at
+ * three revisions is three. That is what the previous, per-row shape counted as well.
+ */
 export interface DrawingReleaseFact {
   discipline: string;
   status: string;
+  count: number;
 }
 
 export interface EngineeringReleasePort {

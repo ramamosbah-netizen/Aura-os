@@ -21,7 +21,7 @@ const base: ReadinessFacts = {
   signedOffBy: 'Engineer',
   witnessedBy: 'Consultant',
   equipment: [{ tag: 'CAM-001', system: 'cctv', status: 'installed', linked: true }],
-  drawings: [{ discipline: 'cctv', status: 'approved' }],
+  drawings: [{ discipline: 'cctv', status: 'approved', count: 1 }],
   ncrs: [],
   itpRequirements: [],
 };
@@ -75,7 +75,7 @@ describe('TC-GATE-3 — readiness chain', () => {
     });
 
     it('blocks when no drawing carries a discipline this system recognises', () => {
-      const g = gate({ drawings: [{ discipline: 'plumbing', status: 'approved' }] }, 'engineering');
+      const g = gate({ drawings: [{ discipline: 'plumbing', status: 'approved', count: 1 }] }, 'engineering');
       expect(g.state).toBe('UNKNOWN');
       expect(g.reason, 'the reason must name what was looked for').toMatch(/cctv|elv|security/);
     });
@@ -123,19 +123,50 @@ describe('TC-GATE-3 — readiness chain', () => {
 
   describe('engineering', () => {
     it('accepts a drawing tagged with the coarse elv discipline', () => {
-      expect(gate({ drawings: [{ discipline: 'elv', status: 'approved' }] }, 'engineering').state).toBe('READY');
+      expect(gate({ drawings: [{ discipline: 'elv', status: 'approved', count: 1 }] }, 'engineering').state).toBe('READY');
     });
 
     it('blocks when drawings exist for the discipline but none are approved', () => {
-      const g = gate({ drawings: [{ discipline: 'cctv', status: 'under_review' }] }, 'engineering');
+      const g = gate({ drawings: [{ discipline: 'cctv', status: 'under_review', count: 1 }] }, 'engineering');
       expect(g.state).toBe('BLOCKED');
       expect(g.reason).toMatch(/none approved/i);
     });
 
     it('reports the ones still in review alongside the approved ones', () => {
-      const g = gate({ drawings: [{ discipline: 'cctv', status: 'approved' }, { discipline: 'cctv', status: 'submitted' }] }, 'engineering');
+      const g = gate({ drawings: [{ discipline: 'cctv', status: 'approved', count: 1 }, { discipline: 'cctv', status: 'submitted', count: 1 }] }, 'engineering');
       expect(g.state).toBe('READY');
       expect(g.reason).toMatch(/1 still in review/);
+    });
+
+    /**
+     * TC-GATE-19. Engineering answers with one row per (discipline, status) and the number of
+     * revisions in it, because a summary is the only shape it can produce from a read that cannot
+     * truncate. A gate that measured `length` here would say "2 drawings" for a project holding
+     * two hundred — so these two assertions are about the sentence a reader is actually given.
+     */
+    it('sums the revisions in each category rather than counting the categories', () => {
+      const g = gate(
+        {
+          drawings: [
+            { discipline: 'cctv', status: 'approved', count: 120 },
+            { discipline: 'cctv', status: 'submitted', count: 80 },
+          ],
+        },
+        'engineering',
+      );
+      expect(g.state).toBe('READY');
+      expect(g.reason).toContain('120 approved drawings');
+      expect(g.reason).toContain('80 still in review');
+    });
+
+    /**
+     * The regression in one line: a hundred and forty is past the hundred-row cap the old read
+     * applied, so this gate used to state a number it had not counted.
+     */
+    it('states the true number of unapproved drawings, past any list cap', () => {
+      const g = gate({ drawings: [{ discipline: 'cctv', status: 'under_review', count: 140 }] }, 'engineering');
+      expect(g.state).toBe('BLOCKED');
+      expect(g.reason).toContain('140 drawings');
     });
   });
 

@@ -3,7 +3,7 @@ import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Drawing } from './domain/drawing';
-import type { DrawingFilter, DrawingStore } from './drawing-store';
+import type { DrawingFilter, DrawingReleaseCount, DrawingStore } from './drawing-store';
 
 interface Row {
   id: string;
@@ -180,6 +180,46 @@ export class PostgresDrawingStore implements DrawingStore {
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
       params,
+    );
+    return res.rows.map(rowToDrawing);
+  }
+
+  /**
+   * THE READ THAT CANNOT TRUNCATE (TC-GATE-19).
+   *
+   * `list` above caps at a hundred rows. Commissioning's "Engineering released" gate was built on
+   * it, and a drawing row here is a REVISION, so a hundred is reached on an ordinary project. The
+   * cap keeps the NEWEST rows, and a settled approved drawing is old — so the truncation removed
+   * exactly the evidence the gate looks for, and the gate then said "12 drawings for this
+   * discipline, none approved for construction" with complete confidence.
+   *
+   * Aggregating in the database is what makes the fix durable rather than a patch: the result is
+   * bounded by the vocabulary, and there is no parameter anyone can pass to shorten it.
+   */
+  async summariseRelease(tenantId: Id, projectId: Id): Promise<DrawingReleaseCount[]> {
+    const res = await this.pool.query<{ discipline: string; status: string; count: number }>(
+      `SELECT discipline, status, COUNT(*)::int AS count
+         FROM public.aura_engineering_drawings
+        WHERE tenant_id = $1 AND project_id = $2
+        GROUP BY discipline, status
+        ORDER BY discipline ASC, status ASC`,
+      [tenantId, projectId],
+    );
+    return res.rows.map((r) => ({ discipline: r.discipline, status: r.status as Drawing['status'], count: Number(r.count) }));
+  }
+
+  /** Unbounded and oldest-first — see the contract. */
+  async listByStatus(
+    tenantId: Id,
+    projectId: Id,
+    statuses: readonly Drawing['status'][],
+  ): Promise<Drawing[]> {
+    if (statuses.length === 0) return [];
+    const res = await this.pool.query<Row>(
+      `SELECT ${COLS} FROM public.aura_engineering_drawings
+        WHERE tenant_id = $1 AND project_id = $2 AND status = ANY($3)
+        ORDER BY created_at ASC`,
+      [tenantId, projectId, [...statuses]],
     );
     return res.rows.map(rowToDrawing);
   }

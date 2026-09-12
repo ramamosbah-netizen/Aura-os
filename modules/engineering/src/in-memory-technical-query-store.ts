@@ -37,6 +37,18 @@ export class InMemoryTechnicalQueryStore implements TechnicalQueryStore {
     return filter.limit ? list.slice(0, filter.limit) : list;
   }
 
+  async listByStatus(
+    tenantId: Id,
+    projectId: Id,
+    statuses: readonly TechnicalQuery['status'][],
+  ): Promise<TechnicalQuery[]> {
+    const wanted = new Set<string>(statuses);
+    return [...this.items.values()]
+      .filter((t) => t.tenantId === tenantId && t.projectId === projectId && wanted.has(t.status))
+      .map((t) => ({ ...t }))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
   async listPaged(filter: TqFilter, page: PageParams): Promise<Page<TechnicalQuery>> {
     const all = await this.list({ ...filter, limit: undefined });
     return paginate(all, page);

@@ -105,6 +105,15 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
     return res.rows.map(rowToPr);
   }
 
+  /** Uncapped by design — see the contract. */
+  async listIdsForProject(tenantId: Id, projectId: Id): Promise<string[]> {
+    const res = await this.pool.query<{ id: string }>(
+      `SELECT id FROM public.aura_procurement_purchase_requests WHERE tenant_id = $1 AND project_id = $2`,
+      [tenantId, projectId],
+    );
+    return res.rows.map((r) => r.id);
+  }
+
   async listPaged(filter: PurchaseRequestFilter, page: PageParams): Promise<Page<PurchaseRequest>> {
     const { whereSql, params } = this.buildWhere(filter);
     const countRes = await this.pool.query<{ count: string }>(

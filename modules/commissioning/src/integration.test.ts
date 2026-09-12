@@ -47,7 +47,7 @@ const qualityPort = (evidence: Parameters<QualityEvidencePort['readProjectQualit
   readProjectQualityEvidence: async () => ({ ncrs: evidence.ncrs ?? [], itps: evidence.itps ?? [], snags: evidence.snags ?? [], irs: evidence.irs ?? [] }),
 });
 
-const engineeringPort = (drawings: { discipline: string; status: string }[]): EngineeringReleasePort => ({
+const engineeringPort = (drawings: { discipline: string; status: string; count: number }[]): EngineeringReleasePort => ({
   readProjectDrawingRelease: async () => drawings,
 });
 
@@ -77,7 +77,7 @@ describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
     const exploding: QualityEvidencePort = { readProjectQualityEvidence: async () => { throw new Error('Quality is down'); } };
     const { svc } = service({
       elv: elvPort({ tag: 'CAM-001', system: 'cctv', status: 'installed' }),
-      engineering: engineeringPort([{ discipline: 'cctv', status: 'approved' }]),
+      engineering: engineeringPort([{ discipline: 'cctv', status: 'approved', count: 1 }]),
       quality: exploding,
     });
     const { rec } = await commissionedSystem(svc);
@@ -95,7 +95,7 @@ describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
     const { svc } = service({
       elv: elvPort({ tag: 'CAM-001', system: 'cctv', status: 'installed' }),
       quality: qualityPort({}),
-      engineering: engineeringPort([{ discipline: 'cctv', status: 'approved' }]),
+      engineering: engineeringPort([{ discipline: 'cctv', status: 'approved', count: 1 }]),
     });
     const { rec } = await commissionedSystem(svc);
 
@@ -110,7 +110,7 @@ describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
     const { svc } = service({
       elv: elvPort({ tag: 'CAM-001', system: 'cctv', status: 'installed' }),
       quality: qualityPort({ ncrs: [{ id: 'n1', ncrNumber: 'NCR-020', system: null, severity: 'major', status: 'raised' }] }),
-      engineering: engineeringPort([{ discipline: 'cctv', status: 'approved' }]),
+      engineering: engineeringPort([{ discipline: 'cctv', status: 'approved', count: 1 }]),
     });
     await commissionedSystem(svc);
 

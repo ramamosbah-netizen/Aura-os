@@ -44,3 +44,32 @@ export function toDiscipline(value: string | null | undefined): Discipline {
   const v = value.trim().toLowerCase();
   return (DISCIPLINES as readonly string[]).includes(v) ? (v as Discipline) : DEFAULT_DISCIPLINE;
 }
+
+/**
+ * One source for labels, so API, UI and reports never drift apart — the same rule `ELV_SYSTEM_LABELS`
+ * follows (TC-GATE-12).
+ *
+ * Added when the inspection-request form needed to offer the full vocabulary instead of its private
+ * four. That form used to label `electrical` as "Electrical & ELV", which is what a screen looks like
+ * when the vocabulary behind it cannot say what the business does.
+ */
+export const DISCIPLINE_LABELS: Record<Discipline, string> = {
+  architectural: 'Architectural',
+  structural: 'Structural',
+  civil: 'Civil',
+  mechanical: 'Mechanical',
+  electrical: 'Electrical',
+  plumbing: 'Plumbing & Drainage',
+  hvac: 'HVAC',
+  fire_fighting: 'Fire Fighting',
+  fire_alarm: 'Fire Alarm',
+  elv: 'ELV (general)',
+  ict: 'ICT & Networks',
+  security: 'Security',
+  cctv: 'CCTV',
+  access_control: 'Access Control',
+  bms: 'BMS',
+  mep: 'MEP (coordinated)',
+  coordination: 'Coordination',
+  other: 'Other',
+};

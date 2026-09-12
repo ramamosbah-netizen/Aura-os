@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
+import { DISCIPLINES, DISCIPLINE_LABELS } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
 import { QUALITY_PATH, QUALITY_SECTIONS } from '@/lib/workspace-sections';
@@ -41,7 +42,7 @@ interface InspectionRequest {
   projectId: string;
   projectName: string | null;
   irNumber: string;
-  discipline: 'civil' | 'mechanical' | 'electrical' | 'plumbing';
+  discipline: string;
   locationDetail: string;
   inspectionDate: string;
   status: 'requested' | 'approved' | 'rejected';
@@ -377,13 +378,11 @@ export default function QualityControlClient({
                   name: 'discipline',
                   label: 'Discipline',
                   kind: 'select',
-                  defaultValue: 'civil',
-                  options: [
-                    { value: 'civil', label: 'Civil & Structural' },
-                    { value: 'mechanical', label: 'Mechanical (HVAC/Plumbing)' },
-                    { value: 'electrical', label: 'Electrical & ELV' },
-                    { value: 'plumbing', label: 'Plumbing & Drainage' },
-                  ],
+                  defaultValue: 'elv',
+                  // TC-GATE-12: the canonical platform vocabulary. These four options used to be the
+                  // whole list, and 'electrical' was labelled "Electrical & ELV" — a screen papering
+                  // over a vocabulary that could not say what this business does.
+                  options: DISCIPLINES.map((d) => ({ value: d, label: DISCIPLINE_LABELS[d] })),
                 },
                 { name: 'inspectionDate', label: 'Inspection date', kind: 'date', required: true, defaultValue: today },
                 { name: 'locationDetail', label: 'Location & scope details', kind: 'text', required: true, placeholder: 'e.g. Roof deck level, axis grid 4-8. Checking slab rebar spacing…', span: 2 },

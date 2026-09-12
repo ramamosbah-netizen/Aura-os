@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useMemo, useState } from 'react';
+import { DISCIPLINES, DISCIPLINE_LABELS, type Discipline } from '@aura/shared';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 import FileAttachmentZone, { type AttachmentItem } from './ui/file-attachment-zone';
@@ -14,7 +15,7 @@ export interface InspectionRequest {
   projectId: string;
   projectName: string | null;
   irNumber: string;
-  discipline: 'civil' | 'mechanical' | 'electrical' | 'plumbing';
+  discipline: Discipline;
   locationDetail: string;
   inspectionDate: string;
   status: 'requested' | 'approved' | 'rejected';
@@ -23,7 +24,8 @@ export interface InspectionRequest {
   createdAt: string;
 }
 
-const DISCIPLINES = ['civil', 'mechanical', 'electrical', 'plumbing'];
+// TC-GATE-12: the canonical platform vocabulary. This list used to be four values, none of which
+// could describe an ELV system — on an ELV ERP.
 
 export default function InspectionRequestClient({ initial }: { initial: InspectionRequest[] }) {
   const [rows, setRows] = useState(initial);
@@ -101,7 +103,7 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
         <div style={st.form}>
           <Field label="Project"><ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></Field>
           <Field label="IR number"><Input value={f.irNumber} onChange={(e) => set('irNumber', e.target.value)} placeholder="IR-001" /></Field>
-          <Field label="Discipline"><Select value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{d}</option>)}</Select></Field>
+          <Field label="Discipline"><Select value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{DISCIPLINE_LABELS[d]}</option>)}</Select></Field>
           <Field label="Location" style={{ minWidth: 220 }}><Input value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="L3 riser, grid C4" /></Field>
           <Field label="Date"><Input type="date" value={f.inspectionDate} onChange={(e) => set('inspectionDate', e.target.value)} /></Field>
         </div>

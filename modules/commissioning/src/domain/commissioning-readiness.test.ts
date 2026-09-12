@@ -153,6 +153,42 @@ describe('TC-GATE-3 — readiness chain', () => {
       expect(g.state).toBe('BLOCKED');
     });
 
+    /**
+     * TC-GATE-12 — the defect this gate closes.
+     *
+     * Matching used to be a private string-strip: lowercase, and hyphens/spaces to underscores. That
+     * made 'Access-Control' match, and left the platform's OWN recognised aliases matching nothing.
+     * 'pa_va' is not hypothetical — @aura/shared records it as a spelling that exists in
+     * aura_commissioning_records. An open non-conformance filed under one of these silently failed
+     * to block the system it was raised against.
+     */
+    it('matches an alias the platform recognises — which the old string-strip did not', () => {
+      const acs = gate({ system: 'access_control', ncrs: [{ ncrNumber: 'NCR-022', system: 'acs', status: 'raised' }] }, 'quality');
+      expect(acs.state, 'acs is access control').toBe('BLOCKED');
+
+      const paVa = gate({ system: 'public_address', ncrs: [{ ncrNumber: 'NCR-023', system: 'pa_va', status: 'raised' }] }, 'quality');
+      expect(paVa.state, 'pa_va is the voice-alarm spelling already in the database').toBe('BLOCKED');
+
+      // And it still does not match a DIFFERENT system: resolving is not the same as matching everything.
+      const other = gate({ system: 'cctv', ncrs: [{ ncrNumber: 'NCR-024', system: 'acs', status: 'raised' }] }, 'quality');
+      expect(other.state, 'an access-control NCR is not a CCTV problem').toBe('READY');
+    });
+
+    /**
+     * An attribution nobody can resolve BLOCKS, and says which value it could not read.
+     *
+     * The alternative is to ignore it, which hides an open non-conformance behind a typo. UNKNOWN
+     * NEVER PASSES is the rule every gate in this chain follows: the cost of being wrong this way is
+     * that somebody corrects the NCR's system field; the cost the other way is a system handed over
+     * with an unresolved non-conformance against it.
+     */
+    it('counts an unrecognised attribution rather than ignoring it, and names the value', () => {
+      const g = gate({ system: 'cctv', ncrs: [{ ncrNumber: 'NCR-025', system: 'chiller plant', status: 'raised' }] }, 'quality');
+      expect(g.state).toBe('BLOCKED');
+      expect(g.reason).toContain('"chiller plant"');
+      expect(g.reason).toMatch(/not a system this platform recognises/i);
+    });
+
     it('ignores a closed non-conformance', () => {
       expect(gate({ ncrs: [{ ncrNumber: 'NCR-001', system: 'cctv', status: 'closed' }] }, 'quality').state).toBe('READY');
     });

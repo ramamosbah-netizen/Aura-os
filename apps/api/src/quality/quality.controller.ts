@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, DISCIPLINES } from '@aura/shared';
 import {
   type Ncr,
   type NcrVerification,
@@ -181,9 +181,12 @@ export class QualityController {
     if (!dto?.locationDetail?.trim()) throw new BadRequestException('locationDetail is required');
     if (!dto?.inspectionDate?.trim()) throw new BadRequestException('inspectionDate is required');
 
-    const validDisciplines = ['civil', 'mechanical', 'electrical', 'plumbing'];
-    if (!validDisciplines.includes(dto.discipline)) {
-      throw new BadRequestException(`discipline must be one of: ${validDisciplines.join(', ')}`);
+    // TC-GATE-12: validated against the canonical platform vocabulary, not a private four-value
+    // list that could not describe an ELV system. Still REJECTED rather than silently coerced — an
+    // unrecognised trade on a write somebody just made is a typo worth reporting, and the domain's
+    // `toDiscipline` fallback is for reading rows that already exist.
+    if (!(DISCIPLINES as readonly string[]).includes(dto.discipline)) {
+      throw new BadRequestException(`discipline must be one of: ${DISCIPLINES.join(', ')}`);
     }
 
     const ctx = this.tenant.get();

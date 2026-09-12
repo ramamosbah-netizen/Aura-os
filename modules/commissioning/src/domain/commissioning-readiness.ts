@@ -18,7 +18,7 @@
  * must not silently declare systems ready.
  */
 
-import { disciplinesForElvSystem } from '@aura/shared';
+import { disciplinesForElvSystem, toElvSystemOrNull } from '@aura/shared';
 
 export type GateState = 'READY' | 'BLOCKED' | 'UNKNOWN' | 'NOT_APPLICABLE';
 
@@ -193,13 +193,29 @@ function qualityGate(f: ReadinessFacts): ReadinessGate {
   if (f.ncrs === null) return gate(id, label, src, 'UNKNOWN', 'Quality could not be read.');
   // A non-conformance with no system recorded is project-wide — Quality's own model says so — and a
   // project-wide NCR blocks every system rather than none.
-  const mine = f.ncrs.filter((n) => OPEN_NCR_STATUSES.has(n.status) && (n.system === null || normalise(n.system) === f.system));
+  //
+  // TC-GATE-12: both sides are resolved through the CANONICAL resolver, which knows the aliases.
+  // This used to be a private string-strip that lowercased and turned hyphens into underscores, so
+  // 'access-control' matched 'access_control' — but 'acs' did not, and neither did 'pa_va', which
+  // is a spelling that genuinely exists in aura_commissioning_records. An open non-conformance
+  // filed under one of those silently failed to block the system it was raised against.
+  const canonical = toElvSystemOrNull(f.system);
+  const mine = f.ncrs.filter((n) => OPEN_NCR_STATUSES.has(n.status) && ncrAppliesTo(n.system, canonical));
+  const unrecognised = f.ncrs.filter(
+    (n) => OPEN_NCR_STATUSES.has(n.status) && n.system !== null && toElvSystemOrNull(n.system) === null,
+  );
   const unresolvedItp = f.itpRequirements.filter((r) => r.result !== 'passed');
   if (mine.length > 0 || unresolvedItp.length > 0) {
     const parts = [
       ...(mine.length > 0 ? [`${mine.length} open NCR (${mine.slice(0, 3).map((n) => n.ncrNumber).join(', ')}${mine.length > 3 ? '…' : ''})`] : []),
       ...(unresolvedItp.length > 0 ? [`${unresolvedItp.length} linked ITP point${unresolvedItp.length === 1 ? '' : 's'} not passed`] : []),
     ];
+    // Name the unrecognised attributions, because the fix is to correct the NCR's system and a
+    // reader cannot do that without being told which value was not understood.
+    if (unrecognised.length > 0) {
+      const names = [...new Set(unrecognised.map((n) => `"${n.system}"`))].slice(0, 3).join(', ');
+      parts.push(`${unrecognised.length} counted because ${names} is not a system this platform recognises`);
+    }
     return gate(id, label, src, 'BLOCKED', `${parts.join('; ')}.`);
   }
   const linked = f.itpRequirements.length;
@@ -269,7 +285,28 @@ function certificatesGate(f: ReadinessFacts): ReadinessGate {
   return gate(id, label, src, 'READY', `${f.pointsTotal} test point${f.pointsTotal === 1 ? '' : 's'} with their full run history, and a witnessed sign-off. Formal controlled issue is DocControl's and is not linked from here.`);
 }
 
-/** Quality records a system as free text; compare it the way a reader would, not byte for byte. */
-function normalise(value: string): string {
-  return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+/**
+ * Does this non-conformance apply to this system? (TC-GATE-12)
+ *
+ * Quality records a system as FREE TEXT, deliberately — migration 0282 declined a CHECK constraint
+ * so an unusual system name could never fail a write. That decision stands; what changes here is
+ * that the READER resolves it properly instead of stripping punctuation and hoping.
+ *
+ * Three cases, and the third is the one worth arguing about:
+ *
+ *   null          → project-wide. Quality's own model says so, and a project-wide NCR blocks every
+ *                   system rather than none.
+ *   recognised    → matches only its own system.
+ *   UNRECOGNISED  → blocks. Somebody attributed it to something, and this platform cannot tell that
+ *                   the something is not this system. The alternative is to ignore it, which hides
+ *                   an open non-conformance behind a typo — and UNKNOWN NEVER PASSES is the rule
+ *                   every other gate in this chain follows. The cost of being wrong here is that
+ *                   someone corrects the NCR's system field; the cost of being wrong the other way
+ *                   is a system handed over with an unresolved non-conformance against it.
+ */
+function ncrAppliesTo(ncrSystem: string | null, canonicalSystem: string | null): boolean {
+  if (ncrSystem === null) return true;
+  const resolved = toElvSystemOrNull(ncrSystem);
+  if (resolved === null) return true;
+  return resolved === canonicalSystem;
 }

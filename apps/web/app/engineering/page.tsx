@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import EngineeringClient from '../../components/engineering-client';
+import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
@@ -138,6 +139,10 @@ export default async function EngineeringPage() {
 
   return (
     <div style={st.page}>
+      {/* The workspace keeps a tab of its own, so opening a section from the shortcut grid adds a
+          tab beside it rather than replacing the way back. Same contract as the Operations overview.
+          The href carries no `?section`, so it always returns to the workspace's own landing view. */}
+      <AuraTabAnchor href="/engineering" title="Engineering" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="engineering" title="Engineering workspace" description="Prepare and release the technical information that enables field work: drawings, RFIs, submittals, design changes and controlled deliverables." />
 
       <EngineeringClient

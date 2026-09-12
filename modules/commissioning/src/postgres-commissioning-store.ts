@@ -6,6 +6,8 @@ import type { CommissioningRecord, CommissioningStatus, ElvSystem } from './doma
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
+import type { OmItem, OmDeliverable, OmItemState } from './domain/om-package';
+import type { TrainingSession, TrainingState } from './domain/client-training';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
@@ -137,6 +139,70 @@ export class PostgresCommissioningStore implements CommissioningStore {
       [...params, page.limit, page.offset],
     );
     return makePage(res.rows.map(toRecord), total, page);
+  }
+
+  // ── O&M deliverables and client training (TC-GATE-5) ───────────────────────
+
+  async saveOmItem(i: OmItem): Promise<void> {
+    // No ON CONFLICT on the natural key: the unique (commissioning_id, deliverable) constraint is
+    // what stops one system carrying two "O&M manual" rows, and swallowing it would make
+    // "is the pack complete" quietly unanswerable.
+    await this.pool.query(
+      `insert into public.aura_handover_om_items
+        (id, tenant_id, company_id, project_id, commissioning_id, deliverable, required, state, document_id, notes,
+         submitted_at, submitted_by, reviewed_at, reviewed_by, accepted_at, accepted_by, created_by, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       on conflict (id) do update set
+         required = excluded.required, state = excluded.state, document_id = excluded.document_id, notes = excluded.notes,
+         submitted_at = excluded.submitted_at, submitted_by = excluded.submitted_by,
+         reviewed_at = excluded.reviewed_at, reviewed_by = excluded.reviewed_by,
+         accepted_at = excluded.accepted_at, accepted_by = excluded.accepted_by, updated_at = excluded.updated_at`,
+      [i.id, i.tenantId, i.companyId, i.projectId, i.commissioningId, i.deliverable, i.required, i.state, i.documentId, i.notes,
+       i.submittedAt, i.submittedBy, i.reviewedAt, i.reviewedBy, i.acceptedAt, i.acceptedBy, i.createdBy, i.createdAt, i.updatedAt],
+    );
+  }
+  async findOmItem(id: string, tenantId: string): Promise<OmItem | null> {
+    const res = await this.pool.query('select * from public.aura_handover_om_items where id = $1 and tenant_id = $2', [id, tenantId]);
+    return res.rowCount === 0 ? null : toOmItem(res.rows[0]);
+  }
+  async listOmItems(tenantId: string, projectId?: string): Promise<OmItem[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_handover_om_items
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toOmItem);
+  }
+
+  async saveTrainingSession(s: TrainingSession): Promise<void> {
+    await this.pool.query(
+      `insert into public.aura_handover_training_sessions
+        (id, tenant_id, company_id, project_id, commissioning_id, title, topics, trainer, session_date, duration_minutes,
+         attendees, demonstration_completed, state, acknowledged_by, acknowledged_at, material_document_id, created_by, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       on conflict (id) do update set
+         title = excluded.title, topics = excluded.topics, trainer = excluded.trainer,
+         session_date = excluded.session_date, duration_minutes = excluded.duration_minutes,
+         attendees = excluded.attendees, demonstration_completed = excluded.demonstration_completed,
+         state = excluded.state, acknowledged_by = excluded.acknowledged_by, acknowledged_at = excluded.acknowledged_at,
+         material_document_id = excluded.material_document_id, updated_at = excluded.updated_at`,
+      [s.id, s.tenantId, s.companyId, s.projectId, s.commissioningId, s.title, s.topics, s.trainer, s.sessionDate, s.durationMinutes,
+       s.attendees, s.demonstrationCompleted, s.state, s.acknowledgedBy, s.acknowledgedAt, s.materialDocumentId, s.createdBy, s.createdAt, s.updatedAt],
+    );
+  }
+  async findTrainingSession(id: string, tenantId: string): Promise<TrainingSession | null> {
+    const res = await this.pool.query('select * from public.aura_handover_training_sessions where id = $1 and tenant_id = $2', [id, tenantId]);
+    return res.rowCount === 0 ? null : toTraining(res.rows[0]);
+  }
+  async listTrainingSessions(tenantId: string, projectId?: string): Promise<TrainingSession[]> {
+    const res = await this.pool.query(
+      `select *, session_date::text as session_date_text from public.aura_handover_training_sessions
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toTraining);
   }
 
   // ── Handover packages ──────────────────────────────────────────────────────
@@ -345,6 +411,38 @@ function toTestItem(r: Record<string, unknown>): CommissioningTestItem {
     pointNo: r.point_no as string, description: r.description as string, expected: (r.expected as string) ?? null,
     actual: (r.actual as string) ?? null, result: r.result as CommissioningTestItem['result'], remarks: (r.remarks as string) ?? null,
     testedBy: (r.tested_by as string) ?? null, testedAt: tsIso(r.tested_at), createdAt: tsIso(r.created_at) as string,
+  };
+}
+
+function toOmItem(r: Record<string, unknown>): OmItem {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    projectId: r.project_id as string, commissioningId: r.commissioning_id as string,
+    deliverable: r.deliverable as OmDeliverable, required: Boolean(r.required), state: r.state as OmItemState,
+    documentId: (r.document_id as string) ?? null, notes: (r.notes as string) ?? null,
+    submittedAt: tsIso(r.submitted_at), submittedBy: (r.submitted_by as string) ?? null,
+    reviewedAt: tsIso(r.reviewed_at), reviewedBy: (r.reviewed_by as string) ?? null,
+    acceptedAt: tsIso(r.accepted_at), acceptedBy: (r.accepted_by as string) ?? null,
+    createdBy: (r.created_by as string) ?? null,
+    createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
+  };
+}
+
+function toTraining(r: Record<string, unknown>): TrainingSession {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    projectId: r.project_id as string, commissioningId: (r.commissioning_id as string) ?? null,
+    title: r.title as string, topics: (r.topics as string) ?? null, trainer: (r.trainer as string) ?? null,
+    // date read as text: a plain date must not acquire a timezone on the way out.
+    sessionDate: (r.session_date_text as string) ?? (typeof r.session_date === 'string' ? r.session_date : null),
+    durationMinutes: r.duration_minutes == null ? null : Number(r.duration_minutes),
+    attendees: (r.attendees as string) ?? null,
+    demonstrationCompleted: Boolean(r.demonstration_completed),
+    state: r.state as TrainingState,
+    acknowledgedBy: (r.acknowledged_by as string) ?? null, acknowledgedAt: tsIso(r.acknowledged_at),
+    materialDocumentId: (r.material_document_id as string) ?? null,
+    createdBy: (r.created_by as string) ?? null,
+    createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
   };
 }
 

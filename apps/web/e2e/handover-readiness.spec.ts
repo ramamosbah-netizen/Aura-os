@@ -33,7 +33,8 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   }
 
   // ── Tick everything a person still can, and the submission is still refused ─────────────────────
-  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { omManuals: true, warrantyDocs: true, training: true, spares: true } });
+  // Only two items remain tickable after TC-GATE-5; the other four are derived.
+  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { warrantyDocs: true, spares: true } });
   const early = await page.request.put(`${HO}/${pkg.id}/submit`, { headers: H(), data: {} });
   expect(early.ok(), 'a package whose systems are not ready must not submit').toBe(false);
   expect(JSON.stringify(await early.json())).toMatch(/not commissioning ready/i);
@@ -43,7 +44,10 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   await expect(page.getByTestId('handover-readiness')).toBeVisible();
   await expect(page.getByTestId('handover-item-commissioning-state')).toHaveText('BLOCKED');
   await expect(page.getByTestId('handover-item-commissioning')).toContainText(/Testing & commissioning/i);
-  await expect(page.getByTestId('handover-item-omManuals')).toContainText(/nothing verifies this/i);
+  // TC-GATE-5 moved O&M from an assertion to a projection, so the "asserted" property is now tested
+  // against one of the two items that still has no owning authority.
+  await expect(page.getByTestId('handover-item-omManuals')).toContainText(/derived · Handover/i);
+  await expect(page.getByTestId('handover-item-warrantyDocs')).toContainText(/nothing verifies this/i);
   // The two derived items are gone from the tickable checklist and said to be derived.
   await expect(page.getByTestId(`handover-checklist-${pkgCode}`)).not.toContainText('As-built drawings');
   await expect(page.getByTestId(`handover-derived-note-${pkgCode}`)).toContainText(/derived from Testing & Commissioning and\s+Engineering/i);

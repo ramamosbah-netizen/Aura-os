@@ -8,16 +8,17 @@
  * its systems had never been tested, because the tick and the evidence lived in different places and
  * only one of them was ever looked at.
  *
- * Two of the six now come from the domain that owns the evidence, and **cannot be ticked**:
+ * Four of the six now come from the domain that owns the evidence, and **cannot be ticked**:
  *
  *   commissioning  → Testing & Commissioning: every system COMMISSIONING READY (its own nine-gate
  *                    chain, unchanged from TC-GATE-3)
  *   asBuilts       → Engineering: an as-built drawing released on this project
+ *   omManuals      → Handover's own O&M pack (TC-GATE-5): every required deliverable accepted
+ *   training       → Handover's own client training record (TC-GATE-5): every system acknowledged
  *
- * The other four have no owning authority in the repository — there is no O&M package, no client
- * training record, no warranty-document register and no spares handover. They stay as assertions,
- * and they say so on the page. An assertion labelled as an assertion is honest; an assertion
- * rendered as evidence is the thing this gate exists to remove.
+ * The last two — warranty documents and spares — still have no owning authority anywhere in the
+ * repository, so they stay assertions and say so on the page. An assertion labelled as an assertion
+ * is honest; an assertion rendered as evidence is the thing this gate exists to remove.
  *
  * UNKNOWN IS NEVER A PASS, the same rule the T&C chain follows: a domain that cannot be read, or a
  * project with nothing to judge, blocks rather than passes.
@@ -57,8 +58,14 @@ export interface HandoverReadinessFacts {
   notReadyReasons: string[];
   /** Engineering's drawings for the project. Null when Engineering could not be read. */
   drawings: { discipline: string; status: string }[] | null;
-  /** The four items nobody owns yet — still the package's own checklist. */
-  asserted: { omManuals: boolean; warrantyDocs: boolean; training: boolean; spares: boolean };
+  /** Handover's own O&M pack, per system (TC-GATE-5). */
+  omItems: { commissioningId: string; deliverable: string; required: boolean; state: string }[];
+  /** Handover's own client training record (TC-GATE-5). */
+  trainingSessions: { commissioningId: string | null; state: string }[];
+  /** The systems the O&M pack and the training are measured against. */
+  systemIds: string[];
+  /** The two items nobody owns yet — still the package's own checklist. */
+  asserted: { warrantyDocs: boolean; spares: boolean };
 }
 
 const AS_BUILT_STATUSES = new Set(['as_built']);
@@ -76,6 +83,8 @@ export function assessHandoverReadiness(facts: HandoverReadinessFacts): Handover
   const items: HandoverReadinessItem[] = [
     commissioningItem(facts),
     asBuiltItem(facts),
+    omItem(facts),
+    trainingItem(facts),
     ...assertedItems(facts.asserted),
   ];
   const blocking = items.filter((i) => i.state !== 'READY').map((i) => i.id);
@@ -118,17 +127,79 @@ function asBuiltItem(f: HandoverReadinessFacts): HandoverReadinessItem {
 }
 
 /**
- * The four with no owner.
+ * The O&M pack, per system.
  *
- * Each says WHO is asserting it and that nothing verified it. When one of these gains a real
- * authority — an O&M package, a client-training record — it moves to `projected` and the tick goes
- * away, which is the same move commissioning and as-builts have just made.
+ * READY only when every system has a pack and every REQUIRED deliverable on it is accepted. A system
+ * with no pack at all is UNKNOWN rather than ready: nothing has been asked for, so nothing can be
+ * said. Deliverables marked not required are excluded — that is what marking them is for.
+ */
+function omItem(f: HandoverReadinessFacts): HandoverReadinessItem {
+  const id: HandoverItemId = 'omManuals';
+  const label = 'O&M deliverables accepted';
+  const source = 'Handover — O&M pack';
+  if (f.systemIds.length === 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN', 'No system is registered, so there is no O&M pack to complete.');
+  }
+  const required = f.omItems.filter((i) => i.required);
+  const withoutPack = f.systemIds.filter((sid) => !required.some((i) => i.commissioningId === sid));
+  if (withoutPack.length > 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN',
+      `${withoutPack.length} of ${f.systemIds.length} system${f.systemIds.length === 1 ? ' has' : 's have'} no O&M deliverables listed, so the pack cannot be judged complete.`);
+  }
+  const outstanding = required.filter((i) => i.state !== 'accepted');
+  if (outstanding.length > 0) {
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${outstanding.length} of ${required.length} required deliverable${required.length === 1 ? '' : 's'} not accepted.`);
+  }
+  return item(id, label, source, 'projected', 'READY',
+    `All ${required.length} required deliverable${required.length === 1 ? '' : 's'} accepted across ${f.systemIds.length} system${f.systemIds.length === 1 ? '' : 's'}.`);
+}
+
+/**
+ * Client training, per system.
+ *
+ * READY only when every system has a session the CLIENT acknowledged. Our own "completed" is not
+ * enough: the acknowledgement is the client's word, and it is the one a dispute turns on. Sessions
+ * recorded against the project rather than a system count for every system, which is how a single
+ * whole-package handover session is legitimately recorded.
+ */
+function trainingItem(f: HandoverReadinessFacts): HandoverReadinessItem {
+  const id: HandoverItemId = 'training';
+  const label = 'Client training acknowledged';
+  const source = 'Handover — client training';
+  if (f.systemIds.length === 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN', 'No system is registered, so there is no training to give.');
+  }
+  const acknowledged = f.trainingSessions.filter((s) => s.state === 'acknowledged');
+  const projectWide = acknowledged.some((s) => s.commissioningId === null);
+  const covered = projectWide
+    ? f.systemIds
+    : f.systemIds.filter((sid) => acknowledged.some((s) => s.commissioningId === sid));
+  const missing = f.systemIds.length - covered.length;
+  if (f.trainingSessions.length === 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN', 'No training session has been recorded for this project.');
+  }
+  if (missing > 0) {
+    const pending = f.trainingSessions.filter((s) => s.state !== 'acknowledged').length;
+    return item(id, label, source, 'projected', 'BLOCKED',
+      `${missing} of ${f.systemIds.length} system${f.systemIds.length === 1 ? '' : 's'} without client-acknowledged training${pending > 0 ? `; ${pending} session${pending === 1 ? '' : 's'} recorded but not acknowledged` : ''}.`);
+  }
+  return item(id, label, source, 'projected', 'READY',
+    projectWide
+      ? 'A project-wide training session has been acknowledged by the client.'
+      : `Every system has client-acknowledged training (${acknowledged.length} session${acknowledged.length === 1 ? '' : 's'}).`);
+}
+
+/**
+ * The two with no owner left.
+ *
+ * Each says WHO is asserting it and that nothing verified it. When one gains a real authority it
+ * moves to `projected` and the tick goes away — the move commissioning, as-builts, O&M and training
+ * have already made.
  */
 function assertedItems(a: HandoverReadinessFacts['asserted']): HandoverReadinessItem[] {
   const rows: { id: HandoverItemId; label: string; ticked: boolean; missing: string }[] = [
-    { id: 'omManuals', label: 'O&M manuals', ticked: a.omManuals, missing: 'no O&M package authority exists yet' },
     { id: 'warrantyDocs', label: 'Warranty documents', ticked: a.warrantyDocs, missing: 'no warranty-document register is linked' },
-    { id: 'training', label: 'Client training and demonstration', ticked: a.training, missing: 'no client-training record exists yet' },
     { id: 'spares', label: 'Spares and consumables handed over', ticked: a.spares, missing: 'no spares handover record is linked' },
   ];
   return rows.map((row) =>

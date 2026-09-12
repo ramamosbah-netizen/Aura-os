@@ -5,6 +5,8 @@ import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
+import type { OmItem } from './domain/om-package';
+import type { TrainingSession } from './domain/client-training';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -17,6 +19,8 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly testRuns: CommissioningTestRun[] = [];
   private readonly punchItems = new Map<string, PunchItem>();
   private readonly itpLinks = new Map<string, CommissioningItpLink>();
+  private readonly omItems = new Map<string, OmItem>();
+  private readonly trainingSessions = new Map<string, TrainingSession>();
   private readonly handovers = new Map<string, HandoverPackage>();
 
   async appendTestRun(run: CommissioningTestRun): Promise<void> {
@@ -95,6 +99,36 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
     return [...this.punchItems.values()]
       .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async saveOmItem(item: OmItem): Promise<void> {
+    const clash = [...this.omItems.values()].find(
+      (i) => i.id !== item.id && i.commissioningId === item.commissioningId && i.deliverable === item.deliverable,
+    );
+    if (clash) throw new Error('conflict: this deliverable is already on the system’s O&M pack');
+    this.omItems.set(item.id, { ...item });
+  }
+  async findOmItem(id: string, tenantId: string): Promise<OmItem | null> {
+    const i = this.omItems.get(id);
+    return i && i.tenantId === tenantId ? { ...i } : null;
+  }
+  async listOmItems(tenantId: string, projectId?: string): Promise<OmItem[]> {
+    return [...this.omItems.values()]
+      .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async saveTrainingSession(session: TrainingSession): Promise<void> {
+    this.trainingSessions.set(session.id, { ...session });
+  }
+  async findTrainingSession(id: string, tenantId: string): Promise<TrainingSession | null> {
+    const s = this.trainingSessions.get(id);
+    return s && s.tenantId === tenantId ? { ...s } : null;
+  }
+  async listTrainingSessions(tenantId: string, projectId?: string): Promise<TrainingSession[]> {
+    return [...this.trainingSessions.values()]
+      .filter((s) => s.tenantId === tenantId && (!projectId || s.projectId === projectId))
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }
 

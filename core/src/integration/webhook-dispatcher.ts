@@ -31,6 +31,24 @@ export class WebhookDispatcher implements OnModuleInit {
       (s) => s.tenantId === event.tenantId && subscriptionMatches(s, event.type),
     );
     for (const sub of subs) {
+      // ALREADY SENT? (TC-GATE-22) This dispatcher subscribes to `*`, so it receives every event,
+      // and the outbox relay retries the whole event whenever ANY handler in the fan-out throws.
+      // Without this check a failure somewhere else in the system re-POSTs a business event to a
+      // customer endpoint — the only duplicate here that leaves the building, and the only one the
+      // people affected cannot see the cause of.
+      //
+      // The delivery table already recorded every send; nothing was reading it before the send.
+      // A failed read means SEND: a webhook that arrives twice is recoverable, one that never
+      // arrives because the log was unavailable is not. The retry worker owns re-sending a
+      // delivery that failed, which is why this only skips ones already on file.
+      const alreadySent = await this.store
+        .deliveryExists(sub.id, event.id)
+        .catch(() => false);
+      if (alreadySent) {
+        this.logger.log(`${event.type} → ${sub.url} [skipped: already delivered for this event]`);
+        continue;
+      }
+
       const body = JSON.stringify({
         id: event.id,
         type: event.type,

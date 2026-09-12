@@ -43,6 +43,8 @@ const facts = (over: Partial<DossierFacts> = {}): DossierFacts => ({
   systems: [{ id: SYSTEM, code: 'TC-CCTV-01', title: 'CCTV — Tower A', commissioned: true, witnessedBy: 'Consultant', pointsPassed: 4, pointsTotal: 4 }],
   omItems: [{ id: 'om-1', commissioningId: SYSTEM, deliverable: 'om_manual', required: true, state: 'accepted', documentId: 'DOC-OM-001' }],
   trainingSessions: [{ id: 'tr-1', title: 'CCTV operator training', state: 'acknowledged', acknowledgedBy: 'Client Rep' }],
+  // TC-GATE-8: the as-built is linked to the system it documents, not merely present on the project.
+  asBuiltLinks: [{ id: 'ab-1', commissioningId: SYSTEM, documentId: 'ELV-AB-001' }],
   documents: REGISTER,
   ...over,
 });
@@ -93,12 +95,28 @@ describe('TC-GATE-7 — the dossier is assembled, never owned', () => {
     expect(entry.reference).toBe('DOC-OM-001');
   });
 
-  it('says nothing about as-builts when document control could not be read', () => {
+  it('excludes both the as-built and the O&M line when document control could not be read', () => {
     const view = assembleDossier(facts({ documents: null }));
-    expect(sectionOf(view, 'as_built_document').entries).toEqual([]);
-    // And the O&M line is excluded rather than assumed good: unverified is not verified.
+    // Unverified is not verified — for either.
+    expect(sectionOf(view, 'as_built_document').entries[0].included).toBe(false);
+    expect(sectionOf(view, 'as_built_document').entries[0].note).toMatch(/could not be read/i);
     expect(sectionOf(view, 'om_deliverable').entries[0].included).toBe(false);
     expect(sectionOf(view, 'om_deliverable').entries[0].note).toMatch(/could not be read/i);
+  });
+
+  it('gives a system with no linked as-built a line of its own saying so (TC-GATE-8)', () => {
+    const view = assembleDossier(facts({ asBuiltLinks: [] }));
+    const entry = sectionOf(view, 'as_built_document').entries[0];
+    expect(entry.included).toBe(false);
+    expect(entry.label).toMatch(/TC-CCTV-01 — as-built drawing/i);
+    expect(entry.note).toMatch(/no controlled drawing has been linked/i);
+  });
+
+  it('excludes a linked drawing that is in the register but not marked as-built', () => {
+    const view = assembleDossier(facts({ asBuiltLinks: [{ id: 'ab-1', commissioningId: SYSTEM, documentId: 'DOC-OM-001' }] }));
+    const entry = sectionOf(view, 'as_built_document').entries[0];
+    expect(entry.included).toBe(false);
+    expect(entry.note).toMatch(/not an as-built/i);
   });
 
   it('ignores deliverables marked not required — waiving one is a decision, not a gap', () => {
@@ -149,7 +167,7 @@ function services(ports: {
   const events: DomainEvent[] = [];
   const store = new InMemoryCommissioningStore();
   const eventStore = { append: async (b: DomainEvent[]) => { events.push(...b); }, list: async () => [], listByAggregate: async () => [] };
-  const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never);
+  const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never, ports.docControl as never);
   const handover = new HandoverService(store as never, eventStore as never, commissioning, ports.docControl as never);
   return { commissioning, handover, store };
 }
@@ -185,6 +203,9 @@ async function readyProject(commissioning: CommissioningService, handover: Hando
   const point = await commissioning.addTestItem(rec.id, TENANT, { pointNo: 'IMG-01', description: 'Camera image' });
   await commissioning.recordTestResult(rec.id, point.id, TENANT, { result: 'pass', actual: 'Image on VMS' });
   await commissioning.commission(rec.id, TENANT, { commissionedBy: 'Engineer', witnessedBy: 'Consultant' });
+
+  // TC-GATE-8: the as-built must be linked to THIS system, not merely present on the project.
+  await commissioning.linkAsBuilt(rec.id, TENANT, { documentId: 'ELV-AB-001' });
 
   for (const [deliverable, documentId] of [['om_manual', 'DOC-OM-001'], ['warranty_certificate', 'DOC-WAR-001']] as const) {
     const item = await handover.addOmItem(TENANT, { commissioningId: rec.id, deliverable });

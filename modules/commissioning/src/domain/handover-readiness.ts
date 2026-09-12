@@ -20,7 +20,7 @@ import {
  *
  *   commissioning  → Testing & Commissioning: every system COMMISSIONING READY (its own nine-gate
  *                    chain, unchanged from TC-GATE-3)
- *   asBuilts       → Document control: an as-built entry in the project register (TC-GATE-6)
+ *   asBuilts       → Document control: a current as-built drawing linked to EVERY system (TC-GATE-8)
  *   omManuals      → Handover's own O&M pack: every required deliverable accepted, each against a
  *                    reference that resolves in DocControl's register (TC-GATE-5, -6)
  *   warrantyDocs   → the same pack's warranty certificate, on its own (TC-GATE-6)
@@ -96,6 +96,8 @@ export interface HandoverReadinessFacts {
   trainingSessions: { commissioningId: string | null; state: string }[];
   /** The systems the O&M pack and the training are measured against. */
   systemIds: string[];
+  /** Which controlled drawing documents which system (TC-GATE-8). T&C's own link, not a copy. */
+  asBuiltLinks: { commissioningId: string; documentId: string }[];
   /** The one item nobody owns yet — still the package's own checklist. */
   asserted: { spares: boolean };
 }
@@ -143,29 +145,55 @@ function commissioningItem(f: HandoverReadinessFacts): HandoverReadinessItem {
 }
 
 /**
- * As-builts, from the register that can actually say so (TC-GATE-6).
+ * As-builts, PER SYSTEM (TC-GATE-8).
  *
- * Still PROJECT-WIDE, not per system, and that is a limit rather than a choice: a register entry's
- * finest dimension is `discipline` (elv, mep, civil …), and no link exists between a drawing and a
- * commissioning system. Splitting it per system would mean inferring that link from a discipline
- * name, which would answer confidently and sometimes wrongly.
+ * TC-GATE-6 moved this question to the register that can answer it, but asked it once for the whole
+ * project: one entry marked `as_built` anywhere satisfied every system. A ten-system project with a
+ * single as-built lift-lobby layout read READY, and said so — "1 as-built drawing in the register" —
+ * which is weak evidence wearing a pass.
+ *
+ * It could not be split before, because nothing joined the two sides: every ELV system on a project
+ * shares the discipline `elv`, so discipline cannot tell one system's as-built from another's. The
+ * link is now EXPLICIT and T&C-owned (migration 0301), so the question can finally be asked once per
+ * system.
+ *
+ * A system with NO link is UNKNOWN, not BLOCKED: nobody has said anything about it, and nothing has
+ * failed. A system whose linked drawing is missing, superseded, or not actually marked as-built IS
+ * blocked — something was said, and it does not hold.
  */
 function asBuiltItem(f: HandoverReadinessFacts): HandoverReadinessItem {
   const id: HandoverItemId = 'asBuilts';
   const label = 'As-built drawings released';
   const source = 'Document control';
-  if (f.documents === null) return item(id, label, source, 'projected', 'UNKNOWN', 'Document control could not be read.');
-  if (f.documents.length === 0) {
-    return item(id, label, source, 'projected', 'UNKNOWN',
-      'The project register holds no controlled documents, so there are no as-builts to release.');
+  const total = f.systemIds.length;
+  if (total === 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN', 'No system is registered, so there is no as-built to link.');
   }
-  const asBuilt = f.documents.filter((d) => d.status === AS_BUILT_STATUS);
-  if (asBuilt.length === 0) {
+  if (f.documents === null) return item(id, label, source, 'projected', 'UNKNOWN', 'Document control could not be read.');
+
+  const unlinked = f.systemIds.filter((sid) => !f.asBuiltLinks.some((l) => l.commissioningId === sid));
+  if (unlinked.length > 0) {
+    return item(id, label, source, 'projected', 'UNKNOWN',
+      `${unlinked.length} of ${total} ${plural(total, 'system has', 'systems have')} no as-built drawing linked, so it cannot be said whether the as-builts cover the project.`);
+  }
+
+  const unsound = f.systemIds.filter((sid) => !linkedAsBuiltIsSound(f, sid));
+  if (unsound.length > 0) {
     return item(id, label, source, 'projected', 'BLOCKED',
-      `${f.documents.length} ${plural(f.documents.length, 'document', 'documents')} in the project register, none marked as-built.`);
+      `${unsound.length} of ${total} ${plural(total, 'system is', 'systems are')} linked to a drawing that is not a current as-built in the register.`);
   }
   return item(id, label, source, 'projected', 'READY',
-    `${asBuilt.length} as-built ${plural(asBuilt.length, 'drawing', 'drawings')} in the register.`);
+    `Every system has a current as-built drawing linked (${f.asBuiltLinks.length} in total).`);
+}
+
+/** At least one of this system's linked drawings resolves, is current, and is marked as-built. */
+function linkedAsBuiltIsSound(f: HandoverReadinessFacts, systemId: string): boolean {
+  return f.asBuiltLinks
+    .filter((l) => l.commissioningId === systemId)
+    .some((l) => {
+      const resolved = resolveDocumentReference(l.documentId, f.documents);
+      return referenceIsSound(resolved) && resolved!.document!.status === AS_BUILT_STATUS;
+    });
 }
 
 /**

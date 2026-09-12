@@ -65,12 +65,14 @@ export class HandoverService {
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
-    const [workspace, documents, omItems, trainingSessions] = await Promise.all([
+    const [workspace, documents, omItems, trainingSessions, asBuiltLinks] = await Promise.all([
       this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
       this.readDocuments(pkg.tenantId, pkg.projectId),
       // Handover's own two authorities (TC-GATE-5) — no port needed, these are its own tables.
       this.store.listOmItems(pkg.tenantId, pkg.projectId),
       this.store.listTrainingSessions(pkg.tenantId, pkg.projectId),
+      // T&C's as-built links (TC-GATE-8) — same module, so a direct store read.
+      this.store.listAsBuiltLinksForProject(pkg.tenantId, pkg.projectId),
     ]);
 
     const notReady = workspace.systems.filter((s) => !s.readiness.commissioningReady);
@@ -91,6 +93,7 @@ export class HandoverService {
         documentId: i.documentId,
       })),
       trainingSessions: trainingSessions.map((s) => ({ commissioningId: s.commissioningId, state: s.state })),
+      asBuiltLinks: asBuiltLinks.map((l) => ({ commissioningId: l.commissioningId, documentId: l.documentId })),
       systemIds: workspace.systems.map((s) => s.record.id),
       // Only spares is left. Warranty documents became a projection at TC-GATE-6, derived from the
       // O&M pack's warranty certificate — the authority was already there, unread.
@@ -145,11 +148,12 @@ export class HandoverService {
 
   /** The dossier as it stands now, from the four owning domains. Reads only; stores nothing. */
   private async assembleFor(pkg: HandoverPackage): Promise<DossierView> {
-    const [workspace, documents, omItems, trainingSessions] = await Promise.all([
+    const [workspace, documents, omItems, trainingSessions, asBuiltLinks] = await Promise.all([
       this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
       this.readDocuments(pkg.tenantId, pkg.projectId),
       this.store.listOmItems(pkg.tenantId, pkg.projectId),
       this.store.listTrainingSessions(pkg.tenantId, pkg.projectId),
+      this.store.listAsBuiltLinksForProject(pkg.tenantId, pkg.projectId),
     ]);
     return assembleDossier({
       systems: workspace.systems.map((s) => ({
@@ -168,6 +172,7 @@ export class HandoverService {
       trainingSessions: trainingSessions.map((s) => ({
         id: s.id, title: s.title, state: s.state, acknowledgedBy: s.acknowledgedBy,
       })),
+      asBuiltLinks: asBuiltLinks.map((l) => ({ id: l.id, commissioningId: l.commissioningId, documentId: l.documentId })),
       documents,
     });
   }

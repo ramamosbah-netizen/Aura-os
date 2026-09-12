@@ -6,6 +6,7 @@ export * from './domain/commissioning-readiness';
 export * from './domain/handover-readiness';
 export * from './domain/document-reference';
 export * from './domain/dossier';
+export * from './domain/asbuilt-link';
 export * from './domain/om-package';
 export * from './domain/client-training';
 export * from './ports';

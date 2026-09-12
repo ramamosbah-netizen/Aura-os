@@ -48,6 +48,8 @@ const facts = (over: Partial<HandoverReadinessFacts> = {}): HandoverReadinessFac
     { commissioningId: SYSTEM, deliverable: 'warranty_certificate', required: true, state: 'accepted', documentId: 'DOC-WAR-001' },
   ],
   trainingSessions: [{ commissioningId: SYSTEM, state: 'acknowledged' }],
+  // TC-GATE-8: as-builts are per system, so the baseline links one to the system it documents.
+  asBuiltLinks: [{ commissioningId: SYSTEM, documentId: 'ELV-AB-001' }],
   systemIds: [SYSTEM],
   asserted: { spares: true },
   ...over,
@@ -191,29 +193,68 @@ describe('TC-GATE-4 — the readiness projection', () => {
     expect(assessHandoverReadiness(facts({ systemsTotal: 0, systemsCommissioningReady: 0 })).readyToSubmit).toBe(false);
   });
 
-  describe('as-builts (TC-GATE-6 — read from document control, not Engineering)', () => {
-    it('is UNKNOWN when the register cannot be read, and when it holds nothing', () => {
+  describe('as-builts (document control since TC-GATE-6, per system since TC-GATE-8)', () => {
+    it('is UNKNOWN when the register cannot be read', () => {
       expect(itemOf({ documents: null }, 'asBuilts').state).toBe('UNKNOWN');
-      expect(itemOf({ documents: [] }, 'asBuilts').state).toBe('UNKNOWN');
-    });
-
-    it('blocks when the register holds documents but none is marked as-built', () => {
-      const blocked = itemOf({ documents: [OM_DOC] }, 'asBuilts');
-      expect(blocked.state).toBe('BLOCKED');
-      expect(blocked.reason).toMatch(/none marked as-built/i);
     });
 
     /**
-     * THE REGRESSION THIS GATE EXISTS FOR.
+     * THE REGRESSION TC-GATE-6 EXISTS FOR.
      *
-     * Until TC-GATE-6 this item read Engineering, whose `DrawingStatus` has no as-built value, so it
-     * could never reach READY on data a real project could produce — every handover package was
-     * permanently unsubmittable. The old test passed by handing the port a fabricated status.
+     * Before it, this item read Engineering, whose `DrawingStatus` has no as-built value, so it could
+     * never reach READY on data a real project could produce — every handover package was permanently
+     * unsubmittable. The old test passed by handing the port a fabricated status.
      */
     it('reaches READY — which it could not do while the question went to Engineering', () => {
-      const ready = itemOf({ documents: [AS_BUILT, OM_DOC] }, 'asBuilts');
+      const ready = itemOf({}, 'asBuilts');
       expect(ready.state).toBe('READY');
       expect(ready.source).toBe('Document control');
+    });
+
+    /**
+     * THE WEAKNESS TC-GATE-8 CLOSES.
+     *
+     * One as-built anywhere in the register used to satisfy every system. Now the question is asked
+     * once per system, and a system nobody has spoken about is UNKNOWN rather than carried by another
+     * system's drawing.
+     */
+    it('is UNKNOWN for a system with nothing linked, even when the register holds an as-built', () => {
+      const item = itemOf({ systemIds: [SYSTEM, 'sys-2'] }, 'asBuilts');
+      expect(item.state).toBe('UNKNOWN');
+      expect(item.reason).toMatch(/1 of 2 systems have no as-built drawing linked/i);
+    });
+
+    it('blocks when a linked drawing is not in the register', () => {
+      const item = itemOf({ asBuiltLinks: [{ commissioningId: SYSTEM, documentId: 'ELV-AB-999' }] }, 'asBuilts');
+      expect(item.state).toBe('BLOCKED');
+      expect(item.reason).toMatch(/not a current as-built/i);
+    });
+
+    it('blocks when the linked drawing is in the register but is not marked as-built', () => {
+      const item = itemOf({ asBuiltLinks: [{ commissioningId: SYSTEM, documentId: 'DOC-OM-001' }] }, 'asBuilts');
+      expect(item.state).toBe('BLOCKED');
+    });
+
+    it('blocks when the linked as-built has since been superseded', () => {
+      const item = itemOf({ documents: [{ ...AS_BUILT, status: 'superseded' }, OM_DOC, WARRANTY_DOC] }, 'asBuilts');
+      expect(item.state).toBe('BLOCKED');
+    });
+
+    it('is READY when every system has one, counted per system rather than per project', () => {
+      const item = itemOf({
+        systemIds: [SYSTEM, 'sys-2'],
+        documents: [AS_BUILT, { ...AS_BUILT, id: 'doc-ab2', documentNumber: 'ELV-AB-002' }, OM_DOC, WARRANTY_DOC],
+        asBuiltLinks: [
+          { commissioningId: SYSTEM, documentId: 'ELV-AB-001' },
+          { commissioningId: 'sys-2', documentId: 'ELV-AB-002' },
+        ],
+        omItems: [
+          { commissioningId: SYSTEM, deliverable: 'om_manual', required: true, state: 'accepted', documentId: 'DOC-OM-001' },
+          { commissioningId: 'sys-2', deliverable: 'om_manual', required: true, state: 'accepted', documentId: 'DOC-OM-001' },
+        ],
+      }, 'asBuilts');
+      expect(item.state).toBe('READY');
+      expect(item.reason).toMatch(/2 in total/i);
     });
   });
 
@@ -235,7 +276,7 @@ function services(ports: {
   const events: DomainEvent[] = [];
   const store = new InMemoryCommissioningStore();
   const eventStore = { append: async (b: DomainEvent[]) => { events.push(...b); }, list: async () => [], listByAggregate: async () => [] };
-  const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never);
+  const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never, ports.docControl as never);
   const handover = new HandoverService(store as never, eventStore as never, commissioning, ports.docControl as never);
   return { commissioning, handover, events };
 }
@@ -247,8 +288,13 @@ const readyPorts = {
   docControl: { readProjectDocuments: async () => REGISTER } as DocControlPort,
 };
 
-/** The Gate-5 half of a ready package: a complete O&M pack and an acknowledged training session. */
-async function completePackAndTraining(handover: HandoverService, commissioningId: string) {
+/**
+ * The Gate-5 and Gate-8 half of a ready package: a complete O&M pack, an acknowledged training
+ * session, and the as-built drawing LINKED to the system it documents — since TC-GATE-8 an as-built
+ * sitting in the register no longer covers a system nobody linked it to.
+ */
+async function completePackAndTraining(handover: HandoverService, commissioning: CommissioningService, commissioningId: string) {
+  await commissioning.linkAsBuilt(commissioningId, TENANT, { documentId: 'ELV-AB-001' });
   for (const [deliverable, documentId] of [['om_manual', 'DOC-OM-001'], ['warranty_certificate', 'DOC-WAR-001']] as const) {
     const item = await handover.addOmItem(TENANT, { commissioningId, deliverable });
     await handover.advanceOmItem(item.id, TENANT, 'submitted', { documentId });
@@ -293,7 +339,7 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
   it('submits once the evidence supports it', async () => {
     const { commissioning, handover } = services(readyPorts);
     const system = await commissionedProject(commissioning);
-    await completePackAndTraining(handover, system.id);
+    await completePackAndTraining(handover, commissioning, system.id);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-03', title: 'Tower A handover' });
     await handover.updateChecklist(pkg.id, TENANT, { spares: true });
 
@@ -310,7 +356,7 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
   it('blocks when document control is unwired, even with everything else in place', async () => {
     const { commissioning, handover } = services({ elv: readyPorts.elv, quality: readyPorts.quality, docControl: readyPorts.docControl });
     const system = await commissionedProject(commissioning);
-    await completePackAndTraining(handover, system.id);
+    await completePackAndTraining(handover, commissioning, system.id);
 
     // Now take document control away and re-read: the same package, nothing else changed.
     const { handover: blind } = services({ elv: readyPorts.elv, quality: readyPorts.quality });
@@ -362,7 +408,7 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
   it('leaves acceptance and the warranty clock exactly as they were', async () => {
     const { commissioning, handover, events } = services(readyPorts);
     const system = await commissionedProject(commissioning);
-    await completePackAndTraining(handover, system.id);
+    await completePackAndTraining(handover, commissioning, system.id);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-05', title: 'Tower A handover' });
     await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT);

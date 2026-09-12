@@ -3,6 +3,7 @@ import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
+import type { AsBuiltLink } from './domain/asbuilt-link';
 import type { OmItem } from './domain/om-package';
 import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
@@ -46,6 +47,14 @@ export interface CommissioningStore {
   deleteItpLink(id: string, tenantId: string): Promise<void>;
   listItpLinks(commissioningId: string, tenantId: string): Promise<CommissioningItpLink[]>;
   listItpLinksForProject(tenantId: string, projectId?: string): Promise<CommissioningItpLink[]>;
+
+  // As-built links — T&C's own record of which controlled drawing documents which system
+  // (TC-GATE-8). Mutable, unlike the dossier manifest: a link is a statement about the present, and
+  // one made in error must be retractable.
+  saveAsBuiltLink(link: AsBuiltLink): Promise<void>;
+  deleteAsBuiltLink(id: string, tenantId: string): Promise<void>;
+  listAsBuiltLinks(commissioningId: string, tenantId: string): Promise<AsBuiltLink[]>;
+  listAsBuiltLinksForProject(tenantId: string, projectId?: string): Promise<AsBuiltLink[]>;
 
   // O&M deliverables and client training — Handover's own authorities (TC-GATE-5). Both are scoped
   // to a system, and both are read project-wide to answer "is this package ready".

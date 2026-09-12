@@ -107,6 +107,8 @@ export interface DossierFacts {
     documentId: string | null;
   }[];
   trainingSessions: { id: string; title: string; state: string; acknowledgedBy: string | null }[];
+  /** Which controlled drawing documents which system (TC-GATE-8). */
+  asBuiltLinks: { id: string; commissioningId: string; documentId: string }[];
   /** The project register, or null when document control could not be read. */
   documents: ControlledDocumentFact[] | null;
   /** System code by id, for labelling an O&M line with the system it belongs to. */
@@ -182,11 +184,38 @@ export function assembleDossier(facts: DossierFacts): DossierView {
     ),
   );
 
-  // Null register ⇒ no as-built line at all, rather than an empty section that reads like "none
-  // exist". The section carries the reason instead.
-  const asBuilts = (facts.documents ?? [])
-    .filter((d) => d.status === AS_BUILT_STATUS)
-    .map((d) => entry('as_built_document', d.id, d.documentNumber, d.title, `rev ${d.revision}`, true));
+  // Per system since TC-GATE-8, because that is the question the client asks: not "does an as-built
+  // exist on this project" but "where is the as-built for THIS system". A system with nothing linked
+  // gets a line saying so, rather than being silently absent from the pack.
+  const asBuilts = facts.systems.flatMap((s) => {
+    const links = facts.asBuiltLinks.filter((l) => l.commissioningId === s.id);
+    if (links.length === 0) {
+      return [entry('as_built_document', s.id, null, `${s.code} — as-built drawing`, null, false,
+        'No controlled drawing has been linked as this system’s as-built.')];
+    }
+    return links.map((l) => {
+      const resolved = resolveDocumentReference(l.documentId, facts.documents);
+      const doc = resolved?.document ?? null;
+      const current = referenceIsSound(resolved) && doc!.status === AS_BUILT_STATUS;
+      return entry(
+        'as_built_document',
+        l.id,
+        doc?.documentNumber ?? l.documentId,
+        `${s.code} — ${doc?.title ?? 'linked drawing'}`,
+        doc ? `rev ${doc.revision}` : null,
+        current,
+        current
+          ? null
+          : facts.documents === null
+            ? 'Document control could not be read, so the linked drawing is unverified.'
+            : resolved === null || resolved.missing
+              ? `No document "${l.documentId}" is in the project register.`
+              : resolved.superseded
+                ? 'The register has superseded the revision this points at.'
+                : `The linked drawing is '${doc!.status}', not an as-built.`,
+      );
+    });
+  });
 
   const sections: DossierSection[] = [
     section('commissioning_certificate', 'Commissioning evidence packs', 'Testing & commissioning', certificates),

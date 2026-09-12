@@ -134,8 +134,34 @@ export interface EngineeringReleasePort {
  *
  * One call per project, like every other port here: a project has ONE register.
  */
+/**
+ * A transmittal, as document control describes it (TC-GATE-15).
+ *
+ * TC-GATE-14 asked DocControl to open one and stored its id on the dossier manifest — a reference
+ * nothing read back. A stored reference nobody resolves is exactly what TC-GATE-6 removed from the
+ * O&M pack: it looks like evidence and proves nothing. This is the other half of that gate.
+ *
+ * Every field is DocControl's answer, read when it is shown and stored nowhere. 'acknowledgedAt' and
+ * 'acknowledgedBy' are the ones that matter: they are the client's word that the documents arrived,
+ * which is the fact "we never received the O&M manuals" actually turns on.
+ */
+export interface TransmittalFact {
+  id: string;
+  code: string;
+  /** draft | sent | received | acknowledged */
+  status: string;
+  recipient: string | null;
+  sentAt: string | null;
+  receivedAt: string | null;
+  acknowledgedAt: string | null;
+  /** Who acknowledged it, from the immutable acknowledgement record DocControl keeps. */
+  acknowledgedBy: string | null;
+}
+
 export interface DocControlPort {
   readProjectDocuments(tenantId: string, projectId: string): Promise<ControlledDocumentFact[]>;
+  /** One call per project, like the register read beside it: a project has few transmittals. */
+  readProjectTransmittals(tenantId: string, projectId: string): Promise<TransmittalFact[]>;
 }
 
 /**

@@ -109,14 +109,34 @@ test('the dossier assembles what the client receives, and remembers what was sen
   // TC-GATE-14: document control was asked to open a transmittal for the controlled documents this
   // issue carries. The manifest is our record of what was sent; the transmittal is theirs of it being
   // conveyed — and it is what an acknowledgement later attaches to.
-  await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toHaveText(/conveyed by document control/i);
+  // TC-GATE-15 made this line say WHAT BECAME of the conveyance rather than only that one exists,
+  // so the assertion names the transmittal and its state. The full lifecycle is driven below.
+  await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toContainText(`TR-${pkgCode}-1`);
   const transmittals = await (await page.request.get(`${API}/api/v1/doccontrol/transmittals`, { headers: H() })).json();
-  const mine = (transmittals as { code: string; status: string; projectId: string }[]).filter((t) => t.projectId === projectId);
+  const mine = (transmittals as { id: string; code: string; status: string; projectId: string }[]).filter((t) => t.projectId === projectId);
   expect(mine, 'document control must hold the transmittal, because it is the one that made it').toHaveLength(1);
   expect(mine[0].code).toBe(`TR-${pkgCode}-1`);
   // A DRAFT: sending needs a recipient, and a handover package does not know the client's document
   // controller. DocControl completes and sends it, which is its job.
   expect(mine[0].status, 'Handover opens it; document control sends it').toBe('draft');
+  // TC-GATE-15: the stored id is read back, so the surface says what became of the conveyance
+  // rather than only that one exists.
+  await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toContainText(/opened, not yet sent/i);
+
+  // ── Document control sends it, and the client acknowledges ──────────────────────────────────────
+  const transmittalId = mine[0].id;
+  await page.request.post(`${API}/api/v1/doccontrol/transmittals/${transmittalId}/send`, { headers: H(), data: {} });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toContainText(/not yet acknowledged/i);
+
+  const ack = await page.request.put(`${API}/api/v1/doccontrol/transmittals/${transmittalId}/acknowledge`, {
+    headers: H(), data: { note: 'Received in full' },
+  });
+  expect(ack.ok(), `document control must accept the acknowledgement — ${await ack.text()}`).toBe(true);
+
+  // THE FACT THIS WHOLE SEAM EXISTS FOR: not our record of sending, but theirs of receiving.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toContainText(/acknowledged by/i);
   await expect(issue1).toContainText(`DOC-OM-${stamp}`);
   await expect(issue1).toContainText(/accepted · rev B/i);
   await expect(issue1).toContainText(`ELV-AB-${stamp}`);

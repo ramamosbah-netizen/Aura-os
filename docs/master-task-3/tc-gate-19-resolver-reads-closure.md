@@ -120,7 +120,7 @@ with auth ON as `u-admin`.
 | Check | Result |
 |---|---|
 | `drawing-release-summary.pg-int` — real Postgres, application role, **130 revisions** | **5 passed** |
-| e2e — full suite | _pending_ |
+| e2e — **full suite**, 54 specs | **149 passed**, 6 skipped, 4 failed — see §7 |
 | `@aura/commissioning` | **176 passed** (was 174) |
 | `@aura/engineering` | 48 passed, 5 skipped (the pg-int suite, run separately above) |
 | `@aura/procurement` | 44 passed |
@@ -129,7 +129,7 @@ with auth ON as `u-admin`.
 | `@aura/api` | **410 passed** (was 405 — the new fitness test) |
 | `@aura/web` | 185 passed |
 | `pnpm typecheck` | 51 / 51 |
-| production `next build` | _pending_ |
+| production `next build` | clean, 27 / 27 |
 | `rls-fitness` | 254 / 254 |
 
 **The integration test proves the defect before it proves the fix.** It seeds thirty approved
@@ -141,6 +141,22 @@ another tenant seeing none of it.
 
 It runs against the Postgres store rather than raw SQL on purpose: the cap lives in that adapter, and
 the in-memory one does not have it.
+
+---
+
+## 6a. The four e2e failures, and how I know they are not mine
+
+The first full run showed **nine**. I did not assume and I did not dismiss: I committed, checked out
+**main**, restarted the API, and ran the same specs. Main failed **three**. Back on the branch with an
+equally fresh server, the same specs failed **three** — identical. The extra six were a dev server
+that had been up for four hours against a drifting database, not a regression. *(Two earlier registers
+in this series blamed "cross-test interference" for what turned out to be a hydration race; the fix for
+that habit is a baseline, not a better guess.)*
+
+- `global-shell-home`, `internal-chat`, `permit-workflow` — **fail identically on main**. Pre-existing,
+  not investigated here, and not this gate's to fix.
+- `spine-journey › account: create → read in the portfolio` — appeared only in the full run and
+  **passes 8/8 in isolation**. A full-suite flake in CRM, which nothing in this change touches.
 
 ---
 

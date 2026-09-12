@@ -1,9 +1,9 @@
 # TC-GATE-2-CORE-WORKSPACE-CLOSURE
 
-**Verdict: NOT CLOSED.** The scope is built, tested and browser-proven, and one required piece of
-evidence is missing: the browser proof ran against the repo's in-memory tier, not against
-PostgreSQL, because Docker would not start on this machine (§10). Everything else in the gate is
-complete. Re-running one command closes it — §10 has the exact command and what it must show.
+**Verdict: CLOSED / VERIFIED.** The scope is built, tested, and proven in the browser against the
+disposable PostgreSQL database with auth on. The one piece of evidence this register originally
+lacked — the TIER-3 run — was executed afterwards and passed unchanged; §10 records what ran and what
+it showed, and keeps the original limitation visible rather than deleting it.
 
 **Scope:** Overview, Systems & Equipment, Testing & Commissioning, Defects & Retests. No ITP
 authoring, no pre-commissioning, no certificates, no Handover change, no O&M, no client training,
@@ -196,7 +196,9 @@ Full checks: commissioning 49 passed / 8 skipped (the pg-int suite, gated), `@au
 
 ## 9. Browser and actor evidence
 
-Auth **ON** (`/auth/status` → `{"enabled":true}`), signed in as **u-admin**.
+Auth **ON** (`/auth/status` → `{"enabled":true}`), signed in as **u-admin**. Run twice: first on the
+in-memory tier, then unchanged on the disposable PostgreSQL database (§10). Both passed; the table
+below describes the PostgreSQL run.
 
 **The journey** (`commissioning-workspace.spec.ts`, all asserted):
 
@@ -233,20 +235,30 @@ only behaviour in this gate that a single principal cannot exercise.
 
 ## 10. Known limitations
 
-1. **The browser proof ran on the in-memory tier (TIER-2), not PostgreSQL (TIER-3).** Docker
-   Desktop's Linux engine would not start on this machine (the process runs; the named pipe never
-   appears), so the disposable database was unavailable. This matters for two things the in-memory
-   adapter cannot prove: the Postgres store paths for the new project-wide queries and the two new
-   punch columns, and RLS posture after `0297`.
-   **What was proven on Postgres before it went down:** migration `0297` applied cleanly
-   (`✓ done 0297_commissioning_punch_test_provenance.sql`, 1 applied / 296 current).
-   **What to re-run to close this** — with Docker up and the disposable database provisioned:
-   ```bash
-   cd apps/web && AURA_API_URL=http://localhost:4000 E2E_DISPOSABLE_DB=1 E2E_USERNAME=u-admin E2E_PASSWORD=e2e-password E2E_VIEWER_USERNAME=u-e2e-viewer E2E_ALT_USERNAME=u-e2e-checker pnpm exec playwright test e2e/commissioning-workspace.spec.ts e2e/commissioning-permissions.spec.ts e2e/commissioning-test-lineage.spec.ts
-   ```
-   plus `node apps/api/scripts/rls-fitness.mjs` (expected: 247/247 enabled, forced, policied —
-   `0297` adds columns to a table that is already RLS-enabled and policied, so the posture should be
-   unchanged, but it has not been re-measured).
+1. **~~The browser proof ran on the in-memory tier (TIER-2), not PostgreSQL (TIER-3).~~ CLOSED.**
+   This was the reason the gate was first reported NOT CLOSED: Docker Desktop's Linux engine would
+   not start on this machine, so the disposable database was unavailable, and the Postgres store
+   paths for the new project-wide queries and punch columns went unproven — as did RLS posture after
+   `0297`.
+
+   **Resolved.** Docker came up; the disposable database was re-provisioned from zero (297/297
+   migrations, `aura_app` LOGIN=true SUPERUSER=false BYPASSRLS=false, marked `e2e-disposable`), and
+   the command in this register was run against it verbatim, with auth on:
+
+   | Evidence | Result |
+   | --- | --- |
+   | `commissioning-workspace` + `commissioning-permissions` + `commissioning-test-lineage` with `E2E_DISPOSABLE_DB=1` | **5 passed** — the full journey, the 403s, and the Gate-1 lineage, on PostgreSQL |
+   | Regressions on the same database (workflow, the four delivery-workspace section specs, engineering, operations, closeout readiness, project lifecycle) | **16 passed** |
+   | `apps/api/scripts/rls-fitness.mjs`, **measured with 0297 applied** | 247 tenant-scoped tables · enabled 247 · forced 247 · with-policy 247 |
+   | `test-run-immutability.rls.pg-int.test.ts` as `aura_app` | **8 passed** — unchanged by 0297 |
+   | Cross-tenant isolation probe (provisioner) | 15 assertions passed under a non-bypass role |
+
+   Nothing in the product changed to make this pass: the same specs and the same code, a different
+   backing store. One incident is recorded because it looked like a product fault and was not — a
+   `404` from the run-append route on the long-running dev server on :3000, which had been running
+   across this gate's route additions and deletions. Restarting it fixed it, and the same route had
+   already passed against every freshly started test server.
+
 2. **A throwaway `api-memory` launch configuration** was added to `.claude/launch.json` to run that
    tier. It exists only because Windows cannot express an empty environment variable through `cmd`;
    it sets `DATABASE_URL=`, `AUTO_MIGRATE=off` and `AUTH_STATE_PERSISTENCE=optional` for a local
@@ -278,4 +290,5 @@ only behaviour in this gate that a single principal cannot exercise.
 
 ---
 
-**CLOSED / NOT CLOSED: NOT CLOSED** — pending only the TIER-3 re-run in §10.1. Gate 3 not started.
+**CLOSED / NOT CLOSED: CLOSED / VERIFIED** — the TIER-3 proof in §10.1 ran and passed. Gate 3 not
+started.

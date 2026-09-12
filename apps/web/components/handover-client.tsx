@@ -48,20 +48,18 @@ interface HandoverPackage {
 }
 
 /**
- * The items a person can still tick — by TC-GATE-6, exactly one.
+ * THERE IS NOTHING LEFT TO TICK (TC-GATE-16).
  *
- * Everything else is derived from a domain that owns the evidence, and the API refuses a tick for
- * each. A checkbox that always errors is worse than no checkbox: it invites someone to try, fail,
- * and conclude the app is broken.
+ * This list began as six checkboxes. Each gate removed one as its evidence found an owner —
+ * commissioned systems and as-builts at TC-GATE-4, O&M and training at TC-GATE-5, warranty
+ * certificates at TC-GATE-6, and spares last, at TC-GATE-16. The API refuses every key, so a
+ * checkbox here could now only ever produce an error, and a control that always errors is worse than
+ * no control: it invites someone to try, fail, and conclude the app is broken.
  *
- * THIS LIST WAS WRONG between TC-GATE-5 and TC-GATE-6. Gate 5 turned `omManuals` and `training`
- * into projections and taught the API to refuse them, but left both checkboxes here — so two
- * controls on this page could only ever produce an error. Deriving an item and withdrawing its
- * control are one change, not two, and splitting them left a visible lie on screen.
+ * The list is kept, empty and typed, rather than deleted: it is where a future tickable item would
+ * go, and its emptiness is the statement.
  */
-const CHECK_ITEMS: { key: keyof Checklist; label: string; core: boolean }[] = [
-  { key: 'spares', label: 'Spares & consumables handed over', core: false },
-];
+const CHECK_ITEMS: { key: keyof Checklist; label: string; core: boolean }[] = [];
 
 export default function HandoverClient({
   initialPackages,
@@ -168,11 +166,10 @@ export default function HandoverClient({
           <div style={st.readinessEyebrow}>HANDOVER READINESS</div>
           <h3 id="handover-readiness-heading" style={st.readinessTitle}>Evidence gates for acceptance</h3>
           <p style={st.readinessDescription}>
-            Five of these six are <strong>derived from the domain that owns the evidence</strong> — Testing &amp; Commissioning for
-            the systems, document control for the as-builts, and Handover&rsquo;s own O&amp;M pack and training record for the rest —
-            and none can be ticked here. Only <strong>spares</strong> is still an assertion, because no authority exists yet to
-            derive it from, and it says so on its own row. A domain that cannot be read reads UNKNOWN and blocks the
-            submission rather than passing.
+            <strong>Every one of these is derived from the domain that owns the evidence</strong> — Testing &amp; Commissioning for
+            the systems, Quality for the snags, document control for the as-builts, and this workspace&rsquo;s own O&amp;M pack,
+            training record and spares record for the rest. <strong>Nothing here can be ticked.</strong> A domain that cannot
+            be read reads UNKNOWN and blocks the submission rather than passing.
           </p>
         </div>
         <div style={st.readinessGrid} data-testid="handover-readiness">
@@ -272,13 +269,13 @@ export default function HandoverClient({
                         {item.label}{item.core ? <span style={st.coreStar} title="Required to submit"> *</span> : null}
                       </label>
                     ))}
-                    {/* Said where the ticks are, not only in the panel above: the items that left this
-                        list did not become optional — they became evidence. */}
+                    {/* Said where the ticks used to be: the items that left this list did not become
+                        optional — they became evidence, one gate at a time, and spares was the last. */}
                     <span style={st.derivedNote} data-testid={`handover-derived-note-${p.code}`}>
-                      Commissioned systems, as-built drawings, O&amp;M deliverables, warranty certificates and client
-                      training are <strong>derived</strong> from Testing &amp; Commissioning, document control and this
-                      workspace&rsquo;s own O&amp;M and training records. They are shown in handover readiness above and
-                      cannot be ticked.
+                      There is nothing to tick. Commissioned systems, Quality snags, as-built drawings, O&amp;M
+                      deliverables, warranty certificates, client training and <strong>spares</strong> are all
+                      <strong> derived</strong> from the domains that hold the evidence, and are shown in handover
+                      readiness above.
                     </span>
                   </div>
 

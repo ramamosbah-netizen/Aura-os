@@ -11,6 +11,7 @@ import type { CertificateLink } from './domain/certificate-link';
 import type { OmItem, OmDeliverable, OmItemState } from './domain/om-package';
 import type { DossierItem, DossierKind } from './domain/dossier';
 import type { TrainingSession, TrainingState } from './domain/client-training';
+import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
@@ -199,6 +200,41 @@ export class PostgresCommissioningStore implements CommissioningStore {
       [handoverId, tenantId],
     );
     return res.rows.map(toDossierItem);
+  }
+
+  async saveSpareItem(i: SpareItem): Promise<void> {
+    // No ON CONFLICT on the natural key: the unique (commissioning_id, description) constraint is
+    // what stops one system carrying the same part twice, and swallowing it would make "how many
+    // were handed over" answerable two ways.
+    await this.pool.query(
+      `insert into public.aura_handover_spares
+        (id, tenant_id, company_id, project_id, commissioning_id, description, stock_item_id, unit,
+         quantity_required, quantity_handed_over, required, handed_over_at, handed_over_by,
+         acknowledged_by, acknowledged_at, notes, created_by, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       on conflict (id) do update set
+         stock_item_id = excluded.stock_item_id, unit = excluded.unit,
+         quantity_required = excluded.quantity_required, quantity_handed_over = excluded.quantity_handed_over,
+         required = excluded.required, handed_over_at = excluded.handed_over_at, handed_over_by = excluded.handed_over_by,
+         acknowledged_by = excluded.acknowledged_by, acknowledged_at = excluded.acknowledged_at,
+         notes = excluded.notes, updated_at = excluded.updated_at`,
+      [i.id, i.tenantId, i.companyId, i.projectId, i.commissioningId, i.description, i.stockItemId, i.unit,
+       i.quantityRequired, i.quantityHandedOver, i.required, i.handedOverAt, i.handedOverBy,
+       i.acknowledgedBy, i.acknowledgedAt, i.notes, i.createdBy, i.createdAt, i.updatedAt],
+    );
+  }
+  async findSpareItem(id: string, tenantId: string): Promise<SpareItem | null> {
+    const res = await this.pool.query('select * from public.aura_handover_spares where id = $1 and tenant_id = $2', [id, tenantId]);
+    return res.rowCount === 0 ? null : toSpareItem(res.rows[0]);
+  }
+  async listSpareItems(tenantId: string, projectId?: string): Promise<SpareItem[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_handover_spares
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toSpareItem);
   }
 
   async saveTrainingSession(s: TrainingSession): Promise<void> {
@@ -542,6 +578,21 @@ function toDossierItem(r: Record<string, unknown>): DossierItem {
     issuedAt: tsIso(r.issued_at) as string, issuedBy: (r.issued_by as string) ?? null,
     transmittalId: (r.transmittal_id as string) ?? null,
     createdAt: tsIso(r.created_at) as string,
+  };
+}
+
+function toSpareItem(r: Record<string, unknown>): SpareItem {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    projectId: r.project_id as string, commissioningId: r.commissioning_id as string,
+    description: r.description as string, stockItemId: (r.stock_item_id as string) ?? null,
+    unit: (r.unit as string) ?? null,
+    quantityRequired: Number(r.quantity_required), quantityHandedOver: Number(r.quantity_handed_over),
+    required: Boolean(r.required),
+    handedOverAt: tsIso(r.handed_over_at), handedOverBy: (r.handed_over_by as string) ?? null,
+    acknowledgedBy: (r.acknowledged_by as string) ?? null, acknowledgedAt: tsIso(r.acknowledged_at),
+    notes: (r.notes as string) ?? null, createdBy: (r.created_by as string) ?? null,
+    createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
   };
 }
 

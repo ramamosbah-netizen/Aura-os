@@ -122,7 +122,7 @@ export const HANDOVER_PATH = '/handover';
  */
 export const HANDOVER_SECTIONS = [
   { id: 'packages', label: 'Acceptance packages', description: 'Compile, submit and record the governed client handover', icon: FileCheck2, tone: 'teal' },
-  { id: 'om', label: 'O&M deliverables', description: 'The manuals, schedules and licences each system owes the client', icon: NotebookPen, tone: 'blue' },
+  { id: 'om', label: 'O&M & spares', description: 'The manuals, licences and spare parts each system owes the client', icon: NotebookPen, tone: 'blue' },
   { id: 'training', label: 'Training & demonstration', description: 'Client training, demonstrated and acknowledged by them', icon: GraduationCap, tone: 'violet' },
   { id: 'dossier', label: 'Handover dossier', description: 'Everything the client receives, and what has already been issued', icon: Library, tone: 'cyan' },
   { id: 'snags', label: 'Snag & punch list', description: 'Quality snags and commissioning punch items still open against the project', icon: ListChecks, tone: 'amber' },

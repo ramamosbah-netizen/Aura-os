@@ -19,6 +19,9 @@ import {
 import {
   type TrainingSession, makeTrainingSession, completeTraining, acknowledgeTraining,
 } from './domain/client-training';
+import {
+  type SpareItem, makeSpareItem, handOverSpare, acknowledgeSpare, setSpareRequired,
+} from './domain/spares';
 import { resolveDocumentReference, type ResolvedDocument } from './domain/document-reference';
 import {
   type DossierItem, type DossierView, assembleDossier, captureDossier, conveyableLines, groupIssues,
@@ -73,7 +76,7 @@ export class HandoverService {
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
-    const [workspace, documents, omItems, trainingSessions, asBuiltLinks, quality] = await Promise.all([
+    const [workspace, documents, omItems, trainingSessions, asBuiltLinks, quality, spares] = await Promise.all([
       this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
       this.readDocuments(pkg.tenantId, pkg.projectId),
       // Handover's own two authorities (TC-GATE-5) — no port needed, these are its own tables.
@@ -84,6 +87,8 @@ export class HandoverService {
       // Quality's snags (TC-GATE-9), through the port T&C already declares. Null when Quality
       // cannot be read, which the assessment renders as UNKNOWN — never as "no snags".
       this.commissioning.readQualityEvidence(pkg.tenantId, pkg.projectId),
+      // Handover's own spares record (TC-GATE-16) — the last readiness item to get an authority.
+      this.store.listSpareItems(pkg.tenantId, pkg.projectId),
     ]);
 
     const notReady = workspace.systems.filter((s) => !s.readiness.commissioningReady);
@@ -107,9 +112,15 @@ export class HandoverService {
       asBuiltLinks: asBuiltLinks.map((l) => ({ commissioningId: l.commissioningId, documentId: l.documentId })),
       snags: quality?.snags ?? null,
       systemIds: workspace.systems.map((s) => s.record.id),
-      // Only spares is left. Warranty documents became a projection at TC-GATE-6, derived from the
-      // O&M pack's warranty certificate — the authority was already there, unread.
-      asserted: { spares: pkg.checklist.spares },
+      // TC-GATE-16: nothing is asserted any more. Spares was the last of the six, and the package's
+      // stored checklist now has nothing left that anybody reads.
+      spares: spares.map((s) => ({
+        commissioningId: s.commissioningId,
+        required: s.required,
+        quantityRequired: s.quantityRequired,
+        quantityHandedOver: s.quantityHandedOver,
+        acknowledgedBy: s.acknowledgedBy,
+      })),
     });
 
     return {
@@ -307,19 +318,20 @@ export class HandoverService {
   /**
    * Tick one of the items nobody owns yet.
    *
-   * Five of the six are refused, because each is derived from a domain that owns the evidence.
-   * Accepting a tick for one would let the package assert something the evidence does not say —
-   * exactly the behaviour these gates removed. Only SPARES is still a person's word, and it is
-   * labelled as one wherever it appears.
+   * NOTHING IS TICKABLE ANY MORE (TC-GATE-16).
+   *
+   * This method began as the writer for six booleans. Each gate took one away as its evidence found
+   * an owner, and spares was the last. Every key is now refused, and the method is kept rather than
+   * deleted so an existing caller gets a refusal that explains itself instead of a 404 — and so the
+   * refusal is a testable claim rather than an absence.
    */
   async updateChecklist(id: string, tenantId: string, patch: Partial<HandoverChecklist>): Promise<HandoverView> {
-    const derived = (['testCertificates', 'asBuilts', 'omManuals', 'training', 'warrantyDocs'] as const).filter(
-      (key) => key in patch,
-    );
+    const derived = (['testCertificates', 'asBuilts', 'omManuals', 'training', 'warrantyDocs', 'spares'] as const)
+      .filter((key) => key in patch);
     if (derived.length > 0) {
       throw new Error(
         `only an item without an owning authority can be ticked by hand — ${derived.join(', ')} ` +
-          'is derived from Testing & Commissioning, document control, the O&M pack and the client training record',
+          "is derived from Testing & Commissioning, document control, and this workspace's own O&M, training and spares records",
       );
     }
     const next = updateChecklist(await this.mustFind(id, tenantId), patch);
@@ -498,6 +510,75 @@ export class HandoverService {
       ...i,
       resolved: resolveDocumentReference(i.documentId, byProject.get(i.projectId) ?? null),
     }));
+  }
+
+  // ── Spares handed to the client (TC-GATE-16) ─────────────────────────────────────────────────
+
+  /**
+   * List a part the client is owed for a system.
+   *
+   * The system must exist, for the same reason an O&M deliverable's must: spares hanging off nothing
+   * would count towards readiness for a system nobody is handing over.
+   */
+  async addSpareItem(
+    tenantId: string,
+    input: {
+      commissioningId: string; description: string; stockItemId?: string | null; unit?: string | null;
+      quantityRequired?: number; required?: boolean; notes?: string | null; createdBy?: string | null;
+    },
+  ): Promise<SpareItem> {
+    const system = await this.commissioning.get(input.commissioningId, tenantId);
+    if (!system) throw new Error(`not found: commissioning record ${input.commissioningId}`);
+    const item = makeSpareItem({
+      tenantId,
+      companyId: system.companyId,
+      projectId: system.projectId,
+      commissioningId: system.id,
+      description: input.description,
+      stockItemId: input.stockItemId,
+      unit: input.unit,
+      quantityRequired: input.quantityRequired,
+      required: input.required,
+      notes: input.notes,
+      createdBy: input.createdBy,
+    });
+    await this.store.saveSpareItem(item);
+    return item;
+  }
+
+  /** Record that spares were handed over. Our word — the client's comes next. */
+  async handOverSpareItem(
+    id: string,
+    tenantId: string,
+    input: { quantity: number; handedOverBy?: string | null; notes?: string | null },
+  ): Promise<SpareItem> {
+    const item = await this.store.findSpareItem(id, tenantId);
+    if (!item) throw new Error(`not found: spare ${id}`);
+    const next = handOverSpare(item, input);
+    await this.store.saveSpareItem(next);
+    return next;
+  }
+
+  /** The client confirms receipt. Only this satisfies readiness. */
+  async acknowledgeSpareItem(id: string, tenantId: string, input: { acknowledgedBy: string }): Promise<SpareItem> {
+    const item = await this.store.findSpareItem(id, tenantId);
+    if (!item) throw new Error(`not found: spare ${id}`);
+    const next = acknowledgeSpare(item, input);
+    await this.store.saveSpareItem(next);
+    this.logger.log(`[Handover] spare "${next.description}" acknowledged by ${next.acknowledgedBy}`);
+    return next;
+  }
+
+  async setSpareItemRequired(id: string, tenantId: string, required: boolean, notes?: string | null): Promise<SpareItem> {
+    const item = await this.store.findSpareItem(id, tenantId);
+    if (!item) throw new Error(`not found: spare ${id}`);
+    const next = setSpareRequired(item, required, notes);
+    await this.store.saveSpareItem(next);
+    return next;
+  }
+
+  listSpareItems(tenantId: string, projectId?: string): Promise<SpareItem[]> {
+    return this.store.listSpareItems(tenantId, projectId);
   }
 
   // ── Client training and demonstration (TC-GATE-5) ────────────────────────────────────────────

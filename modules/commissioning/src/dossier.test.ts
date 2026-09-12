@@ -259,6 +259,11 @@ async function readyProject(commissioning: CommissioningService, handover: Hando
   const session = await handover.planTraining(TENANT, { projectId: 'p1', commissioningId: rec.id, title: 'CCTV operator training' });
   await handover.completeTraining(session.id, TENANT, { attendees: 'Client FM team (3)' });
   await handover.acknowledgeTraining(session.id, TENANT, { acknowledgedBy: 'Client Rep' });
+
+  // TC-GATE-16: the spares tick became a record — listed, handed over, acknowledged by the client.
+  const spare = await handover.addSpareItem(TENANT, { commissioningId: rec.id, description: 'Spare camera', quantityRequired: 2 });
+  await handover.handOverSpareItem(spare.id, TENANT, { quantity: 2 });
+  await handover.acknowledgeSpareItem(spare.id, TENANT, { acknowledgedBy: 'Client Rep' });
   return rec;
 }
 
@@ -306,7 +311,6 @@ describe('TC-GATE-14 — the conveyance', () => {
     void registry;
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-14', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     expect(opened, 'document control must be asked exactly once').toHaveLength(1);
@@ -341,7 +345,6 @@ describe('TC-GATE-14 — the conveyance', () => {
     const { commissioning, handover } = services({ ...ports, docControl, docControlIssue: issuePort });
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-17', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     const issue = (await handover.readDossier(pkg.id, TENANT))!.issues[0];
@@ -362,7 +365,6 @@ describe('TC-GATE-14 — the conveyance', () => {
     const { commissioning, handover } = services({ ...ports, docControl: blindToTransmittals, docControlIssue: issuePort });
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-18', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     const issue = (await handover.readDossier(pkg.id, TENANT))!.issues[0];
@@ -375,7 +377,6 @@ describe('TC-GATE-14 — the conveyance', () => {
     const { commissioning, handover } = services(ports);
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-15', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     const issues = (await handover.readDossier(pkg.id, TENANT))!.issues;
@@ -389,7 +390,6 @@ describe('TC-GATE-14 — the conveyance', () => {
     const { commissioning, handover } = services({ ...ports, docControlIssue: exploding });
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-16', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
 
     // One domain's outage must not block another's decision. The manifest still records what was
     // sent; it records no transmittal, and the surface says so.
@@ -417,7 +417,6 @@ describe('TC-GATE-7 — an issued manifest does not move', () => {
     const { commissioning, handover } = services(ports);
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-02', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
 
     const view = (await handover.readDossier(pkg.id, TENANT))!.view;
     await handover.submit(pkg.id, TENANT, 'u-admin');
@@ -440,7 +439,6 @@ describe('TC-GATE-7 — an issued manifest does not move', () => {
     const { commissioning, handover } = services(ports);
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-03', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     const issued = (await handover.readDossier(pkg.id, TENANT))!.issues[0];
@@ -463,7 +461,6 @@ describe('TC-GATE-7 — an issued manifest does not move', () => {
     const { commissioning, handover } = services(ports);
     const system = await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-04', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     const first = (await handover.readDossier(pkg.id, TENANT))!.issues[0];
@@ -488,7 +485,6 @@ describe('TC-GATE-7 — an issued manifest does not move', () => {
     const { commissioning, handover, store } = services(ports);
     await readyProject(commissioning, handover);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-05', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT, 'u-admin');
 
     const captured = await store.listDossierItems(pkg.id, TENANT);

@@ -164,7 +164,10 @@ describe('TC-GATE-6 — cross-module vocabulary agreement', () => {
         asBuiltLinks: [{ commissioningId: 'sys-1', documentId: entry.documentNumber }],
         snags: [],
         systemIds: ['sys-1'],
-        asserted: { spares: true },
+        // TC-GATE-16 replaced the last assertion with a record, so the facts carry spares rather
+        // than a boolean. Empty here: this test is about the as-built vocabulary, and spares reading
+        // UNKNOWN does not affect the item under assertion.
+        spares: [],
       };
       const asBuilts = assessHandoverReadiness(facts).items.find((i) => i.id === 'asBuilts')!;
       expect(asBuilts.state).toBe('READY');

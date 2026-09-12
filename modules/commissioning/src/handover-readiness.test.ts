@@ -53,7 +53,9 @@ const facts = (over: Partial<HandoverReadinessFacts> = {}): HandoverReadinessFac
   // TC-GATE-9: Quality's snags, which handover was blind to until now. A clean project has none.
   snags: [],
   systemIds: [SYSTEM],
-  asserted: { spares: true },
+  // TC-GATE-16: spares became the last assertion to get an authority, so the baseline carries a
+  // part the client has acknowledged rather than a boolean somebody ticked.
+  spares: [{ commissioningId: SYSTEM, required: true, quantityRequired: 2, quantityHandedOver: 2, acknowledgedBy: 'Client Rep' }],
   ...over,
 });
 
@@ -65,22 +67,28 @@ describe('TC-GATE-4 — the readiness projection', () => {
     const r = assessHandoverReadiness(facts());
     expect(r.readyToSubmit).toBe(true);
     expect(r.blocking).toEqual([]);
-    // Order matters on screen: the six derived items first, then what is still somebody's word.
+    // Order matters on screen, and since TC-GATE-16 every one of them is derived.
     expect(r.items.map((i) => i.id)).toEqual(['commissioning', 'snags', 'asBuilts', 'omManuals', 'warrantyDocs', 'training', 'spares']);
   });
 
-  it('marks which items are evidence and which are somebody’s word', () => {
+  /**
+   * The arc of TC-GATE-4 through TC-GATE-16, item by item.
+   *
+   * Each line records which gate found the authority that item is now derived from. The last one is
+   * the end of the six booleans this whole sequence began with.
+   */
+  it('names the domain behind every item, and asserts none of them', () => {
     const byId = new Map(assessHandoverReadiness(facts()).items.map((i) => [i.id, i]));
-    expect(byId.get('commissioning')!.evidence).toBe('projected');
-    expect(byId.get('asBuilts')!.evidence).toBe('projected');
-    // TC-GATE-5 moved these two from asserted to projected — the move the gate exists to make.
-    expect(byId.get('omManuals')!.evidence).toBe('projected');
-    expect(byId.get('training')!.evidence).toBe('projected');
-    // TC-GATE-6 moved warranty documents too: the O&M pack already held the authority, unread.
-    expect(byId.get('warrantyDocs')!.evidence).toBe('projected');
-    // Spares is the only assertion left, and it says so in its own reason.
-    expect(byId.get('spares')!.evidence).toBe('asserted');
-    expect(byId.get('spares')!.reason).toMatch(/nothing verifies this/i);
+    expect(byId.get('commissioning')!.source).toBe('Testing & commissioning');   // TC-GATE-4
+    expect(byId.get('snags')!.source).toBe('Quality');                            // TC-GATE-9
+    expect(byId.get('asBuilts')!.source).toBe('Document control');                // TC-GATE-6, -8
+    expect(byId.get('omManuals')!.source).toMatch(/O&M pack/);                    // TC-GATE-5
+    expect(byId.get('warrantyDocs')!.source).toMatch(/O&M pack/);                 // TC-GATE-6
+    expect(byId.get('training')!.source).toMatch(/client training/);              // TC-GATE-5
+    expect(byId.get('spares')!.source).toMatch(/spares/);                         // TC-GATE-16
+    for (const item of byId.values()) {
+      expect(item.evidence, `${item.id} must be derived, not asserted`).toBe('projected');
+    }
   });
 
   describe('O&M pack', () => {
@@ -309,10 +317,61 @@ describe('TC-GATE-4 — the readiness projection', () => {
     });
   });
 
-  it('an unticked assertion blocks and explains why it cannot be derived', () => {
-    const item = itemOf({ asserted: { spares: false } }, 'spares');
-    expect(item.state).toBe('BLOCKED');
-    expect(item.reason).toMatch(/no spares handover record is linked/i);
+  /**
+   * TC-GATE-16 — the last assertion becomes a projection.
+   *
+   * Every register from TC-GATE-4 onwards recorded this item as "nothing verifies this". Nothing in
+   * the repository held the fact: Inventory records a part ISSUED TO A PROJECT, which is how it gets
+   * installed, not handed to the building owner; and the O&M pack's recommended-spares list is a
+   * document, not a delivery.
+   */
+  describe('spares', () => {
+    const spare = (over: Partial<HandoverReadinessFacts['spares'][number]> = {}) => ({
+      commissioningId: SYSTEM, required: true, quantityRequired: 2, quantityHandedOver: 2,
+      acknowledgedBy: 'Client Rep' as string | null, ...over,
+    });
+
+    it('is UNKNOWN while a system has no spares listed — nothing was asked, so nothing can be said', () => {
+      const item = itemOf({ spares: [] }, 'spares');
+      expect(item.state).toBe('UNKNOWN');
+      expect(item.reason).toMatch(/no spares listed/i);
+    });
+
+    /** Our record of handing something over is not evidence that anybody received it. */
+    it('blocks on a part handed over but not acknowledged by the client', () => {
+      const item = itemOf({ spares: [spare({ acknowledgedBy: null })] }, 'spares');
+      expect(item.state).toBe('BLOCKED');
+      expect(item.reason).toMatch(/not acknowledged by the client/i);
+      expect(item.reason).toMatch(/1 handed over but not confirmed/i);
+    });
+
+    it('blocks when the client acknowledged fewer than were asked for', () => {
+      const item = itemOf({ spares: [spare({ quantityHandedOver: 1 })] }, 'spares');
+      expect(item.state).toBe('BLOCKED');
+      expect(item.reason).toMatch(/short of the quantity asked for/i);
+    });
+
+    it('is READY once every required part is acknowledged in full', () => {
+      const item = itemOf({}, 'spares');
+      expect(item.state).toBe('READY');
+      expect(item.source).toBe('Handover — spares');
+    });
+
+    it('excludes a part marked not required, and reads READY when all of them are', () => {
+      expect(itemOf({ spares: [spare({ required: false, quantityHandedOver: 0, acknowledgedBy: null })] }, 'spares').state)
+        .toBe('READY');
+    });
+  });
+
+  /**
+   * THE END OF THE SIX BOOLEANS.
+   *
+   * This assertion is the arc of TC-GATE-4 through TC-GATE-16 in one line: there is no longer any
+   * item a person can tick. Every one is derived from a domain that owns the evidence.
+   */
+  it('has nothing left that is merely asserted', () => {
+    const items = assessHandoverReadiness(facts()).items;
+    expect(items.map((i) => i.evidence)).toEqual(items.map(() => 'projected'));
   });
 });
 
@@ -356,6 +415,12 @@ async function completePackAndTraining(handover: HandoverService, commissioning:
   const session = await handover.planTraining(TENANT, { projectId: 'p1', commissioningId, title: 'CCTV operator training' });
   await handover.completeTraining(session.id, TENANT, { attendees: 'Client FM team (3)' });
   await handover.acknowledgeTraining(session.id, TENANT, { acknowledgedBy: 'Client Rep' });
+
+  // TC-GATE-16: the spares tick became a record. Listed, handed over, and acknowledged by the
+  // client — only the last of those satisfies readiness.
+  const spare = await handover.addSpareItem(TENANT, { commissioningId, description: 'Spare camera', quantityRequired: 2 });
+  await handover.handOverSpareItem(spare.id, TENANT, { quantity: 2 });
+  await handover.acknowledgeSpareItem(spare.id, TENANT, { acknowledgedBy: 'Client Rep' });
 }
 
 async function commissionedProject(commissioning: CommissioningService) {
@@ -382,7 +447,6 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
     // Registered, never tested — T&C's chain blocks, so handover must too.
     await commissioning.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-02', title: 'CCTV', system: 'cctv' });
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-02', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
 
     await expect(handover.submit(pkg.id, TENANT)).rejects.toThrow(/not commissioning ready/i);
   });
@@ -392,7 +456,6 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
     const system = await commissionedProject(commissioning);
     await completePackAndTraining(handover, commissioning, system.id);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-03', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
 
     const view = await handover.get(pkg.id, TENANT);
     expect(view!.readiness.readyToSubmit).toBe(true);
@@ -412,7 +475,6 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
     // Now take document control away and re-read: the same package, nothing else changed.
     const { handover: blind } = services({ elv: readyPorts.elv, quality: readyPorts.quality });
     const pkg = await blind.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-04', title: 'Tower A handover' });
-    await blind.updateChecklist(pkg.id, TENANT, { spares: true });
 
     const view = await blind.get(pkg.id, TENANT);
     expect(view!.readiness.items.find((i) => i.id === 'asBuilts')!.state).toBe('UNKNOWN');
@@ -461,7 +523,6 @@ describe('TC-GATE-4 — a tick can no longer buy a submission', () => {
     const system = await commissionedProject(commissioning);
     await completePackAndTraining(handover, commissioning, system.id);
     const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-05', title: 'Tower A handover' });
-    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
     await handover.submit(pkg.id, TENANT);
 
     const accepted = await handover.accept(pkg.id, TENANT, { clientRepresentative: 'Client Rep', warrantyMonths: 24 });

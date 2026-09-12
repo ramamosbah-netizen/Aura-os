@@ -310,7 +310,12 @@ function CertificateLinkRow({ system }: { system: SystemView }) {
             placeholder="Certificate document number"
             value={reference}
             onChange={(e) => setReference(e.target.value)}
-            disabled={busy}
+            // Disabled until hydrated, like the button beside it. Typing into a server-rendered
+            // input before React attaches means hydration resets it to its initial state and the
+            // value silently disappears — the field forgets what was typed, and the control it
+            // gates never enables. A field that is briefly disabled is honest; one that forgets is
+            // not. (Found by the e2e suite under load, where hydration loses the race.)
+            disabled={busy || !hydrated}
             data-testid={`certificate-ref-${system.record.code}`}
           />
           <button
@@ -438,7 +443,9 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
                 placeholder="As-built document number"
                 value={reference[s.record.id] ?? ''}
                 onChange={(e) => setReference({ ...reference, [s.record.id]: e.target.value })}
-                disabled={busy !== null}
+                // See the certificate input above: disabled until hydrated, so the field cannot
+                // forget what was typed into it.
+                disabled={busy !== null || !hydrated}
                 data-testid={`asbuilt-ref-${s.record.code}`}
               />
               <button

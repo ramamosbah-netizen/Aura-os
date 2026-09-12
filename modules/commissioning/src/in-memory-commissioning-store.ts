@@ -10,6 +10,7 @@ import type { CertificateLink } from './domain/certificate-link';
 import type { OmItem } from './domain/om-package';
 import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
+import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -26,6 +27,7 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly certificateLinks = new Map<string, CertificateLink>();
   private readonly omItems = new Map<string, OmItem>();
   private readonly trainingSessions = new Map<string, TrainingSession>();
+  private readonly spareItems = new Map<string, SpareItem>();
   private readonly handovers = new Map<string, HandoverPackage>();
   // Append-only, like the table: this adapter offers no way to replace or remove a captured line
   // either, so a test that passes here cannot be one that would fail against Postgres's refusal.
@@ -168,6 +170,23 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   }
   async listOmItems(tenantId: string, projectId?: string): Promise<OmItem[]> {
     return [...this.omItems.values()]
+      .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  async saveSpareItem(item: SpareItem): Promise<void> {
+    const clash = [...this.spareItems.values()].find(
+      (i) => i.id !== item.id && i.commissioningId === item.commissioningId && i.description === item.description,
+    );
+    if (clash) throw new Error('conflict: this spare is already listed for the system');
+    this.spareItems.set(item.id, { ...item });
+  }
+  async findSpareItem(id: string, tenantId: string): Promise<SpareItem | null> {
+    const i = this.spareItems.get(id);
+    return i && i.tenantId === tenantId ? { ...i } : null;
+  }
+  async listSpareItems(tenantId: string, projectId?: string): Promise<SpareItem[]> {
+    return [...this.spareItems.values()]
       .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
   }

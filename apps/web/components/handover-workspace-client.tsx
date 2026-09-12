@@ -8,6 +8,7 @@ import HandoverClient from './handover-client';
 import { OmPackSection, TrainingSection, type OmItemRow, type SystemRow, type TrainingRow } from './handover-om-training';
 import { DossierSection, type DossierData } from './handover-dossier';
 import { DefectsSection, type DefectsData } from './handover-defects';
+import { SparesSection, type SpareRow } from './handover-spares';
 
 type Section = (typeof HANDOVER_SECTIONS)[number]['id'];
 const SECTION_IDS = HANDOVER_SECTIONS.map((s) => s.id) as Section[];
@@ -25,7 +26,7 @@ const SECTION_IDS = HANDOVER_SECTIONS.map((s) => s.id) as Section[];
  * across a switch, and the AURA tab anchor untouched.
  */
 export default function HandoverWorkspaceClient({
-  projects, packages, systems, omItems, trainingSessions, dossiers, defects, selectedProject,
+  projects, packages, systems, omItems, trainingSessions, dossiers, defects, spares, selectedProject,
 }: {
   projects: { id: string; title: string }[];
   packages: Parameters<typeof HandoverClient>[0]['initialPackages'];
@@ -34,6 +35,7 @@ export default function HandoverWorkspaceClient({
   trainingSessions: TrainingRow[] | null;
   dossiers: DossierData[] | null;
   defects: DefectsData | null;
+  spares: SpareRow[] | null;
   selectedProject: string;
 }) {
   const router = useRouter();
@@ -87,7 +89,12 @@ export default function HandoverWorkspaceClient({
       </nav>
 
       {active === 'om' ? (
-        <OmPackSection systems={systems} items={omItems} />
+        <>
+          <OmPackSection systems={systems} items={omItems} />
+          {/* TC-GATE-16: spares live beside the O&M pack because that is the pack a client receives,
+              but they are a separate authority with their own acknowledgement. */}
+          <SparesSection systems={systems} spares={spares} />
+        </>
       ) : active === 'training' ? (
         <TrainingSection projectId={selectedProject} systems={systems} sessions={trainingSessions} />
       ) : active === 'dossier' ? (

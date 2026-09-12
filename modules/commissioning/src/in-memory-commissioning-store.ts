@@ -4,6 +4,7 @@ import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
+import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -15,6 +16,7 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   // test that passes here cannot be one that would fail against Postgres's refusal to update.
   private readonly testRuns: CommissioningTestRun[] = [];
   private readonly punchItems = new Map<string, PunchItem>();
+  private readonly itpLinks = new Map<string, CommissioningItpLink>();
   private readonly handovers = new Map<string, HandoverPackage>();
 
   async appendTestRun(run: CommissioningTestRun): Promise<void> {
@@ -68,6 +70,28 @@ export class InMemoryCommissioningStore implements CommissioningStore {
       .filter((r) => r.tenantId === tenantId && (!projectId || r.projectId === projectId))
       .sort((a, b) => (a.testItemId === b.testItemId ? a.runNo - b.runNo : a.testItemId < b.testItemId ? -1 : 1));
   }
+  async saveItpLink(link: CommissioningItpLink): Promise<void> {
+    const clash = [...this.itpLinks.values()].find(
+      (l) => l.id !== link.id && l.commissioningId === link.commissioningId && l.itpId === link.itpId && l.pointIndex === link.pointIndex,
+    );
+    if (clash) throw new Error('conflict: this ITP requirement is already linked to the system');
+    this.itpLinks.set(link.id, { ...link });
+  }
+  async deleteItpLink(id: string, tenantId: string): Promise<void> {
+    const found = this.itpLinks.get(id);
+    if (found && found.tenantId === tenantId) this.itpLinks.delete(id);
+  }
+  async listItpLinks(commissioningId: string, tenantId: string): Promise<CommissioningItpLink[]> {
+    return [...this.itpLinks.values()]
+      .filter((l) => l.commissioningId === commissioningId && l.tenantId === tenantId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+  async listItpLinksForProject(tenantId: string, projectId?: string): Promise<CommissioningItpLink[]> {
+    return [...this.itpLinks.values()]
+      .filter((l) => l.tenantId === tenantId && (!projectId || l.projectId === projectId))
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
   async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
     return [...this.punchItems.values()]
       .filter((i) => i.tenantId === tenantId && (!projectId || i.projectId === projectId))

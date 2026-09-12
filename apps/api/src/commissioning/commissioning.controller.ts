@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -58,6 +58,15 @@ class PunchDto {
 }
 class ClosePunchDto {
   @IsString() resolution!: string;
+}
+class EscalateDto {
+  /** The Quality NCR a person raised for this defect. A reference — T&C never creates one. */
+  @IsOptional() @IsString() qualityNcrId?: string;
+}
+class LinkItpDto {
+  @IsString() itpId!: string;
+  @IsOptional() @IsInt() @Min(0) pointIndex?: number;
+  @IsOptional() @IsString() testItemId?: string;
 }
 
 /**
@@ -121,6 +130,24 @@ export class CommissioningController {
   @Get('punch-items')
   projectPunch(@Query('projectId') projectId?: string): Promise<PunchItem[]> {
     return this.service.listProjectPunchItems(this.tenant.get().tenantId, projectId || undefined);
+  }
+
+  /**
+   * The project's Quality evidence, as T&C reads it: the ITPs a person can link to a system, and the
+   * non-conformances that block one. Read-only, and `null` when Quality cannot be read — the UI says
+   * so rather than showing an empty list that looks like "all clear".
+   */
+  @Get('quality-evidence')
+  qualityEvidence(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    return this.service.readQualityEvidence(this.tenant.get().tenantId, projectId);
+  }
+
+  /** The project's device schedule, read from the ELV register, which owns it. */
+  @Get('equipment')
+  equipment(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    return this.service.readEquipment(this.tenant.get().tenantId, projectId);
   }
 
   @Get(':id')
@@ -228,6 +255,43 @@ export class CommissioningController {
       raisedBy: ctx.actorId,
       testItemId: dto.testItemId ?? null,
       sourceRunId: dto.sourceRunId ?? null,
+    });
+  }
+
+  /** Record that a Quality ITP — or one point of it — applies to this system. */
+  @Post(':id/itp-links')
+  linkItp(@Param('id') id: string, @Body() dto: LinkItpDto) {
+    if (!dto?.itpId?.trim()) throw new BadRequestException('itpId is required');
+    const ctx = this.tenant.get();
+    return this.service.linkItp(id, ctx.tenantId, {
+      itpId: dto.itpId,
+      pointIndex: dto.pointIndex ?? null,
+      testItemId: dto.testItemId ?? null,
+      linkedBy: ctx.actorId,
+    });
+  }
+
+  @Get(':id/itp-links')
+  listItpLinks(@Param('id') id: string) {
+    return this.service.listItpLinks(id, this.tenant.get().tenantId);
+  }
+
+  @Delete(':id/itp-links/:linkId')
+  async unlinkItp(@Param('id') id: string, @Param('linkId') linkId: string): Promise<{ ok: true }> {
+    await this.service.unlinkItp(id, linkId, this.tenant.get().tenantId);
+    return { ok: true };
+  }
+
+  /**
+   * Record that a defect needs a Quality non-conformance, and the NCR that answers it.
+   * T&C does not raise the NCR — Quality owns that, and this stores only a reference to it.
+   */
+  @Put(':id/punch/:punchId/escalate')
+  escalate(@Param('id') id: string, @Param('punchId') punchId: string, @Body() dto: EscalateDto): Promise<PunchItem> {
+    const ctx = this.tenant.get();
+    return this.service.escalatePunchItem(id, punchId, ctx.tenantId, {
+      qualityNcrId: dto?.qualityNcrId ?? null,
+      escalatedBy: ctx.actorId,
     });
   }
 

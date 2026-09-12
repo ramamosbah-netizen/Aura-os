@@ -339,6 +339,21 @@ export class EngineeringService {
     return sameTenantOrNull(await this.drawingStore.get(id), this.tenant?.boundTenantId());
   }
 
+  /**
+   * Implements `EngineeringReleasePort` for Testing & Commissioning (TC-GATE-3).
+   *
+   * "Has the technical truth been released for this system?" is Engineering's question, not T&C's.
+   * What comes back is the minimum that answers it — a discipline and a status per drawing — and
+   * nothing else: T&C has no business holding drawing codes, revisions or files.
+   *
+   * The consumer decides which disciplines count for which ELV system, because that mapping is a
+   * commissioning judgement rather than an engineering fact.
+   */
+  async readProjectDrawingRelease(tenantId: Id, projectId: Id) {
+    const drawings = await this.listDrawings({ tenantId, projectId });
+    return drawings.map((d) => ({ discipline: d.discipline as string, status: d.status as string }));
+  }
+
   listDrawings(filter?: DrawingFilter): Promise<Drawing[]> {
     return this.drawingStore.list(filter);
   }

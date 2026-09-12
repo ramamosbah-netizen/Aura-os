@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type HealthSignal, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { COMMISSIONING_STORE, type CommissioningStore } from './store.interface';
@@ -12,7 +12,14 @@ import {
 } from './domain/commissioning-record';
 import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './domain/commissioning-test-item';
 import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
-import { type PunchItem, type PunchSeverity, makePunchItem, closePunch } from './domain/punch-item';
+import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
+import { type CommissioningItpLink, makeItpLink } from './domain/commissioning-itp-link';
+import { assessSystemReadiness, type SystemReadiness } from './domain/commissioning-readiness';
+import {
+  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE,
+  type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort,
+  type EquipmentFact, type ItpFact, type NcrFact,
+} from './ports';
 
 /**
  * A test point that stands failed, with the run that failed it and any defect already raised
@@ -49,6 +56,34 @@ export interface CommissioningSystemView {
   commissioned: boolean;
   blockers: string[];
   failingPoints: FailingPointView[];
+  /**
+   * The wider handover question (TC-GATE-3), deliberately distinct from `eligible` above.
+   *
+   * `eligible` asks "may I sign this system off?" from T&C's own evidence. This asks "is it
+   * COMMISSIONING READY?", which also needs the ELV register, Engineering and Quality. A system can
+   * be legitimately commissioned and still not be ready — drawings never released, a non-conformance
+   * open against it — and collapsing the two would make one of them a lie.
+   */
+  readiness: SystemReadiness;
+  /** The ITP requirements a person has linked to this system, with Quality's own result for each. */
+  itpRequirements: LinkedItpRequirement[];
+}
+
+/** One Quality ITP requirement, linked to this system by a person, shown with Quality's result. */
+export interface LinkedItpRequirement {
+  linkId: string;
+  itpId: string;
+  reference: string;
+  title: string;
+  pointIndex: number | null;
+  activity: string;
+  pointType: string;
+  acceptanceCriteria: string;
+  /** Quality's result for the point — pending | passed | failed. T&C never writes it. */
+  result: string;
+  /** The commissioning test point nominated as proof, when one has been. */
+  testItemId: string | null;
+  testPointNo: string | null;
 }
 
 export interface CommissioningWorkspaceView {
@@ -62,6 +97,8 @@ export interface CommissioningWorkspaceView {
     openPunch: number;
     eligible: number;
     commissioned: number;
+    /** Systems whose whole readiness chain is satisfied — the number Handover reads. */
+    commissioningReady: number;
   };
 }
 
@@ -78,7 +115,25 @@ export class CommissioningService {
   constructor(
     @Inject(COMMISSIONING_STORE) private readonly store: CommissioningStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // The three domains T&C READS for pre-commissioning readiness. Optional by design: an absent or
+    // throwing port becomes null, and the readiness chain renders null as UNKNOWN — which blocks. A
+    // gate nobody can answer must never read as satisfied (see domain/commissioning-readiness).
+    @Optional() @Inject(ELV_EQUIPMENT) private readonly elv?: ElvEquipmentPort,
+    @Optional() @Inject(QUALITY_EVIDENCE) private readonly quality?: QualityEvidencePort,
+    @Optional() @Inject(ENGINEERING_RELEASE) private readonly engineering?: EngineeringReleasePort,
   ) {}
+
+  /** Read a neighbouring domain without letting its outage fail this request. */
+  private async readPort<T>(name: string, run: () => Promise<T>): Promise<T | null> {
+    try {
+      return await run();
+    } catch (error) {
+      // Logged rather than swallowed: the screen says the domain was unreadable, and the log says
+      // why. A reader told "Quality could not be read" knows exactly what to chase.
+      this.logger.warn(`[Commissioning] ${name} could not be read: ${error}`);
+      return null;
+    }
+  }
 
   async register(params: {
     tenantId: string;
@@ -462,12 +517,26 @@ export class CommissioningService {
    * round trips to answer one screen.
    */
   async readWorkspace(tenantId: string, projectId?: string): Promise<CommissioningWorkspaceView> {
-    const [records, items, runs, punch] = await Promise.all([
+    const [records, items, runs, punch, itpLinks, equipment, qualityEvidence, drawings] = await Promise.all([
       this.store.list(tenantId, projectId),
       this.store.listTestItemsForProject(tenantId, projectId),
       this.store.listTestRunsForProject(tenantId, projectId),
       this.store.listPunchItemsForProject(tenantId, projectId),
+      this.store.listItpLinksForProject(tenantId, projectId),
+      // The three neighbouring domains, read once for the whole project rather than once per system.
+      // Each is null when its port is unbound or errors, and null becomes UNKNOWN downstream.
+      projectId && this.elv ? this.readPort('ELV device register', () => this.elv!.readProjectEquipment(tenantId, projectId)) : Promise.resolve(null),
+      projectId && this.quality ? this.readPort('Quality', () => this.quality!.readProjectQualityEvidence(tenantId, projectId)) : Promise.resolve(null),
+      projectId && this.engineering ? this.readPort('Engineering', () => this.engineering!.readProjectDrawingRelease(tenantId, projectId)) : Promise.resolve(null),
     ]);
+    const itpsById = new Map((qualityEvidence?.itps ?? []).map((itp) => [itp.id, itp]));
+    const itemsById = new Map(items.map((item) => [item.id, item]));
+    const linksByRecord = new Map<string, typeof itpLinks>();
+    for (const link of itpLinks) {
+      const list = linksByRecord.get(link.commissioningId) ?? [];
+      list.push(link);
+      linksByRecord.set(link.commissioningId, list);
+    }
 
     const itemsByRecord = new Map<string, CommissioningTestItem[]>();
     for (const item of items) {
@@ -523,9 +592,59 @@ export class CommissioningService {
         };
       });
 
+      // The Quality requirements a person has tied to this system. Quality's own result is carried
+      // through untouched — T&C shows it, and never writes it.
+      const itpRequirements: LinkedItpRequirement[] = (linksByRecord.get(record.id) ?? []).flatMap((link) => {
+        const itp = itpsById.get(link.itpId);
+        if (!itp) return [];
+        const indexes = link.pointIndex == null ? itp.points.map((_, i) => i) : [link.pointIndex];
+        return indexes.flatMap((index) => {
+          const point = itp.points[index];
+          if (!point) return [];
+          const testItem = link.testItemId ? itemsById.get(link.testItemId) : undefined;
+          return [{
+            linkId: link.id,
+            itpId: itp.id,
+            reference: itp.reference,
+            title: itp.title,
+            pointIndex: index,
+            activity: point.activity,
+            pointType: point.pointType,
+            acceptanceCriteria: point.acceptanceCriteria,
+            result: point.result,
+            testItemId: link.testItemId,
+            testPointNo: testItem?.pointNo ?? null,
+          }];
+        });
+      });
+
+      const readiness = assessSystemReadiness({
+        system: record.system,
+        pointsTotal: points.length,
+        pointsPassed: passed.length,
+        pointsFailing: failing.length,
+        pointsUntested: untested.length,
+        pointsEverFailed: everFailed,
+        openPunch: openPunch.length,
+        commissioned: record.status === 'commissioned',
+        signedOffBy: record.commissionedBy,
+        witnessedBy: record.witnessedBy,
+        equipment: equipment === null ? null : equipment.map((d) => ({
+          tag: d.tag,
+          system: d.system,
+          status: d.status,
+          linked: d.commissioningRecordId === record.id,
+        })),
+        drawings: drawings === null ? null : drawings,
+        ncrs: qualityEvidence === null ? null : qualityEvidence.ncrs.map((n) => ({ ncrNumber: n.ncrNumber, system: n.system, status: n.status })),
+        itpRequirements: itpRequirements.map((r) => ({ reference: r.reference, activity: r.activity, pointType: r.pointType, result: r.result })),
+      });
+
       return {
         record,
         failingPoints,
+        readiness,
+        itpRequirements,
         pointsTotal: points.length,
         pointsPassed: passed.length,
         pointsFailing: failing.length,
@@ -552,6 +671,7 @@ export class CommissioningService {
         openPunch: systems.reduce((sum, s) => sum + s.openPunch, 0),
         eligible: systems.filter((s) => s.eligible).length,
         commissioned: systems.filter((s) => s.commissioned).length,
+        commissioningReady: systems.filter((s) => s.readiness.commissioningReady).length,
       },
     };
   }
@@ -559,6 +679,88 @@ export class CommissioningService {
   /** Every defect on the project with its provenance, for the Defects & Retests surface. */
   async listProjectPunchItems(tenantId: string, projectId?: string): Promise<PunchItem[]> {
     return this.store.listPunchItemsForProject(tenantId, projectId);
+  }
+
+  // ── ITP linkage (TC-GATE-3) ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Record that a Quality ITP — or one point of it — applies to this system.
+   *
+   * T&C writes ONLY the link. The plan, its acceptance criteria and its results stay Quality's, and
+   * are read back through the evidence port. This exists because the two sides cannot be joined
+   * automatically: an ITP carries a free-text discipline, a commissioning record carries the
+   * canonical ElvSystem, and matching them by string would put the wrong acceptance criteria in
+   * front of an engineer — worse than showing none.
+   */
+  async linkItp(
+    id: string,
+    tenantId: string,
+    input: { itpId: string; pointIndex?: number | null; testItemId?: string | null; linkedBy?: string | null },
+  ): Promise<CommissioningItpLink> {
+    const rec = await this.mustFind(id, tenantId);
+    if (input.testItemId) {
+      const point = await this.store.findTestItem(input.testItemId, tenantId);
+      if (!point || point.commissioningId !== rec.id) {
+        throw new Error(`not found: test point ${input.testItemId} on this commissioning record`);
+      }
+    }
+    const link = makeItpLink({
+      tenantId,
+      companyId: rec.companyId,
+      commissioningId: rec.id,
+      projectId: rec.projectId,
+      itpId: input.itpId,
+      pointIndex: input.pointIndex,
+      testItemId: input.testItemId,
+      linkedBy: input.linkedBy,
+    });
+    await this.store.saveItpLink(link);
+    this.logger.log(`[Commissioning] ${rec.code} linked to ITP ${input.itpId}${input.pointIndex == null ? '' : ` point ${input.pointIndex}`}`);
+    return link;
+  }
+
+  async unlinkItp(id: string, linkId: string, tenantId: string): Promise<void> {
+    await this.mustFind(id, tenantId);
+    await this.store.deleteItpLink(linkId, tenantId);
+  }
+
+  listItpLinks(id: string, tenantId: string): Promise<CommissioningItpLink[]> {
+    return this.store.listItpLinks(id, tenantId);
+  }
+
+  /** The project's ITPs and non-conformances, read from Quality. Null when Quality cannot be read. */
+  async readQualityEvidence(tenantId: string, projectId: string): Promise<{ ncrs: NcrFact[]; itps: ItpFact[] } | null> {
+    if (!this.quality) return null;
+    return this.readPort('Quality', () => this.quality!.readProjectQualityEvidence(tenantId, projectId));
+  }
+
+  /** The project's device schedule, read from the ELV register. Null when it cannot be read. */
+  async readEquipment(tenantId: string, projectId: string): Promise<EquipmentFact[] | null> {
+    if (!this.elv) return null;
+    return this.readPort('ELV device register', () => this.elv!.readProjectEquipment(tenantId, projectId));
+  }
+
+  // ── Quality escalation seam (TC-GATE-3) ──────────────────────────────────────────────────────
+
+  /**
+   * Record that a defect needs a Quality non-conformance, and the NCR that answers it.
+   *
+   * T&C does not raise the NCR: that is Quality's authority and its lifecycle. This writes T&C's own
+   * note about its own defect, plus a REFERENCE to the Quality record. Nothing of the NCR is copied,
+   * so there is nothing here to drift out of step with Quality.
+   */
+  async escalatePunchItem(
+    id: string,
+    punchId: string,
+    tenantId: string,
+    input: { qualityNcrId?: string | null; escalatedBy?: string | null },
+  ): Promise<PunchItem> {
+    const item = await this.store.findPunchItem(punchId, tenantId);
+    if (!item || item.commissioningId !== id) throw new Error(`not found: punch item ${punchId}`);
+    const updated = escalateToQuality(item, input);
+    await this.store.savePunchItem(updated);
+    this.logger.log(`[Commissioning] defect ${punchId} escalated to Quality${input.qualityNcrId ? ` (NCR ${input.qualityNcrId})` : ''}`);
+    return updated;
   }
 
   private async mustFind(id: string, tenantId: string): Promise<CommissioningRecord> {

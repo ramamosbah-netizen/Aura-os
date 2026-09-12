@@ -55,6 +55,13 @@ export interface DossierItem {
   state: string | null;
   issuedAt: string;
   issuedBy: string | null;
+  /**
+   * The document-control transmittal that conveyed this issue (TC-GATE-14), or null.
+   *
+   * Null is not a failure: the issue may predate the transmittal seam, document control may not have
+   * been readable, or the dossier may have cited nothing that IS a controlled document.
+   */
+  transmittalId: string | null;
   createdAt: string;
 }
 
@@ -266,6 +273,7 @@ export function captureDossier(
   pkg: { id: Id; tenantId: Id; companyId: Id | null; projectId: Id },
   issueNo: number,
   issuedBy?: Id | null,
+  transmittalId?: string | null,
 ): DossierItem[] {
   // Worded with "must": the API error taxonomy classifies by message SHAPE, and a guard that reads
   // as prose escapes to 500 — which the taxonomy fitness test catches, and did catch this one.
@@ -288,12 +296,44 @@ export function captureDossier(
         state: e.state,
         issuedAt,
         issuedBy: issuedBy ?? null,
+        transmittalId: transmittalId ?? null,
       })),
   ).map((item) => ({ ...item, createdAt: issuedAt }));
 }
 
+/**
+ * The register-entry lines of a dossier — the only ones a transmittal can carry (TC-GATE-14).
+ *
+ * A transmittal conveys CONTROLLED DOCUMENTS. Three of the dossier's four sections cite one when a
+ * person has registered it: as-built drawings, commissioning certificates and O&M deliverables.
+ * Training records are not documents and never appear here, which is why the surface says how many
+ * of an issue's lines were conveyed rather than implying all of them were.
+ */
+export function conveyableLines(
+  view: DossierView,
+  documents: ControlledDocumentFact[] | null,
+): { registerEntryId: string; revision: string }[] {
+  if (documents === null) return [];
+  const seen = new Set<string>();
+  const out: { registerEntryId: string; revision: string }[] = [];
+  for (const section of view.sections) {
+    for (const entry of section.entries) {
+      if (!entry.included || entry.kind === 'training_session') continue;
+      const resolved = resolveDocumentReference(entry.reference, documents);
+      const doc = resolved?.document;
+      // One line per document: two deliverables citing one manual convey it once.
+      if (!doc || seen.has(doc.id)) continue;
+      seen.add(doc.id);
+      out.push({ registerEntryId: doc.id, revision: doc.revision });
+    }
+  }
+  return out;
+}
+
 /** The issues of a package, newest first, each with its own captured lines. */
-export function groupIssues(items: DossierItem[]): { issueNo: number; issuedAt: string; issuedBy: string | null; items: DossierItem[] }[] {
+export function groupIssues(
+  items: DossierItem[],
+): { issueNo: number; issuedAt: string; issuedBy: string | null; transmittalId: string | null; items: DossierItem[] }[] {
   const byIssue = new Map<number, DossierItem[]>();
   for (const item of items) {
     const list = byIssue.get(item.issueNo) ?? [];
@@ -306,6 +346,8 @@ export function groupIssues(items: DossierItem[]): { issueNo: number; issuedAt: 
       issueNo,
       issuedAt: list[0].issuedAt,
       issuedBy: list[0].issuedBy,
+      // One transmittal per issue — every row of an issue is written in one call, with one id.
+      transmittalId: list[0].transmittalId,
       items: [...list].sort((a, b) => DOSSIER_KINDS.indexOf(a.kind) - DOSSIER_KINDS.indexOf(b.kind) || a.label.localeCompare(b.label)),
     }));
 }

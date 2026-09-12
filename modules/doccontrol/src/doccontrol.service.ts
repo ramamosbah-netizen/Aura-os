@@ -631,6 +631,47 @@ export class DocControlService {
     }));
   }
 
+  /**
+   * Open a DRAFT transmittal conveying documents another domain is issuing (TC-GATE-14).
+   *
+   * Implements `DocControlIssuePort` for Handover, whose dossier cites controlled documents it does
+   * not own. The caller supplies the list and a title; everything that makes this a controlled
+   * conveyance stays here — the permission check, the event, the code on the items, and every state
+   * the transmittal moves through afterwards.
+   *
+   * DRAFT, not sent. Sending needs a recipient, and a handover package does not know the client's
+   * document controller. A person completes and sends it here, where transmittals are sent.
+   */
+  async openTransmittal(
+    tenantId: Id,
+    request: {
+      projectId: Id;
+      projectName: string | null;
+      code: string;
+      title: string;
+      items: { registerEntryId: string; revision: string }[];
+      actorId?: string | null;
+    },
+  ): Promise<{ id: string; code: string }> {
+    const transmittal = await this.createTransmittal({
+      tenantId,
+      code: request.code,
+      title: request.title,
+      projectId: request.projectId,
+      projectName: request.projectName ?? undefined,
+      createdBy: request.actorId ?? undefined,
+    });
+    if (request.items.length > 0) {
+      // 'for_information': a handover dossier conveys the record, it does not ask for a review.
+      await this.addTransmittalItems(
+        tenantId,
+        transmittal.id,
+        request.items.map((i) => ({ registerEntryId: i.registerEntryId, revision: i.revision, purpose: 'for_information' as const })),
+      );
+    }
+    return { id: transmittal.id, code: transmittal.code };
+  }
+
   listRegisterByProject(tenantId: Id, projectId: Id): Promise<DrawingRegisterEntry[]> {
     return this.registerStore.findByProject(projectId, tenantId);
   }

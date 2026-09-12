@@ -5,7 +5,8 @@ import { HandoverService } from './handover.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
 import { assembleDossier, captureDossier, groupIssues, type DossierFacts } from './domain/dossier';
 import type { ControlledDocumentFact } from './domain/document-reference';
-import type { DocControlPort, ElvEquipmentPort, EngineeringReleasePort, QualityEvidencePort } from './ports';
+import { conveyableLines } from './domain/dossier';
+import type { DocControlIssuePort, DocControlPort, ElvEquipmentPort, EngineeringReleasePort, QualityEvidencePort } from './ports';
 
 /**
  * TC-GATE-7 — the handover dossier.
@@ -204,12 +205,13 @@ describe('TC-GATE-7 — capture', () => {
 
 function services(ports: {
   elv?: ElvEquipmentPort; quality?: QualityEvidencePort; engineering?: EngineeringReleasePort; docControl?: DocControlPort;
+  docControlIssue?: DocControlIssuePort;
 } = {}) {
   const events: DomainEvent[] = [];
   const store = new InMemoryCommissioningStore();
   const eventStore = { append: async (b: DomainEvent[]) => { events.push(...b); }, list: async () => [], listByAggregate: async () => [] };
   const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never, ports.docControl as never);
-  const handover = new HandoverService(store as never, eventStore as never, commissioning, ports.docControl as never);
+  const handover = new HandoverService(store as never, eventStore as never, commissioning, ports.docControl as never, ports.docControlIssue as never);
   return { commissioning, handover, store };
 }
 
@@ -259,6 +261,91 @@ async function readyProject(commissioning: CommissioningService, handover: Hando
   await handover.acknowledgeTraining(session.id, TENANT, { acknowledgedBy: 'Client Rep' });
   return rec;
 }
+
+/**
+ * TC-GATE-14 — the issue is conveyed through document control.
+ *
+ * The manifest records what a package SAID it was sending. A transmittal is the controlled channel
+ * that records the client RECEIVING it — recipient, sent date, acknowledgement with who and when —
+ * and that is the evidence "we never got the O&M manuals" actually turns on.
+ */
+describe('TC-GATE-14 — the conveyance', () => {
+  it('carries only the lines that are controlled documents, each once', () => {
+    const view = assembleDossier(facts());
+    const lines = conveyableLines(view, REGISTER);
+    // The as-built and the O&M manual are register entries; the training session is not a document,
+    // and the certificate on this fixture is not registered.
+    expect(lines.map((l) => l.registerEntryId).sort()).toEqual(['doc-ab', 'doc-om']);
+    expect(lines.every((l) => l.revision)).toBe(true);
+  });
+
+  it('conveys one document once, however many deliverables cite it', () => {
+    const view = assembleDossier(facts({
+      omItems: [
+        { id: 'om-1', commissioningId: SYSTEM, deliverable: 'om_manual', required: true, state: 'accepted', documentId: 'DOC-OM-001' },
+        { id: 'om-2', commissioningId: SYSTEM, deliverable: 'datasheets', required: true, state: 'accepted', documentId: 'DOC-OM-001' },
+      ],
+    }));
+    expect(conveyableLines(view, REGISTER).filter((l) => l.registerEntryId === 'doc-om')).toHaveLength(1);
+  });
+
+  it('carries nothing when the register cannot be read — an unverified document is not conveyed', () => {
+    expect(conveyableLines(assembleDossier(facts({ documents: null })), null)).toEqual([]);
+  });
+
+  it('opens a transmittal on submit and stamps it on every row of the issue', async () => {
+    const opened: { code: string; items: number }[] = [];
+    const { registry, ports } = readyPorts();
+    const issuePort: DocControlIssuePort = {
+      openTransmittal: async (_t, req) => {
+        opened.push({ code: req.code, items: req.items.length });
+        return { id: 'tr-1', code: req.code };
+      },
+    };
+    const { commissioning, handover } = services({ ...ports, docControlIssue: issuePort });
+    void registry;
+    await readyProject(commissioning, handover);
+    const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-14', title: 'Tower A handover' });
+    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
+    await handover.submit(pkg.id, TENANT, 'u-admin');
+
+    expect(opened, 'document control must be asked exactly once').toHaveLength(1);
+    expect(opened[0].code).toBe('TR-HO-14-1');
+    expect(opened[0].items).toBeGreaterThan(0);
+
+    const issues = (await handover.readDossier(pkg.id, TENANT))!.issues;
+    expect(issues[0].transmittalId).toBe('tr-1');
+    expect(issues[0].items.every((i) => i.transmittalId === 'tr-1'), 'every row of the issue').toBe(true);
+  });
+
+  it('still submits when document control is unwired, recording no conveyance', async () => {
+    const { ports } = readyPorts();
+    const { commissioning, handover } = services(ports);
+    await readyProject(commissioning, handover);
+    const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-15', title: 'Tower A handover' });
+    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
+    await handover.submit(pkg.id, TENANT, 'u-admin');
+
+    const issues = (await handover.readDossier(pkg.id, TENANT))!.issues;
+    expect(issues[0].items.length, 'the manifest is captured either way').toBeGreaterThan(0);
+    expect(issues[0].transmittalId).toBeNull();
+  });
+
+  it('does not let a document-control failure refuse the submission', async () => {
+    const { ports } = readyPorts();
+    const exploding: DocControlIssuePort = { openTransmittal: async () => { throw new Error('DocControl is down'); } };
+    const { commissioning, handover } = services({ ...ports, docControlIssue: exploding });
+    await readyProject(commissioning, handover);
+    const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-16', title: 'Tower A handover' });
+    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
+
+    // One domain's outage must not block another's decision. The manifest still records what was
+    // sent; it records no transmittal, and the surface says so.
+    const submitted = await handover.submit(pkg.id, TENANT, 'u-admin');
+    expect(submitted.status).toBe('submitted');
+    expect((await handover.readDossier(pkg.id, TENANT))!.issues[0].transmittalId).toBeNull();
+  });
+});
 
 describe('TC-GATE-7 — an issued manifest does not move', () => {
   it('captures nothing until the package is submitted', async () => {

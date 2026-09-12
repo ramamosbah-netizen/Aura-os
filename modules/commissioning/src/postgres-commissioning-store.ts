@@ -185,9 +185,9 @@ export class PostgresCommissioningStore implements CommissioningStore {
     for (const d of items) {
       await this.pool.query(
         `insert into public.aura_handover_dossier_items
-          (id, tenant_id, company_id, handover_id, project_id, issue_no, kind, source_id, reference, label, state, issued_at, issued_by, created_at)
-         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
-        [d.id, d.tenantId, d.companyId, d.handoverId, d.projectId, d.issueNo, d.kind, d.sourceId, d.reference, d.label, d.state, d.issuedAt, d.issuedBy, d.createdAt],
+          (id, tenant_id, company_id, handover_id, project_id, issue_no, kind, source_id, reference, label, state, issued_at, issued_by, transmittal_id, created_at)
+         values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+        [d.id, d.tenantId, d.companyId, d.handoverId, d.projectId, d.issueNo, d.kind, d.sourceId, d.reference, d.label, d.state, d.issuedAt, d.issuedBy, d.transmittalId, d.createdAt],
       );
     }
   }
@@ -540,6 +540,7 @@ function toDossierItem(r: Record<string, unknown>): DossierItem {
     issueNo: Number(r.issue_no), kind: r.kind as DossierKind, sourceId: r.source_id as string,
     reference: (r.reference as string) ?? null, label: r.label as string, state: (r.state as string) ?? null,
     issuedAt: tsIso(r.issued_at) as string, issuedBy: (r.issued_by as string) ?? null,
+    transmittalId: (r.transmittal_id as string) ?? null,
     createdAt: tsIso(r.created_at) as string,
   };
 }

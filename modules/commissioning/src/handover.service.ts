@@ -21,10 +21,10 @@ import {
 } from './domain/client-training';
 import { resolveDocumentReference, type ResolvedDocument } from './domain/document-reference';
 import {
-  type DossierItem, type DossierView, assembleDossier, captureDossier, groupIssues,
+  type DossierItem, type DossierView, assembleDossier, captureDossier, conveyableLines, groupIssues,
 } from './domain/dossier';
 import { CommissioningService } from './commissioning.service';
-import { DOC_CONTROL, type DocControlPort, type SnagFact } from './ports';
+import { DOC_CONTROL, DOC_CONTROL_ISSUE, type DocControlPort, type DocControlIssuePort, type SnagFact } from './ports';
 
 /**
  * A handover package enriched with the live commissioning status of its project — the
@@ -62,6 +62,11 @@ export class HandoverService {
     //
     // Absent or throwing ⇒ null ⇒ UNKNOWN ⇒ blocked. Never a pass.
     @Optional() @Inject(DOC_CONTROL) private readonly docControl?: DocControlPort,
+    // Asking document control to open a transmittal for what this package is issuing (TC-GATE-14).
+    // The first port here that WRITES, and it is still DocControl doing the writing: it assigns the
+    // code, applies its own permission check and owns every state that follows. Absent means the
+    // manifest is captured without a conveyance — an unwired port blocks proof, never work.
+    @Optional() @Inject(DOC_CONTROL_ISSUE) private readonly docControlIssue?: DocControlIssuePort,
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
@@ -129,6 +134,44 @@ export class HandoverService {
       this.store.listPunchItemsForProject(tenantId, projectId),
     ]);
     return { snags: quality?.snags ?? null, punch };
+  }
+
+  /**
+   * Ask document control to open a transmittal for the controlled documents this issue carries.
+   *
+   * Returns null — and the submission still goes through — in three cases, none of them a failure:
+   * the port is not wired, the register could not be read, or the dossier cites nothing that IS a
+   * controlled document. A package of evidence packs and training records with no registered
+   * documents has nothing for a transmittal to carry, and inventing an empty one would put a hollow
+   * conveyance in the register.
+   *
+   * A DocControl failure is caught and logged rather than raised: refusing the submission because
+   * the conveyance could not be opened would let one domain's outage block another's decision. The
+   * manifest still records what was sent; it records no transmittal, and the surface says so.
+   */
+  private async openTransmittalFor(
+    pkg: HandoverPackage,
+    view: DossierView,
+    issueNo: number,
+    actorId: string | null,
+  ): Promise<{ id: string; code: string } | null> {
+    if (!this.docControlIssue) return null;
+    const documents = await this.readDocuments(pkg.tenantId, pkg.projectId);
+    const items = conveyableLines(view, documents);
+    if (items.length === 0) return null;
+    try {
+      return await this.docControlIssue.openTransmittal(pkg.tenantId, {
+        projectId: pkg.projectId,
+        projectName: pkg.projectName,
+        code: `TR-${pkg.code}-${issueNo}`,
+        title: `${pkg.title} — handover dossier issue ${issueNo}`,
+        items,
+        actorId,
+      });
+    } catch (error) {
+      this.logger.warn(`[Handover] transmittal could not be opened for ${pkg.code}: ${error}`);
+      return null;
+    }
   }
 
   /**
@@ -275,11 +318,21 @@ export class HandoverService {
 
     const existing = await this.store.listDossierItems(pkg.id, tenantId);
     const issueNo = existing.reduce((max, i) => Math.max(max, i.issueNo), 0) + 1;
-    const manifest: DossierItem[] = captureDossier(await this.assembleFor(pkg), pkg, issueNo, actorId ?? pkg.createdBy);
+    const view = await this.assembleFor(pkg);
+
+    // The conveyance is opened BEFORE the manifest is captured, so its id exists when the rows are
+    // written. The manifest table has no UPDATE policy and does not gain one: an issued manifest
+    // records what was sent, and that includes how it was sent.
+    const transmittal = await this.openTransmittalFor(pkg, view, issueNo, actorId ?? pkg.createdBy);
+
+    const manifest: DossierItem[] = captureDossier(view, pkg, issueNo, actorId ?? pkg.createdBy, transmittal?.id ?? null);
     if (manifest.length > 0) await this.store.appendDossierItems(manifest);
 
     await this.store.saveHandover(next);
-    this.logger.log(`[Handover] ${next.code} submitted — dossier issue ${issueNo}, ${manifest.length} item(s) cited`);
+    this.logger.log(
+      `[Handover] ${next.code} submitted — dossier issue ${issueNo}, ${manifest.length} item(s) cited` +
+        (transmittal ? `, conveyed by transmittal ${transmittal.code}` : ', no controlled conveyance'),
+    );
     return this.withStats(next);
   }
 

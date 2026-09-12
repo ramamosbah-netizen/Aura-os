@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import HandoverClient from '../../components/handover-client';
+import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
 
@@ -45,6 +46,11 @@ export default async function HandoverPage() {
 
   return (
     <div style={st.page}>
+      {/* The workspace keeps a tab of its own, like every other Delivery Operations workspace, so it
+          survives opening something else and can be returned to. It carries NO section shortcut grid:
+          this workspace is one package register, and its readiness panel is a projection of that
+          register rather than a second place to stand. See the section spec. */}
+      <AuraTabAnchor href="/handover" title="Handover" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
       <DeliveryWorkspaceSummary eyebrow="HANDOVER OPERATIONS" title="Handover operating picture" description="See which acceptance packages are ready, blocked or waiting for a decision before close-out." metrics={metrics} attention={attention} emptyMessage="No handover exceptions are open for the available packages." />
       <HandoverClient initialPackages={packages ?? []} projects={projects ?? []} />

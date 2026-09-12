@@ -101,3 +101,35 @@ for (const workspace of WORKSPACES) {
     await expect(page).toHaveURL(new RegExp(`\\?section=${workspace.opens.id}$`));
   });
 }
+
+/**
+ * Testing & commissioning and Handover are SINGLE-REGISTER workspaces: a create form and one list
+ * each (Handover's readiness panel is a projection of that same list, not a second place to stand).
+ * They therefore get the half of the pattern that applies — their own AURA tab — and deliberately no
+ * section grid, because they have no sections. Splitting either register by status would put a
+ * filter on a card and call it a place.
+ *
+ * The absence is asserted, not assumed: a grid appearing here later should be a decision someone
+ * makes on purpose, not something that arrives by copying a neighbouring page.
+ */
+const SINGLE_REGISTER_WORKSPACES = [
+  { name: 'Testing & commissioning', path: '/commissioning', tabTitle: 'Testing & commissioning', heading: /Commissioning Register/i },
+  { name: 'Handover', path: '/handover', tabTitle: 'Handover', heading: /Handover Packages/i },
+];
+
+for (const workspace of SINGLE_REGISTER_WORKSPACES) {
+  test(`${workspace.name} keeps its own AURA tab and offers no section grid`, async ({ page }) => {
+    await page.goto('/', { waitUntil: 'domcontentloaded' });
+    await page.evaluate(() => window.localStorage.removeItem('aura.record-tabs'));
+
+    await page.goto(workspace.path, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByRole('heading', { name: workspace.heading })).toBeVisible();
+
+    const tabs = auraTabs(page);
+    await expect(tabs).toHaveCount(1);
+    await expect(tabs.nth(0)).toContainText(workspace.tabTitle);
+
+    // No shortcut grid anywhere on the page — there is one register to be in.
+    await expect(page.getByRole('heading', { name: /sections$/i })).toHaveCount(0);
+  });
+}

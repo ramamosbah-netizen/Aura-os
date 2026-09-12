@@ -562,6 +562,40 @@ export class QualityService {
     return updated;
   }
 
+  /**
+   * Implements `QualityEvidencePort` for Testing & Commissioning (TC-GATE-3).
+   *
+   * T&C cannot declare a system ready while Quality has an open non-conformance against it, and it
+   * must show the ITP requirements a person has tied to that system. Both facts are Quality's, so
+   * they are answered here rather than inferred over there.
+   *
+   * Read-only, and it hands back what Quality already holds — including each ITP point's RESULT,
+   * which stays Quality's to set. T&C displays it and never writes it.
+   */
+  async readProjectQualityEvidence(tenantId: Id, projectId: Id) {
+    const [ncrs, itps] = await Promise.all([this.listNcrs(tenantId), this.listItps(tenantId)]);
+    return {
+      ncrs: ncrs
+        .filter((n) => n.projectId === projectId)
+        .map((n) => ({ id: n.id, ncrNumber: n.ncrNumber, system: n.system, severity: n.severity, status: n.status })),
+      itps: itps
+        .filter((i) => i.projectId === projectId)
+        .map((i) => ({
+          id: i.id,
+          reference: i.reference,
+          title: i.title,
+          discipline: i.discipline,
+          status: i.status,
+          points: i.points.map((p) => ({
+            activity: p.activity,
+            pointType: p.pointType as string,
+            acceptanceCriteria: p.acceptanceCriteria,
+            result: p.result as string,
+          })),
+        })),
+    };
+  }
+
   listItps(tenantId: Id): Promise<Itp[]> {
     return this.itpStore.findAll(tenantId);
   }

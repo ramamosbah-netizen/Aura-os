@@ -6,6 +6,7 @@ import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric
 import CommissioningWorkspaceClient, {
   type DeviceRow, type Project, type PunchRow, type WorkspaceView,
 } from '../../components/commissioning-workspace-client';
+import type { QualityEvidence } from '../../components/commissioning-gate3-sections';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,13 +27,15 @@ export default async function CommissioningPage({
   const project = filters.project ?? '';
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
-  const [view, projects, punch, devices] = await Promise.all([
+  const [view, projects, punch, devices, qualityEvidence] = await Promise.all([
     getJson<WorkspaceView>(`/api/commissioning/records/workspace${scoped}`),
     getJson<Project[]>('/api/projects/projects'),
     getJson<PunchRow[]>(`/api/commissioning/records/punch-items${scoped}`),
-    // Equipment is read from the ELV device register, which owns it. Project-scoped only: the whole
-    // tenant's device schedule is not a T&C question.
-    project ? getJson<DeviceRow[]>(`/api/elv/devices?projectId=${encodeURIComponent(project)}`) : Promise.resolve([]),
+    // Equipment and Quality evidence both come through commissioning's own read, which goes through
+    // the cross-module PORTS. Reading the ELV and Quality APIs directly here would let this page show
+    // one thing while the readiness chain computed from another — the drift these ports exist to stop.
+    project ? getJson<DeviceRow[]>(`/api/commissioning/records/equipment?projectId=${encodeURIComponent(project)}`) : Promise.resolve([]),
+    project ? getJson<QualityEvidence>(`/api/commissioning/records/quality-evidence?projectId=${encodeURIComponent(project)}`) : Promise.resolve(null),
   ]);
 
   const totals = view?.totals;
@@ -40,7 +43,7 @@ export default async function CommissioningPage({
     { label: 'In scope', value: totals?.inScope ?? null, hint: 'Systems registered for T&C', tone: 'accent' },
     { label: 'Failing', value: totals?.failing ?? null, hint: 'A test point stands failed', tone: 'critical' },
     { label: 'Open defects', value: totals?.openPunch ?? null, hint: 'Punch items blocking sign-off', tone: 'warning' },
-    { label: 'Commissioned', value: totals?.commissioned ?? null, hint: 'Witnessed sign-off complete', tone: 'good' },
+    { label: 'Commissioning ready', value: totals?.commissioningReady ?? null, hint: 'Whole readiness chain satisfied', tone: 'good' },
   ];
   // The exception lane names the blocker, not the status: "3 test points failing" is actionable,
   // "failed" is a label. Each row leads to the system it is about.
@@ -66,6 +69,7 @@ export default async function CommissioningPage({
         view={view}
         punch={punch}
         devices={devices}
+        qualityEvidence={qualityEvidence}
         selectedProject={project}
       />
     </div>

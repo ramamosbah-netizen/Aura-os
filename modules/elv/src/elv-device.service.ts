@@ -41,6 +41,28 @@ export type ElvDevicePatch = Partial<
  */
 @Injectable()
 export class ElvDeviceService {
+  /**
+   * Implements `ElvEquipmentPort` for Testing & Commissioning (TC-GATE-3).
+   *
+   * T&C asks "what equipment belongs to this system, and is it installed?" — a question only this
+   * register can answer, because it owns the device. The whole project's schedule comes back in one
+   * call rather than one per system: a project has one device schedule, and fifty round trips to
+   * render one screen is not a design.
+   *
+   * Deliberately minimal: tag, system, status and the commissioning link. Serial, cable and port
+   * stay here, where they are maintained — T&C has no business copying them.
+   */
+  async readProjectEquipment(tenantId: string, projectId: string) {
+    const devices = await this.list(tenantId, { projectId });
+    return devices.map((d) => ({
+      id: d.id,
+      tag: d.tag,
+      system: d.system as string,
+      status: d.status as string,
+      commissioningRecordId: d.commissioningRecordId,
+    }));
+  }
+
   private readonly logger = new Logger('ELV');
 
   constructor(

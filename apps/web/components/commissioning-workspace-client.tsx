@@ -7,6 +7,10 @@ import { COMMISSIONING_PATH, COMMISSIONING_SECTIONS } from '@/lib/workspace-sect
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
 import CommissioningSystemPanel from './commissioning-system-panel';
+import {
+  ItpSection, PreCommissioningSection, CertificatesSection, ReadinessSection, QualityEscalation,
+  type QualityEvidence,
+} from './commissioning-gate3-sections';
 
 type Section = (typeof COMMISSIONING_SECTIONS)[number]['id'];
 const SECTION_IDS = COMMISSIONING_SECTIONS.map((s) => s.id) as Section[];
@@ -18,19 +22,30 @@ export interface FailingPoint {
   lastRunNo: number; lastActual: string | null; lastRemarks: string | null; lastTestedAt: string;
   runCount: number; openPunchIds: string[];
 }
+export interface ReadinessGate { id: string; label: string; state: string; reason: string; source: string }
+export interface LinkedItpRequirement {
+  linkId: string; itpId: string; reference: string; title: string; pointIndex: number | null;
+  activity: string; pointType: string; acceptanceCriteria: string; result: string;
+  testItemId: string | null; testPointNo: string | null;
+}
 export interface SystemView {
   record: { id: string; code: string; title: string; system: string; location: string | null; status: string; projectId: string; projectName: string | null };
   pointsTotal: number; pointsPassed: number; pointsFailing: number; pointsUntested: number;
   pointsEverFailed: number; retestsRequired: number; openPunch: number;
   eligible: boolean; commissioned: boolean; blockers: string[]; failingPoints: FailingPoint[];
+  /** The wider handover chain (TC-GATE-3) — distinct from `eligible`, which is T&C's own evidence. */
+  readiness: { gates: ReadinessGate[]; commissioningReady: boolean; blocking: string[] };
+  itpRequirements: LinkedItpRequirement[];
 }
 export interface WorkspaceView {
   systems: SystemView[];
-  totals: { inScope: number; notStarted: number; noTestPoints: number; failing: number; retestsRequired: number; openPunch: number; eligible: number; commissioned: number };
+  totals: { inScope: number; notStarted: number; noTestPoints: number; failing: number; retestsRequired: number; openPunch: number; eligible: number; commissioned: number; commissioningReady: number };
 }
 export interface PunchRow {
   id: string; commissioningId: string; description: string; severity: string; status: string;
   location: string | null; resolution: string | null; testItemId: string | null; sourceRunId: string | null; createdAt: string;
+  /** The Quality escalation seam: T&C's note, and a REFERENCE to the NCR someone raised over there. */
+  escalationRequestedAt: string | null; escalatedBy: string | null; qualityNcrId: string | null;
 }
 export interface DeviceRow {
   id: string; tag: string; system: string; model: string | null; location: string | null;
@@ -48,12 +63,14 @@ type Filter = 'all' | 'failing' | 'untested' | 'no-points' | 'eligible' | 'commi
  * the backend will refuse, and there is no readiness flag for anyone to tick.
  */
 export default function CommissioningWorkspaceClient({
-  projects, view, punch, devices, selectedProject,
+  projects, view, punch, devices, qualityEvidence, selectedProject,
 }: {
   projects: Project[];
   view: WorkspaceView | null;
   punch: PunchRow[] | null;
   devices: DeviceRow[] | null;
+  /** Quality's ITPs and non-conformances. Null when Quality could not be read — never an empty list. */
+  qualityEvidence: QualityEvidence | null;
   selectedProject: string;
 }) {
   const router = useRouter();
@@ -151,10 +168,18 @@ export default function CommissioningWorkspaceClient({
         <Overview view={view} hrefFor={hrefFor} go={go} hydrated={hydrated} />
       ) : active === 'systems' ? (
         <Systems systems={systems} devices={devices} selectedProject={selectedProject} projects={projects} />
+      ) : active === 'itp' ? (
+        <ItpSection systems={systems} evidence={qualityEvidence} />
+      ) : active === 'pre-commissioning' ? (
+        <PreCommissioningSection systems={systems} />
       ) : active === 'testing' ? (
         <Testing systems={filtered} filter={filter} go={go} hrefFor={hrefFor} hydrated={hydrated} />
+      ) : active === 'certificates' ? (
+        <CertificatesSection systems={systems} />
+      ) : active === 'readiness' ? (
+        <ReadinessSection systems={systems} />
       ) : (
-        <Defects systems={systems} punch={punch} />
+        <Defects systems={systems} punch={punch} ncrs={qualityEvidence?.ncrs ?? null} />
       )}
     </div>
   );
@@ -177,6 +202,7 @@ function Overview({
     { label: 'Open punch items', value: t.openPunch, hint: 'Defects blocking sign-off', tone: 'warn', section: 'defects', filter: 'all' },
     { label: 'Eligible to commission', value: t.eligible, hint: 'Every point passed, no open defect', tone: 'good', section: 'testing', filter: 'eligible' },
     { label: 'Commissioned', value: t.commissioned, hint: 'Witnessed sign-off complete', tone: 'good', section: 'testing', filter: 'commissioned' },
+    { label: 'Commissioning ready', value: t.commissioningReady, hint: 'Whole chain satisfied — what Handover reads', tone: 'good', section: 'readiness', filter: 'all' },
   ];
 
   return (
@@ -458,7 +484,7 @@ function Testing({
 
 // ── Defects & Retests ───────────────────────────────────────────────────────────────────────────
 
-function Defects({ systems, punch }: { systems: SystemView[]; punch: PunchRow[] | null }) {
+function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: PunchRow[] | null; ncrs: { id: string; ncrNumber: string; system: string | null; severity: string; status: string }[] | null }) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [busy, setBusy] = useState<string | null>(null);
@@ -578,6 +604,9 @@ function Defects({ systems, punch }: { systems: SystemView[]; punch: PunchRow[] 
                   {item.location ? ` · ${item.location}` : ''}
                 </span>
                 <span style={st.defectAction}>
+                  {/* Escalation is a note T&C keeps about its own defect plus a reference to the NCR
+                      someone raised in Quality. No NCR is created here. */}
+                  <QualityEscalation item={item} ncrs={ncrs} onDone={() => router.refresh()} />
                   <button style={st.smallBtn} onClick={() => closeDefect(item)} disabled={busy !== null || !hydrated} data-testid={`close-defect-${item.id}`}>
                     {busy === item.id ? 'Closing…' : 'Close'}
                   </button>

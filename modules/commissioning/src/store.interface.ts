@@ -2,6 +2,7 @@ import type { Page, PageParams } from '@aura/shared';
 import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
+import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -36,6 +37,12 @@ export interface CommissioningStore {
   listTestItemsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestItem[]>;
   listTestRunsForProject(tenantId: string, projectId?: string): Promise<CommissioningTestRun[]>;
   listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]>;
+
+  // ITP links — T&C's own record of which Quality plan applies to which system (TC-GATE-3).
+  saveItpLink(link: CommissioningItpLink): Promise<void>;
+  deleteItpLink(id: string, tenantId: string): Promise<void>;
+  listItpLinks(commissioningId: string, tenantId: string): Promise<CommissioningItpLink[]>;
+  listItpLinksForProject(tenantId: string, projectId?: string): Promise<CommissioningItpLink[]>;
 
   // Handover (project-level acceptance)
   saveHandover(pkg: HandoverPackage): Promise<void>;

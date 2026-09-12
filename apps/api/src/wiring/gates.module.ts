@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
-import { CommissioningModule, CommissioningService } from '@aura/commissioning';
+import { ElvModule, ElvDeviceService } from '@aura/elv';
+import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
@@ -31,7 +32,7 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
  */
 @Global()
 @Module({
-  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule],
+  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule, ElvModule],
   providers: [
     { provide: QUALITY_GATE, useExisting: QualityService },
     { provide: ITP_GATE, useExisting: QualityService },
@@ -61,7 +62,19 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     { provide: HSE_HEALTH, useExisting: HseService },
     { provide: ENGINEERING_HEALTH, useExisting: EngineeringService },
     { provide: PROCUREMENT_HEALTH, useExisting: RfqService },
+
+    // ── Pre-commissioning readiness (TC-GATE-3) ──────────────────────────────────────────────
+    // The mirror image of the bindings above: here COMMISSIONING is the consumer. It asks the ELV
+    // register what equipment exists and whether it is installed, Engineering whether the drawings
+    // are released, and Quality whether anything is open against the system.
+    //
+    // Forgetting one of these wires does NOT quietly pass a system: commissioning treats an absent
+    // port as UNKNOWN, and UNKNOWN blocks the readiness chain. Optional dependency, never optional
+    // evidence — the same rule the closeout ports above follow.
+    { provide: ELV_EQUIPMENT, useExisting: ElvDeviceService },
+    { provide: QUALITY_EVIDENCE, useExisting: QualityService },
+    { provide: ENGINEERING_RELEASE, useExisting: EngineeringService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE],
 })
 export class GatesModule {}

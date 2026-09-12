@@ -32,6 +32,15 @@ export interface PunchItem {
    */
   testItemId: Id | null;
   sourceRunId: Id | null;
+  /**
+   * The Quality escalation seam (TC-GATE-3). T&C never raises a non-conformance — that is Quality's
+   * authority and its lifecycle. What T&C owns is the fact that it ASKED, and the reference to the
+   * NCR a person then raised over there. `qualityNcrId` is a reference, never a copy: no NCR field
+   * is duplicated here, so there is nothing to drift out of step with Quality.
+   */
+  escalationRequestedAt: string | null;
+  escalatedBy: Id | null;
+  qualityNcrId: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +81,9 @@ export function makePunchItem(input: NewPunchItem): PunchItem {
     closedAt: null,
     testItemId: input.testItemId ?? null,
     sourceRunId: input.sourceRunId ?? null,
+    escalationRequestedAt: null,
+    escalatedBy: null,
+    qualityNcrId: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -83,4 +95,26 @@ export function closePunch(item: PunchItem, input: { resolution: string; closedB
   if (!input.resolution?.trim()) throw new Error('a resolution note is required to close a punch item');
   const now = new Date().toISOString();
   return { ...item, status: 'closed', resolution: input.resolution.trim(), closedBy: input.closedBy ?? null, closedAt: now, updatedAt: now };
+}
+
+/**
+ * Record that this defect needs a Quality non-conformance, and — once someone has raised one over
+ * there — which NCR answers it.
+ *
+ * Deliberately NOT a state machine. Escalation is a note T&C keeps about its own defect; the NCR's
+ * lifecycle belongs to Quality and is read from Quality. Calling again updates the reference, which
+ * is what happens when the first NCR number turns out to be the wrong one.
+ */
+export function escalateToQuality(
+  item: PunchItem,
+  input: { qualityNcrId?: string | null; escalatedBy?: Id | null },
+): PunchItem {
+  if (item.status === 'closed') throw new Error('conflict: the defect is already closed');
+  return {
+    ...item,
+    escalationRequestedAt: item.escalationRequestedAt ?? new Date().toISOString(),
+    escalatedBy: input.escalatedBy ?? item.escalatedBy,
+    qualityNcrId: input.qualityNcrId?.trim() || item.qualityNcrId,
+    updatedAt: new Date().toISOString(),
+  };
 }

@@ -88,16 +88,23 @@ export const QUALITY_SECTIONS = [
 
 export const COMMISSIONING_PATH = '/commissioning';
 /**
- * Testing & commissioning stopped being a single register at TC-GATE-2. Its four sections are the
- * four jobs the workspace actually has — not a register sliced by status, which would be a filter
- * wearing a section's clothes. Certificates, pre-commissioning and ITP integration are deliberately
- * absent: they are later gates, and an empty section would promise work the app cannot do.
+ * Testing & commissioning stopped being a single register at TC-GATE-2, which gave it four sections,
+ * and reached its full shape at TC-GATE-3 with eight. Each is a job the workspace actually has —
+ * never a register sliced by status, which would be a filter wearing a section's clothes.
+ *
+ * Three of them read work other domains own: Inspection & Test Plans shows Quality's ITP
+ * requirements, Pre-Commissioning derives its gates from the ELV register, Engineering and Quality,
+ * and Certificates & Records stops at the evidence pack because DocControl owns formal issue.
  */
 export const COMMISSIONING_SECTIONS = [
   { id: 'overview', label: 'Overview', description: 'What is preventing these systems from being commissioned', icon: Gauge, tone: 'teal' },
   { id: 'systems', label: 'Systems & Equipment', description: 'Commissioning scope, and the devices under each system', icon: Boxes, tone: 'blue' },
+  { id: 'itp', label: 'Inspection & Test Plans', description: 'The Quality ITP requirements that apply to each system', icon: ListChecks, tone: 'violet' },
+  { id: 'pre-commissioning', label: 'Pre-Commissioning', description: 'Equipment, installation, engineering and quality before testing starts', icon: Hourglass, tone: 'cyan' },
   { id: 'testing', label: 'Testing & Commissioning', description: 'Execute test points, review run history and sign off', icon: ClipboardCheck, tone: 'green' },
   { id: 'defects', label: 'Defects & Retests', description: 'Failing points, the defects raised from them, and retests owed', icon: TriangleAlert, tone: 'amber' },
+  { id: 'certificates', label: 'Certificates & Records', description: 'The evidence pack behind each commissioned system', icon: BadgeCheck, tone: 'blue' },
+  { id: 'readiness', label: 'Readiness & Handover', description: 'The full chain to COMMISSIONING READY, which Handover reads', icon: FileCheck2, tone: 'green' },
 ] as const satisfies readonly WorkspaceSection[];
 
 export const HSE_PATH = '/hse/control';

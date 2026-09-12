@@ -5,6 +5,7 @@ import type { CommissioningStore } from './store.interface';
 import type { CommissioningRecord, CommissioningStatus, ElvSystem } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
+import type { CommissioningItpLink } from './domain/commissioning-itp-link';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
@@ -242,10 +243,13 @@ export class PostgresCommissioningStore implements CommissioningStore {
   async savePunchItem(i: PunchItem): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_punch_items
-        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, test_item_id, source_run_id, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
-       on conflict (id) do update set status = excluded.status, resolution = excluded.resolution, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
-      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.testItemId, i.sourceRunId, i.createdAt, i.updatedAt],
+        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, test_item_id, source_run_id, escalation_requested_at, escalated_by, quality_ncr_id, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       on conflict (id) do update set status = excluded.status, resolution = excluded.resolution,
+         closed_by = excluded.closed_by, closed_at = excluded.closed_at,
+         escalation_requested_at = excluded.escalation_requested_at, escalated_by = excluded.escalated_by,
+         quality_ncr_id = excluded.quality_ncr_id, updated_at = excluded.updated_at`,
+      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.testItemId, i.sourceRunId, i.escalationRequestedAt, i.escalatedBy, i.qualityNcrId, i.createdAt, i.updatedAt],
     );
   }
   async findPunchItem(id: string, tenantId: string): Promise<PunchItem | null> {
@@ -277,6 +281,39 @@ export class PostgresCommissioningStore implements CommissioningStore {
     );
     return res.rows.map(toTestRun);
   }
+  // ── ITP links (TC-GATE-3) ─────────────────────────────────────────────────────────────────────
+
+  async saveItpLink(l: CommissioningItpLink): Promise<void> {
+    // No ON CONFLICT DO NOTHING: the unique constraint is the guard against linking one requirement
+    // twice, and swallowing it would tell the user their second link took when it did not.
+    await this.pool.query(
+      `insert into public.aura_commissioning_itp_links
+        (id, tenant_id, company_id, commissioning_id, project_id, itp_id, point_index, test_item_id, linked_by, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       on conflict (commissioning_id, itp_id, point_index) do update set test_item_id = excluded.test_item_id`,
+      [l.id, l.tenantId, l.companyId, l.commissioningId, l.projectId, l.itpId, l.pointIndex, l.testItemId, l.linkedBy, l.createdAt],
+    );
+  }
+  async deleteItpLink(id: string, tenantId: string): Promise<void> {
+    await this.pool.query('delete from public.aura_commissioning_itp_links where id = $1 and tenant_id = $2', [id, tenantId]);
+  }
+  async listItpLinks(commissioningId: string, tenantId: string): Promise<CommissioningItpLink[]> {
+    const res = await this.pool.query(
+      'select * from public.aura_commissioning_itp_links where commissioning_id = $1 and tenant_id = $2 order by created_at asc',
+      [commissioningId, tenantId],
+    );
+    return res.rows.map(toItpLink);
+  }
+  async listItpLinksForProject(tenantId: string, projectId?: string): Promise<CommissioningItpLink[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_itp_links
+        where tenant_id = $1 and ($2::text is null or project_id = $2)
+        order by created_at asc`,
+      [tenantId, projectId ?? null],
+    );
+    return res.rows.map(toItpLink);
+  }
+
   async listPunchItemsForProject(tenantId: string, projectId?: string): Promise<PunchItem[]> {
     const res = await this.pool.query(
       `select * from public.aura_commissioning_punch_items
@@ -311,6 +348,18 @@ function toTestItem(r: Record<string, unknown>): CommissioningTestItem {
   };
 }
 
+function toItpLink(r: Record<string, unknown>): CommissioningItpLink {
+  return {
+    id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
+    commissioningId: r.commissioning_id as string, projectId: r.project_id as string,
+    itpId: r.itp_id as string,
+    pointIndex: r.point_index == null ? null : Number(r.point_index),
+    testItemId: (r.test_item_id as string) ?? null,
+    linkedBy: (r.linked_by as string) ?? null,
+    createdAt: tsIso(r.created_at) as string,
+  };
+}
+
 function toPunch(r: Record<string, unknown>): PunchItem {
   return {
     id: r.id as string, tenantId: r.tenant_id as string, companyId: (r.company_id as string) ?? null,
@@ -319,6 +368,8 @@ function toPunch(r: Record<string, unknown>): PunchItem {
     status: r.status as PunchItem['status'], raisedBy: (r.raised_by as string) ?? null, resolution: (r.resolution as string) ?? null,
     closedBy: (r.closed_by as string) ?? null, closedAt: tsIso(r.closed_at),
     testItemId: (r.test_item_id as string) ?? null, sourceRunId: (r.source_run_id as string) ?? null,
+    escalationRequestedAt: tsIso(r.escalation_requested_at), escalatedBy: (r.escalated_by as string) ?? null,
+    qualityNcrId: (r.quality_ncr_id as string) ?? null,
     createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
   };
 }

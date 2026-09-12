@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { makeEvent } from '@aura/shared';
 import { COMMISSIONING_STORE, type CommissioningStore } from './store.interface';
@@ -11,6 +11,9 @@ import {
   accept,
   reject,
 } from './domain/handover';
+import { assessHandoverReadiness, type HandoverReadiness } from './domain/handover-readiness';
+import { CommissioningService } from './commissioning.service';
+import { ENGINEERING_RELEASE, type EngineeringReleasePort } from './ports';
 
 /**
  * A handover package enriched with the live commissioning status of its project — the
@@ -20,6 +23,11 @@ import {
 export type HandoverView = HandoverPackage & {
   systemsTotal: number;
   systemsCommissioned: number;
+  /**
+   * Readiness, PROJECTED from the domains that own the evidence (TC-GATE-4). Two of the six items
+   * are derived and cannot be ticked; the other four are still assertions and say so.
+   */
+  readiness: HandoverReadiness;
 };
 
 @Injectable()
@@ -29,14 +37,49 @@ export class HandoverService {
   constructor(
     @Inject(COMMISSIONING_STORE) private readonly store: CommissioningStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Same module, so this is a direct call rather than a port: handover reads T&C's OWN readiness
+    // calculation, the one the T&C workspace shows and the sign-off guard uses. Two calculations of
+    // "is this system ready" would be the drift this whole arrangement exists to prevent.
+    private readonly commissioning: CommissioningService,
+    // Engineering is another context, so it comes through the port commissioning already declares.
+    // Absent or throwing ⇒ null ⇒ UNKNOWN ⇒ blocked. Never a pass.
+    @Optional() @Inject(ENGINEERING_RELEASE) private readonly engineering?: EngineeringReleasePort,
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
-    const systems = await this.store.list(pkg.tenantId, pkg.projectId);
+    const [workspace, drawings] = await Promise.all([
+      this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
+      this.engineering
+        ? this.engineering.readProjectDrawingRelease(pkg.tenantId, pkg.projectId).catch((error) => {
+            this.logger.warn(`[Handover] Engineering could not be read: ${error}`);
+            return null;
+          })
+        : Promise.resolve(null),
+    ]);
+
+    const notReady = workspace.systems.filter((s) => !s.readiness.commissioningReady);
+    const readiness = assessHandoverReadiness({
+      systemsTotal: workspace.systems.length,
+      systemsCommissioningReady: workspace.systems.length - notReady.length,
+      // The blocker in the words T&C itself used, so the two screens say the same thing.
+      notReadyReasons: notReady.map((s) => {
+        const first = s.readiness.gates.find((g) => g.state === 'BLOCKED' || g.state === 'UNKNOWN');
+        return `${s.record.code}: ${first ? first.reason : 'not ready'}`;
+      }),
+      drawings,
+      asserted: {
+        omManuals: pkg.checklist.omManuals,
+        warrantyDocs: pkg.checklist.warrantyDocs,
+        training: pkg.checklist.training,
+        spares: pkg.checklist.spares,
+      },
+    });
+
     return {
       ...pkg,
-      systemsTotal: systems.length,
-      systemsCommissioned: systems.filter((s) => s.status === 'commissioned').length,
+      systemsTotal: workspace.systems.length,
+      systemsCommissioned: workspace.systems.filter((s) => s.commissioned).length,
+      readiness,
     };
   }
 
@@ -65,14 +108,32 @@ export class HandoverService {
     return Promise.all(pkgs.map((p) => this.withStats(p)));
   }
 
+  /**
+   * Tick one of the items nobody owns yet.
+   *
+   * `testCertificates` and `asBuilts` are refused: since TC-GATE-4 both are derived from Testing &
+   * Commissioning and Engineering, and accepting a tick for them would let the package assert
+   * something the evidence does not say — exactly the behaviour this gate removed.
+   */
   async updateChecklist(id: string, tenantId: string, patch: Partial<HandoverChecklist>): Promise<HandoverView> {
+    const derived = (['testCertificates', 'asBuilts'] as const).filter((key) => key in patch);
+    if (derived.length > 0) {
+      throw new Error(
+        `only an item without an owning authority can be ticked by hand — ${derived.join(' and ')} ` +
+          'is derived from Testing & Commissioning and Engineering',
+      );
+    }
     const next = updateChecklist(await this.mustFind(id, tenantId), patch);
     await this.store.saveHandover(next);
     return this.withStats(next);
   }
 
   async submit(id: string, tenantId: string): Promise<HandoverView> {
-    const next = submit(await this.mustFind(id, tenantId));
+    const pkg = await this.mustFind(id, tenantId);
+    // Assess first, then gate on the assessment: the commissioning and as-built items are derived,
+    // so a tick cannot buy a submission the evidence does not support.
+    const { readiness } = await this.withStats(pkg);
+    const next = submit(pkg, readiness);
     await this.store.saveHandover(next);
     return this.withStats(next);
   }

@@ -28,6 +28,15 @@ interface HandoverPackage {
   title: string;
   status: 'draft' | 'submitted' | 'accepted' | 'rejected';
   checklist: Checklist;
+  /**
+   * Readiness PROJECTED from the domains that own the evidence (TC-GATE-4). Two items are derived
+   * and cannot be ticked; the other four are still assertions and say so on the page.
+   */
+  readiness?: {
+    readyToSubmit: boolean;
+    blocking: string[];
+    items: { id: string; label: string; state: string; reason: string; source: string; evidence: 'projected' | 'asserted' }[];
+  };
   submittedAt: string | null;
   acceptedAt: string | null;
   clientRepresentative: string | null;
@@ -38,10 +47,16 @@ interface HandoverPackage {
   systemsCommissioned: number;
 }
 
+/**
+ * The items a person can still tick (TC-GATE-4).
+ *
+ * `asBuilts` and `testCertificates` are gone from this list on purpose: both are now derived —
+ * from Engineering and from Testing & Commissioning — and the API refuses a tick for either. A
+ * checkbox that always errored would be worse than no checkbox. They appear in the readiness panel
+ * above, with their derived state and the domain that answered.
+ */
 const CHECK_ITEMS: { key: keyof Checklist; label: string; core: boolean }[] = [
   { key: 'omManuals', label: 'O&M manuals', core: true },
-  { key: 'asBuilts', label: 'As-built drawings', core: true },
-  { key: 'testCertificates', label: 'Test & commissioning certificates', core: true },
   { key: 'warrantyDocs', label: 'Warranty documents', core: false },
   { key: 'training', label: 'Client training completed', core: false },
   { key: 'spares', label: 'Spares & consumables handed over', core: false },
@@ -115,15 +130,12 @@ export default function HandoverClient({
   };
   const statusStyle = (s: HandoverPackage['status']): CSSProperties =>
     s === 'accepted' ? st.tagGood : s === 'rejected' ? st.tagBad : s === 'submitted' ? st.tagInfo : st.tagPending;
-  const coreReady = (c: Checklist) => c.omManuals && c.asBuilts && c.testCertificates;
-  const readinessSummary = CHECK_ITEMS.map((item) => ({
-    ...item,
-    state: packages.length === 0
-      ? 'Not established'
-      : packages.every((p) => p.checklist[item.key])
-        ? 'Ready'
-        : 'Open',
-  }));
+  // Submission eligibility is the BACKEND's assessment, not a re-derivation from the checkboxes —
+  // so the button cannot offer something the API will refuse, and cannot hide something it allows.
+  const coreReady = (p: HandoverPackage) => p.readiness?.readyToSubmit ?? false;
+  const blockedReason = (p: HandoverPackage) =>
+    (p.readiness?.items ?? []).filter((i) => i.state !== 'READY').map((i) => `${i.label}: ${i.reason}`).join(' ') ||
+    'Readiness has not been assessed.';
 
   return (
     <div>
@@ -154,15 +166,38 @@ export default function HandoverClient({
         <div style={st.readinessCopy}>
           <div style={st.readinessEyebrow}>HANDOVER READINESS</div>
           <h3 id="handover-readiness-heading" style={st.readinessTitle}>Evidence gates for acceptance</h3>
-          <p style={st.readinessDescription}>Readiness is projected from the canonical handover package checklist. It is not a separate readiness record and cannot be marked ready manually.</p>
+          <p style={st.readinessDescription}>
+            Two of these are <strong>derived from the domain that owns the evidence</strong> — Testing &amp; Commissioning for the
+            systems, Engineering for the as-builts — and cannot be ticked here. The rest are still assertions on the package,
+            because no authority exists yet to derive them from, and each one says so. A domain that cannot be read reads
+            UNKNOWN and blocks the submission rather than passing.
+          </p>
         </div>
-        <div style={st.readinessGrid}>
-          {readinessSummary.map((item) => (
-            <div key={item.key} style={st.readinessItem}>
-              <span style={st.readinessLabel}>{item.label}{item.core ? ' *' : ''}</span>
-              <strong style={item.state === 'Ready' ? st.readinessGood : item.state === 'Open' ? st.readinessOpen : st.readinessUnknown}>{item.state}</strong>
-            </div>
-          ))}
+        <div style={st.readinessGrid} data-testid="handover-readiness">
+          {packages.length === 0 ? (
+            <div style={st.readinessItem}><span style={st.readinessLabel}>No packages</span><strong style={st.readinessUnknown}>Not established</strong></div>
+          ) : (
+            (packages[0].readiness?.items ?? []).map((item) => (
+              <div key={item.id} style={st.readinessItem} data-testid={`handover-item-${item.id}`}>
+                <span style={st.readinessLabel}>
+                  {item.label}
+                  <small style={{ display: 'block', opacity: 0.7 }}>
+                    {item.evidence === 'projected' ? `derived · ${item.source}` : 'asserted · nothing verifies this'}
+                  </small>
+                  {/* The reason, inline — the same treatment the T&C chain gives its gates. A state on
+                      its own is a colour; "none marked as-built" is the sentence to act on. */}
+                  <small style={{ display: 'block', opacity: 0.85, marginTop: 2 }}>{item.reason}</small>
+                </span>
+                <strong
+                  style={item.state === 'READY' ? st.readinessGood : item.state === 'BLOCKED' ? st.readinessOpen : st.readinessUnknown}
+                  data-testid={`handover-item-${item.id}-state`}
+                  title={item.reason}
+                >
+                  {item.state}
+                </strong>
+              </div>
+            ))
+          )}
         </div>
       </section>
 
@@ -223,7 +258,7 @@ export default function HandoverClient({
                     {p.projectName || '—'} · {p.systemsCommissioned}/{p.systemsTotal} systems commissioned ({commPct}%)
                   </p>
 
-                  <div style={st.checkGrid}>
+                  <div style={st.checkGrid} data-testid={`handover-checklist-${p.code}`}>
                     {CHECK_ITEMS.map((item) => (
                       <label key={item.key} style={{ ...st.check, opacity: accepted ? 0.7 : 1 }}>
                         <input
@@ -235,6 +270,12 @@ export default function HandoverClient({
                         {item.label}{item.core ? <span style={st.coreStar} title="Required to submit"> *</span> : null}
                       </label>
                     ))}
+                    {/* Said where the ticks are, not only in the panel above: the two that left this
+                        list did not become optional — they became evidence. */}
+                    <span style={st.derivedNote} data-testid={`handover-derived-note-${p.code}`}>
+                      Systems commissioned and as-built drawings are derived from Testing &amp; Commissioning and
+                      Engineering, and are shown in handover readiness above.
+                    </span>
                   </div>
 
                   {accepted ? (
@@ -247,9 +288,10 @@ export default function HandoverClient({
                       {(p.status === 'draft' || p.status === 'rejected') && (
                         <button
                           onClick={() => submit(p)}
-                          disabled={!coreReady(p.checklist)}
-                          style={coreReady(p.checklist) ? st.btnSm : st.btnSmDisabled}
-                          title={coreReady(p.checklist) ? 'Submit to client' : 'Attach O&M manuals, as-builts and test certificates first'}
+                          disabled={!coreReady(p)}
+                          style={coreReady(p) ? st.btnSm : st.btnSmDisabled}
+                          title={coreReady(p) ? 'Submit to client' : blockedReason(p)}
+                          data-testid={`handover-submit-${p.code}`}
                         >
                           Submit to client
                         </button>
@@ -320,6 +362,7 @@ const st = {
   meta: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px' } as CSSProperties,
   checkGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '7px 16px', marginBottom: 12 } as CSSProperties,
   check: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer' } as CSSProperties,
+  derivedNote: { gridColumn: '1 / -1', fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 } as CSSProperties,
   coreStar: { color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   signoff: { fontSize: 13, color: 'var(--good)', margin: '4px 0 0', background: 'var(--good-soft)', borderRadius: 8, padding: '8px 12px' } as CSSProperties,
   actions: { display: 'flex', flexDirection: 'column', gap: 8 } as CSSProperties,

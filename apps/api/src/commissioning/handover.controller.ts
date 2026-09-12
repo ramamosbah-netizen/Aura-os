@@ -97,6 +97,18 @@ export class HandoverController {
   // The CLIENT's people, not ours. HSE's training is worker safety — a different authority about
   // different people, and neither may stand in for the other.
 
+  /**
+   * Both defect authorities for a project, side by side (TC-GATE-9).
+   *
+   * Declared BEFORE `:id` so the fixed segment is not swallowed by the id route. Quality owns
+   * snags, T&C owns punch items; this merges neither and Handover writes neither.
+   */
+  @Get('defects')
+  defects(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    return this.service.readDefects(this.tenant.get().tenantId, projectId);
+  }
+
   @Get('training')
   listTraining(@Query('projectId') projectId?: string) {
     return this.service.listTrainingSessions(this.tenant.get().tenantId, projectId || undefined);

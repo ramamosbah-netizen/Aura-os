@@ -24,7 +24,7 @@ import {
   type DossierItem, type DossierView, assembleDossier, captureDossier, groupIssues,
 } from './domain/dossier';
 import { CommissioningService } from './commissioning.service';
-import { DOC_CONTROL, type DocControlPort } from './ports';
+import { DOC_CONTROL, type DocControlPort, type SnagFact } from './ports';
 
 /**
  * A handover package enriched with the live commissioning status of its project — the
@@ -65,7 +65,7 @@ export class HandoverService {
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
-    const [workspace, documents, omItems, trainingSessions, asBuiltLinks] = await Promise.all([
+    const [workspace, documents, omItems, trainingSessions, asBuiltLinks, quality] = await Promise.all([
       this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
       this.readDocuments(pkg.tenantId, pkg.projectId),
       // Handover's own two authorities (TC-GATE-5) — no port needed, these are its own tables.
@@ -73,6 +73,9 @@ export class HandoverService {
       this.store.listTrainingSessions(pkg.tenantId, pkg.projectId),
       // T&C's as-built links (TC-GATE-8) — same module, so a direct store read.
       this.store.listAsBuiltLinksForProject(pkg.tenantId, pkg.projectId),
+      // Quality's snags (TC-GATE-9), through the port T&C already declares. Null when Quality
+      // cannot be read, which the assessment renders as UNKNOWN — never as "no snags".
+      this.commissioning.readQualityEvidence(pkg.tenantId, pkg.projectId),
     ]);
 
     const notReady = workspace.systems.filter((s) => !s.readiness.commissioningReady);
@@ -94,6 +97,7 @@ export class HandoverService {
       })),
       trainingSessions: trainingSessions.map((s) => ({ commissioningId: s.commissioningId, state: s.state })),
       asBuiltLinks: asBuiltLinks.map((l) => ({ commissioningId: l.commissioningId, documentId: l.documentId })),
+      snags: quality?.snags ?? null,
       systemIds: workspace.systems.map((s) => s.record.id),
       // Only spares is left. Warranty documents became a projection at TC-GATE-6, derived from the
       // O&M pack's warranty certificate — the authority was already there, unread.
@@ -106,6 +110,25 @@ export class HandoverService {
       systemsCommissioned: workspace.systems.filter((s) => s.commissioned).length,
       readiness,
     };
+  }
+
+  /**
+   * Both defect authorities for a project, side by side (TC-GATE-9).
+   *
+   * Quality owns snags; T&C owns punch items. They are different records with different scopes,
+   * different severity scales and different lifecycles, and this MERGES NEITHER — it returns each
+   * under its own name so the surface can say who owns what. Handover writes neither: a third
+   * writer for a defect is the last thing this repository needs.
+   */
+  async readDefects(tenantId: string, projectId: string): Promise<{
+    snags: SnagFact[] | null;
+    punch: Awaited<ReturnType<CommissioningStore['listPunchItemsForProject']>>;
+  }> {
+    const [quality, punch] = await Promise.all([
+      this.commissioning.readQualityEvidence(tenantId, projectId),
+      this.store.listPunchItemsForProject(tenantId, projectId),
+    ]);
+    return { snags: quality?.snags ?? null, punch };
   }
 
   /**

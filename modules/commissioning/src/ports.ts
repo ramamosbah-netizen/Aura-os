@@ -45,6 +45,33 @@ export interface NcrFact {
   status: string;
 }
 
+/**
+ * A snag, as QUALITY describes it (TC-GATE-9).
+ *
+ * Quality owns snags: `aura_quality_snags`, project-scoped, with its own severity scale
+ * (low | medium | high) and its own three-state lifecycle (open | resolved | closed). T&C owns a
+ * DIFFERENT defect record — the punch item, system-scoped, minor | major | critical, open | closed,
+ * with provenance back to the failing test run.
+ *
+ * They are not merged here and must not be. Two authorities describing overlapping facts is a real
+ * problem in this repository, but the fix for it is convergence, not a consumer quietly deciding
+ * which one wins. What this port does is let Handover SEE the one it was blind to.
+ *
+ * `status` is carried through as Quality's own word. Handover counts what Quality calls open and
+ * adds no severity threshold of its own — restating a threshold in the consumer is exactly the drift
+ * these ports exist to prevent.
+ */
+export interface SnagFact {
+  id: string;
+  description: string;
+  locationDetail: string;
+  /** low | medium | high — Quality's scale, not T&C's. */
+  severity: string;
+  /** open | resolved | closed */
+  status: string;
+  assignedTo: string | null;
+}
+
 /** An Inspection & Test Plan and its points, owned by Quality. Results are Quality's, not T&C's. */
 export interface ItpFact {
   id: string;
@@ -56,7 +83,10 @@ export interface ItpFact {
 }
 
 export interface QualityEvidencePort {
-  readProjectQualityEvidence(tenantId: string, projectId: string): Promise<{ ncrs: NcrFact[]; itps: ItpFact[] }>;
+  readProjectQualityEvidence(
+    tenantId: string,
+    projectId: string,
+  ): Promise<{ ncrs: NcrFact[]; itps: ItpFact[]; snags: SnagFact[] }>;
 }
 
 /** A drawing's release state, as Engineering describes it. Discipline is the shared dimension. */

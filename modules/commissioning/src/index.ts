@@ -1,5 +1,6 @@
 export * from './domain/commissioning-record';
 export * from './domain/commissioning-test-item';
+export * from './domain/commissioning-test-run';
 export * from './domain/punch-item';
 export * from './domain/handover';
 export * from './store.interface';

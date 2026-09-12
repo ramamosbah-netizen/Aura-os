@@ -15,6 +15,7 @@ import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-t
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
 import { type CommissioningItpLink, makeItpLink } from './domain/commissioning-itp-link';
 import { type AsBuiltLink, makeAsBuiltLink } from './domain/asbuilt-link';
+import { type CertificateLink, makeCertificateLink } from './domain/certificate-link';
 import { type ControlledDocumentFact, AS_BUILT_STATUS, referenceIsSound, resolveDocumentReference } from './domain/document-reference';
 import { assessSystemReadiness, type SystemReadiness } from './domain/commissioning-readiness';
 import {
@@ -22,6 +23,32 @@ import {
   type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort, type DocControlPort,
   type EquipmentFact, type ItpFact, type NcrFact, type SnagFact,
 } from './ports';
+
+/** Put a certificate link back to the register. Shared by the detail read and the workspace. */
+export function resolveCertificate(
+  link: { id: string; documentId: string },
+  documents: ControlledDocumentFact[] | null,
+): LinkedCertificate {
+  const resolved = resolveDocumentReference(link.documentId, documents);
+  const doc = resolved?.document ?? null;
+  const current = referenceIsSound(resolved);
+  return {
+    linkId: link.id,
+    documentId: link.documentId,
+    documentNumber: doc?.documentNumber ?? null,
+    title: doc?.title ?? null,
+    revision: doc?.revision ?? null,
+    status: doc?.status ?? null,
+    current,
+    note: current
+      ? null
+      : documents === null
+        ? 'Document control could not be read, so this certificate is unverified.'
+        : resolved === null || resolved.missing
+          ? `No document "${link.documentId}" is in the project register.`
+          : 'The register has superseded the revision this points at.',
+  };
+}
 
 /**
  * A test point that stands failed, with the run that failed it and any defect already raised
@@ -71,6 +98,8 @@ export interface CommissioningSystemView {
   itpRequirements: LinkedItpRequirement[];
   /** The drawings linked as this system's as-built, with what the register says about each now. */
   asBuiltRecords: LinkedAsBuilt[];
+  /** The controlled document this system's evidence pack is registered as, or null (TC-GATE-10). */
+  certificate: LinkedCertificate | null;
 }
 
 /**
@@ -80,6 +109,31 @@ export interface CommissioningSystemView {
  * read and kept nowhere — so a drawing that has been superseded or renumbered says so, instead of
  * showing whatever was true on the day it was linked.
  */
+/**
+ * The controlled document a system's evidence pack is registered as (TC-GATE-10).
+ *
+ * Resolved from the register at the moment it is shown and stored nowhere, so a certificate that has
+ * been superseded says so rather than showing what was true when it was linked.
+ */
+export interface LinkedCertificate {
+  linkId: string;
+  documentId: string;
+  documentNumber: string | null;
+  title: string | null;
+  revision: string | null;
+  status: string | null;
+  /**
+   * Resolves and is not superseded.
+   *
+   * No particular register STATUS is demanded, unlike an as-built: `RegisterStatus` is drawing-shaped
+   * and a test certificate has no honest value in it. Superseded is the one state that makes handing
+   * it over wrong, and it is the one this tests.
+   */
+  current: boolean;
+  /** Why it does not count, in words a reader can act on. Null when it does. */
+  note: string | null;
+}
+
 export interface LinkedAsBuilt {
   linkId: string;
   documentId: string;
@@ -521,15 +575,24 @@ export class CommissioningService {
   async getDetail(
     id: string,
     tenantId: string,
-  ): Promise<{ record: CommissioningRecord; testItems: CommissioningTestItem[]; testRuns: CommissioningTestRun[]; punchItems: PunchItem[] } | null> {
+  ): Promise<{
+    record: CommissioningRecord;
+    testItems: CommissioningTestItem[];
+    testRuns: CommissioningTestRun[];
+    punchItems: PunchItem[];
+    /** The controlled document this pack is registered as, resolved now (TC-GATE-10). */
+    certificate: LinkedCertificate | null;
+  } | null> {
     const record = await this.store.find(id, tenantId);
     if (!record) return null;
-    const [testItems, testRuns, punchItems] = await Promise.all([
+    const [testItems, testRuns, punchItems, link] = await Promise.all([
       this.store.listTestItems(id, tenantId),
       this.store.listTestRuns(id, tenantId),
       this.store.listPunchItems(id, tenantId),
+      this.store.findCertificateLink(id, tenantId),
     ]);
-    return { record, testItems, testRuns, punchItems };
+    const documents = link ? await this.readDocuments(tenantId, record.projectId) : null;
+    return { record, testItems, testRuns, punchItems, certificate: link ? resolveCertificate(link, documents) : null };
   }
 
   // ── The workspace read model (TC-GATE-2) ─────────────────────────────────────────────────────
@@ -546,13 +609,14 @@ export class CommissioningService {
    * round trips to answer one screen.
    */
   async readWorkspace(tenantId: string, projectId?: string): Promise<CommissioningWorkspaceView> {
-    const [records, items, runs, punch, itpLinks, asBuiltLinks, equipment, qualityEvidence, drawings, documents] = await Promise.all([
+    const [records, items, runs, punch, itpLinks, asBuiltLinks, certificateLinks, equipment, qualityEvidence, drawings, documents] = await Promise.all([
       this.store.list(tenantId, projectId),
       this.store.listTestItemsForProject(tenantId, projectId),
       this.store.listTestRunsForProject(tenantId, projectId),
       this.store.listPunchItemsForProject(tenantId, projectId),
       this.store.listItpLinksForProject(tenantId, projectId),
       this.store.listAsBuiltLinksForProject(tenantId, projectId),
+      this.store.listCertificateLinksForProject(tenantId, projectId),
       // The three neighbouring domains, read once for the whole project rather than once per system.
       // Each is null when its port is unbound or errors, and null becomes UNKNOWN downstream.
       projectId && this.elv ? this.readPort('ELV device register', () => this.elv!.readProjectEquipment(tenantId, projectId)) : Promise.resolve(null),
@@ -658,6 +722,10 @@ export class CommissioningService {
         };
       });
 
+      // The controlled document this system's pack is registered as, if a person has said so.
+      const certificateLink = certificateLinks.find((l) => l.commissioningId === record.id) ?? null;
+      const certificate = certificateLink ? resolveCertificate(certificateLink, documents) : null;
+
       // The Quality requirements a person has tied to this system. Quality's own result is carried
       // through untouched — T&C shows it, and never writes it.
       const itpRequirements: LinkedItpRequirement[] = (linksByRecord.get(record.id) ?? []).flatMap((link) => {
@@ -712,6 +780,7 @@ export class CommissioningService {
         readiness,
         itpRequirements,
         asBuiltRecords,
+        certificate,
         pointsTotal: points.length,
         pointsPassed: passed.length,
         pointsFailing: failing.length,
@@ -843,6 +912,63 @@ export class CommissioningService {
   async unlinkAsBuilt(id: string, linkId: string, tenantId: string): Promise<void> {
     await this.mustFind(id, tenantId);
     await this.store.deleteAsBuiltLink(linkId, tenantId);
+  }
+
+  // ── Certificate links (TC-GATE-10) ───────────────────────────────────────────────────────────
+
+  /**
+   * Record that a controlled document is this system's commissioning certificate.
+   *
+   * TWO GUARDS, each closing a way the record could lie:
+   *
+   * 1. THE SYSTEM MUST BE COMMISSIONED. A certificate for a system that has not been signed off is
+   *    a claim about work that has not finished, and the register would then carry a controlled
+   *    document saying so. The evidence must exist before the document that attests to it.
+   *
+   * 2. THE REFERENCE MUST RESOLVE, when document control can be read. A certificate pointing at
+   *    nothing is exactly the failure TC-GATE-6 removed from the O&M pack.
+   *
+   * Unlike the as-built guard, this does NOT demand a particular register status. `RegisterStatus`
+   * is drawing-shaped — draft, for_review, for_construction, superseded, as_built — and a test
+   * certificate has no honest value in it. Demanding one would push people to label certificates
+   * "for construction", a lie the check itself caused. Superseded is surfaced on every read instead.
+   */
+  async linkCertificate(
+    id: string,
+    tenantId: string,
+    input: { documentId: string; linkedBy?: string | null },
+  ): Promise<CertificateLink> {
+    const rec = await this.mustFind(id, tenantId);
+    if (rec.status !== 'commissioned') {
+      throw new Error(
+        `only a commissioned system can have its certificate registered — ${rec.code} is '${rec.status}'`,
+      );
+    }
+    const link = makeCertificateLink({
+      tenantId,
+      companyId: rec.companyId,
+      commissioningId: rec.id,
+      projectId: rec.projectId,
+      documentId: input.documentId,
+      linkedBy: input.linkedBy,
+    });
+
+    const resolved = resolveDocumentReference(link.documentId, await this.readDocuments(tenantId, rec.projectId));
+    if (resolved?.missing) {
+      throw new Error(
+        `validation: the document reference "${resolved.reference}" must match a controlled document ` +
+          "in this project's register — by document number or id",
+      );
+    }
+
+    await this.store.saveCertificateLink(link);
+    this.logger.log(`[Commissioning] ${rec.code} certificate registered as ${resolved?.document?.documentNumber ?? link.documentId}`);
+    return link;
+  }
+
+  async unlinkCertificate(id: string, linkId: string, tenantId: string): Promise<void> {
+    await this.mustFind(id, tenantId);
+    await this.store.deleteCertificateLink(linkId, tenantId);
   }
 
   listAsBuiltLinks(id: string, tenantId: string): Promise<AsBuiltLink[]> {

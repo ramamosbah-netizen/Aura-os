@@ -187,6 +187,14 @@ export class HandoverService {
         witnessedBy: s.record.witnessedBy ?? null,
         pointsPassed: s.pointsPassed,
         pointsTotal: s.pointsTotal,
+        certificate: s.certificate
+          ? {
+              documentNumber: s.certificate.documentNumber,
+              revision: s.certificate.revision,
+              current: s.certificate.current,
+              note: s.certificate.note,
+            }
+          : null,
       })),
       omItems: omItems.map((i) => ({
         id: i.id, commissioningId: i.commissioningId, deliverable: i.deliverable,

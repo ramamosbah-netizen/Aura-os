@@ -40,7 +40,12 @@ const WARRANTY_DOC: ControlledDocumentFact = {
 const REGISTER = [AS_BUILT, OM_DOC, WARRANTY_DOC];
 
 const facts = (over: Partial<DossierFacts> = {}): DossierFacts => ({
-  systems: [{ id: SYSTEM, code: 'TC-CCTV-01', title: 'CCTV — Tower A', commissioned: true, witnessedBy: 'Consultant', pointsPassed: 4, pointsTotal: 4 }],
+  systems: [{
+    id: SYSTEM, code: 'TC-CCTV-01', title: 'CCTV — Tower A', commissioned: true, witnessedBy: 'Consultant',
+    pointsPassed: 4, pointsTotal: 4,
+    // TC-GATE-10: the evidence pack registered as a controlled document.
+    certificate: { documentNumber: 'CX-CERT-001', revision: 'A', current: true, note: null },
+  }],
   omItems: [{ id: 'om-1', commissioningId: SYSTEM, deliverable: 'om_manual', required: true, state: 'accepted', documentId: 'DOC-OM-001' }],
   trainingSessions: [{ id: 'tr-1', title: 'CCTV operator training', state: 'acknowledged', acknowledgedBy: 'Client Rep' }],
   // TC-GATE-8: the as-built is linked to the system it documents, not merely present on the project.
@@ -65,12 +70,48 @@ describe('TC-GATE-7 — the dossier is assembled, never owned', () => {
 
   it('shows what is NOT in the pack, with the reason — a short dossier must say why it is short', () => {
     const view = assembleDossier(facts({
-      systems: [{ id: SYSTEM, code: 'TC-CCTV-01', title: 'CCTV — Tower A', commissioned: false, witnessedBy: null, pointsPassed: 2, pointsTotal: 4 }],
+      systems: [{
+        id: SYSTEM, code: 'TC-CCTV-01', title: 'CCTV — Tower A', commissioned: false, witnessedBy: null,
+        pointsPassed: 2, pointsTotal: 4, certificate: null,
+      }],
     }));
     const cert = sectionOf(view, 'commissioning_certificate').entries[0];
     expect(cert.included).toBe(false);
     expect(cert.note).toMatch(/2 of 4 test points passed/i);
     expect(view.outstanding).toHaveLength(1);
+  });
+
+  // ── TC-GATE-10: the certificate line cites a controlled document when one is registered ───────
+
+  describe('commissioning certificates', () => {
+    const system = (certificate: DossierFacts['systems'][number]['certificate']) => ([{
+      id: SYSTEM, code: 'TC-CCTV-01', title: 'CCTV — Tower A', commissioned: true, witnessedBy: 'Consultant',
+      pointsPassed: 4, pointsTotal: 4, certificate,
+    }]);
+
+    it('cites the document number and revision when one is registered', () => {
+      const entry = sectionOf(assembleDossier(facts()), 'commissioning_certificate').entries[0];
+      expect(entry.included).toBe(true);
+      expect(entry.reference).toBe('CX-CERT-001');
+      expect(entry.state).toBe('commissioned · CX-CERT-001 rev A');
+    });
+
+    it('still issues the pack when none is registered, and says so on the line', () => {
+      const entry = sectionOf(assembleDossier(facts({ systems: system(null) })), 'commissioning_certificate').entries[0];
+      // The evidence exists either way — a missing certificate is not a missing evidence pack.
+      expect(entry.included).toBe(true);
+      expect(entry.state).toBe('commissioned · evidence pack only');
+      expect(entry.note).toMatch(/no controlled certificate is registered/i);
+      expect(entry.reference).toBe('TC-CCTV-01');
+    });
+
+    it('falls back to the system code and carries the reason when the certificate is not current', () => {
+      const entry = sectionOf(assembleDossier(facts({
+        systems: system({ documentNumber: 'CX-CERT-001', revision: 'B', current: false, note: 'The register has superseded the revision this points at.' }),
+      })), 'commissioning_certificate').entries[0];
+      expect(entry.reference).toBe('TC-CCTV-01');
+      expect(entry.note).toMatch(/superseded/i);
+    });
   });
 
   it('excludes an O&M deliverable accepted against a reference the register does not hold', () => {

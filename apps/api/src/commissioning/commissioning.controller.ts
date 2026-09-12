@@ -306,6 +306,25 @@ export class CommissioningController {
     return { ok: true };
   }
 
+  // ── Certificate link (TC-GATE-10) ────────────────────────────────────────────────────────────
+  //
+  // T&C generates the evidence; document control issues the document. This records that a register
+  // entry IS this system's certificate. One per system, and only once the system is commissioned —
+  // a certificate for unfinished work is a claim, and the register would then carry it.
+
+  @Post(':id/certificate-link')
+  linkCertificate(@Param('id') id: string, @Body() dto: { documentId?: string }) {
+    if (!dto?.documentId?.trim()) throw new BadRequestException('documentId is required');
+    const ctx = this.tenant.get();
+    return this.service.linkCertificate(id, ctx.tenantId, { documentId: dto.documentId, linkedBy: ctx.actorId });
+  }
+
+  @Delete(':id/certificate-link/:linkId')
+  async unlinkCertificate(@Param('id') id: string, @Param('linkId') linkId: string): Promise<{ ok: true }> {
+    await this.service.unlinkCertificate(id, linkId, this.tenant.get().tenantId);
+    return { ok: true };
+  }
+
   /**
    * Record that a defect needs a Quality non-conformance, and the NCR that answers it.
    * T&C does not raise the NCR — Quality owns that, and this stores only a reference to it.

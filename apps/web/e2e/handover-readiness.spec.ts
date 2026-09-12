@@ -20,6 +20,17 @@ const HO = `${API}/api/v1/commissioning/handovers`;
 const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
 
+/**
+ * A long journey on purpose, and it has grown with every gate: it drives Testing & Commissioning,
+ * the ELV register, Engineering, document control and the handover package in one pass, because the
+ * claim being made is about the CHAIN and a chain cannot be proved in pieces.
+ *
+ * It now has 42 awaited steps and runs 30–50s, which put it inside the default 60s timeout by
+ * luck rather than design. Raised deliberately rather than split: splitting would mean re-seeding
+ * the same five domains twice and asserting less, not more.
+ */
+test.setTimeout(180_000);
+
 test('handover readiness is projected, and a tick cannot buy a submission', async ({ page, baseURL }) => {
   const projectId = await createProject(page.request, 'TC Gate4', baseURL);
   const code = `CX-HO-${Date.now().toString().slice(-6)}`;

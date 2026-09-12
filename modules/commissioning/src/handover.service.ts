@@ -22,14 +22,16 @@ import {
 import {
   type SpareItem, makeSpareItem, handOverSpare, acknowledgeSpare, setSpareRequired,
 } from './domain/spares';
+import { type ResolvedStockItem, resolveStockReference } from './domain/stock-reference';
 import { resolveDocumentReference, type ResolvedDocument } from './domain/document-reference';
 import {
   type DossierItem, type DossierView, assembleDossier, captureDossier, conveyableLines, groupIssues,
 } from './domain/dossier';
 import { CommissioningService } from './commissioning.service';
 import {
-  DOC_CONTROL, DOC_CONTROL_ISSUE,
-  type DocControlPort, type DocControlIssuePort, type SnagFact, type TransmittalFact,
+  DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY,
+  type DocControlPort, type DocControlIssuePort, type InventoryPort,
+  type SnagFact, type StockItemFact, type TransmittalFact,
 } from './ports';
 
 /**
@@ -73,6 +75,10 @@ export class HandoverService {
     // code, applies its own permission check and owns every state that follows. Absent means the
     // manifest is captured without a conveyance — an unwired port blocks proof, never work.
     @Optional() @Inject(DOC_CONTROL_ISSUE) private readonly docControlIssue?: DocControlIssuePort,
+    // Inventory, so a spare can name a real part (TC-GATE-17). Read only — nothing here moves
+    // stock. Absent means the reference cannot be checked, which shows on the row as unverified
+    // rather than stopping anybody listing a spare.
+    @Optional() @Inject(INVENTORY) private readonly inventory?: InventoryPort,
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
@@ -184,6 +190,17 @@ export class HandoverService {
       });
     } catch (error) {
       this.logger.warn(`[Handover] transmittal could not be opened for ${pkg.code}: ${error}`);
+      return null;
+    }
+  }
+
+  /** The tenant's parts, or null when Inventory could not be read. */
+  private async readStockItems(tenantId: string): Promise<StockItemFact[] | null> {
+    if (!this.inventory) return null;
+    try {
+      return await this.inventory.readStockItems(tenantId);
+    } catch (error) {
+      this.logger.warn(`[Handover] Inventory could not be read: ${error}`);
       return null;
     }
   }
@@ -542,6 +559,17 @@ export class HandoverService {
       notes: input.notes,
       createdBy: input.createdBy,
     });
+
+    // TC-GATE-17: the typo is caught where it is typed, when Inventory can be read. The reference is
+    // OPTIONAL — a spare described in words is still a spare — but one that points somewhere must
+    // point at something. An unwired Inventory lets the write through and leaves the row unverified.
+    const resolved = resolveStockReference(item.stockItemId, await this.readStockItems(tenantId));
+    if (resolved?.missing) {
+      throw new Error(
+        `validation: the stock reference "${resolved.reference}" must match a part in inventory — by code or id`,
+      );
+    }
+
     await this.store.saveSpareItem(item);
     return item;
   }
@@ -577,8 +605,22 @@ export class HandoverService {
     return next;
   }
 
-  listSpareItems(tenantId: string, projectId?: string): Promise<SpareItem[]> {
-    return this.store.listSpareItems(tenantId, projectId);
+  /**
+   * The spares, with each stock reference put back to Inventory (TC-GATE-17).
+   *
+   * The resolved part is attached for READING only — never stored. A part renamed in Inventory reads
+   * renamed here, because nothing was kept; that is the difference between referencing Inventory and
+   * copying it.
+   */
+  async listSpareItems(
+    tenantId: string,
+    projectId?: string,
+  ): Promise<Array<SpareItem & { resolved: ResolvedStockItem | null }>> {
+    const [items, stock] = await Promise.all([
+      this.store.listSpareItems(tenantId, projectId),
+      this.readStockItems(tenantId),
+    ]);
+    return items.map((i) => ({ ...i, resolved: resolveStockReference(i.stockItemId, stock) }));
   }
 
   // ── Client training and demonstration (TC-GATE-5) ────────────────────────────────────────────

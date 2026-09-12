@@ -4,6 +4,7 @@ import { CommissioningService } from './commissioning.service';
 import { HandoverService } from './handover.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
 import { assessHandoverReadiness, type HandoverReadinessFacts } from './domain/handover-readiness';
+import { resolveStockReference } from './domain/stock-reference';
 import type { ControlledDocumentFact } from './domain/document-reference';
 import type { DocControlPort, ElvEquipmentPort, EngineeringReleasePort, QualityEvidencePort } from './ports';
 
@@ -325,6 +326,39 @@ describe('TC-GATE-4 — the readiness projection', () => {
    * installed, not handed to the building owner; and the O&M pack's recommended-spares list is a
    * document, not a delivery.
    */
+  /**
+   * TC-GATE-17 — the stock reference becomes real.
+   *
+   * TC-GATE-16 gave a spare an optional stockItemId and called it a reference. It was free text
+   * nobody checked — what TC-GATE-6 removed from the O&M pack, reintroduced one gate later in a
+   * smaller place. These assert the resolution, not the readiness item, which is unaffected: a spare
+   * described in words is still a spare, and the gate has always been about the acknowledgement.
+   */
+  describe('stock references (TC-GATE-17)', () => {
+    const STOCK = [
+      { id: 'stk-1', code: 'CAM-DOME-4MP', name: '4MP dome camera', unit: 'ea' },
+      { id: 'stk-2', code: 'PSU-12V', name: '12V power supply', unit: 'ea' },
+    ];
+
+    it('resolves by code as well as id, because that is what a person types', () => {
+      expect(resolveStockReference('CAM-DOME-4MP', STOCK)!.item!.name).toBe('4MP dome camera');
+      expect(resolveStockReference('stk-2', STOCK)!.item!.code).toBe('PSU-12V');
+      expect(resolveStockReference('cam-dome-4mp', STOCK)!.item, 'case is not a different part').toBeTruthy();
+    });
+
+    it('reports a reference the tenant has no part for', () => {
+      const r = resolveStockReference('CAM-DOME-8MP', STOCK)!;
+      expect(r.missing).toBe(true);
+      expect(r.item).toBeNull();
+      expect(r.reference, 'the typed value is kept so a reader can see what failed').toBe('CAM-DOME-8MP');
+    });
+
+    it('says nothing when there is nothing to say', () => {
+      expect(resolveStockReference(null, STOCK), 'no reference given').toBeNull();
+      expect(resolveStockReference('CAM-DOME-4MP', null), 'inventory unreadable').toBeNull();
+    });
+  });
+
   describe('spares', () => {
     const spare = (over: Partial<HandoverReadinessFacts['spares'][number]> = {}) => ({
       commissioningId: SYSTEM, required: true, quantityRequired: 2, quantityHandedOver: 2,

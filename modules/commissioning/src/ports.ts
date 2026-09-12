@@ -203,8 +203,34 @@ export interface DocControlIssuePort {
   openTransmittal(tenantId: string, request: TransmittalRequest): Promise<{ id: string; code: string }>;
 }
 
+/**
+ * A stock item, as Inventory describes it (TC-GATE-17).
+ *
+ * TC-GATE-16 gave a spare an optional `stockItemId` and called it "a reference for whoever wants the
+ * part's real record". It was free text nobody checked — the same thing TC-GATE-6 removed from the
+ * O&M pack, reintroduced one gate later in a smaller place. This is the port that makes the word
+ * REFERENCE true again.
+ *
+ * Inventory keeps ownership of everything that makes a part a part: its code, its unit, what is on
+ * hand and what it cost. Handover reads a projection of the first two and nothing else — a consumer
+ * that cannot see valuation cannot come to depend on it, and a spares list has no business showing
+ * a client what the contractor paid.
+ */
+export interface StockItemFact {
+  id: string;
+  code: string;
+  name: string;
+  unit: string;
+}
+
+export interface InventoryPort {
+  /** Every stock item for the tenant. One call, resolved against in memory — a spares list is small. */
+  readStockItems(tenantId: string): Promise<StockItemFact[]>;
+}
+
 export const ELV_EQUIPMENT = Symbol('ELV_EQUIPMENT');
 export const QUALITY_EVIDENCE = Symbol('QUALITY_EVIDENCE');
 export const ENGINEERING_RELEASE = Symbol('ENGINEERING_RELEASE');
 export const DOC_CONTROL = Symbol('DOC_CONTROL');
 export const DOC_CONTROL_ISSUE = Symbol('DOC_CONTROL_ISSUE');
+export const INVENTORY = Symbol('INVENTORY');

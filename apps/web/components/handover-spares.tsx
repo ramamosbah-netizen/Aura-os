@@ -18,11 +18,20 @@ import EmptyState from '@/components/ui/empty-state';
  * and only the acknowledgement satisfies readiness — the same rule client training follows.
  */
 
+/** What Inventory said about this row's stock reference (TC-GATE-17). Null when nothing to ask. */
+export interface ResolvedStockRow {
+  reference: string;
+  item: { id: string; code: string; name: string; unit: string } | null;
+  missing: boolean;
+}
+
 export interface SpareRow {
   id: string;
   commissioningId: string;
   description: string;
   stockItemId: string | null;
+  /** Resolved on read, stored nowhere — a part renamed in Inventory reads renamed here. */
+  resolved?: ResolvedStockRow | null;
   unit: string | null;
   quantityRequired: number;
   quantityHandedOver: number;
@@ -34,12 +43,32 @@ export interface SpareRow {
 
 export interface SystemRow { id: string; code: string; title: string }
 
+/**
+ * One stock reference, as Inventory answered it (TC-GATE-17).
+ *
+ * TC-GATE-16 gave a spare an optional `stockItemId` and called it a reference. It was free text
+ * nobody checked — which is what TC-GATE-6 removed from the O&M pack, reintroduced one gate later in
+ * a smaller place. A reference that points at nothing now says so on the row rather than sitting
+ * there looking like a citation.
+ */
+function StockCell({ row }: { row: SpareRow }) {
+  if (!row.stockItemId) return null;
+  const resolved = row.resolved;
+  if (!resolved) {
+    return <small style={st.stockWarn} title="Inventory could not be read, so this reference is unverified."> {row.stockItemId} · unverified</small>;
+  }
+  if (resolved.missing) {
+    return <small style={st.stockBad} title="No part with this code or id is in inventory."> {row.stockItemId} · not in inventory</small>;
+  }
+  return <small style={st.muted}> {resolved.item!.code} · {resolved.item!.name}</small>;
+}
+
 export function SparesSection({ systems, spares }: { systems: SystemRow[]; spares: SpareRow[] | null }) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [draft, setDraft] = useState<Record<string, { description: string; quantity: string }>>({});
+  const [draft, setDraft] = useState<Record<string, { description: string; quantity: string; stockItemId?: string }>>({});
   const [ack, setAck] = useState<Record<string, string>>({});
 
   const bySystem = useMemo(() => {
@@ -80,7 +109,9 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
         records a part being <strong>issued to a project</strong> — that is how it gets installed. Handing spares to the
         building owner is a different event with a different counterparty. The O&amp;M pack&rsquo;s recommended-spares
         list is a <strong>document</strong>; a list is not a delivery. Handing over is our record — only the
-        client&rsquo;s <strong>acknowledgement</strong> satisfies readiness.
+        client&rsquo;s <strong>acknowledgement</strong> satisfies readiness. A part may name a real{' '}
+        <strong>inventory item</strong>, and that reference is checked against inventory — which keeps everything that
+        makes a part a part (quantities, warehouse, cost) and hands over only its code, name and unit.
       </p>
 
       {spares === null ? (
@@ -116,6 +147,7 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
                           <th scope="row" style={st.tdLabel}>
                             {row.description}
                             {!row.required && <small style={st.muted}> not required</small>}
+                            <StockCell row={row} />
                           </th>
                           <td style={st.tdMuted}>{row.quantityRequired}{row.unit ? ` ${row.unit}` : ''}</td>
                           <td style={st.tdMuted} data-testid={`spare-handed-${row.id}`}>
@@ -182,6 +214,14 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
                     data-testid={`spare-description-${system.code}`}
                   />
                   <input
+                    style={st.input}
+                    placeholder="Inventory code (optional)"
+                    value={d.stockItemId ?? ''}
+                    onChange={(e) => setDraft({ ...draft, [system.id]: { ...d, stockItemId: e.target.value } })}
+                    disabled={busy !== null || !hydrated}
+                    data-testid={`spare-stock-${system.code}`}
+                  />
+                  <input
                     style={st.qty}
                     type="number"
                     min={1}
@@ -203,6 +243,7 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
                           commissioningId: system.id,
                           description: d.description.trim(),
                           quantityRequired: Number(d.quantity) || 1,
+                          stockItemId: d.stockItemId?.trim() || undefined,
                         }),
                       },
                       `add-${system.id}`,
@@ -232,6 +273,8 @@ const st = {
   code: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, color: 'var(--accent)' } as CSSProperties,
   grow: { flex: 1, minWidth: 140 } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 11 } as CSSProperties,
+  stockWarn: { color: 'var(--warn)', fontSize: 11 } as CSSProperties,
+  stockBad: { color: 'var(--bad)', fontSize: 11 } as CSSProperties,
   row: { display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } as CSSProperties,
   th: { textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--border, #e5e7eb)', color: 'var(--muted)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase' } as CSSProperties,

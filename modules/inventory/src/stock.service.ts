@@ -193,6 +193,20 @@ export class StockService {
     return { item, movements: await this.store.listMovements(id) };
   }
 
+  /**
+   * The tenant's parts, for a domain that REFERENCES one without owning it (TC-GATE-17).
+   *
+   * Implements `InventoryPort` for Handover, whose spares record points at a part so a client can be
+   * told which one they were handed. Deliberately a projection of code, name and unit: everything
+   * that makes this Inventory's — quantities, warehouse, average cost, costing method, reorder
+   * policy — stays here. A consumer that cannot see valuation cannot come to depend on it, and a
+   * spares list handed to a client has no business carrying what the contractor paid.
+   */
+  async readStockItems(tenantId: Id): Promise<Array<{ id: string; code: string; name: string; unit: string }>> {
+    const items = await this.store.listItems({ tenantId });
+    return items.map((i) => ({ id: i.id, code: i.code, name: i.name, unit: i.unit }));
+  }
+
   listItems(filter?: StockFilter): Promise<StockItem[]> {
     return this.store.listItems(filter);
   }

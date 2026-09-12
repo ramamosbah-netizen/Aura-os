@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { type Discipline, toDiscipline } from '@aura/shared';
 
 export type InspectionStatus = 'requested' | 'in_progress' | 'approved' | 'rejected';
 
@@ -33,7 +34,19 @@ export interface InspectionRequest {
   projectId: string;
   projectName: string | null;
   irNumber: string;
-  discipline: 'civil' | 'mechanical' | 'electrical' | 'plumbing';
+  /**
+   * The trade this inspection is against — the canonical platform `Discipline` (TC-GATE-12).
+   *
+   * It used to be four values: civil, mechanical, electrical, plumbing. **This is an ELV ERP whose
+   * inspection request could not say "cctv".** An engineer inspecting a camera installation had to
+   * file it as electrical or not at all — which is a large part of why inspection requests
+   * contribute nothing to commissioning readiness: nothing on them could name the system.
+   *
+   * Widening to the shared dimension is a strict SUPERSET. All four old values are members of it,
+   * every existing row stays valid, and the column has never carried a CHECK constraint — so this
+   * needs no migration.
+   */
+  discipline: Discipline;
   locationDetail: string;
   inspectionDate: string; // YYYY-MM-DD
   status: InspectionStatus;
@@ -54,7 +67,8 @@ export interface NewInspectionRequest {
   projectId: string;
   projectName?: string | null;
   irNumber: string;
-  discipline: InspectionRequest['discipline'];
+  /** Accepts any string; normalised to a canonical `Discipline` on the way in. */
+  discipline: Discipline | string;
   locationDetail: string;
   inspectionDate: string;
   status?: InspectionRequest['status'];
@@ -74,7 +88,9 @@ export function makeInspectionRequest(input: NewInspectionRequest): InspectionRe
     projectId: input.projectId,
     projectName: input.projectName ?? null,
     irNumber: input.irNumber.trim(),
-    discipline: input.discipline,
+    // Normalised at the boundary rather than constrained at the column — the same reading every
+    // shared dimension gets. The API rejects an unrecognised trade before it reaches here.
+    discipline: toDiscipline(input.discipline),
     locationDetail: input.locationDetail.trim(),
     inspectionDate: input.inspectionDate,
     status: input.status ?? 'requested',

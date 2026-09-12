@@ -39,7 +39,7 @@ interface InspectionRequest {
   projectId: string;
   projectName: string | null;
   irNumber: string;
-  discipline: 'civil' | 'mechanical' | 'electrical' | 'plumbing';
+  discipline: string;
   locationDetail: string;
   inspectionDate: string;
   status: 'requested' | 'approved' | 'rejected';

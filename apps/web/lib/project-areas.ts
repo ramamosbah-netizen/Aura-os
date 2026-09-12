@@ -1,3 +1,4 @@
+import { toElvSystemOrNull } from '@aura/shared';
 // Project 360 context — delivery records remain owned by Delivery Operations and are linked here.
 // A single config drives both the shell nav and the generic area register, so adding an area is a
 // one-object change. Every listed endpoint returns records that carry a `projectId`, which is how
@@ -29,11 +30,26 @@ export interface ProjectArea {
 
 type ProjectAreaRow = Record<string, unknown>;
 
-const normaliseLensValue = (value: unknown): string =>
-  String(value ?? '')
+/**
+ * One value, reduced to what the lens compares (TC-GATE-12).
+ *
+ * The ELV-system aliases come FIRST. This used to strip punctuation and stop there, which made
+ * 'access-control' and 'access_control' match — and left 'acs' and 'pa_va' matching nothing, though
+ * the platform recognises both and 'pa_va' is a spelling that genuinely exists in commissioning
+ * records. The lens then showed a system's own NCR under no lens at all.
+ *
+ * The punctuation strip is kept as the fallback, because this lens compares heterogeneous fields:
+ * a drawing's `discipline` ('architectural') is not an ELV system and must still compare sensibly.
+ * Resolve as a system when it IS one; otherwise reduce it the way it always was.
+ */
+const normaliseLensValue = (value: unknown): string => {
+  const asSystem = toElvSystemOrNull(value);
+  if (asSystem) return asSystem.replace(/[^a-z0-9]+/g, '');
+  return String(value ?? '')
     .trim()
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
+};
 
 /**
  * Apply the cross-module discipline lens without hiding records that are genuinely

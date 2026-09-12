@@ -11,6 +11,7 @@ import {
   NumberingService,
   AuditService,
   TenantContext,
+  InMemoryEventDeliveryStore,
 } from '@aura/core';
 import { OpportunityService, InMemoryOpportunityStore } from '@aura/crm';
 import { TenderService, InMemoryTenderStore, InMemoryBOQStore, InMemoryBidScoreStore, InMemoryEstimateStore, InMemorySubmissionStore } from '@aura/tendering';
@@ -51,6 +52,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   let quotationsStub: Record<string, unknown> = {};
   const linkedContracts: Array<{ quotationId: string; contractId: string }> = [];
   const bus = new EventBus();
+  const deliveries = new InMemoryEventDeliveryStore();
   const events = new InMemoryEventStore(bus);
   const tx = new NullTxRunner();
   const access = new AccessService();
@@ -269,10 +271,14 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
     mockFinanceAccounts, // AccountService (Finance) — GL account resolver
     mockJournals, // JournalService
     mockHse, // HseService
+    undefined as never, // AmcService — not exercised by these specs
+    // The per-handler delivery log (TC-GATE-22). Bound here because the point of these specs is
+    // what happens on a RE-DELIVERY, which is exactly what it governs.
+    deliveries,
   );
   subscriber.onModuleInit(); // subscribe the reactor to the bus
 
-  return { bus, events, opportunities, tenders, contracts, projects, activate, wbs, cbs, ledger, quantityLedger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
+  return { bus, events, deliveries, opportunities, tenders, contracts, projects, activate, wbs, cbs, ledger, quantityLedger, customerInvoices, bidScoreStore, estimateStore, postedJournals, createdApInvoices, createdPrs, createdVariations, createdRas, signals: mockSignals, createdSignals, linkedContracts, quotationsStub };
 }
 
 /**
@@ -848,8 +854,15 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
    * so a re-delivery is not hypothetical: any sibling handler failing causes one. Publishing the
    * same event twice is precisely what the relay does after a partial failure.
    */
-  it('does not double-count the ordered reversal when a cancelled-PO event is re-delivered', async () => {
-    const poCancelled = makeEvent({
+  /**
+   * TC-GATE-20 proved the LEDGER KEY; TC-GATE-22 added a delivery log that stops most re-runs
+   * before they reach it. These three build TWO events with different ids and one aggregate,
+   * which is a producer emitting twice — the case the delivery log cannot catch and the durable
+   * dedupe key exists for. Publishing one event twice is a different case, and it has its own
+   * tests below.
+   */
+  it('does not double-count the ordered reversal when a cancelled PO is emitted twice', async () => {
+    const poCancelled = () => makeEvent({
       type: 'procurement.po.updated',
       tenantId,
       companyId: null,
@@ -866,8 +879,8 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       },
     });
 
-    await h.bus.publish(poCancelled);
-    await h.bus.publish(poCancelled); // re-delivery
+    await h.bus.publish(poCancelled());
+    await h.bus.publish(poCancelled()); // a SECOND event for the same PO, new event id
 
     const rows = await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-REV-1' });
     expect(rows.filter((t) => t.source === 'reversal'), 'one cancellation, one reversal').toHaveLength(1);
@@ -875,8 +888,8 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(rows[0].dedupeKey).toBe('po-ordered-reversal:po-cancel-1');
   });
 
-  it('does not double-count the received quantity when a GRN event is re-delivered', async () => {
-    const grn = makeEvent({
+  it('does not double-count the received quantity when a GRN is emitted twice', async () => {
+    const grn = () => makeEvent({
       type: 'inventory.grn.created',
       tenantId,
       companyId: null,
@@ -886,8 +899,8 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       payload: { boqItemId: 'BOQ-GRN-1', project: { id: 'project-1', name: 'Tower A' }, receivedQuantity: 12, unit: 'nr', title: 'GRN-77' },
     });
 
-    await h.bus.publish(grn);
-    await h.bus.publish(grn); // re-delivery
+    await h.bus.publish(grn());
+    await h.bus.publish(grn()); // a SECOND event for the same GRN, new event id
 
     const rows = await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-GRN-1' });
     expect(rows).toHaveLength(1);
@@ -895,8 +908,8 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(rows[0].dedupeKey).toBe('grn-received:grn-dup-1');
   });
 
-  it('does not double-count the issued quantity when a stock movement is re-delivered', async () => {
-    const movement = makeEvent({
+  it('does not double-count the issued quantity when a stock movement is emitted twice', async () => {
+    const movement = () => makeEvent({
       type: 'inventory.stock.movement_recorded',
       tenantId,
       companyId: null,
@@ -906,13 +919,103 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       payload: { boqItemId: 'BOQ-MOVE-1', projectId: 'project-1', direction: 'out', quantity: 9, unit: 'nr', code: 'CAB-01' },
     });
 
-    await h.bus.publish(movement);
-    await h.bus.publish(movement); // re-delivery
+    await h.bus.publish(movement());
+    await h.bus.publish(movement()); // a SECOND event for the same movement, new event id
 
     const rows = await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-MOVE-1' });
     expect(rows).toHaveLength(1);
     expect(rows[0].quantity).toBe(9);
     expect(rows[0].dedupeKey).toBe('stock-movement:move-dup-1');
+  });
+
+  /**
+   * TC-GATE-22 — THE CASE THIS GATE EXISTS FOR.
+   *
+   * `EventBus.publish` fans one event out to every subscriber with `Promise.all`, and the outbox
+   * relay retries the whole EVENT when that promise rejects. So a single handler failing re-ran
+   * every sibling that had already SUCCEEDED.
+   *
+   * `inventory.stock.movement_recorded` has four subscribers, one of them `retryable`. Two of the
+   * others are `bestEffort` for a reason written at the call site: "journals.post is not
+   * idempotent; a retry would double-post the GL entry", and "PR create is not idempotent". So a
+   * failure in the cost reactor posted a second real GL entry — money, from an unrelated fault.
+   *
+   * Publishing the same event twice is exactly what the relay does after a partial failure.
+   */
+  it('does not re-post the GL journal when the SAME event is re-delivered', async () => {
+    const movement = makeEvent({
+      type: 'inventory.stock.movement_recorded',
+      tenantId,
+      companyId: 'company-1',
+      actorId: null,
+      aggregateType: 'inventory.stock',
+      aggregateId: 'move-gl-1',
+      payload: {
+        boqItemId: 'BOQ-GL-1', projectId: 'project-1', direction: 'out',
+        quantity: 5, unitCost: 100, unit: 'nr', code: 'CAB-GL',
+      },
+    });
+
+    await h.bus.publish(movement);
+    const afterFirst = h.postedJournals.length;
+    expect(
+      afterFirst,
+      'the GL journal must actually post the first time, or the assertion below proves nothing',
+    ).toBeGreaterThan(0);
+
+    // The relay retrying the event, which is what a sibling handler's throw causes.
+    await h.bus.publish(movement);
+
+    expect(
+      h.postedJournals.length,
+      'the GL journal handler already completed this event — a re-delivery must not post again',
+    ).toBe(afterFirst);
+  });
+
+  it('records each handler that completed, under its own name', async () => {
+    const movement = makeEvent({
+      type: 'inventory.stock.movement_recorded',
+      tenantId,
+      companyId: 'company-1',
+      actorId: null,
+      aggregateType: 'inventory.stock',
+      aggregateId: 'move-log-1',
+      payload: { boqItemId: 'BOQ-LOG-1', projectId: 'project-1', direction: 'out', quantity: 2, unit: 'nr', code: 'CAB-LOG' },
+    });
+    await h.bus.publish(movement);
+
+    const done = await h.deliveries.deliveredHandlers(tenantId, movement.id);
+    expect(
+      done,
+      'the label each call site already wrote is what identifies the handler',
+    ).toContain('post material quantity txn from stock.movement_recorded');
+    expect(done.length, 'more than one subscriber completed this event').toBeGreaterThan(1);
+  });
+
+  /**
+   * The delivery log is keyed by EVENT, not by handler name. Skipping on the name alone would
+   * make the first movement the only one that ever posts — a far worse bug than the one this
+   * gate fixes, and an easy one to write.
+   */
+  it('is keyed by the event, so a different event still runs the same handler', async () => {
+    const movement = (aggregateId: string, boqItemId: string) => makeEvent({
+      type: 'inventory.stock.movement_recorded',
+      tenantId,
+      companyId: 'company-1',
+      actorId: null,
+      aggregateType: 'inventory.stock',
+      aggregateId,
+      payload: { boqItemId, projectId: 'project-1', direction: 'out', quantity: 3, unit: 'nr', code: 'CAB-K' },
+    });
+
+    await h.bus.publish(movement('move-k1', 'BOQ-K1'));
+    await h.bus.publish(movement('move-k2', 'BOQ-K2'));
+
+    expect(await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-K1' })).toHaveLength(1);
+    expect(
+      await h.quantityLedger.list({ tenantId, boqItemId: 'BOQ-K2' }),
+      'a second, different event must not be skipped because the handler ran once before',
+    ).toHaveLength(1);
   });
 
   it('does not double-bill an AR invoice when an IPC-certified event is re-delivered', async () => {

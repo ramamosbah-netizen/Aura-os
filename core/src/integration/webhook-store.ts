@@ -37,4 +37,14 @@ export interface WebhookStore {
   /** `pending` deliveries whose `nextAttemptAt` is due (<= nowIso) — the worker's claim. */
   duePendingDeliveries(nowIso: string, limit: number): Promise<WebhookDelivery[]>;
   listDeliveries(subscriptionId?: Id, limit?: number): Promise<WebhookDelivery[]>;
+
+  /**
+   * Has this subscription already been sent this event? (TC-GATE-22)
+   *
+   * The dispatcher is a `*` subscriber, so it receives EVERY event — and the outbox relay retries
+   * the whole event when any handler fails. Without this, a failure anywhere in the fan-out
+   * re-POSTs the same business event to a customer's endpoint. That is the one duplicate in this
+   * system that leaves the building.
+   */
+  deliveryExists(subscriptionId: Id, eventId: Id): Promise<boolean>;
 }

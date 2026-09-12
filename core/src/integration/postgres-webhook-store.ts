@@ -127,6 +127,14 @@ export class PostgresWebhookStore implements WebhookStore {
     return res.rows.map(rowToDelivery);
   }
 
+  async deliveryExists(subscriptionId: Id, eventId: Id): Promise<boolean> {
+    const res = await this.pool.query(
+      `SELECT 1 FROM public.aura_webhook_deliveries WHERE subscription_id = $1 AND event_id = $2 LIMIT 1`,
+      [subscriptionId, eventId],
+    );
+    return (res.rowCount ?? 0) > 0;
+  }
+
   async listDeliveries(subscriptionId?: Id, limit = 50): Promise<WebhookDelivery[]> {
     const where = subscriptionId ? 'WHERE subscription_id = $1' : '';
     const params: unknown[] = subscriptionId ? [subscriptionId] : [];

@@ -1,5 +1,5 @@
-import { Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import { EventBus, TenantContext } from '@aura/core';
+import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
+import { EventBus, EVENT_DELIVERY_STORE, type EventDeliveryStore, TenantContext } from '@aura/core';
 import { ContractService } from '@aura/contracts';
 import {
   ProjectService,
@@ -73,7 +73,52 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly journals: JournalService,
     private readonly hse: HseService,
     private readonly amc: AmcService,
+    /**
+     * The per-handler delivery log (TC-GATE-22). OPTIONAL, and unbound it changes nothing: every
+     * handler runs on every delivery exactly as before. Bound, a handler that already completed
+     * this event is skipped, so one sibling's failure stops re-running the work that succeeded.
+     */
+    @Optional() @Inject(EVENT_DELIVERY_STORE) private readonly deliveries: EventDeliveryStore | null = null,
   ) {}
+
+  /**
+   * Has this handler already completed this event? (TC-GATE-22)
+   *
+   * The label is the handler's identity. It was already there, written at every call site to say
+   * what the work is — which is exactly what a delivery record needs to name.
+   *
+   * A LOG FAILURE MEANS "RUN IT", never "skip it". If this read fails we fall back to today's
+   * behaviour and do the work again, because a duplicate side effect is recoverable and a side
+   * effect that never happened because the bookkeeping was down is not.
+   */
+  private async alreadyDelivered(label: string, e: DomainEvent): Promise<boolean> {
+    if (!this.deliveries || !e.tenantId || !e.id) return false;
+    try {
+      const done = await this.deliveries.wasDelivered(e.tenantId, e.id, label);
+      if (done) {
+        this.logger.log(`↩ ${label} already completed ${e.type} (${e.id}) — skipped on re-delivery`);
+      }
+      return done;
+    } catch (err) {
+      this.logger.warn(`delivery log unreadable for ${label} on ${e.type}; re-running the handler: ${err}`);
+      return false;
+    }
+  }
+
+  /**
+   * Record that it did. Recorded AFTER the work, never before: claiming first would mark a
+   * handler done that then failed, and the retry would skip the very thing it exists to redo.
+   *
+   * A failure to record is logged and swallowed. The side effect has already happened — turning
+   * that into a failed event would retry the whole thing and cause the duplicate this exists to
+   * prevent.
+   */
+  private async recordDelivered(label: string, e: DomainEvent): Promise<void> {
+    if (!this.deliveries || !e.tenantId || !e.id) return;
+    await this.deliveries.markDelivered(e.tenantId, e.id, label).catch((err) => {
+      this.logger.warn(`could not record delivery of ${label} for ${e.type} (${e.id}): ${err}`);
+    });
+  }
 
   /** Resolve a GL account by well-known code, creating it on first use (mirrors payment.service). */
   private async ensureAccount(tenantId: string, code: string, name: string, type: AccountType) {
@@ -313,8 +358,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
    * hands the failure to the outbox's retry + dead-letter machinery.
    */
   private async retryable(label: string, e: DomainEvent, work: () => Promise<void>): Promise<void> {
+    if (await this.alreadyDelivered(label, e)) return;
     try {
       await work();
+      await this.recordDelivered(label, e);
     } catch (err) {
       this.logger.error(`${label} failed for ${e.type} ${e.aggregateId} — rethrowing so the outbox retries: ${err}`);
       throw err;
@@ -327,8 +374,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
    * never confused with "optional enrichment".
    */
   private async bestEffort(label: string, e: DomainEvent, reason: string, work: () => Promise<void>): Promise<void> {
+    if (await this.alreadyDelivered(label, e)) return;
     try {
       await work();
+      await this.recordDelivered(label, e);
     } catch (err) {
       this.logger.error(
         `${label} failed for ${e.type} ${e.aggregateId} and will NOT be retried (${reason}): ${err}`,

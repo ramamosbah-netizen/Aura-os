@@ -4,6 +4,9 @@ import { EventBus } from './events/event-bus';
 import { EVENT_STORE } from './events/event-store';
 import { InMemoryEventStore } from './events/in-memory-event-store';
 import { PostgresEventStore } from './events/postgres-event-store';
+import { EVENT_DELIVERY_STORE } from './events/event-delivery-store';
+import { InMemoryEventDeliveryStore } from './events/in-memory-event-delivery-store';
+import { PostgresEventDeliveryStore } from './events/postgres-event-delivery-store';
 import { OutboxRelay } from './events/outbox-relay';
 import { PG_POOL, createPgPool } from './events/pg-pool';
 import { TenantScopedPool } from './events/tenant-scoped-pool';
@@ -182,6 +185,15 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
         pool ? new PostgresEventStore(pool, tenant) : new InMemoryEventStore(bus),
     },
     {
+      // Per-handler delivery log (TC-GATE-22). One event fans out to every subscriber and the relay
+      // retries the whole event, so without this a single handler's failure re-runs the siblings
+      // that already succeeded — including the ones documented as unsafe on replay.
+      provide: EVENT_DELIVERY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresEventDeliveryStore(pool) : new InMemoryEventDeliveryStore(),
+    },
+    {
       provide: OutboxRelay,
       inject: [PG_POOL, EventBus, TenantContext],
       useFactory: (pool: Pool | null, bus: EventBus, tenant: TenantContext) =>
@@ -299,6 +311,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     PG_POOL,
     TX_RUNNER,
     EVENT_STORE,
+    EVENT_DELIVERY_STORE,
   ],
 })
 export class CoreModule {}

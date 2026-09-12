@@ -41,6 +41,10 @@ export class InMemoryWebhookStore implements WebhookStore {
       .map((d) => ({ ...d }));
   }
 
+  async deliveryExists(subscriptionId: Id, eventId: Id): Promise<boolean> {
+    return this.deliveries.some((d) => d.subscriptionId === subscriptionId && d.eventId === eventId);
+  }
+
   async listDeliveries(subscriptionId?: Id, limit = 50): Promise<WebhookDelivery[]> {
     let out = this.deliveries;
     if (subscriptionId) out = out.filter((d) => d.subscriptionId === subscriptionId);

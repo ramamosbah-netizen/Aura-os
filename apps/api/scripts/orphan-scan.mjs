@@ -13,6 +13,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { config } from 'dotenv';
 import pg from 'pg';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 config({ path: join(here, '..', '.env.local') });
@@ -42,6 +43,9 @@ const enforce = process.argv.includes('--enforce');
 
 async function main() {
   await client.connect();
+  // TC-GATE-21: a scan that sees nothing reports a FALSE CLEAN, and binds no tenant. Under FORCE RLS an unprivileged owner would be
+  // filtered to nothing WITHOUT an error. This makes that raise instead of reporting success.
+  await openCrossTenantSession(client, 'orphan-scan');
   let orphanTotal = 0;
   let scanned = 0;
   for (const [child, column, parent] of REFERENCES) {

@@ -23,6 +23,7 @@ import pg from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const argv = process.argv.slice(2);
@@ -62,6 +63,9 @@ function readDatabaseUrl() {
 async function main() {
   const client = new pg.Client({ connectionString: readDatabaseUrl(), ssl: { rejectUnauthorized: false } });
   await client.connect();
+  // TC-GATE-21: an operator fix rewrites rows across tenants, and binds no tenant. Under FORCE RLS an unprivileged owner would be
+  // filtered to nothing WITHOUT an error. This makes that raise instead of reporting success.
+  await openCrossTenantSession(client, 'merge-duplicate-accounts');
 
   const tables = (await client.query(REFERENCING_TABLES_SQL)).rows.map((r) => r.table_name);
 

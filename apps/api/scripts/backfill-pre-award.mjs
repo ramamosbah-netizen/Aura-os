@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { config } from 'dotenv';
 import pg from 'pg';
 import { summariseEstimate } from '@aura/tendering';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 const apiRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 config({ path: join(apiRoot, '.env.local') });
@@ -29,6 +30,9 @@ const bindTenant = (t) => client.query("select set_config('app.current_tenant_id
 
 async function main() {
   await client.connect();
+  // TC-GATE-21: a backfill writes across every tenant, and binds no tenant. Under FORCE RLS an unprivileged owner would be
+  // filtered to nothing WITHOUT an error. This makes that raise instead of reporting success.
+  await openCrossTenantSession(client, 'backfill-pre-award');
   await client.query('BEGIN');
   const created = { packages: 0, basis: 0, estimates: 0, buildups: 0, sheets: 0 };
   const log = [];

@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import CommissioningClient from '../../components/commissioning-client';
+import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
 
@@ -46,6 +47,11 @@ export default async function CommissioningPage() {
 
   return (
     <div style={st.page}>
+      {/* The workspace keeps a tab of its own, like every other Delivery Operations workspace, so it
+          survives opening something else and can be returned to. It carries NO section shortcut grid:
+          this workspace is a single register, so there are no sections for cards to open — and a card
+          per status would be a filter dressed up as a place. See the section spec. */}
+      <AuraTabAnchor href="/commissioning" title="Testing & commissioning" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="commissioning" title="Testing & commissioning workspace" description="Turn installed systems into accepted systems through test plans, point results, witnessed sign-off and commissioning evidence." />
       <DeliveryWorkspaceSummary eyebrow="TESTING & COMMISSIONING" title="Commissioning operating picture" description="Move systems from ready to test through witnessed testing, retest and final commissioning." metrics={metrics} attention={attention} emptyMessage="No failed or overdue commissioning records are open." />
       <CommissioningClient initialRecords={records ?? []} projects={projects ?? []} />

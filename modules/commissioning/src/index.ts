@@ -4,6 +4,8 @@ export * from './domain/commissioning-test-run';
 export * from './domain/commissioning-itp-link';
 export * from './domain/commissioning-readiness';
 export * from './domain/handover-readiness';
+export * from './domain/om-package';
+export * from './domain/client-training';
 export * from './ports';
 export * from './domain/punch-item';
 export * from './domain/handover';

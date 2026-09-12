@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import HandoverClient from '../../components/handover-client';
+import HandoverWorkspaceClient from '../../components/handover-workspace-client';
+import type { OmItemRow, SystemRow, TrainingRow } from '../../components/handover-om-training';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
@@ -28,17 +29,35 @@ interface HandoverPackage {
   remarks: string | null;
   systemsTotal: number;
   systemsCommissioned: number;
+  readiness?: { readyToSubmit: boolean; blocking: string[]; items: { id: string; label: string; state: string; reason: string; source: string; evidence: 'projected' | 'asserted' }[] };
 }
 
-export default async function HandoverPage() {
-  const [packages, projects] = await Promise.all([
-    getJson<HandoverPackage[]>('/api/commissioning/handovers'),
+interface WorkspaceView { systems: { record: { id: string; code: string; title: string } }[] }
+
+export default async function HandoverPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ project?: string; section?: string }>;
+}) {
+  const filters = (await searchParams) ?? {};
+  const project = filters.project ?? '';
+  const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
+
+  const [packages, projects, workspace, omItems, trainingSessions] = await Promise.all([
+    getJson<HandoverPackage[]>(`/api/commissioning/handovers${scoped}`),
     getJson<Project[]>('/api/projects/projects'),
+    // The systems an O&M pack and a training session hang off — read from T&C, which owns them.
+    project ? getJson<WorkspaceView>(`/api/commissioning/records/workspace${scoped}`) : Promise.resolve(null),
+    getJson<OmItemRow[]>(`/api/commissioning/handovers/om-items${scoped}`),
+    getJson<TrainingRow[]>(`/api/commissioning/handovers/training${scoped}`),
   ]);
+  const systems: SystemRow[] = (workspace?.systems ?? []).map((s) => ({ id: s.record.id, code: s.record.code, title: s.record.title }));
 
   const metrics: WorkspaceMetric[] = [
     { label: 'In handover', value: packages === null ? null : packages.filter((row) => row.status === 'submitted' || row.status === 'draft').length, hint: 'Packages being compiled', tone: 'accent' },
-    { label: 'Blocked', value: packages === null ? null : packages.filter((row) => row.status === 'draft' && !(row.checklist.omManuals && row.checklist.asBuilts && row.checklist.testCertificates)).length, hint: 'Core evidence still open', tone: 'critical' },
+    // Blocked comes from the ASSESSED readiness now, not from re-reading the checkboxes here — the
+    // page and the submit guard must not be able to disagree about what is blocked.
+    { label: 'Blocked', value: packages === null ? null : packages.filter((row) => row.status === 'draft' && row.readiness && !row.readiness.readyToSubmit).length, hint: 'Handover evidence still open', tone: 'critical' },
     { label: 'Needs action', value: packages === null ? null : packages.filter((row) => row.status === 'submitted' || row.status === 'rejected').length, hint: 'Client or internal decision', tone: 'warning' },
     { label: 'Accepted', value: packages === null ? null : packages.filter((row) => row.status === 'accepted').length, hint: 'Accepted packages', tone: 'good' },
   ];
@@ -47,13 +66,23 @@ export default async function HandoverPage() {
   return (
     <div style={st.page}>
       {/* The workspace keeps a tab of its own, like every other Delivery Operations workspace, so it
-          survives opening something else and can be returned to. It carries NO section shortcut grid:
-          this workspace is one package register, and its readiness panel is a projection of that
-          register rather than a second place to stand. See the section spec. */}
+          survives opening something else and can be returned to. The anchor href carries no section,
+          so it always returns to the packages.
+
+          It gained sections at TC-GATE-5 — three of them, because only three have real data behind
+          them. Its readiness panel is still a projection rather than a second place to stand, and two
+          of the six items it shows are now derived from these new sections. */}
       <AuraTabAnchor href="/handover" title="Handover" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
       <DeliveryWorkspaceSummary eyebrow="HANDOVER OPERATIONS" title="Handover operating picture" description="See which acceptance packages are ready, blocked or waiting for a decision before close-out." metrics={metrics} attention={attention} emptyMessage="No handover exceptions are open for the available packages." />
-      <HandoverClient initialPackages={packages ?? []} projects={projects ?? []} />
+      <HandoverWorkspaceClient
+        packages={packages ?? []}
+        projects={projects ?? []}
+        systems={systems}
+        omItems={omItems}
+        trainingSessions={trainingSessions}
+        selectedProject={project}
+      />
     </div>
   );
 }

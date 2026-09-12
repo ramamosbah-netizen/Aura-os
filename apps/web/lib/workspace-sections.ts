@@ -107,6 +107,22 @@ export const COMMISSIONING_SECTIONS = [
   { id: 'readiness', label: 'Readiness & Handover', description: 'The full chain to COMMISSIONING READY, which Handover reads', icon: FileCheck2, tone: 'green' },
 ] as const satisfies readonly WorkspaceSection[];
 
+export const HANDOVER_PATH = '/handover';
+/**
+ * Handover has THREE sections, and only three (TC-GATE-5).
+ *
+ * Only these have real data behind them: the acceptance packages, the O&M pack and client training —
+ * the last two being the authorities that turned two of Handover's readiness assertions into
+ * projections. Scope, snags, as-builts, the dossier and a separate acceptance surface are absent on
+ * purpose: each needs work that does not exist yet, and an empty section promises what the app
+ * cannot do.
+ */
+export const HANDOVER_SECTIONS = [
+  { id: 'packages', label: 'Acceptance packages', description: 'Compile, submit and record the governed client handover', icon: FileCheck2, tone: 'teal' },
+  { id: 'om', label: 'O&M deliverables', description: 'The manuals, schedules and licences each system owes the client', icon: NotebookPen, tone: 'blue' },
+  { id: 'training', label: 'Training & demonstration', description: 'Client training, demonstrated and acknowledged by them', icon: GraduationCap, tone: 'violet' },
+] as const satisfies readonly WorkspaceSection[];
+
 export const HSE_PATH = '/hse/control';
 export const HSE_SECTIONS = [
   { id: 'incidents', label: 'Incident Management & Near Misses', description: 'Reported events, investigation and closure', icon: TriangleAlert, tone: 'amber' },

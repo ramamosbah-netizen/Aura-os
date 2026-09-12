@@ -3,6 +3,8 @@ import type { CommissioningRecord } from './domain/commissioning-record';
 import type { CommissioningTestItem } from './domain/commissioning-test-item';
 import type { CommissioningTestRun } from './domain/commissioning-test-run';
 import type { CommissioningItpLink } from './domain/commissioning-itp-link';
+import type { OmItem } from './domain/om-package';
+import type { TrainingSession } from './domain/client-training';
 import type { PunchItem } from './domain/punch-item';
 import type { HandoverPackage } from './domain/handover';
 
@@ -43,6 +45,16 @@ export interface CommissioningStore {
   deleteItpLink(id: string, tenantId: string): Promise<void>;
   listItpLinks(commissioningId: string, tenantId: string): Promise<CommissioningItpLink[]>;
   listItpLinksForProject(tenantId: string, projectId?: string): Promise<CommissioningItpLink[]>;
+
+  // O&M deliverables and client training — Handover's own authorities (TC-GATE-5). Both are scoped
+  // to a system, and both are read project-wide to answer "is this package ready".
+  saveOmItem(item: OmItem): Promise<void>;
+  findOmItem(id: string, tenantId: string): Promise<OmItem | null>;
+  listOmItems(tenantId: string, projectId?: string): Promise<OmItem[]>;
+
+  saveTrainingSession(session: TrainingSession): Promise<void>;
+  findTrainingSession(id: string, tenantId: string): Promise<TrainingSession | null>;
+  listTrainingSessions(tenantId: string, projectId?: string): Promise<TrainingSession[]>;
 
   // Handover (project-level acceptance)
   saveHandover(pkg: HandoverPackage): Promise<void>;

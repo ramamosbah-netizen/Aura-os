@@ -42,6 +42,104 @@ export class HandoverController {
     private readonly tenant: TenantContext,
   ) {}
 
+  // ── O&M deliverables (TC-GATE-5) ─────────────────────────────────────────────────────────────
+  //
+  // Handover's own authority. The document itself stays in DocControl — `documentId` here is a
+  // reference, and submitting without one is refused, because "submitted" with nothing to point at
+  // is a claim rather than evidence.
+
+  @Get('om-items')
+  listOmItems(@Query('projectId') projectId?: string) {
+    return this.service.listOmItems(this.tenant.get().tenantId, projectId || undefined);
+  }
+
+  @Post('om-items')
+  addOmItem(@Body() dto: { commissioningId?: string; deliverable?: string; required?: boolean; notes?: string }) {
+    if (!dto?.commissioningId) throw new BadRequestException('commissioningId is required');
+    if (!dto?.deliverable) throw new BadRequestException('deliverable is required');
+    const ctx = this.tenant.get();
+    return this.service.addOmItem(ctx.tenantId, {
+      commissioningId: dto.commissioningId,
+      deliverable: dto.deliverable as never,
+      required: dto.required,
+      notes: dto.notes ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  /** Seed the standard pack for a system — every deliverable a client expects, all still required. */
+  @Post('om-items/seed')
+  seedOmPack(@Body() dto: { commissioningId?: string }) {
+    if (!dto?.commissioningId) throw new BadRequestException('commissioningId is required');
+    const ctx = this.tenant.get();
+    return this.service.seedOmPack(ctx.tenantId, dto.commissioningId, ctx.actorId);
+  }
+
+  @Put('om-items/:id/state')
+  advanceOmItem(@Param('id') id: string, @Body() dto: { to?: string; documentId?: string; notes?: string }) {
+    if (!dto?.to) throw new BadRequestException('to is required');
+    const ctx = this.tenant.get();
+    return this.service.advanceOmItem(id, ctx.tenantId, dto.to as never, {
+      documentId: dto.documentId ?? null,
+      notes: dto.notes ?? null,
+      actorId: ctx.actorId,
+    });
+  }
+
+  @Put('om-items/:id/required')
+  setOmItemRequired(@Param('id') id: string, @Body() dto: { required?: boolean; notes?: string }) {
+    if (typeof dto?.required !== 'boolean') throw new BadRequestException('required must be true or false');
+    return this.service.setOmItemRequired(id, this.tenant.get().tenantId, dto.required, dto.notes ?? null);
+  }
+
+  // ── Client training and demonstration (TC-GATE-5) ────────────────────────────────────────────
+  //
+  // The CLIENT's people, not ours. HSE's training is worker safety — a different authority about
+  // different people, and neither may stand in for the other.
+
+  @Get('training')
+  listTraining(@Query('projectId') projectId?: string) {
+    return this.service.listTrainingSessions(this.tenant.get().tenantId, projectId || undefined);
+  }
+
+  @Post('training')
+  planTraining(@Body() dto: {
+    projectId?: string; commissioningId?: string; title?: string; topics?: string;
+    trainer?: string; sessionDate?: string; durationMinutes?: number; materialDocumentId?: string;
+  }) {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.title?.trim()) throw new BadRequestException('title is required');
+    const ctx = this.tenant.get();
+    return this.service.planTraining(ctx.tenantId, {
+      projectId: dto.projectId,
+      commissioningId: dto.commissioningId ?? null,
+      title: dto.title,
+      topics: dto.topics ?? null,
+      trainer: dto.trainer ?? null,
+      sessionDate: dto.sessionDate ?? null,
+      durationMinutes: dto.durationMinutes ?? null,
+      materialDocumentId: dto.materialDocumentId ?? null,
+      createdBy: ctx.actorId,
+    });
+  }
+
+  @Put('training/:id/complete')
+  completeTraining(@Param('id') id: string, @Body() dto: { attendees?: string; trainer?: string; demonstrationCompleted?: boolean; sessionDate?: string }) {
+    if (!dto?.attendees?.trim()) throw new BadRequestException('attendees is required');
+    return this.service.completeTraining(id, this.tenant.get().tenantId, {
+      attendees: dto.attendees,
+      trainer: dto.trainer ?? null,
+      demonstrationCompleted: dto.demonstrationCompleted,
+      sessionDate: dto.sessionDate ?? null,
+    });
+  }
+
+  @Put('training/:id/acknowledge')
+  acknowledgeTraining(@Param('id') id: string, @Body() dto: { acknowledgedBy?: string }) {
+    if (!dto?.acknowledgedBy?.trim()) throw new BadRequestException('acknowledgedBy is required');
+    return this.service.acknowledgeTraining(id, this.tenant.get().tenantId, { acknowledgedBy: dto.acknowledgedBy });
+  }
+
   @Post()
   create(@Body() dto: CreateHandoverDto): Promise<HandoverView> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');

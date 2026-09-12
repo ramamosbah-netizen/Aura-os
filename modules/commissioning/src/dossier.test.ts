@@ -219,7 +219,7 @@ function services(ports: {
 function movableRegister() {
   let register: ControlledDocumentFact[] = [...REGISTER];
   return {
-    port: { readProjectDocuments: async () => register } as DocControlPort,
+    port: { readProjectDocuments: async () => register, readProjectTransmittals: async () => [] } as DocControlPort,
     supersede(documentNumber: string) {
       register = register.map((d) => (d.documentNumber === documentNumber ? { ...d, status: 'superseded', revision: 'C' } : d));
     },
@@ -316,6 +316,58 @@ describe('TC-GATE-14 — the conveyance', () => {
     const issues = (await handover.readDossier(pkg.id, TENANT))!.issues;
     expect(issues[0].transmittalId).toBe('tr-1');
     expect(issues[0].items.every((i) => i.transmittalId === 'tr-1'), 'every row of the issue').toBe(true);
+  });
+
+  /**
+   * TC-GATE-15 — the reference TC-GATE-14 stored becomes an ANSWER.
+   *
+   * A stored reference nobody resolves is what TC-GATE-6 removed from the O&M pack: it looks like
+   * evidence and proves nothing. These assert the four states the surface distinguishes, and the
+   * distinction that matters most is the last two — "never conveyed" is a decision, "conveyed but
+   * unreadable" is an outage, and reporting one as the other would be a lie about who is at fault.
+   */
+  it('reads back what became of the conveyance, including the client’s acknowledgement', async () => {
+    const acknowledged = {
+      id: 'tr-1', code: 'TR-HO-17-1', status: 'acknowledged', recipient: 'Client DC',
+      sentAt: '2026-09-01T00:00:00.000Z', receivedAt: null,
+      acknowledgedAt: '2026-09-03T00:00:00.000Z', acknowledgedBy: 'Client Rep',
+    };
+    const { ports } = readyPorts();
+    const docControl: DocControlPort = {
+      readProjectDocuments: async () => REGISTER,
+      readProjectTransmittals: async () => [acknowledged],
+    };
+    const issuePort: DocControlIssuePort = { openTransmittal: async () => ({ id: 'tr-1', code: 'TR-HO-17-1' }) };
+    const { commissioning, handover } = services({ ...ports, docControl, docControlIssue: issuePort });
+    await readyProject(commissioning, handover);
+    const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-17', title: 'Tower A handover' });
+    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
+    await handover.submit(pkg.id, TENANT, 'u-admin');
+
+    const issue = (await handover.readDossier(pkg.id, TENANT))!.issues[0];
+    expect(issue.transmittalId).toBe('tr-1');
+    expect(issue.transmittal!.acknowledgedBy, 'the client’s word, not ours').toBe('Client Rep');
+    expect(issue.transmittal!.status).toBe('acknowledged');
+  });
+
+  it('distinguishes "never conveyed" from "conveyed but unreadable"', async () => {
+    const { ports } = readyPorts();
+    const issuePort: DocControlIssuePort = { openTransmittal: async () => ({ id: 'tr-9', code: 'TR-9' }) };
+    // The register reads, so the manifest is captured and a transmittal is opened — but the
+    // transmittal read finds nothing, which is the outage case.
+    const blindToTransmittals: DocControlPort = {
+      readProjectDocuments: async () => REGISTER,
+      readProjectTransmittals: async () => { throw new Error('DocControl is down'); },
+    };
+    const { commissioning, handover } = services({ ...ports, docControl: blindToTransmittals, docControlIssue: issuePort });
+    await readyProject(commissioning, handover);
+    const pkg = await handover.create({ tenantId: TENANT, projectId: 'p1', code: 'HO-18', title: 'Tower A handover' });
+    await handover.updateChecklist(pkg.id, TENANT, { spares: true });
+    await handover.submit(pkg.id, TENANT, 'u-admin');
+
+    const issue = (await handover.readDossier(pkg.id, TENANT))!.issues[0];
+    expect(issue.transmittalId, 'a conveyance WAS opened').toBe('tr-9');
+    expect(issue.transmittal, 'but what became of it cannot be read').toBeNull();
   });
 
   it('still submits when document control is unwired, recording no conveyance', async () => {

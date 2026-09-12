@@ -43,6 +43,15 @@ export interface DossierIssueRow {
   issuedBy: string | null;
   /** The document-control transmittal that conveyed this issue (TC-GATE-14), or null. */
   transmittalId: string | null;
+  /**
+   * What became of it, read from document control (TC-GATE-15). Null when none was opened, or when
+   * document control could not be read — the two are shown apart, because one is a decision and the
+   * other is an outage.
+   */
+  transmittal: {
+    code: string; status: string; recipient: string | null;
+    sentAt: string | null; acknowledgedAt: string | null; acknowledgedBy: string | null;
+  } | null;
   items: { id: string; kind: string; reference: string | null; label: string; state: string | null }[];
 }
 
@@ -139,6 +148,30 @@ function DossierCard({ data }: { data: DossierData }) {
   );
 }
 
+/**
+ * What the conveyance says, in one line (TC-GATE-15).
+ *
+ * Four states, and the distinction between the last two is the point: an issue with no transmittal
+ * was never conveyed, while an issue whose transmittal cannot be read is conveyed and unverified.
+ * Collapsing them into one phrase would report an outage as a decision.
+ */
+function conveyanceLabel(issue: DossierIssueRow): string {
+  if (!issue.transmittalId) return 'not conveyed through document control';
+  const t = issue.transmittal;
+  if (!t) return 'conveyed, but document control could not be read';
+  if (t.acknowledgedAt) {
+    return `acknowledged by ${t.acknowledgedBy ?? 'the recipient'} on ${t.acknowledgedAt.slice(0, 10)} (${t.code})`;
+  }
+  if (t.sentAt) return `sent ${t.sentAt.slice(0, 10)}${t.recipient ? ` to ${t.recipient}` : ''} (${t.code}) — not yet acknowledged`;
+  return `${t.code} opened, not yet sent by document control`;
+}
+
+function conveyanceStyle(issue: DossierIssueRow): CSSProperties {
+  if (!issue.transmittalId) return st.muted;
+  if (!issue.transmittal) return st.docWarn;
+  return issue.transmittal.acknowledgedAt ? st.conveyed : st.muted;
+}
+
 function Issue({ pkgCode, issue, defaultOpen }: { pkgCode: string; issue: DossierIssueRow; defaultOpen: boolean }) {
   // The current pack is what a reader wants first; the history is what they go looking for.
   const [open, setOpen] = useState(defaultOpen);
@@ -150,11 +183,12 @@ function Issue({ pkgCode, issue, defaultOpen }: { pkgCode: string; issue: Dossie
           {new Date(issue.issuedAt).toISOString().slice(0, 10)}
           {issue.issuedBy ? ` · ${issue.issuedBy}` : ''} · {issue.items.length} item{issue.items.length === 1 ? '' : 's'}
         </small>
-        {/* TC-GATE-14: the manifest says what we sent; the transmittal is document control's record
-            that it was conveyed — recipient, sent date and the client's acknowledgement. Said plainly
-            either way, because "no conveyance" is a fact a reader needs as much as the code. */}
-        <small style={issue.transmittalId ? st.conveyed : st.muted} data-testid={`dossier-conveyance-${pkgCode}-${issue.issueNo}`}>
-          {issue.transmittalId ? '· conveyed by document control' : '· not conveyed through document control'}
+{/* TC-GATE-14 opened the conveyance; TC-GATE-15 reads back what became of it. The manifest is
+            our record of what was sent; the acknowledgement is the CLIENT's that it arrived, and that
+            is the one a dispute turns on. Said plainly in every state, including "not conveyed",
+            because that is a fact a reader needs as much as a code. */}
+        <small style={conveyanceStyle(issue)} data-testid={`dossier-conveyance-${pkgCode}-${issue.issueNo}`}>
+          · {conveyanceLabel(issue)}
         </small>
         <span style={st.grow} />
         <small style={st.muted}>{open ? 'hide' : 'show'}</small>
@@ -196,6 +230,7 @@ const st = {
   ref: { fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
   markGood: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
   conveyed: { color: 'var(--good)', fontSize: 11, fontWeight: 600 } as CSSProperties,
+  docWarn: { color: 'var(--warn)', fontSize: 11, fontWeight: 600 } as CSSProperties,
   markWarn: { color: 'var(--warn)', fontWeight: 700 } as CSSProperties,
   tagGood: { padding: '3px 9px', borderRadius: 999, background: 'var(--good-soft, rgba(34,197,94,.15))', color: 'var(--good)', fontSize: 11, fontWeight: 700 } as CSSProperties,
   tagWarn: { padding: '3px 9px', borderRadius: 999, background: 'var(--warn-soft, rgba(234,179,8,.15))', color: 'var(--warn)', fontSize: 11, fontWeight: 700 } as CSSProperties,

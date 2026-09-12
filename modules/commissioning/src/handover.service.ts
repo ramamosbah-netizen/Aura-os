@@ -24,7 +24,10 @@ import {
   type DossierItem, type DossierView, assembleDossier, captureDossier, conveyableLines, groupIssues,
 } from './domain/dossier';
 import { CommissioningService } from './commissioning.service';
-import { DOC_CONTROL, DOC_CONTROL_ISSUE, type DocControlPort, type DocControlIssuePort, type SnagFact } from './ports';
+import {
+  DOC_CONTROL, DOC_CONTROL_ISSUE,
+  type DocControlPort, type DocControlIssuePort, type SnagFact, type TransmittalFact,
+} from './ports';
 
 /**
  * A handover package enriched with the live commissioning status of its project — the
@@ -201,15 +204,40 @@ export class HandoverService {
   async readDossier(id: string, tenantId: string): Promise<{
     package: HandoverPackage;
     view: DossierView;
-    issues: ReturnType<typeof groupIssues>;
+    issues: Array<ReturnType<typeof groupIssues>[number] & { transmittal: TransmittalFact | null }>;
   } | null> {
     const pkg = await this.store.findHandover(id, tenantId);
     if (!pkg) return null;
-    const [view, items] = await Promise.all([
+    const [view, items, transmittals] = await Promise.all([
       this.assembleFor(pkg),
       this.store.listDossierItems(pkg.id, tenantId),
+      this.readTransmittals(pkg.tenantId, pkg.projectId),
     ]);
-    return { package: pkg, view, issues: groupIssues(items) };
+
+    // TC-GATE-15: the id TC-GATE-14 stored becomes an ANSWER. A stored reference nobody resolves is
+    // what TC-GATE-6 removed from the O&M pack — it looks like evidence and proves nothing. Null
+    // here means either no conveyance was opened, or document control could not be read; the surface
+    // distinguishes the two rather than showing one silence for both.
+    const byId = new Map((transmittals ?? []).map((t) => [t.id, t]));
+    return {
+      package: pkg,
+      view,
+      issues: groupIssues(items).map((issue) => ({
+        ...issue,
+        transmittal: issue.transmittalId ? byId.get(issue.transmittalId) ?? null : null,
+      })),
+    };
+  }
+
+  /** The project's transmittals, or null when document control could not be read. */
+  private async readTransmittals(tenantId: string, projectId: string): Promise<TransmittalFact[] | null> {
+    if (!this.docControl) return null;
+    try {
+      return await this.docControl.readProjectTransmittals(tenantId, projectId);
+    } catch (error) {
+      this.logger.warn(`[Handover] transmittals could not be read: ${error}`);
+      return null;
+    }
   }
 
   /** The dossier as it stands now, from the four owning domains. Reads only; stores nothing. */

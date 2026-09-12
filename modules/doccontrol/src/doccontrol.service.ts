@@ -9,7 +9,7 @@ import {
   receiveTransmittal,
   acknowledgeTransmittal as ackTransmittalDomain,
 } from './domain/transmittal';
-import { makeTransmittalAcknowledgement } from './domain/transmittal-acknowledgement';
+import { makeTransmittalAcknowledgement, type TransmittalAcknowledgement } from './domain/transmittal-acknowledgement';
 import { TRANSMITTAL_STORE, TRANSMITTAL_ACK_STORE, type TransmittalStore, type TransmittalAcknowledgementStore, type DocListFilter } from './store.interface';
 
 import {
@@ -670,6 +670,49 @@ export class DocControlService {
       );
     }
     return { id: transmittal.id, code: transmittal.code };
+  }
+
+  /**
+   * The project's transmittals, for a domain that opened one and needs to know what became of it
+   * (TC-GATE-15).
+   *
+   * Implements the read half of DocControlPort. The acknowledgement is resolved here rather than
+   * handed over as a raw record: the transmittal head holds the current status, and the immutable
+   * acknowledgement holds who and when, and a consumer should not have to know that they are two
+   * tables to answer one question.
+   *
+   * A projection, not the row — no owner, no distribution list. A consumer that cannot see them
+   * cannot come to depend on them.
+   */
+  async readProjectTransmittals(
+    tenantId: Id,
+    projectId: Id,
+  ): Promise<Array<{
+    id: string; code: string; status: string; recipient: string | null;
+    sentAt: string | null; receivedAt: string | null; acknowledgedAt: string | null; acknowledgedBy: string | null;
+  }>> {
+    const transmittals = (await this.listTransmittals(tenantId)).filter((t) => t.projectId === projectId);
+    return Promise.all(
+      transmittals.map(async (t) => {
+        // Only an acknowledged transmittal has an acknowledgement to read, so only it is asked for.
+        const acks: TransmittalAcknowledgement[] =
+          t.status === 'acknowledged' ? await this.transmittalAckStore.listByTransmittal(t.id, tenantId) : [];
+        const latest = acks.reduce<TransmittalAcknowledgement | null>(
+          (newest, a) => (newest && newest.acknowledgedAt >= a.acknowledgedAt ? newest : a),
+          null,
+        );
+        return {
+          id: t.id,
+          code: t.code,
+          status: t.status as string,
+          recipient: t.recipient,
+          sentAt: t.sentAt,
+          receivedAt: t.receivedAt,
+          acknowledgedAt: t.acknowledgedAt ?? latest?.acknowledgedAt ?? null,
+          acknowledgedBy: latest?.acknowledgedBy ?? null,
+        };
+      }),
+    );
   }
 
   listRegisterByProject(tenantId: Id, projectId: Id): Promise<DrawingRegisterEntry[]> {

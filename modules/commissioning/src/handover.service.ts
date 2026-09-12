@@ -19,8 +19,9 @@ import {
 import {
   type TrainingSession, makeTrainingSession, completeTraining, acknowledgeTraining,
 } from './domain/client-training';
+import { resolveDocumentReference, type ResolvedDocument } from './domain/document-reference';
 import { CommissioningService } from './commissioning.service';
-import { ENGINEERING_RELEASE, type EngineeringReleasePort } from './ports';
+import { DOC_CONTROL, type DocControlPort } from './ports';
 
 /**
  * A handover package enriched with the live commissioning status of its project — the
@@ -48,20 +49,22 @@ export class HandoverService {
     // calculation, the one the T&C workspace shows and the sign-off guard uses. Two calculations of
     // "is this system ready" would be the drift this whole arrangement exists to prevent.
     private readonly commissioning: CommissioningService,
-    // Engineering is another context, so it comes through the port commissioning already declares.
+    // Document control is another context, so it comes through a port (TC-GATE-6). It answers two
+    // questions: is there an as-built in this project's register, and is the document each O&M
+    // deliverable was accepted against actually there.
+    //
+    // This REPLACED an Engineering port, and the replacement was a bug fix, not a preference:
+    // Engineering's `DrawingStatus` has no as-built value, so the as-built gate it fed could never
+    // reach READY on real data. See the note in domain/handover-readiness.ts.
+    //
     // Absent or throwing ⇒ null ⇒ UNKNOWN ⇒ blocked. Never a pass.
-    @Optional() @Inject(ENGINEERING_RELEASE) private readonly engineering?: EngineeringReleasePort,
+    @Optional() @Inject(DOC_CONTROL) private readonly docControl?: DocControlPort,
   ) {}
 
   private async withStats(pkg: HandoverPackage): Promise<HandoverView> {
-    const [workspace, drawings, omItems, trainingSessions] = await Promise.all([
+    const [workspace, documents, omItems, trainingSessions] = await Promise.all([
       this.commissioning.readWorkspace(pkg.tenantId, pkg.projectId),
-      this.engineering
-        ? this.engineering.readProjectDrawingRelease(pkg.tenantId, pkg.projectId).catch((error) => {
-            this.logger.warn(`[Handover] Engineering could not be read: ${error}`);
-            return null;
-          })
-        : Promise.resolve(null),
+      this.readDocuments(pkg.tenantId, pkg.projectId),
       // Handover's own two authorities (TC-GATE-5) — no port needed, these are its own tables.
       this.store.listOmItems(pkg.tenantId, pkg.projectId),
       this.store.listTrainingSessions(pkg.tenantId, pkg.projectId),
@@ -76,14 +79,19 @@ export class HandoverService {
         const first = s.readiness.gates.find((g) => g.state === 'BLOCKED' || g.state === 'UNKNOWN');
         return `${s.record.code}: ${first ? first.reason : 'not ready'}`;
       }),
-      drawings,
-      omItems: omItems.map((i) => ({ commissioningId: i.commissioningId, deliverable: i.deliverable, required: i.required, state: i.state })),
+      documents,
+      omItems: omItems.map((i) => ({
+        commissioningId: i.commissioningId,
+        deliverable: i.deliverable,
+        required: i.required,
+        state: i.state,
+        documentId: i.documentId,
+      })),
       trainingSessions: trainingSessions.map((s) => ({ commissioningId: s.commissioningId, state: s.state })),
       systemIds: workspace.systems.map((s) => s.record.id),
-      asserted: {
-        warrantyDocs: pkg.checklist.warrantyDocs,
-        spares: pkg.checklist.spares,
-      },
+      // Only spares is left. Warranty documents became a projection at TC-GATE-6, derived from the
+      // O&M pack's warranty certificate — the authority was already there, unread.
+      asserted: { spares: pkg.checklist.spares },
     });
 
     return {
@@ -92,6 +100,23 @@ export class HandoverService {
       systemsCommissioned: workspace.systems.filter((s) => s.commissioned).length,
       readiness,
     };
+  }
+
+  /**
+   * Read the project register, or say plainly that it could not be read.
+   *
+   * Null here is not an error state to be smoothed over: it travels into the readiness assessment
+   * and comes out as UNKNOWN, which blocks. A register we cannot see must never look like a register
+   * that agreed with us.
+   */
+  private async readDocuments(tenantId: string, projectId: string) {
+    if (!this.docControl) return null;
+    try {
+      return await this.docControl.readProjectDocuments(tenantId, projectId);
+    } catch (error) {
+      this.logger.warn(`[Handover] Document control could not be read: ${error}`);
+      return null;
+    }
   }
 
   async create(params: {
@@ -122,16 +147,19 @@ export class HandoverService {
   /**
    * Tick one of the items nobody owns yet.
    *
-   * `testCertificates` and `asBuilts` are refused: since TC-GATE-4 both are derived from Testing &
-   * Commissioning and Engineering, and accepting a tick for them would let the package assert
-   * something the evidence does not say — exactly the behaviour this gate removed.
+   * Five of the six are refused, because each is derived from a domain that owns the evidence.
+   * Accepting a tick for one would let the package assert something the evidence does not say —
+   * exactly the behaviour these gates removed. Only SPARES is still a person's word, and it is
+   * labelled as one wherever it appears.
    */
   async updateChecklist(id: string, tenantId: string, patch: Partial<HandoverChecklist>): Promise<HandoverView> {
-    const derived = (['testCertificates', 'asBuilts', 'omManuals', 'training'] as const).filter((key) => key in patch);
+    const derived = (['testCertificates', 'asBuilts', 'omManuals', 'training', 'warrantyDocs'] as const).filter(
+      (key) => key in patch,
+    );
     if (derived.length > 0) {
       throw new Error(
         `only an item without an owning authority can be ticked by hand — ${derived.join(', ')} ` +
-          'is derived from Testing & Commissioning, Engineering, the O&M pack and the client training record',
+          'is derived from Testing & Commissioning, document control, the O&M pack and the client training record',
       );
     }
     const next = updateChecklist(await this.mustFind(id, tenantId), patch);
@@ -224,6 +252,17 @@ export class HandoverService {
     return created;
   }
 
+  /**
+   * Move a deliverable along — and, when submitting, check the reference is real (TC-GATE-6).
+   *
+   * The typo is caught HERE, at the moment somebody types it, rather than surfacing days later as a
+   * readiness item nobody can explain. The readiness projection checks it again on every read, which
+   * is not redundant: a document can be superseded long after it was referenced.
+   *
+   * If document control cannot be read the write still goes through. An unwired port must not stop
+   * work from being recorded — it only stops the result being called verified, which is what the
+   * UNKNOWN in the readiness chain does. Optional dependency, never optional evidence.
+   */
   async advanceOmItem(
     id: string,
     tenantId: string,
@@ -233,6 +272,15 @@ export class HandoverService {
     const item = await this.store.findOmItem(id, tenantId);
     if (!item) throw new Error(`not found: O&M deliverable ${id}`);
     const next = advanceOmItem(item, to, input);
+    if (to === 'submitted') {
+      const resolved = resolveDocumentReference(next.documentId, await this.readDocuments(tenantId, item.projectId));
+      if (resolved?.missing) {
+        throw new Error(
+          `validation: the document reference "${resolved.reference}" must match a controlled document ` +
+            "in this project's register — by document number or id",
+        );
+      }
+    }
     await this.store.saveOmItem(next);
     return next;
   }
@@ -245,8 +293,24 @@ export class HandoverService {
     return next;
   }
 
-  listOmItems(tenantId: string, projectId?: string): Promise<OmItem[]> {
-    return this.store.listOmItems(tenantId, projectId);
+  /**
+   * The pack, with each reference put back to the register (TC-GATE-6).
+   *
+   * The resolved document is attached for READING only — it is never stored. That is the difference
+   * between referencing DocControl and copying it: a title shown here is the title the register has
+   * right now, and a revision that moves on shows as moved on, because nothing was kept.
+   */
+  async listOmItems(tenantId: string, projectId?: string): Promise<Array<OmItem & { resolved: ResolvedDocument | null }>> {
+    const items = await this.store.listOmItems(tenantId, projectId);
+    // One register read for the whole list, not one per item.
+    const byProject = new Map<string, Awaited<ReturnType<HandoverService['readDocuments']>>>();
+    for (const projectKey of new Set(items.map((i) => i.projectId))) {
+      byProject.set(projectKey, await this.readDocuments(tenantId, projectKey));
+    }
+    return items.map((i) => ({
+      ...i,
+      resolved: resolveDocumentReference(i.documentId, byProject.get(i.projectId) ?? null),
+    }));
   }
 
   // ── Client training and demonstration (TC-GATE-5) ────────────────────────────────────────────

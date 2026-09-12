@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
-import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE } from '@aura/commissioning';
+import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL } from '@aura/commissioning';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
@@ -74,7 +74,17 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     { provide: ELV_EQUIPMENT, useExisting: ElvDeviceService },
     { provide: QUALITY_EVIDENCE, useExisting: QualityService },
     { provide: ENGINEERING_RELEASE, useExisting: EngineeringService },
+
+    // ── Handover's document references (TC-GATE-6) ────────────────────────────────────────────
+    // Handover points at controlled documents it does not own, and asks whether an as-built exists.
+    // Only the register can answer either, so only the register is asked.
+    //
+    // This binding REPLACED Handover's use of ENGINEERING_RELEASE for as-builts, and the replacement
+    // was a defect fix: Engineering has no as-built status, so the gate it fed could never pass.
+    // ENGINEERING_RELEASE stays bound above — Testing & Commissioning still reads drawing release
+    // for its own pre-commissioning chain, which is a different question Engineering CAN answer.
+    { provide: DOC_CONTROL, useExisting: DocControlService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE],
+  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL],
 })
 export class GatesModule {}

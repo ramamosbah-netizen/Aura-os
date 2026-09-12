@@ -4,6 +4,12 @@
 // "test certificates ✓" while its systems had never been tested, because the tick and the evidence
 // lived in different places and only one of them was ever looked at. So the assertions that matter
 // are the ones that try to tick past the evidence and are refused.
+//
+// TC-GATE-6 rewrote the as-built half of this file. It used to drive ENGINEERING drawings and then
+// stop at BLOCKED — because Engineering has no as-built status, so the gate could not be made to
+// pass at all. Every handover package was permanently unsubmittable and this spec, by never
+// asserting READY, recorded the dead end as if it were the design. The register that can say
+// `as_built` is document control's, and the flow below now ends where it always should have: READY.
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
@@ -11,6 +17,7 @@ import { apiAuthHeaders } from './api-auth';
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
 const HO = `${API}/api/v1/commissioning/handovers`;
+const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
 
 test('handover readiness is projected, and a tick cannot buy a submission', async ({ page, baseURL }) => {
@@ -26,15 +33,16 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   const pkg = await (await page.request.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Tower A handover' } })).json();
 
   // ── The derived items cannot be ticked at all ───────────────────────────────────────────────────
-  for (const key of ['testCertificates', 'asBuilts']) {
+  // Five of the six, after TC-GATE-6 moved warranty documents onto the O&M pack's own evidence.
+  for (const key of ['testCertificates', 'asBuilts', 'omManuals', 'training', 'warrantyDocs']) {
     const refused = await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { [key]: true } });
     expect(refused.ok(), `${key} must not be tickable`).toBe(false);
     expect(JSON.stringify(await refused.json())).toMatch(/only an item without an owning authority/i);
   }
 
   // ── Tick everything a person still can, and the submission is still refused ─────────────────────
-  // Only two items remain tickable after TC-GATE-5; the other four are derived.
-  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { warrantyDocs: true, spares: true } });
+  // Exactly one item remains tickable after TC-GATE-6; the other five are derived.
+  await page.request.put(`${HO}/${pkg.id}/checklist`, { headers: H(), data: { spares: true } });
   const early = await page.request.put(`${HO}/${pkg.id}/submit`, { headers: H(), data: {} });
   expect(early.ok(), 'a package whose systems are not ready must not submit').toBe(false);
   expect(JSON.stringify(await early.json())).toMatch(/not commissioning ready/i);
@@ -44,13 +52,14 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   await expect(page.getByTestId('handover-readiness')).toBeVisible();
   await expect(page.getByTestId('handover-item-commissioning-state')).toHaveText('BLOCKED');
   await expect(page.getByTestId('handover-item-commissioning')).toContainText(/Testing & commissioning/i);
-  // TC-GATE-5 moved O&M from an assertion to a projection, so the "asserted" property is now tested
-  // against one of the two items that still has no owning authority.
   await expect(page.getByTestId('handover-item-omManuals')).toContainText(/derived · Handover/i);
-  await expect(page.getByTestId('handover-item-warrantyDocs')).toContainText(/nothing verifies this/i);
-  // The two derived items are gone from the tickable checklist and said to be derived.
+  // TC-GATE-6: warranty documents became a projection too, so the "asserted" property is tested
+  // against SPARES — the only item left that nothing verifies.
+  await expect(page.getByTestId('handover-item-warrantyDocs')).toContainText(/derived · Handover/i);
+  await expect(page.getByTestId('handover-item-spares')).toContainText(/nothing verifies this/i);
+  // The derived items are gone from the tickable checklist and said to be derived.
   await expect(page.getByTestId(`handover-checklist-${pkgCode}`)).not.toContainText('As-built drawings');
-  await expect(page.getByTestId(`handover-derived-note-${pkgCode}`)).toContainText(/derived from Testing & Commissioning and\s+Engineering/i);
+  await expect(page.getByTestId(`handover-derived-note-${pkgCode}`)).toContainText(/derived/i);
   // The submit control is disabled and says why, rather than offering something the API refuses.
   await expect(page.getByTestId(`handover-submit-${pkgCode}`)).toBeDisabled();
   await expect(page.getByTestId(`handover-submit-${pkgCode}`)).toHaveAttribute('title', /not commissioning ready/i);
@@ -63,6 +72,9 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   const device = await (await page.request.post(`${API}/api/v1/elv/devices`, { headers: H(), data: { projectId, tag: 'CAM-001', system: 'cctv' } })).json();
   await page.request.put(`${API}/api/v1/elv/devices/${device.id}/status`, { headers: H(), data: { status: 'installed' } });
 
+  // Engineering's own drawing, for TESTING & COMMISSIONING's engineering gate. This is a different
+  // question to the as-built one below, asked of a different domain on purpose: Engineering owns
+  // whether the design is released, document control owns whether an as-built has been issued.
   const drawing = await (await page.request.post(`${API}/api/v1/engineering/drawings`, {
     headers: H(), data: { projectId, code: `DWG-${Date.now().toString().slice(-5)}`, title: 'CCTV layout', revision: '0', discipline: 'cctv' },
   })).json();
@@ -71,17 +83,31 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   }
   await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved' } });
 
-  // Approved is not as-built: the gate must still refuse until the drawing is actually released.
+  // A controlled document exists on the project, but it is not an as-built yet.
+  const docNumber = `ELV-AB-${Date.now().toString().slice(-5)}`;
+  const entry = await (await page.request.post(`${DC}/register`, {
+    headers: H(),
+    data: { projectId, documentNumber: docNumber, title: 'CCTV layout — as-built', discipline: 'elv', docType: 'drawing', currentRevision: 'A', status: 'for_construction' },
+  })).json();
+
   await page.reload({ waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('handover-item-commissioning-state')).toHaveText('READY');
   await expect(page.getByTestId('handover-item-asBuilts-state')).toHaveText('BLOCKED');
   await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/none marked as-built/i);
+  await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/Document control/i);
 
-  await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/transmit`, { headers: H(), data: {} }).catch(() => undefined);
-  await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/close`, { headers: H(), data: {} }).catch(() => undefined);
+  // ── Release it as the as-built, and the gate reaches READY ──────────────────────────────────────
+  // This is the assertion TC-GATE-4 could not make: while the question went to Engineering, whose
+  // drawing lifecycle has no as-built state, this item could never leave BLOCKED.
+  const revised = await page.request.put(`${DC}/register/${entry.id}/revise`, { headers: H(), data: { revision: 'B', status: 'as_built' } });
+  expect(revised.ok(), 'the register must accept an as-built revision').toBe(true);
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('handover-item-asBuilts-state')).toHaveText('READY');
+  await expect(page.getByTestId('handover-item-asBuilts')).toContainText(/in the register/i);
 });
 
-test('the handover checklist no longer offers the two derived items', async ({ page, baseURL }) => {
+test('the handover checklist offers only the one item nobody owns', async ({ page, baseURL }) => {
   const projectId = await createProject(page.request, 'TC Gate4 Checklist', baseURL);
   const pkgCode = `HO-CK-${Date.now().toString().slice(-5)}`;
   const created = await page.request.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Checklist shape' } });
@@ -89,11 +115,10 @@ test('the handover checklist no longer offers the two derived items', async ({ p
 
   await page.goto('/handover', { waitUntil: 'domcontentloaded' });
   const checklist = page.getByTestId(`handover-checklist-${pkgCode}`);
-  await expect(checklist).toContainText('O&M manuals');
-  await expect(checklist).toContainText('Warranty documents');
-  await expect(checklist).toContainText('Client training completed');
   await expect(checklist).toContainText('Spares & consumables handed over');
-  // The two that became evidence.
-  await expect(checklist).not.toContainText('As-built drawings');
-  await expect(checklist).not.toContainText('Test & commissioning certificates');
+  // Everything else became evidence. A checkbox the API refuses is worse than no checkbox: until
+  // TC-GATE-6 this page still offered three of them, and this spec asserted they were there.
+  for (const gone of ['O&M manuals', 'Warranty documents', 'Client training completed', 'As-built drawings', 'Test & commissioning certificates']) {
+    await expect(checklist, `${gone} must no longer be tickable`).not.toContainText(gone);
+  }
 });

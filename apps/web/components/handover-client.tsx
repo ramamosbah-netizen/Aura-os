@@ -48,17 +48,18 @@ interface HandoverPackage {
 }
 
 /**
- * The items a person can still tick (TC-GATE-4).
+ * The items a person can still tick — by TC-GATE-6, exactly one.
  *
- * `asBuilts` and `testCertificates` are gone from this list on purpose: both are now derived —
- * from Engineering and from Testing & Commissioning — and the API refuses a tick for either. A
- * checkbox that always errored would be worse than no checkbox. They appear in the readiness panel
- * above, with their derived state and the domain that answered.
+ * Everything else is derived from a domain that owns the evidence, and the API refuses a tick for
+ * each. A checkbox that always errors is worse than no checkbox: it invites someone to try, fail,
+ * and conclude the app is broken.
+ *
+ * THIS LIST WAS WRONG between TC-GATE-5 and TC-GATE-6. Gate 5 turned `omManuals` and `training`
+ * into projections and taught the API to refuse them, but left both checkboxes here — so two
+ * controls on this page could only ever produce an error. Deriving an item and withdrawing its
+ * control are one change, not two, and splitting them left a visible lie on screen.
  */
 const CHECK_ITEMS: { key: keyof Checklist; label: string; core: boolean }[] = [
-  { key: 'omManuals', label: 'O&M manuals', core: true },
-  { key: 'warrantyDocs', label: 'Warranty documents', core: false },
-  { key: 'training', label: 'Client training completed', core: false },
   { key: 'spares', label: 'Spares & consumables handed over', core: false },
 ];
 
@@ -167,10 +168,11 @@ export default function HandoverClient({
           <div style={st.readinessEyebrow}>HANDOVER READINESS</div>
           <h3 id="handover-readiness-heading" style={st.readinessTitle}>Evidence gates for acceptance</h3>
           <p style={st.readinessDescription}>
-            Two of these are <strong>derived from the domain that owns the evidence</strong> — Testing &amp; Commissioning for the
-            systems, Engineering for the as-builts — and cannot be ticked here. The rest are still assertions on the package,
-            because no authority exists yet to derive them from, and each one says so. A domain that cannot be read reads
-            UNKNOWN and blocks the submission rather than passing.
+            Five of these six are <strong>derived from the domain that owns the evidence</strong> — Testing &amp; Commissioning for
+            the systems, document control for the as-builts, and Handover&rsquo;s own O&amp;M pack and training record for the rest —
+            and none can be ticked here. Only <strong>spares</strong> is still an assertion, because no authority exists yet to
+            derive it from, and it says so on its own row. A domain that cannot be read reads UNKNOWN and blocks the
+            submission rather than passing.
           </p>
         </div>
         <div style={st.readinessGrid} data-testid="handover-readiness">
@@ -270,11 +272,13 @@ export default function HandoverClient({
                         {item.label}{item.core ? <span style={st.coreStar} title="Required to submit"> *</span> : null}
                       </label>
                     ))}
-                    {/* Said where the ticks are, not only in the panel above: the two that left this
+                    {/* Said where the ticks are, not only in the panel above: the items that left this
                         list did not become optional — they became evidence. */}
                     <span style={st.derivedNote} data-testid={`handover-derived-note-${p.code}`}>
-                      Systems commissioned and as-built drawings are derived from Testing &amp; Commissioning and
-                      Engineering, and are shown in handover readiness above.
+                      Commissioned systems, as-built drawings, O&amp;M deliverables, warranty certificates and client
+                      training are <strong>derived</strong> from Testing &amp; Commissioning, document control and this
+                      workspace&rsquo;s own O&amp;M and training records. They are shown in handover readiness above and
+                      cannot be ticked.
                     </span>
                   </div>
 

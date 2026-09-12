@@ -600,6 +600,37 @@ export class DocControlService {
     };
   }
 
+  /**
+   * The project's register, for a domain that REFERENCES documents without owning them (TC-GATE-6).
+   *
+   * Implements `DocControlPort` for Handover, whose O&M pack points at controlled documents and
+   * whose as-built gate asks whether an as-built exists. Both are questions only this register can
+   * answer — `RegisterStatus` carries `as_built`, and the register is where a document number
+   * becomes a real thing with a revision.
+   *
+   * The whole register in one call, not a lookup per reference: a pack of nine deliverables across
+   * ten systems would otherwise be ninety round trips to answer one screen.
+   *
+   * Deliberately a projection, not the row. The caller gets what it needs to resolve a reference and
+   * nothing more — no custodian, no distribution list. A consumer that cannot see the distribution
+   * matrix cannot come to depend on it, and this register stays free to change shape.
+   */
+  async readProjectDocuments(
+    tenantId: Id,
+    projectId: Id,
+  ): Promise<Array<{ id: string; documentNumber: string; title: string; revision: string; status: string; discipline: string; docType: string }>> {
+    const register = await this.listRegisterByProject(tenantId, projectId);
+    return register.map((entry) => ({
+      id: entry.id,
+      documentNumber: entry.documentNumber,
+      title: entry.title,
+      revision: entry.currentRevision,
+      status: entry.status as string,
+      discipline: entry.discipline as string,
+      docType: entry.docType as string,
+    }));
+  }
+
   listRegisterByProject(tenantId: Id, projectId: Id): Promise<DrawingRegisterEntry[]> {
     return this.registerStore.findByProject(projectId, tenantId);
   }

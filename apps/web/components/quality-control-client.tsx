@@ -5,6 +5,11 @@ import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
+import { QUALITY_PATH, QUALITY_SECTIONS } from '@/lib/workspace-sections';
+import { useWorkspaceSection } from '@/lib/use-workspace-section';
+
+type QualitySection = (typeof QUALITY_SECTIONS)[number]['id'];
+const SECTION_IDS = QUALITY_SECTIONS.map((section) => section.id) as QualitySection[];
 
 interface Project {
   id: string;
@@ -103,7 +108,9 @@ export default function QualityControlClient({
   initialAudits,
 }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'ncrs' | 'irs' | 'snags' | 'audits'>('ncrs');
+  // The section lives in the URL, so a shortcut card, a pasted link and a reopened AURA tab all land
+  // on the same work. See lib/use-workspace-section.
+  const { active: activeTab, select: setActiveTab } = useWorkspaceSection<QualitySection>(QUALITY_PATH, SECTION_IDS, 'ncrs');
   const ncrs = initialNcrs;
   const inspections = initialInspections;
   const snags = initialSnags;
@@ -249,32 +256,18 @@ export default function QualityControlClient({
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
-      {/* Tabs */}
+      {/* One list drives the strip and the shortcut cards at the foot of the page, so they cannot
+          offer different work. */}
       <div style={st.tabs}>
-        <button
-          onClick={() => setActiveTab('ncrs')}
-          style={activeTab === 'ncrs' ? st.activeTabBtn : st.tabBtn}
-        >
-          Non-Conformance Reports (NCR)
-        </button>
-        <button
-          onClick={() => setActiveTab('irs')}
-          style={activeTab === 'irs' ? st.activeTabBtn : st.tabBtn}
-        >
-          Inspection Requests (IR)
-        </button>
-        <button
-          onClick={() => setActiveTab('snags')}
-          style={activeTab === 'snags' ? st.activeTabBtn : st.tabBtn}
-        >
-          Snagging & Punch List
-        </button>
-        <button
-          onClick={() => setActiveTab('audits')}
-          style={activeTab === 'audits' ? st.activeTabBtn : st.tabBtn}
-        >
-          ISO Checklist Audits
-        </button>
+        {QUALITY_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            onClick={() => setActiveTab(section.id)}
+            style={activeTab === section.id ? st.activeTabBtn : st.tabBtn}
+          >
+            {section.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Contents */}

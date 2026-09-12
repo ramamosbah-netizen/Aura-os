@@ -1,8 +1,11 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import QualityControlClient from '../../../components/quality-control-client';
+import AuraTabAnchor from '../../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
+import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
+import { QUALITY_PATH, QUALITY_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
 
 export const dynamic = 'force-dynamic';
 
@@ -111,6 +114,9 @@ export default async function QualityControlPage() {
 
   return (
     <div style={st.page}>
+      {/* The workspace keeps a tab of its own, so opening a section from the grid below adds a tab
+          beside it rather than replacing the way back. Same contract as Engineering. */}
+      <AuraTabAnchor href={QUALITY_PATH} title="Quality" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="quality" title="Quality control workspace" description="Plan inspections, manage NCRs and snags, and close corrective actions with auditable evidence across projects." />
 
       <DeliveryWorkspaceSummary eyebrow="QUALITY OPERATIONS" title="Quality operating picture" description="See the exceptions that can affect execution, then open the canonical inspection or NCR workflow to act." metrics={metrics} attention={attention} emptyMessage="No quality exceptions are open for the available records." />
@@ -122,6 +128,21 @@ export default async function QualityControlPage() {
         projects={projects ?? []}
         initialAudits={audits ?? []}
       />
+
+      {/* The same shortcut grid Sales and the Delivery Operations overview use. Each card opens its
+          section as an AURA tab beside the workspace's own, so two sections can be held open at once
+          — which is all a single tab strip could never do. No counts: the summary above already
+          carries the numbers, and repeating them here would only invite the two to disagree. */}
+      <div style={{ marginTop: 24 }}>
+        <SuiteShortcutGrid
+          kicker="Quality control workspace"
+          title="Quality sections"
+          items={sectionShortcuts(QUALITY_PATH, QUALITY_SECTIONS, 'ncrs')}
+          itemTestId="quality-shortcut"
+          tabType="Quality"
+          titleId="quality-sections-title"
+        />
+      </div>
     </div>
   );
 }

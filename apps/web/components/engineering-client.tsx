@@ -1,13 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import type { CSSProperties } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { Boxes, ClipboardCheck, FileCheck2, FileText, MessageSquareQuote, PencilRuler, Replace } from 'lucide-react';
 import FormRenderer, { useFormEngine } from '@/components/form-engine/FormRenderer';
 import { docTypeFieldSchema } from '@/lib/form-schemas/engineering-documents';
 import SuiteShortcutGrid from '@/components/suite-shortcut-grid';
-import type { SuiteShortcut } from '@/components/suite-dashboard-shell';
+import { ENGINEERING_PATH, ENGINEERING_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
+import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
 
 interface Project {
@@ -135,31 +134,9 @@ const DISCIPLINES = [
   'fire_fighting', 'fire_alarm', 'elv', 'ict', 'security', 'cctv', 'access_control', 'bms', 'other',
 ];
 
-type Tab = 'overview' | 'drawings' | 'rfis' | 'submittals' | 'design-changes' | 'documents' | 'technical-queries' | 'bim-models';
+type Tab = 'overview' | (typeof ENGINEERING_SECTIONS)[number]['id'];
 
-/**
- * The workspace's sections, as ADDRESSABLE work rather than local component state.
- *
- * They were `useState` only, so nothing outside this component could point at one: no deep link, no
- * AURA tab, no way back to "the RFIs I was working on". Giving each a `?section=` URL is what makes
- * the shortcut cards at the foot of Overview possible at all — a card has to have somewhere to go.
- * `sectionHref` is the single place that shape is decided, so the cards, the top tab buttons and any
- * future link cannot disagree about it.
- */
-const SECTIONS: { tab: Exclude<Tab, 'overview'>; label: string; description: string; icon: SuiteShortcut['icon']; tone: SuiteShortcut['tone'] }[] = [
-  { tab: 'drawings', label: 'Shop Drawings', description: 'Issue and approve shop drawings and revisions', icon: PencilRuler, tone: 'blue' },
-  { tab: 'rfis', label: 'RFIs', description: 'Requests for information and their answers', icon: MessageSquareQuote, tone: 'amber' },
-  { tab: 'submittals', label: 'Technical Submittals', description: 'Material, technical and sample submittals in review', icon: ClipboardCheck, tone: 'green' },
-  { tab: 'technical-queries', label: 'Technical Queries', description: 'Site-raised queries awaiting a technical response', icon: FileText, tone: 'teal' },
-  { tab: 'design-changes', label: 'Design Changes', description: 'Additions and omissions, with cost and time impact', icon: Replace, tone: 'violet' },
-  { tab: 'documents', label: 'Documents', description: 'Controlled engineering deliverables and revisions', icon: FileCheck2, tone: 'cyan' },
-  { tab: 'bim-models', label: 'BIM Models', description: 'Federated models, versions and publication state', icon: Boxes, tone: 'slate' },
-];
-
-const sectionHref = (tab: Tab): string => (tab === 'overview' ? '/engineering' : `/engineering?section=${tab}`);
-
-const isTab = (value: string | null): value is Tab =>
-  value === 'overview' || SECTIONS.some((section) => section.tab === value);
+const SECTION_IDS = ENGINEERING_SECTIONS.map((section) => section.id) as Tab[];
 
 // Renders a docType's type-specific fields via the platform form engine (ADR-0011 point-6): a new
 // document type is a new schema in lib/form-schemas/engineering-documents.ts, not new code here.
@@ -205,25 +182,7 @@ export default function EngineeringClient({
   projects,
   tenders,
 }: Props) {
-  const searchParams = useSearchParams();
-  const sectionParam = searchParams.get('section');
-  const [activeTab, setActiveTab] = useState<Tab>(isTab(sectionParam) ? sectionParam : 'overview');
-  // The URL is the source of truth for which section is showing, so arriving from a shortcut card
-  // (or a pasted link, or an AURA tab reopened days later) lands on the right one. Only the URL
-  // drives this — the in-page buttons go through `selectTab`, which writes the URL first.
-  useEffect(() => {
-    setActiveTab(isTab(sectionParam) ? sectionParam : 'overview');
-  }, [sectionParam]);
-
-  // `history.replaceState` rather than a router navigation: this page is force-dynamic, so pushing
-  // the query through the router would refetch every register on each tab click and turn an instant
-  // switch into a round trip. Next integrates the native history methods with `useSearchParams`
-  // (docs: app/guides/single-page-applications — "Shallow routing on the client"), so the effect
-  // above still sees the change and the AURA tab strip still highlights the matching tab.
-  const selectTab = useCallback((tab: Tab) => {
-    setActiveTab(tab);
-    window.history.replaceState(null, '', sectionHref(tab));
-  }, []);
+  const { active: activeTab, select: selectTab } = useWorkspaceSection<Tab>(ENGINEERING_PATH, SECTION_IDS, 'overview');
 
   const [drawings, setDrawings] = useState<Drawing[]>(initialDrawings);
   const [rfis, setRfis] = useState<Rfi[]>(initialRfis);
@@ -630,23 +589,16 @@ export default function EngineeringClient({
   // Counts on the cards are the OPEN/pending work in each section, not the total on record — a
   // badge that only ever grows tells a reader nothing about where their attention is owed. Zero is
   // left off rather than shown, so "no badge" reads as "nothing waiting" instead of as a stat.
-  const openBySection: Record<Exclude<Tab, 'overview'>, number> = {
-    drawings: drawingsPending,
-    rfis: rfisOpen,
-    submittals: submittalsPending,
-    'technical-queries': tqsOpen,
-    'design-changes': dcAwaiting,
-    documents: docsPending,
-    'bim-models': bimWip,
-  };
-  const sectionShortcuts: SuiteShortcut[] = SECTIONS.map((section) => ({
-    label: section.label,
-    description: section.description,
-    href: sectionHref(section.tab),
-    icon: section.icon,
-    tone: section.tone,
-    count: openBySection[section.tab] > 0 ? openBySection[section.tab] : undefined,
-  }));
+  const open = (count: number) => (count > 0 ? count : undefined);
+  const shortcuts = sectionShortcuts(ENGINEERING_PATH, ENGINEERING_SECTIONS, 'overview', {
+    drawings: open(drawingsPending),
+    rfis: open(rfisOpen),
+    submittals: open(submittalsPending),
+    'technical-queries': open(tqsOpen),
+    'design-changes': open(dcAwaiting),
+    documents: open(docsPending),
+    'bim-models': open(bimWip),
+  });
 
   const byDiscipline = (() => {
     const m = new Map<string, number>();
@@ -659,16 +611,16 @@ export default function EngineeringClient({
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
-      {/* Tabs — driven by SECTIONS so the strip and the shortcut cards can never list different work. */}
+      {/* One list drives the strip and the shortcut cards, so they cannot offer different work. */}
       <div style={st.tabs}>
         <button onClick={() => selectTab('overview')} style={activeTab === 'overview' ? st.activeTabBtn : st.tabBtn}>
           Overview
         </button>
-        {SECTIONS.map((section) => (
+        {ENGINEERING_SECTIONS.map((section) => (
           <button
-            key={section.tab}
-            onClick={() => selectTab(section.tab)}
-            style={activeTab === section.tab ? st.activeTabBtn : st.tabBtn}
+            key={section.id}
+            onClick={() => selectTab(section.id)}
+            style={activeTab === section.id ? st.activeTabBtn : st.tabBtn}
           >
             {section.label}
           </button>
@@ -743,7 +695,7 @@ export default function EngineeringClient({
             <SuiteShortcutGrid
               kicker="Engineering workspace"
               title="Engineering sections"
-              items={sectionShortcuts}
+              items={shortcuts}
               itemTestId="engineering-shortcut"
               tabType="Engineering"
               titleId="engineering-sections-title"

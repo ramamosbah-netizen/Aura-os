@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { HSE_PATH, HSE_SECTIONS } from '@/lib/workspace-sections';
+import { useWorkspaceSection } from '@/lib/use-workspace-section';
+
+type HseSection = (typeof HSE_SECTIONS)[number]['id'];
+const SECTION_IDS = HSE_SECTIONS.map((section) => section.id) as HseSection[];
 
 /** Surface the API's own refusal text (the taxonomy sends a useful message) rather than a generic one. */
 async function extractError(res: Response): Promise<string> {
@@ -113,7 +118,9 @@ export default function HseControlClient({
   riskAssessments,
 }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'incidents' | 'ptws' | 'capas' | 'training'>('incidents');
+  // The section lives in the URL, so a shortcut card, a pasted link and a reopened AURA tab all land
+  // on the same work. See lib/use-workspace-section.
+  const { active: activeTab, select: setActiveTab } = useWorkspaceSection<HseSection>(HSE_PATH, SECTION_IDS, 'incidents');
   const incidents = initialIncidents;
   const permits = initialPermits;
   const capas = initialCapas;
@@ -187,32 +194,18 @@ export default function HseControlClient({
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
-      {/* Tabs */}
+      {/* One list drives the strip and the shortcut cards at the foot of the page, so they cannot
+          offer different work. */}
       <div style={st.tabs}>
-        <button
-          onClick={() => setActiveTab('incidents')}
-          style={activeTab === 'incidents' ? st.activeTabBtn : st.tabBtn}
-        >
-          Incident Management & Near Misses
-        </button>
-        <button
-          onClick={() => setActiveTab('ptws')}
-          style={activeTab === 'ptws' ? st.activeTabBtn : st.tabBtn}
-        >
-          Permit to Work (PTW)
-        </button>
-        <button
-          onClick={() => setActiveTab('capas')}
-          style={activeTab === 'capas' ? st.activeTabBtn : st.tabBtn}
-        >
-          CAPA Corrective Actions
-        </button>
-        <button
-          onClick={() => setActiveTab('training')}
-          style={activeTab === 'training' ? st.activeTabBtn : st.tabBtn}
-        >
-          Safety Training Matrix
-        </button>
+        {HSE_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            onClick={() => setActiveTab(section.id)}
+            style={activeTab === section.id ? st.activeTabBtn : st.tabBtn}
+          >
+            {section.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Contents */}

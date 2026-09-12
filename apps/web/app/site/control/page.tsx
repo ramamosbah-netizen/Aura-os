@@ -1,8 +1,11 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import SiteControlClient from '../../../components/site-control-client';
+import AuraTabAnchor from '../../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
+import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
+import { SITE_PATH, SITE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
 
 export const dynamic = 'force-dynamic';
 
@@ -142,6 +145,9 @@ export default async function SiteControlPage() {
 
   return (
     <div style={st.page}>
+      {/* The workspace keeps a tab of its own, so opening a section from the grid below adds a tab
+          beside it rather than replacing the way back. Same contract as Engineering. */}
+      <AuraTabAnchor href={SITE_PATH} title="Site" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="site" title="Site execution workspace" description="Coordinate field work through controlled instructions, daily reports, progress, delays, labour, equipment and site evidence." />
 
       <DeliveryWorkspaceSummary eyebrow="FIELD OPERATIONS" title="Today's operating picture" description="Keep the field moving with clear work, exception and evidence signals. Actions remain owned by Site." metrics={metrics} attention={attention} emptyMessage="No site exceptions are open for the available records." />
@@ -156,6 +162,21 @@ export default async function SiteControlPage() {
         initialInstructions={instructions ?? []}
         instructionsUnavailable={instructions === null}
       />
+
+      {/* The same shortcut grid Sales and the Delivery Operations overview use. Each card opens its
+          section as an AURA tab beside the workspace's own, so two sections can be held open at once
+          — which is all a single tab strip could never do. No counts: the summary above already
+          carries the numbers, and repeating them here would only invite the two to disagree. */}
+      <div style={{ marginTop: 24 }}>
+        <SuiteShortcutGrid
+          kicker="Site execution workspace"
+          title="Site sections"
+          items={sectionShortcuts(SITE_PATH, SITE_SECTIONS, 'instructions')}
+          itemTestId="site-shortcut"
+          tabType="Site"
+          titleId="site-sections-title"
+        />
+      </div>
     </div>
   );
 }

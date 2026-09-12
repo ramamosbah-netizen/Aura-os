@@ -1,8 +1,11 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import HseControlClient from '../../../components/hse-control-client';
+import AuraTabAnchor from '../../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
+import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
+import { HSE_PATH, HSE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
 
 export const dynamic = 'force-dynamic';
 
@@ -114,6 +117,9 @@ export default async function HseControlPage() {
 
   return (
     <div style={st.page}>
+      {/* The workspace keeps a tab of its own, so opening a section from the grid below adds a tab
+          beside it rather than replacing the way back. Same contract as Engineering. */}
+      <AuraTabAnchor href={HSE_PATH} title="HSE" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="hse" title="HSE control workspace" description="Keep field activities safe through permits, risk controls, incidents, observations, training and corrective actions." />
 
       <DeliveryWorkspaceSummary eyebrow="HSE OPERATIONS" title="Safety operating picture" description="See permits, incidents and corrective actions that need attention. Safety records remain owned by HSE." metrics={metrics} attention={attention} emptyMessage="No HSE exceptions are open for the available records." />
@@ -126,6 +132,21 @@ export default async function HseControlPage() {
         projects={projects ?? []}
         riskAssessments={(riskAssessments ?? []).filter((r) => r.status === 'approved')}
       />
+
+      {/* The same shortcut grid Sales and the Delivery Operations overview use. Each card opens its
+          section as an AURA tab beside the workspace's own, so two sections can be held open at once
+          — which is all a single tab strip could never do. No counts: the summary above already
+          carries the numbers, and repeating them here would only invite the two to disagree. */}
+      <div style={{ marginTop: 24 }}>
+        <SuiteShortcutGrid
+          kicker="HSE control workspace"
+          title="HSE sections"
+          items={sectionShortcuts(HSE_PATH, HSE_SECTIONS, 'incidents')}
+          itemTestId="hse-shortcut"
+          tabType="HSE"
+          titleId="hse-sections-title"
+        />
+      </div>
     </div>
   );
 }

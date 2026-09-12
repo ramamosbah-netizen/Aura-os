@@ -6,6 +6,11 @@ import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
 import SiteInstructionsClient from './site-instructions-client';
+import { SITE_PATH, SITE_SECTIONS } from '@/lib/workspace-sections';
+import { useWorkspaceSection } from '@/lib/use-workspace-section';
+
+type SiteSection = (typeof SITE_SECTIONS)[number]['id'];
+const SECTION_IDS = SITE_SECTIONS.map((section) => section.id) as SiteSection[];
 
 interface Project {
   id: string;
@@ -136,7 +141,9 @@ export default function SiteControlClient({
   instructionsUnavailable = false,
 }: Props) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<'instructions' | 'daily-reports' | 'delay-logs' | 'material-consumption' | 'labour-allocations' | 'progress-mapping'>('instructions');
+  // The section lives in the URL, so a shortcut card, a pasted link and a reopened AURA tab all land
+  // on the same work. See lib/use-workspace-section.
+  const { active: activeTab, select: setActiveTab } = useWorkspaceSection<SiteSection>(SITE_PATH, SECTION_IDS, 'instructions');
   const dailyReports = initialDailyReports;
   const delayLogs = initialDelayLogs;
   const materialConsumption = initialMaterialConsumption;
@@ -176,44 +183,18 @@ export default function SiteControlClient({
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
-      {/* Tabs */}
+      {/* One list drives the strip and the shortcut cards at the foot of the page, so they cannot
+          offer different work. */}
       <div style={st.tabs}>
-        <button
-          onClick={() => setActiveTab('instructions')}
-          style={activeTab === 'instructions' ? st.activeTabBtn : st.tabBtn}
-        >
-          Work Instructions
-        </button>
-        <button
-          onClick={() => setActiveTab('daily-reports')}
-          style={activeTab === 'daily-reports' ? st.activeTabBtn : st.tabBtn}
-        >
-          Daily Reports / Site Diary
-        </button>
-        <button
-          onClick={() => setActiveTab('delay-logs')}
-          style={activeTab === 'delay-logs' ? st.activeTabBtn : st.tabBtn}
-        >
-          Site Delay Logs
-        </button>
-        <button
-          onClick={() => setActiveTab('material-consumption')}
-          style={activeTab === 'material-consumption' ? st.activeTabBtn : st.tabBtn}
-        >
-          Material Consumption
-        </button>
-        <button
-          onClick={() => setActiveTab('labour-allocations')}
-          style={activeTab === 'labour-allocations' ? st.activeTabBtn : st.tabBtn}
-        >
-          Labour Allocations
-        </button>
-        <button
-          onClick={() => setActiveTab('progress-mapping')}
-          style={activeTab === 'progress-mapping' ? st.activeTabBtn : st.tabBtn}
-        >
-          Progress % Mapping (vs Baselines)
-        </button>
+        {SITE_SECTIONS.map((section) => (
+          <button
+            key={section.id}
+            onClick={() => setActiveTab(section.id)}
+            style={activeTab === section.id ? st.activeTabBtn : st.tabBtn}
+          >
+            {section.label}
+          </button>
+        ))}
       </div>
 
       {/* Tab Contents */}

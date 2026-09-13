@@ -549,12 +549,13 @@ function GateList({ gates, testIdPrefix }: { gates: Gate[]; testIdPrefix: string
         <li key={g.id} style={st.gate} data-testid={`${testIdPrefix}-${g.id}`}>
           <span style={gateStyle(g.state)} data-testid={`${testIdPrefix}-${g.id}-state`}>{g.state.replace('_', ' ')}</span>
           <span style={st.gateCopy}>
-            <strong>{g.label}</strong>
+            <strong style={st.gateLabel} title={g.label}>{g.label}</strong>
             {/* The reason, not just the state: "2 not yet installed (CAM-014, CAM-022)" is actionable;
-                "BLOCKED" is a colour. */}
-            <small>{g.reason}</small>
+                "BLOCKED" is a colour. Clamped to two lines rather than one, so the actionable half
+                survives — see `gateReason`. */}
+            <small style={st.gateReason} title={g.reason}>{g.reason}</small>
           </span>
-          <span style={st.gateSource}>{g.source}</span>
+          <span style={st.gateSource} title={g.source}>{g.source}</span>
         </li>
       ))}
     </ol>
@@ -644,7 +645,22 @@ const st = {
   gates: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 } as CSSProperties,
   gate: { display: 'grid', gridTemplateColumns: '110px 1fr 170px', gap: 10, alignItems: 'center', fontSize: 12 } as CSSProperties,
   gateCopy: { display: 'flex', flexDirection: 'column', minWidth: 0 } as CSSProperties,
-  gateSource: { color: 'var(--muted)', fontSize: 11, textAlign: 'right' } as CSSProperties,
+  // The label is short by construction; truncating it is a guard, not a change.
+  gateLabel: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  /**
+   * The reason is CLAMPED TO TWO LINES, not cut to one.
+   *
+   * One line would have been simpler and wrong: the comment above this cell says why the reason is
+   * rendered at all — "2 not yet installed (CAM-014, CAM-022)" is actionable where "BLOCKED" is a
+   * colour — and an ellipsis after four words throws away the actionable half. Two lines hold
+   * almost every reason the gates produce, bound the row's height so a list of ten reads as a list,
+   * and the `title` carries the whole sentence for the few that overflow.
+   */
+  gateReason: {
+    display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
+    overflow: 'hidden', wordBreak: 'break-word',
+  } as CSSProperties,
+  gateSource: { color: 'var(--muted)', fontSize: 11, textAlign: 'right', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   table: { width: '100%', borderCollapse: 'collapse', fontSize: 12 } as CSSProperties,
   th: { textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--border, #e5e7eb)', color: 'var(--muted)', fontWeight: 600, fontSize: 10, textTransform: 'uppercase' } as CSSProperties,
   td: { padding: '6px 10px', borderBottom: '1px solid var(--border, #f1f5f9)' } as CSSProperties,

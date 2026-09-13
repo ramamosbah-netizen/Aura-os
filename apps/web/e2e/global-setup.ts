@@ -146,8 +146,39 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
       }
       process.env.E2E_API_TOKEN = token;
 
+      /**
+       * The OTHER identities the suite needs, probed here so a missing one is a setup fact
+       * rather than a confusing assertion three minutes into a spec (TC-GATE-23).
+       *
+       * Three specs were red for four gates — a permit that would not approve, a shell that
+       * showed the wrong suites, a DM isolation check that could not sign in as the third
+       * party. All three were ONE cause: the identity they name is seeded in CI
+       * (`AUTH_DEV_ADMIN_USER=u-admin,u-approver`) and not in a local disposable database,
+       * whose seeder registers a different set. None was a product defect, and none of them
+       * said so — each failed on an assertion about the product.
+       *
+       * Probing costs one request per identity and turns that into a line naming the variable
+       * to set. A missing identity does NOT fail the run: the specs that need it skip, which
+       * is visible and honest, where a wrong-reason failure is neither.
+       */
+      const probeIdentity = async (who: string, name: string | undefined): Promise<string | null> => {
+        if (!name) return null;
+        const res = await page.request
+          .post(`${apiBase}/api/v1/auth/login`, { data: { username: name, password } })
+          .catch(() => null);
+        const token = res?.ok() ? (((await res.json()) as { token?: string }).token ?? null) : null;
+        if (!token) {
+          console.warn(
+            `e2e global setup: the ${who} identity '${name}' could not sign in. ` +
+              `Specs needing it will SKIP. Set E2E_${who.toUpperCase()}_USERNAME to an account this ` +
+              "environment seeds (a local disposable database seeds u-admin, u-e2e-checker, u-e2e-viewer).",
+          );
+        }
+        return token;
+      };
+
       // A second actor, so specs can exercise segregation of duties — a permit requested by this
-      // one and approved by the session user. Optional: absent, those specs assert the refusal.
+      // one and approved by the session user.
       const altUser = process.env.E2E_ALT_USERNAME;
       if (altUser) {
         const altRes = await page.request
@@ -162,6 +193,21 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
           );
         }
         process.env.E2E_ALT_API_TOKEN = altToken;
+      }
+
+      // The restricted VIEWER identity. Unlike the alt actor above it was never probed, so a
+      // name this environment does not seed surfaced as `expect(login.ok()).toBe(true)` failing
+      // inside the spec — a product-shaped assertion for an environment-shaped cause.
+      const viewerUser = process.env.E2E_VIEWER_USERNAME ?? 'u-approver';
+      const viewerToken = await probeIdentity('viewer', viewerUser);
+      if (viewerToken) process.env.E2E_VIEWER_AVAILABLE = '1';
+
+      // The alt identity again, by its EFFECTIVE name. The block above probes it only when the
+      // variable is SET; a spec falling back to the default was never checked at all — which is how
+      // the DM-isolation spec came to fail on a login rather than on the property it guards.
+      const effectiveAlt = process.env.E2E_ALT_USERNAME ?? 'u-approver';
+      if (process.env.E2E_ALT_API_TOKEN || (await probeIdentity('alt', effectiveAlt))) {
+        process.env.E2E_ALT_AVAILABLE = '1';
       }
     }
     await warmRoutes(page, baseURL);

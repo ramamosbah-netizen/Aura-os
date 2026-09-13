@@ -53,6 +53,11 @@ test('permit register → 360 → approve → close, with the authorisation gate
   // before auth was enabled (no actor ⇒ no recorded requester), which is exactly why turning auth
   // on is worth doing rather than working around.
   const alt = altApiAuthHeaders();
+  // WITHOUT a second actor this journey is not merely awkward, it is correctly IMPOSSIBLE:
+  // segregation of duties refuses self-authorisation, so the approve leg below could never
+  // succeed. The comment above has always said so; the assertions did not, and the spec failed
+  // as though the product were broken (TC-GATE-23). Skipping states the requirement instead.
+  test.skip(!alt, 'needs a second actor: set E2E_ALT_USERNAME to an account this environment seeds');
   const apiBase = process.env.AURA_API_URL ?? 'http://localhost:4000';
   const permit = alt
     ? await (

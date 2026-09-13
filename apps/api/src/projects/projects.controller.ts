@@ -1,7 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe, Permissions } from '@aura/core';
-import { parsePageParams, type ProjectHealth, type RiskImpact, type RiskLikelihood } from '@aura/shared';
+import { AccessService, TenantContext, ParseUuidOr404Pipe, Permissions, SelfScoped } from '@aura/core';
+import { parsePageParams, type OrgLevel, type Page, type ProjectHealth, type RiskImpact, type RiskLikelihood } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
@@ -257,6 +257,7 @@ class IssueStatusDto {
 @Controller('projects')
 export class ProjectsController {
   constructor(
+    private readonly access: AccessService,
     private readonly projects: ProjectService,
     private readonly wbs: WbsService,
     private readonly cbs: CbsService,
@@ -304,6 +305,86 @@ export class ProjectsController {
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
+  }
+
+  /**
+   * GET /api/v1/projects/projects/mine — the projects this caller is entitled to see.
+   *
+   * ## Why this endpoint has to exist
+   *
+   * Every other list answers "what is there", and the guard authorises it against a project the
+   * REQUEST names. This one answers "what may I reach", which has no project to name — so the
+   * guard would derive `projects.project.read` with no resource, only an org-wide grant could
+   * satisfy it, and the people it exists for (project members, who hold resource grants and no org
+   * grant) would all be refused. Hence `@SelfScoped`: the handler takes the decision instead.
+   *
+   * ## The decision, and where it happens
+   *
+   * Authorisation is computed here and the authorised id set is handed to the QUERY — so the
+   * count, the search and the page window are all over what the caller may see. Nothing is
+   * fetched and then hidden, in this layer or any layer above it.
+   *
+   *   org-level reader  → every project in the tenant that the grant reaches
+   *   project member    → only the projects granted to them
+   *   neither           → an empty page, not a 403
+   *
+   * The empty page is deliberate: "you are entitled to no projects" is an answer this screen can
+   * render, and it leaks nothing. A 403 would be indistinguishable from the endpoint being broken.
+   *
+   * Membership stays where it already is — a grant scoped to `resource:project:<id>`, written by
+   * the team screen. Nothing here is a second source of membership truth; this only reads it.
+   *
+   * Tenant isolation is unchanged and independent: the store read is tenant-bound, and RLS is
+   * beneath that, so a grant naming a project in another tenant resolves to no row.
+   */
+  @SelfScoped()
+  @Get('projects/mine')
+  async myProjects(
+    @Query('q') q?: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ): Promise<Page<Project> & { scope: 'organisation' | 'projects' | 'none' }> {
+    const ctx = this.tenant.get();
+    const page = parsePageParams(limit, offset);
+    const permission = 'projects.project.read';
+    const orgPath: Array<{ level: OrgLevel; id: string }> = [{ level: 'tenant', id: ctx.tenantId }];
+    if (ctx.companyId) orgPath.push({ level: 'company', id: ctx.companyId });
+
+    // No actor means the access seam is off (the dev default) — the same staged pass-through the
+    // guard itself applies, rather than a special case invented here.
+    if (!ctx.actorId) {
+      return { ...(await this.projects.listPaged({ search: q }, page)), scope: 'organisation' };
+    }
+
+    // An org-level grant is checked FIRST and with no resource on the target, which is exactly
+    // what an org grant means: it authorises regardless of which project is touched.
+    if (this.access.can(ctx.actorId, { permission, orgPath }).allowed) {
+      return { ...(await this.projects.listPaged({ search: q }, page)), scope: 'organisation' };
+    }
+
+    /**
+     * Otherwise: the projects this actor holds a grant on, kept only where that grant actually
+     * authorises READING a project. Both halves are needed and they are different questions — a
+     * QA/QC member holds a grant on the project and no `projects.*` permission at all, so
+     * membership alone would over-report. Project scope and functional permission are separate
+     * dimensions, and this is the place both have to hold.
+     */
+    const ids = [
+      ...new Set(
+        this.access
+          .grantsOf(ctx.actorId)
+          .filter((g) => g.scope.kind === 'resource' && g.scope.resourceType === 'project')
+          .map((g) => (g.scope as { resourceId: string }).resourceId),
+      ),
+    ].filter((id) => this.access.can(ctx.actorId!, { permission, orgPath, resource: { type: 'project', id } }).allowed);
+
+    // The empty set goes through the SAME query rather than short-circuiting to a hand-built
+    // empty page: it keeps one code path, and it exercises the `ids: []` contract that decides
+    // whether a caller entitled to nothing receives nothing or receives the whole tenant.
+    if (ids.length === 0) {
+      return { ...(await this.projects.listPaged({ ids: [], search: q }, page)), scope: 'none' };
+    }
+    return { ...(await this.projects.listPaged({ ids, search: q }, page)), scope: 'projects' };
   }
 
   @Get('projects')

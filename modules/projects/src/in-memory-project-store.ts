@@ -35,6 +35,13 @@ export class InMemoryProjectStore implements ProjectStore {
     if (filter.status) out = out.filter((p) => p.status === filter.status);
     if (filter.accountId) out = out.filter((p) => p.accountId === filter.accountId);
     if (filter.contractId) out = out.filter((p) => p.contractId === filter.contractId);
+    // `ids` present but EMPTY means no projects, not "no filter" — the distinction that decides
+    // whether a caller entitled to nothing receives nothing or receives everything.
+    if (filter.ids) { const allow = new Set(filter.ids); out = out.filter((p) => allow.has(p.id)); }
+    if (filter.search?.trim()) {
+      const q = filter.search.trim().toLowerCase();
+      out = out.filter((p) => `${p.title} ${p.reference ?? ''}`.toLowerCase().includes(q));
+    }
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

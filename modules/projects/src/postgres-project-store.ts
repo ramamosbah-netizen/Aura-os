@@ -162,6 +162,14 @@ export class PostgresProjectStore implements ProjectStore {
     add('status', filter.status);
     add('account_id', filter.accountId);
     add('contract_id', filter.contractId);
+    // The authorised id set, in the same WHERE as everything else — so COUNT(*) and the LIMIT
+    // window are computed over it. An empty array is `id = ANY('{}')`, which matches no row: the
+    // correct answer for a caller entitled to nothing, and the reason it is not treated as absent.
+    if (filter.ids) { params.push(filter.ids); where.push(`id = ANY($${params.length}::uuid[])`); }
+    if (filter.search?.trim()) {
+      params.push(`%${filter.search.trim()}%`);
+      where.push(`(title ILIKE $${params.length} OR reference ILIKE $${params.length})`);
+    }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const countRes = await this.pool.query<{ count: string }>(
       `SELECT COUNT(*)::int AS count FROM public.aura_projects_projects ${whereSql}`, params);

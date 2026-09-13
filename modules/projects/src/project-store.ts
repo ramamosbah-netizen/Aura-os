@@ -11,6 +11,18 @@ export interface ProjectFilter {
   accountId?: string;
   contractId?: string;
   limit?: number;
+  /**
+   * Restrict to these project ids.
+   *
+   * Exists so governed discovery can hand the AUTHORISED set to the query itself: the count, the
+   * search and the page window are then computed over what the caller may see, not over the
+   * tenant with the rest removed afterwards. An EMPTY array means exactly that — no projects —
+   * and must not be read as "no filter", which is the mistake that would return everything to
+   * someone entitled to nothing.
+   */
+  ids?: string[];
+  /** Case-insensitive match on title or code. Applied inside the same query as `ids`. */
+  search?: string;
 }
 
 export interface ProjectStore {

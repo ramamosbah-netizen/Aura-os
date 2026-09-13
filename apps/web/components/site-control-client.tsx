@@ -143,7 +143,9 @@ export default function SiteControlClient({
   const router = useRouter();
   // The section lives in the URL, so a shortcut card, a pasted link and a reopened AURA tab all land
   // on the same work. See lib/use-workspace-section.
-  const { active: activeTab, select: setActiveTab } = useWorkspaceSection<SiteSection>(SITE_PATH, SECTION_IDS, 'instructions');
+  // Only `active` now: the strip that called `select` is gone, and the shortcut cards navigate by
+  // href rather than through this hook.
+  const { active: activeTab } = useWorkspaceSection<SiteSection>(SITE_PATH, SECTION_IDS, 'instructions');
   const dailyReports = initialDailyReports;
   const delayLogs = initialDelayLogs;
   const materialConsumption = initialMaterialConsumption;
@@ -183,19 +185,14 @@ export default function SiteControlClient({
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
-      {/* One list drives the strip and the shortcut cards at the foot of the page, so they cannot
-          offer different work. */}
-      <div style={st.tabs}>
-        {SITE_SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            onClick={() => setActiveTab(section.id)}
-            style={activeTab === section.id ? st.activeTabBtn : st.tabBtn}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
+      {/* The tab strip is gone: it was `SITE_SECTIONS` rendered twice, once here as buttons and again
+          as the shortcut cards at the foot of the page. The cards are the better half — each opens
+          its section as an AURA tab beside the workspace's own, so two sections can be held open at
+          once, where the strip could only swap one for the other.
+
+          Nothing is stranded by removing it. That grid is rendered by the PAGE, after this client and
+          outside any section condition, so it stays on screen whichever section is active — and the
+          section itself is a real `?section=` address, so it survives a reload. */}
 
       {/* Tab Contents */}
       {activeTab === 'instructions' && (
@@ -602,28 +599,6 @@ export default function SiteControlClient({
 }
 
 const st = {
-  tabs: { display: 'flex', gap: 8, margin: '0 0 24px' } as CSSProperties,
-  tabBtn: {
-    padding: '8px 16px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'transparent',
-    color: 'var(--muted)',
-    cursor: 'pointer',
-    fontWeight: 500,
-    fontSize: 14,
-    transition: 'all 0.2s',
-  } as CSSProperties,
-  activeTabBtn: {
-    padding: '8px 16px',
-    borderRadius: 8,
-    border: '1px solid var(--accent)',
-    background: 'var(--border)',
-    color: 'var(--text)',
-    cursor: 'pointer',
-    fontWeight: 600,
-    fontSize: 14,
-  } as CSSProperties,
   tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
   btnApprove: {
     padding: '4px 10px',

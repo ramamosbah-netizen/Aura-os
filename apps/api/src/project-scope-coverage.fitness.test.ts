@@ -36,7 +36,6 @@ const PROJECT_SCOPED = ['projects', 'engineering', 'site', 'quality', 'hse', 'co
  * record; an omission is an oversight — which is the distinction this test exists to keep.
  */
 const NOT_PROJECT_BEARING: Record<string, string> = {
-  'projects:project': 'a project IS the scope; resolving it to itself adds nothing',
   'projects:member': 'membership is addressed by :projectId already, so the guard needs no resolver',
   'hse:training': 'a training record is a fact about a person’s competence, not about a site',
   'projects:quantity-ledger':

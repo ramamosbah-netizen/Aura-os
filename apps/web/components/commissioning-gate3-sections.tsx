@@ -111,7 +111,7 @@ export function ItpSection({
               <li key={s.record.id} style={st.card} data-testid={`itp-system-${s.record.code}`}>
                 <div style={st.cardHead}>
                   <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
-                  <strong style={st.grow}>{s.record.title}</strong>
+                  <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
                   <span style={st.muted}>{s.itpRequirements.length} linked requirement{s.itpRequirements.length === 1 ? '' : 's'}</span>
                 </div>
 
@@ -200,7 +200,7 @@ export function PreCommissioningSection({ systems }: { systems: SystemView[] }) 
               <li key={s.record.id} style={st.card} data-testid={`pre-system-${s.record.code}`}>
                 <div style={st.cardHead}>
                   <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
-                  <strong style={st.grow}>{s.record.title}</strong>
+                  <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
                   <span style={clear ? st.tagGood : st.tagWarn} data-testid={`pre-state-${s.record.code}`}>
                     {clear ? 'ready to test' : 'prerequisites outstanding'}
                   </span>
@@ -246,7 +246,7 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
             <li key={s.record.id} style={st.card} data-testid={`certificate-${s.record.code}`}>
               <div style={st.cardHead}>
                 <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
-                <strong style={st.grow}>{s.record.title}</strong>
+                <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
                 <a href={`/commissioning/${s.record.id}/certificate`} style={st.printLink} data-testid={`certificate-open-${s.record.code}`}>
                   Open evidence pack →
                 </a>
@@ -415,7 +415,7 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
           <li key={s.record.id} style={st.card} data-testid={`asbuilt-${s.record.code}`}>
             <div style={st.cardHead}>
               <span style={st.code}>{s.record.code}</span>
-              <strong style={st.grow}>{s.record.title}</strong>
+              <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
               <span
                 style={s.asBuiltRecords.some((a) => a.current) ? st.tagGood : st.tagWarn}
                 data-testid={`asbuilt-state-${s.record.code}`}
@@ -519,7 +519,7 @@ export function ReadinessSection({ systems }: { systems: SystemView[] }) {
             <li key={s.record.id} style={st.card} data-testid={`readiness-${s.record.code}`}>
               <div style={st.cardHead}>
                 <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
-                <strong style={st.grow}>{s.record.title}</strong>
+                <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
                 <span
                   style={s.readiness.commissioningReady ? st.tagGood : st.tagWarn}
                   data-testid={`readiness-state-${s.record.code}`}
@@ -635,7 +635,10 @@ const st = {
   card: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
   cardHead: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 } as CSSProperties,
   code: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' } as CSSProperties,
-  grow: { flex: 1, minWidth: 140 } as CSSProperties,
+  // `flex: 1` lets it take the room, `minWidth: 0` lets it give it back — without the second a
+  // long system title cannot shrink and pushes the tags off the end of the card. The ellipsis
+  // keeps the head one line; the `title` attribute keeps the whole string reachable.
+  grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
   mutedInline: { color: 'var(--muted)' } as CSSProperties,
   gates: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 } as CSSProperties,

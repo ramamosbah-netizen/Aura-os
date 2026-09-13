@@ -275,7 +275,7 @@ function Overview({
             <li key={s.record.id} style={st.blockRow}>
               <a href={`/commissioning/${s.record.id}`} style={st.blockCode}>{s.record.code}</a>
               <span style={st.blockTitle}>{s.record.title}</span>
-              <span style={st.blockReasons}>{s.blockers.join(' · ')}</span>
+              <span style={st.blockReasons} title={s.blockers.join(' · ')}>{s.blockers.join(' · ')}</span>
             </li>
           ))}
         </ul>
@@ -313,7 +313,7 @@ function Systems({
           {scopePage.slice.map((s) => (
             <li key={s.record.id} style={st.scopeRow}>
               <a href={`/commissioning/${s.record.id}`} style={st.blockCode}>{s.record.code}</a>
-              <span style={st.scopeTitle}><strong>{s.record.title}</strong><small>{s.record.system.replace(/_/g, ' ')}{s.record.location ? ` · ${s.record.location}` : ''}</small></span>
+              <span style={st.scopeTitle}><strong style={st.truncate} title={s.record.title}>{s.record.title}</strong><small style={st.truncate}>{s.record.system.replace(/_/g, ' ')}{s.record.location ? ` · ${s.record.location}` : ''}</small></span>
               <span style={st.scopePoints}>{s.pointsTotal === 0 ? 'no test points' : `${s.pointsPassed}/${s.pointsTotal} points passed`}</span>
               <span style={s.commissioned ? st.tagGood : s.pointsFailing > 0 ? st.tagBad : st.tagMuted}>{s.record.status.replace('_', ' ')}</span>
             </li>
@@ -505,7 +505,7 @@ function Testing({
                   >
                     <span style={st.caret} aria-hidden>{open ? '▾' : '▸'}</span>
                     <span style={st.blockCode}>{s.record.code}</span>
-                    <span style={st.systemTitle}>{s.record.title}</span>
+                    <span style={st.systemTitle} title={s.record.title}>{s.record.title}</span>
                   </button>
                   <span style={st.systemPoints} data-testid={`cx-points-${s.record.code}`}>
                     {s.pointsTotal === 0 ? 'no test points' : `${s.pointsPassed}/${s.pointsTotal} passed`}
@@ -613,7 +613,7 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
               <span style={st.defectHead}>
                 <a href={`/commissioning/${s.record.id}`} style={st.blockCode}>{s.record.code}</a>
                 <strong>{point.pointNo}</strong>
-                <span style={st.defectDesc}>{point.description}</span>
+                <span style={st.defectDesc} title={point.description}>{point.description}</span>
               </span>
               <span style={st.defectEvidence}>
                 {/* The failure is the evidence: which run, what it measured, why it failed. */}
@@ -657,7 +657,7 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
                 <span style={st.defectHead}>
                   {system && <a href={`/commissioning/${system.record.id}`} style={st.blockCode}>{system.record.code}</a>}
                   <strong>{item.severity}</strong>
-                  <span style={st.defectDesc}>{item.description}</span>
+                  <span style={st.defectDesc} title={item.description}>{item.description}</span>
                 </span>
                 <span style={st.defectEvidence}>
                   {item.testItemId ? 'raised from a failing test point' : 'raised outside testing'}
@@ -724,10 +724,16 @@ const st = {
   blockRow: { display: 'grid', gridTemplateColumns: '120px 1fr 1.4fr', gap: 10, alignItems: 'center', padding: '9px 12px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, fontSize: 13 } as CSSProperties,
   blockCode: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, color: 'var(--accent)', textDecoration: 'none' } as CSSProperties,
   blockTitle: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
-  blockReasons: { color: 'var(--warn)', fontSize: 12 } as CSSProperties,
+  // A grid child defaults to `min-width: auto`, so a long blocker list does not shrink — it widens
+  // its track and pushes the row out of shape. `minWidth: 0` lets it shrink, and the ellipsis
+  // keeps every row one line tall. The full text stays reachable through the `title`.
+  blockReasons: { color: 'var(--warn)', fontSize: 12, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   scopeList: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 } as CSSProperties,
   scopeRow: { display: 'grid', gridTemplateColumns: '120px 1fr 160px 120px', gap: 10, alignItems: 'center', padding: '9px 12px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, fontSize: 13 } as CSSProperties,
   scopeTitle: { display: 'flex', flexDirection: 'column', minWidth: 0 } as CSSProperties,
+  // `minWidth: 0` on the column is not enough on its own: the TEXT inside still needs somewhere
+  // to break, so each line truncates rather than stretching the row.
+  truncate: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   scopePoints: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
   authorityNote: { margin: 0, padding: '10px 12px', borderRadius: 10, background: 'var(--panel-2)', color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 } as CSSProperties,
   deviceGroups: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,

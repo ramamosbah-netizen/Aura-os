@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import EmptyState from './ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 import ExportButton from './export-button';
 import NextBestActionBanner from './ui/next-best-action-banner';
 import SaveViewButton from './save-view-button';
@@ -79,6 +80,9 @@ export default function HandoverClient({
 
   const projName = projects.find((p) => p.id === projectId)?.title || null;
   const patch = (p: HandoverPackage) => setPackages((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+  // The acceptance register grows for the life of a project; paged so the open ones are not
+  // buried under every package already accepted.
+  const page = usePaged(packages);
 
   async function call(url: string, method: string, body: unknown): Promise<HandoverPackage | null> {
     setError(null);
@@ -185,7 +189,7 @@ export default function HandoverClient({
                   </small>
                   {/* The reason, inline — the same treatment the T&C chain gives its gates. A state on
                       its own is a colour; "none marked as-built" is the sentence to act on. */}
-                  <small style={{ display: 'block', opacity: 0.85, marginTop: 2 }}>{item.reason}</small>
+                  <small style={st.readinessReason} title={item.reason}>{item.reason}</small>
                 </span>
                 <strong
                   style={item.state === 'READY' ? st.readinessGood : item.state === 'BLOCKED' ? st.readinessOpen : st.readinessUnknown}
@@ -242,17 +246,18 @@ export default function HandoverClient({
             description="Start a package once a project's systems are commissioned. Compile the close-out deliverables, submit to the client, and record acceptance — which starts the warranty clock."
           />
         ) : (
-          <div style={st.list}>
-            {packages.map((p) => {
+          <>
+          <div style={st.list} data-testid="handover-package-list">
+            {page.slice.map((p) => {
               const accepted = p.status === 'accepted';
               const commPct = p.systemsTotal > 0 ? Math.round((p.systemsCommissioned / p.systemsTotal) * 100) : 0;
               return (
                 <div key={p.id} style={st.card}>
                   <div style={st.cardHead}>
-                    <span style={st.code}>{p.code}</span>
+                    <span style={st.code} title={p.code}>{p.code}</span>
                     <span style={statusStyle(p.status)}>{p.status}</span>
                   </div>
-                  <h4 style={st.cardTitle}>{p.title}</h4>
+                  <h4 style={st.cardTitle} title={p.title}>{p.title}</h4>
                   <p style={st.meta}>
                     {p.projectName || '—'} · {p.systemsCommissioned}/{p.systemsTotal} systems commissioned ({commPct}%)
                   </p>
@@ -322,6 +327,8 @@ export default function HandoverClient({
               );
             })}
           </div>
+          <Pager state={page} label="packages" testId="handover-packages-pager" />
+          </>
         )}
       </section>
     </div>
@@ -341,7 +348,13 @@ const st = {
   readinessDescription: { margin: '6px 0 0', color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.45 } as CSSProperties,
   readinessGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 } as CSSProperties,
   readinessItem: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', minWidth: 0 } as CSSProperties,
-  readinessLabel: { display: 'block', color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.3, minHeight: 29 } as CSSProperties,
+  readinessLabel: { display: 'block', color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.3, minHeight: 29, minWidth: 0 } as CSSProperties,
+  // Two lines, not one: "none marked as-built" fits, and a reason naming three systems still shows
+  // enough of itself to be recognised. Truncation that hides everything is not containment.
+  readinessReason: {
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+    opacity: 0.85, marginTop: 2,
+  } as CSSProperties,
   readinessGood: { display: 'block', color: 'var(--good)', fontSize: 12, marginTop: 4 } as CSSProperties,
   readinessOpen: { display: 'block', color: 'var(--warn)', fontSize: 12, marginTop: 4 } as CSSProperties,
   readinessUnknown: { display: 'block', color: 'var(--muted)', fontSize: 12, marginTop: 4 } as CSSProperties,
@@ -357,9 +370,9 @@ const st = {
   panelTitle: { fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text)' } as CSSProperties,
   list: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--panel-2)' } as CSSProperties,
-  cardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 } as CSSProperties,
-  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--text)' } as CSSProperties,
-  cardTitle: { fontSize: 14.5, fontWeight: 600, margin: '2px 0 4px', color: 'var(--text)' } as CSSProperties,
+  cardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, marginBottom: 6, minWidth: 0 } as CSSProperties,
+  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  cardTitle: { fontSize: 14.5, fontWeight: 600, margin: '2px 0 4px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   meta: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px' } as CSSProperties,
   checkGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '7px 16px', marginBottom: 12 } as CSSProperties,
   check: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer' } as CSSProperties,

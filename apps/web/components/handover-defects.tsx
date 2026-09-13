@@ -1,6 +1,8 @@
 'use client';
 
 import type { CSSProperties } from 'react';
+import EmptyState from '@/components/ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 
 /**
  * Snag & Punch List (TC-GATE-9) — both defect authorities, side by side, and neither of them ours.
@@ -48,12 +50,17 @@ export interface DefectsData {
 }
 
 export function DefectsSection({
-  defects, systems,
+  projectId, defects, systems,
 }: {
+  projectId: string;
   defects: DefectsData | null;
   systems: { id: string; code: string; title: string }[];
 }) {
   const codeById = new Map(systems.map((s) => [s.id, s.code]));
+  // Two registers, two pagers: a snag and a punch item are different things being counted, and one
+  // shared page number would make each list lie about the other.
+  const snagPage = usePaged(defects?.snags ?? []);
+  const punchPage = usePaged(defects?.punch ?? []);
 
   return (
     <section aria-label="Snag and punch list" style={st.section}>
@@ -65,7 +72,12 @@ export function DefectsSection({
         creates, resolves or closes either: this reads both so the package can be judged on all of it.
       </p>
 
-      {defects === null ? (
+      {/* Three states, not two. Without a project nothing was ASKED for — a defect list belongs to
+          one — and "could not be read" would be this surface reporting a fault that never happened.
+          A read that genuinely failed still says so, and so does a half-read one, below. */}
+      {!projectId ? (
+        <EmptyState compact title="Choose a project" description="Snags and punch items are raised against a project, and are read one project at a time." />
+      ) : defects === null ? (
         <div style={st.unavailable} role="alert">The defect lists could not be read.</div>
       ) : (
         <>
@@ -86,11 +98,12 @@ export function DefectsSection({
             ) : defects.snags.length === 0 ? (
               <p style={st.empty}>Quality holds no snag for this project.</p>
             ) : (
-              <ul style={st.list}>
-                {defects.snags.map((s) => (
+              <>
+                <ul style={st.list}>
+                {snagPage.slice.map((s) => (
                   <li key={s.id} style={st.row} data-testid={`snag-${s.id}`}>
                     <span style={s.status === 'open' ? st.markWarn : st.markGood} aria-hidden>{s.status === 'open' ? '—' : '✓'}</span>
-                    <span style={st.grow}>
+                    <span style={st.grow} title={[s.description, s.locationDetail, s.assignedTo].filter(Boolean).join(' · ')}>
                       {s.description}
                       {s.locationDetail && <small style={st.muted}> · {s.locationDetail}</small>}
                       {s.assignedTo && <small style={st.muted}> · {s.assignedTo}</small>}
@@ -99,7 +112,9 @@ export function DefectsSection({
                     <small style={s.status === 'open' ? st.stateOpen : st.muted} data-testid={`snag-state-${s.id}`}>{s.status}</small>
                   </li>
                 ))}
-              </ul>
+                </ul>
+                <Pager state={snagPage} label="snags" testId="handover-snags-pager" />
+              </>
             )}
           </div>
 
@@ -115,11 +130,15 @@ export function DefectsSection({
             {defects.punch.length === 0 ? (
               <p style={st.empty}>No punch item has been raised on this project.</p>
             ) : (
-              <ul style={st.list}>
-                {defects.punch.map((p) => (
+              <>
+                <ul style={st.list}>
+                {punchPage.slice.map((p) => (
                   <li key={p.id} style={st.row} data-testid={`punch-${p.id}`}>
                     <span style={p.status === 'open' ? st.markWarn : st.markGood} aria-hidden>{p.status === 'open' ? '—' : '✓'}</span>
-                    <span style={st.grow}>
+                    <span
+                      style={st.grow}
+                      title={[codeById.get(p.commissioningId), p.description, p.location, p.qualityNcrId && `escalated to NCR ${p.qualityNcrId}`].filter(Boolean).join(' · ')}
+                    >
                       <strong style={st.code}>{codeById.get(p.commissioningId) ?? '—'}</strong> {p.description}
                       {p.location && <small style={st.muted}> · {p.location}</small>}
                       {/* The Quality escalation seam from TC-GATE-3: a reference, never a copy. */}
@@ -129,7 +148,9 @@ export function DefectsSection({
                     <small style={p.status === 'open' ? st.stateOpen : st.muted} data-testid={`punch-state-${p.id}`}>{p.status}</small>
                   </li>
                 ))}
-              </ul>
+                </ul>
+                <Pager state={punchPage} label="punch items" testId="handover-punch-pager" />
+              </>
             )}
           </div>
 
@@ -154,7 +175,10 @@ const st = {
   blockHead: { display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 13 } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
   row: { display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12 } as CSSProperties,
-  grow: { flex: 1, minWidth: 140 } as CSSProperties,
+  // `minWidth: 0` so a long title can SHRINK — with `min-width: auto` it widens its own
+  // track instead and pushes the status tag off the card. Ellipsis keeps the head one line;
+  // the `title` attribute keeps the whole string reachable.
+  grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 11 } as CSSProperties,
   empty: { margin: 0, color: 'var(--muted)', fontSize: 12 } as CSSProperties,
   warnLine: { margin: 0, color: 'var(--warn)', fontSize: 12, lineHeight: 1.6 } as CSSProperties,

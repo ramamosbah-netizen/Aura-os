@@ -37,6 +37,10 @@ test('the client’s acknowledgement is what satisfies the gate, not ours', asyn
   // ── Listed, and the gate blocks ─────────────────────────────────────────────────────────────────
   await page.goto(`/handover?project=${projectId}&section=om`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('spares-authority')).toContainText(/a list is not a delivery/i);
+  // The list for a system is behind a caret now — a table per system is unreadable at twenty of
+  // them, and the count on the closed card is what most readers came for. The caret is view state,
+  // deliberately not in the URL, so each arrival at this section opens it again.
+  await page.getByTestId(`spares-open-${code}`).click();
   await page.getByTestId(`spare-description-${code}`).fill('Spare camera');
   await page.getByTestId(`spare-quantity-${code}`).fill('2');
   await page.getByTestId(`spare-add-${code}`).click();
@@ -57,6 +61,7 @@ test('the client’s acknowledgement is what satisfies the gate, not ours', asyn
 
   // ── The client's word is what clears it ─────────────────────────────────────────────────────────
   await page.goto(`/handover?project=${projectId}&section=om`, { waitUntil: 'domcontentloaded' });
+  await page.getByTestId(`spares-open-${code}`).click();
   await page.getByTestId(`spare-ack-name-${spareId}`).fill('Client Rep');
   await page.getByTestId(`spare-acknowledge-${spareId}`).click();
   await expect(page.getByTestId(`spare-ack-${spareId}`)).toHaveText('Client Rep', { timeout: 15_000 });

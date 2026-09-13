@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
+import Pager, { usePaged } from '@/components/ui/pager';
 
 /**
  * The handover dossier (TC-GATE-7).
@@ -70,6 +71,10 @@ export function DossierSection({ dossiers }: { dossiers: DossierData[] | null })
     );
   }
 
+  // A dossier card is a whole manifest — sections, entries and issues — so more than a few on one
+  // screen is unreadable. Paged for the same reason the rest of the workspace is.
+  const page = usePaged(dossiers);
+
   return (
     <section aria-label="Handover dossier" style={st.section}>
       <p style={st.authorityNote} data-testid="dossier-authority">
@@ -86,7 +91,10 @@ export function DossierSection({ dossiers }: { dossiers: DossierData[] | null })
       {dossiers.length === 0 ? (
         <div style={st.unavailable}>No handover package on this project yet — a dossier is assembled for a package.</div>
       ) : (
-        dossiers.map((d) => <DossierCard key={d.package.id} data={d} />)
+        <>
+          {page.slice.map((d) => <DossierCard key={d.package.id} data={d} />)}
+          <Pager state={page} label="dossiers" testId="handover-dossiers-pager" />
+        </>
       )}
     </section>
   );
@@ -98,7 +106,7 @@ function DossierCard({ data }: { data: DossierData }) {
     <article style={st.card} data-testid={`dossier-${pkg.code}`}>
       <div style={st.cardHead}>
         <span style={st.code}>{pkg.code}</span>
-        <strong style={st.grow}>{pkg.title}</strong>
+        <strong style={st.grow} title={pkg.title}>{pkg.title}</strong>
         <span style={st.tagMuted}>{pkg.status}</span>
         <span style={view.outstanding.length === 0 ? st.tagGood : st.tagWarn} data-testid={`dossier-count-${pkg.code}`}>
           {view.includedTotal} ready{view.outstanding.length > 0 ? ` · ${view.outstanding.length} outstanding` : ''}
@@ -222,7 +230,10 @@ const st = {
   issueHead: { display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 12, background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left', width: '100%' } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 3 } as CSSProperties,
   row: { display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12 } as CSSProperties,
-  grow: { flex: 1, minWidth: 120 } as CSSProperties,
+  // `minWidth: 0` so a long title can SHRINK — with `min-width: auto` it widens its own
+  // track instead and pushes the status tag off the card. Ellipsis keeps the head one line;
+  // the `title` attribute keeps the whole string reachable.
+  grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 11 } as CSSProperties,
   note: { color: 'var(--warn)', fontSize: 11 } as CSSProperties,
   empty: { margin: 0, color: 'var(--muted)', fontSize: 12 } as CSSProperties,

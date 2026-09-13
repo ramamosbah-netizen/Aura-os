@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
 import EmptyState from '@/components/ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 
 /**
  * O&M deliverables and client training (TC-GATE-5).
@@ -112,6 +113,14 @@ export function OmPackSection({ systems, items }: { systems: SystemRow[]; items:
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [docRef, setDocRef] = useState<Record<string, string>>({});
+  /**
+   * Each system renders a table of six deliverables, so twenty systems put a hundred and twenty
+   * rows on screen and the system titles you scan disappeared between them. Paged twenty at a
+   * time, and each pack behind a caret — the ACCEPTED COUNT stays on the closed card, so the
+   * overview survives the collapse.
+   */
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const page = usePaged(systems);
 
   const bySystem = useMemo(() => {
     const map = new Map<string, OmItemRow[]>();
@@ -158,22 +167,34 @@ export function OmPackSection({ systems, items }: { systems: SystemRow[]; items:
       ) : systems.length === 0 ? (
         <EmptyState compact title="No systems in scope" description="An O&M pack belongs to a system; register one in Testing & Commissioning first." />
       ) : (
+        <>
         <ul style={st.list} data-testid="om-systems">
-          {systems.map((system) => {
+          {page.slice.map((system) => {
             const pack = bySystem.get(system.id) ?? [];
             const required = pack.filter((i) => i.required);
             const accepted = required.filter((i) => i.state === 'accepted');
+            const open = expanded === system.id;
             return (
               <li key={system.id} style={st.card} data-testid={`om-system-${system.code}`}>
                 <div style={st.cardHead}>
-                  <span style={st.code}>{system.code}</span>
-                  <strong style={st.grow}>{system.title}</strong>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : system.id)}
+                    style={st.disclosure}
+                    aria-expanded={open}
+                    disabled={!hydrated}
+                    data-testid={`om-open-${system.code}`}
+                  >
+                    <span style={st.caret} aria-hidden>{open ? '▾' : '▸'}</span>
+                    <span style={st.code}>{system.code}</span>
+                    <strong style={st.grow} title={system.title}>{system.title}</strong>
+                  </button>
                   <span style={pack.length === 0 ? st.tagWarn : accepted.length === required.length ? st.tagGood : st.tagMuted} data-testid={`om-state-${system.code}`}>
                     {pack.length === 0 ? 'no pack' : `${accepted.length}/${required.length} accepted`}
                   </span>
                 </div>
 
-                {pack.length === 0 ? (
+                {open && (pack.length === 0 ? (
                   <div style={st.row}>
                     <span style={st.muted}>No deliverables listed, so the pack cannot be judged complete.</span>
                     <button
@@ -237,11 +258,13 @@ export function OmPackSection({ systems, items }: { systems: SystemRow[]; items:
                       })}
                     </tbody>
                   </table>
-                )}
+                ))}
               </li>
             );
           })}
         </ul>
+        <Pager state={page} label="systems" testId="om-systems-pager" />
+        </>
       )}
     </section>
   );
@@ -254,6 +277,9 @@ export function TrainingSection({
 }: { projectId: string; systems: SystemRow[]; sessions: TrainingRow[] | null }) {
   const router = useRouter();
   const hydrated = useHydrated();
+  // A project accumulates a session per system plus whole-package ones; paged so the newest are not
+  // buried under a year of them.
+  const sessionPage = usePaged(sessions ?? []);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [title, setTitle] = useState('');
@@ -326,12 +352,13 @@ export function TrainingSection({
           ) : sessions.length === 0 ? (
             <EmptyState compact title="No training recorded" description="Readiness reports this as UNKNOWN rather than passing: nothing has been recorded to judge." />
           ) : (
+            <>
             <ul style={st.list} data-testid="training-sessions">
-              {sessions.map((s) => (
+              {sessionPage.slice.map((s) => (
                 <li key={s.id} style={st.card} data-testid={`training-${s.id}`}>
                   <div style={st.cardHead}>
                     <span style={st.code}>{codeOf(s.commissioningId)}</span>
-                    <strong style={st.grow}>{s.title}</strong>
+                    <strong style={st.grow} title={s.title}>{s.title}</strong>
                     <span style={s.state === 'acknowledged' ? st.tagGood : s.state === 'completed' ? st.tagMuted : st.tagWarn} data-testid={`training-state-${s.id}`}>
                       {s.state}
                     </span>
@@ -377,6 +404,8 @@ export function TrainingSection({
                 </li>
               ))}
             </ul>
+            <Pager state={sessionPage} label="sessions" testId="training-sessions-pager" />
+            </>
           )}
         </>
       )}
@@ -396,9 +425,16 @@ const st = {
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
   card: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
   cardHead: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 } as CSSProperties,
-  metaRow: { display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12 } as CSSProperties,
+  // An attendee list is free text and can arrive as one unbroken string; `anywhere` lets it break
+  // rather than widen the card. The row already wraps, so nothing is truncated here.
+  metaRow: { display: 'flex', gap: 6, flexWrap: 'wrap', fontSize: 12, minWidth: 0, overflowWrap: 'anywhere' } as CSSProperties,
   code: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, color: 'var(--accent)' } as CSSProperties,
-  grow: { flex: 1, minWidth: 140 } as CSSProperties,
+  // `minWidth: 0` so a long title can SHRINK — with `min-width: auto` it widens its own
+  // track instead and pushes the status tag off the card. Ellipsis keeps the head one line;
+  // the `title` attribute keeps the whole string reachable.
+  grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  disclosure: { display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0 } as CSSProperties,
+  caret: { width: 12, color: 'var(--muted)' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
   row: { display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' } as CSSProperties,
   field: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11, color: 'var(--muted)', minWidth: 200 } as CSSProperties,

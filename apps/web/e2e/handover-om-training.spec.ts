@@ -102,6 +102,12 @@ test('the O&M pack and client training are authorities, and readiness counts the
   await expect(page.getByTestId('om-authority')).toContainText(/DocControl owns the controlled documents/i);
   await expect(page.getByTestId(`om-state-${code}`)).toHaveText('no pack');
 
+  // Each system renders a table of deliverables, so a project of twenty is a page nobody can scan.
+  // The pack is now the detail behind a caret: the STATE above is readable on the closed card, the
+  // rows are not. That open/closed is view state and deliberately NOT in the URL, so an arrival at
+  // this section starts closed and the spec says so rather than works around it.
+  await page.getByTestId(`om-open-${code}`).click();
+
   await page.getByTestId(`om-seed-${code}`).click();
   await expect(page.getByTestId(`om-item-${code}-om_manual`)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId(`om-item-state-${code}-om_manual`)).toHaveText('required');

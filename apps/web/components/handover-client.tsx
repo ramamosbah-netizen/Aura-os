@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
+import { useHydrated } from '@/lib/use-hydrated';
 import type { CSSProperties } from 'react';
 import EmptyState from './ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 import ExportButton from './export-button';
 import NextBestActionBanner from './ui/next-best-action-banner';
 import SaveViewButton from './save-view-button';
@@ -76,9 +78,17 @@ export default function HandoverClient({
   const [title, setTitle] = useState('');
   const [clientRep, setClientRep] = useState<Record<string, string>>({});
   const [warrantyMonths, setWarrantyMonths] = useState<Record<string, string>>({});
+  // One package open at a time. A card carries a checklist note, an action row and a signature pad,
+  // so several open at once is the wall this was meant to remove. The caret is dead until React has
+  // attached, because a click that only navigates would look like a toggle that does nothing.
+  const [openPackage, setOpenPackage] = useState<string | null>(null);
+  const hydrated = useHydrated();
 
   const projName = projects.find((p) => p.id === projectId)?.title || null;
   const patch = (p: HandoverPackage) => setPackages((prev) => prev.map((x) => (x.id === p.id ? p : x)));
+  // The acceptance register grows for the life of a project; paged so the open ones are not
+  // buried under every package already accepted.
+  const page = usePaged(packages);
 
   async function call(url: string, method: string, body: unknown): Promise<HandoverPackage | null> {
     setError(null);
@@ -185,7 +195,7 @@ export default function HandoverClient({
                   </small>
                   {/* The reason, inline — the same treatment the T&C chain gives its gates. A state on
                       its own is a colour; "none marked as-built" is the sentence to act on. */}
-                  <small style={{ display: 'block', opacity: 0.85, marginTop: 2 }}>{item.reason}</small>
+                  <small style={st.readinessReason} title={item.reason}>{item.reason}</small>
                 </span>
                 <strong
                   style={item.state === 'READY' ? st.readinessGood : item.state === 'BLOCKED' ? st.readinessOpen : st.readinessUnknown}
@@ -242,86 +252,111 @@ export default function HandoverClient({
             description="Start a package once a project's systems are commissioned. Compile the close-out deliverables, submit to the client, and record acceptance — which starts the warranty clock."
           />
         ) : (
-          <div style={st.list}>
-            {packages.map((p) => {
+          <>
+          <div style={st.list} data-testid="handover-package-list">
+            {page.slice.map((p) => {
               const accepted = p.status === 'accepted';
               const commPct = p.systemsTotal > 0 ? Math.round((p.systemsCommissioned / p.systemsTotal) * 100) : 0;
               return (
                 <div key={p.id} style={st.card}>
                   <div style={st.cardHead}>
-                    <span style={st.code}>{p.code}</span>
+                    <button
+                      type="button"
+                      onClick={() => setOpenPackage(openPackage === p.id ? null : p.id)}
+                      style={st.disclosure}
+                      aria-expanded={openPackage === p.id}
+                      disabled={!hydrated}
+                      data-testid={`handover-open-${p.code}`}
+                    >
+                      <span style={st.caret} aria-hidden>{openPackage === p.id ? '▾' : '▸'}</span>
+                      <span style={st.code} title={p.code}>{p.code}</span>
+                      <h4 style={st.cardTitle} title={p.title}>{p.title}</h4>
+                    </button>
                     <span style={statusStyle(p.status)}>{p.status}</span>
-                  </div>
-                  <h4 style={st.cardTitle}>{p.title}</h4>
-                  <p style={st.meta}>
-                    {p.projectName || '—'} · {p.systemsCommissioned}/{p.systemsTotal} systems commissioned ({commPct}%)
-                  </p>
-
-                  <div style={st.checkGrid} data-testid={`handover-checklist-${p.code}`}>
-                    {CHECK_ITEMS.map((item) => (
-                      <label key={item.key} style={{ ...st.check, opacity: accepted ? 0.7 : 1 }}>
-                        <input
-                          type="checkbox"
-                          checked={p.checklist[item.key]}
-                          disabled={accepted}
-                          onChange={() => toggle(p, item.key)}
-                        />
-                        {item.label}{item.core ? <span style={st.coreStar} title="Required to submit"> *</span> : null}
-                      </label>
-                    ))}
-                    {/* Said where the ticks used to be: the items that left this list did not become
-                        optional — they became evidence, one gate at a time, and spares was the last. */}
-                    <span style={st.derivedNote} data-testid={`handover-derived-note-${p.code}`}>
-                      There is nothing to tick. Commissioned systems, Quality snags, as-built drawings, O&amp;M
-                      deliverables, warranty certificates, client training and <strong>spares</strong> are all
-                      <strong> derived</strong> from the domains that hold the evidence, and are shown in handover
-                      readiness above.
-                    </span>
+                    {/* Outside the fold on purpose: the certificate is the one thing someone opens a
+                        package list to reach, and making them expand a card to find it is a worse
+                        page than the one this change is fixing. */}
+                    <a
+                      href={`/handover/${p.id}/print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={st.printLink}
+                      data-testid={`handover-print-${p.code}`}
+                    >
+                      🖨 Print certificate →
+                    </a>
                   </div>
 
-                  {accepted ? (
-                    <p style={st.signoff}>
-                      ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : ''} by <strong>{p.clientRepresentative}</strong>
-                      {p.warrantyStartDate ? ` — warranty: ${p.warrantyMonths ?? 12} months from ${p.warrantyStartDate}` : ''}
+                  {openPackage === p.id && (
+                  <>
+                    <p style={st.meta}>
+                      {p.projectName || '—'} · {p.systemsCommissioned}/{p.systemsTotal} systems commissioned ({commPct}%)
                     </p>
-                  ) : (
-                    <div style={st.actions}>
-                      {(p.status === 'draft' || p.status === 'rejected') && (
-                        <button
-                          onClick={() => submit(p)}
-                          disabled={!coreReady(p)}
-                          style={coreReady(p) ? st.btnSm : st.btnSmDisabled}
-                          title={coreReady(p) ? 'Submit to client' : blockedReason(p)}
-                          data-testid={`handover-submit-${p.code}`}
-                        >
-                          Submit to client
-                        </button>
-                      )}
-                      {p.status === 'submitted' && (
-                        <>
-                          <div style={st.actionRow}>
-                            <input placeholder="Client representative" value={clientRep[p.id] ?? ''} onChange={(e) => setClientRep({ ...clientRep, [p.id]: e.target.value })} style={st.smInput} />
-                            <input type="number" min={0} placeholder="Warranty months (12)" value={warrantyMonths[p.id] ?? ''} onChange={(e) => setWarrantyMonths({ ...warrantyMonths, [p.id]: e.target.value })} style={{ ...st.smInput, maxWidth: 150 }} />
-                            <button onClick={() => accept(p)} style={st.btnSmGood}>Accept ✓</button>
-                            <button onClick={() => reject(p)} style={st.btnSmDanger}>Reject</button>
-                          </div>
-                          <div style={{ marginTop: 8 }}>
-                            <SignatureCanvas label="Client Representative Acceptance Signature" onChange={() => {}} height={110} />
-                          </div>
-                        </>
-                      )}
-                      {p.remarks && <p style={st.remarks}>Remarks: {p.remarks}</p>}
-                      <div style={{ marginTop: 8 }}>
-                        <a href={`/handover/${p.id}/print`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>
-                          🖨 Print Handover Certificate (PDF) →
-                        </a>
-                      </div>
+
+                    <div style={st.checkGrid} data-testid={`handover-checklist-${p.code}`}>
+                      {CHECK_ITEMS.map((item) => (
+                        <label key={item.key} style={{ ...st.check, opacity: accepted ? 0.7 : 1 }}>
+                          <input
+                            type="checkbox"
+                            checked={p.checklist[item.key]}
+                            disabled={accepted}
+                            onChange={() => toggle(p, item.key)}
+                          />
+                          {item.label}{item.core ? <span style={st.coreStar} title="Required to submit"> *</span> : null}
+                        </label>
+                      ))}
+                      {/* Said where the ticks used to be: the items that left this list did not become
+                          optional — they became evidence, one gate at a time, and spares was the last. */}
+                      <span style={st.derivedNote} data-testid={`handover-derived-note-${p.code}`}>
+                        There is nothing to tick. Commissioned systems, Quality snags, as-built drawings, O&amp;M
+                        deliverables, warranty certificates, client training and <strong>spares</strong> are all
+                        <strong> derived</strong> from the domains that hold the evidence, and are shown in handover
+                        readiness above.
+                      </span>
                     </div>
+
+                    {accepted ? (
+                      <p style={st.signoff}>
+                        ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : ''} by <strong>{p.clientRepresentative}</strong>
+                        {p.warrantyStartDate ? ` — warranty: ${p.warrantyMonths ?? 12} months from ${p.warrantyStartDate}` : ''}
+                      </p>
+                    ) : (
+                      <div style={st.actions}>
+                        {(p.status === 'draft' || p.status === 'rejected') && (
+                          <button
+                            onClick={() => submit(p)}
+                            disabled={!coreReady(p)}
+                            style={coreReady(p) ? st.btnSm : st.btnSmDisabled}
+                            title={coreReady(p) ? 'Submit to client' : blockedReason(p)}
+                            data-testid={`handover-submit-${p.code}`}
+                          >
+                            Submit to client
+                          </button>
+                        )}
+                        {p.status === 'submitted' && (
+                          <>
+                            <div style={st.actionRow}>
+                              <input placeholder="Client representative" value={clientRep[p.id] ?? ''} onChange={(e) => setClientRep({ ...clientRep, [p.id]: e.target.value })} style={st.smInput} />
+                              <input type="number" min={0} placeholder="Warranty months (12)" value={warrantyMonths[p.id] ?? ''} onChange={(e) => setWarrantyMonths({ ...warrantyMonths, [p.id]: e.target.value })} style={{ ...st.smInput, maxWidth: 150 }} />
+                              <button onClick={() => accept(p)} style={st.btnSmGood}>Accept ✓</button>
+                              <button onClick={() => reject(p)} style={st.btnSmDanger}>Reject</button>
+                            </div>
+                            <div style={{ marginTop: 8 }}>
+                              <SignatureCanvas label="Client Representative Acceptance Signature" onChange={() => {}} height={110} />
+                            </div>
+                          </>
+                        )}
+                        {p.remarks && <p style={st.remarks}>Remarks: {p.remarks}</p>}
+                      </div>
+                    )}
+                  </>
                   )}
                 </div>
               );
             })}
           </div>
+          <Pager state={page} label="packages" testId="handover-packages-pager" />
+          </>
         )}
       </section>
     </div>
@@ -341,7 +376,13 @@ const st = {
   readinessDescription: { margin: '6px 0 0', color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.45 } as CSSProperties,
   readinessGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 } as CSSProperties,
   readinessItem: { background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 10px', minWidth: 0 } as CSSProperties,
-  readinessLabel: { display: 'block', color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.3, minHeight: 29 } as CSSProperties,
+  readinessLabel: { display: 'block', color: 'var(--muted)', fontSize: 11.5, lineHeight: 1.3, minHeight: 29, minWidth: 0 } as CSSProperties,
+  // Two lines, not one: "none marked as-built" fits, and a reason naming three systems still shows
+  // enough of itself to be recognised. Truncation that hides everything is not containment.
+  readinessReason: {
+    display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+    opacity: 0.85, marginTop: 2,
+  } as CSSProperties,
   readinessGood: { display: 'block', color: 'var(--good)', fontSize: 12, marginTop: 4 } as CSSProperties,
   readinessOpen: { display: 'block', color: 'var(--warn)', fontSize: 12, marginTop: 4 } as CSSProperties,
   readinessUnknown: { display: 'block', color: 'var(--muted)', fontSize: 12, marginTop: 4 } as CSSProperties,
@@ -357,10 +398,13 @@ const st = {
   panelTitle: { fontSize: 15, fontWeight: 700, margin: '0 0 14px', color: 'var(--text)' } as CSSProperties,
   list: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
   card: { border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', background: 'var(--panel-2)' } as CSSProperties,
-  cardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 } as CSSProperties,
-  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--text)' } as CSSProperties,
-  cardTitle: { fontSize: 14.5, fontWeight: 600, margin: '2px 0 4px', color: 'var(--text)' } as CSSProperties,
-  meta: { fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px' } as CSSProperties,
+  cardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, minWidth: 0 } as CSSProperties,
+  disclosure: { display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', cursor: 'pointer', textAlign: 'left', padding: 0 } as CSSProperties,
+  caret: { width: 12, color: 'var(--muted)' } as CSSProperties,
+  printLink: { fontSize: 12.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, whiteSpace: 'nowrap' } as CSSProperties,
+  code: { fontFamily: 'ui-monospace, monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--text)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  cardTitle: { flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 600, margin: 0, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  meta: { fontSize: 12.5, color: 'var(--muted)', margin: '10px 0 12px' } as CSSProperties,
   checkGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '7px 16px', marginBottom: 12 } as CSSProperties,
   check: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text)', cursor: 'pointer' } as CSSProperties,
   derivedNote: { gridColumn: '1 / -1', fontSize: 11, color: 'var(--muted)', lineHeight: 1.5 } as CSSProperties,

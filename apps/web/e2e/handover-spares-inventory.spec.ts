@@ -56,6 +56,8 @@ test('a stock reference is checked when it is typed, and resolved when it is sho
   // ── On screen: the part as INVENTORY has it, resolved on read and stored nowhere ────────────────
   await page.goto(`/handover?project=${projectId}&section=om`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('spares-authority')).toContainText(/checked against inventory/i);
+  // The spare ROWS are behind the system caret now — the authority note above it is not.
+  await page.getByTestId(`spares-open-${code}`).click();
   const spareId = (await linked.json()).id;
   await expect(page.getByTestId(`spare-${spareId}`)).toContainText(partCode);
   await expect(page.getByTestId(`spare-${spareId}`)).toContainText('4MP dome camera');

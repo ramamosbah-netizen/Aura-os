@@ -100,7 +100,7 @@ export default function HandoverWorkspaceClient({
       ) : active === 'dossier' ? (
         <DossierSection dossiers={dossiers} />
       ) : active === 'snags' ? (
-        <DefectsSection defects={defects} systems={systems} />
+        <DefectsSection projectId={selectedProject} defects={defects} systems={systems} />
       ) : (
         <HandoverClient initialPackages={packages} projects={projects} />
       )}

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, type CSSProperties } from 'react';
+import { useHydrated } from '@/lib/use-hydrated';
+import Pager, { usePaged } from '@/components/ui/pager';
 
 /**
  * The handover dossier (TC-GATE-7).
@@ -70,6 +72,10 @@ export function DossierSection({ dossiers }: { dossiers: DossierData[] | null })
     );
   }
 
+  // A dossier card is a whole manifest — sections, entries and issues — so more than a few on one
+  // screen is unreadable. Paged for the same reason the rest of the workspace is.
+  const page = usePaged(dossiers);
+
   return (
     <section aria-label="Handover dossier" style={st.section}>
       <p style={st.authorityNote} data-testid="dossier-authority">
@@ -86,7 +92,10 @@ export function DossierSection({ dossiers }: { dossiers: DossierData[] | null })
       {dossiers.length === 0 ? (
         <div style={st.unavailable}>No handover package on this project yet — a dossier is assembled for a package.</div>
       ) : (
-        dossiers.map((d) => <DossierCard key={d.package.id} data={d} />)
+        <>
+          {page.slice.map((d) => <DossierCard key={d.package.id} data={d} />)}
+          <Pager state={page} label="dossiers" testId="handover-dossiers-pager" />
+        </>
       )}
     </section>
   );
@@ -94,55 +103,75 @@ export function DossierSection({ dossiers }: { dossiers: DossierData[] | null })
 
 function DossierCard({ data }: { data: DossierData }) {
   const { package: pkg, view, issues } = data;
+  const hydrated = useHydrated();
+  // A dossier is a whole manifest — five sections, every entry in each, plus the issue history.
+  // Printed in full for every package, a project of ten is a page of several hundred lines. What
+  // the head already says is what the manifest is FOR: how many are ready and how many are not.
+  // The list behind that count is the detail, and detail belongs behind a caret.
+  const [open, setOpen] = useState(false);
   return (
     <article style={st.card} data-testid={`dossier-${pkg.code}`}>
       <div style={st.cardHead}>
-        <span style={st.code}>{pkg.code}</span>
-        <strong style={st.grow}>{pkg.title}</strong>
+        <button
+          type="button"
+          onClick={() => setOpen(!open)}
+          style={st.disclosure}
+          aria-expanded={open}
+          disabled={!hydrated}
+          data-testid={`dossier-open-${pkg.code}`}
+        >
+          <span style={st.caret} aria-hidden>{open ? '▾' : '▸'}</span>
+          <span style={st.code}>{pkg.code}</span>
+          <strong style={st.grow} title={pkg.title}>{pkg.title}</strong>
+        </button>
         <span style={st.tagMuted}>{pkg.status}</span>
         <span style={view.outstanding.length === 0 ? st.tagGood : st.tagWarn} data-testid={`dossier-count-${pkg.code}`}>
           {view.includedTotal} ready{view.outstanding.length > 0 ? ` · ${view.outstanding.length} outstanding` : ''}
         </span>
       </div>
 
-      <h4 style={st.heading}>What would go to the client today</h4>
-      {view.sections.map((section) => (
-        <div key={section.kind} style={st.block} data-testid={`dossier-section-${section.kind}`}>
-          <div style={st.blockHead}>
-            <strong>{section.title}</strong>
-            <small style={st.muted}>{section.source}</small>
-            <span style={st.grow} />
-            <small style={st.muted} data-testid={`dossier-included-${section.kind}`}>
-              {section.included} of {section.entries.length} in the pack
-            </small>
+      {open && (
+        <>
+        <h4 style={st.heading}>What would go to the client today</h4>
+        {view.sections.map((section) => (
+          <div key={section.kind} style={st.block} data-testid={`dossier-section-${section.kind}`}>
+            <div style={st.blockHead}>
+              <strong>{section.title}</strong>
+              <small style={st.muted}>{section.source}</small>
+              <span style={st.grow} />
+              <small style={st.muted} data-testid={`dossier-included-${section.kind}`}>
+                {section.included} of {section.entries.length} in the pack
+              </small>
+            </div>
+            {section.entries.length === 0 ? (
+              <p style={st.empty}>Nothing recorded.</p>
+            ) : (
+              <ul style={st.list}>
+                {section.entries.map((e) => (
+                  <li key={`${e.kind}-${e.sourceId}`} style={st.row} data-testid={`dossier-entry-${e.sourceId}`}>
+                    <span aria-hidden style={e.included ? st.markGood : st.markWarn}>{e.included ? '✓' : '—'}</span>
+                    <span style={st.grow}>
+                      {e.reference && <strong style={st.ref}>{e.reference}</strong>} {e.label}
+                      {e.note && <small style={st.note}> {e.note}</small>}
+                    </span>
+                    {e.state && <small style={st.muted}>{e.state}</small>}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-          {section.entries.length === 0 ? (
-            <p style={st.empty}>Nothing recorded.</p>
-          ) : (
-            <ul style={st.list}>
-              {section.entries.map((e) => (
-                <li key={`${e.kind}-${e.sourceId}`} style={st.row} data-testid={`dossier-entry-${e.sourceId}`}>
-                  <span aria-hidden style={e.included ? st.markGood : st.markWarn}>{e.included ? '✓' : '—'}</span>
-                  <span style={st.grow}>
-                    {e.reference && <strong style={st.ref}>{e.reference}</strong>} {e.label}
-                    {e.note && <small style={st.note}> {e.note}</small>}
-                  </span>
-                  {e.state && <small style={st.muted}>{e.state}</small>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ))}
+        ))}
 
-      <h4 style={st.heading}>Issued to the client</h4>
-      {issues.length === 0 ? (
-        <p style={st.empty} data-testid={`dossier-no-issue-${pkg.code}`}>
-          Nothing has been issued yet. A manifest is captured when the package is submitted.
-        </p>
-      ) : (
-        // Newest first, from the API. The newest is open; older ones fold away.
-        issues.map((issue, index) => <Issue key={issue.issueNo} pkgCode={pkg.code} issue={issue} defaultOpen={index === 0} />)
+        <h4 style={st.heading}>Issued to the client</h4>
+        {issues.length === 0 ? (
+          <p style={st.empty} data-testid={`dossier-no-issue-${pkg.code}`}>
+            Nothing has been issued yet. A manifest is captured when the package is submitted.
+          </p>
+        ) : (
+          // Newest first, from the API. The newest is open; older ones fold away.
+          issues.map((issue, index) => <Issue key={issue.issueNo} pkgCode={pkg.code} issue={issue} defaultOpen={index === 0} />)
+        )}
+        </>
       )}
     </article>
   );
@@ -222,7 +251,12 @@ const st = {
   issueHead: { display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', fontSize: 12, background: 'transparent', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, textAlign: 'left', width: '100%' } as CSSProperties,
   list: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 3 } as CSSProperties,
   row: { display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12 } as CSSProperties,
-  grow: { flex: 1, minWidth: 120 } as CSSProperties,
+  // `minWidth: 0` so a long title can SHRINK — with `min-width: auto` it widens its own
+  // track instead and pushes the status tag off the card. Ellipsis keeps the head one line;
+  // the `title` attribute keeps the whole string reachable.
+  grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  disclosure: { display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0 } as CSSProperties,
+  caret: { width: 12, color: 'var(--muted)' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 11 } as CSSProperties,
   note: { color: 'var(--warn)', fontSize: 11 } as CSSProperties,
   empty: { margin: 0, color: 'var(--muted)', fontSize: 12 } as CSSProperties,

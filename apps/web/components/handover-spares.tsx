@@ -4,6 +4,7 @@ import { useMemo, useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
 import EmptyState from '@/components/ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 
 /**
  * Spares handed to the client (TC-GATE-16) — the last of the six readiness items to get an authority.
@@ -66,6 +67,13 @@ function StockCell({ row }: { row: SpareRow }) {
 export function SparesSection({ systems, spares }: { systems: SystemRow[]; spares: SpareRow[] | null }) {
   const router = useRouter();
   const hydrated = useHydrated();
+  /**
+   * Each system carries a spares table AND an add-a-part row, so twenty systems is a very long
+   * page. Paged twenty at a time with the pack behind a caret; the ACKNOWLEDGED COUNT stays on the
+   * closed card, so you can still see which systems are outstanding without opening one.
+   */
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const page = usePaged(systems);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Record<string, { description: string; quantity: string; stockItemId?: string }>>({});
@@ -119,17 +127,29 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
       ) : systems.length === 0 ? (
         <EmptyState compact title="No systems in scope" description="Spares belong to a system; register one in Testing & Commissioning first." />
       ) : (
+        <>
         <ul style={st.list} data-testid="spares-systems">
-          {systems.map((system) => {
+          {page.slice.map((system) => {
             const rows = bySystem.get(system.id) ?? [];
             const required = rows.filter((r) => r.required);
             const acknowledged = required.filter((r) => r.acknowledgedBy);
             const d = draft[system.id] ?? { description: '', quantity: '1' };
+            const open = expanded === system.id;
             return (
               <li key={system.id} style={st.card} data-testid={`spares-system-${system.code}`}>
                 <div style={st.cardHead}>
-                  <span style={st.code}>{system.code}</span>
-                  <strong style={st.grow}>{system.title}</strong>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : system.id)}
+                    style={st.disclosure}
+                    aria-expanded={open}
+                    disabled={!hydrated}
+                    data-testid={`spares-open-${system.code}`}
+                  >
+                    <span style={st.caret} aria-hidden>{open ? '▾' : '▸'}</span>
+                    <span style={st.code}>{system.code}</span>
+                    <strong style={st.grow} title={system.title}>{system.title}</strong>
+                  </button>
                   <span
                     style={rows.length === 0 ? st.tagWarn : acknowledged.length === required.length ? st.tagGood : st.tagMuted}
                     data-testid={`spares-state-${system.code}`}
@@ -138,7 +158,7 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
                   </span>
                 </div>
 
-                {rows.length > 0 && (
+                {open && rows.length > 0 && (
                   <table style={st.table}>
                     <thead><tr>{['Part', 'Required', 'Handed over', 'Client', ''].map((h) => <th key={h} scope="col" style={st.th}>{h}</th>)}</tr></thead>
                     <tbody>
@@ -202,7 +222,7 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
                   </table>
                 )}
 
-                <div style={st.row}>
+                {open && <div style={st.row}>
                   <input
                     style={st.input}
                     placeholder="Spare part"
@@ -252,11 +272,13 @@ export function SparesSection({ systems, spares }: { systems: SystemRow[]; spare
                   >
                     {busy === `add-${system.id}` ? 'Adding…' : 'List spare'}
                   </button>
-                </div>
+                </div>}
               </li>
             );
           })}
         </ul>
+        <Pager state={page} label="systems" testId="spares-systems-pager" />
+        </>
       )}
     </section>
   );
@@ -271,7 +293,12 @@ const st = {
   card: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
   cardHead: { display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', fontSize: 13 } as CSSProperties,
   code: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, color: 'var(--accent)' } as CSSProperties,
-  grow: { flex: 1, minWidth: 140 } as CSSProperties,
+  // `minWidth: 0` so a long title can SHRINK — with `min-width: auto` it widens its own
+  // track instead and pushes the status tag off the card. Ellipsis keeps the head one line;
+  // the `title` attribute keeps the whole string reachable.
+  grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  disclosure: { display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0 } as CSSProperties,
+  caret: { width: 12, color: 'var(--muted)' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 11 } as CSSProperties,
   stockWarn: { color: 'var(--warn)', fontSize: 11 } as CSSProperties,
   stockBad: { color: 'var(--bad)', fontSize: 11 } as CSSProperties,

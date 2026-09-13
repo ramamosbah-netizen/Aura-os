@@ -10,6 +10,14 @@ export interface WorkspaceMetric {
 }
 
 export interface WorkspaceAttention {
+  /**
+   * The identity of the RECORD behind the row, and the React key.
+   *
+   * It used to be keyed on `label`-`detail`, which are both prose — two draft daily reports for one
+   * project on one date, or two major snags on one project, compose the same string and React then
+   * warns that it may duplicate or drop a child. A record id cannot collide.
+   */
+  id: string;
   label: string;
   detail: string;
   href: string;
@@ -62,7 +70,7 @@ export default function DeliveryWorkspaceSummary({
           <div className={styles.empty}><ListChecks size={16} aria-hidden /> {emptyMessage}</div>
         ) : (
           <div className={styles.attentionList}>
-            {attention.slice(0, 5).map((item) => <Link key={`${item.label}-${item.detail}`} href={item.href} className={styles.attentionRow}><span className={`${styles.dot} ${item.tone === 'critical' ? styles.dotCritical : ''}`} aria-hidden /><span><strong>{item.label}</strong><small>{item.detail}</small></span><ArrowUpRight size={14} aria-hidden /></Link>)}
+            {attention.slice(0, 5).map((item) => <Link key={item.id} href={item.href} className={styles.attentionRow}><span className={`${styles.dot} ${item.tone === 'critical' ? styles.dotCritical : ''}`} aria-hidden /><span><strong>{item.label}</strong><small>{item.detail}</small></span><ArrowUpRight size={14} aria-hidden /></Link>)}
           </div>
         )}
       </div>

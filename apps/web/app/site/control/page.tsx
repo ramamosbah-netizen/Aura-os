@@ -149,9 +149,9 @@ export default async function SiteControlPage({
     { label: 'Blocked', value: open(delayLogs, ['resolved']), hint: 'Unresolved delay logs', tone: 'critical' },
   ];
   const attention: WorkspaceAttention[] | null = [instructions, dailyReports, delayLogs].some((rows) => rows === null) ? null : [
-    ...(delayLogs ?? []).filter((row) => row.status !== 'resolved').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · delay`, detail: row.description, href: '/site/control', tone: 'critical' as const })),
-    ...(dailyReports ?? []).filter((row) => row.status !== 'submitted').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · daily report`, detail: `${row.date} · draft not submitted`, href: '/site/daily-reports', tone: 'warning' as const })),
-    ...(instructions ?? []).filter((row) => !['closed', 'acknowledged'].includes(row.status.toLowerCase())).slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · ${row.reference}`, detail: 'Acknowledgement pending', href: '/site/instructions', tone: 'warning' as const })),
+    ...(delayLogs ?? []).filter((row) => row.status !== 'resolved').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · delay`, detail: row.description, href: '/site/control', tone: 'critical' as const })),
+    ...(dailyReports ?? []).filter((row) => row.status !== 'submitted').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · daily report`, detail: `${row.date} · draft not submitted`, href: '/site/daily-reports', tone: 'warning' as const })),
+    ...(instructions ?? []).filter((row) => !['closed', 'acknowledged'].includes(row.status.toLowerCase())).slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · ${row.reference}`, detail: 'Acknowledgement pending', href: '/site/instructions', tone: 'warning' as const })),
   ];
 
   return (

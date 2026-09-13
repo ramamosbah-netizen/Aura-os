@@ -121,9 +121,9 @@ export default async function HseControlPage({
     { label: 'Critical actions', value: capas === null ? null : capas.filter((row) => row.status !== 'completed').length, hint: 'Corrective actions in progress', tone: 'warning' },
   ];
   const attention: WorkspaceAttention[] | null = [incidents, permits, capas].some((rows) => rows === null) ? null : [
-    ...(permits ?? []).filter((row) => row.status !== 'closed' && row.validTo.slice(0, 10) <= new Date().toISOString().slice(0, 10)).slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · permit`, detail: `Expires ${row.validTo.slice(0, 10)}`, href: '/hse/permits', tone: 'critical' as const })),
-    ...(capas ?? []).filter((row) => row.status !== 'completed').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · corrective action`, detail: `${row.dueDate} · ${row.actionRequired}`, href: '/hse/control', tone: 'warning' as const })),
-    ...(incidents ?? []).filter((row) => row.status !== 'closed').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · safety event`, detail: `${row.severity.toUpperCase()} · investigation open`, href: '/hse/control', tone: row.severity === 'fatal' || row.severity === 'major' ? 'critical' as const : 'warning' as const })),
+    ...(permits ?? []).filter((row) => row.status !== 'closed' && row.validTo.slice(0, 10) <= new Date().toISOString().slice(0, 10)).slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · permit`, detail: `Expires ${row.validTo.slice(0, 10)}`, href: '/hse/permits', tone: 'critical' as const })),
+    ...(capas ?? []).filter((row) => row.status !== 'completed').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · corrective action`, detail: `${row.dueDate} · ${row.actionRequired}`, href: '/hse/control', tone: 'warning' as const })),
+    ...(incidents ?? []).filter((row) => row.status !== 'closed').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · safety event`, detail: `${row.severity.toUpperCase()} · investigation open`, href: '/hse/control', tone: row.severity === 'fatal' || row.severity === 'major' ? 'critical' as const : 'warning' as const })),
   ];
 
   return (

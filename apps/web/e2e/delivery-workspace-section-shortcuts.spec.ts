@@ -22,11 +22,21 @@ interface Workspace {
   sections: string[];
   /** A section to open from a card, and text that proves that section is the one showing. */
   opens: { id: string; label: string; proof: RegExp };
+  /**
+   * Does this workspace still render the in-page tab strip?
+   *
+   * Site and HSE dropped theirs: it was the same section list as the cards, and the cards are the
+   * half that can hold two sections open at once. Where it is gone the assertion flips — from "the
+   * strip agrees with the cards" to "the strip is absent and the way back still works", which is
+   * the property that actually had to survive the removal.
+   */
+  hasStrip: boolean;
 }
 
 const WORKSPACES: Workspace[] = [
   {
     name: 'Site',
+    hasStrip: false,
     path: '/site/control',
     testId: 'site-shortcut',
     tabTitle: 'Site',
@@ -35,6 +45,7 @@ const WORKSPACES: Workspace[] = [
   },
   {
     name: 'Quality',
+    hasStrip: true,
     path: '/quality/control',
     testId: 'quality-shortcut',
     tabTitle: 'Quality',
@@ -43,6 +54,7 @@ const WORKSPACES: Workspace[] = [
   },
   {
     name: 'HSE',
+    hasStrip: false,
     path: '/hse/control',
     testId: 'hse-shortcut',
     tabTitle: 'HSE',
@@ -94,11 +106,24 @@ for (const workspace of WORKSPACES) {
     await page.waitForURL(`**${workspace.path}`);
     await expect(tabs).toHaveCount(2);
 
-    // The strip stays instant (no navigation) but still writes the URL, so the two controls can
-    // never disagree about which section is showing.
-    // `exact`: the open AURA tab carries a "Close <section>" button that a loose name match also hits.
-    await page.getByRole('button', { name: workspace.opens.label, exact: true }).click();
-    await expect(page).toHaveURL(new RegExp(`\\?section=${workspace.opens.id}$`));
+    if (workspace.hasStrip) {
+      // The strip stays instant (no navigation) but still writes the URL, so the two controls can
+      // never disagree about which section is showing.
+      // `exact`: the open AURA tab carries a "Close <section>" button a loose name match also hits.
+      await page.getByRole('button', { name: workspace.opens.label, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`\\?section=${workspace.opens.id}$`));
+    } else {
+      // No strip here any more. What had to survive its removal is the WAY BACK, so that is what is
+      // asserted instead: the duplicate is gone, and the workspace's own AURA tab still returns to a
+      // page offering every section as a card.
+      await expect(
+        page.getByRole('button', { name: workspace.opens.label, exact: true }),
+        'the duplicate strip must not come back',
+      ).toHaveCount(0);
+      await tabs.nth(0).click();
+      await page.waitForURL(`**${workspace.path}`);
+      await expect(page.getByTestId(workspace.testId)).toHaveCount(workspace.sections.length);
+    }
   });
 }
 

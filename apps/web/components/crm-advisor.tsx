@@ -121,7 +121,10 @@ const st = {
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
     background: 'var(--panel)', border: '1px solid var(--border)', borderRight: 'none',
     borderRadius: '10px 0 0 10px', padding: '10px 8px', cursor: 'pointer',
-    boxShadow: '0 6px 20px var(--overlay)',
+    // No visible symptom today — the badge sets its own colour and the icon is an emoji — but a
+    // <button> falls back to the UA's black `buttontext`, so the first plain label added here would
+    // be invisible on the dark panel. Set for the same reason as every other control.
+    color: 'var(--text)', boxShadow: '0 6px 20px var(--overlay)',
   } as CSSProperties,
   tabIcon: { fontSize: 16 } as CSSProperties,
   tabCount: { fontSize: 11, fontWeight: 800, color: 'var(--accent-ink)', background: 'var(--accent)', borderRadius: 999, padding: '0 6px', minWidth: 18, textAlign: 'center' } as CSSProperties,

@@ -22,21 +22,11 @@ interface Workspace {
   sections: string[];
   /** A section to open from a card, and text that proves that section is the one showing. */
   opens: { id: string; label: string; proof: RegExp };
-  /**
-   * Does this workspace still render the in-page tab strip?
-   *
-   * Site and HSE dropped theirs: it was the same section list as the cards, and the cards are the
-   * half that can hold two sections open at once. Where it is gone the assertion flips — from "the
-   * strip agrees with the cards" to "the strip is absent and the way back still works", which is
-   * the property that actually had to survive the removal.
-   */
-  hasStrip: boolean;
 }
 
 const WORKSPACES: Workspace[] = [
   {
     name: 'Site',
-    hasStrip: false,
     path: '/site/control',
     testId: 'site-shortcut',
     tabTitle: 'Site',
@@ -45,7 +35,6 @@ const WORKSPACES: Workspace[] = [
   },
   {
     name: 'Quality',
-    hasStrip: true,
     path: '/quality/control',
     testId: 'quality-shortcut',
     tabTitle: 'Quality',
@@ -54,7 +43,6 @@ const WORKSPACES: Workspace[] = [
   },
   {
     name: 'HSE',
-    hasStrip: false,
     path: '/hse/control',
     testId: 'hse-shortcut',
     tabTitle: 'HSE',
@@ -75,8 +63,8 @@ for (const workspace of WORKSPACES) {
     await expect(tabs).toHaveCount(1);
     await expect(tabs.nth(0)).toContainText(workspace.tabTitle);
 
-    // Every section on the strip is offered as a card — a section the cards cannot reach is exactly
-    // the drift this list-in-one-place arrangement exists to prevent.
+    // Every section is offered as a card — the cards are now the ONLY way in, so a section they
+    // cannot reach is unreachable, which is exactly the drift one list in one place prevents.
     const shortcuts = page.getByTestId(workspace.testId);
     await expect(shortcuts).toHaveCount(workspace.sections.length);
     for (const [index, section] of workspace.sections.entries()) {
@@ -106,24 +94,22 @@ for (const workspace of WORKSPACES) {
     await page.waitForURL(`**${workspace.path}`);
     await expect(tabs).toHaveCount(2);
 
-    if (workspace.hasStrip) {
-      // The strip stays instant (no navigation) but still writes the URL, so the two controls can
-      // never disagree about which section is showing.
-      // `exact`: the open AURA tab carries a "Close <section>" button a loose name match also hits.
-      await page.getByRole('button', { name: workspace.opens.label, exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`\\?section=${workspace.opens.id}$`));
-    } else {
-      // No strip here any more. What had to survive its removal is the WAY BACK, so that is what is
-      // asserted instead: the duplicate is gone, and the workspace's own AURA tab still returns to a
-      // page offering every section as a card.
-      await expect(
-        page.getByRole('button', { name: workspace.opens.label, exact: true }),
-        'the duplicate strip must not come back',
-      ).toHaveCount(0);
-      await tabs.nth(0).click();
-      await page.waitForURL(`**${workspace.path}`);
-      await expect(page.getByTestId(workspace.testId)).toHaveCount(workspace.sections.length);
-    }
+    // NO IN-PAGE TAB STRIP. All three of these workspaces used to render their section list twice —
+    // as buttons inside the client and as the cards above — and the cards are the half that can hold
+    // two sections open at once. What had to survive the removal is the WAY BACK, so that is what is
+    // asserted: the duplicate is gone, and the workspace's own AURA tab still returns to a page
+    // offering every section.
+    //
+    // A `hasStrip` flag was carried here briefly while the three were removed one at a time. With
+    // none left it would have been a branch no test reaches, so it went with the last strip.
+    // `exact`: the open AURA tab carries a "Close <section>" button a loose name match also hits.
+    await expect(
+      page.getByRole('button', { name: workspace.opens.label, exact: true }),
+      'the duplicate strip must not come back',
+    ).toHaveCount(0);
+    await tabs.nth(0).click();
+    await page.waitForURL(`**${workspace.path}`);
+    await expect(page.getByTestId(workspace.testId)).toHaveCount(workspace.sections.length);
   });
 }
 

@@ -116,7 +116,10 @@ export default async function HandoverPage({
 }
 
 const st = {
-  page: { maxWidth: 1100, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // Full width across the delivery suite: the fixed column left the display empty on both sides
+  // while the section cards, which stretch with their container, were squeezed. The header's
+  // own description stays capped at 760px, so the prose is still a readable measure.
+  page: { padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
 };

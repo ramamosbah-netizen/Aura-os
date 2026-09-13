@@ -33,7 +33,17 @@ export default async function DeliveryOperationsReportsPage({
     getJson<Row[]>(`/api/commissioning/records${scoped}`),
   ]);
   const cards = [
-    { label: 'Projects in delivery', value: value(projects?.length ?? null), detail: 'Portfolio source', href: '/projects/projects', icon: BarChart3 },
+    /**
+     * PORTFOLIO ONLY. A count of projects is a cross-project answer, and inside one project's
+     * context it is both meaningless and wrong to show: the reader asked about this project. It is
+     * also the one card whose source is not project-scoped, so leaving it in a project view would
+     * be the single place this page could report beyond the project selected.
+     *
+     * Dropped rather than blanked, so the row does not carry an empty box implying missing data.
+     */
+    ...(project
+      ? []
+      : [{ label: 'Projects in delivery', value: value(projects?.length ?? null), detail: 'Portfolio source', href: '/projects/projects', icon: BarChart3 }]),
     { label: 'Engineering queue', value: value(open(drawings, ['approved', 'rejected'])), detail: 'Drawings not closed', href: '/engineering', icon: PencilRuler },
     { label: 'RFIs open', value: value(open(rfis, ['closed', 'resolved'])), detail: 'Technical decisions', href: '/engineering', icon: FileCheck2 },
     { label: 'Site reports in progress', value: value(open(reports, ['submitted', 'approved'])), detail: 'Field evidence', href: '/site/daily-reports', icon: HardHat },

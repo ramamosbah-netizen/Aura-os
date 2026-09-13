@@ -19,50 +19,32 @@ const PAGE_SIZE = 20;
 
 test.setTimeout(240_000);
 
-test('the drawing register pages, and search reaches what paging pushed off', async ({ page, baseURL }) => {
+test('the global register finds a drawing across projects and leads into the project', async ({ page, baseURL }) => {
   const run = Date.now().toString().slice(-6);
-  const projectId = await createProject(page.request, `ENG Paging ${run}`, baseURL);
+  const name = `ENG Global ${run}`;
+  const projectId = await createProject(page.request, name, baseURL);
+  const code = `GL-${run}-01`;
 
-  // Codes chosen so the sort — live drawings by code — puts a known one LAST. The register sorts
-  // alphabetically, so `ZZ` is the row that page one cannot hold, whatever else is in the register.
-  const total = PAGE_SIZE + 1;
-  const first = await page.request.post(`${baseURL}/api/engineering/drawings`, {
-    data: { projectId, projectName: `ENG Paging ${run}`, code: `AA-${run}-01`, title: 'Drawing 01' },
+  const made = await page.request.post(`${baseURL}/api/engineering/drawings`, {
+    data: { projectId, projectName: name, code, title: 'Findable across projects', revision: '0' },
   });
-  test.skip(!first.ok(), 'engineering API not reachable behind the web shell');
-  for (let n = 2; n < total; n += 1) {
-    await page.request.post(`${baseURL}/api/engineering/drawings`, {
-      data: { projectId, projectName: `ENG Paging ${run}`, code: `AA-${run}-${String(n).padStart(2, '0')}`, title: `Drawing ${n}` },
-    });
-  }
-  const lastCode = `ZZ-${run}-99`;
-  await page.request.post(`${baseURL}/api/engineering/drawings`, {
-    data: { projectId, projectName: `ENG Paging ${run}`, code: lastCode, title: 'The one at the end' },
-  });
+  test.skip(!made.ok(), 'engineering API not reachable behind the web shell');
 
-  await page.goto(`/engineering/drawings?projectId=${encodeURIComponent(projectId)}`, { waitUntil: 'domcontentloaded' });
+  await page.goto('/engineering/drawings', { waitUntil: 'domcontentloaded' });
 
-  const rows = page.getByTestId('drawing-register').locator('tbody tr');
-  await expect(rows, 'a full page, not the whole register').toHaveCount(PAGE_SIZE);
-  await expect(page.getByTestId('drawing-register-pager-info')).toContainText(`1–${PAGE_SIZE} of ${total}`);
-  await expect(page.getByTestId('drawing-register')).not.toContainText(lastCode);
+  // What this page uniquely owes: a code, typed with no idea which project holds it, reaches the
+  // project that does. Project-centric navigation does not remove the need for that.
+  await page.getByTestId('eng-drawings-search').fill(code);
+  await expect(page.getByTestId(`eng-project-${projectId}`)).toBeVisible();
 
-  await page.getByTestId('drawing-register-pager-next').click();
-  await expect(rows, 'the remainder, not a second full page').toHaveCount(total - PAGE_SIZE);
-  await expect(page.getByTestId('drawing-register'), 'page two holds it').toContainText(lastCode);
-  await expect(page.getByTestId('drawing-register-pager-next')).toBeDisabled();
-
-  // And without paging to it at all: the point of the search box.
-  await page.getByTestId('drawing-register-pager-prev').click();
-  await page.getByTestId('drawing-register-search').fill(lastCode);
-  await expect(page.getByTestId('drawing-register')).toContainText(lastCode);
-  await expect(page.getByTestId('drawing-register-count')).toContainText(`1 of ${total}`);
-  await expect(page.getByTestId('drawing-register-pager'), 'one match needs no pager').toHaveCount(0);
-
-  // A search that matches nothing says so, and says how big the register is — rather than showing
-  // an empty table that reads like the register itself is empty.
-  await page.getByTestId('drawing-register-search').fill(`no-such-drawing-${run}`);
-  await expect(page.getByTestId('drawing-register-no-match')).toContainText(`${total}`);
+  // And every way out of it leads INTO the project, which is the point of the change.
+  await expect(page.getByTestId(`eng-project-register-${projectId}`)).toHaveAttribute(
+    'href',
+    `/project/${projectId}/drawings`,
+  );
+  await page.getByTestId(`eng-project-open-${projectId}`).click();
+  const manage = page.locator(`[data-testid^="eng-drawing-open-"]`).first();
+  await expect(manage).toHaveAttribute('href', new RegExp(`^/project/${projectId}/drawings/`));
 });
 
 /**

@@ -18,12 +18,16 @@ test('drawing register → 360 → submit → review → approve (UI)', async ({
 
   // 1. Register shows the new drawing.
   await page.goto('/engineering/drawings', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByTestId('drawing-register')).toBeVisible();
-  // The register is shown twenty at a time now, so a drawing registered a moment ago is not
-  // necessarily on the page you land on — it sorts by code, not by age. Searched for rather than
-  // scrolled to, which is also the only way a person finds one: this is what the search box is for.
-  await page.getByTestId('drawing-register-search').fill(code);
-  const openLink = page.getByTestId(`open-${code}-0`);
+  await expect(page.getByTestId('eng-drawings-projects')).toBeVisible();
+  // The register groups by project and shows twenty projects at a time, so a drawing registered
+  // a moment ago is not necessarily on the page you land on. Searched for by CODE — the search
+  // matches a project by the drawings it holds, which is exactly why it was built that way — and
+  // then the project is opened to reach the row.
+  await page.getByTestId('eng-drawings-search').fill(code);
+  const projectCard = page.locator('[data-testid^="eng-project-open-"]').first();
+  await expect(projectCard).toBeEnabled();
+  await projectCard.click();
+  const openLink = page.locator('[data-testid^="eng-drawing-open-"]').first();
   await expect(openLink).toBeVisible();
 
   // 2. Open the Drawing 360 — status is Draft.

@@ -84,6 +84,35 @@ test('the O&M pack and the spares table are behind a caret, and a long system ti
   }
 });
 
+test('a dossier card shows its count, and the manifest behind it opens from the caret', async ({ page, baseURL }) => {
+  const run = Date.now().toString().slice(-6);
+  const projectId = await createProject(page.request, `HO Dossier fold ${run}`, baseURL);
+  const pkgCode = `HD-${run}`;
+
+  const created = await page.request.post(`${CX}`, {
+    headers: H(),
+    data: { projectId, code: `HDS-${run}`, title: LONG_TITLE, system: 'cctv' },
+  });
+  test.skip(!created.ok(), 'commissioning API not reachable');
+  const pkg = await page.request.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Tower A handover' } });
+  test.skip(!pkg.ok(), 'handover API not reachable');
+
+  await page.goto(`/handover?project=${encodeURIComponent(projectId)}&section=dossier`, { waitUntil: 'domcontentloaded' });
+
+  const card = page.getByTestId(`dossier-${pkgCode}`);
+  await expect(card).toBeVisible();
+
+  // The count is the thing worth reading at a glance, and it stays on the closed card. The manifest
+  // it was computed from — five sections, every entry — is what the caret is for.
+  await expect(page.getByTestId(`dossier-count-${pkgCode}`), 'the count reads while closed').toBeVisible();
+  await expect(card.locator('[data-testid^="dossier-section-"]'), 'the manifest is folded away').toHaveCount(0);
+
+  const caret = page.getByTestId(`dossier-open-${pkgCode}`);
+  await expect(caret).toBeEnabled();
+  await caret.click();
+  await expect(card.locator('[data-testid^="dossier-section-"]'), 'and unfolds').not.toHaveCount(0);
+});
+
 test('the handover package list pages, and the overflowed package is still reachable', async ({ page, baseURL }) => {
   test.setTimeout(180_000);
   const run = Date.now().toString().slice(-6);
@@ -123,4 +152,32 @@ test('the handover package list pages, and the overflowed package is still reach
   await page.getByTestId('handover-packages-pager-prev').click();
   await expect(pager).toContainText(`1–${PAGE_SIZE} of ${total}`);
   await expect(page.getByTestId('handover-packages-pager-prev')).toBeDisabled();
+});
+
+test('a package card folds to its title, and the certificate stays out of the fold', async ({ page, baseURL }) => {
+  const run = Date.now().toString().slice(-6);
+  const projectId = await createProject(page.request, `HO Fold ${run}`, baseURL);
+  const [a, b] = [`HF-${run}-A`, `HF-${run}-B`];
+
+  const created = await page.request.post(HO, { headers: H(), data: { projectId, code: a, title: 'Tower A handover' } });
+  test.skip(!created.ok(), 'handover API not reachable');
+  await page.request.post(HO, { headers: H(), data: { projectId, code: b, title: 'Tower B handover' } });
+
+  await page.goto(`/handover?project=${encodeURIComponent(projectId)}`, { waitUntil: 'domcontentloaded' });
+
+  // What survives the fold is what a reader scans a package list for: the code, the title, the
+  // status, and the certificate. The checklist, the action row and the signature pad do not.
+  await expect(page.getByTestId(`handover-checklist-${a}`), 'folded on arrival').toHaveCount(0);
+  await expect(page.getByTestId(`handover-print-${a}`), 'the certificate is reachable without opening anything').toBeVisible();
+
+  const caretA = page.getByTestId(`handover-open-${a}`);
+  await expect(caretA).toBeEnabled();
+  await caretA.click();
+  await expect(page.getByTestId(`handover-checklist-${a}`)).toBeVisible();
+
+  // One at a time. A card is a checklist plus an action row plus a signature pad, so several open
+  // at once rebuilds the wall this removed.
+  await page.getByTestId(`handover-open-${b}`).click();
+  await expect(page.getByTestId(`handover-checklist-${b}`)).toBeVisible();
+  await expect(page.getByTestId(`handover-checklist-${a}`), 'opening one closes the other').toHaveCount(0);
 });

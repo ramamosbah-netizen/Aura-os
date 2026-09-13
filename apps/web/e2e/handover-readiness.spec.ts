@@ -70,7 +70,10 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   await expect(page.getByTestId('handover-item-warrantyDocs')).toContainText(/derived · Handover/i);
   await expect(page.getByTestId('handover-item-spares')).toContainText(/derived · Handover/i);
   await expect(page.getByTestId('handover-readiness')).not.toContainText(/nothing verifies this/i);
-  // The checklist is empty, and says why.
+  // The checklist is empty, and says why. It lives behind the package card's caret now — a card
+  // carries a checklist, an action row and a signature pad, so the list of packages shows the head
+  // and opens one at a time.
+  await page.getByTestId(`handover-open-${pkgCode}`).click();
   await expect(page.getByTestId(`handover-checklist-${pkgCode}`)).not.toContainText('As-built drawings');
   await expect(page.getByTestId(`handover-derived-note-${pkgCode}`)).toContainText(/nothing to tick/i);
   await expect(page.getByTestId(`handover-derived-note-${pkgCode}`)).toContainText(/derived/i);
@@ -138,7 +141,12 @@ test('the handover checklist offers nothing at all, because everything is derive
   test.skip(!created.ok(), 'commissioning API not reachable');
 
   await page.goto('/handover', { waitUntil: 'domcontentloaded' });
+  await page.getByTestId(`handover-open-${pkgCode}`).click();
   const checklist = page.getByTestId(`handover-checklist-${pkgCode}`);
+  // Asserted PRESENT before it is asserted empty: every check below is a `not.toContainText`, and
+  // a locator that resolves to nothing satisfies all of them. Now that the checklist is behind a
+  // disclosure, that is a live way for this test to pass while proving nothing.
+  await expect(checklist, 'the checklist is on screen, so the absences below mean something').toBeVisible();
   // TC-GATE-16 emptied it: spares was the last item with no authority behind it.
   // Everything else became evidence. A checkbox the API refuses is worse than no checkbox: until
   // TC-GATE-6 this page still offered three of them, and this spec asserted they were there.

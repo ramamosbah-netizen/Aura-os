@@ -100,6 +100,8 @@ test('the registered certificate shows on the surface, the printed pack and the 
   await page.request.post(`${API}/api/v1/commissioning/handovers`, { headers: H(), data: { projectId, code: pkgCode, title: 'Tower A handover' } });
   await page.goto(`/handover?project=${projectId}&section=dossier`, { waitUntil: 'domcontentloaded' });
   const card = page.getByTestId(`dossier-${pkgCode}`);
+  // The manifest is behind a caret — the card head shows the count, not the entries.
+  await page.getByTestId(`dossier-open-${pkgCode}`).click();
   await expect(card.getByTestId('dossier-section-commissioning_certificate')).toContainText(doc.documentNumber);
   await expect(card.getByTestId('dossier-section-commissioning_certificate')).toContainText(/rev A/i);
 

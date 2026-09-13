@@ -95,6 +95,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
   await page.goto(`/handover?project=${projectId}&section=dossier`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('dossier-authority')).toContainText(/owns nothing/i);
   await expect(page.getByTestId(`dossier-${pkgCode}`)).toBeVisible();
+  await openDossier(page, pkgCode);
 
   // Scoped to THIS package's card. A project can carry more than one package — a lifecycle reactor
   // raises one of its own when a project reaches handover — and an unscoped section testid would
@@ -113,6 +114,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
   expect(submitted.ok(), `the package must submit once the evidence supports it — ${await submitted.text()}`).toBe(true);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openDossier(page, pkgCode);
   const issue1 = page.getByTestId(`dossier-issue-${pkgCode}-1`);
   await expect(issue1).toBeVisible();
 
@@ -137,6 +139,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
   const transmittalId = mine[0].id;
   await page.request.post(`${API}/api/v1/doccontrol/transmittals/${transmittalId}/send`, { headers: H(), data: {} });
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openDossier(page, pkgCode);
   await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toContainText(/not yet acknowledged/i);
 
   const ack = await page.request.put(`${API}/api/v1/doccontrol/transmittals/${transmittalId}/acknowledge`, {
@@ -146,6 +149,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
 
   // THE FACT THIS WHOLE SEAM EXISTS FOR: not our record of sending, but theirs of receiving.
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openDossier(page, pkgCode);
   await expect(page.getByTestId(`dossier-conveyance-${pkgCode}-1`)).toContainText(/acknowledged by/i);
   await expect(issue1).toContainText(`DOC-OM-${stamp}`);
   await expect(issue1).toContainText(/accepted · rev B/i);
@@ -156,6 +160,7 @@ test('the dossier assembles what the client receives, and remembers what was sen
   expect(revised.ok()).toBe(true);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openDossier(page, pkgCode);
 
   // Today's pack notices — that is what a derived view is for.
   await expect(page.getByTestId(`dossier-${pkgCode}`).getByTestId('dossier-section-om_deliverable')).toContainText(/superseded/i);
@@ -177,3 +182,16 @@ test('the dossier section is addressable and keeps the project', async ({ page, 
   await expect(page).toHaveURL(new RegExp(`project=${projectId}`));
   await expect(page.getByTestId('dossier-authority')).toBeVisible();
 });
+
+/**
+ * A dossier card is collapsed on arrival: five sections, every entry in each and the issue history
+ * is several hundred lines for a project of ten packages, so the manifest sits behind a caret and
+ * the head carries the count. The open state is view state and deliberately NOT in the URL, which
+ * means every reload closes it again — hence a helper called at each one rather than once.
+ */
+async function openDossier(page: import('@playwright/test').Page, pkgCode: string) {
+  const caret = page.getByTestId(`dossier-open-${pkgCode}`);
+  await expect(caret).toBeEnabled();
+  if ((await caret.getAttribute('aria-expanded')) !== 'true') await caret.click();
+  await expect(caret).toHaveAttribute('aria-expanded', 'true');
+}

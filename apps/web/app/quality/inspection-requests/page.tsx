@@ -4,8 +4,12 @@ import InspectionRequestClient, { type InspectionRequest } from '../../../compon
 
 export const dynamic = 'force-dynamic';
 
-export default async function InspectionRequestPage() {
-  const irs = await getJson<InspectionRequest[]>('/api/quality/irs');
+export default async function InspectionRequestPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const irs = await getJson<InspectionRequest[]>(`/api/quality/irs${scope}`);
 
   return (
     <div style={st.page}>

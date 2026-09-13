@@ -81,7 +81,7 @@ export class HseService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'hse.incident.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'hse.incident.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const incident = makeHseIncident(input);
@@ -203,7 +203,7 @@ export class HseService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'hse.ptw.request', orgPath });
+      this.access.assert(input.createdBy, { permission: 'hse.ptw.request', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const permit = makePermitToWork(input);
@@ -235,7 +235,7 @@ export class HseService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (found.companyId) orgPath.push({ level: 'company', id: found.companyId });
-      this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath });
+      this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath, resource: { type: 'project', id: found.projectId } });
     }
 
     // Gate 1 — an approved risk assessment must authorise this work.
@@ -385,7 +385,7 @@ export class HseService {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: permit.tenantId }];
     if (permit.companyId) orgPath.push({ level: 'company', id: permit.companyId });
-    this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath });
+    this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath, resource: { type: 'project', id: permit.projectId } });
   }
 
   /** Optionally narrowed to one project — see the workspace project scope (server-side). */
@@ -415,7 +415,7 @@ export class HseService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'hse.toolbox.record', orgPath });
+      this.access.assert(input.createdBy, { permission: 'hse.toolbox.record', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const talk = makeToolboxTalk(input);
@@ -459,7 +459,7 @@ export class HseService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'hse.capa.raise', orgPath });
+      this.access.assert(input.createdBy, { permission: 'hse.capa.raise', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const capa = makeCapaAction(input);
@@ -489,7 +489,7 @@ export class HseService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (capa.companyId) orgPath.push({ level: 'company', id: capa.companyId });
-      this.access.assert(actorId, { permission: 'hse.capa.complete', orgPath });
+      this.access.assert(actorId, { permission: 'hse.capa.complete', orgPath, resource: { type: 'project', id: capa.projectId } });
     }
 
     capa.status = 'completed';
@@ -587,7 +587,7 @@ export class HseService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'hse.risk_assessment.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'hse.risk_assessment.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const ra = makeRiskAssessment(input);
     await this.tx.run(async (handle) => { await this.riskStore.save(ra, handle); });

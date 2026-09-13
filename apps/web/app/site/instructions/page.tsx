@@ -25,12 +25,18 @@ interface Project {
 }
 
 export default async function SiteInstructionsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
-  const [{ projectId }, instructions, projects] = await Promise.all([
-    searchParams,
-    getJson<SiteInstruction[]>('/api/site/instructions'),
-    getJson<Project[]>('/api/projects/projects'),
+  // The project is CARRIED to the API. An unscoped read is refused for a project member, so
+  // narrowing afterwards never had anything to narrow; and the project list is refused too, which
+  // is why the one in context is read by id instead.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const [instructions, projects, current] = await Promise.all([
+    getJson<SiteInstruction[]>(`/api/site/instructions${scope}`),
+    projectId ? Promise.resolve(null) : getJson<Project[]>('/api/projects/projects'),
+    projectId ? getJson<Project>(`/api/projects/projects/${encodeURIComponent(projectId)}`) : Promise.resolve(null),
   ]);
   const rows = projectId ? (instructions ?? []).filter((item) => item.projectId === projectId) : instructions;
+  const projectOptions = current ? [current] : (projects ?? []);
 
   return (
     <div style={st.page}>
@@ -40,7 +46,7 @@ export default async function SiteInstructionsPage({ searchParams }: { searchPar
         closed. Flag cost and/or time implications so they can be escalated to a variation or EOT claim.
       </p>
       <section style={{ marginTop: 10 }}>
-        {instructions === null ? <p style={st.muted}>Site instructions could not be loaded. Retry when the Site service is available.</p> : <SiteInstructionsClient initialInstructions={rows ?? []} initialProjectId={projectId} projects={projects ?? []} projectsUnavailable={projects === null} />}
+        {instructions === null ? <p style={st.muted}>Site instructions could not be loaded. Retry when the Site service is available.</p> : <SiteInstructionsClient initialInstructions={rows ?? []} initialProjectId={projectId} projects={projectOptions} projectsUnavailable={!projectId && projects === null} />}
       </section>
     </div>
   );

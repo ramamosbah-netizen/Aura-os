@@ -4,8 +4,12 @@ import RiskAssessmentClient, { type RiskAssessment } from '../../../components/r
 
 export const dynamic = 'force-dynamic';
 
-export default async function RiskAssessmentPage() {
-  const ras = await getJson<RiskAssessment[]>('/api/hse/risk-assessments');
+export default async function RiskAssessmentPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const ras = await getJson<RiskAssessment[]>(`/api/hse/risk-assessments${scope}`);
 
   return (
     <div style={st.page}>

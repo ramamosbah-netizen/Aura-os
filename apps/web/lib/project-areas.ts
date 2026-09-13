@@ -148,6 +148,10 @@ export const PROJECT_AREAS: ProjectArea[] = [
       { label: 'Toolbox talks', href: '/hse/toolbox-talks', description: 'Track site safety briefings' },
     ],
     columns: [
+      // The WORK the permit covers, first. Without it a row reads `hot_work · 13 Sep · 20 Sep ·
+      // requested` — four permits on a project are then indistinguishable from one another, and the
+      // register cannot answer the question it exists for: which permit is this.
+      { key: 'description', label: 'Work' },
       { key: 'permitType', label: 'Type' },
       { key: 'validFrom', label: 'Valid from', kind: 'date' },
       { key: 'validTo', label: 'Valid to', kind: 'date' },

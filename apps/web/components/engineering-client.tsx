@@ -611,21 +611,12 @@ export default function EngineeringClient({
     <div>
       {error && <div style={st.errorPanel}>{error}</div>}
 
-      {/* One list drives the strip and the shortcut cards, so they cannot offer different work. */}
-      <div style={st.tabs}>
-        <button onClick={() => selectTab('overview')} style={activeTab === 'overview' ? st.activeTabBtn : st.tabBtn}>
-          Overview
-        </button>
-        {ENGINEERING_SECTIONS.map((section) => (
-          <button
-            key={section.id}
-            onClick={() => selectTab(section.id)}
-            style={activeTab === section.id ? st.activeTabBtn : st.tabBtn}
-          >
-            {section.label}
-          </button>
-        ))}
-      </div>
+      {/* The top tab strip is gone, and the shortcut grid below is the workspace's navigation.
+          They were the same list twice: eight buttons here and eight cards there, offering the same
+          eight destinations. The cards are the better half — each opens its section as an AURA tab
+          BESIDE the workspace's own, so RFIs and Submittals can be open at once, where the strip
+          could only ever swap one for the other. Removing the strip removes a duplicate, not a way
+          back: the way back is the workspace's own AURA tab, which `AuraTabAnchor` keeps open. */}
 
       {!hasProject && <div role="status" style={st.projectGate}>
         <strong>Select a project for project-linked engineering actions.</strong>
@@ -1599,28 +1590,6 @@ export default function EngineeringClient({
 }
 
 const st = {
-  tabs: { display: 'flex', gap: 8, margin: '0 0 24px' } as CSSProperties,
-  tabBtn: {
-    padding: '8px 16px',
-    borderRadius: 8,
-    border: '1px solid var(--border)',
-    background: 'transparent',
-    color: 'var(--muted)',
-    cursor: 'pointer',
-    fontWeight: 500,
-    fontSize: 14,
-    transition: 'all 0.2s',
-  } as CSSProperties,
-  activeTabBtn: {
-    padding: '8px 16px',
-    borderRadius: 8,
-    border: '1px solid var(--accent)',
-    background: 'var(--border)',
-    color: 'var(--text)',
-    cursor: 'pointer',
-    fontWeight: 600,
-    fontSize: 14,
-  } as CSSProperties,
   formCard: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',

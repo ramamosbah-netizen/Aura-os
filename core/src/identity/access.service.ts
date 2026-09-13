@@ -234,6 +234,17 @@ export class AccessService implements OnModuleInit {
     return [...this.roles.values()];
   }
 
+  /**
+   * One user's grants.
+   *
+   * Discovery needs this: to answer "which projects may I see?" you must start from what the
+   * actor holds, not from what exists. Returned as a copy so a caller cannot mutate the registry
+   * by accident.
+   */
+  grantsOf(userId: Id): Grant[] {
+    return [...(this.grantsByUser.get(userId) ?? [])];
+  }
+
   /** All grants across users (for the admin access screen). */
   listGrants(): Grant[] {
     return [...this.grantsByUser.values()].flat();

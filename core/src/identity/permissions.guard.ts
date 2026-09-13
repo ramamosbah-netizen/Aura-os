@@ -13,6 +13,7 @@ import { UsersService } from './users.service';
 import { ModulesService } from '../config/modules.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { PERMISSIONS_KEY } from './permissions.decorator';
+import { SELF_SCOPED_KEY } from './self-scoped.decorator';
 import { ProjectResolverRegistry } from './project-resolver';
 import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@aura/shared';
 
@@ -193,6 +194,21 @@ export class PermissionsGuard implements CanActivate {
     if (this.users && !this.users.isActive(tenantId, actorId)) {
       throw new ForbiddenException(`account ${actorId} is deactivated`);
     }
+
+    /**
+     * A self-scoped handler authorises itself against the actor's own grants (see
+     * `self-scoped.decorator.ts`). Reached only after the actor is known, the tenant is bound, the
+     * module is enabled and the account is active — this skips the permission assertion and
+     * nothing else.
+     */
+    const selfScoped = this.reflector.getAllAndOverride<unknown>(SELF_SCOPED_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    // STRICTLY `true`, which is the only thing `@SelfScoped()` sets. Accepting any truthy value
+    // would let unrelated metadata unguard a route, and this is the one branch in the guard that
+    // skips the permission check — it should be reachable in exactly one way.
+    if (selfScoped === true) return true;
 
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [
       { level: 'tenant', id: tenantId },

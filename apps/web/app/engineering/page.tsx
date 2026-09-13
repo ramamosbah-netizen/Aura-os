@@ -162,7 +162,16 @@ export default async function EngineeringPage() {
 }
 
 const st = {
-  page: { maxWidth: 980, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // FULL WIDTH, deliberately. This was `maxWidth: 980, margin: '0 auto'`, which centred the
+  // workspace in a 980px column and left the rest of the screen empty on both sides — on a wide
+  // monitor most of the display showed nothing while the section cards were squeezed into four
+  // narrow columns. The shortcut grid is `repeat(4, minmax(0, 1fr))`, so every pixel given back
+  // goes straight into the cards.
+  //
+  // Engineering only, on purpose: the rest of the app is capped (720–1280) and changing those is a
+  // separate decision. `sub` below keeps its own `maxWidth: 640`, so the description stays a
+  // readable measure rather than stretching across the whole screen.
+  page: { padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 640, lineHeight: 1.5 } as CSSProperties,
 };

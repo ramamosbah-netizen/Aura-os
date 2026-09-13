@@ -18,12 +18,21 @@ export const dynamic = 'force-dynamic';
  */
 export default async function ProjectDrawingsPage({ params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const [drawings, projects] = await Promise.all([
+  /**
+   * The project is read BY ID, not found in the list.
+   *
+   * The list names no project, so a project-scoped grant has nothing to match and a member is
+   * refused it — which is correct, and meant this page printed a raw uuid at exactly the people it
+   * was built for while showing the name to administrators. Browser proof caught that; the API
+   * tests could not, because they never rendered the heading.
+   */
+  const [drawings, project] = await Promise.all([
     getJson<DrawingRow[]>(`/api/engineering/drawings?projectId=${encodeURIComponent(projectId)}`),
-    getJson<ProjectRef[]>('/api/projects/projects'),
+    getJson<ProjectRef>(`/api/projects/projects/${encodeURIComponent(projectId)}`),
   ]);
 
-  const name = (projects ?? []).find((p) => p.id === projectId)?.title ?? projectId;
+  const name = project?.title ?? projectId;
+  const projects = project ? [project] : [];
   const rows = drawings ?? [];
 
   return (
@@ -42,7 +51,7 @@ export default async function ProjectDrawingsPage({ params }: { params: Promise<
           <a href="/engineering?section=drawings" style={st.link}>Engineering workspace</a>.
         </div>
       ) : (
-        <DrawingsByProject drawings={rows} projects={projects ?? []} scopedProjectId={projectId} />
+        <DrawingsByProject drawings={rows} projects={projects} scopedProjectId={projectId} />
       )}
     </div>
   );

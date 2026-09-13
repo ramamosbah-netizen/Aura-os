@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { PencilRuler,
+import { BarChart3, PencilRuler,
   Bot,
   CalendarRange,
   CircleDollarSign,
@@ -81,6 +81,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
     { key: 'testing', group: 'Completion', label: 'Testing & Commissioning', description: 'Test plans, records and commissioning', icon: Wrench, href: workspace('testing'), active: pathname === workspace('testing') || pathname.startsWith('/commissioning') },
     { key: 'handover', group: 'Completion', label: 'Handover & Closeout', description: 'Readiness, closeout and acceptance', icon: ClipboardCheck, href: workspace('handover'), active: pathname === workspace('handover') || pathname.startsWith('/handover') },
     { key: 'activity', group: 'Information', label: 'Activity & History', description: 'Timeline and audit history', icon: History, href: workspace('activity'), active: pathname === workspace('activity') },
+    { key: 'reports', group: 'Information', label: 'Reports', description: 'Delivery reporting for this project', icon: BarChart3, href: `/operations/reports?project=${project.id}`, active: pathname.startsWith('/operations/reports') },
   ];
   const navGroups = ['Project', 'Plan & Control', 'Delivery', 'Commercial', 'Information', 'Completion']
     .map((group) => ({ group, items: navItems.filter((item) => item.group === group) }))

@@ -132,7 +132,7 @@ export class SiteService {
     equipmentCount?: number;
     createdBy?: string;
   }): Promise<DailyReport> {
-    this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create');
+    this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create', input.projectId);
     await this.assertNoReportForDate(input.tenantId, input.projectId, input.date);
     const report = makeDailyReport(input);
     const event = makeEvent({
@@ -184,11 +184,33 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
 
   // ── Governed daily-report lifecycle ──────────────────────────────────────────
 
-  private assertReportPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string): void {
+  /**
+   * Authorise an action on a record, AGAINST THE PROJECT THAT RECORD BELONGS TO.
+   *
+   * Without the project on the target, only an ORG-wide grant can satisfy this — so a project
+   * member holding `site.*` was refused every write on their own project, with a message naming
+   * the permission they in fact hold. The scope was missing, not the permission, and the message
+   * pointed at the wrong one.
+   *
+   * The project comes from the RECORD, never from the request, so it cannot be misstated. An org
+   * grant matches by `orgPath` and ignores the resource, so nobody previously authorised loses
+   * anything: this only adds the grant that should always have applied.
+   */
+  private assertReportPerm(
+    actorId: Id | null,
+    tenantId: Id,
+    companyId: string | null,
+    permission: string,
+    projectId?: Id | null,
+  ): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
     if (companyId) orgPath.push({ level: 'company', id: companyId });
-    this.access.assert(actorId, { permission, orgPath });
+    this.access.assert(actorId, {
+      permission,
+      orgPath,
+      ...(projectId ? { resource: { type: 'project', id: projectId } } : {}),
+    });
   }
 
   private async loadReport(tenantId: Id, id: Id): Promise<DailyReport> {
@@ -214,28 +236,28 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
   /** draft → submitted (kept name for the existing BFF/UI; now enforced). */
   async submitDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.submit');
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.submit', report.projectId);
     return this.saveReportWithEvent(submitReport(report, actorId), actorId, SITE_REPORT_EVENT.submitted);
   }
 
   /** submitted → under_review. */
   async startReviewReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.review');
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.review', report.projectId);
     return this.saveReportWithEvent(startReviewReport(report, actorId), actorId, SITE_REPORT_EVENT.reviewStarted);
   }
 
   /** under_review → approved (immutable thereafter). */
   async approveDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve');
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId);
     return this.saveReportWithEvent(approveReport(report, actorId), actorId, SITE_REPORT_EVENT.approved);
   }
 
   /** under_review → rejected (reason mandatory) then auto-reopened to draft for correction. */
   async rejectDailyReport(tenantId: Id, actorId: Id | null, id: Id, reason: string): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve');
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId);
     const rejected = rejectReport(report, actorId, reason);
     // record the rejection, then reopen to draft so the site team can correct and resubmit.
     await this.saveReportWithEvent(rejected, actorId, SITE_REPORT_EVENT.rejected);
@@ -248,7 +270,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
 
   private async addLine<T>(tenantId: Id, reportId: Id, permission: string, make: (report: DailyReport) => T, save: (line: T, tx: import('@aura/core').TxHandle | null) => Promise<void>, actorId: Id | null): Promise<T> {
     const report = await this.loadReport(tenantId, reportId);
-    this.assertReportPerm(actorId, tenantId, report.companyId, permission);
+    this.assertReportPerm(actorId, tenantId, report.companyId, permission, report.projectId);
     assertReportEditable(report); // 409 unless the report is still a draft
     const line = make(report);
     await this.tx.run(async (handle) => { await save(line, handle); });
@@ -332,7 +354,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.delay.log', orgPath });
+      this.access.assert(input.createdBy, { permission: 'site.delay.log', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const log = makeDelayLog(input);
@@ -362,7 +384,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (log.companyId) orgPath.push({ level: 'company', id: log.companyId });
-      this.access.assert(actorId, { permission: 'site.delay.resolve', orgPath });
+      this.access.assert(actorId, { permission: 'site.delay.resolve', orgPath, resource: { type: 'project', id: log.projectId } });
     }
 
     log.status = 'resolved';
@@ -406,7 +428,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.instruction.issue', orgPath });
+      this.access.assert(input.createdBy, { permission: 'site.instruction.issue', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const si = makeSiteInstruction(input);
@@ -484,7 +506,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.consumption.log', orgPath });
+      this.access.assert(input.createdBy, { permission: 'site.consumption.log', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const consumption = makeMaterialConsumption(input);

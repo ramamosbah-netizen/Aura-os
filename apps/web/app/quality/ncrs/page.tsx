@@ -5,9 +5,13 @@ import NcrClient, { type Ncr } from '../../../components/ncr-client';
 export const dynamic = 'force-dynamic';
 
 export default async function NcrPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
-  const [{ projectId }, ncrs] = await Promise.all([
-    searchParams,
-    getJson<Ncr[]>('/api/quality/ncrs'),
+  // The project is read from the URL and then CARRIED, which it was not before: an unscoped read
+  // is refused for a project member, so narrowing the result afterwards never had a result to
+  // narrow. The page took the parameter and dropped it where it counted.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const [ncrs] = await Promise.all([
+    getJson<Ncr[]>(`/api/quality/ncrs${scope}`),
   ]);
   const rows = projectId ? (ncrs ?? []).filter((ncr) => ncr.projectId === projectId) : ncrs;
 

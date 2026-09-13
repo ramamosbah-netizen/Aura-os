@@ -17,8 +17,12 @@ interface MaterialApproval {
   reviewComments: string;
 }
 
-export default async function MarPage() {
-  const mars = await getJson<MaterialApproval[]>('/api/quality/material-approvals');
+export default async function MarPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const mars = await getJson<MaterialApproval[]>(`/api/quality/material-approvals${scope}`);
 
   return (
     <div style={st.page}>

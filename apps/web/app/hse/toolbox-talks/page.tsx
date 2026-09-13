@@ -15,8 +15,12 @@ interface ToolboxTalk {
   notes: string;
 }
 
-export default async function ToolboxTalksPage() {
-  const talks = await getJson<ToolboxTalk[]>('/api/hse/toolbox-talks');
+export default async function ToolboxTalksPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const talks = await getJson<ToolboxTalk[]>(`/api/hse/toolbox-talks${scope}`);
 
   return (
     <div style={st.page}>

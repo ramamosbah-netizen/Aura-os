@@ -4,8 +4,12 @@ import SnagClient, { type Snag } from '../../../components/snag-client';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SnagPage() {
-  const snags = await getJson<Snag[]>('/api/quality/snags');
+export default async function SnagPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const snags = await getJson<Snag[]>(`/api/quality/snags${scope}`);
 
   return (
     <div style={st.page}>

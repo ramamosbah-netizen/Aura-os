@@ -4,8 +4,12 @@ import CalibrationClient, { type Calibration } from '../../../components/calibra
 
 export const dynamic = 'force-dynamic';
 
-export default async function CalibrationPage() {
-  const calibrations = await getJson<Calibration[]>('/api/quality/calibrations');
+export default async function CalibrationPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const calibrations = await getJson<Calibration[]>(`/api/quality/calibrations${scope}`);
 
   return (
     <div style={st.page}>

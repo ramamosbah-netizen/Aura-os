@@ -419,7 +419,7 @@ export class EngineeringService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'engineering.rfi.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'engineering.rfi.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const rfi = makeRfi(input);
@@ -448,7 +448,7 @@ export class EngineeringService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (rfi.companyId) orgPath.push({ level: 'company', id: rfi.companyId });
-      this.access.assert(actorId, { permission: 'engineering.rfi.answer', orgPath });
+      this.access.assert(actorId, { permission: 'engineering.rfi.answer', orgPath, resource: { type: 'project', id: rfi.projectId } });
     }
 
     rfi.answer = answer;
@@ -493,7 +493,7 @@ export class EngineeringService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'engineering.submittal.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'engineering.submittal.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const submittal = makeSubmittal(input);
@@ -522,7 +522,7 @@ export class EngineeringService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (submittal.companyId) orgPath.push({ level: 'company', id: submittal.companyId });
-      this.access.assert(actorId, { permission: 'engineering.submittal.update_status', orgPath });
+      this.access.assert(actorId, { permission: 'engineering.submittal.update_status', orgPath, resource: { type: 'project', id: submittal.projectId } });
     }
 
     const oldStatus = submittal.status;
@@ -616,7 +616,7 @@ export class EngineeringService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'engineering.tq.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'engineering.tq.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const tq = makeTechnicalQuery(input);
     const event = makeEvent({
@@ -638,7 +638,7 @@ export class EngineeringService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (tq.companyId) orgPath.push({ level: 'company', id: tq.companyId });
-      this.access.assert(actorId, { permission: 'engineering.tq.respond', orgPath });
+      this.access.assert(actorId, { permission: 'engineering.tq.respond', orgPath, resource: { type: 'project', id: tq.projectId } });
     }
     const updated = respondToQuery(tq, response);
     const event = makeEvent({
@@ -765,7 +765,7 @@ export class EngineeringService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'engineering.design_change.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'engineering.design_change.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const dc = makeDesignChange(input);
     const event = makeEvent({
@@ -792,7 +792,7 @@ export class EngineeringService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (dc.companyId) orgPath.push({ level: 'company', id: dc.companyId });
-      this.access.assert(actorId, { permission: 'engineering.design_change.decide', orgPath });
+      this.access.assert(actorId, { permission: 'engineering.design_change.decide', orgPath, resource: { type: 'project', id: dc.projectId } });
     }
     const updated = decideDesignChange(dc, status, actorId);
     const type = status === 'approved' ? DESIGN_CHANGE_EVENT.approved
@@ -838,7 +838,7 @@ export class EngineeringService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'engineering.document.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'engineering.document.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const doc = makeEngineeringDocument(input);
     const event = makeEvent({
@@ -865,7 +865,7 @@ export class EngineeringService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (doc.companyId) orgPath.push({ level: 'company', id: doc.companyId });
-      this.access.assert(actorId, { permission: 'engineering.document.transition', orgPath });
+      this.access.assert(actorId, { permission: 'engineering.document.transition', orgPath, resource: { type: 'project', id: doc.projectId } });
     }
     const updated = transitionDocument(doc, status, actorId);
     const type = status === 'submitted' ? ENGINEERING_DOCUMENT_EVENT.submitted
@@ -908,7 +908,7 @@ export class EngineeringService {
     if (input.uploadedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.uploadedBy, { permission: 'engineering.bim_model.register', orgPath });
+      this.access.assert(input.uploadedBy, { permission: 'engineering.bim_model.register', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const model = makeBimModel(input);
     const event = makeEvent({

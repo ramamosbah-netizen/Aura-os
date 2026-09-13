@@ -33,8 +33,12 @@ function statusStyle(status: string): CSSProperties {
 
 const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
 
-export default async function DocumentRegisterPage() {
-  const entries = (await getJson<RegisterEntry[]>('/api/doccontrol/register')) ?? [];
+export default async function DocumentRegisterPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const entries = (await getJson<RegisterEntry[]>(`/api/doccontrol/register${scope}`)) ?? [];
   const rows = [...entries].sort((a, b) => a.documentNumber.localeCompare(b.documentNumber));
 
   return (

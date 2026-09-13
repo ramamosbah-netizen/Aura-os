@@ -21,7 +21,24 @@ export default async function ProjectAreaPage({
   const area = findArea(slug);
   if (!area) notFound();
 
-  const result = await fetchJson<Row[]>(area.endpoint);
+  /**
+   * SCOPED AT THE SOURCE, not after it.
+   *
+   * This read the unscoped endpoint and then filtered by `projectId` here. Two things were wrong
+   * with that, and the second is the serious one:
+   *
+   *   • the whole tenant was fetched to display one project, and
+   *   • a project MEMBER was refused the unscoped endpoint outright — it names no project, so a
+   *     project-scoped grant has nothing to match — which meant every project area page showed
+   *     them an error. The page worked only for the org-wide identities that did not need it.
+   *
+   * Carrying the project means the guard scopes the read, the API returns that project's rows, and
+   * the filtering happens where the authorisation does. The local filter is KEPT as a belt: it now
+   * removes nothing, and if it ever removes something the API sent, that is a fault worth not
+   * rendering — but it is no longer what makes the page correct.
+   */
+  const separator = area.endpoint.includes('?') ? '&' : '?';
+  const result = await fetchJson<Row[]>(`${area.endpoint}${separator}projectId=${encodeURIComponent(projectId)}`);
   if (!result.ok) return <DataStateNotice error={result.error} subject={`${area.label.toLowerCase()} records`} />;
   const projectRows = (Array.isArray(result.data) ? result.data : []).filter((r) => r.projectId === projectId);
   const rows = filterAreaRows(projectRows, query.discipline);

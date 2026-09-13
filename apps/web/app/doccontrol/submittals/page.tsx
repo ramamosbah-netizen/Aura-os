@@ -16,8 +16,12 @@ interface Submittal {
   reviewComments: string;
 }
 
-export default async function SubmittalsPage() {
-  const submittals = await getJson<Submittal[]>('/api/doccontrol/submittals');
+export default async function SubmittalsPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const submittals = await getJson<Submittal[]>(`/api/doccontrol/submittals${scope}`);
 
   return (
     <div style={st.page}>

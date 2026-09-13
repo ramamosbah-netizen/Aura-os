@@ -28,8 +28,12 @@ function statusStyle(status: string): CSSProperties {
 }
 const fmt = (iso: string | null): string => (iso ? new Date(iso).toLocaleDateString() : '—');
 
-export default async function TransmittalRegisterPage() {
-  const list = (await getJson<Transmittal[]>('/api/doccontrol/transmittals')) ?? [];
+export default async function TransmittalRegisterPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const list = (await getJson<Transmittal[]>(`/api/doccontrol/transmittals${scope}`)) ?? [];
   const rows = [...list].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (

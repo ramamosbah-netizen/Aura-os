@@ -291,7 +291,7 @@ export class DocControlService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'doccontrol.correspondence.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'doccontrol.correspondence.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const correspondence = makeCorrespondence(input);
@@ -321,7 +321,7 @@ export class DocControlService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (correspondence.companyId) orgPath.push({ level: 'company', id: correspondence.companyId });
-      this.access.assert(actorId, { permission: 'doccontrol.correspondence.close', orgPath });
+      this.access.assert(actorId, { permission: 'doccontrol.correspondence.close', orgPath, resource: { type: 'project', id: correspondence.projectId } });
     }
 
     correspondence.status = 'closed';
@@ -359,7 +359,7 @@ export class DocControlService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'doccontrol.submittal.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'doccontrol.submittal.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const submittal = makeSubmittal(input);
     await this.tx.run(async (handle) => {
@@ -421,7 +421,7 @@ export class DocControlService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'doccontrol.register.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'doccontrol.register.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const entry = makeDrawingRegisterEntry(input);
     const revision = makeDocumentRevision({

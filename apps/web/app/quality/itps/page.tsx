@@ -15,8 +15,12 @@ interface Itp {
   points: ItpPoint[];
 }
 
-export default async function ItpPage() {
-  const itps = await getJson<Itp[]>('/api/quality/itps');
+export default async function ItpPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // Carried to the API, not applied here: an unscoped read is REFUSED for a project member, so
+  // filtering afterwards never gets the chance to run.
+  const { projectId } = await searchParams;
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const itps = await getJson<Itp[]>(`/api/quality/itps${scope}`);
 
   return (
     <div style={st.page}>

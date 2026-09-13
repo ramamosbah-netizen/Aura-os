@@ -96,7 +96,7 @@ export class QualityService {
     if (input.raisedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.raisedBy, { permission: 'quality.ncr.create', orgPath });
+      this.access.assert(input.raisedBy, { permission: 'quality.ncr.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const ncr = makeNcr(input);
@@ -125,11 +125,29 @@ export class QualityService {
     return ncr;
   }
 
-  private assertNcrPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string): void {
+  /**
+   * Authorise an NCR action against the project the NCR belongs to.
+   *
+   * Without the project on the target only an ORG grant can satisfy it, so a QA/QC member holding
+   * `quality.*` was refused every NCR transition on their own project — and told the permission
+   * was missing when it was the scope. Taken from the RECORD, so it cannot be misstated; an org
+   * grant matches by `orgPath` and is unaffected.
+   */
+  private assertNcrPerm(
+    actorId: Id | null,
+    tenantId: Id,
+    companyId: string | null,
+    permission: string,
+    projectId?: Id | null,
+  ): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
     if (companyId) orgPath.push({ level: 'company', id: companyId });
-    this.access.assert(actorId, { permission, orgPath });
+    this.access.assert(actorId, {
+      permission,
+      orgPath,
+      ...(projectId ? { resource: { type: 'project', id: projectId } } : {}),
+    });
   }
 
   private async saveNcrWithEvent(ncr: Ncr, actorId: Id | null, type: string): Promise<Ncr> {
@@ -158,14 +176,14 @@ export class QualityService {
     input: { rootCause: string; correctiveAction: string; assignedTo?: string | null },
   ): Promise<Ncr> {
     const ncr = await this.loadNcr(tenantId, id);
-    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.plan');
+    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.plan', ncr.projectId);
     return this.saveNcrWithEvent(planNcrAction(ncr, input), actorId, QUALITY_EVENT.ncrActionPlanned);
   }
 
   /** action_planned → corrected. The owner marks the corrective action implemented. */
   async markNcrCorrected(tenantId: Id, actorId: Id | null, id: Id): Promise<Ncr> {
     const ncr = await this.loadNcr(tenantId, id);
-    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.correct');
+    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.correct', ncr.projectId);
     return this.saveNcrWithEvent(markNcrCorrected(ncr, actorId), actorId, QUALITY_EVENT.ncrCorrected);
   }
 
@@ -175,7 +193,7 @@ export class QualityService {
    */
   async verifyNcr(tenantId: Id, actorId: Id | null, id: Id, input: { accepted: boolean; note?: string }): Promise<Ncr> {
     const ncr = await this.loadNcr(tenantId, id);
-    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.close');
+    this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.close', ncr.projectId);
 
     const verification = makeNcrVerification({
       tenantId: ncr.tenantId,
@@ -269,7 +287,7 @@ export class QualityService {
     if (input.inspectedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.inspectedBy, { permission: 'quality.ir.request', orgPath });
+      this.access.assert(input.inspectedBy, { permission: 'quality.ir.request', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const ir = makeInspectionRequest(input);
@@ -289,7 +307,7 @@ export class QualityService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (ir.companyId) orgPath.push({ level: 'company', id: ir.companyId });
-      this.access.assert(actorId, { permission: 'quality.ir.approve', orgPath });
+      this.access.assert(actorId, { permission: 'quality.ir.approve', orgPath, resource: { type: 'project', id: ir.projectId } });
     }
     assertInspectionTransition(ir.status, 'in_progress');
     ir.status = 'in_progress';
@@ -309,7 +327,7 @@ export class QualityService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (ir.companyId) orgPath.push({ level: 'company', id: ir.companyId });
-      this.access.assert(actorId, { permission: 'quality.ir.approve', orgPath });
+      this.access.assert(actorId, { permission: 'quality.ir.approve', orgPath, resource: { type: 'project', id: ir.projectId } });
     }
 
     assertInspectionTransition(ir.status, status); // fail-closed: a resolved IR cannot be re-resolved
@@ -365,7 +383,7 @@ export class QualityService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'quality.snag.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'quality.snag.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
     const snag = makeSnag(input);
@@ -385,7 +403,7 @@ export class QualityService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (snag.companyId) orgPath.push({ level: 'company', id: snag.companyId });
-      this.access.assert(actorId, { permission: 'quality.snag.resolve', orgPath });
+      this.access.assert(actorId, { permission: 'quality.snag.resolve', orgPath, resource: { type: 'project', id: snag.projectId } });
     }
 
     snag.status = status;
@@ -518,7 +536,7 @@ export class QualityService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'quality.itp.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'quality.itp.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const itp = makeItp(input);
     const event = makeEvent({
@@ -645,7 +663,7 @@ export class QualityService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'quality.mar.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'quality.mar.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const mar = makeMaterialApproval(input);
     const event = makeEvent({
@@ -768,7 +786,7 @@ export class QualityService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'quality.calibration.create', orgPath });
+      this.access.assert(input.createdBy, { permission: 'quality.calibration.create', orgPath, ...(input.projectId ? { resource: { type: 'project' as const, id: input.projectId } } : {}) });
     }
     const cal = makeCalibration(input);
     await this.tx.run(async (handle) => { await this.calibrationStore.save(cal, handle); });
@@ -792,7 +810,7 @@ export class QualityService {
     if (actorId && this.access) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(actorId, { permission: 'quality.calibration.create', orgPath });
+      this.access.assert(actorId, { permission: 'quality.calibration.create', orgPath, ...(input.projectId ? { resource: { type: 'project' as const, id: input.projectId } } : {}) });
     }
 
     const audit = makeAuditSchedule(input);

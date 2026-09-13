@@ -1780,7 +1780,10 @@ const st = {
   statCard: {
     display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4,
     padding: '16px 18px', borderRadius: 12, border: '1px solid var(--border)',
-    background: 'var(--panel)', cursor: 'pointer', textAlign: 'left',
+    // `color` explicitly: a <button> does NOT inherit text colour, it falls back to the UA's
+    // `buttontext` — black. On a dark panel the number and its label were black on near-black and
+    // simply did not appear; the only line that showed was the one carrying its own `var(--warn)`.
+    background: 'var(--panel)', color: 'var(--text)', cursor: 'pointer', textAlign: 'left',
   } as CSSProperties,
   statNum: { fontSize: 26, fontWeight: 700, letterSpacing: -0.5 } as CSSProperties,
   statLabel: { fontSize: 13, fontWeight: 600 } as CSSProperties,
@@ -1795,7 +1798,9 @@ const st = {
   attnLink: {
     display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 10px',
     borderRadius: 8, border: '1px solid var(--border)', background: 'transparent',
-    cursor: 'pointer', textAlign: 'left', fontSize: 13.5,
+    // Same reason as `statCard`: without this the row's text was black on the panel, and only the
+    // count badge — which sets its own colour — was readable.
+    color: 'var(--text)', cursor: 'pointer', textAlign: 'left', fontSize: 13.5,
   } as CSSProperties,
   attnCount: {
     minWidth: 26, textAlign: 'center', fontWeight: 700, fontSize: 12,

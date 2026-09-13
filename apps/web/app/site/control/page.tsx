@@ -182,7 +182,14 @@ export default async function SiteControlPage() {
 }
 
 const st = {
-  page: { maxWidth: 1020, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // FULL WIDTH, the same change and for the same reason as the Engineering workspace. This was
+  // `maxWidth: 1020, margin: '0 auto'`, which centred the page in a 1020px column and left the rest
+  // of the screen empty on both sides. The section shortcut grid is `repeat(4, minmax(0, 1fr))`, so
+  // it stretches with its container and every pixel the cap withheld came out of the cards.
+  //
+  // `sub` below keeps its own `maxWidth: 640`: the description stays a readable measure rather than
+  // one line across the whole display.
+  page: { padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 640, lineHeight: 1.5 } as CSSProperties,
 };

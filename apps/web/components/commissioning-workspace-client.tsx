@@ -6,6 +6,7 @@ import { useHydrated } from '@/lib/use-hydrated';
 import { COMMISSIONING_PATH, COMMISSIONING_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 import CommissioningSystemPanel from './commissioning-system-panel';
 import {
   ItpSection, PreCommissioningSection, CertificatesSection, ReadinessSection, QualityEscalation,
@@ -224,6 +225,7 @@ function Overview({
 }: { view: WorkspaceView; hrefFor: (s: Section, f?: Filter) => string; go: (s: Section, f?: Filter) => void; hydrated: boolean }) {
   const t = view.totals;
   const blocking = view.systems.filter((s) => !s.commissioned && s.blockers.length > 0);
+  const blockingPage = usePaged(blocking);
 
   const cards: { label: string; value: number; hint: string; tone: keyof typeof toneStyle; section: Section; filter: Filter }[] = [
     { label: 'In commissioning scope', value: t.inScope, hint: 'Systems registered for T&C', tone: 'neutral', section: 'systems', filter: 'all' },
@@ -267,8 +269,9 @@ function Overview({
       ) : blocking.length === 0 ? (
         <div style={st.clear} data-testid="cx-nothing-blocking">Nothing is blocking commissioning on these systems.</div>
       ) : (
+        <>
         <ul style={st.blockList} data-testid="cx-blocking">
-          {blocking.map((s) => (
+          {blockingPage.slice.map((s) => (
             <li key={s.record.id} style={st.blockRow}>
               <a href={`/commissioning/${s.record.id}`} style={st.blockCode}>{s.record.code}</a>
               <span style={st.blockTitle}>{s.record.title}</span>
@@ -276,6 +279,8 @@ function Overview({
             </li>
           ))}
         </ul>
+        <Pager state={blockingPage} label="systems" testId="cx-blocking-pager" />
+        </>
       )}
     </section>
   );
@@ -293,6 +298,8 @@ function Systems({
     bySystem.set(device.system, list);
   }
 
+  const scopePage = usePaged(systems);
+
   return (
     <section aria-label="Systems and equipment" style={st.section}>
       <RegisterSystem projects={projects} selectedProject={selectedProject} />
@@ -301,8 +308,9 @@ function Systems({
       {systems.length === 0 ? (
         <EmptyState compact title="No systems registered for commissioning" description="Register each ELV system above. The scope is what T&C owns; the devices under it are read from the ELV device register." />
       ) : (
+        <>
         <ul style={st.scopeList} data-testid="cx-scope">
-          {systems.map((s) => (
+          {scopePage.slice.map((s) => (
             <li key={s.record.id} style={st.scopeRow}>
               <a href={`/commissioning/${s.record.id}`} style={st.blockCode}>{s.record.code}</a>
               <span style={st.scopeTitle}><strong>{s.record.title}</strong><small>{s.record.system.replace(/_/g, ' ')}{s.record.location ? ` · ${s.record.location}` : ''}</small></span>
@@ -311,6 +319,8 @@ function Systems({
             </li>
           ))}
         </ul>
+        <Pager state={scopePage} label="systems" testId="cx-scope-pager" />
+        </>
       )}
 
       <h3 style={st.h3}>Equipment under these systems</h3>
@@ -453,6 +463,8 @@ function Testing({
 }: { systems: SystemView[]; filter: Filter; go: (s: Section, f?: Filter) => void; hrefFor: (s: Section, f?: Filter) => string; hydrated: boolean }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
+  const testingPage = usePaged(systems);
+
   return (
     <section aria-label="Testing and commissioning" style={st.section}>
       <div style={st.filters} role="group" aria-label="Filter systems">
@@ -477,8 +489,9 @@ function Testing({
           description="Clear the filter to see every system in commissioning scope, or register one in Systems & Equipment."
         />
       ) : (
+        <>
         <ul style={st.systemList} data-testid="cx-systems">
-          {systems.map((s) => {
+          {testingPage.slice.map((s) => {
             const open = expanded === s.record.id;
             return (
               <li key={s.record.id} style={st.systemItem}>
@@ -509,6 +522,8 @@ function Testing({
             );
           })}
         </ul>
+        <Pager state={testingPage} label="systems" testId="cx-systems-pager" />
+        </>
       )}
     </section>
   );

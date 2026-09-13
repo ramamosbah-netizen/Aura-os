@@ -8,6 +8,7 @@ import SuiteShortcutGrid from '@/components/suite-shortcut-grid';
 import { ENGINEERING_PATH, ENGINEERING_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 
 interface Project {
   id: string;
@@ -254,6 +255,23 @@ export default function EngineeringClient({
   const [disciplineFilter, setDisciplineFilter] = useState('all');
   const byDisciplineFilter = <T extends { discipline: string }>(list: T[]) =>
     disciplineFilter === 'all' ? list : list.filter((x) => x.discipline === disciplineFilter);
+
+  /**
+   * Every register on this workspace is shown a page at a time, the same twenty as Testing &
+   * Commissioning. The lists are already fully loaded, so this is presentational: the filters above
+   * each list still work on the WHOLE list rather than on the visible page.
+   *
+   * Design changes and documents are paged on the FILTERED list, not the raw one — page 2 of a
+   * discipline filter must mean page 2 of what the filter left, or the count lies. `usePaged`
+   * resets to page 1 when the length changes, which is what switching the filter does.
+   */
+  const drawingPage = usePaged(drawings);
+  const rfiPage = usePaged(rfis);
+  const tqPage = usePaged(technicalQueries);
+  const submittalPage = usePaged(submittals);
+  const designChangePage = usePaged(byDisciplineFilter(designChanges));
+  const documentPage = usePaged(byDisciplineFilter(documents));
+  const bimPage = usePaged(bimModels);
 
   // Inline action states
   const [rfiAnswers, setRfiAnswers] = useState<Record<string, string>>({});
@@ -767,6 +785,7 @@ export default function EngineeringClient({
                 description="Register a shop drawing above to track its revisions and route it for approval."
               />
             ) : (
+              <>
               <table style={st.table}>
                 <thead>
                   <tr>
@@ -776,7 +795,7 @@ export default function EngineeringClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {drawings.map((d) => (
+                  {drawingPage.slice.map((d) => (
                     <tr key={d.id}>
                       <td style={st.tdCode}>{d.code}</td>
                       <td style={st.td}>{d.title}</td>
@@ -796,6 +815,8 @@ export default function EngineeringClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={drawingPage} label="drawings" testId="eng-drawings-pager" />
+              </>
             )}
           </section>
         </div>
@@ -869,8 +890,9 @@ export default function EngineeringClient({
                 description="Raise an RFI above when you need information from the consultant to proceed."
               />
             ) : (
+              <>
               <div style={st.rfiList}>
-                {rfis.map((r) => (
+                {rfiPage.slice.map((r) => (
                   <div key={r.id} style={st.rfiCard}>
                     <div style={st.rfiHeader}>
                       <span style={st.rfiCode}>{r.code}</span>
@@ -905,6 +927,8 @@ export default function EngineeringClient({
                   </div>
                 ))}
               </div>
+              <Pager state={rfiPage} label="RFIs" testId="eng-rfis-pager" />
+              </>
             )}
           </section>
         </div>
@@ -1037,8 +1061,9 @@ export default function EngineeringClient({
                 description="Raise a TQ to formally seek a design clarification or decision from the consultant. Each one tracks its discipline, priority, drawing reference and cost/time impact until a response closes it."
               />
             ) : (
+              <>
               <div style={st.rfiList}>
-                {technicalQueries.map((t) => (
+                {tqPage.slice.map((t) => (
                   <div key={t.id} style={st.rfiCard}>
                     <div style={st.rfiHeader}>
                       <span style={st.rfiCode}>{t.code}</span>
@@ -1088,6 +1113,8 @@ export default function EngineeringClient({
                   </div>
                 ))}
               </div>
+              <Pager state={tqPage} label="technical queries" testId="eng-tqs-pager" />
+              </>
             )}
           </section>
         </div>
@@ -1163,6 +1190,7 @@ export default function EngineeringClient({
                 description="Register material, technical, sample or drawing submittals above and track them through review."
               />
             ) : (
+              <>
               <table style={st.table}>
                 <thead>
                   <tr>
@@ -1172,7 +1200,7 @@ export default function EngineeringClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {submittals.map((s) => (
+                  {submittalPage.slice.map((s) => (
                     <tr key={s.id}>
                       <td style={st.tdCode}>{s.code}</td>
                       <td style={st.td}>{s.title}</td>
@@ -1213,6 +1241,8 @@ export default function EngineeringClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={submittalPage} label="submittals" testId="eng-submittals-pager" />
+              </>
             )}
           </section>
         </div>
@@ -1285,12 +1315,13 @@ export default function EngineeringClient({
                 description="Raise a design change above; on approval it creates a commercial variation on the linked project."
               />
             ) : (
+              <>
               <table style={st.table}>
                 <thead>
                   <tr>{['Code', 'Title', 'Discipline', 'Type', 'Value', 'Status', 'Actions'].map((h) => (<th key={h} style={st.th}>{h}</th>))}</tr>
                 </thead>
                 <tbody>
-                  {byDisciplineFilter(designChanges).map((d) => (
+                  {designChangePage.slice.map((d) => (
                     <tr key={d.id}>
                       <td style={st.tdCode}>{d.code}</td>
                       <td style={st.td}>{d.title}</td>
@@ -1312,6 +1343,8 @@ export default function EngineeringClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={designChangePage} label="design changes" testId="eng-design-changes-pager" />
+              </>
             )}
           </section>
         </div>
@@ -1374,12 +1407,13 @@ export default function EngineeringClient({
                 description="Create a controlled document (method statement, risk assessment, spec) above and route it through its approval lifecycle."
               />
             ) : (
+              <>
               <table style={st.table}>
                 <thead>
                   <tr>{['Code', 'Title', 'Type', 'Owner', 'Discipline', 'Rev', 'Status'].map((h) => (<th key={h} style={st.th}>{h}</th>))}</tr>
                 </thead>
                 <tbody>
-                  {byDisciplineFilter(documents).map((d) => (
+                  {documentPage.slice.map((d) => (
                     <tr key={d.id}>
                       <td style={st.tdCode}>{d.code}</td>
                       <td style={st.td}>{d.title}</td>
@@ -1396,6 +1430,8 @@ export default function EngineeringClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={documentPage} label="documents" testId="eng-documents-pager" />
+              </>
             )}
           </section>
         </div>
@@ -1535,8 +1571,9 @@ export default function EngineeringClient({
                 description="Register a model above to build the versioned coordination registry. Each entry tracks its discipline, format, revision and federation group so the viewer can load models together."
               />
             ) : (
+              <>
               <div style={st.rfiList}>
-                {bimModels.map((m) => (
+                {bimPage.slice.map((m) => (
                   <div key={m.id} style={st.rfiCard}>
                     <div style={st.rfiHeader}>
                       <span style={st.rfiCode}>{m.code} · v{m.version}</span>
@@ -1586,6 +1623,8 @@ export default function EngineeringClient({
                   </div>
                 ))}
               </div>
+              <Pager state={bimPage} label="models" testId="eng-bim-pager" />
+              </>
             )}
           </section>
         </div>

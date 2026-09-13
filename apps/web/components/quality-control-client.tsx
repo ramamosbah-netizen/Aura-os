@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { DISCIPLINES, DISCIPLINE_LABELS } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
+import Pager, { usePaged } from '@/components/ui/pager';
 import { QUALITY_PATH, QUALITY_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 
@@ -118,6 +119,16 @@ export default function QualityControlClient({
   const inspections = initialInspections;
   const snags = initialSnags;
   const audits = initialAudits;
+
+  /**
+   * Twenty a page, the same as Testing & Commissioning. The lists arrive whole, so this is
+   * presentational: nothing is re-fetched and the counts above each register still speak for the
+   * whole register rather than for the visible page.
+   */
+  const ncrPage = usePaged(ncrs);
+  const inspectionPage = usePaged(inspections);
+  const snagPage = usePaged(snags);
+  const auditPage = usePaged(audits);
   const [selectedAuditId, setSelectedAuditId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -308,7 +319,8 @@ export default function QualityControlClient({
                 description="Raise a non-conformance report to track defects and drive them to close-out."
               />
             ) : (
-              <table style={st.table}>
+              <>
+              <table style={st.table} data-testid="qa-ncrs">
                 <thead>
                   <tr>
                     {['Ref #', 'Severity', 'Project', 'Description', 'Assigned To', 'Status', 'Actions'].map((h) => (
@@ -317,7 +329,7 @@ export default function QualityControlClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {ncrs.map((n) => (
+                  {ncrPage.slice.map((n) => (
                     <tr key={n.id}>
                       <td style={st.tdCode}>{n.ncrNumber}</td>
                       <td style={st.td}>
@@ -355,6 +367,8 @@ export default function QualityControlClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={ncrPage} label="NCRs" testId="qa-ncrs-pager" />
+              </>
             )}
           </section>
         </div>
@@ -397,6 +411,7 @@ export default function QualityControlClient({
                 description="Log an inspection request (IR) to schedule consultant/QA inspections and capture their outcome."
               />
             ) : (
+              <>
               <table style={st.table}>
                 <thead>
                   <tr>
@@ -406,7 +421,7 @@ export default function QualityControlClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {inspections.map((ir) => (
+                  {inspectionPage.slice.map((ir) => (
                     <tr key={ir.id}>
                       <td style={st.tdCode}>{ir.irNumber}</td>
                       <td style={st.tdCode}>{ir.discipline}</td>
@@ -451,6 +466,8 @@ export default function QualityControlClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={inspectionPage} label="inspection requests" testId="qa-inspections-pager" />
+              </>
             )}
           </section>
         </div>
@@ -495,6 +512,7 @@ export default function QualityControlClient({
                 description="Capture snags/defects and track their close-out before handover."
               />
             ) : (
+              <>
               <table style={st.table}>
                 <thead>
                   <tr>
@@ -504,7 +522,7 @@ export default function QualityControlClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {snags.map((s) => (
+                  {snagPage.slice.map((s) => (
                     <tr key={s.id}>
                       <td style={st.td}>{s.description}</td>
                       <td style={st.tdMuted}>{s.locationDetail}</td>
@@ -542,6 +560,8 @@ export default function QualityControlClient({
                   ))}
                 </tbody>
               </table>
+              <Pager state={snagPage} label="snags" testId="qa-snags-pager" />
+              </>
             )}
           </section>
         </div>
@@ -587,6 +607,7 @@ export default function QualityControlClient({
               />
             ) : (
               <div style={{ overflowX: 'auto' }}>
+                <>
                 <table style={st.table}>
                   <thead>
                     <tr>
@@ -596,7 +617,7 @@ export default function QualityControlClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {audits.map((a) => (
+                    {auditPage.slice.map((a) => (
                       <tr key={a.id} style={{ background: selectedAuditId === a.id ? 'var(--panel-2)' : 'transparent' }}>
                         <td style={st.tdCode}>{a.auditNumber}</td>
                         <td style={st.tdBold}>{a.auditType}</td>
@@ -632,6 +653,8 @@ export default function QualityControlClient({
                     ))}
                   </tbody>
                 </table>
+                <Pager state={auditPage} label="audits" testId="qa-audits-pager" />
+                </>
               </div>
             )}
           </section>

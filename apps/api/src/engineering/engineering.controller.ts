@@ -39,6 +39,13 @@ class CreateDrawingDto {
   @IsOptional() @IsString() revision?: string;
   @IsOptional() @IsString() status?: DrawingStatus;
   @IsOptional() @IsString() discipline?: Discipline;
+  /**
+   * A link to the document this revision draws on, held wherever the project keeps its files —
+   * AURA has no object store, and this is a citation, not a copy. The aggregate has carried
+   * `fileUrl` since it was written and `revise` has always accepted one; the create DTO never
+   * did, so the first revision of a drawing could not cite its own document.
+   */
+  @IsOptional() @IsString() fileUrl?: string;
 }
 
 class SubmitDrawingDto {
@@ -155,6 +162,8 @@ export class EngineeringController {
       revision: dto.revision,
       status: dto.status,
       discipline: dto.discipline,
+      // See the DTO: `revise` could always cite a document, `create` could not.
+      fileUrl: dto.fileUrl,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     });

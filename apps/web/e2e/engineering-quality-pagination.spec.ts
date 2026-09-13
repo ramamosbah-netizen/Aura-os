@@ -65,34 +65,12 @@ test('the drawing register pages, and search reaches what paging pushed off', as
   await expect(page.getByTestId('drawing-register-no-match')).toContainText(`${total}`);
 });
 
-test('the engineering workspace section pages at twenty', async ({ page, baseURL }) => {
-  const run = Date.now().toString().slice(-6);
-  const projectId = await createProject(page.request, `ENG Section Paging ${run}`, baseURL);
-
-  const total = PAGE_SIZE + 1;
-  const seeded = await page.request.post(`${baseURL}/api/engineering/drawings`, {
-    data: { projectId, projectName: `ENG Section Paging ${run}`, code: `SD-${run}-01`, title: 'Section drawing 01' },
-  });
-  test.skip(!seeded.ok(), 'engineering API not reachable behind the web shell');
-  for (let n = 2; n <= total; n += 1) {
-    await page.request.post(`${baseURL}/api/engineering/drawings`, {
-      data: { projectId, projectName: `ENG Section Paging ${run}`, code: `SD-${run}-${String(n).padStart(2, '0')}`, title: `Section drawing ${n}` },
-    });
-  }
-
-  // The workspace section reads the whole tenant, not one project, so the assertion is on the page
-  // SIZE and on the pager turning — not on a count this spec cannot own.
-  await page.goto('/engineering?section=drawings', { waitUntil: 'domcontentloaded' });
-  const pager = page.getByTestId('eng-drawings-pager-info');
-  await expect(pager, 'the section pages').toBeVisible();
-  await expect(pager).toContainText(`1–${PAGE_SIZE} of `);
-
-  const onPageOne = await page.getByTestId('eng-drawings-pager-info').innerText();
-  await page.getByTestId('eng-drawings-pager-next').click();
-  await expect(page.getByTestId('eng-drawings-pager-info'), 'Next moves off page one').not.toHaveText(onPageOne);
-  await expect(page.getByTestId('eng-drawings-pager-info')).toContainText(`${PAGE_SIZE + 1}–`);
-});
-
+/**
+ * The engineering workspace DRAWINGS section is no longer a flat list of drawings — it groups by
+ * project and pages the projects. Its paging therefore lives with the rest of that behaviour, in
+ * engineering-drawings-by-project.spec.ts, rather than being asserted here against a shape that no
+ * longer exists. The other engineering registers keep the pagers added with this change.
+ */
 test('the quality registers page at twenty', async ({ page, baseURL }) => {
   const run = Date.now().toString().slice(-6);
   const projectId = await createProject(page.request, `QA Paging ${run}`, baseURL);

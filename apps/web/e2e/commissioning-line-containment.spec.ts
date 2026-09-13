@@ -50,6 +50,18 @@ test('gate reasons and system titles are contained, in both sections that show t
     await page.goto(`/commissioning?project=${encodeURIComponent(projectId)}&section=${section}`, { waitUntil: 'domcontentloaded' });
 
     const prefix = section === 'readiness' ? `readiness-gate-LC-${run}` : `pre-gate-LC-${run}`;
+
+    // BOTH sections are collapsed by default — four gate rows per card in pre-commissioning, ten in
+    // readiness, which buried the titles you scan to find a system. The gates are the detail behind
+    // a disclosure, so each card is opened before its rows can be measured.
+    const gatesBefore = page.locator(`[data-testid^="${prefix}-"]`);
+    await expect(gatesBefore, `${section}: collapsed by default — the card shows its title, not its gates`).toHaveCount(0);
+
+    const disclosure = page.getByTestId(`${section === 'readiness' ? 'readiness' : 'pre'}-open-LC-${run}`);
+    await expect(disclosure, `${section}: the caret is live once React has attached`).toBeEnabled();
+    await disclosure.click();
+    await expect(disclosure).toHaveAttribute('aria-expanded', 'true');
+
     const firstGate = page.locator(`[data-testid^="${prefix}-"]`).first();
     await expect(firstGate, `${section} renders its gates`).toBeVisible();
 

@@ -14,6 +14,15 @@ const CX = `${API}/api/v1/commissioning/records`;
 const QA = `${API}/api/v1/quality`;
 const H = () => apiAuthHeaders();
 
+
+/**
+ * The readiness chain is TEN gates per system, so the cards are collapsed and the chain sits behind
+ * a disclosure. The state tag stays on the closed card; the gates need opening. Deliberately not in
+ * the URL — it is view state, not a filter — so a reload closes it and this is called again.
+ */
+const openGates = (page: import('@playwright/test').Page, code: string) =>
+  page.getByTestId(`readiness-open-${code}`).click();
+
 test('an open inspection blocks the system, and approving it clears the gate', async ({ page, baseURL }) => {
   const projectId = await createProject(page.request, 'TC Gate13 Inspections', baseURL);
   const stamp = Date.now().toString().slice(-5);
@@ -25,6 +34,7 @@ test('an open inspection blocks the system, and approving it clears the gate', a
   // An unreadable Quality is "we asked and could not hear". A project that filed no inspection for
   // this trade has been heard perfectly well, and blocking on it would invent a requirement.
   await page.goto(`/commissioning?project=${projectId}&section=readiness`, { waitUntil: 'domcontentloaded' });
+  await openGates(page, code);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections-state`)).toHaveText('NOT APPLICABLE');
   await expect(page.getByTestId(`readiness-gate-${code}-inspections`)).toContainText(/none is owed/i);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections`)).toContainText(/Quality/i);
@@ -44,6 +54,7 @@ test('an open inspection blocks the system, and approving it clears the gate', a
   const { id: irId } = await ir.json();
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openGates(page, code);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections-state`)).toHaveText('BLOCKED');
   await expect(page.getByTestId(`readiness-gate-${code}-inspections`)).toContainText(`IR-${stamp}`);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections`)).toContainText(/awaiting Quality/i);
@@ -53,6 +64,7 @@ test('an open inspection blocks the system, and approving it clears the gate', a
   expect(approved.ok(), `Quality must resolve its own inspection — ${await approved.text()}`).toBe(true);
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await openGates(page, code);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections-state`)).toHaveText('READY');
   await expect(page.getByTestId(`readiness-gate-${code}-inspections`)).toContainText(/1 of 1 inspection approved/i);
 });
@@ -77,6 +89,7 @@ test('a rejected inspection does not block here — the non-conformance is what 
   // already blocks on open NCRs. Counting the rejection here too would report one problem as two —
   // the rule this chain has followed since TC-GATE-6.
   await page.goto(`/commissioning?project=${projectId}&section=readiness`, { waitUntil: 'domcontentloaded' });
+  await openGates(page, code);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections-state`)).toHaveText('READY');
   await expect(page.getByTestId(`readiness-gate-${code}-inspections`)).toContainText(/non-conformance rather than this gate/i);
 });
@@ -97,6 +110,7 @@ test('another trade’s inspection is not this system’s precondition', async (
   });
 
   await page.goto(`/commissioning?project=${projectId}&section=readiness`, { waitUntil: 'domcontentloaded' });
+  await openGates(page, code);
   await expect(page.getByTestId(`readiness-gate-${code}-inspections-state`), 'a plumbing inspection is not a CCTV precondition')
     .toHaveText('NOT APPLICABLE');
 });

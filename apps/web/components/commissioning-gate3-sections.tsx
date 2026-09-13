@@ -177,6 +177,19 @@ export function ItpSection({
 const PRE_GATES = ['equipment', 'installation', 'engineering', 'quality'] as const;
 
 export function PreCommissioningSection({ systems }: { systems: SystemView[] }) {
+  /**
+   * COLLAPSED BY DEFAULT, and on this section that is not only tidiness.
+   *
+   * Each card carries four gate rows, so twenty systems put eighty rows on the screen at once
+   * and the titles — the thing you scan to find the system you want — were buried between them.
+   * Closed, the page is a list of systems with their state; open, it is the detail for the one
+   * you asked about.
+   *
+   * One at a time, matching the Testing section's disclosure rather than inventing a second
+   * shape for the same gesture.
+   */
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const hydrated = useHydrated();
   const prePage = usePaged(systems);
 
   return (
@@ -196,16 +209,29 @@ export function PreCommissioningSection({ systems }: { systems: SystemView[] }) 
           {prePage.slice.map((s) => {
             const gates = s.readiness.gates.filter((g) => (PRE_GATES as readonly string[]).includes(g.id));
             const clear = gates.every((g) => g.state === 'READY' || g.state === 'NOT_APPLICABLE');
+            const open = expanded === s.record.id;
             return (
               <li key={s.record.id} style={st.card} data-testid={`pre-system-${s.record.code}`}>
                 <div style={st.cardHead}>
-                  <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
-                  <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
+                  <button
+                    type="button"
+                    onClick={() => setExpanded(open ? null : s.record.id)}
+                    style={st.disclosure}
+                    aria-expanded={open}
+                    // Nothing is live until React has attached — see `useHydrated`. A caret that
+                    // looks clickable and is not is the same trap the Testing section already fixed.
+                    disabled={!hydrated}
+                    data-testid={`pre-open-${s.record.code}`}
+                  >
+                    <span style={st.caret} aria-hidden>{open ? '▾' : '▸'}</span>
+                    <span style={st.code}>{s.record.code}</span>
+                    <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
+                  </button>
                   <span style={clear ? st.tagGood : st.tagWarn} data-testid={`pre-state-${s.record.code}`}>
                     {clear ? 'ready to test' : 'prerequisites outstanding'}
                   </span>
                 </div>
-                <GateList gates={gates} testIdPrefix={`pre-gate-${s.record.code}`} />
+                {open && <GateList gates={gates} testIdPrefix={`pre-gate-${s.record.code}`} />}
               </li>
             );
           })}
@@ -494,6 +520,16 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
 // ── Readiness & Handover ────────────────────────────────────────────────────────────────────────
 
 export function ReadinessSection({ systems }: { systems: SystemView[] }) {
+  /**
+   * COLLAPSED BY DEFAULT, for the same reason as Pre-Commissioning and more so: the readiness
+   * chain is TEN gates per system, so twenty systems put two hundred rows on one screen and the
+   * titles you scan to find a system disappeared between them.
+   *
+   * Closed, the page answers "which systems are ready"; open, it answers "and why is this one
+   * not". The state tag stays visible either way, so the overview survives the collapse.
+   */
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const hydrated = useHydrated();
   const ready = systems.filter((s) => s.readiness.commissioningReady);
   const readyPage = usePaged(systems);
 
@@ -518,8 +554,18 @@ export function ReadinessSection({ systems }: { systems: SystemView[] }) {
           {readyPage.slice.map((s) => (
             <li key={s.record.id} style={st.card} data-testid={`readiness-${s.record.code}`}>
               <div style={st.cardHead}>
-                <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
-                <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
+                <button
+                  type="button"
+                  onClick={() => setExpanded(expanded === s.record.id ? null : s.record.id)}
+                  style={st.disclosure}
+                  aria-expanded={expanded === s.record.id}
+                  disabled={!hydrated}
+                  data-testid={`readiness-open-${s.record.code}`}
+                >
+                  <span style={st.caret} aria-hidden>{expanded === s.record.id ? '▾' : '▸'}</span>
+                  <span style={st.code}>{s.record.code}</span>
+                  <strong style={st.grow} title={s.record.title}>{s.record.title}</strong>
+                </button>
                 <span
                   style={s.readiness.commissioningReady ? st.tagGood : st.tagWarn}
                   data-testid={`readiness-state-${s.record.code}`}
@@ -527,7 +573,9 @@ export function ReadinessSection({ systems }: { systems: SystemView[] }) {
                   {s.readiness.commissioningReady ? 'COMMISSIONING READY' : `${s.readiness.blocking.length} gate${s.readiness.blocking.length === 1 ? '' : 's'} outstanding`}
                 </span>
               </div>
-              <GateList gates={s.readiness.gates} testIdPrefix={`readiness-gate-${s.record.code}`} />
+              {expanded === s.record.id && (
+                <GateList gates={s.readiness.gates} testIdPrefix={`readiness-gate-${s.record.code}`} />
+              )}
             </li>
           ))}
         </ul>
@@ -640,6 +688,8 @@ const st = {
   // long system title cannot shrink and pushes the tags off the end of the card. The ellipsis
   // keeps the head one line; the `title` attribute keeps the whole string reachable.
   grow: { flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } as CSSProperties,
+  disclosure: { display: 'flex', gap: 10, alignItems: 'center', flex: 1, minWidth: 0, background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left', padding: 0 } as CSSProperties,
+  caret: { width: 12, color: 'var(--muted)' } as CSSProperties,
   muted: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
   mutedInline: { color: 'var(--muted)' } as CSSProperties,
   gates: { listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 5 } as CSSProperties,

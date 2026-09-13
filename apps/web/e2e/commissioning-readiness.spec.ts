@@ -29,7 +29,10 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
   // ── Readiness: commissioned, but not ready — and the chain says which domains have not answered ─
   await page.goto(`/commissioning?section=readiness&project=${projectId}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId(`readiness-${code}`)).toBeVisible();
+  // The STATE is on the closed card — the overview survives the collapse — and the ten-gate chain
+  // behind it is a disclosure, so open it before reading the gates.
   await expect(page.getByTestId(`readiness-state-${code}`)).not.toHaveText('COMMISSIONING READY');
+  await page.getByTestId(`readiness-open-${code}`).click();
   await expect(page.getByTestId(`readiness-gate-${code}-signoff-state`)).toHaveText('READY');
   // Nothing is registered for this system anywhere, so these are UNKNOWN — not passes.
   await expect(page.getByTestId(`readiness-gate-${code}-equipment-state`)).toHaveText('UNKNOWN');
@@ -42,6 +45,7 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
   await page.getByTestId('cx-section-pre-commissioning').click();
   await expect(page.getByTestId('pre-authority')).toContainText(/derived from the domain that owns it/i);
   await expect(page.getByTestId(`pre-state-${code}`)).toHaveText('prerequisites outstanding');
+  await page.getByTestId(`pre-open-${code}`).click();
   await expect(page.getByTestId(`pre-gate-${code}-installation`)).toContainText('ELV device register');
 
   // ── Answer the ELV register: register a device and install it ───────────────────────────────────
@@ -52,6 +56,9 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
   await page.request.put(`${API}/api/v1/elv/devices/${device.id}/status`, { headers: H(), data: { status: 'installed' } });
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  // A reload closes the disclosure: it is view state, not a filter, so it is deliberately NOT kept
+  // in the URL — reopening it here is the honest cost of that choice.
+  await page.getByTestId(`pre-open-${code}`).click();
   await expect(page.getByTestId(`pre-gate-${code}-equipment-state`)).toHaveText('READY');
   await expect(page.getByTestId(`pre-gate-${code}-installation-state`)).toHaveText('READY');
   await expect(page.getByTestId(`pre-gate-${code}-installation`)).toContainText(/installed and terminated/i);
@@ -68,6 +75,8 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
   await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved for construction' } });
 
   await page.reload({ waitUntil: 'domcontentloaded' });
+  // A reload closes the disclosure — it is view state, not a filter.
+  await page.getByTestId(`pre-open-${code}`).click();
   await expect(page.getByTestId(`pre-gate-${code}-engineering-state`)).toHaveText('READY');
   await expect(page.getByTestId(`pre-state-${code}`)).toHaveText('ready to test');
 
@@ -126,12 +135,15 @@ test('a Quality ITP is linked, shown with Quality’s own result, and blocks unt
 
   // …and it blocks the Quality gate, because an unproven hold point is not a pass.
   await page.getByTestId('cx-section-pre-commissioning').click();
+  await page.getByTestId(`pre-open-${code}`).click();
   await expect(page.getByTestId(`pre-gate-${code}-quality-state`)).toHaveText('BLOCKED');
   await expect(page.getByTestId(`pre-gate-${code}-quality`)).toContainText(/ITP point/i);
 
   // Quality passes the point — in Quality, where it is owned. T&C never writes it.
   await page.request.put(`${API}/api/v1/quality/itps/${itp.id}/points/0`, { headers: H(), data: { result: 'passed' } });
   await page.reload({ waitUntil: 'domcontentloaded' });
+  // A reload closes the disclosure — it is view state, not a filter.
+  await page.getByTestId(`pre-open-${code}`).click();
   await expect(page.getByTestId(`pre-gate-${code}-quality-state`)).toHaveText('READY');
   await expect(page.getByTestId(`pre-gate-${code}-quality`)).toContainText(/all 1 linked ITP point passed/i);
 });

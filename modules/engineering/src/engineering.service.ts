@@ -335,8 +335,49 @@ export class EngineeringService {
   }
 
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */
+  /**
+   * Read one drawing, enforced against the project the drawing ACTUALLY belongs to.
+   *
+   * The permission guard cannot help here. It stamps `resource: project:<id>` only when the
+   * project is knowable from the request — a `:projectId` param, or `projectId` in the body or
+   * query — and a route addressed by drawing id alone carries none. So this route fell through to
+   * an org-wide grant, and that failed in BOTH directions at once:
+   *
+   *   • an org-grant holder could read any drawing on any project, and
+   *   • a project MEMBER could read none at all, including their own project's, because a
+   *     project-scoped grant has nothing to match when the target carries no resource.
+   *
+   * Resolving entity→project here closes both. The record is loaded first (tenant-checked), its
+   * own `projectId` becomes the resource on the access target, and the decision is made against
+   * the row rather than against anything the caller supplied. An org grant still matches by
+   * `orgPath` and is unaffected — this narrows nobody who was legitimately broad.
+   *
+   * A refusal is `null`, the same as a drawing that does not exist. Distinguishing them would
+   * tell an unauthorised caller that the id is real.
+   */
   async getDrawing(id: Id): Promise<Drawing | null> {
-    return sameTenantOrNull(await this.drawingStore.get(id), this.tenant?.boundTenantId());
+    const found = sameTenantOrNull(await this.drawingStore.get(id), this.tenant?.boundTenantId());
+    if (!found) return null;
+    return this.mayRead(found) ? found : null;
+  }
+
+  /**
+   * May the acting user read this drawing, given the project it belongs to?
+   *
+   * No actor in context means the access seam is off (the dev default, and every unit test) —
+   * the same staged pass-through the guard itself applies. Enforcement engages when auth does.
+   */
+  private mayRead(drawing: Drawing): boolean {
+    const ctx = this.tenant?.get?.();
+    const actorId = ctx?.actorId ?? null;
+    if (!actorId) return true;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: drawing.tenantId }];
+    if (drawing.companyId) orgPath.push({ level: 'company', id: drawing.companyId });
+    return this.access.can(actorId, {
+      permission: 'engineering.drawing.read',
+      orgPath,
+      resource: { type: 'project', id: drawing.projectId },
+    }).allowed;
   }
 
   /**

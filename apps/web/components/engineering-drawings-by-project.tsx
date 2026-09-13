@@ -126,12 +126,19 @@ export function groupByProject(drawings: DrawingRow[], projects: ProjectRef[]): 
 export default function DrawingsByProject({
   drawings,
   projects,
+  scopedProjectId = null,
 }: {
   drawings: DrawingRow[];
   projects: ProjectRef[];
+  /**
+   * Set when the page is already inside one project. The grouping still runs — one group — but
+   * it opens on arrival, because asking someone to expand the only project on a page that is
+   * ABOUT that project is a click that answers nothing.
+   */
+  scopedProjectId?: string | null;
 }) {
   const hydrated = useHydrated();
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(scopedProjectId);
   const [query, setQuery] = useState('');
 
   const groups = useMemo(() => groupByProject(drawings, projects), [drawings, projects]);
@@ -214,7 +221,7 @@ export default function DrawingsByProject({
                           Open project →
                         </a>
                         <a
-                          href={`/engineering/drawings?projectId=${encodeURIComponent(g.projectId)}`}
+                          href={`/project/${g.projectId}/drawings`}
                           style={st.link}
                           data-testid={`eng-project-register-${g.projectId}`}
                         >
@@ -257,7 +264,11 @@ export default function DrawingsByProject({
                               )}
                             </td>
                             <td style={st.td}>
-                              <a href={`/engineering/drawings/${d.id}`} style={st.link} data-testid={`eng-drawing-open-${d.id}`}>
+                              <a
+                                href={`/project/${d.projectId}/drawings/${d.id}`}
+                                style={st.link}
+                                data-testid={`eng-drawing-open-${d.id}`}
+                              >
                                 Manage →
                               </a>
                             </td>

@@ -103,6 +103,17 @@ export class AccessService implements OnModuleInit {
     // switched on — only the wildcard admin roles worked. Granting it back repairs that rather
     // than widening anything.
     const COMMS = 'comms.*';
+    /**
+     * PATTERNS ARE THREE SEGMENTS: `module.entity.action`, which is what
+     * `derivePermissionFromRoute` produces for all ~600 handlers. A two-segment pattern like
+     * `site.read` therefore matches NOTHING — `permissionMatches` compares segment by segment and
+     * requires equal length, so it can only ever match a literal permission `site.read`, which no
+     * route derives. Read-only across a module is `site.*.read`.
+     *
+     * Six such patterns were live here, across all four delivery roles used for project
+     * membership — so a project member held a role that granted no cross-module read at all, and
+     * every such request was refused with no sign that the role was the cause.
+     */
     const DEFAULT_ROLES: Role[] = [
       { id: 'r-admin', name: 'System Administrator', permissions: ['*'] },
       {
@@ -118,27 +129,27 @@ export class AccessService implements OnModuleInit {
       {
         id: 'r-pm',
         name: 'Project Manager',
-        permissions: ['projects.*', 'contracts.ipc.create', 'contracts.contract.read', 'site.read', 'quality.read', 'doccontrol.read', COMMS],
+        permissions: ['projects.*', 'contracts.ipc.create', 'contracts.contract.read', 'site.*.read', 'quality.*.read', 'doccontrol.*.read', COMMS],
       },
       {
         id: 'r-site-engineer',
         name: 'Site Engineer',
-        permissions: ['site.*', 'quality.inspection-request.create', 'quality.read', 'hse.read', 'engineering.read', COMMS],
+        permissions: ['site.*', 'quality.inspection-request.create', 'quality.*.read', 'hse.*.read', 'engineering.*.read', COMMS],
       },
       {
         id: 'r-qa-qc',
         name: 'QA/QC Inspector',
-        permissions: ['quality.*', 'commissioning.*', 'site.read', 'engineering.read', COMMS],
+        permissions: ['quality.*', 'commissioning.*', 'site.*.read', 'engineering.*.read', COMMS],
       },
       {
         id: 'r-hse',
         name: 'HSE Officer',
-        permissions: ['hse.*', 'site.read', COMMS],
+        permissions: ['hse.*', 'site.*.read', COMMS],
       },
       {
         id: 'r-procurement',
         name: 'Procurement Specialist',
-        permissions: ['procurement.*', 'inventory.read', 'suppliers.*', COMMS],
+        permissions: ['procurement.*', 'inventory.*.read', 'suppliers.*', COMMS],
       },
       {
         id: 'r-store',

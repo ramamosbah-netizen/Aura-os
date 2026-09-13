@@ -53,9 +53,11 @@ test('drawings group by project, and each row carries status, date, count and a 
 
   // Both ways in, and where each goes.
   await expect(page.getByTestId(`eng-project-link-${projectId}`)).toHaveAttribute('href', `/project/${projectId}`);
+  // Both ways in are now project-scoped ROUTES rather than a filtered global list: the register
+  // link is the shape the permission guard can read a project out of before a record is loaded.
   await expect(page.getByTestId(`eng-project-register-${projectId}`)).toHaveAttribute(
     'href',
-    `/engineering/drawings?projectId=${encodeURIComponent(projectId)}`,
+    `/project/${projectId}/drawings`,
   );
 
   // Collapsed until asked: the rows are the detail behind the count above.

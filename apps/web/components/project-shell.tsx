@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import {
+import { PencilRuler,
   Bot,
   CalendarRange,
   CircleDollarSign,
@@ -69,6 +69,7 @@ export default function ProjectShell({ project, children }: { project: ProjectHe
     { key: 'project', group: 'Project', label: 'Project', description: 'Setup, scope and ownership', icon: ClipboardList, href: workspace('project'), active: pathname === workspace('project') },
     { key: 'plan', group: 'Plan & Control', label: 'Plan & Control', description: 'Schedule, WBS and project controls', icon: CalendarRange, href: workspace('plan'), active: pathname === workspace('plan') || pathname.startsWith(`${base}/controls`) && !['cost', 'closeout'].includes(searchParams.get('tab') ?? '') },
     { key: 'engineering', group: 'Delivery', label: 'Engineering', description: 'Drawings, RFIs and technical records', icon: Wrench, href: workspace('engineering'), active: pathname === workspace('engineering') || pathname === `${base}/engineering` },
+    { key: 'drawings', group: 'Delivery', label: 'Drawings', description: 'Shop drawings on this project, and their revisions', icon: PencilRuler, href: `${base}/drawings`, active: pathname.startsWith(`${base}/drawings`) },
     { key: 'procurement', group: 'Delivery', label: 'Procurement', description: 'Material requirements and buying', icon: ShoppingCart, href: workspace('procurement'), active: pathname === workspace('procurement') || pathname.startsWith('/procurement/') },
     { key: 'subcontracts', group: 'Delivery', label: 'Subcontracts', description: 'Packages, tenders and awards', icon: FileStack, href: workspace('subcontracts'), active: pathname === workspace('subcontracts') || pathname.startsWith('/subcontracts/') },
     { key: 'site', group: 'Delivery', label: 'Site', description: 'Work instructions, reports and progress', icon: HardHat, href: workspace('site'), active: pathname === workspace('site') || pathname.startsWith(`${base}/site`) },

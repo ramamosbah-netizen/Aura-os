@@ -39,10 +39,14 @@ import { InMemoryEngineeringDocumentStore } from './in-memory-engineering-docume
 import { PostgresEngineeringDocumentStore } from './postgres-engineering-document-store';
 
 import { EngineeringService } from './engineering.service';
+import { EngineeringProjectResolvers } from './project-resolvers';
 
 @Module({
   imports: [CoreModule],
   providers: [
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    EngineeringProjectResolvers,
     {
       provide: DRAWING_STORE,
       inject: [PG_POOL],

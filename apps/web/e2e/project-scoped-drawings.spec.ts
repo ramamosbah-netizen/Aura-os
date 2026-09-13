@@ -127,12 +127,13 @@ test.describe('project-scoped drawing access', () => {
     expect(await status(`/engineering/drawings${scopedB}`, memberToken!), 'and so is its list').toBe(403);
 
     // ── 3. The URL lie: B’s drawing asked for under A ❌ ─────────────────────────────────────────
-    // The guard ALLOWS this — the caller is a member of A and A is what the request says. Only the
-    // check against the loaded record catches it, which is the whole reason that check exists.
+    // Refused at the DOOR, not after the read. The guard resolves the project from the RECORD and
+    // ignores what the request claims, so `?projectId=A` buys nothing: the decision is made
+    // against B, where this caller has no grant. The URL is not an input to the decision.
     expect(
       await status(`/engineering/drawings/${drawingB.id}${scopedA}`, memberToken!),
-      'a drawing that does not belong to the project in the request must not be returned',
-    ).toBe(404);
+      'claiming a project the record is not on must not authorise anything',
+    ).toBe(403);
 
     // ── 4. No membership of the project → refused, even holding a membership elsewhere ❌ ───────
     // This is the non-member case. It uses the member identity against a project it never joined
@@ -158,13 +159,17 @@ test.describe('project-scoped drawing access', () => {
     // regression dressed as a security fix.
     expect(await status(`/engineering/drawings/${drawingB.id}`, admin!.replace('Bearer ', '')), 'admin still reads anything').toBe(200);
 
-    // ── 6. The route the guard cannot read a project out of stays shut to members ────────────────
-    // Recorded rather than fixed: `/engineering/drawings/:id` with no project is the shape this
-    // slice replaces, and it is deliberately NOT made to work for members — the project-scoped
-    // route is the way in.
+    // ── 6. A record named by id alone, with no project anywhere in the request ✅ ────────────────
+    // This was a 403 and was the defect: the guard had nothing to scope by, so a project-scoped
+    // grant could not match and the member was locked out of their own project. The resolver seam
+    // reads the project off the record, so the shape works without the caller supplying anything.
     expect(
       await status(`/engineering/drawings/${drawingA.id}`, memberToken!),
-      'the project-less route gives the guard nothing to match, so a member is refused',
+      'the project is resolved from the record, so no project in the request is needed',
+    ).toBe(200);
+    expect(
+      await status(`/engineering/drawings/${drawingB.id}`, memberToken!),
+      'and the same shape still refuses another project’s record',
     ).toBe(403);
   });
 });

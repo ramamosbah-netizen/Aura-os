@@ -74,11 +74,15 @@ import { DELIVERY_ITEM_MAP_STORE } from './delivery-item-map-store';
 import { InMemoryDeliveryItemMapStore } from './in-memory-delivery-item-map-store';
 import { PostgresDeliveryItemMapStore } from './postgres-delivery-item-map-store';
 import { DeliveryItemMapService } from './delivery-item-map.service';
+import { ProjectsProjectResolvers } from './project-resolvers';
 
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
   imports: [CoreModule],
   providers: [
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    ProjectsProjectResolvers,
     {
       provide: PROJECT_STORE,
       inject: [PG_POOL],

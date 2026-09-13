@@ -35,10 +35,17 @@ import {
   PostgresCalibrationStore,
   PostgresAuditScheduleStore,
 } from './postgres-quality-store';
+import { QualityProjectResolvers } from './project-resolvers';
 
 @Module({
   imports: [CoreModule],
   providers: [
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    QualityProjectResolvers,
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    QualityProjectResolvers,
     {
       provide: NCR_STORE,
       inject: [PG_POOL],

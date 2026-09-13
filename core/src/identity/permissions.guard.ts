@@ -13,6 +13,7 @@ import { UsersService } from './users.service';
 import { ModulesService } from '../config/modules.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { PERMISSIONS_KEY } from './permissions.decorator';
+import { ProjectResolverRegistry } from './project-resolver';
 import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@aura/shared';
 
 /** Modules whose routes stay outside the permission taxonomy (public / infra surfaces). */
@@ -50,6 +51,27 @@ function pickProjectId(req: {
 }): string | null {
   const candidate = req?.params?.projectId ?? req?.body?.projectId ?? req?.query?.projectId;
   return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+}
+
+/**
+ * The FIRST path parameter declared on a route, and its value — the id of the entity the route
+ * addresses. `drawings/:id/reviews` is about the drawing; `records/:id/test-items/:itemId/runs`
+ * is about the record. Read from the declared path so the order is the route's, not the params
+ * object's, and `:projectId` is excluded because a route carrying one needs no resolution.
+ */
+function pickEntityId(
+  controllerPath: string,
+  handlerPath: string,
+  params: Record<string, unknown> | undefined,
+): string | null {
+  if (!params) return null;
+  const first = `${controllerPath}/${handlerPath}`
+    .split('/')
+    .map((seg) => seg.trim())
+    .find((seg) => seg.startsWith(':') && seg !== ':projectId');
+  if (!first) return null;
+  const value = params[first.slice(1)];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
 const METHOD_ACTION: Record<string, string> = {
@@ -115,6 +137,9 @@ export class PermissionsGuard implements CanActivate {
     // Explicit @Inject: union types emit `Object` in design:paramtypes (see auth.service).
     @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
     @Optional() @Inject(ModulesService) private readonly modules: ModulesService | null = null,
+    // Optional so the guard still works in a composition that registers no resolvers at all —
+    // every route then behaves exactly as it did before this seam existed.
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projects: ProjectResolverRegistry | null = null,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -184,8 +209,43 @@ export class PermissionsGuard implements CanActivate {
       const ctrlPath = ((Reflect.getMetadata('path', context.getClass()) as string) ?? '').replace(/^\/+/, '');
       const moduleId = ctrlPath.split('/')[0];
       if (PROJECT_SCOPED_MODULES.has(moduleId)) {
-        const projectId = pickProjectId(context.switchToHttp().getRequest() ?? {});
-        if (projectId) resource = { type: 'project', id: projectId };
+        const req = context.switchToHttp().getRequest() ?? {};
+
+        /**
+         * RESOLUTION FIRST, and the order is the point.
+         *
+         * A project read from the RECORD cannot be wrong about which project the record is on. A
+         * project read from the request can: a member of A who learns an id belonging to B can
+         * send `?projectId=A`, and a guard that trusted the request would find a valid grant and
+         * allow it. Preferring the resolved value makes the URL stop being an input to the
+         * decision at all — the caller may state a project, and on an entity-addressed route it
+         * simply does not matter what they state.
+         *
+         * The request is still the source for routes with no record to resolve: creates carrying
+         * `projectId` in the body, lists carrying it in the query, and `:projectId` routes.
+         */
+        if (this.projects) {
+          /**
+           * Purely additive: an unresolvable id leaves the target without a resource and the
+           * request behaves exactly as it did before this seam, and an org grant matches by
+           * `orgPath` regardless. What changes is that a project member's grant finally has
+           * something to match.
+           */
+          const handlerPath = (Reflect.getMetadata('path', context.getHandler()) as string) ?? '';
+          const entity = singular(`${ctrlPath}/${handlerPath}`.split('/').filter((x) => x && !x.startsWith(':'))[1] ?? '');
+          const entityId = pickEntityId(ctrlPath, handlerPath, req.params);
+          if (entity && entityId && this.projects.handles(moduleId, entity)) {
+            const resolved = await this.projects.projectOf(moduleId, entity, entityId);
+            if (resolved) resource = { type: 'project', id: resolved };
+          }
+        }
+
+        // Nothing resolved — no record on this route, or none registered for it. The request is
+        // then the only thing that can say which project is touched, and it is used as before.
+        if (!resource) {
+          const stated = pickProjectId(req);
+          if (stated) resource = { type: 'project', id: stated };
+        }
       }
     }
 

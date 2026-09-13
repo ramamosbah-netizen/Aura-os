@@ -86,7 +86,7 @@ export default async function HandoverPage({
     { label: 'Needs action', value: packages === null ? null : packages.filter((row) => row.status === 'submitted' || row.status === 'rejected').length, hint: 'Client or internal decision', tone: 'warning' },
     { label: 'Accepted', value: packages === null ? null : packages.filter((row) => row.status === 'accepted').length, hint: 'Accepted packages', tone: 'good' },
   ];
-  const attention: WorkspaceAttention[] | null = packages === null ? null : packages.filter((row) => row.status !== 'accepted').slice(0, 4).map((row) => ({ label: `${row.projectName ?? 'Project'} · ${row.code}`, detail: row.status === 'submitted' ? 'Awaiting client acceptance' : row.status === 'rejected' ? 'Returned for correction' : 'Evidence package is still open', href: '/handover', tone: row.status === 'rejected' ? 'critical' as const : 'warning' as const }));
+  const attention: WorkspaceAttention[] | null = packages === null ? null : packages.filter((row) => row.status !== 'accepted').slice(0, 4).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · ${row.code}`, detail: row.status === 'submitted' ? 'Awaiting client acceptance' : row.status === 'rejected' ? 'Returned for correction' : 'Evidence package is still open', href: '/handover', tone: row.status === 'rejected' ? 'critical' as const : 'warning' as const }));
 
   return (
     <div style={st.page}>

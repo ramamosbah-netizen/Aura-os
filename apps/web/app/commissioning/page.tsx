@@ -51,6 +51,7 @@ export default async function CommissioningPage({
     .filter((s) => !s.commissioned && s.blockers.length > 0)
     .slice(0, 4)
     .map((s) => ({
+      id: s.record.id,
       label: `${s.record.projectName ?? 'Project'} · ${s.record.code}`,
       detail: s.blockers.join(' · '),
       href: `/commissioning/${s.record.id}`,

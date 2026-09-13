@@ -118,9 +118,9 @@ export default async function QualityControlPage({
     { label: 'Open snags', value: open(snags, ['closed', 'resolved']), hint: 'Outstanding close-out items', tone: 'warning' },
   ];
   const attention: WorkspaceAttention[] | null = [ncrs, inspections, snags].some((rows) => rows === null) ? null : [
-    ...(ncrs ?? []).filter((row) => !['closed', 'corrected'].includes(row.status)).slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · ${row.ncrNumber}`, detail: `${row.severity.toUpperCase()} NCR · corrective action open`, href: '/quality/ncrs', tone: row.severity === 'major' ? 'critical' as const : 'warning' as const })),
-    ...(inspections ?? []).filter((row) => row.inspectionDate.slice(0, 10) === new Date().toISOString().slice(0, 10) && row.status === 'requested').slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · ${row.irNumber}`, detail: 'Inspection scheduled today', href: '/quality/inspection-requests', tone: 'warning' as const })),
-    ...(snags ?? []).filter((row) => !['closed', 'resolved'].includes(row.status)).slice(0, 2).map((row) => ({ label: `${row.projectName ?? 'Project'} · snag`, detail: `${row.severity.toUpperCase()} · closure evidence required`, href: '/quality/snags', tone: 'warning' as const })),
+    ...(ncrs ?? []).filter((row) => !['closed', 'corrected'].includes(row.status)).slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · ${row.ncrNumber}`, detail: `${row.severity.toUpperCase()} NCR · corrective action open`, href: '/quality/ncrs', tone: row.severity === 'major' ? 'critical' as const : 'warning' as const })),
+    ...(inspections ?? []).filter((row) => row.inspectionDate.slice(0, 10) === new Date().toISOString().slice(0, 10) && row.status === 'requested').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · ${row.irNumber}`, detail: 'Inspection scheduled today', href: '/quality/inspection-requests', tone: 'warning' as const })),
+    ...(snags ?? []).filter((row) => !['closed', 'resolved'].includes(row.status)).slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · snag`, detail: `${row.severity.toUpperCase()} · closure evidence required`, href: '/quality/snags', tone: 'warning' as const })),
   ];
 
   return (

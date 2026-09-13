@@ -77,5 +77,8 @@ export default async function CommissioningPage({
 }
 
 const st = {
-  page: { maxWidth: 1100, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // Full width across the delivery suite: the fixed column left the display empty on both sides
+  // while the section cards, which stretch with their container, were squeezed. The header's
+  // own description stays capped at 760px, so the prose is still a readable measure.
+  page: { padding: '28px 28px 64px' } as CSSProperties,
 };

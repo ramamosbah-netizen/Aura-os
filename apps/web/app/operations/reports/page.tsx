@@ -41,8 +41,11 @@ export default async function DeliveryOperationsReportsPage({
     { label: 'Active permits', value: value(open(permits, ['closed', 'expired'])), detail: 'HSE source', href: '/hse/permits', icon: ShieldCheck },
     { label: 'Commissioning queue', value: value(open(commissioning, ['commissioned', 'failed'])), detail: 'Testing source', href: '/commissioning', icon: Wrench },
   ];
+  // Full width across the delivery suite: the fixed column left the display empty on both sides
+  // while the cards, which stretch with their container, were squeezed. The header caps its own
+  // description at 760px, so the prose is still a readable measure.
   return (
-    <div style={{ maxWidth: 1240, margin: '0 auto', padding: '28px 28px 64px' }} data-testid="delivery-operations-reports">
+    <div style={{ padding: '28px 28px 64px' }} data-testid="delivery-operations-reports">
       <DeliveryOperationsWorkspaceHeader active="reports" title="Delivery reports" description="Cross-project operational views built from the same discipline authorities. These are read models, not a second reporting database." />
       <ProjectScopeFilter projects={(projects ?? []) as { id: string; title: string }[]} selected={project} path="/operations/reports" />
       <section className={styles.hero}><div><span className={styles.kicker}>OPERATING PICTURE</span><h2>What needs a decision?</h2><p>Use the live signals below to open the source workspace, inspect the record and take the governed action there.</p></div><Link href="/my-work" className={styles.heroLink}>Open My Work <ArrowUpRight size={14} aria-hidden /></Link></section>

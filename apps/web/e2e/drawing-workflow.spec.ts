@@ -19,6 +19,10 @@ test('drawing register → 360 → submit → review → approve (UI)', async ({
   // 1. Register shows the new drawing.
   await page.goto('/engineering/drawings', { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('drawing-register')).toBeVisible();
+  // The register is shown twenty at a time now, so a drawing registered a moment ago is not
+  // necessarily on the page you land on — it sorts by code, not by age. Searched for rather than
+  // scrolled to, which is also the only way a person finds one: this is what the search box is for.
+  await page.getByTestId('drawing-register-search').fill(code);
   const openLink = page.getByTestId(`open-${code}-0`);
   await expect(openLink).toBeVisible();
 

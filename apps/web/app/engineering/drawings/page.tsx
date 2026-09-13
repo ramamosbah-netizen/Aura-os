@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import DrawingRegisterTable from '@/components/drawing-register-table';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,34 +15,6 @@ interface Drawing {
   discipline: string;
   previousRevision: string | null;
   updatedAt: string;
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  draft: 'Draft',
-  submitted: 'Submitted',
-  under_review: 'Under Review',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  revision_required: 'Revision Required',
-  transmitted: 'Transmitted',
-  closed: 'Closed',
-  superseded: 'Superseded',
-};
-
-function statusStyle(status: string): CSSProperties {
-  const base: CSSProperties = { padding: '2px 9px', borderRadius: 999, fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' };
-  const map: Record<string, CSSProperties> = {
-    approved: { background: 'var(--good-soft)', color: 'var(--good)' },
-    transmitted: { background: 'var(--good-soft)', color: 'var(--good)' },
-    closed: { background: 'var(--panel-2)', color: 'var(--muted)' },
-    superseded: { background: 'var(--panel-2)', color: 'var(--muted)' },
-    rejected: { background: 'var(--bad-soft)', color: 'var(--bad)' },
-    revision_required: { background: 'var(--warn-soft)', color: 'var(--warn)' },
-    under_review: { background: 'var(--info-soft)', color: 'var(--info)' },
-    submitted: { background: 'var(--info-soft)', color: 'var(--info)' },
-    draft: { background: 'var(--panel-2)', color: 'var(--muted)' },
-  };
-  return { ...base, ...(map[status] ?? map.draft) };
 }
 
 export default async function DrawingRegisterPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
@@ -73,52 +46,21 @@ export default async function DrawingRegisterPage({ searchParams }: { searchPara
           No drawings yet. Create one from the <a href="/engineering" style={st.crumbLink}>Engineering</a> workspace.
         </div>
       ) : (
-        <div style={st.tableWrap}>
-          <table style={st.table} data-testid="drawing-register">
-            <thead>
-              <tr>
-                {['Drawing', 'Rev', 'Title', 'Discipline', 'Status', ''].map((h) => (
-                  <th key={h} style={st.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((d) => (
-                <tr key={d.id} style={d.status === 'superseded' ? st.rowMuted : undefined}>
-                  <td style={st.tdCode}>{d.code}</td>
-                  <td style={st.tdMuted}>{d.revision}</td>
-                  <td style={st.td}>{d.title}</td>
-                  <td style={st.tdMuted}>{d.discipline}</td>
-                  <td style={st.td}><span style={statusStyle(d.status)}>{STATUS_LABEL[d.status] ?? d.status}</span></td>
-                  <td style={st.td}>
-                    <a href={`/engineering/drawings/${d.id}`} style={st.open} data-testid={`open-${d.code}-${d.revision}`}>
-                      Open →
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DrawingRegisterTable rows={rows} />
       )}
     </div>
   );
 }
 
 const st = {
-  page: { maxWidth: 1080, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  // Full width, matching /engineering — the register is a wide table and this page sat in a
+  // 1080px column with empty screen on both sides, which is the thing that was already fixed on
+  // the workspace it belongs to. `sub` keeps its own measure so the description stays readable.
+  page: { padding: '28px 28px 64px' } as CSSProperties,
   crumbs: { display: 'flex', gap: 8, alignItems: 'center', fontSize: 13, color: 'var(--muted)', marginBottom: 10 } as CSSProperties,
   crumbLink: { color: 'var(--accent, #2563eb)', textDecoration: 'none' } as CSSProperties,
   crumbSep: { opacity: 0.5 } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 720, lineHeight: 1.5 } as CSSProperties,
   empty: { border: '1px dashed var(--border, #d1d5db)', borderRadius: 12, padding: 28, color: 'var(--muted)', textAlign: 'center' } as CSSProperties,
-  tableWrap: { overflowX: 'auto', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12 } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 14 } as CSSProperties,
-  th: { textAlign: 'left', padding: '11px 14px', borderBottom: '1px solid var(--border, #e5e7eb)', color: 'var(--muted)', fontWeight: 600, fontSize: 12, textTransform: 'uppercase', letterSpacing: 0.4 } as CSSProperties,
-  td: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)' } as CSSProperties,
-  tdCode: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)', fontWeight: 600, fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
-  tdMuted: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)', color: 'var(--muted)' } as CSSProperties,
-  rowMuted: { opacity: 0.55 } as CSSProperties,
-  open: { color: 'var(--accent, #2563eb)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
 };

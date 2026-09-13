@@ -16,3 +16,4 @@ export * from './postgres-drawing-register-store';
 export * from './store.interface';
 export * from './doccontrol.service';
 export * from './doccontrol.module';
+export * from './project-resolvers';

@@ -9,3 +9,4 @@ export * from './hse.module';
 export * from './store.interface';
 export * from './in-memory-hse-store';
 export * from './postgres-hse-store';
+export * from './project-resolvers';

@@ -89,3 +89,4 @@ export * from './in-memory-schedule-store';
 export * from './postgres-schedule-store';
 export * from './schedule.service';
 export * from './projects.module';
+export * from './project-resolvers';

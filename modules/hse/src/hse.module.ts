@@ -29,10 +29,14 @@ import {
   PostgresRiskAssessmentStore,
   PostgresSafetyTrainingStore,
 } from './postgres-hse-store';
+import { HseProjectResolvers } from './project-resolvers';
 
 @Module({
   imports: [CoreModule],
   providers: [
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    HseProjectResolvers,
     {
       provide: INCIDENT_STORE,
       inject: [PG_POOL],

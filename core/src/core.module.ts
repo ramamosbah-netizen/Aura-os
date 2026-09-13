@@ -66,6 +66,7 @@ import { LockService } from './commands/lock.service';
 import { CommandBus } from './commands/command.bus';
 import { IdempotencyInterceptor } from './commands/idempotency.interceptor';
 import { PermissionsGuard } from './identity/permissions.guard';
+import { ProjectResolverRegistry } from './identity/project-resolver';
 import { SnapshotEngine } from './projections/snapshot.engine';
 import { ProjectionEngine } from './projections/projection.engine';
 import { OlapExportService } from './projections/olap-export.service';
@@ -130,6 +131,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     CommandBus,
     IdempotencyInterceptor,
     PermissionsGuard,
+    ProjectResolverRegistry,
     SnapshotEngine,
     ProjectionEngine,
     OlapExportService,
@@ -289,6 +291,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     CommandBus,
     IdempotencyInterceptor,
     PermissionsGuard,
+    ProjectResolverRegistry,
     SnapshotEngine,
     ProjectionEngine,
     OlapExportService,

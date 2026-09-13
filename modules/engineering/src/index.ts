@@ -46,4 +46,5 @@ export * from './in-memory-engineering-document-store';
 export * from './postgres-engineering-document-store';
 
 export * from './engineering.service';
+export * from './project-resolvers';
 export * from './engineering.module';

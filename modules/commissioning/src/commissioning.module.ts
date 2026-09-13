@@ -6,6 +6,7 @@ import { HandoverService } from './handover.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
 import { PostgresCommissioningStore } from './postgres-commissioning-store';
 import { COMMISSIONING_STORE } from './store.interface';
+import { CommissioningProjectResolvers } from './project-resolvers';
 
 /**
  * Commissioning (T&C) business module. Postgres when a pool is configured, in-memory
@@ -14,6 +15,9 @@ import { COMMISSIONING_STORE } from './store.interface';
 @Module({
   imports: [CoreModule],
   providers: [
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    CommissioningProjectResolvers,
     CommissioningService,
     HandoverService,
     {

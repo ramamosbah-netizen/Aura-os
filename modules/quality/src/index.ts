@@ -11,3 +11,4 @@ export * from './quality.module';
 export * from './store.interface';
 export * from './in-memory-quality-store';
 export * from './postgres-quality-store';
+export * from './project-resolvers';

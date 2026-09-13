@@ -14,3 +14,4 @@ export * from './site.module';
 export * from './store.interface';
 export * from './in-memory-site-store';
 export * from './postgres-site-store';
+export * from './project-resolvers';

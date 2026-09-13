@@ -15,6 +15,7 @@ export * from './events/tenant-scoped-pool';
 export * from './tenancy/tenant-context';
 export * from './identity/org.service';
 export * from './identity/access.service';
+export * from './identity/project-resolver';
 export * from './identity/auth.service';
 export * from './identity/mfa.service';
 export * from './identity/users.service';

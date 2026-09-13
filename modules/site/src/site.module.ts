@@ -39,10 +39,14 @@ import {
   PostgresPlantUsageStore,
   PostgresInstallationStore,
 } from './postgres-site-store';
+import { SiteProjectResolvers } from './project-resolvers';
 
 @Module({
   imports: [CoreModule],
   providers: [
+    // Tells the permission guard which project each record belongs to, so entity-addressed
+    // routes can be authorised by a project-scoped grant. See project-resolvers.ts.
+    SiteProjectResolvers,
     {
       provide: DAILY_REPORT_STORE,
       inject: [PG_POOL],

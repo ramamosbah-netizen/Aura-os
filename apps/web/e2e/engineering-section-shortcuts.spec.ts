@@ -61,11 +61,17 @@ test('Engineering sections are addressable and open as AURA tabs beside the work
   await page.goto('/engineering?section=submittals', { waitUntil: 'domcontentloaded' });
   await expect(page.getByRole('heading', { name: /Submittal/ }).first()).toBeVisible();
 
-  // The top strip stays instant (no navigation) but still writes the URL, so the two controls can
-  // never disagree about which section is showing.
-  await page.getByRole('button', { name: 'Design Changes' }).click();
-  await expect(page).toHaveURL(/\?section=design-changes$/);
-  await page.getByRole('button', { name: 'Overview', exact: true }).click();
+  // The top strip is gone: it was the same eight destinations as the cards, and the cards are the
+  // half that can hold two sections open at once. What had to survive its removal is the WAY BACK —
+  // so that is what is asserted now, from a section URL opened cold.
+  await expect(
+    page.getByRole('button', { name: 'Design Changes' }),
+    'the duplicate strip must not come back',
+  ).toHaveCount(0);
+
+  const workspaceTab = page.getByRole('tablist', { name: 'Open AURA tabs' }).getByRole('tab').first();
+  await expect(workspaceTab, "the workspace keeps its own tab, and that is the way back").toContainText('Engineering');
+  await workspaceTab.click();
   await expect(page).toHaveURL(/\/engineering$/);
   await expect(page.getByRole('heading', { name: 'Pre-award technical context' })).toBeVisible();
 });

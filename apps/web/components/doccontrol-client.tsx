@@ -640,7 +640,10 @@ export default function DocControlClient({
 }
 
 const st = {
-  tabs: { display: 'flex', gap: 8, margin: '0 0 24px' } as CSSProperties,
+  // `flexWrap` so a strip that outgrows the container wraps instead of running past its right
+  // edge, where the last tabs are cut off and unreachable rather than merely off-screen. Every
+  // other workspace strip already wraps; these were the deviation.
+  tabs: { display: 'flex', gap: 8, flexWrap: 'wrap', margin: '0 0 24px' } as CSSProperties,
   tabBtn: {
     padding: '8px 16px',
     borderRadius: 8,

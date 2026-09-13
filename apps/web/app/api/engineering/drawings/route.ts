@@ -7,6 +7,8 @@ export async function POST(request: Request): Promise<Response> {
     code?: string;
     title?: string;
     revision?: string;
+    /** A link to the document held elsewhere — AURA stores no files. */
+    fileUrl?: string;
   };
 
   if (!body.projectId || !body.code || !body.title) {

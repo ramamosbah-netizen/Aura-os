@@ -9,6 +9,7 @@ import { ENGINEERING_PATH, ENGINEERING_SECTIONS, sectionShortcuts } from '@/lib/
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
 import Pager, { usePaged } from '@/components/ui/pager';
+import DrawingsByProject from '@/components/engineering-drawings-by-project';
 
 interface Project {
   id: string;
@@ -22,14 +23,25 @@ interface TenderContext {
   status?: string | null;
 }
 
-interface Drawing {
+export interface Drawing {
   id: string;
   projectId: string;
   projectName: string | null;
   code: string;
   title: string;
   revision: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
+  /**
+   * The nine states of the drawing machine (`modules/engineering/src/domain/drawing.ts`).
+   * This said `'draft' | 'pending_approval' | 'approved' | 'rejected'` — a status that does not
+   * exist plus six real ones missing. It never broke because the values only reached equality
+   * checks, which is how a wrong type survives a long time.
+   */
+  status:
+    | 'draft' | 'submitted' | 'under_review' | 'approved' | 'rejected'
+    | 'revision_required' | 'transmitted' | 'closed' | 'superseded';
+  /** A reference to a document held elsewhere. AURA stores no files. */
+  fileUrl: string | null;
+  updatedAt: string | null;
   createdAt: string;
 }
 
@@ -204,6 +216,9 @@ export default function EngineeringClient({
   const [drawingCode, setDrawingCode] = useState('');
   const [drawingTitle, setDrawingTitle] = useState('');
   const [drawingRev, setDrawingRev] = useState('0');
+  // A LINK, not a file. There is no object store in AURA, so a drawing cites its document the
+  // same way a BIM model does. Registering without one is normal and stays normal.
+  const [drawingFileUrl, setDrawingFileUrl] = useState('');
 
   const [rfiCode, setRfiCode] = useState('');
   const [rfiTitle, setRfiTitle] = useState('');
@@ -298,6 +313,7 @@ export default function EngineeringClient({
           code: drawingCode,
           title: drawingTitle,
           revision: drawingRev,
+          fileUrl: drawingFileUrl.trim() || undefined,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -306,6 +322,7 @@ export default function EngineeringClient({
       setDrawingCode('');
       setDrawingTitle('');
       setDrawingRev('0');
+      setDrawingFileUrl('');
     } catch (err: any) {
       setError(err.message || 'Failed to create drawing');
     }
@@ -771,13 +788,26 @@ export default function EngineeringClient({
                   style={st.input}
                 />
               </div>
+              <div style={st.field}>
+                <label style={st.label}>Document link (optional)</label>
+                <input
+                  type="url"
+                  placeholder="https://… link to the PDF or DWG"
+                  value={drawingFileUrl}
+                  onChange={(e) => setDrawingFileUrl(e.target.value)}
+                  style={st.input}
+                  data-testid="drawing-file-url"
+                />
+              </div>
             </div>
             <button type="submit" style={{ ...st.btn, opacity: hasProject ? 1 : 0.5, cursor: hasProject ? 'pointer' : 'not-allowed' }} disabled={!hasProject}>Register Drawing</button>
           </form>
 
           {/* List panel */}
           <section style={st.panel}>
-            <h3 style={st.panelTitle}>Active Drawings</h3>
+            <div style={st.panelHead}>
+              <h3 style={st.panelTitle}>Active Drawings</h3>
+            </div>
             {drawings.length === 0 ? (
               <EmptyState
                 compact
@@ -785,38 +815,10 @@ export default function EngineeringClient({
                 description="Register a shop drawing above to track its revisions and route it for approval."
               />
             ) : (
-              <>
-              <table style={st.table}>
-                <thead>
-                  <tr>
-                    {['Code', 'Title', 'Project', 'Revision', 'Status', 'Actions'].map((h) => (
-                      <th key={h} style={st.th}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {drawingPage.slice.map((d) => (
-                    <tr key={d.id}>
-                      <td style={st.tdCode}>{d.code}</td>
-                      <td style={st.td}>{d.title}</td>
-                      <td style={st.tdMuted}>{d.projectName || '—'}</td>
-                      <td style={st.tdMuted}>Rev {d.revision}</td>
-                      <td style={st.td}>
-                        <span style={d.status === 'approved' ? st.tagApproved : st.tagPending}>
-                          {d.status}
-                        </span>
-                      </td>
-                      <td style={st.td}>
-                        <a href={`/engineering/drawings/${d.id}`} style={st.btnApprove}>
-                          Manage workflow →
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <Pager state={drawingPage} label="drawings" testId="eng-drawings-pager" />
-              </>
+              /* Grouped by project: the flat register answered "what drawings exist", which is not
+                 the question this panel is read for. See the component for what "latest status"
+                 means and why there is no upload control. */
+              <DrawingsByProject drawings={drawings} projects={projects} />
             )}
           </section>
         </div>

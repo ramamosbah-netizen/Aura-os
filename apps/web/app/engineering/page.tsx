@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
-import EngineeringClient from '../../components/engineering-client';
+import EngineeringClient, { type Drawing } from '../../components/engineering-client';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import ProjectScopeFilter from '../../components/project-scope-filter';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
@@ -17,17 +17,6 @@ interface TenderContext {
   title: string;
   reference?: string | null;
   status?: string | null;
-}
-
-interface Drawing {
-  id: string;
-  projectId: string;
-  projectName: string | null;
-  code: string;
-  title: string;
-  revision: string;
-  status: 'draft' | 'pending_approval' | 'approved' | 'rejected';
-  createdAt: string;
 }
 
 interface Rfi {

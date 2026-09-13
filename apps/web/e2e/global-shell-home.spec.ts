@@ -139,6 +139,13 @@ test('global shell exposes the Home launcher, the suite sidebar and permission-a
   // the same count the Home launcher asserts earlier in this test.
   await expect(page.getByTestId('suite-launcher').getByRole('link')).toHaveCount(12);
 
+  // The restricted identity is probed in global setup; absent, this leg states the requirement
+  // rather than failing on `login.ok()` as though the product refused a valid credential
+  // (TC-GATE-23).
+  test.skip(
+    !process.env.E2E_VIEWER_AVAILABLE,
+    `needs a restricted viewer: set E2E_VIEWER_USERNAME to an account this environment seeds`,
+  );
   const restricted = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport: { width: 1280, height: 900 } });
   const login = await restricted.request.post('/api/auth/login', {
     // The RESTRICTED identity this test is about — deliberately its own actor, not the suite's

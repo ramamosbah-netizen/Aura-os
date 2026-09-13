@@ -5,6 +5,7 @@ import AuraTabAnchor from '../../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
 import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
+import ProjectScopeFilter from '../../../components/project-scope-filter';
 import { SITE_PATH, SITE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
 
 export const dynamic = 'force-dynamic';
@@ -118,15 +119,25 @@ interface ProjectSchedule {
   updatedAt: string;
 }
 
-export default async function SiteControlPage() {
+export default async function SiteControlPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ project?: string; section?: string }>;
+}) {
+  // The project lives in the URL and is applied on the SERVER: rows for other projects are never
+  // sent to the browser. A picker that hid them client-side would leave the same data on the wire.
+  const filters = (await searchParams) ?? {};
+  const project = filters.project ?? '';
+  const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
+
   const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects, instructions] = await Promise.all([
-    getJson<DailyReport[]>('/api/site/daily-reports'),
-    getJson<DelayLog[]>('/api/site/delay-logs'),
-    getJson<MaterialConsumption[]>('/api/site/material-consumption'),
-    getJson<LabourAllocation[]>('/api/site/labour'),
+    getJson<DailyReport[]>(`/api/site/daily-reports${scoped}`),
+    getJson<DelayLog[]>(`/api/site/delay-logs${scoped}`),
+    getJson<MaterialConsumption[]>(`/api/site/material-consumption${scoped}`),
+    getJson<LabourAllocation[]>(`/api/site/labour${scoped}`),
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
-    getJson<SiteInstruction[]>('/api/site/instructions'),
+    getJson<SiteInstruction[]>(`/api/site/instructions${scoped}`),
   ]);
 
   const open = <T extends { status?: string }>(rows: T[] | null, closed: string[]) => rows === null ? null : rows.filter((row) => !closed.includes((row.status ?? '').toLowerCase())).length;
@@ -151,6 +162,8 @@ export default async function SiteControlPage() {
       <DeliveryOperationsWorkspaceHeader active="site" title="Site execution workspace" description="Coordinate field work through controlled instructions, daily reports, progress, delays, labour, equipment and site evidence." />
 
       <DeliveryWorkspaceSummary eyebrow="FIELD OPERATIONS" title="Today's operating picture" description="Keep the field moving with clear work, exception and evidence signals. Actions remain owned by Site." metrics={metrics} attention={attention} emptyMessage="No site exceptions are open for the available records." />
+
+      <ProjectScopeFilter projects={projects ?? []} selected={project} path={SITE_PATH} />
 
       <SiteControlClient
         initialDailyReports={dailyReports ?? []}

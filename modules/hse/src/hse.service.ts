@@ -175,8 +175,10 @@ export class HseService {
     this.access.assert(actorId, { permission, orgPath });
   }
 
-  listIncidents(tenantId: Id): Promise<HseIncident[]> {
-    return this.incidentStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listIncidents(tenantId: Id, projectId?: string): Promise<HseIncident[]> {
+    const all = await this.incidentStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   listIncidentsPaged(tenantId: Id, page: PageParams): Promise<Page<HseIncident>> {
@@ -386,8 +388,10 @@ export class HseService {
     this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath });
   }
 
-  listPermits(tenantId: Id): Promise<PermitToWork[]> {
-    return this.ptwStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listPermits(tenantId: Id, projectId?: string): Promise<PermitToWork[]> {
+    const all = await this.ptwStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   listPermitsPaged(tenantId: Id, page: PageParams): Promise<Page<PermitToWork>> {
@@ -500,8 +504,10 @@ export class HseService {
     return capa;
   }
 
-  listCapas(tenantId: Id): Promise<CapaAction[]> {
-    return this.capaStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listCapas(tenantId: Id, projectId?: string): Promise<CapaAction[]> {
+    const all = await this.capaStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   /**
@@ -601,8 +607,10 @@ export class HseService {
     return this.riskStore.findById(id, tenantId);
   }
 
-  listRiskAssessments(tenantId: Id): Promise<RiskAssessment[]> {
-    return this.riskStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listRiskAssessments(tenantId: Id, projectId?: string): Promise<RiskAssessment[]> {
+    const all = await this.riskStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   // ── Safety Training Matrix ──────────────────────────────────────────────────

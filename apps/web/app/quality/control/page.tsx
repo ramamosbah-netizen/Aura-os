@@ -3,6 +3,7 @@ import { getJson } from '@/lib/api';
 import QualityControlClient from '../../../components/quality-control-client';
 import AuraTabAnchor from '../../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
+import ProjectScopeFilter from '../../../components/project-scope-filter';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
 import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
 import { QUALITY_PATH, QUALITY_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
@@ -90,13 +91,23 @@ interface AuditSchedule {
   updatedAt: string;
 }
 
-export default async function QualityControlPage() {
+export default async function QualityControlPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ project?: string; section?: string }>;
+}) {
+  // The project lives in the URL and is applied on the SERVER: rows for other projects are
+  // never sent to the browser. Hiding them client-side would leave the same data on the wire.
+  const filters = (await searchParams) ?? {};
+  const project = filters.project ?? '';
+  const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
+
   const [ncrs, inspections, snags, projects, audits] = await Promise.all([
-    getJson<Ncr[]>('/api/quality/ncrs'),
-    getJson<InspectionRequest[]>('/api/quality/irs'),
-    getJson<Snag[]>('/api/quality/snags'),
+    getJson<Ncr[]>(`/api/quality/ncrs${scoped}`),
+    getJson<InspectionRequest[]>(`/api/quality/irs${scoped}`),
+    getJson<Snag[]>(`/api/quality/snags${scoped}`),
     getJson<Project[]>('/api/projects/projects'),
-    getJson<AuditSchedule[]>('/api/quality/audits'),
+    getJson<AuditSchedule[]>(`/api/quality/audits${scoped}`),
   ]);
 
   const open = <T extends { status?: string }>(rows: T[] | null, closed: string[]) => rows === null ? null : rows.filter((row) => !closed.includes((row.status ?? '').toLowerCase())).length;
@@ -120,6 +131,8 @@ export default async function QualityControlPage() {
       <DeliveryOperationsWorkspaceHeader active="quality" title="Quality control workspace" description="Plan inspections, manage NCRs and snags, and close corrective actions with auditable evidence across projects." />
 
       <DeliveryWorkspaceSummary eyebrow="QUALITY OPERATIONS" title="Quality operating picture" description="See the exceptions that can affect execution, then open the canonical inspection or NCR workflow to act." metrics={metrics} attention={attention} emptyMessage="No quality exceptions are open for the available records." />
+
+      <ProjectScopeFilter projects={projects ?? []} selected={project} path={QUALITY_PATH} />
 
       <QualityControlClient
         initialNcrs={ncrs ?? []}

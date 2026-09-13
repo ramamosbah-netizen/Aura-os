@@ -153,9 +153,9 @@ export class QualityController {
   }
 
   @Get('ncrs')
-  listNcrs(): Promise<Ncr[]> {
+  listNcrs(@Query('projectId') projectId?: string): Promise<Ncr[]> {
     const ctx = this.tenant.get();
-    return this.qualityService.listNcrs(ctx.tenantId);
+    return this.qualityService.listNcrs(ctx.tenantId, projectId);
   }
 
   @Get('ncrs/paged')
@@ -249,9 +249,9 @@ export class QualityController {
   }
 
   @Get('irs')
-  listInspections(): Promise<InspectionRequest[]> {
+  listInspections(@Query('projectId') projectId?: string): Promise<InspectionRequest[]> {
     const ctx = this.tenant.get();
-    return this.qualityService.listInspections(ctx.tenantId);
+    return this.qualityService.listInspections(ctx.tenantId, projectId);
   }
 
   @Get('irs/paged')
@@ -300,9 +300,9 @@ export class QualityController {
   }
 
   @Get('snags')
-  listSnags(): Promise<Snag[]> {
+  listSnags(@Query('projectId') projectId?: string): Promise<Snag[]> {
     const ctx = this.tenant.get();
-    return this.qualityService.listSnags(ctx.tenantId);
+    return this.qualityService.listSnags(ctx.tenantId, projectId);
   }
 
   @Get('snags/paged')
@@ -490,8 +490,8 @@ export class QualityController {
   }
 
   @Get('audits')
-  listAudits(): Promise<AuditSchedule[]> {
-    return this.qualityService.listAudits(this.tenant.get().tenantId);
+  listAudits(@Query('projectId') projectId?: string): Promise<AuditSchedule[]> {
+    return this.qualityService.listAudits(this.tenant.get().tenantId, projectId);
   }
 
   @Get('audits/:id')

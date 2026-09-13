@@ -208,9 +208,9 @@ export class SiteController {
   }
 
   @Get('daily-reports')
-  listDailyReports(): Promise<DailyReport[]> {
+  listDailyReports(@Query('projectId') projectId?: string): Promise<DailyReport[]> {
     const ctx = this.tenant.get();
-    return this.siteService.listDailyReports(ctx.tenantId);
+    return this.siteService.listDailyReports(ctx.tenantId, projectId);
   }
 
   /** The Site Daily Report 360: the report with all its line-items. */
@@ -262,9 +262,9 @@ export class SiteController {
   }
 
   @Get('delay-logs')
-  listDelayLogs(): Promise<DelayLog[]> {
+  listDelayLogs(@Query('projectId') projectId?: string): Promise<DelayLog[]> {
     const ctx = this.tenant.get();
-    return this.siteService.listDelayLogs(ctx.tenantId);
+    return this.siteService.listDelayLogs(ctx.tenantId, projectId);
   }
 
   // ── Material Consumption ───────────────────────────────────────────────────
@@ -301,9 +301,9 @@ export class SiteController {
   }
 
   @Get('material-consumption')
-  listMaterialConsumption(): Promise<MaterialConsumption[]> {
+  listMaterialConsumption(@Query('projectId') projectId?: string): Promise<MaterialConsumption[]> {
     const ctx = this.tenant.get();
-    return this.siteService.listMaterialConsumption(ctx.tenantId);
+    return this.siteService.listMaterialConsumption(ctx.tenantId, projectId);
   }
 
   // ── Site Instructions ──────────────────────────────────────────────────────
@@ -337,8 +337,8 @@ export class SiteController {
   }
 
   @Get('instructions')
-  listInstructions(): Promise<SiteInstruction[]> {
-    return this.siteService.listSiteInstructions(this.tenant.get().tenantId);
+  listInstructions(@Query('projectId') projectId?: string): Promise<SiteInstruction[]> {
+    return this.siteService.listSiteInstructions(this.tenant.get().tenantId, projectId);
   }
 
   @Put('instructions/:id/acknowledge')

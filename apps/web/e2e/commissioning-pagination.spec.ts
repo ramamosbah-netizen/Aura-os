@@ -59,6 +59,25 @@ test('the commissioning scope pages, and the last system is still reachable', as
   await page.getByTestId('cx-scope-pager-prev').click();
   await expect(rows).toHaveCount(PAGE_SIZE);
   await expect(page.getByTestId('cx-scope-pager-prev')).toBeDisabled();
+
+  /**
+   * The same twenty-one systems seen through every other section that lists them. A section that
+   * quietly did not get the treatment is exactly the drift a per-section spec would miss, so they
+   * are asserted from one table against one seeded project.
+   */
+  for (const [section, listId] of [
+    ['itp', 'itp-systems'],
+    ['pre-commissioning', 'pre-systems'],
+    ['testing', 'cx-systems'],
+    ['readiness', 'readiness-systems'],
+  ] as const) {
+    await page.goto(`/commissioning?project=${encodeURIComponent(projectId)}&section=${section}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId(listId).locator('> li'), `${section} shows one page`).toHaveCount(PAGE_SIZE);
+    await expect(page.getByTestId(`${listId}-pager-info`)).toContainText(`1–${PAGE_SIZE} of ${total}`);
+
+    await page.getByTestId(`${listId}-pager-next`).click();
+    await expect(page.getByTestId(listId).locator('> li'), `${section} turns the page`).toHaveCount(total - PAGE_SIZE);
+  }
 });
 
 test('a list that fits on one page offers no pager at all', async ({ page, baseURL }) => {

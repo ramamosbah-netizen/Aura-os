@@ -4,6 +4,7 @@ import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
 import EmptyState from '@/components/ui/empty-state';
+import Pager, { usePaged } from './ui/pager';
 import type { PunchRow, SystemView } from './commissioning-workspace-client';
 
 /**
@@ -81,6 +82,8 @@ export function ItpSection({
     }
   }
 
+  const itpPage = usePaged(systems);
+
   return (
     <section aria-label="Inspection and test plans" style={st.section}>
       {error && <p style={st.error} role="alert" data-testid="itp-error">{error}</p>}
@@ -100,8 +103,9 @@ export function ItpSection({
       ) : systems.length === 0 ? (
         <EmptyState compact title="No systems in commissioning scope" description="Register a system first; requirements are linked to a system, not to a project." />
       ) : (
+        <>
         <ul style={st.list} data-testid="itp-systems">
-          {systems.map((s) => {
+          {itpPage.slice.map((s) => {
             const available = evidence.itps.filter((itp) => !s.itpRequirements.some((r) => r.itpId === itp.id));
             return (
               <li key={s.record.id} style={st.card} data-testid={`itp-system-${s.record.code}`}>
@@ -161,6 +165,8 @@ export function ItpSection({
             );
           })}
         </ul>
+        <Pager state={itpPage} label="systems" testId="itp-systems-pager" />
+        </>
       )}
     </section>
   );
@@ -171,6 +177,8 @@ export function ItpSection({
 const PRE_GATES = ['equipment', 'installation', 'engineering', 'quality'] as const;
 
 export function PreCommissioningSection({ systems }: { systems: SystemView[] }) {
+  const prePage = usePaged(systems);
+
   return (
     <section aria-label="Pre-commissioning" style={st.section}>
       <p style={st.authorityNote} data-testid="pre-authority">
@@ -183,8 +191,9 @@ export function PreCommissioningSection({ systems }: { systems: SystemView[] }) 
       {systems.length === 0 ? (
         <EmptyState compact title="No systems in commissioning scope" description="Register a system to see what stands between it and testing." />
       ) : (
+        <>
         <ul style={st.list} data-testid="pre-systems">
-          {systems.map((s) => {
+          {prePage.slice.map((s) => {
             const gates = s.readiness.gates.filter((g) => (PRE_GATES as readonly string[]).includes(g.id));
             const clear = gates.every((g) => g.state === 'READY' || g.state === 'NOT_APPLICABLE');
             return (
@@ -201,6 +210,8 @@ export function PreCommissioningSection({ systems }: { systems: SystemView[] }) 
             );
           })}
         </ul>
+        <Pager state={prePage} label="systems" testId="pre-systems-pager" />
+        </>
       )}
     </section>
   );
@@ -210,6 +221,8 @@ export function PreCommissioningSection({ systems }: { systems: SystemView[] }) 
 
 export function CertificatesSection({ systems }: { systems: SystemView[] }) {
   const commissioned = systems.filter((s) => s.commissioned);
+  const certPage = usePaged(commissioned);
+
   return (
     <section aria-label="Certificates and records" style={st.section}>
       <p style={st.authorityNote} data-testid="certificates-authority">
@@ -227,8 +240,9 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
       {commissioned.length === 0 ? (
         <EmptyState compact title="No system has been signed off yet" description="An evidence pack is assembled once a system is commissioned with a witness on record." />
       ) : (
+        <>
         <ul style={st.list} data-testid="certificate-list">
-          {commissioned.map((s) => (
+          {certPage.slice.map((s) => (
             <li key={s.record.id} style={st.card} data-testid={`certificate-${s.record.code}`}>
               <div style={st.cardHead}>
                 <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
@@ -258,6 +272,8 @@ export function CertificatesSection({ systems }: { systems: SystemView[] }) {
             </li>
           ))}
         </ul>
+        <Pager state={certPage} label="systems" testId="certificate-list-pager" />
+        </>
       )}
     </section>
   );
@@ -388,12 +404,14 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
 
   if (systems.length === 0) return null;
 
+  const abPage = usePaged(systems);
+
   return (
     <div style={st.section} data-testid="asbuilt-links">
       <h4 style={st.subHeading}>As-built drawings</h4>
       {error && <p style={st.error} role="alert" data-testid="asbuilt-error">{error}</p>}
       <ul style={st.list}>
-        {systems.map((s) => (
+        {abPage.slice.map((s) => (
           <li key={s.record.id} style={st.card} data-testid={`asbuilt-${s.record.code}`}>
             <div style={st.cardHead}>
               <span style={st.code}>{s.record.code}</span>
@@ -468,6 +486,7 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
           </li>
         ))}
       </ul>
+      <Pager state={abPage} label="systems" testId="asbuilt-pager" />
     </div>
   );
 }
@@ -476,6 +495,8 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
 
 export function ReadinessSection({ systems }: { systems: SystemView[] }) {
   const ready = systems.filter((s) => s.readiness.commissioningReady);
+  const readyPage = usePaged(systems);
+
   return (
     <section aria-label="Readiness and handover" style={st.section}>
       <p style={st.authorityNote} data-testid="readiness-authority">
@@ -492,8 +513,9 @@ export function ReadinessSection({ systems }: { systems: SystemView[] }) {
       {systems.length === 0 ? (
         <EmptyState compact title="No systems in commissioning scope" description="Readiness is per system; register one to see its chain." />
       ) : (
+        <>
         <ul style={st.list} data-testid="readiness-systems">
-          {systems.map((s) => (
+          {readyPage.slice.map((s) => (
             <li key={s.record.id} style={st.card} data-testid={`readiness-${s.record.code}`}>
               <div style={st.cardHead}>
                 <a href={`/commissioning/${s.record.id}`} style={st.code}>{s.record.code}</a>
@@ -509,6 +531,8 @@ export function ReadinessSection({ systems }: { systems: SystemView[] }) {
             </li>
           ))}
         </ul>
+        <Pager state={readyPage} label="systems" testId="readiness-systems-pager" />
+        </>
       )}
     </section>
   );

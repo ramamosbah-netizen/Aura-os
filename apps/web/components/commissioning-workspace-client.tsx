@@ -539,6 +539,15 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
 
   const failing = systems.filter((s) => s.failingPoints.length > 0);
   const open = (punch ?? []).filter((p) => p.status === 'open');
+
+  /**
+   * FLATTENED before paging. The rows here are test POINTS, not systems — one system can stand
+   * several failed points — so paging the systems would put "1–20 of 6" above twenty-odd rows.
+   * Pairing each point with its system keeps the row's link and code intact.
+   */
+  const failingPoints = failing.flatMap((s) => s.failingPoints.map((point) => ({ system: s, point })));
+  const failingPage = usePaged(failingPoints);
+  const openPage = usePaged(open);
   const byRecord = new Map(systems.map((s) => [s.record.id, s]));
 
   async function raiseDefect(system: SystemView, point: FailingPoint): Promise<void> {
@@ -597,8 +606,9 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
       {failing.length === 0 ? (
         <div style={st.clear} data-testid="no-failing-points">No test point is standing failed on these systems.</div>
       ) : (
+        <>
         <ul style={st.defectList} data-testid="cx-failing-points">
-          {failing.map((s) => s.failingPoints.map((point) => (
+          {failingPage.slice.map(({ system: s, point }) => (
             <li key={point.pointId} style={st.defectRow} data-testid={`failing-${point.pointNo}`}>
               <span style={st.defectHead}>
                 <a href={`/commissioning/${s.record.id}`} style={st.blockCode}>{s.record.code}</a>
@@ -626,8 +636,10 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
                 )}
               </span>
             </li>
-          )))}
+          ))}
         </ul>
+        <Pager state={failingPage} label="failing points" testId="cx-failing-points-pager" />
+        </>
       )}
 
       <h3 style={st.h3}>Open defects</h3>
@@ -636,8 +648,9 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
       ) : open.length === 0 ? (
         <div style={st.clear} data-testid="no-open-defects">No defect is open on these systems.</div>
       ) : (
+        <>
         <ul style={st.defectList} data-testid="cx-open-defects">
-          {open.map((item) => {
+          {openPage.slice.map((item) => {
             const system = byRecord.get(item.commissioningId);
             return (
               <li key={item.id} style={st.defectRow} data-testid={`defect-${item.id}`}>
@@ -662,6 +675,8 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
             );
           })}
         </ul>
+        <Pager state={openPage} label="defects" testId="cx-open-defects-pager" />
+        </>
       )}
 
       {/* The authority boundary, stated on the screen rather than assumed. */}

@@ -306,8 +306,10 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     return this.dailyReportStore.findById(id, tenantId);
   }
 
-  listDailyReports(tenantId: Id): Promise<DailyReport[]> {
-    return this.dailyReportStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listDailyReports(tenantId: Id, projectId?: string): Promise<DailyReport[]> {
+    const all = await this.dailyReportStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   listDailyReportsPaged(filter: DailyReportFilter, page: PageParams): Promise<Page<DailyReport>> {
@@ -375,8 +377,10 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     return log;
   }
 
-  listDelayLogs(tenantId: Id): Promise<DelayLog[]> {
-    return this.delayLogStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listDelayLogs(tenantId: Id, projectId?: string): Promise<DelayLog[]> {
+    const all = await this.delayLogStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   /** Paged variant — low-growth list, so windowing over findAll suffices (gap #9 tail). */
@@ -452,8 +456,10 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     return updated;
   }
 
-  listSiteInstructions(tenantId: Id): Promise<SiteInstruction[]> {
-    return this.siteInstructionStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listSiteInstructions(tenantId: Id, projectId?: string): Promise<SiteInstruction[]> {
+    const all = await this.siteInstructionStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   /** Paged variant — low-growth list, windowed over findAll (gap #9 tail). */
@@ -501,8 +507,10 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     return consumption;
   }
 
-  listMaterialConsumption(tenantId: Id): Promise<MaterialConsumption[]> {
-    return this.materialConsumptionStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listMaterialConsumption(tenantId: Id, projectId?: string): Promise<MaterialConsumption[]> {
+    const all = await this.materialConsumptionStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   /** Paged variant — low-growth list, windowed over findAll (gap #9 tail). */

@@ -3,6 +3,7 @@ import { getJson } from '@/lib/api';
 import HseControlClient from '../../../components/hse-control-client';
 import AuraTabAnchor from '../../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../../components/delivery-operations-workspace-header';
+import ProjectScopeFilter from '../../../components/project-scope-filter';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
 import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
 import { HSE_PATH, HSE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
@@ -91,15 +92,25 @@ interface RiskAssessmentLite {
   status: string;
 }
 
-export default async function HseControlPage() {
+export default async function HseControlPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ project?: string; section?: string }>;
+}) {
+  // The project lives in the URL and is applied on the SERVER: rows for other projects are
+  // never sent to the browser. Hiding them client-side would leave the same data on the wire.
+  const filters = (await searchParams) ?? {};
+  const project = filters.project ?? '';
+  const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
+
   const [incidents, permits, capas, trainingRecords, projects, riskAssessments] = await Promise.all([
-    getJson<HseIncident[]>('/api/hse/incidents'),
-    getJson<PermitToWork[]>('/api/hse/ptws'),
-    getJson<CapaAction[]>('/api/hse/capas'),
+    getJson<HseIncident[]>(`/api/hse/incidents${scoped}`),
+    getJson<PermitToWork[]>(`/api/hse/ptws${scoped}`),
+    getJson<CapaAction[]>(`/api/hse/capas${scoped}`),
     getJson<SafetyTrainingRecord[]>('/api/hse/training'),
     getJson<Project[]>('/api/projects/projects'),
     // Only APPROVED assessments can authorise a permit, so only those are offerable.
-    getJson<RiskAssessmentLite[]>('/api/hse/risk-assessments'),
+    getJson<RiskAssessmentLite[]>(`/api/hse/risk-assessments${scoped}`),
   ]);
 
   const open = <T extends { status?: string }>(rows: T[] | null, closed: string[]) => rows === null ? null : rows.filter((row) => !closed.includes((row.status ?? '').toLowerCase())).length;
@@ -123,6 +134,8 @@ export default async function HseControlPage() {
       <DeliveryOperationsWorkspaceHeader active="hse" title="HSE control workspace" description="Keep field activities safe through permits, risk controls, incidents, observations, training and corrective actions." />
 
       <DeliveryWorkspaceSummary eyebrow="HSE OPERATIONS" title="Safety operating picture" description="See permits, incidents and corrective actions that need attention. Safety records remain owned by HSE." metrics={metrics} attention={attention} emptyMessage="No HSE exceptions are open for the available records." />
+
+      <ProjectScopeFilter projects={projects ?? []} selected={project} path={HSE_PATH} />
 
       <HseControlClient
         initialIncidents={incidents ?? []}

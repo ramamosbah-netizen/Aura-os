@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import EngineeringClient from '../../components/engineering-client';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
+import ProjectScopeFilter from '../../components/project-scope-filter';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 
 export const dynamic = 'force-dynamic';
@@ -123,15 +124,26 @@ interface BimModel {
   createdAt: string;
 }
 
-export default async function EngineeringPage() {
+export default async function EngineeringPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ project?: string; section?: string }>;
+}) {
+  // The project lives in the URL, so it survives a reload, a pasted link and a reopened AURA tab —
+  // and, more importantly, it is applied on the SERVER: the rows for other projects are never sent.
+  // A picker that hid them in the browser would leave the same data on the wire.
+  const filters = (await searchParams) ?? {};
+  const project = filters.project ?? '';
+  const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
+
   const [drawings, rfis, submittals, designChanges, documents, technicalQueries, bimModels, docTypes, projects, tenders] = await Promise.all([
-    getJson<Drawing[]>('/api/engineering/drawings'),
-    getJson<Rfi[]>('/api/engineering/rfis'),
-    getJson<Submittal[]>('/api/engineering/submittals'),
-    getJson<DesignChange[]>('/api/engineering/design-changes'),
-    getJson<EngineeringDocument[]>('/api/engineering/documents'),
-    getJson<TechnicalQuery[]>('/api/engineering/technical-queries'),
-    getJson<BimModel[]>('/api/engineering/bim-models'),
+    getJson<Drawing[]>(`/api/engineering/drawings${scoped}`),
+    getJson<Rfi[]>(`/api/engineering/rfis${scoped}`),
+    getJson<Submittal[]>(`/api/engineering/submittals${scoped}`),
+    getJson<DesignChange[]>(`/api/engineering/design-changes${scoped}`),
+    getJson<EngineeringDocument[]>(`/api/engineering/documents${scoped}`),
+    getJson<TechnicalQuery[]>(`/api/engineering/technical-queries${scoped}`),
+    getJson<BimModel[]>(`/api/engineering/bim-models${scoped}`),
     getJson<DocTypeMeta[]>('/api/engineering/document-types'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<TenderContext[]>('/api/tendering/tenders'),
@@ -145,7 +157,10 @@ export default async function EngineeringPage() {
       <AuraTabAnchor href="/engineering" title="Engineering" type="Delivery Operations" />
       <DeliveryOperationsWorkspaceHeader active="engineering" title="Engineering workspace" description="Prepare and release the technical information that enables field work: drawings, RFIs, submittals, design changes and controlled deliverables." />
 
+      <ProjectScopeFilter projects={projects ?? []} selected={project} path="/engineering" />
+
       <EngineeringClient
+        scopedProjectId={project}
         initialDrawings={drawings ?? []}
         initialRfis={rfis ?? []}
         initialSubmittals={submittals ?? []}

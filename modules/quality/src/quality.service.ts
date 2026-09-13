@@ -240,8 +240,10 @@ export class QualityService {
     });
   }
 
-  listNcrs(tenantId: Id): Promise<Ncr[]> {
-    return this.ncrStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listNcrs(tenantId: Id, projectId?: string): Promise<Ncr[]> {
+    const all = await this.ncrStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   listNcrsPaged(tenantId: Id, page: PageParams): Promise<Page<Ncr>> {
@@ -337,8 +339,10 @@ export class QualityService {
     return ir;
   }
 
-  listInspections(tenantId: Id): Promise<InspectionRequest[]> {
-    return this.irStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listInspections(tenantId: Id, projectId?: string): Promise<InspectionRequest[]> {
+    const all = await this.irStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   listInspectionsPaged(tenantId: Id, page: PageParams): Promise<Page<InspectionRequest>> {
@@ -488,8 +492,10 @@ export class QualityService {
     return { id: 'quality-ncr', domain: 'quality', state: 'CLEAR' };
   }
 
-  listSnags(tenantId: Id): Promise<Snag[]> {
-    return this.snagStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listSnags(tenantId: Id, projectId?: string): Promise<Snag[]> {
+    const all = await this.snagStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   listSnagsPaged(tenantId: Id, page: PageParams): Promise<Page<Snag>> {
@@ -813,8 +819,10 @@ export class QualityService {
     return this.auditStore.findById(id, tenantId);
   }
 
-  listAudits(tenantId: string): Promise<AuditSchedule[]> {
-    return this.auditStore.findAll(tenantId);
+  /** Optionally narrowed to one project — see the workspace project scope (server-side). */
+  async listAudits(tenantId: string, projectId?: string): Promise<AuditSchedule[]> {
+    const all = await this.auditStore.findAll(tenantId);
+    return projectId ? all.filter((r) => r.projectId === projectId) : all;
   }
 
   async updateAuditChecklist(

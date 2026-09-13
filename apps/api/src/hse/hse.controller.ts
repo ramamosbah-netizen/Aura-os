@@ -118,9 +118,9 @@ export class HseController {
   }
 
   @Get('incidents')
-  listIncidents(): Promise<HseIncident[]> {
+  listIncidents(@Query('projectId') projectId?: string): Promise<HseIncident[]> {
     const ctx = this.tenant.get();
-    return this.hseService.listIncidents(ctx.tenantId);
+    return this.hseService.listIncidents(ctx.tenantId, projectId);
   }
 
   @Get('incidents/paged')
@@ -205,9 +205,9 @@ export class HseController {
   }
 
   @Get('ptws')
-  listPermits(): Promise<PermitToWork[]> {
+  listPermits(@Query('projectId') projectId?: string): Promise<PermitToWork[]> {
     const ctx = this.tenant.get();
-    return this.hseService.listPermits(ctx.tenantId);
+    return this.hseService.listPermits(ctx.tenantId, projectId);
   }
 
   @Get('ptws/paged')
@@ -251,9 +251,9 @@ export class HseController {
   }
 
   @Get('capas')
-  listCapas(): Promise<CapaAction[]> {
+  listCapas(@Query('projectId') projectId?: string): Promise<CapaAction[]> {
     const ctx = this.tenant.get();
-    return this.hseService.listCapas(ctx.tenantId);
+    return this.hseService.listCapas(ctx.tenantId, projectId);
   }
 
   // ── Toolbox Talks ──────────────────────────────────────────────────────────
@@ -312,8 +312,8 @@ export class HseController {
   }
 
   @Get('risk-assessments')
-  listRiskAssessments(): Promise<RiskAssessment[]> {
-    return this.hseService.listRiskAssessments(this.tenant.get().tenantId);
+  listRiskAssessments(@Query('projectId') projectId?: string): Promise<RiskAssessment[]> {
+    return this.hseService.listRiskAssessments(this.tenant.get().tenantId, projectId);
   }
 
   @Put('risk-assessments/:id/approve')

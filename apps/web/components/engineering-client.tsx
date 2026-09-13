@@ -164,6 +164,8 @@ interface Props {
   docTypes: DocTypeMeta[];
   projects: Project[];
   tenders: TenderContext[];
+  /** The workspace's project scope, from `?project=`. Seeds the create forms so the two agree. */
+  scopedProjectId?: string;
 }
 
 function attentionCount(...counts: number[]) {
@@ -181,6 +183,7 @@ export default function EngineeringClient({
   docTypes,
   projects,
   tenders,
+  scopedProjectId = '',
 }: Props) {
   const { active: activeTab, select: selectTab } = useWorkspaceSection<Tab>(ENGINEERING_PATH, SECTION_IDS, 'overview');
 
@@ -194,7 +197,9 @@ export default function EngineeringClient({
 
   // Form states
   // Project context is an explicit decision, never silently inferred from the first record.
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  // Seeded from the workspace's project scope, so a scoped workspace does not then ask again which
+  // project a new record belongs to. Empty when the scope is "All projects", exactly as before.
+  const [selectedProjectId, setSelectedProjectId] = useState(scopedProjectId);
   const [drawingCode, setDrawingCode] = useState('');
   const [drawingTitle, setDrawingTitle] = useState('');
   const [drawingRev, setDrawingRev] = useState('0');

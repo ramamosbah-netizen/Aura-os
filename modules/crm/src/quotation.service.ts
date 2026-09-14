@@ -231,21 +231,32 @@ export class QuotationService {
 
   /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */
   async revise(id: Id, actorId: Id | null = null): Promise<Quotation> {
-    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
     const actor = this.actor(actorId);
-    const { superseded, next } = reviseQuotation(q, { actorId: actor });
-    const event = makeEvent({
-      type: QUOTATION_EVENT.revised,
-      tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
-      aggregateType: 'crm.quotation', aggregateId: next.id,
-      payload: { quoteNumber: q.quoteNumber, fromRevision: q.revision, toRevision: next.revision, supersededId: q.id },
-    });
+    let source!: Quotation;
+    let next!: Quotation;
     await this.runAtomic(async (handle) => {
-      await this.store.saveWithClient(handle, superseded);
+      const boundTenant = this.tenant?.boundTenantId();
+      // Serialize revisions on the canonical current row. Without this lock two requests arriving
+      // together can both observe `sent` and create two Rev n+1 children. The caller supplies only
+      // the row being revised; parent identity and revision number are always derived here.
+      const locked = handle !== null && boundTenant && this.store.getForTenantForUpdate
+        ? await this.store.getForTenantForUpdate(handle, boundTenant, id)
+        : await this.store.get(id);
+      const q = assertSameTenant(locked, boundTenant, 'quotation', id);
+      source = q;
+      const revision = reviseQuotation(q, { actorId: actor });
+      next = revision.next;
+      const event = makeEvent({
+        type: QUOTATION_EVENT.revised,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
+        aggregateType: 'crm.quotation', aggregateId: next.id,
+        payload: { quoteNumber: q.quoteNumber, fromRevision: q.revision, toRevision: next.revision, supersededId: q.id },
+      });
+      await this.store.saveWithClient(handle, revision.superseded);
       await this.store.saveWithClient(handle, next);
       await this.appendEvents(handle, [event]);
     });
-    this.logger.log(`Quotation ${q.quoteNumber} revised: Rev ${q.revision} → Rev ${next.revision}`);
+    this.logger.log(`Quotation ${source.quoteNumber} revised: Rev ${source.revision} → Rev ${next.revision}`);
     return next;
   }
 
@@ -393,8 +404,10 @@ export class QuotationService {
       return buildQuotationLine({
         description: (it.description ?? '').trim() || `Item ${i + 1}`,
         quantity: r.quantity,
+        unit: it.unit ?? q.lines[i]?.unit ?? null,
+        sourceItemId: it.sourceItemId ?? q.lines[i]?.sourceItemId ?? null,
         unitPrice: r.unitSellPrice,
-        vatRate: 5,
+        vatRate: q.lines[i]?.vatRate ?? 5,
       });
     });
     const { subtotal, vatTotal, total } = computeQuotationTotals(lines);

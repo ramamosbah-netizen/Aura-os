@@ -27,14 +27,22 @@ export interface SheetHead {
   lines: Line[];
 }
 
-export default function PricingWorkspace({ quotationId, sheetName, initialSheet }: {
+export default function PricingWorkspace({ quotationId, sheetName, initialSheet, initialLines = null }: {
   quotationId: string;
   /** Default name for a sheet created on first save — usually the quote number + subject. */
   sheetName: string;
   initialSheet: SheetHead | null;
+  /** Carried quotation build-up used when a new revision has no sheet row yet. */
+  initialLines?: Line[] | null;
 }) {
   const [sheet, setSheet] = useState<SheetHead | null>(initialSheet);
-  const [lines, setLines] = useState<Line[]>(initialSheet && initialSheet.lines.length > 0 ? initialSheet.lines : [seed()]);
+  const [lines, setLines] = useState<Line[]>(
+    initialSheet && initialSheet.lines.length > 0
+      ? initialSheet.lines
+      : initialLines && initialLines.length > 0
+        ? initialLines
+        : [seed()],
+  );
   const [sel, setSel] = useState(0);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);

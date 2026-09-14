@@ -3,10 +3,11 @@ import RecordChrome from '../../../../../components/record-chrome';
 import PricingAdvicePanel from '../../../../../components/pricing-advice-panel';
 import PricingWorkspace, { type SheetHead } from '../../../../../components/pricing-workspace';
 import DataStateNotice from '../../../../../components/ui/data-state';
+import type { EstimationLineInput } from '@aura/shared';
 
 export const dynamic = 'force-dynamic';
 
-interface QuotationHead { id: string; quoteNumber: string; revision: number; status: string; customerName: string; subject?: string | null }
+interface QuotationHead { id: string; quoteNumber: string; revision: number; status: string; customerName: string; subject?: string | null; estimation?: EstimationLineInput[] | null }
 
 export default async function QuotationPricingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -64,6 +65,7 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         quotationId={id}
         sheetName={`${q.quoteNumber}${q.subject ? ` — ${q.subject}` : ''}`}
         initialSheet={workingSheet}
+        initialLines={q.estimation ?? null}
       />
       <div style={{ marginTop: 20 }}><PricingAdvicePanel id={id} /></div>
     </div>

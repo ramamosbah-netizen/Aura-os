@@ -53,10 +53,18 @@ export class NegotiationController {
     @Query('quotationId') quotationId?: string,
   ): Promise<{ entries: NegotiationEntry[]; moves: PriceMove[]; summary: NegotiationSummary }> {
     const tenantId = this.tenant.get().tenantId;
-    const entries = await this.store.list({ tenantId, quotationId });
+    // A negotiation belongs to the quotation CHAIN, even though each entry records the exact
+    // revision that was current when the conversation happened. Reading Rev 1 must therefore keep
+    // the customer's ask recorded against Rev 0 visible instead of presenting a blank history.
+    const revisions = quotationId ? await this.quotations.listRevisions(tenantId, quotationId) : [];
+    const entries = quotationId
+      ? (await Promise.all(revisions.map((revision) => this.store.list({ tenantId, quotationId: revision.id }))))
+          .flat()
+          .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+      : await this.store.list({ tenantId });
     // Without a quotation there is no single revision chain to price against, so the summary
     // reports the log only. Better than silently summarising across unrelated deals.
-    const moves = quotationId ? await this.priceMoves(tenantId, quotationId) : [];
+    const moves = quotationId ? this.priceMovesFrom(revisions) : [];
     return { entries, moves, summary: summariseNegotiation(entries, moves) };
   }
 
@@ -104,8 +112,7 @@ export class NegotiationController {
   }
 
   /** The revision chain, reduced to what a negotiation cares about: what the price did. */
-  private async priceMoves(tenantId: string, quotationId: string): Promise<PriceMove[]> {
-    const revisions = await this.quotations.listRevisions(tenantId, quotationId);
+  private priceMovesFrom(revisions: Awaited<ReturnType<QuotationService['listRevisions']>>): PriceMove[] {
     let previous: number | null = null;
     return revisions.map((q) => {
       const total = q.total ?? 0;

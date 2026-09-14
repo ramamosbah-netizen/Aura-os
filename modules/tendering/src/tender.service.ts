@@ -457,23 +457,28 @@ export class TenderService implements OnModuleInit {
   async submit(
     id: Id,
     details: Omit<NewTenderSubmission, 'tenantId' | 'companyId' | 'tenderId' | 'tenderTitle' | 'submittedValue'> = {},
+    /** Canonical approved-offer value resolved by the app layer; never accepted from request data. */
+    approvedOfferValue?: number,
   ): Promise<{ tender: Tender; submission: TenderSubmission }> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
+    const submittedTender = approvedOfferValue !== undefined && approvedOfferValue > 0
+      ? { ...existing, value: approvedOfferValue }
+      : existing;
 
-    const evidence = await this.tenderEvidence(existing.tenantId, id);
-    const check = checkTenderTransition(existing, 'submitted', evidence);
+    const evidence = await this.tenderEvidence(submittedTender.tenantId, id);
+    const check = checkTenderTransition(submittedTender, 'submitted', evidence);
     if (!check.allowed) throw new Error(tenderGateMessage('submitted', check.gaps));
 
     const submission = makeTenderSubmission({
       ...details,
-      tenantId: existing.tenantId,
-      companyId: existing.companyId,
-      tenderId: existing.id,
-      tenderTitle: existing.title,
+      tenantId: submittedTender.tenantId,
+      companyId: submittedTender.companyId,
+      tenderId: submittedTender.id,
+      tenderTitle: submittedTender.title,
       // The offer as it stands right now — a snapshot later BOQ edits cannot rewrite.
-      submittedValue: existing.value,
+      submittedValue: submittedTender.value,
     });
-    const updated: Tender = { ...existing, status: 'submitted' };
+    const updated: Tender = { ...submittedTender, status: 'submitted' };
 
     const event = makeEvent({
       type: TENDER_EVENT.submitted,

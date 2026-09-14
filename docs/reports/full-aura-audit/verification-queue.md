@@ -2,6 +2,12 @@
 
 55 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
 
+## Wave 2 closure update
+
+The bounded Direct/Tender study-to-offer gate is verified in [the Wave 2 closure report](./wave-2-progress-report.md). Its proof covers maker/checker approval, Rev 0 immutability, persisted negotiation, stale/concurrent revision protection, Rev 1 re-approval and issue, complete revision history, actual final PDF/XLSX files, and final Rev 1 award-basis consumption.
+
+This does not remove or conceal any row in the frozen queue. `EST-07`, `EST-11`, `EST-12` and `EST-13` remain UNVERIFIED and are now executed with Wave 4, where supplier quotation selection, normalized landed cost and technical/commercial comparison have their canonical authority. Queue total remains **55**.
+
 | ID | Capability | Roles | Stages | Authority | Current evidence boundary | Acceptance proof |
 | --- | --- | --- | --- | --- | --- | --- |
 | STU-02 | Site survey on existing opportunity | Pre-Sales / Estimator; Design / Technical Engineer; Technical Manager | Pre-Sales; Engineering | CRM solution scope / Tender pre-award | R-J1 | Representative Pre-Sales / Estimator, Design / Technical Engineer, Technical Manager role executes Site survey on existing opportunity in the canonical CRM solution scope / Tender pre-award context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
@@ -59,4 +65,3 @@
 | MGT-09 | Margin and forecast | Project Manager; Technical Manager; Commercial Manager / QS; Procurement Manager / Buyer; Senior Management; CEO | Sales; Award; Mobilisation; Engineering; Planning; Procurement; Progress; Commercial / Certification; Finance / Collection; Closeout | Canonical portfolio projections | N-SOURCE | Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Margin and forecast in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | MGT-12 | Variations and claims | Project Manager; Technical Manager; Commercial Manager / QS; Procurement Manager / Buyer; Senior Management; CEO | Sales; Award; Mobilisation; Engineering; Planning; Procurement; Progress; Commercial / Certification; Finance / Collection; Closeout | Canonical portfolio projections | N-SOURCE | Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Variations and claims in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | MGT-13 | Forecast completion | Project Manager; Technical Manager; Commercial Manager / QS; Procurement Manager / Buyer; Senior Management; CEO | Sales; Award; Mobilisation; Engineering; Planning; Procurement; Progress; Commercial / Certification; Finance / Collection; Closeout | Canonical portfolio projections | N-SOURCE | Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Forecast completion in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
-

@@ -2,6 +2,12 @@
 
 DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 new). This freezes the remediation scope; it does not assert functional completion. COMPLETE requires actual end-to-end proof; no code-presence promotion. Group evidence is a pointer, not blanket leaf proof.
 
+## Post-audit remediation state — 14 September 2026
+
+Wave 0, Wave 1 and the bounded Wave 2 journey are **CLOSED / VERIFIED**. Wave 2 now proves Direct and Tender from approved technical basis through canonical quantities, estimate, maker/checker approval, issued Rev 0, negotiation, immutable revised Rev 0, re-approved/issued Rev 1 and a frozen final award basis. The old revision and caller-supplied parent/baseline/revision identifiers cannot replace the persisted current basis. Final PDF and XLSX outputs were opened and reconciled. See [Wave 2 Closure Report](./wave-2-progress-report.md).
+
+The discovery classifications and counts below remain historical scope-freeze facts. They are not silently rewritten by remediation. The supplier-dependent leaves `EST-07`, `EST-11`, `EST-12` and `EST-13` remain UNVERIFIED and are sequenced with Wave 4. Wave 3 is READY TO START; AURA overall remains OPEN, not functionally complete and not Production Ready.
+
 | Classification | Capability count |
 | --- | --- |
 | COMPLETE | 0 |

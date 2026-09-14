@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { estimateLine } from '@aura/shared';
 import { makeBOQ, makeBOQItem } from './boq';
 import { PRICING_SHEET_CSV_COLUMNS, pricingSheetCsvRows } from './pricing-csv';
-import { compileResourceBreakdown, computeBuildUp, makeRateBuildUp, summariseEstimate, type NewRateBuildUp } from './estimate';
+import { compileResourceBreakdown, computeBuildUp, makeRateBuildUp, summariseEstimate, tenderBuildUpToEstimationLine, type NewRateBuildUp } from './estimate';
 
 const base: NewRateBuildUp = {
   tenantId: 't-1',
@@ -100,6 +101,46 @@ describe('tender estimate summary', () => {
     const est = summariseEstimate('boq-1', 'tender-1', [], []);
     expect(est.estimatedTenderValue).toBe(0);
     expect(est.marginPercent).toBe(0);
+  });
+});
+
+describe('Tender build-up → quotation revision handoff', () => {
+  it('carries canonical BOQ identity, quantity, cost categories and exact selling rate', () => {
+    const boq = makeBOQ({ tenantId: 't-1', tenderId: 'tender-1' });
+    const item = makeBOQItem({
+      tenantId: 't-1', boqId: boq.id, itemCode: 'CCTV-01', description: 'IP camera', unit: 'nos', quantity: 24, rate: 0,
+    });
+    const buildUp = makeRateBuildUp({
+      ...base,
+      boqItemId: item.id,
+      indirectPercent: 5,
+      overheadPercent: 10,
+      riskPercent: 4,
+      profitPercent: 8,
+    });
+
+    const carried = tenderBuildUpToEstimationLine(item, buildUp);
+    const result = estimateLine(carried);
+
+    expect(carried).toMatchObject({
+      description: '[CCTV-01] IP camera (nos)', unit: 'nos', sourceItemId: item.id, quantity: 24,
+      materialUnitCost: 294, equipmentUnitCost: 35,
+      labour: { hoursPerUnit: 0.8, hourlyRate: 45 },
+    });
+    expect(result.unitCost).toBeCloseTo(buildUp.sellingRate - buildUp.profitAmount, 2);
+    expect(result.unitSellPrice).toBe(buildUp.sellingRate);
+  });
+
+  it('carries an unbuilt BOQ rate without inventing a margin or changing quantity', () => {
+    const boq = makeBOQ({ tenantId: 't-1', tenderId: 'tender-1' });
+    const item = makeBOQItem({
+      tenantId: 't-1', boqId: boq.id, itemCode: 'CABLE-01', description: 'CAT6 cable', unit: 'm', quantity: 305, rate: 2.75,
+    });
+    const carried = tenderBuildUpToEstimationLine(item, null);
+    const result = estimateLine(carried);
+
+    expect(carried).toMatchObject({ quantity: 305, materialUnitCost: 2.75, targetMarginPercent: 0, sourceItemId: item.id });
+    expect(result.unitSellPrice).toBe(2.75);
   });
 });
 

@@ -10,8 +10,9 @@
 | --- | --- | --- |
 | 0 | COMPLETE for its bounded safety scope | [Wave 0 Closure Report](./wave-0-closure-report.md): nine planned defects plus J1-08 corrected; wider capabilities remain assigned to later waves. |
 | 1 | COMPLETE for its bounded journey scope | [Wave 1 Closure Report](./wave-1-progress-report.md): direct and Tender paths now have canonical inputs, versioned DMS evidence, persisted structured Technical Studies and independent approval. Bid/No-Bid is immutable with governed amendment history. PostgreSQL browser proof includes a real Sales Manager session and Tender study save/reload/submit. |
-| 2 | ACTIVE | [Wave 2 progress](./wave-2-progress-report.md): the carried bypasses are corrected; actual commercial PDF, technical-proposal PDF, direct internal XLSX and Tender internal XLSX outputs are proved. Tender Technical Study now feeds an independently approved quantity take-off and a lineage-preserving, locked BOQ projection; pricing, exports and customer offer generation cannot bypass that projection. The Tender API chain is proved with intended roles. Direct intended-role browser acceptance and negotiation proof remain open. |
-| 3–10 | NOT STARTED as remediation waves | Audit evidence and acceptance gates are frozen below; isolated corrections do not promote these waves. |
+| 2 | CLOSED / VERIFIED | [Wave 2 closure](./wave-2-progress-report.md): Direct and Tender both prove issued Rev 0 → recorded negotiation → immutable revised Rev 0 → editable/re-approved/issued Rev 1 → complete history → final frozen award basis. Actual final-revision PDF/XLSX files reconcile and request data cannot nominate an old revision. |
+| 3 | READY TO START | The frozen Rev 1 commercial basis is available to the Award/Mobilisation journey without BOQ quantity or selling-price re-entry. No Wave 3 remediation has started. |
+| 4–10 | NOT STARTED as remediation waves | Audit evidence and acceptance gates remain frozen below. |
 
 ## Programme rules
 
@@ -50,9 +51,9 @@ The estimates below are relative planning ranges for a staffed product squad, no
 | --- | --- | --- | --- | ---: |
 | 0 | Safety containment and repeatable acceptance harness | J1-01, J1-07, J3-01, J3-02, J3-03, J3-04, J4-02, F-11, F-12 | None; creates fixtures used by all later proof | 1–2 iterations |
 | 1 | Sales intake → governed technical study | J1-02, J1-03, J1-04, J1-05, J1-06, J1-12, J1-13, UX-01, UX-02, UX-03, UX-04 | STU-02, STU-06, STU-07, STU-08 | 2–4 iterations |
-| 2 | Study → estimate → approved customer offer | J1-08, J1-09, J1-10, J1-11, J1-14, F-01, F-02, F-03 | EST-07, EST-11, EST-12, EST-13 | 3–5 iterations |
+| 2 | Study → estimate → approved customer offer | J1-08, J1-09, J1-10, J1-11, J1-14, and the applicable offer surfaces of F-01, F-02, F-03 | None; the final Direct/Tender journey and its actual outputs are proved | 3–5 iterations |
 | 3 | Award → mobilisation → engineering → connected plan | J2-02, J2-03, F-07, F-08 | AWD-06, ENG-03, ENG-04, ENG-05, ENG-06, PLN-04 | 3–5 iterations |
-| 4 | Material need → supplier decision → PO/GRN/stock/site | J3-05, F-04 | SUP-01..12, BUY-01, BUY-02, BUY-03, BUY-07 | 3–5 iterations |
+| 4 | Material need → supplier decision → PO/GRN/stock/site | J3-05, F-04 | EST-07, EST-11, EST-12, EST-13, SUP-01..12, BUY-01, BUY-02, BUY-03, BUY-07 | 3–5 iterations |
 | 5 | Site execution → QA/QC/HSE → measured progress | J4-01, J4-03, J4-04 | SIT-01, SIT-06, QHS-01, QHS-02, QHS-06, QHS-07 | 2–4 iterations |
 | 6 | Certified work → invoice → collection → final account | J5-01, J5-02 | COM-02, COM-07, COM-10 | 2–4 iterations |
 | 7 | System T&C → handover → warranty/service → closeout | J6-01, J6-02 | TC-07, TC-10, HO-05, HO-10 | 3–5 iterations |
@@ -98,15 +99,14 @@ Build the employee path from the first enquiry:
 Connect the approved study to a complete estimate:
 
 - preserve quantity take-off lineage and revisions;
-- include material, labour/productivity, engineering hours, plant/access, subcontract, logistics/landed cost, wastage, risk/contingency and overhead;
-- attach supplier quotation source and revision to each applicable cost;
+- include material, labour/productivity, engineering hours, plant/access, subcontract, wastage, risk/contingency and overhead; retain any existing supplier-source lineage;
 - distinguish margin, markup, discount, cost and selling price;
 - require technical and commercial internal approval before customer submission;
 - generate separate internal pricing and customer technical/commercial outputs with correct company identity and no internal-margin leakage;
 - preserve the frozen offer/quantity basis into award without manual re-entry;
 - retire or gate legacy quotation paths that bypass the governed chain.
 
-**Exit gate:** one direct-sale job and one Tender job move from approved study to submitted offer and revision/negotiation; calculations reconcile; four EST verification leaves are proved; actual PDF and XLSX outputs open correctly and trace to the approved revision.
+**Exit gate — met:** one Direct Sale and one Tender move from approved study through submitted offer, recorded negotiation, immutable Rev 0, re-approved Rev 1 and a final frozen award basis. Calculations reconcile; actual final-revision PDF and XLSX outputs open correctly; maker/checker, stale revision and forged-lineage refusals are proved. `EST-07`, `EST-11`, `EST-12` and `EST-13` remain frozen verification leaves and are sequenced with Wave 4 because their canonical authority is the supplier decision. This sequencing clarification changes no discovery total or capability scope.
 
 ## Wave 3 — Award, mobilisation, engineering and connected planning
 

@@ -8,6 +8,7 @@ import {
   PRICING_SUMMARY_CSV_COLUMNS,
   TenderService,
   isSourceStale,
+  tenderBuildUpToEstimationLine,
   pricingSheetCsvRows,
   type BOQItem,
   type EstimateSource,
@@ -533,6 +534,7 @@ export class TenderPricingController {
     if (lines.every((l) => l.unitPrice <= 0)) {
       throw new BadRequestException('no line has a price — fill the pricing sheet (or BOQ rates) first');
     }
+    const estimation = items.map((item) => tenderBuildUpToEstimationLine(item, byItem.get(item.id) ?? null));
 
     const quoteNumber = await this.numbering.generateNextNumber(ctx.tenantId, ctx.companyId ?? null, 'crm', 'quotation', 'QUO');
     const quotation = await this.quotations.create({
@@ -545,6 +547,7 @@ export class TenderPricingController {
       issueDate: new Date().toISOString().slice(0, 10),
       validUntil: dto?.validUntil ?? null,
       lines,
+      estimation,
       createdBy: ctx.actorId ?? null,
     });
 

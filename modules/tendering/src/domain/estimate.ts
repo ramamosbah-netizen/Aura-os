@@ -1,4 +1,13 @@
-import { type Id, newId, moneyNumber, computeBuildUp, COST_TYPES, type CostType, type CostComponent } from '@aura/shared';
+import {
+  type Id,
+  newId,
+  moneyNumber,
+  computeBuildUp,
+  COST_TYPES,
+  type CostType,
+  type CostComponent,
+  type EstimationLineInput,
+} from '@aura/shared';
 import type { BOQItem } from './boq';
 
 // Tendering estimate — the TENDER-SPECIFIC layer over the shared estimation core. A RateBuildUp is the
@@ -127,6 +136,75 @@ export function withComponentUnitCost(buildUp: RateBuildUp, componentId: Id, uni
   if (!found) throw new Error(`component ${componentId} not found in build-up ${buildUp.id}`);
   const figures = computeBuildUp(components, buildUp.overheadPercent, buildUp.profitPercent, buildUp.indirectPercent, buildUp.riskPercent);
   return { ...buildUp, components, ...figures };
+}
+
+/**
+ * Carry a Tender BOQ rate build-up into the shared quotation estimation model. This is the
+ * pre-award handoff boundary: a later commercial revision must start from the approved Tender
+ * quantity and cost truth instead of asking the estimator to type it again.
+ *
+ * Tender's indirect loading is represented as contingency in the shared sheet (the closest
+ * governed cost allowance); overhead and compounded risk retain their exact persisted amounts.
+ * Tender profit is a markup, while the shared workspace uses margin on sell, so the percentage is
+ * converted from the persisted monetary figures rather than copied under the wrong meaning.
+ */
+export function tenderBuildUpToEstimationLine(item: BOQItem, buildUp: RateBuildUp | null): EstimationLineInput {
+  const description = `[${item.itemCode}] ${item.description} (${item.unit})`;
+  if (!buildUp) {
+    return {
+      description,
+      unit: item.unit,
+      sourceItemId: item.id,
+      quantity: item.quantity,
+      materialUnitCost: item.rate,
+      wastagePercent: 0,
+      labour: { hoursPerUnit: 0, crewSize: 1, hourlyRate: 0 },
+      equipmentUnitCost: 0,
+      consumablesUnitCost: 0,
+      subcontractUnitCost: 0,
+      overheadPercent: 0,
+      riskPercent: 0,
+      warrantyPercent: 0,
+      contingencyPercent: 0,
+      targetMarginPercent: 0,
+    };
+  }
+
+  const amount = (type: CostType): number => r2(
+    buildUp.components.filter((c) => c.costType === type).reduce((sum, c) => sum + c.amount, 0),
+  );
+  const labourComponents = buildUp.components.filter((c) => c.costType === 'labour');
+  const labourAmount = amount('labour');
+  const labourHours = labourComponents.reduce((sum, c) => sum + c.quantity, 0);
+  const direct = buildUp.directCost;
+  const percentOfDirect = (value: number): number => direct > 0 ? (value / direct) * 100 : 0;
+
+  return {
+    description,
+    unit: item.unit,
+    sourceItemId: item.id,
+    quantity: item.quantity,
+    // Wastage from a structured Tender resource sheet is already an explicit material component.
+    materialUnitCost: amount('material'),
+    wastagePercent: 0,
+    labour: {
+      hoursPerUnit: labourHours > 0 ? labourHours : (labourAmount > 0 ? 1 : 0),
+      crewSize: Math.max(1, Math.floor(
+        (buildUp.resources?.technician.count ?? 0)
+        + (buildUp.resources?.engineer.count ?? 0)
+        + (buildUp.resources?.projectManager.count ?? 0),
+      )),
+      hourlyRate: labourHours > 0 ? labourAmount / labourHours : labourAmount,
+    },
+    equipmentUnitCost: amount('plant'),
+    consumablesUnitCost: amount('other'),
+    subcontractUnitCost: amount('subcontract'),
+    overheadPercent: percentOfDirect(buildUp.overheadAmount),
+    riskPercent: percentOfDirect(buildUp.riskAmount),
+    warrantyPercent: 0,
+    contingencyPercent: percentOfDirect(buildUp.indirectAmount),
+    targetMarginPercent: buildUp.sellingRate > 0 ? (buildUp.profitAmount / buildUp.sellingRate) * 100 : 0,
+  };
 }
 
 // ── Tender-level estimate (fold build-ups over the BOQ) ─────────────────────

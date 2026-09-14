@@ -270,6 +270,39 @@ describe('QuotationService.listRevisions — the chain is links, not the number'
     expect(await svc.listRevisions('t1', 'nope')).toEqual([]);
   });
 
+  it('locks the canonical source row inside the transaction before deriving the child revision', async () => {
+    const store = new InMemoryQuotationStore();
+    const events = {
+      append: vi.fn().mockResolvedValue(undefined),
+      appendWithClient: vi.fn().mockResolvedValue(undefined),
+    } as unknown as EventStore;
+    const tx = { run: vi.fn(async (fn: (handle: unknown) => Promise<unknown>) => fn('tx-handle')) };
+    const tenant = {
+      boundTenantId: () => 't1',
+      get: () => ({ tenantId: 't1', companyId: null, actorId: 'u-reviser' }),
+    };
+    const svc = new QuotationService(
+      store,
+      new InMemoryCommercialBaselineStore(),
+      events,
+      noopAccess,
+      tenant as never,
+      tx as never,
+    );
+    const r0 = await quote(svc, 'QT-LOCKED');
+    await store.save({ ...r0, status: 'under_negotiation' });
+    const lock = vi.spyOn(store, 'getForTenantForUpdate');
+
+    const r1 = await svc.revise(r0.id, 'u-reviser');
+
+    expect(lock).toHaveBeenCalledWith('tx-handle', 't1', r0.id);
+    expect(r1).toMatchObject({ revision: 1, parentQuotationId: r0.id, status: 'draft' });
+    expect(await store.get(r0.id)).toMatchObject({ revision: 0, status: 'revised' });
+    expect(events.appendWithClient).toHaveBeenCalledWith('tx-handle', expect.arrayContaining([
+      expect.objectContaining({ type: 'crm.quotation.revised', aggregateId: r1.id }),
+    ]));
+  });
+
   it('restarts validity and records the revising actor when the old window has elapsed', async () => {
     const { svc } = harness();
     const r0 = await quote(svc, 'QT-EXPIRED');
@@ -349,5 +382,28 @@ describe('QuotationService.updateCommercialTerms — editable only while worked 
     const updated = await svc.updateCommercialTerms(next.id, { paymentConditions: 'new negotiated terms' });
     expect(updated.paymentConditions).toBe('new negotiated terms');
     expect((await svc.get(q.id))?.paymentConditions).toBeNull();
+  });
+});
+
+describe('QuotationService.saveEstimation — preserves scope lineage', () => {
+  it('keeps unit, source item and VAT while deriving quantity and selling price', async () => {
+    const { svc } = harness();
+    const q = await svc.create({
+      tenantId: 't1', quoteNumber: 'QT-LINEAGE', customerName: 'Emaar', issueDate: '2026-07-14',
+      lines: [{ description: 'Old', quantity: 1, unit: 'no', sourceItemId: 'boq-item-1', unitPrice: 1, vatRate: 7 }],
+    });
+
+    const updated = await svc.saveEstimation(q.id, [{
+      description: 'IP camera complete', unit: 'no', sourceItemId: 'boq-item-1', quantity: 24,
+      materialUnitCost: 100, wastagePercent: 0,
+      labour: { hoursPerUnit: 0, crewSize: 1, hourlyRate: 0 },
+      equipmentUnitCost: 0, consumablesUnitCost: 0, subcontractUnitCost: 0,
+      overheadPercent: 0, riskPercent: 0, warrantyPercent: 0, contingencyPercent: 0,
+      targetMarginPercent: 20,
+    }]);
+
+    expect(updated.lines[0]).toMatchObject({
+      description: 'IP camera complete', quantity: 24, unit: 'no', sourceItemId: 'boq-item-1', unitPrice: 125, vatRate: 7,
+    });
   });
 });

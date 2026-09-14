@@ -543,6 +543,11 @@ export class TenderingController {
     if (!found) throw new NotFoundException(`tender ${id} not found`);
     await this.assertSubmissionReadiness(found);
     const ctx = this.tenant.get();
+    // The submission value is the current server-resolved approved offer when one exists. The
+    // request cannot nominate a quotation/baseline (unknown DTO fields are stripped globally), so
+    // an old revision cannot be selected as the bid value and the user never retypes commercial
+    // truth that already exists in the frozen baseline.
+    const basis = await this.resolveAwardBasis(ctx.tenantId, id);
     return this.tenders.submit(id, {
       method: (dto.method as SubmissionMethod) ?? null,
       portal: dto.portal ?? null,
@@ -553,7 +558,7 @@ export class TenderingController {
       notes: dto.notes ?? null,
       submittedBy: ctx.actorId,
       createdBy: ctx.actorId,
-    });
+    }, basis?.value);
   }
 
   /** GET /api/tendering/tenders/:id/submissions — the submission records, latest first. */

@@ -562,8 +562,12 @@ export class WorkItemsService {
       module: 'Projects',
       kind: value.workstream.replaceAll('_', ' '),
       title: value.title,
-      detail: value.description,
-      href: `/project/${value.projectId}/team?responsibility=${value.id}`,
+      detail: value.sourceReference
+        ? `${value.sourceReference} Rev ${value.sourceRevision ?? '—'}${value.transmittalRef ? ` · ${value.transmittalRef}` : ''}`
+        : value.description,
+      href: value.sourceType === 'engineering.drawing' && value.sourceId
+        ? `/project/${value.projectId}/drawings/${value.sourceId}`
+        : `/project/${value.projectId}/team?responsibility=${value.id}`,
       projectId: value.projectId,
       projectName,
       status,

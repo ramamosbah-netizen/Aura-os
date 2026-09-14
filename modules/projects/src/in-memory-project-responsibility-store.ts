@@ -5,7 +5,12 @@ import type { ProjectResponsibilityFilter, ProjectResponsibilityStore } from './
 export class InMemoryProjectResponsibilityStore implements ProjectResponsibilityStore {
   private readonly rows = new Map<Id, ProjectResponsibility>();
   async create(value: ProjectResponsibility): Promise<void> { this.rows.set(value.id, { ...value }); }
-  async update(value: ProjectResponsibility): Promise<void> { this.rows.set(value.id, { ...value }); }
+  async update(value: ProjectResponsibility, expectedUpdatedAt?: string): Promise<boolean> {
+    const current = this.rows.get(value.id);
+    if (!current || (expectedUpdatedAt && current.updatedAt !== expectedUpdatedAt)) return false;
+    this.rows.set(value.id, { ...value });
+    return true;
+  }
   async get(id: Id): Promise<ProjectResponsibility | null> { const row = this.rows.get(id); return row ? { ...row } : null; }
   async list(filter: ProjectResponsibilityFilter): Promise<ProjectResponsibility[]> {
     let rows = [...this.rows.values()].filter((row) => row.tenantId === filter.tenantId);

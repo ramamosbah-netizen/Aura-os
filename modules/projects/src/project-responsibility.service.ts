@@ -1,9 +1,9 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Optional } from '@nestjs/common';
 import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { assertSameTenant, type Id, makeEvent } from '@aura/shared';
 import {
   acceptProjectResponsibility, completeProjectResponsibility, makeProjectResponsibility,
-  startProjectResponsibility, type NewProjectResponsibility, type ProjectResponsibility,
+  nextResponsibilityTimestamp, startProjectResponsibility, type NewProjectResponsibility, type ProjectResponsibility,
 } from './domain/project-responsibility';
 import { PROJECT_RESPONSIBILITY_STORE, type ProjectResponsibilityFilter, type ProjectResponsibilityStore } from './project-responsibility-store';
 import { PROJECT_STORE, type ProjectStore } from './project-store';
@@ -48,6 +48,49 @@ export class ProjectResponsibilityService {
     return this.move(id, projectId, actorId, completeProjectResponsibility, 'completed');
   }
 
+  /** App-layer reactor hook: attach one canonical issued drawing to its nominated delivery receipt. */
+  async linkEngineeringRelease(input: {
+    id: Id; tenantId: Id; projectId: Id; drawingId: Id; drawingCode: string;
+    revision: string; transmittalRef: string; actorId: Id | null;
+  }): Promise<ProjectResponsibility> {
+    const existing = assertSameTenant(await this.rows.get(input.id), input.tenantId, 'Responsibility', input.id);
+    if (existing.projectId !== input.projectId) throw new BadRequestException('responsibility does not belong to the drawing project');
+    if (existing.workstream !== 'engineering_release') throw new BadRequestException('responsibility is not an engineering release receipt');
+    if (existing.status === 'completed') throw new BadRequestException('completed responsibility cannot receive a new engineering release');
+    if (existing.sourceId && existing.sourceId !== input.drawingId) throw new BadRequestException('responsibility is already linked to another engineering release');
+    if (!input.drawingCode.trim() || !input.revision.trim() || !input.transmittalRef.trim()) {
+      throw new BadRequestException('engineering release lineage is incomplete');
+    }
+    if (existing.sourceId === input.drawingId) {
+      if (existing.sourceReference !== input.drawingCode.trim()
+        || existing.sourceRevision !== input.revision.trim()
+        || existing.transmittalRef !== input.transmittalRef.trim()) {
+        throw new BadRequestException('engineering release lineage conflicts with the existing receipt');
+      }
+      return existing;
+    }
+    const linked: ProjectResponsibility = {
+      ...existing,
+      sourceType: 'engineering.drawing',
+      sourceId: input.drawingId,
+      sourceReference: input.drawingCode.trim(),
+      sourceRevision: input.revision.trim(),
+      transmittalRef: input.transmittalRef.trim(),
+      linkedAt: existing.linkedAt ?? new Date().toISOString(),
+      updatedAt: nextResponsibilityTimestamp(existing.updatedAt),
+    };
+    if (!(await this.rows.update(linked, existing.updatedAt))) {
+      const concurrent = assertSameTenant(await this.rows.get(input.id), input.tenantId, 'Responsibility', input.id);
+      if (concurrent.sourceId === input.drawingId
+        && concurrent.sourceReference === input.drawingCode.trim()
+        && concurrent.sourceRevision === input.revision.trim()
+        && concurrent.transmittalRef === input.transmittalRef.trim()) return concurrent;
+      throw new ConflictException('responsibility changed while the engineering release was being linked');
+    }
+    await this.emit('projects.responsibility.source_linked', linked, input.actorId);
+    return linked;
+  }
+
   private async move(
     id: Id, projectId: Id, actorId: Id,
     transition: (value: ProjectResponsibility) => ProjectResponsibility,
@@ -60,7 +103,9 @@ export class ProjectResponsibilityService {
     let next: ProjectResponsibility;
     try { next = transition(existing); }
     catch (error) { throw new BadRequestException((error as Error).message); }
-    await this.rows.update(next);
+    if (!(await this.rows.update(next, existing.updatedAt))) {
+      throw new ConflictException('responsibility changed while the transition was being recorded');
+    }
     await this.emit(`projects.responsibility.${verb}`, next, actorId);
     return next;
   }
@@ -69,11 +114,17 @@ export class ProjectResponsibilityService {
     return assertProjectWriteAllowed({ projects: this.projects, access: this.access }, { projectId, tenantId, actorId, permission });
   }
 
-  private async emit(type: string, value: ProjectResponsibility, actorId: Id): Promise<void> {
+  private async emit(type: string, value: ProjectResponsibility, actorId: Id | null): Promise<void> {
     await this.events.append([makeEvent({
       type, tenantId: value.tenantId, companyId: null, actorId,
       aggregateType: 'projects.responsibility', aggregateId: value.id,
-      payload: { projectId: value.projectId, workstream: value.workstream, assigneeId: value.assigneeId, status: value.status, dueDate: value.dueDate },
+      payload: {
+        projectId: value.projectId, workstream: value.workstream, assigneeId: value.assigneeId,
+        status: value.status, dueDate: value.dueDate, sourceType: value.sourceType,
+        sourceId: value.sourceId, sourceReference: value.sourceReference,
+        sourceRevision: value.sourceRevision, transmittalRef: value.transmittalRef,
+        linkedAt: value.linkedAt,
+      },
     })]);
   }
 }

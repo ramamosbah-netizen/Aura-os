@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import { getJson } from '@/lib/api';
-import Drawing360, { type Drawing, type Submission, type Review } from '@/components/drawing-360';
+import Drawing360, { type Drawing, type Submission, type Review, type ReleaseResponsibility } from '@/components/drawing-360';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,12 +50,13 @@ export default async function ProjectDrawingPage({
   // "wrong project" message would tell an unauthorised caller that the id is real.
   if (drawing.projectId !== projectId) notFound();
 
-  const [revisions, submissions, reviews] = await Promise.all([
+  const [revisions, submissions, reviews, responsibilities] = await Promise.all([
     getJson<Drawing[]>(
       `/api/engineering/drawings/revisions?projectId=${encodeURIComponent(drawing.projectId)}&code=${encodeURIComponent(drawing.code)}`,
     ),
     getJson<Submission[]>(`/api/engineering/drawings/${drawingId}/submissions${scope}`),
     getJson<Review[]>(`/api/engineering/drawings/${drawingId}/reviews${scope}`),
+    getJson<ReleaseResponsibility[]>(`/api/projects/${projectId}/responsibilities`),
   ]);
 
   return (
@@ -64,6 +65,7 @@ export default async function ProjectDrawingPage({
       revisions={revisions}
       submissions={submissions}
       reviews={reviews}
+      responsibilities={(responsibilities ?? []).filter((row) => row.workstream === 'engineering_release')}
       crumbs={[
         { label: drawing.projectName ?? 'Project', href: `/project/${projectId}` },
         { label: 'Drawings', href: `/project/${projectId}/drawings` },

@@ -30,4 +30,32 @@ describe('ProjectResponsibilityService', () => {
     const { service } = setup();
     await expect(service.assign({ tenantId: 'tenant-a', projectId: 'project-a', workstream: 'planning', title: 'Publish baseline', assigneeId: 'outsider', assignedBy: 'manager' })).rejects.toThrow('assignee must be a member');
   });
+
+  it('links one canonical construction release and refuses project/source substitution', async () => {
+    const { service, events } = setup();
+    const row = await service.assign({ tenantId: 'tenant-a', projectId: 'project-a', workstream: 'engineering_release', title: 'Receive IFC drawings', assigneeId: 'engineer', assignedBy: 'manager' });
+    const linked = await service.linkEngineeringRelease({ id: row.id, tenantId: 'tenant-a', projectId: 'project-a', drawingId: 'drawing-a', drawingCode: 'ELV-CCTV-001', revision: '2', transmittalRef: 'TR-001', actorId: 'engineer' });
+    expect(linked).toMatchObject({ sourceType: 'engineering.drawing', sourceId: 'drawing-a', sourceReference: 'ELV-CCTV-001', sourceRevision: '2', transmittalRef: 'TR-001' });
+    const replayed = await service.linkEngineeringRelease({ id: row.id, tenantId: 'tenant-a', projectId: 'project-a', drawingId: 'drawing-a', drawingCode: 'ELV-CCTV-001', revision: '2', transmittalRef: 'TR-001', actorId: 'engineer' });
+    expect(replayed).toEqual(linked);
+    expect(events.append).toHaveBeenCalledTimes(2);
+    expect(events.append).toHaveBeenLastCalledWith([expect.objectContaining({
+      actorId: 'engineer',
+      payload: expect.objectContaining({ sourceId: 'drawing-a', sourceRevision: '2', transmittalRef: 'TR-001' }),
+    })]);
+    await expect(service.linkEngineeringRelease({ id: row.id, tenantId: 'tenant-a', projectId: 'project-b', drawingId: 'drawing-a', drawingCode: 'X', revision: '2', transmittalRef: 'TR-X', actorId: 'engineer' })).rejects.toThrow('does not belong');
+    await expect(service.linkEngineeringRelease({ id: row.id, tenantId: 'tenant-a', projectId: 'project-a', drawingId: 'drawing-b', drawingCode: 'X', revision: '1', transmittalRef: 'TR-X', actorId: 'engineer' })).rejects.toThrow('already linked');
+  });
+
+  it('allows only one source to win when two releases race for the same responsibility', async () => {
+    const { service } = setup();
+    const row = await service.assign({ tenantId: 'tenant-a', projectId: 'project-a', workstream: 'engineering_release', title: 'Receive one IFC release', assigneeId: 'engineer', assignedBy: 'manager' });
+    const result = await Promise.allSettled([
+      service.linkEngineeringRelease({ id: row.id, tenantId: 'tenant-a', projectId: 'project-a', drawingId: 'drawing-a', drawingCode: 'ELV-A', revision: '0', transmittalRef: 'TR-A', actorId: 'engineer' }),
+      service.linkEngineeringRelease({ id: row.id, tenantId: 'tenant-a', projectId: 'project-a', drawingId: 'drawing-b', drawingCode: 'ELV-B', revision: '0', transmittalRef: 'TR-B', actorId: 'engineer' }),
+    ]);
+    expect(result.filter((entry) => entry.status === 'fulfilled')).toHaveLength(1);
+    expect(result.filter((entry) => entry.status === 'rejected')).toHaveLength(1);
+    expect(['drawing-a', 'drawing-b']).toContain((await service.get(row.id))?.sourceId);
+  });
 });

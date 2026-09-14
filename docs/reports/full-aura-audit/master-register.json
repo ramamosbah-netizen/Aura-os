@@ -1512,7 +1512,7 @@
       "stages": [
         "Engineering"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Engineering / DocControl",
       "evidence": [
         "R-J26"
@@ -1527,9 +1527,10 @@
         "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Design / Technical Engineer, Project Engineer, Technical Manager role executes Release notification to site in the canonical Engineering / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "Fresh Wave 3 proof requires an open named engineering-release responsibility before an approved For Construction drawing can be transmitted. The controller derives both persisted records, rejects a responsibility from another project or source, and the outbox links the exact drawing code/revision and sent DocControl transmittal to the assignee My Work item. Auth-ON browser proof waits for both conveyance and receipt. Representative Site/Project/Procurement recipient roles and material-submittal release remain unproved.",
+      "acceptanceProof": "Repeat the governed release with separate Design issuer and assigned Site Engineer, Project Engineer and Procurement recipients; prove only authorized recipients see/accept their exact drawing or material revision and retain receipt history."
     },
     {
       "id": "PLN-01",
@@ -8532,7 +8533,7 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 2,
-      "PARTIAL": 90,
+      "PARTIAL": 91,
       "BACKEND_ONLY": 10,
       "UI_ONLY": 0,
       "ABSENT": 1,
@@ -8541,7 +8542,7 @@
       "DISCONNECTED": 11,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 53,
+      "UNVERIFIED": 52,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

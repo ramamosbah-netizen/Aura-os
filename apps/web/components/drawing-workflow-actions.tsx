@@ -3,13 +3,14 @@
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
+import type { ReleaseResponsibility } from '@/components/drawing-360';
 
 /**
  * Drawing workflow action bar (G-32). Renders only the commands legal from the current status and
  * POSTs them to the state-machine endpoints — it never sets `status` directly. The backend enforces
  * the transition; on success we refresh the server-rendered 360 so records/lineage update.
  */
-export default function DrawingWorkflowActions({ id, projectId, status }: { id: string; projectId: string; status: string }) {
+export default function DrawingWorkflowActions({ id, projectId, status, responsibilities }: { id: string; projectId: string; status: string; responsibilities: ReleaseResponsibility[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
@@ -22,6 +23,7 @@ export default function DrawingWorkflowActions({ id, projectId, status }: { id: 
   const [purpose, setPurpose] = useState('For Approval');
   const [comments, setComments] = useState('');
   const [reason, setReason] = useState('');
+  const [responsibilityId, setResponsibilityId] = useState('');
 
   async function run(command: string, body: Record<string, unknown> = {}): Promise<void> {
     setBusy(true);
@@ -41,9 +43,21 @@ export default function DrawingWorkflowActions({ id, projectId, status }: { id: 
         // the durable outbox. Keep the action busy until the linked reference is observable so the
         // engineer sees completion rather than a misleading "not transmitted yet" refresh.
         for (let attempt = 0; attempt < 20; attempt += 1) {
-          const linked = await fetch(`/api/engineering/drawings/${id}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
-          const current = (await linked.json().catch(() => ({}))) as { transmittalRef?: string | null };
-          if (linked.ok && current.transmittalRef) break;
+          const [drawingResponse, responsibilityResponse] = await Promise.all([
+            fetch(`/api/engineering/drawings/${id}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' }),
+            responsibilityId
+              ? fetch(`/api/projects/${projectId}/responsibilities`, { cache: 'no-store' })
+              : Promise.resolve(null),
+          ]);
+          const current = (await drawingResponse.json().catch(() => ({}))) as { transmittalRef?: string | null };
+          const receiptRows = responsibilityResponse
+            ? await responsibilityResponse.json().catch(() => []) as ReleaseResponsibility[]
+            : [];
+          const receiptLinked = !responsibilityId || (
+            responsibilityResponse?.ok
+            && receiptRows.some((row) => row.id === responsibilityId && row.sourceId === id && row.transmittalRef)
+          );
+          if (drawingResponse.ok && current.transmittalRef && receiptLinked) break;
           await new Promise((resolve) => setTimeout(resolve, 250));
         }
       }
@@ -112,10 +126,18 @@ export default function DrawingWorkflowActions({ id, projectId, status }: { id: 
               <option>For Review</option>
             </select>
           </label>
-          <button style={st.primary} disabled={locked || !recipient.trim() || !purpose.trim()} data-testid="btn-transmit" onClick={() => run('transmit', { recipient: recipient.trim(), purpose })}>
+          <label style={st.fieldLabel}>Internal delivery owner
+            <select style={st.input} aria-label="Engineering release responsibility" value={responsibilityId} onChange={(e) => setResponsibilityId(e.target.value)} disabled={locked} data-testid="transmit-responsibility">
+              <option value="">{purpose === 'For Construction' ? 'Choose responsibility…' : 'No internal receipt'}</option>
+              {responsibilities.filter((row) => row.status !== 'completed' && (!row.sourceId || row.sourceId === id)).map((row) => (
+                <option key={row.id} value={row.id}>{row.assigneeName} — {row.title}</option>
+              ))}
+            </select>
+          </label>
+          <button style={st.primary} disabled={locked || !recipient.trim() || !purpose.trim() || (purpose === 'For Construction' && !responsibilityId)} data-testid="btn-transmit" onClick={() => run('transmit', { recipient: recipient.trim(), purpose, responsibilityId: responsibilityId || undefined })}>
             Transmit
           </button>
-          <span style={st.help}>Creates and sends the controlled DocControl transmittal for this exact revision.</span>
+          <span style={st.help}>Creates the controlled transmittal. A construction issue also links this exact revision to its named delivery owner in My Work.</span>
         </div>
       )}
 

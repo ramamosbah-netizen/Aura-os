@@ -54,6 +54,11 @@ export interface Review {
   comments: string | null;
 }
 
+export interface ReleaseResponsibility {
+  id: string; workstream: string; title: string; assigneeName: string; status: string;
+  sourceId: string | null; sourceReference: string | null; sourceRevision: string | null; transmittalRef: string | null;
+}
+
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Draft', submitted: 'Submitted', under_review: 'Under Review', approved: 'Approved',
   rejected: 'Rejected', revision_required: 'Revision Required', transmitted: 'Transmitted',
@@ -69,12 +74,13 @@ const outcomeLabel: Record<string, string> = {
 };
 
 export default function Drawing360({
-  drawing, revisions, submissions, reviews, crumbs,
+  drawing, revisions, submissions, reviews, responsibilities, crumbs,
 }: {
   drawing: Drawing;
   revisions: Drawing[] | null;
   submissions: Submission[] | null;
   reviews: Review[] | null;
+  responsibilities: ReleaseResponsibility[];
   /** Where this drawing was reached from — the project, or the global register. */
   crumbs: Array<{ label: string; href?: string }>;
 }) {
@@ -115,7 +121,7 @@ export default function Drawing360({
       </div>
 
       {/* Workflow actions (client) */}
-      <DrawingWorkflowActions id={drawing.id} projectId={drawing.projectId} status={drawing.status} />
+      <DrawingWorkflowActions id={drawing.id} projectId={drawing.projectId} status={drawing.status} responsibilities={responsibilities} />
 
       {/* Revisions */}
       <Section title="Revisions" testid="tab-revisions">
@@ -169,6 +175,15 @@ export default function Drawing360({
         ) : (
           <p style={st.paraMuted}>Not transmitted yet. Transmittal is created automatically on transmit.</p>
         )}
+      </Section>
+
+      <Section title="Delivery receipt" testid="tab-delivery-receipt">
+        {responsibilities.filter((row) => row.sourceId === drawing.id).map((row) => (
+          <p key={row.id} style={st.para} data-testid="drawing-release-receipt">
+            <strong>{row.assigneeName}</strong> received {row.sourceReference} Rev {row.sourceRevision} through {row.transmittalRef}. Status: {row.status.replaceAll('_', ' ')}.
+          </p>
+        ))}
+        {!responsibilities.some((row) => row.sourceId === drawing.id) ? <p style={st.paraMuted}>No internal delivery responsibility is linked to this revision.</p> : null}
       </Section>
 
       {/* Activity */}

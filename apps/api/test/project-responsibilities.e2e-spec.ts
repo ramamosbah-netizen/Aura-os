@@ -67,6 +67,62 @@ describe('Project delivery responsibilities (HTTP)', () => {
       .expect(400);
   });
 
+  it('requires the canonical delivery owner for a construction drawing and exposes its exact release in My Work', async () => {
+    await http.post(`/api/v1/projects/${otherProjectId}/members`)
+      .set('x-test-actor', 'manager')
+      .send({ userId: 'engineer', roleId: 'r-technical-engineer' })
+      .expect(201);
+    const wrongProjectResponsibility = (await http.post(`/api/v1/projects/${otherProjectId}/responsibilities`)
+      .set('x-test-actor', 'manager')
+      .send({ workstream: 'engineering_release', title: 'Other project release', assigneeId: 'engineer' })
+      .expect(201)).body;
+    const releaseResponsibility = (await http.post(`/api/v1/projects/${projectId}/responsibilities`)
+      .set('x-test-actor', 'manager')
+      .send({ workstream: 'engineering_release', title: 'Receive CCTV construction issue', assigneeId: 'engineer' })
+      .expect(201)).body;
+
+    const drawing = (await http.post('/api/v1/engineering/drawings')
+      .set('x-test-actor', 'manager')
+      .send({ projectId, code: 'ELV-CCTV-IFC-001', title: 'CCTV construction layout' })
+      .expect(201)).body;
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/submit`).set('x-test-actor', 'manager').send({ purpose: 'For Approval' }).expect(201);
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/start-review`).set('x-test-actor', 'manager').send({}).expect(201);
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/review`).set('x-test-actor', 'manager').send({ outcome: 'approved' }).expect(201);
+
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/transmit`)
+      .set('x-test-actor', 'manager')
+      .send({ recipient: 'Site team', purpose: 'For Construction' })
+      .expect(400, /engineering release responsibility is required/);
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/transmit`)
+      .set('x-test-actor', 'manager')
+      .send({ recipient: 'Site team', purpose: 'For Construction', responsibilityId: wrongProjectResponsibility.id })
+      .expect(400, /drawing project/);
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/transmit`)
+      .set('x-test-actor', 'manager')
+      .send({ recipient: 'Site team', purpose: 'For Construction', responsibilityId: releaseResponsibility.id })
+      .expect(201);
+
+    const history = (await http.get(`/api/v1/projects/${projectId}/responsibilities`).set('x-test-actor', 'manager').expect(200)).body;
+    expect(history).toContainEqual(expect.objectContaining({
+      id: releaseResponsibility.id,
+      sourceType: 'engineering.drawing',
+      sourceId: drawing.id,
+      sourceReference: 'ELV-CCTV-IFC-001',
+      sourceRevision: '0',
+      transmittalRef: expect.stringMatching(/^TR-/),
+    }));
+
+    const mine = (await http.get('/api/v1/work-items').set('x-test-actor', 'engineer').expect(200)).body;
+    expect(mine.items).toContainEqual(expect.objectContaining({
+      source: 'project-responsibility',
+      sourceId: releaseResponsibility.id,
+      projectId,
+      href: `/project/${projectId}/drawings/${drawing.id}`,
+      detail: expect.stringMatching(/ELV-CCTV-IFC-001 Rev 0 · TR-/),
+      actions: ['start'],
+    }));
+  });
+
   it('records acceptance, start and completion and removes completed work from the active queue', async () => {
     await http.post(`/api/v1/projects/${projectId}/responsibilities/${responsibilityId}/accept`).set('x-test-actor', 'engineer').expect(201, /accepted/);
     await http.post(`/api/v1/projects/${projectId}/responsibilities/${responsibilityId}/start`).set('x-test-actor', 'engineer').expect(201, /in_progress/);

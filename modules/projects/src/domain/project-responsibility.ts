@@ -31,6 +31,12 @@ export interface ProjectResponsibility {
   acceptedAt: string | null;
   startedAt: string | null;
   completedAt: string | null;
+  sourceType: 'engineering.drawing' | null;
+  sourceId: Id | null;
+  sourceReference: string | null;
+  sourceRevision: string | null;
+  transmittalRef: string | null;
+  linkedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +50,11 @@ export interface NewProjectResponsibility {
   assigneeId: Id;
   assignedBy: Id;
   dueDate?: string | null;
+}
+
+/** Keeps optimistic-write tokens distinct even when two transitions occur in one millisecond. */
+export function nextResponsibilityTimestamp(previous: string): string {
+  return new Date(Math.max(Date.now(), Date.parse(previous) + 1)).toISOString();
 }
 
 export function makeProjectResponsibility(input: NewProjectResponsibility): ProjectResponsibility {
@@ -68,13 +79,19 @@ export function makeProjectResponsibility(input: NewProjectResponsibility): Proj
     acceptedAt: null,
     startedAt: null,
     completedAt: null,
+    sourceType: null,
+    sourceId: null,
+    sourceReference: null,
+    sourceRevision: null,
+    transmittalRef: null,
+    linkedAt: null,
     createdAt: now,
     updatedAt: now,
   };
 }
 
 function at(status: ProjectResponsibilityStatus, value: ProjectResponsibility): ProjectResponsibility {
-  const now = new Date().toISOString();
+  const now = nextResponsibilityTimestamp(value.updatedAt);
   if (status === 'accepted' && value.status !== 'assigned') throw new Error(`cannot accept responsibility from ${value.status}`);
   if (status === 'in_progress' && !['assigned', 'accepted'].includes(value.status)) throw new Error(`cannot start responsibility from ${value.status}`);
   if (status === 'completed' && value.status !== 'in_progress') throw new Error(`cannot complete responsibility from ${value.status}`);

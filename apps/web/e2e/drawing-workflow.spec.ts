@@ -10,6 +10,15 @@ const code = `ELV-E2E-${Date.now().toString().slice(-6)}`;
 
 test('project drawing → review → sent DocControl transmittal (UI)', async ({ page, baseURL }) => {
   const projectId = await projectFixtureId(page.request, baseURL);
+  const member = await page.request.post(`${baseURL}/api/projects/${projectId}/members`, {
+    data: { userId: 'u-admin', roleId: 'r-pm' },
+  });
+  expect(member.ok(), await member.text()).toBe(true);
+  const assigned = await page.request.post(`${baseURL}/api/projects/${projectId}/responsibilities`, {
+    data: { workstream: 'engineering_release', title: `Receive ${code} for construction`, assigneeId: 'u-admin' },
+  });
+  expect(assigned.ok(), await assigned.text()).toBe(true);
+  const responsibility = (await assigned.json()) as { id: string };
 
   // 1. Register in the owning project's workspace. The user never loses project context or
   //    supplies a project selector that could point the drawing somewhere else.
@@ -40,9 +49,12 @@ test('project drawing → review → sent DocControl transmittal (UI)', async ({
   // 6. Transmit this exact approved revision. The UI proves the resulting DocControl reference.
   await page.getByTestId('transmit-recipient').fill('Consultant');
   await page.getByTestId('transmit-purpose').selectOption({ label: 'For Construction' });
+  await expect(page.getByTestId('btn-transmit')).toBeDisabled();
+  await page.getByTestId('transmit-responsibility').selectOption(responsibility.id);
   await page.getByTestId('btn-transmit').click();
   await expect(page.getByTestId('drawing-status')).toHaveText('Transmitted');
   await expect(page.getByTestId('transmittal-ref')).toContainText('TR-');
+  await expect(page.getByTestId('drawing-release-receipt')).toContainText(`${code} Rev 0 through TR-`);
 
   // A submission and a review record are now shown on the 360 (audit trail).
   await expect(page.getByTestId('tab-submissions')).toContainText('For Approval');

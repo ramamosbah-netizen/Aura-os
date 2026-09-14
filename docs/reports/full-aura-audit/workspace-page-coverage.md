@@ -173,7 +173,7 @@
 | apps/web/app/procurement/three-way-match/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/controls/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/drawings/page.tsx | PARTIAL | Wave 3 live project-scoped drawing registration path passed |
-| apps/web/app/project/[projectId]/drawings/[drawingId]/page.tsx | PARTIAL | Wave 3 live review and sent DocControl transmittal path passed |
+| apps/web/app/project/[projectId]/drawings/[drawingId]/page.tsx | PARTIAL | Wave 3 live review, sent DocControl transmittal and linked delivery-receipt path passed |
 | apps/web/app/project/[projectId]/page.tsx | PARTIAL | Live authorized/anonymous/forbidden project context test passed |
 | apps/web/app/project/[projectId]/team/page.tsx | PARTIAL | Wave 3 manager assignment and assignee handoff/history path passed |
 | apps/web/app/project/[projectId]/workspace/[section]/page.tsx | NOT_AUDITED | UNVERIFIED |

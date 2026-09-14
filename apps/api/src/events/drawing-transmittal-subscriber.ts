@@ -3,6 +3,7 @@ import { EventBus } from '@aura/core';
 import { type DomainEvent } from '@aura/shared';
 import { EngineeringService } from '@aura/engineering';
 import { DocControlService } from '@aura/doccontrol';
+import { ProjectResponsibilityService } from '@aura/projects';
 
 /**
  * Engineering → Document Control: when an approved shop drawing is TRANSMITTED, the official
@@ -23,6 +24,7 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
     private readonly bus: EventBus,
     private readonly doccontrol: DocControlService,
     private readonly engineering: EngineeringService,
+    private readonly responsibilities: ProjectResponsibilityService,
   ) {}
 
   onModuleInit(): void {
@@ -35,6 +37,7 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
           projectName?: string;
           recipient?: string | null;
           purpose?: string | null;
+          responsibilityId?: string | null;
       };
       const revision = p.revision ?? '0';
       // Keep the full aggregate id: the database uniqueness key is tenant+project+code, so
@@ -68,6 +71,18 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
 
       // Link on every delivery, including a replay that found the conveyance already present.
       await this.engineering.linkTransmittal(e.tenantId, e.aggregateId, transmittal.code);
+      if (p.responsibilityId) {
+        await this.responsibilities.linkEngineeringRelease({
+          id: p.responsibilityId,
+          tenantId: e.tenantId,
+          projectId: p.projectId ?? '',
+          drawingId: e.aggregateId,
+          drawingCode: p.code ?? 'Drawing',
+          revision,
+          transmittalRef: transmittal.code,
+          actorId: e.actorId,
+        });
+      }
 
       this.logger.log(
         `drawing.transmitted → sent doccontrol transmittal ${transmittal.code} for ${p.code} Rev ${revision}`,

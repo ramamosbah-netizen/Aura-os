@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
 import { TenantContext } from '@aura/core';
+import { ProjectResponsibilityService } from '@aura/projects';
 import { parsePageParams } from '@aura/shared';
 import {
   type Drawing,
@@ -71,6 +72,7 @@ class TransmitDrawingDto {
   @IsOptional() @IsString() recipient?: string;
   @IsOptional() @IsString() purpose?: string;
   @IsOptional() @IsString() transmittalRef?: string;
+  @IsOptional() @IsString() responsibilityId?: string;
 }
 
 // RFIs DTOs
@@ -140,6 +142,7 @@ class TransitionDocumentDto {
 export class EngineeringController {
   constructor(
     private readonly engineeringService: EngineeringService,
+    private readonly projectResponsibilities: ProjectResponsibilityService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -211,14 +214,31 @@ export class EngineeringController {
   }
 
   @Post('drawings/:id/transmit')
-  transmitDrawing(@Param('id') id: string, @Body() dto: TransmitDrawingDto): Promise<Drawing> {
+  async transmitDrawing(@Param('id') id: string, @Body() dto: TransmitDrawingDto): Promise<Drawing> {
     if (!dto?.recipient?.trim()) throw new BadRequestException('recipient is required');
     if (!dto?.purpose?.trim()) throw new BadRequestException('purpose is required');
     const ctx = this.tenant.get();
+    if (dto.responsibilityId) {
+      const [drawing, responsibility] = await Promise.all([
+        this.engineeringService.getDrawing(id),
+        this.projectResponsibilities.get(dto.responsibilityId),
+      ]);
+      if (!drawing) throw new NotFoundException('drawing not found');
+      if (!responsibility || responsibility.projectId !== drawing.projectId || responsibility.workstream !== 'engineering_release') {
+        throw new BadRequestException('responsibility must be an engineering release receipt for this drawing project');
+      }
+      if (responsibility.status === 'completed') {
+        throw new BadRequestException('completed responsibility cannot receive a new engineering release');
+      }
+      if (responsibility.sourceId && responsibility.sourceId !== drawing.id) {
+        throw new BadRequestException('responsibility is already linked to another engineering release');
+      }
+    }
     return this.engineeringService.transmitDrawing(ctx.tenantId, ctx.actorId, id, {
       recipient: dto?.recipient,
       purpose: dto?.purpose,
       transmittalRef: dto?.transmittalRef,
+      responsibilityId: dto?.responsibilityId,
     });
   }
 

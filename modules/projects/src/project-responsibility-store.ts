@@ -13,7 +13,8 @@ export interface ProjectResponsibilityFilter {
 
 export interface ProjectResponsibilityStore {
   create(value: ProjectResponsibility): Promise<void>;
-  update(value: ProjectResponsibility): Promise<void>;
+  /** Returns false when another writer changed the row after it was loaded. */
+  update(value: ProjectResponsibility, expectedUpdatedAt?: string): Promise<boolean>;
   get(id: Id): Promise<ProjectResponsibility | null>;
   list(filter: ProjectResponsibilityFilter): Promise<ProjectResponsibility[]>;
 }

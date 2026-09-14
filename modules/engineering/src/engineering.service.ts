@@ -262,12 +262,15 @@ export class EngineeringService {
     tenantId: Id,
     actorId: Id | null,
     id: Id,
-    input: { recipient?: string; purpose?: string; transmittalRef?: string } = {},
+    input: { recipient?: string; purpose?: string; transmittalRef?: string; responsibilityId?: string } = {},
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
     this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.transmit', drawing.projectId);
     if (!input.recipient?.trim()) throw new Error('recipient is required to transmit a drawing');
     if (!input.purpose?.trim()) throw new Error('purpose is required to transmit a drawing');
+    if (input.purpose.trim() === 'For Construction' && !input.responsibilityId?.trim()) {
+      throw new Error('engineering release responsibility is required for construction issue');
+    }
 
     const updated = applyTransmit(drawing, input.transmittalRef ?? null); // enforces approved → transmitted
     const event = makeEvent({
@@ -285,6 +288,7 @@ export class EngineeringService {
         projectName: drawing.projectName,
         recipient: input.recipient.trim(),
         purpose: input.purpose.trim(),
+        responsibilityId: input.responsibilityId?.trim() || null,
       },
     });
     await this.tx.run(async (handle) => {

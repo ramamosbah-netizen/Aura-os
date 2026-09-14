@@ -50,6 +50,14 @@ The first Auth-ON browser run exposed a real discovery defect: a project-only me
 
 ENG-06 remains open because a general `engineering_release` responsibility does not yet carry the canonical drawing/revision/transmittal reference and is not automatically produced by the governed release event.
 
+## Iteration 4 — Construction drawing release to named delivery owner
+
+An approved drawing issued **For Construction** now requires a named, open `engineering_release` responsibility in the drawing's canonical project. The public request can nominate only that responsibility identity; the controller reloads the persisted drawing and responsibility and refuses a missing receipt, a responsibility from another project, a completed responsibility or one already bound to another release.
+
+The durable drawing event creates and sends the DocControl transmittal, links it back to the drawing, then attaches the exact drawing code, revision and transmittal reference to the responsibility. The assignee's My Work item opens the canonical Project Drawing 360 rather than a generic team page. The browser keeps the action busy until both the transmittal and delivery receipt are observable, so it does not present a half-completed release.
+
+The source lookup is deliberately one-to-many: one issued drawing may have named Site, Project and Procurement recipients, while each responsibility remains immutable against reassignment to another source. The executed proof covers an Engineering assignee and an Auth-ON administrator browser journey. **ENG-06 is PARTIAL** until representative Site Engineer, Project Engineer and Procurement recipients independently receive and progress their records, and material-submittal release follows the same governed pattern.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -64,6 +72,10 @@ ENG-06 remains open because a general `engineering_release` responsibility does 
 | Project member lacks the functional permission | Auth-ON HTTP proof denies create/update even when the actor has membership on the canonical project |
 | Another user tries to progress the assignment | Accept/Start/Complete require the persisted assignee identity and deny the wrong actor |
 | Tenant-wide My Work discovery leaks project items | Every discovered item is filtered with `work-items.work-item.read` against its persisted project before it is returned |
+| For Construction is issued without an internal owner | Service boundary refuses the transition unless `responsibilityId` is present |
+| Caller nominates another project's responsibility | Controller reloads drawing and responsibility and rejects persisted project mismatch before transmission |
+| Caller reuses an old receipt for a new drawing | Controller and service reject a responsibility already linked to another canonical drawing |
+| UI reports success before the delivery receipt exists | Browser polls both drawing transmittal and responsibility lineage before refresh |
 
 ## Verification completed
 
@@ -82,20 +94,21 @@ ENG-06 remains open because a general `engineering_release` responsibility does 
 | Register reconciliation | 180 capabilities / 46 gap records / 999 role pairs / 938 journey pairs |
 | Engineering drawing API journey | 1/1 passed; missing recipient denied and resulting conveyance is sent with purpose |
 | Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
-| Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal reference |
-| Database migration posture | 313/313 applied; transmittal purpose and delivery responsibilities persisted with forced RLS |
+| Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal and linked delivery receipt |
+| Database migration posture | 314/314 applied; delivery responsibility stores canonical drawing/revision/transmittal lineage with forced RLS |
 | Full API unit/fitness suite | 495 passed / 4 skipped |
-| Project responsibility domain | 2/2 passed; canonical assignee grant and transition authority covered |
-| Project responsibility HTTP journey | 3/3 passed; positive handoff plus wrong-project/wrong-user/wrong-permission denials |
+| Project responsibility domain | 4/4 passed; canonical assignee grant, transition authority, idempotent source binding and concurrent-source refusal covered |
+| Engineering/responsibility HTTP journeys | 5/5 passed; lifecycle plus missing/wrong-project delivery owner denial and exact My Work receipt |
+| Project responsibility HTTP journey | 4/4 passed; positive handoff and release plus wrong-project/wrong-user/wrong-permission denials |
 | My Work service and self-scoped fitness | 15/15 passed, including per-item project filtering |
 | Project responsibility browser journey | 1/1 passed in Chromium; manager UI assignment → member My Work → Start/Complete → retained history |
-| Full Projects module suite | 429 passed / 12 PostgreSQL-only skips |
+| Full Projects module suite | 431 passed / 12 PostgreSQL-only skips |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
-1. Governed engineering file storage, material-submittal/register-item lineage and receipt by the assigned Site/Project/Procurement roles.
+1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. WBS-linked schedule activities instead of an independent task list.
 3. Real employee/team/equipment requirements, availability, conflict resolution and My Work handoff.
 4. Milestone, baseline, look-ahead, delay/recovery and forecast evidence from the connected plan.

@@ -12,7 +12,7 @@ const event = () => makeEvent({
   aggregateId: 'd1234567-0000-4000-8000-000000000001',
   payload: {
     code: 'ELV-CCTV-SD-001', title: 'CCTV layout', revision: '2',
-    projectId: 'project-1', projectName: 'Tower', recipient: 'Consultant', purpose: 'For Construction',
+    projectId: 'project-1', projectName: 'Tower', recipient: 'Consultant', purpose: 'For Construction', responsibilityId: 'responsibility-1',
   },
 });
 
@@ -32,7 +32,8 @@ describe('DrawingTransmittalSubscriber', () => {
       sendTransmittal: vi.fn().mockResolvedValue({ ...draft, status: 'sent', sentAt: '2026-09-15T10:00:00.000Z' }),
     };
     const engineering = { linkTransmittal: vi.fn().mockResolvedValue(undefined) };
-    new DrawingTransmittalSubscriber(bus, doccontrol as never, engineering as never).onModuleInit();
+    const responsibilities = { linkEngineeringRelease: vi.fn().mockResolvedValue(undefined) };
+    new DrawingTransmittalSubscriber(bus, doccontrol as never, engineering as never, responsibilities as never).onModuleInit();
 
     await bus.publish(event());
 
@@ -41,6 +42,10 @@ describe('DrawingTransmittalSubscriber', () => {
     }));
     expect(doccontrol.sendTransmittal).toHaveBeenCalledWith('tenant-1', null, 'transmittal-1');
     expect(engineering.linkTransmittal).toHaveBeenCalledWith('tenant-1', event().aggregateId, 'TR-d1234567-0000-4000-8000-000000000001-2');
+    expect(responsibilities.linkEngineeringRelease).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'responsibility-1', projectId: 'project-1', drawingId: event().aggregateId,
+      drawingCode: 'ELV-CCTV-SD-001', revision: '2', transmittalRef: draft.code, actorId: 'engineer-1',
+    }));
   });
 
   it('resumes a replayed event and repairs a missing drawing link without duplicating the transmittal', async () => {
@@ -51,7 +56,8 @@ describe('DrawingTransmittalSubscriber', () => {
       sendTransmittal: vi.fn(),
     };
     const engineering = { linkTransmittal: vi.fn().mockResolvedValue(undefined) };
-    new DrawingTransmittalSubscriber(bus, doccontrol as never, engineering as never).onModuleInit();
+    const responsibilities = { linkEngineeringRelease: vi.fn().mockResolvedValue(undefined) };
+    new DrawingTransmittalSubscriber(bus, doccontrol as never, engineering as never, responsibilities as never).onModuleInit();
 
     const delivery = event();
     await bus.publish(delivery);
@@ -59,6 +65,7 @@ describe('DrawingTransmittalSubscriber', () => {
     expect(doccontrol.createTransmittal).not.toHaveBeenCalled();
     expect(doccontrol.sendTransmittal).not.toHaveBeenCalled();
     expect(engineering.linkTransmittal).toHaveBeenCalledWith('tenant-1', delivery.aggregateId, 'TR-d1234567-0000-4000-8000-000000000001-2');
+    expect(responsibilities.linkEngineeringRelease).toHaveBeenCalledTimes(1);
   });
 
   it('propagates failures so the durable event handler can retry', async () => {
@@ -68,7 +75,7 @@ describe('DrawingTransmittalSubscriber', () => {
       createTransmittal: vi.fn().mockRejectedValue(new Error('doccontrol unavailable')),
       sendTransmittal: vi.fn(),
     };
-    new DrawingTransmittalSubscriber(bus, doccontrol as never, { linkTransmittal: vi.fn() } as never).onModuleInit();
+    new DrawingTransmittalSubscriber(bus, doccontrol as never, { linkTransmittal: vi.fn() } as never, { linkEngineeringRelease: vi.fn() } as never).onModuleInit();
 
     await expect(bus.publish(event())).rejects.toThrow('doccontrol unavailable');
   });

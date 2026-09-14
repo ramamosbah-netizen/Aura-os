@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { CalendarPlus, Layers3, Plus, Trash2 } from 'lucide-react';
+import { Fragment, useState } from 'react';
+import { CalendarPlus, Layers3, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import EmptyState from './ui/empty-state';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
@@ -52,7 +52,7 @@ function span(tasks: ScheduleTask[]): { min: number; total: number } {
   return { min, total: Math.max(1, (max - min) / DAY + 1) };
 }
 
-interface RequirementDraft { resourceKey: string; quantity: string; unit: 'hours' | 'persons' | 'crews' | 'units' }
+interface RequirementDraft { id?: string; resourceKey: string; quantity: string; unit: 'hours' | 'persons' | 'crews' | 'units' }
 interface NewTask { name: string; plannedStart: string; plannedEnd: string; percentComplete: string; durationWorkingDays: string; wbsNodeId: string; requirements: RequirementDraft[] }
 const emptyRequirement = (): RequirementDraft => ({ resourceKey: '', quantity: '1', unit: 'persons' });
 const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0', durationWorkingDays: '', wbsNodeId: '', requirements: [] });
@@ -62,30 +62,47 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addTask, setAddTask] = useState<Record<string, NewTask>>({});
+  const [editTask, setEditTask] = useState<Record<string, NewTask>>({});
   const [newProjectId, setNewProjectId] = useState(selectedProjectId ?? '');
   const [newTask, setNewTask] = useState<NewTask>(emptyTask());
 
   const scheduledProjectIds = new Set(schedules.map((s) => s.projectId));
   const unscheduled = projects.filter((p) => !scheduledProjectIds.has(p.id));
 
-  function toTask(nt: NewTask): ScheduleTask | null {
+  function toTask(nt: NewTask, existing?: ScheduleTask): ScheduleTask | null {
     const duration = Number(nt.durationWorkingDays);
     if (!nt.name.trim() || !nt.plannedStart || !nt.plannedEnd || !nt.wbsNodeId || !Number.isInteger(duration) || duration < 1) return null;
     if (nt.requirements.some((item) => !item.resourceKey || !(Number(item.quantity) > 0))) return null;
     return {
       // No id: this task does not exist yet, and the server mints one.
-      id: undefined,
+      id: existing?.id,
       wbsNodeId: nt.wbsNodeId,
       name: nt.name.trim(), plannedStart: nt.plannedStart, plannedEnd: nt.plannedEnd,
-      baselineStart: null, baselineEnd: null, actualStart: null, actualEnd: null,
+      baselineStart: existing?.baselineStart ?? null, baselineEnd: existing?.baselineEnd ?? null,
+      actualStart: existing?.actualStart ?? null, actualEnd: existing?.actualEnd ?? null,
       percentComplete: Math.min(100, Math.max(0, Number(nt.percentComplete) || 0)),
       durationWorkingDays: duration,
       requirements: nt.requirements.map((item) => {
         const [resourceType, canonicalResourceId] = item.resourceKey.split(':', 2) as ['employee' | 'vehicle' | 'asset', string];
-        return { resource: { resourceType, canonicalResourceId }, quantity: Number(item.quantity), unit: item.unit };
+        return { id: item.id, resource: { resourceType, canonicalResourceId }, quantity: Number(item.quantity), unit: item.unit };
       }),
     };
   }
+
+  const taskDraft = (task: ScheduleTask): NewTask => ({
+    name: task.name,
+    plannedStart: task.plannedStart,
+    plannedEnd: task.plannedEnd,
+    percentComplete: String(task.percentComplete),
+    durationWorkingDays: task.durationWorkingDays ? String(task.durationWorkingDays) : '',
+    wbsNodeId: task.wbsNodeId ?? '',
+    requirements: (task.requirements ?? []).map((requirement) => ({
+      id: requirement.id,
+      resourceKey: `${requirement.resource.resourceType}:${requirement.resource.canonicalResourceId}`,
+      quantity: String(requirement.quantity),
+      unit: requirement.unit,
+    })),
+  });
 
   const catalogLabel = (resourceType: string, id: string): string => {
     const item = resourceCatalog.find((candidate) => candidate.resourceType === resourceType && candidate.canonicalResourceId === id);
@@ -101,7 +118,11 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
         </button>
       </div>
       {task.requirements.length === 0 ? <small>No resource demand recorded yet.</small> : task.requirements.map((requirement, index) => (
-        <div className={styles.resourceRow} key={index}>
+        <div
+          className={styles.resourceRow}
+          key={requirement.id ?? `${requirement.resourceKey || 'new'}-${index}`}
+          data-resource-key={requirement.resourceKey || undefined}
+        >
           <select
             className={styles.input}
             aria-label={`Resource ${index + 1}`}
@@ -168,6 +189,15 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
     } catch (e: any) {
       setError(e.message || 'Failed to update task percentage');
     }
+  }
+
+  async function handleSaveTask(sch: ProjectSchedule, taskIndex: number) {
+    const original = sch.tasks[taskIndex];
+    if (!original.id) return;
+    const next = toTask(editTask[original.id], original);
+    if (!next) { setError('Activity needs a name, dates, working-day duration and complete resource lines.'); return; }
+    await saveSchedule(sch.projectId, sch.projectName, sch.tasks.map((task, index) => index === taskIndex ? next : task));
+    setEditTask((current) => { const copy = { ...current }; delete copy[original.id!]; return copy; });
   }
 
   async function handleAddTask(sch: ProjectSchedule) {
@@ -251,7 +281,8 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
             <div className={styles.timeline} aria-hidden="true"><span /> <div className={styles.timelineScale}><span>{new Date(min).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span><span>Today</span><span>{new Date(min + total * 86_400_000).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span></div><span /><span /></div>
             <div className={styles.rows}>
               {sch.tasks.map((t, idx) => (
-                <div key={`${t.name}-${idx}`} className={styles.row}>
+                <Fragment key={t.id ?? `${t.name}-${idx}`}>
+                <div className={styles.row}>
                   <div className={styles.label} title={t.name}>
                     {t.name}
                     <small>{t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'WBS record unavailable'; })() : 'Legacy activity · WBS not linked'}</small>
@@ -279,6 +310,15 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                   />
                   <button
                     type="button"
+                    onClick={() => t.id && setEditTask((current) => ({ ...current, [t.id!]: taskDraft(t) }))}
+                    className={styles.editButton}
+                    aria-label={`Edit plan for ${t.name}`}
+                    title="Edit activity plan"
+                  >
+                    <Pencil size={13} />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleRemoveTask(sch, idx)}
                     className={styles.removeButton}
                     title="Remove task"
@@ -286,6 +326,27 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                     <Trash2 size={14} />
                   </button>
                 </div>
+                {t.id && editTask[t.id] && (() => {
+                  const draft = editTask[t.id!];
+                  const setDraft = (next: NewTask) => setEditTask((current) => ({ ...current, [t.id!]: next }));
+                  return (
+                    <div className={styles.editPanel} data-testid={`edit-task-${t.id}`}>
+                      <div className={styles.editGrid}>
+                        <label>Activity name<input className={styles.input} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></label>
+                        <label>Planned start<input className={styles.input} type="date" value={draft.plannedStart} onChange={(event) => setDraft({ ...draft, plannedStart: event.target.value })} /></label>
+                        <label>Planned finish<input className={styles.input} type="date" value={draft.plannedEnd} onChange={(event) => setDraft({ ...draft, plannedEnd: event.target.value })} /></label>
+                        <label>Working days<input className={styles.input} aria-label={`Edit working days for ${t.name}`} type="number" min={1} step={1} value={draft.durationWorkingDays} onChange={(event) => setDraft({ ...draft, durationWorkingDays: event.target.value })} /></label>
+                      </div>
+                      <div className={styles.lockedPackage}>WBS package remains fixed: {t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'record unavailable'; })() : 'legacy activity is not linked'}</div>
+                      {requirementsEditor(draft, setDraft, `Edit resource needs for ${t.name}`)}
+                      <div className={styles.editActions}>
+                        <button type="button" className={styles.btn} onClick={() => setEditTask((current) => { const copy = { ...current }; delete copy[t.id!]; return copy; })}><X size={13} /> Cancel</button>
+                        <button type="button" className={styles.btnPrimary} disabled={busy === sch.projectId} onClick={() => handleSaveTask(sch, idx)}><Save size={13} /> Save activity</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+                </Fragment>
               ))}
               {sch.tasks.length === 0 && <p className={styles.meta}>No tasks yet — add one below.</p>}
             </div>

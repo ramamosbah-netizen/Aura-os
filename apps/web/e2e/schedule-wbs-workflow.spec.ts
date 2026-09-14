@@ -86,15 +86,31 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     await expect(page.locator('small').filter({ hasText: `2 persons · Maya Planner ${run}` })).toBeVisible();
     await expect(page.locator('small').filter({ hasText: `1 units · Fluke tester ${run}` })).toBeVisible();
 
-    const schedules = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
-    expect(schedules.ok(), await schedules.text()).toBe(true);
-    const saved = ((await schedules.json()) as Array<{ projectId: string; tasks: Array<{ wbsNodeId: string; durationWorkingDays: number; requirements: Array<{ resource: { resourceType: string; canonicalResourceId: string }; quantity: number; unit: string }> }> }>).find(
+    const initialSchedules = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
+    expect(initialSchedules.ok(), await initialSchedules.text()).toBe(true);
+    const initial = ((await initialSchedules.json()) as Array<{ projectId: string; tasks: Array<{ id: string; wbsNodeId: string; durationWorkingDays: number; requirements: Array<{ id: string; resource: { resourceType: string; canonicalResourceId: string }; quantity: number; unit: string }> }> }>).find(
       (schedule) => schedule.projectId === project.id,
     );
+    const taskId = initial?.tasks[0].id;
+    const employeeRequirementId = initial?.tasks[0].requirements.find((item) => item.resource.canonicalResourceId === employee.id)?.id;
+
+    await page.getByRole('button', { name: `Edit plan for Install CCTV devices ${run}` }).click();
+    const editor = page.locator('[data-testid^="edit-task-"]');
+    const employeeRow = editor.locator(`[data-resource-key="employee:${employee.id}"]`);
+    await employeeRow.locator('input[type="number"]').fill('3');
+    await editor.getByRole('button', { name: 'Save activity' }).click();
+    await expect(page.locator('small').filter({ hasText: `3 persons · Maya Planner ${run}` })).toBeVisible({ timeout: 30_000 });
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.locator('small').filter({ hasText: `3 persons · Maya Planner ${run}` })).toBeVisible({ timeout: 30_000 });
+
+    const schedules = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
+    expect(schedules.ok(), await schedules.text()).toBe(true);
+    const saved = ((await schedules.json()) as Array<{ projectId: string; tasks: Array<{ id: string; wbsNodeId: string; durationWorkingDays: number; requirements: Array<{ id: string; resource: { resourceType: string; canonicalResourceId: string }; quantity: number; unit: string }> }> }>).find((schedule) => schedule.projectId === project.id);
+    expect(saved?.tasks[0].id).toBe(taskId);
     expect(saved?.tasks[0].wbsNodeId).toBe(workPackage.id);
     expect(saved?.tasks[0].durationWorkingDays).toBe(3);
     expect(saved?.tasks[0].requirements).toEqual(expect.arrayContaining([
-      expect.objectContaining({ resource: { resourceType: 'employee', canonicalResourceId: employee.id }, quantity: 2, unit: 'persons' }),
+      expect.objectContaining({ id: employeeRequirementId, resource: { resourceType: 'employee', canonicalResourceId: employee.id }, quantity: 3, unit: 'persons' }),
       expect.objectContaining({ resource: { resourceType: 'asset', canonicalResourceId: asset.id }, quantity: 1, unit: 'units' }),
     ]));
   });

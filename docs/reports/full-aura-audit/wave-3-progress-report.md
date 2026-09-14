@@ -74,9 +74,9 @@ The planning desk now captures an authored working-day duration and any number o
 
 The API catalog exposes only planning-safe fields. Before saving, the application-layer bridge resolves each employee, vehicle or asset against the authenticated tenant and returns 400 for an invented, deleted or cross-tenant id. It also refuses `pool` until the governed team/resource-pool register exists, so a free-text team cannot silently become planning truth.
 
-Auth-ON browser proof created `Install CCTV devices` with three authored working days, two people from HR and one Fluke tester from Assets; reload and the schedule API returned the same requirements. The same journey first submitted a fabricated employee UUID and received 400.
+Auth-ON browser proof created `Install CCTV devices` with three authored working days, two people from HR and one Fluke tester from Assets; reload and the schedule API returned the same requirements. The same journey first submitted a fabricated employee UUID and received 400. It then reopened the established activity, changed employee demand from two to three, saved and reloaded it, and proved the task and employee-requirement ids were unchanged. The edit preserves the established WBS link plus any baseline and actual dates rather than recreating delivery identity.
 
-**PLN-06 moves from BACKEND_ONLY to PARTIAL.** New-activity demand is connected through owning register → safe catalog → UI → API validation → task requirement persistence → solver input. Existing-activity demand editing, team pools, held allocation/bookings, availability integration and My Work receipts remain open.
+**PLN-06 moves from BACKEND_ONLY to PARTIAL.** Activity demand is connected through owning register → safe catalog → create/edit UI → API validation → task requirement persistence → solver input. Team pools, held allocation/bookings, availability integration and My Work receipts remain open.
 
 ## Security and authority proof
 
@@ -101,6 +101,7 @@ Auth-ON browser proof created `Install CCTV devices` with three authored working
 | Edit silently drops or moves an established activity package | Missing input preserves the stored link; a different node is refused |
 | Caller invents an employee/equipment id | The API reloads the authenticated tenant's HR/Fleet/Assets catalogs and returns 400 before schedule persistence |
 | Projects copies names from owning registers | The task stores only typed ids; the current label is read through the safe planning catalog on render |
+| Planner edits demand by replacing the activity or requirement | Browser/API proof changes the quantity while retaining the persisted task and requirement ids, WBS link, baseline and actual fields |
 | Caller submits an ungoverned free-text team | `pool` is refused until the canonical resource-pool register is connected |
 
 ## Verification completed

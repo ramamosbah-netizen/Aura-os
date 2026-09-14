@@ -1726,8 +1726,8 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Wave 3 iteration 6 lets the planner author working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. Team/resource-pool authoring and editing demand on an established activity remain unavailable.",
-      "acceptanceProof": "Add the governed team/resource-pool register and an edit flow for established activity demand; prove each requirement continues into bookings, conflict resolution and My Work without re-entry."
+      "currentBehavior": "Wave 3 iteration 6 lets the planner author and later edit working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. The edit flow preserves the established task, requirement, WBS, baseline and actual identities. Governed team/resource-pool authoring remains unavailable.",
+      "acceptanceProof": "Add the governed team/resource-pool register; prove each established requirement continues into bookings, conflict resolution and My Work without re-entry."
     },
     {
       "id": "PLN-07",
@@ -8346,13 +8346,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Wave 3 iteration 6 lets the planner author working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. Team/resource-pool authoring and editing demand on an established activity remain unavailable.",
+      "currentBehavior": "Wave 3 iteration 6 lets the planner author and later edit working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. The edit flow preserves the established task, requirement, WBS, baseline and actual identities. Governed team/resource-pool authoring remains unavailable.",
       "expectedOperationalBehavior": "Resource requirements from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Add the governed team/resource-pool register and an edit flow for established activity demand; prove each requirement continues into bookings, conflict resolution and My Work without re-entry."
+      "acceptanceProof": "Add the governed team/resource-pool register; prove each established requirement continues into bookings, conflict resolution and My Work without re-entry."
     },
     {
       "id": "F-09",

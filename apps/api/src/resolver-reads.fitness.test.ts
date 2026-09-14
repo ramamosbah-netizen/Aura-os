@@ -111,6 +111,7 @@ const RECORDED_CAPS = [
   'procurement/postgres-supplier-store.ts#list',
   'projects/postgres-closeout-store.ts#list',
   'projects/postgres-cost-ledger-store.ts#list',
+  'projects/postgres-project-responsibility-store.ts#list',
   'projects/postgres-project-store.ts#list',
   'projects/postgres-quantity-ledger-store.ts#list',
   'projects/postgres-variation-store.ts#list',

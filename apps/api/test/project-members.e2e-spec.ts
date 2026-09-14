@@ -7,7 +7,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { PROJECT_DELIVERY_ROLE_IDS, TenantContext } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -38,10 +38,10 @@ describe('Project Delivery — membership (HTTP)', () => {
   const PB = '/api/v1/projects/proj-B';
 
   it('assigns delivery-role members per project, isolates them, and blocks enterprise-role escalation', async () => {
-    // The assignable catalog offers ONLY the four delivery roles.
+    // The assignable catalog offers only the governed delivery-role whitelist.
     const cat = await http.get(`${PA}/assignable`).expect(200);
     const roleIds = (cat.body.roles as Array<{ id: string }>).map((r) => r.id).sort();
-    expect(roleIds).toEqual(['r-hse', 'r-pm', 'r-qa-qc', 'r-site-engineer']);
+    expect(roleIds).toEqual([...PROJECT_DELIVERY_ROLE_IDS].sort());
 
     // Add a Site Engineer to project A.
     const added = await http.post(`${PA}/members`).send({ userId: 'u-eng-1', roleId: 'r-site-engineer' }).expect(201);

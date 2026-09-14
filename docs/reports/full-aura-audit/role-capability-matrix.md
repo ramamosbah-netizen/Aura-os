@@ -15,7 +15,7 @@
 | Sales | AWD-03 | PARTIAL | UNVERIFIED |
 | Sales | AWD-04 | PARTIAL | UNVERIFIED |
 | Sales | AWD-05 | COMPLETE | UNVERIFIED |
-| Sales | AWD-06 | UNVERIFIED | UNVERIFIED |
+| Sales | AWD-06 | COMPLETE | UNVERIFIED |
 | Sales | AWD-07 | PARTIAL | UNVERIFIED |
 | Sales | OUT-01 | PARTIAL | UNVERIFIED |
 | Sales | OUT-02 | PARTIAL | UNVERIFIED |
@@ -307,7 +307,7 @@
 | Project Manager | AWD-03 | PARTIAL | UNVERIFIED |
 | Project Manager | AWD-04 | PARTIAL | UNVERIFIED |
 | Project Manager | AWD-05 | COMPLETE | UNVERIFIED |
-| Project Manager | AWD-06 | UNVERIFIED | UNVERIFIED |
+| Project Manager | AWD-06 | COMPLETE | UNVERIFIED |
 | Project Manager | AWD-07 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-01 | DISCONNECTED | UNVERIFIED |
 | Project Manager | PLN-02 | BACKEND_ONLY | UNVERIFIED |
@@ -519,7 +519,7 @@
 | Commercial Manager / QS | AWD-03 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | AWD-04 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | AWD-05 | COMPLETE | UNVERIFIED |
-| Commercial Manager / QS | AWD-06 | UNVERIFIED | UNVERIFIED |
+| Commercial Manager / QS | AWD-06 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | AWD-07 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | SUP-01 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | SUP-02 | UNVERIFIED | UNVERIFIED |

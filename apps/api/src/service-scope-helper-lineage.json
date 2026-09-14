@@ -140,6 +140,11 @@
     "call": "this.guard(existing.projectId, existing.tenantId, actorId, 'projects.issue.update')"
   },
   {
+    "file": "modules/projects/src/project-responsibility.service.ts",
+    "method": "guard",
+    "call": "assertProjectWriteAllowed({ projects: this.projects, access: this.access }, { projectId, tenantId, actorId, permission })"
+  },
+  {
     "file": "modules/projects/src/project-risk-materialisation.service.ts",
     "method": "materialise",
     "call": "assertProjectWriteAllowed({ projects: this.projects, access: this.access }, { projectId: existing.projectId, tenantId: existing.tenantId, actorId: input.actorId, permission })"

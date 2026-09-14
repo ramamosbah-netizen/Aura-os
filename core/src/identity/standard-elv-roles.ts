@@ -16,6 +16,7 @@ export interface StandardElvRole extends Role {
 // Every employee needs their own tasks, alerts, inbox, communication and authorized documents.
 // DMS still applies its document-level access resolver after this functional permission.
 const STAFF_BASE = ['comms.*', 'work-items.*', 'notifications.*', 'inbox.*', 'documents.*.read'] as const;
+const PROJECT_RESPONSIBILITY_WORK = 'projects.responsibility.update';
 const readOnly = (module: string): string => `${module}.*.read`;
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
@@ -98,7 +99,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       'engineering.*.read', 'engineering.*.create', 'engineering.*.update',
       'engineering.drawing.submit', 'engineering.drawing.revise', 'engineering.drawing.transmit',
-      readOnly('projects'), readOnly('doccontrol'), ...STAFF_BASE,
+      readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },
   {
@@ -107,7 +108,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Records site execution, labour, plant, progress and inspection requests for an assigned project.',
     assignmentScope: 'project',
     permissions: [
-      'site.*', 'quality.inspection-request.create', readOnly('quality'), readOnly('projects'),
+      'site.*', 'quality.inspection-request.create', readOnly('quality'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK,
       readOnly('engineering'), readOnly('hse'), readOnly('inventory'), ...STAFF_BASE,
     ],
   },
@@ -117,7 +118,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Builds WBS and schedules, runs planning scenarios and maintains baselines and forecasts.',
     assignmentScope: 'project',
     permissions: [
-      'projects.schedule.read', 'projects.schedule.plan', 'projects.wb.*',
+      'projects.schedule.read', 'projects.schedule.plan', 'projects.wb.*', PROJECT_RESPONSIBILITY_WORK,
       'projects.delay.*', readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
     ],
   },
@@ -127,7 +128,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Coordinates technical, site, quality and material work inside an assigned project.',
     assignmentScope: 'project',
     permissions: [
-      'projects.*.read', 'projects.issue.*', 'projects.risk.*',
+      'projects.*.read', 'projects.issue.*', 'projects.risk.*', PROJECT_RESPONSIBILITY_WORK,
       'engineering.*.read', 'engineering.rfi.*', 'site.*.read', 'quality.*.read',
       'procurement.*.read', 'commissioning.*.read', ...STAFF_BASE,
     ],
@@ -152,7 +153,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.opportunity.read', 'crm.study.read', 'crm.study.approve', 'crm.scope.approve',
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
-      'engineering.*', readOnly('tendering'), readOnly('projects'), readOnly('doccontrol'), ...STAFF_BASE,
+      'engineering.*', readOnly('tendering'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },
   {
@@ -163,7 +164,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       'crm.estimate.read', 'crm.estimate.approve', 'crm.quotation.*', 'crm.internal-pricing.access',
       'tendering.internal-pricing.access',
-      'contracts.*', 'projects.variation.*', 'projects.eot-claim.*', 'projects.cb.*',
+      'contracts.*', 'projects.variation.*', 'projects.eot-claim.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
       readOnly('tendering'), readOnly('projects'), readOnly('procurement'), readOnly('finance'), ...STAFF_BASE,
     ],
   },
@@ -175,7 +176,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       'procurement.*.read', 'procurement.*.create', 'procurement.*.update',
       'procurement.po.view', 'procurement.po.create', 'procurement.po.update', 'procurement.po.submit',
-      readOnly('inventory'), readOnly('projects'), readOnly('subcontracts'), ...STAFF_BASE,
+      readOnly('inventory'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('subcontracts'), ...STAFF_BASE,
     ],
   },
   {
@@ -190,21 +191,21 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'Storekeeper',
     description: 'Receives, identifies, stores and issues material while retaining purchase-order context.',
     assignmentScope: 'tenant-or-project',
-    permissions: ['inventory.*', 'procurement.po.view', readOnly('procurement'), readOnly('projects'), readOnly('assets'), ...STAFF_BASE],
+    permissions: ['inventory.*', 'procurement.po.view', readOnly('procurement'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), ...STAFF_BASE],
   },
   {
     id: 'r-qa-qc',
     name: 'QA / QC',
     description: 'Owns inspections, ITP evidence, material approvals, NCRs and quality closeout.',
     assignmentScope: 'project',
-    permissions: ['quality.*', readOnly('commissioning'), readOnly('engineering'), readOnly('site'), readOnly('projects'), ...STAFF_BASE],
+    permissions: ['quality.*', readOnly('commissioning'), readOnly('engineering'), readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, ...STAFF_BASE],
   },
   {
     id: 'r-hse',
     name: 'HSE',
     description: 'Owns permits, incidents, risk assessments, toolbox talks and corrective actions.',
     assignmentScope: 'project',
-    permissions: ['hse.*', readOnly('site'), readOnly('projects'), readOnly('engineering'), readOnly('hr'), ...STAFF_BASE],
+    permissions: ['hse.*', readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('engineering'), readOnly('hr'), ...STAFF_BASE],
   },
   {
     id: 'r-finance',
@@ -221,14 +222,14 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'T&C Engineer',
     description: 'Executes system-specific pre-commissioning, tests, defects, retests and evidence capture.',
     assignmentScope: 'project',
-    permissions: ['commissioning.record.*', readOnly('quality'), readOnly('engineering'), readOnly('site'), readOnly('projects'), readOnly('doccontrol'), ...STAFF_BASE],
+    permissions: ['commissioning.record.*', readOnly('quality'), readOnly('engineering'), readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE],
   },
   {
     id: 'r-handover-fm',
     name: 'Handover / FM',
     description: 'Prepares O&M, training, spares, dossier and handover readiness records for acceptance.',
     assignmentScope: 'project',
-    permissions: ['commissioning.handover.*', readOnly('commissioning'), readOnly('projects'), readOnly('assets'), readOnly('amc'), readOnly('doccontrol'), ...STAFF_BASE],
+    permissions: ['commissioning.handover.*', readOnly('commissioning'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), readOnly('amc'), readOnly('doccontrol'), ...STAFF_BASE],
   },
   {
     id: 'r-executive',

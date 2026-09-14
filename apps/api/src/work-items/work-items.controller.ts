@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, UnauthorizedException } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { SelfScoped, TenantContext } from '@aura/core';
 import { TASK_RECURRENCES, type TaskRecurrence } from '@aura/crm';
 import { WorkItemsService, type WorkItem, type WorkItemAction, type WorkItemsPayload } from './work-items.service';
 
@@ -9,11 +9,12 @@ const ACTIONS = new Set<WorkItemAction>(['start', 'complete', 'reopen']);
 export class WorkItemsController {
   constructor(private readonly workItems: WorkItemsService, private readonly tenant: TenantContext) {}
 
-  @Get()
+  @SelfScoped()
+  @Get('')
   list(): Promise<WorkItemsPayload> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new UnauthorizedException('A signed-in user is required');
-    return this.workItems.list(ctx.tenantId, ctx.actorId);
+    return this.workItems.list(ctx.tenantId, ctx.actorId, ctx.companyId ?? null);
   }
 
   @Post()
@@ -67,12 +68,13 @@ export class WorkItemsController {
     return this.workItems.remove(ctx.tenantId, ctx.actorId, source, id);
   }
 
+  @SelfScoped()
   @Post(':source/:id/:action')
   act(@Param('source') source: string, @Param('id') id: string, @Param('action') action: string): Promise<WorkItem> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new UnauthorizedException('A signed-in user is required');
     if (!ACTIONS.has(action as WorkItemAction)) throw new BadRequestException('Unknown work-item action');
-    return this.workItems.act(ctx.tenantId, ctx.actorId, source, id, action as WorkItemAction);
+    return this.workItems.act(ctx.tenantId, ctx.actorId, source, id, action as WorkItemAction, ctx.companyId ?? null);
   }
 
   private validateSchedule(dto: { reminderAt?: string | null; recurrence?: TaskRecurrence; recurrenceEndsOn?: string | null }): void {

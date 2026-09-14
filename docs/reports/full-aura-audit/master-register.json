@@ -1287,7 +1287,7 @@
         "Award",
         "Mobilisation"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Contracts / Projects",
       "evidence": [
         "R-J1",
@@ -1296,16 +1296,17 @@
       "source": "apps/api/test/j2-j6-delivery-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Sales, Project Manager, Commercial Manager / QS role executes Team and responsibility assignment in the canonical Contracts / Projects context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "Fresh Wave 3 proof separates project access grants from operational responsibility. Project 360 assigns a named member, workstream, due date and deliverable; the assignee receives the persisted item in My Work, starts and completes it, and the source history remains visible. Canonical-project, assignee and functional-permission checks deny wrong-project, wrong-user and read-only-member actions.",
+      "acceptanceProof": "Regression keeps manager UI assignment, save/reload, member My Work receipt, assignee-only progression, project context and wrong-scope/wrong-permission denials green."
     },
     {
       "id": "AWD-07",
@@ -8530,7 +8531,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 1,
+      "COMPLETE": 2,
       "PARTIAL": 90,
       "BACKEND_ONLY": 10,
       "UI_ONLY": 0,
@@ -8540,7 +8541,7 @@
       "DISCONNECTED": 11,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 54,
+      "UNVERIFIED": 53,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

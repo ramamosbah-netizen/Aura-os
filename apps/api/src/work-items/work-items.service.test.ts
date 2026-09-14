@@ -27,9 +27,13 @@ function harness() {
   // §21 registers. Empty here on purpose: these tests are about the personal-task half of My
   // Work, and a source that returns nothing must not change any of their answers.
   const projectRisks = { list: empty }, projectIssues = { list: empty };
+  const projectResponsibilities = { list: vi.fn(empty), get: vi.fn() };
+  const projects = { get: vi.fn(async (id: string) => ({ id, title: 'Project One' })) };
+  const access = { can: vi.fn(() => ({ allowed: true })) };
+  const auth = { enabled: false };
   const notifications = { record: vi.fn(async () => ({})) };
-  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, notifications as never);
-  return { service, activities, notifications };
+  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, projects as never, access as never, auth as never, notifications as never);
+  return { service, activities, notifications, projectResponsibilities, access, auth };
 }
 
 describe('WorkItemsService', () => {
@@ -113,5 +117,40 @@ describe('WorkItemsService', () => {
     activities.complete.mockResolvedValue({ ...recurring, status: 'completed', completedAt: '2026-08-16T09:00:00.000Z' });
     await service.act('tenant-a', 'user-a', 'crm-activity', 'a1', 'complete');
     expect(activities.create).toHaveBeenCalledWith(expect.objectContaining({ dueDate: '2026-08-22', recurrence: 'weekly', recurrenceSeriesId: 'a1' }));
+  });
+
+  it('surfaces assigned project responsibilities and progresses them through the source service', async () => {
+    const { service, projectResponsibilities } = harness();
+    const row = {
+      id: 'resp-1', tenantId: 'tenant-a', projectId: 'project-a', workstream: 'engineering_release',
+      title: 'Release IFC drawings', description: 'Issue the approved package', assigneeId: 'user-a',
+      assignedBy: 'manager-a', dueDate: '2026-08-20', status: 'assigned', acceptedAt: null,
+      startedAt: null, completedAt: null, createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+    };
+    projectResponsibilities.list.mockResolvedValue([row]);
+    projectResponsibilities.get.mockResolvedValue(row);
+    projectResponsibilities.start = vi.fn(async () => ({ ...row, status: 'in_progress', startedAt: '2026-08-02T00:00:00.000Z' }));
+    const listed = await service.list('tenant-a', 'user-a');
+    expect(listed.items).toContainEqual(expect.objectContaining({ source: 'project-responsibility', sourceId: 'resp-1', actions: ['start'] }));
+    await expect(service.act('tenant-a', 'user-a', 'project-responsibility', 'resp-1', 'start')).resolves.toMatchObject({ status: 'in_progress', actions: ['complete'] });
+  });
+
+  it('filters project work against each persisted project when Auth is enabled', async () => {
+    const { service, projectResponsibilities, access, auth } = harness();
+    auth.enabled = true;
+    projectResponsibilities.list.mockResolvedValue([{
+      id: 'resp-hidden', tenantId: 'tenant-a', projectId: 'project-a', workstream: 'engineering_release',
+      title: 'Restricted release', description: null, assigneeId: 'user-a', assignedBy: 'manager-a',
+      dueDate: '2026-08-20', status: 'assigned', acceptedAt: null, startedAt: null, completedAt: null,
+      createdAt: '2026-08-01T00:00:00.000Z', updatedAt: '2026-08-01T00:00:00.000Z',
+    }]);
+    access.can.mockReturnValue({ allowed: false });
+
+    const result = await service.list('tenant-a', 'user-a', 'company-a');
+
+    expect(result.items).not.toContainEqual(expect.objectContaining({ sourceId: 'resp-hidden' }));
+    expect(access.can).toHaveBeenCalledWith('user-a', expect.objectContaining({
+      permission: 'work-items.work-item.read', resource: { type: 'project', id: 'project-a' },
+    }));
   });
 });

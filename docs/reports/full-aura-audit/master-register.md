@@ -4,7 +4,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 1 |
+| COMPLETE | 2 |
 | PARTIAL | 90 |
 | BACKEND_ONLY | 10 |
 | UI_ONLY | 0 |
@@ -14,7 +14,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | DISCONNECTED | 11 |
 | WRONG_BEHAVIOR | 13 |
 | UNREACHABLE | 0 |
-| UNVERIFIED | 54 |
+| UNVERIFIED | 53 |
 | NOT_AUDITED | 0 |
 
 ## Capabilities
@@ -59,7 +59,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | AWD-03 | Contract creation and activation | PARTIAL | Contracts / Projects | R-J1; R-J26 |
 | AWD-04 | Project creation | PARTIAL | Contracts / Projects | R-J1; R-J26 |
 | AWD-05 | Delivery item mapping | COMPLETE | Contracts / Projects | R-J1; R-J26 |
-| AWD-06 | Team and responsibility assignment | UNVERIFIED | Contracts / Projects | R-J1; R-J26 |
+| AWD-06 | Team and responsibility assignment | COMPLETE | Contracts / Projects | R-J1; R-J26 |
 | AWD-07 | Mobilisation readiness | PARTIAL | Contracts / Projects | R-J1; R-J26 |
 | ENG-01 | Drawing creation and revision | PARTIAL | Engineering / DocControl | R-J26 |
 | ENG-02 | Design review and release | PARTIAL | Engineering / DocControl | R-J26 |

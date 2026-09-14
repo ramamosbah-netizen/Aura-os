@@ -23,6 +23,14 @@ const ALLOWED: Record<string, string> = {
     'this exists for — would be refused. The handler computes the authorised project id set from ' +
     'the actor’s own grants and hands it to the query, so the count, search and page window are ' +
     'all over the authorised set. Entitled to nothing returns an empty page, not an error.',
+  'work-items.controller.ts::':
+    'Personal work discovery names no project in the URL. The service selects only records assigned ' +
+    'to or created by the actor, then evaluates work-items.work-item.read against each record’s ' +
+    'persisted project before returning it. Org-scoped grants remain valid for non-project work.',
+  'work-items.controller.ts:::source/:id/:action':
+    'A My Work quick action names a source record rather than a project. The service loads that ' +
+    'record, verifies the actor is its assignee, derives the persisted project, re-evaluates the ' +
+    'functional work-item permission in that project, and then delegates to the source command.',
 };
 
 function controllerFiles(dir: string): string[] {

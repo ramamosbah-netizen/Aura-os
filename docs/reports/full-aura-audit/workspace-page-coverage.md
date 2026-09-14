@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-213 page.tsx templates enumerated. Enumeration is not audit. 35 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+213 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -155,7 +155,7 @@
 | apps/web/app/my-work/favorites/page.tsx | PARTIAL | Live in-app source-link path passed |
 | apps/web/app/my-work/my-day/page.tsx | PARTIAL | Live daily focus/source coverage/mobile path passed |
 | apps/web/app/my-work/page.tsx | PARTIAL | Live cross-module attention aggregation and source-link paths passed |
-| apps/web/app/my-work/tasks/page.tsx | PARTIAL | Live source-owned task center path passed |
+| apps/web/app/my-work/tasks/page.tsx | PARTIAL | Live source-owned task center and project responsibility Start/Complete handoff passed |
 | apps/web/app/notifications/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/operations/overview/page.tsx | PARTIAL | Live filtered operations-to-project drilldown test passed |
 | apps/web/app/operations/pre-execution/page.tsx | NOT_AUDITED | UNVERIFIED |
@@ -175,7 +175,7 @@
 | apps/web/app/project/[projectId]/drawings/page.tsx | PARTIAL | Wave 3 live project-scoped drawing registration path passed |
 | apps/web/app/project/[projectId]/drawings/[drawingId]/page.tsx | PARTIAL | Wave 3 live review and sent DocControl transmittal path passed |
 | apps/web/app/project/[projectId]/page.tsx | PARTIAL | Live authorized/anonymous/forbidden project context test passed |
-| apps/web/app/project/[projectId]/team/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/project/[projectId]/team/page.tsx | PARTIAL | Wave 3 manager assignment and assignee handoff/history path passed |
 | apps/web/app/project/[projectId]/workspace/[section]/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/[area]/page.tsx | PARTIAL | Live site register/filter/mobile path test passed |
 | apps/web/app/projects/approvals/page.tsx | NOT_AUDITED | UNVERIFIED |

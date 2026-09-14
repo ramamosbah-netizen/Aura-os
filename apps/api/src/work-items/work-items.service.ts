@@ -1,11 +1,19 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { ActivityService, type Activity, type TaskRecurrence } from '@aura/crm';
-import { NotificationService } from '@aura/core';
+import { AccessService, AuthService, NotificationService } from '@aura/core';
 import { EngineeringService, type Drawing, type Rfi, type TechnicalQuery } from '@aura/engineering';
 import { HseService, type CapaAction } from '@aura/hse';
 import { PurchaseOrderService, PurchaseRequestService, RfqService, type PurchaseOrder, type PurchaseRequest, type Rfq } from '@aura/procurement';
 import { QualityService, type Ncr, type Snag } from '@aura/quality';
-import { ProjectRiskService, ProjectIssueService, type ProjectRisk, type ProjectIssue } from '@aura/projects';
+import {
+  ProjectRiskService,
+  ProjectIssueService,
+  ProjectResponsibilityService,
+  ProjectService,
+  type ProjectRisk,
+  type ProjectIssue,
+  type ProjectResponsibility,
+} from '@aura/projects';
 
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
 export type WorkItemPriority = 'critical' | 'high' | 'medium' | 'low' | 'normal';
@@ -113,11 +121,15 @@ export class WorkItemsService {
     private readonly pos: PurchaseOrderService,
     private readonly projectRisks: ProjectRiskService,
     private readonly projectIssues: ProjectIssueService,
+    private readonly projectResponsibilities: ProjectResponsibilityService,
+    private readonly projects: ProjectService,
+    private readonly access: AccessService,
+    private readonly auth: AuthService,
     private readonly notifications: NotificationService,
   ) {}
 
-  async list(tenantId: string, actorId: string): Promise<WorkItemsPayload> {
-    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, snags, capas, prs, rfqs, pos, projectRisks, projectIssues] = await Promise.all([
+  async list(tenantId: string, actorId: string, companyId: string | null = null): Promise<WorkItemsPayload> {
+    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities] = await Promise.all([
       this.activities.list({ tenantId, assigneeId: actorId, limit: 1000 }),
       this.activities.list({ tenantId, createdBy: actorId, limit: 1000 }),
       this.engineering.listDrawings({ tenantId, limit: 1000 }),
@@ -134,6 +146,7 @@ export class WorkItemsService {
       // register in the tenant.
       this.projectRisks.list({ openOnly: true, limit: 1000 }),
       this.projectIssues.list({ openOnly: true, limit: 1000 }),
+      this.projectResponsibilities.list({ tenantId, assigneeId: actorId, openOnly: true, limit: 1000 }),
     ]);
 
     const items = new Map<string, WorkItem>();
@@ -163,10 +176,17 @@ export class WorkItemsService {
     for (const po of pos) this.addPo(put, po, actorId);
     for (const risk of projectRisks) this.addProjectRisk(put, risk, actorId);
     for (const issue of projectIssues) this.addProjectIssue(put, issue, actorId);
+    const responsibilityProjects = new Map<string, string>();
+    await Promise.all([...new Set(projectResponsibilities.map((value) => value.projectId))].map(async (projectId) => {
+      const project = await this.projects.get(projectId);
+      if (project) responsibilityProjects.set(projectId, project.title);
+    }));
+    for (const responsibility of projectResponsibilities) this.addProjectResponsibility(put, responsibility, actorId, responsibilityProjects.get(responsibility.projectId) ?? null);
 
     return {
       generatedAt: new Date().toISOString(),
       items: [...items.values()]
+        .filter((item) => this.canUse(tenantId, companyId, actorId, item.projectId))
         .filter((item) => item.status !== 'cancelled')
         .sort((a, b) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') || b.updatedAt.localeCompare(a.updatedAt)),
       coverage: {
@@ -242,16 +262,28 @@ export class WorkItemsService {
     return { deleted: true };
   }
 
-  async act(tenantId: string, actorId: string, source: string, id: string, action: WorkItemAction): Promise<WorkItem> {
+  async act(tenantId: string, actorId: string, source: string, id: string, action: WorkItemAction, companyId: string | null = null): Promise<WorkItem> {
+    if (source === 'project-responsibility') {
+      const existing = await this.projectResponsibilities.get(id);
+      if (!existing || existing.tenantId !== tenantId) throw new NotFoundException('Work item not found');
+      this.assertCanUse(tenantId, companyId, actorId, existing.projectId);
+      if (action === 'reopen') throw new ForbiddenException('Completed responsibilities are reopened by the project manager at the source.');
+      const updated = action === 'start'
+        ? await this.projectResponsibilities.start(id, existing.projectId, actorId)
+        : await this.projectResponsibilities.complete(id, existing.projectId, actorId);
+      const project = await this.projects.get(updated.projectId);
+      return this.responsibilityItem(updated, actorId, project?.title ?? null);
+    }
     if (source !== 'crm-activity') throw new ForbiddenException('This source does not expose a safe quick action. Open the source record instead.');
     const activity = await this.activities.get(id);
     if (!activity || activity.tenantId !== tenantId) throw new NotFoundException('Work item not found');
     if (activity.assigneeId !== actorId) throw new ForbiddenException('Only the assigned user can update this work item here.');
+    this.assertCanUse(tenantId, companyId, actorId, activity.relatedType === 'project' ? activity.relatedId : null);
     const updated = action === 'start' ? await this.activities.start(id, actorId)
       : action === 'complete' ? await this.activities.complete(id, undefined, undefined, actorId)
         : await this.activities.reopen(id, actorId);
     if (action === 'complete') await this.createNextOccurrence(activity);
-    const payload = await this.list(tenantId, actorId);
+    const payload = await this.list(tenantId, actorId, companyId);
     const item = payload.items.find((candidate) => candidate.source === source && candidate.sourceId === updated.id);
     if (!item) throw new NotFoundException('Updated work item not found');
     return item;
@@ -496,6 +528,57 @@ export class WorkItemsService {
       scopes: scopes(assigned, created), isFollowUp: false, actions: [],
       origin: origin(i.createdBy, actor),
     });
+  }
+
+  private canUse(tenantId: string, companyId: string | null, actorId: string, projectId: string | null): boolean {
+    if (!this.auth.enabled) return true;
+    return this.access.can(actorId, {
+      permission: 'work-items.work-item.read',
+      orgPath: [
+        { level: 'tenant', id: tenantId },
+        ...(companyId ? [{ level: 'company' as const, id: companyId }] : []),
+      ],
+      ...(projectId ? { resource: { type: 'project', id: projectId } } : {}),
+    }).allowed;
+  }
+
+  private assertCanUse(tenantId: string, companyId: string | null, actorId: string, projectId: string | null): void {
+    if (!this.canUse(tenantId, companyId, actorId, projectId)) {
+      throw new ForbiddenException('Your functional role does not allow work-item actions in this scope.');
+    }
+  }
+
+  private addProjectResponsibility(put: (item: WorkItem) => void, value: ProjectResponsibility, actor: string, projectName: string | null): void {
+    put(this.responsibilityItem(value, actor, projectName));
+  }
+
+  private responsibilityItem(value: ProjectResponsibility, actor: string, projectName: string | null): WorkItem {
+    const status: WorkItemStatus = value.status === 'completed' ? 'done'
+      : value.status === 'in_progress' ? 'in_progress' : 'todo';
+    return {
+      id: `project-responsibility:${value.id}`,
+      source: 'project-responsibility',
+      sourceId: value.id,
+      module: 'Projects',
+      kind: value.workstream.replaceAll('_', ' '),
+      title: value.title,
+      detail: value.description,
+      href: `/project/${value.projectId}/team?responsibility=${value.id}`,
+      projectId: value.projectId,
+      projectName,
+      status,
+      sourceStatus: value.status,
+      priority: derivedPriority(value.dueDate),
+      dueAt: value.dueDate,
+      createdAt: value.createdAt,
+      updatedAt: value.updatedAt,
+      scopes: scopes(value.assigneeId === actor, value.assignedBy === actor),
+      isFollowUp: false,
+      actions: value.assigneeId !== actor ? []
+        : ['assigned', 'accepted'].includes(value.status) ? ['start']
+          : value.status === 'in_progress' ? ['complete'] : [],
+      origin: origin(value.assignedBy, actor),
+    };
   }
 
   private addPo(put: (item: WorkItem) => void, p: PurchaseOrder, actor: string): void {

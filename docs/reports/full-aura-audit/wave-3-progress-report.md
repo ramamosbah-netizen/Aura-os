@@ -38,6 +38,18 @@ The general DocControl screen now calls a manually created transmittal a draft a
 
 ENG-01, ENG-02 and ENG-05 remain **PARTIAL**: the browser and API prove the connected workflow, but governed file storage/versioning, independent maker-checker roles, exact register-item package linkage and recipient-role receipt remain open. ENG-06 remains open until assigned Site/Project/Procurement users receive an actionable release item.
 
+## Iteration 3 — Project delivery responsibility to My Work
+
+Project membership now remains an access grant, while operational responsibility is a separate persisted record. A Project Manager assigns a named project member, workstream, deliverable and due date in Project 360. That exact responsibility arrives in the assignee's My Work with project context and follows:
+
+`Project Manager assigns work → named member/due/workstream → assignee My Work receipt → source Accept or My Work Start → Complete → retained project history`
+
+The service derives project authority from the persisted responsibility, requires the assignee to hold a grant on that canonical project, and requires the matching functional permission for every transition. The UI reloads the saved assignment and its source history. This closes **AWD-06** for project team responsibility assignment and receipt.
+
+The first Auth-ON browser run exposed a real discovery defect: a project-only member could not open `/work-items` because the route has no project identifier for the blanket guard. My Work is now a reviewed self-scoped discovery route that filters every returned item against its persisted project and rechecks the same scope before quick actions. Project membership still never grants functionality by itself.
+
+ENG-06 remains open because a general `engineering_release` responsibility does not yet carry the canonical drawing/revision/transmittal reference and is not automatically produced by the governed release event.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -48,6 +60,10 @@ ENG-01, ENG-02 and ENG-05 remain **PARTIAL**: the browser and API prove the conn
 | Caller replays or forges source fields | Browser API replay with forged source values returns the same canonical mapping and source identity |
 | Outbox redelivery duplicates SOLD | Quantity-ledger dedupe key is based on the delivery mapping id; subscriber retry proof remains idempotent |
 | Project membership replaces functional permission | Existing Projects controller permission and Project Scope guard remain active; the browser proof runs Auth-ON |
+| Caller changes the project in the responsibility URL | The service compares the URL project with the responsibility's persisted project and denies the mismatch |
+| Project member lacks the functional permission | Auth-ON HTTP proof denies create/update even when the actor has membership on the canonical project |
+| Another user tries to progress the assignment | Accept/Start/Complete require the persisted assignee identity and deny the wrong actor |
+| Tenant-wide My Work discovery leaks project items | Every discovered item is filtered with `work-items.work-item.read` against its persisted project before it is returned |
 
 ## Verification completed
 
@@ -67,18 +83,22 @@ ENG-01, ENG-02 and ENG-05 remain **PARTIAL**: the browser and API prove the conn
 | Engineering drawing API journey | 1/1 passed; missing recipient denied and resulting conveyance is sent with purpose |
 | Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
 | Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal reference |
-| Database migration posture | 312/312 applied; transmittal purpose persisted |
-| Full API unit/fitness suite | 493 passed / 4 skipped |
+| Database migration posture | 313/313 applied; transmittal purpose and delivery responsibilities persisted with forced RLS |
+| Full API unit/fitness suite | 495 passed / 4 skipped |
+| Project responsibility domain | 2/2 passed; canonical assignee grant and transition authority covered |
+| Project responsibility HTTP journey | 3/3 passed; positive handoff plus wrong-project/wrong-user/wrong-permission denials |
+| My Work service and self-scoped fitness | 15/15 passed, including per-item project filtering |
+| Project responsibility browser journey | 1/1 passed in Chromium; manager UI assignment → member My Work → Start/Complete → retained history |
+| Full Projects module suite | 429 passed / 12 PostgreSQL-only skips |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
-1. Project team and responsibility assignment with clear owner, due date and handoff.
-2. Governed engineering file storage, material-submittal/register-item lineage and receipt by the assigned Site/Project/Procurement roles.
-3. WBS-linked schedule activities instead of an independent task list.
-4. Real employee/team/equipment requirements, availability, conflict resolution and My Work handoff.
-5. Milestone, baseline, look-ahead, delay/recovery and forecast evidence from the connected plan.
+1. Governed engineering file storage, material-submittal/register-item lineage and receipt by the assigned Site/Project/Procurement roles.
+2. WBS-linked schedule activities instead of an independent task list.
+3. Real employee/team/equipment requirements, availability, conflict resolution and My Work handoff.
+4. Milestone, baseline, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state
 

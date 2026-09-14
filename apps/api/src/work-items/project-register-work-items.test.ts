@@ -43,11 +43,16 @@ function harness(risks: unknown[] = [], issues: unknown[] = []) {
   const prs = { list: empty }, rfqs = { list: empty }, pos = { list: empty };
   const projectRisks = { list: vi.fn(async () => risks) };
   const projectIssues = { list: vi.fn(async () => issues) };
+  const projectResponsibilities = { list: empty };
+  const projects = { get: vi.fn() };
+  const access = { can: vi.fn(() => ({ allowed: true })) };
+  const auth = { enabled: false };
   const notifications = { record: vi.fn(async () => ({})) };
   const service = new WorkItemsService(
     activities as never, engineering as never, quality as never, hse as never,
     prs as never, rfqs as never, pos as never,
-    projectRisks as never, projectIssues as never, notifications as never,
+    projectRisks as never, projectIssues as never, projectResponsibilities as never,
+    projects as never, access as never, auth as never, notifications as never,
   );
   return { service, projectRisks, projectIssues };
 }

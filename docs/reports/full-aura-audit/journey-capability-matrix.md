@@ -143,7 +143,7 @@
 | Award | AWD-03 | PARTIAL |
 | Award | AWD-04 | PARTIAL |
 | Award | AWD-05 | COMPLETE |
-| Award | AWD-06 | UNVERIFIED |
+| Award | AWD-06 | COMPLETE |
 | Award | AWD-07 | PARTIAL |
 | Award | OUT-01 | PARTIAL |
 | Award | OUT-02 | PARTIAL |
@@ -201,7 +201,7 @@
 | Mobilisation | AWD-03 | PARTIAL |
 | Mobilisation | AWD-04 | PARTIAL |
 | Mobilisation | AWD-05 | COMPLETE |
-| Mobilisation | AWD-06 | UNVERIFIED |
+| Mobilisation | AWD-06 | COMPLETE |
 | Mobilisation | AWD-07 | PARTIAL |
 | Mobilisation | OUT-01 | PARTIAL |
 | Mobilisation | OUT-02 | PARTIAL |

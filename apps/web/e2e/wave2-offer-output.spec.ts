@@ -382,7 +382,7 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   });
   // Contract creation is an outbox-driven handoff. Wait for the event consumer instead of racing
   // the immediate HTTP response from the award transaction.
-  let contracts: Array<{ value: number; acceptedQuotationId: string; acceptedQuotationRevisionId: string; commercialBaselineId: string }> = [];
+  let contracts: Array<{ id: string; value: number; acceptedQuotationId: string; acceptedQuotationRevisionId: string; commercialBaselineId: string }> = [];
   await expect.poll(async () => {
     const contractsResponse = await request.get(`${API}/contracts/contracts?tenderId=${tender.id}`, { headers: adminHeaders });
     expect(contractsResponse.ok(), await contractsResponse.text()).toBe(true);
@@ -396,6 +396,54 @@ test('downloads governed Tender pricing and technical outputs from their clear w
     acceptedQuotationRevisionId: revisedQuoteId,
     commercialBaselineId: finalBaseline.id,
   });
+
+  // Wave 3 bridge: the awarded revision becomes one immutable project handover. A planner maps
+  // its sold item from Project 360; the browser never supplies tender/revision/handover identity.
+  const activated = await request.patch(`${API}/contracts/contracts/${contracts[0].id}/status`, {
+    headers: adminHeaders, data: { status: 'active' },
+  });
+  expect(activated.ok(), await activated.text()).toBe(true);
+  let projects: Array<{ id: string; handoverId: string; handoverSnapshot: { sourceItems: Array<{ frozenItemKey: string; sourceItemId: string; soldQuantity: number }> } }> = [];
+  await expect.poll(async () => {
+    const response = await request.get(`${API}/projects/projects?contractId=${contracts[0].id}`, { headers: adminHeaders });
+    expect(response.ok(), await response.text()).toBe(true);
+    projects = await response.json() as typeof projects;
+    return projects.length;
+  }, { timeout: 15_000 }).toBe(1);
+  const project = projects[0];
+  const soldItem = project.handoverSnapshot.sourceItems[0];
+  expect(soldItem.soldQuantity).toBe(24);
+
+  await page.goto(`/project/${project.id}/controls`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('tab', { name: 'Scope & plan' }).click();
+  await expect(page.getByTestId('delivery-mapping-form')).toBeVisible();
+  await page.getByLabel('WBS code').fill('1.1');
+  await page.getByLabel('WBS title').fill('CCTV supply and installation');
+  await page.getByLabel('WBS planned value').fill(String(finalBaseline.total));
+  await page.getByRole('button', { name: 'Create WBS' }).click();
+  await page.getByLabel('Delivery work package').selectOption({ label: '1.1 · CCTV supply and installation' });
+  await page.getByRole('button', { name: 'Map sold item' }).click();
+  await expect(page.getByTestId('delivery-mapping-complete')).toContainText('All frozen sold items are mapped');
+
+  await expect.poll(async () => {
+    const response = await request.get(`${API}/projects/quantity-ledger/position/${soldItem.sourceItemId}`, { headers: adminHeaders });
+    expect(response.ok(), await response.text()).toBe(true);
+    return ((await response.json()) as { sold: number | null }).sold;
+  }, { timeout: 15_000 }).toBe(24);
+
+  const mapsResponse = await request.get(`${API}/projects/delivery-item-maps?projectId=${project.id}`, { headers: adminHeaders });
+  expect(mapsResponse.ok(), await mapsResponse.text()).toBe(true);
+  const [canonicalMap] = await mapsResponse.json() as Array<{ id: string; handoverId: string; sourceRevisionRef: string; sourceItemId: string; wbsNodeId: string }>;
+  expect(canonicalMap).toMatchObject({ handoverId: project.handoverId, sourceItemId: soldItem.sourceItemId });
+  const spoofedReplay = await request.post(`${API}/projects/delivery-item-maps`, {
+    headers: adminHeaders,
+    data: {
+      projectId: project.id, frozenItemKey: soldItem.frozenItemKey, wbsNodeId: canonicalMap.wbsNodeId,
+      handoverId: 'forged-handover', sourceKind: 'DIRECT', sourceRevisionRef: 'old-revision', sourceItemId: 'forged-item',
+    },
+  });
+  expect(spoofedReplay.ok(), await spoofedReplay.text()).toBe(true);
+  expect(await spoofedReplay.json()).toMatchObject({ id: canonicalMap.id, handoverId: project.handoverId, sourceItemId: soldItem.sourceItemId });
   } finally {
     await Promise.allSettled(users.reverse().map((userId) =>
       request.delete(`/api/admin/users/${encodeURIComponent(userId)}`, { timeout: 15_000 })));

@@ -4,8 +4,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AccessService, TenantContext } from '@aura/core';
-import { QuantityLedgerService } from '@aura/projects';
+import { AccessService, TenantContext, UsersService } from '@aura/core';
 import pg from 'pg';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -38,8 +37,6 @@ async function ownerQuery<T extends pg.QueryResultRow>(sql: string, values: unkn
 describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
-  let quantityLedger: QuantityLedgerService;
-  let tenantContext: TenantContext;
 
   beforeAll(async () => {
     if (!process.env.DATABASE_URL) throw new Error('DATABASE_URL is required for C4 PostgreSQL proof');
@@ -50,8 +47,9 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     access.registerRole({ id: ROLE, name: 'C4 proof', permissions: ['*'] });
     access.grant({ userId: MAKER, roleId: ROLE, scope: { kind: 'org', level: 'tenant', id: TENANT } });
     access.grant({ userId: CERTIFIER, roleId: ROLE, scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 1_000_000 });
+    app.get(UsersService).save({ tenantId: TENANT, userId: MAKER, displayName: 'C4 maker', active: true });
+    app.get(UsersService).save({ tenantId: TENANT, userId: CERTIFIER, displayName: 'C4 certifier', active: true });
     const tenant = app.get(TenantContext);
-    tenantContext = tenant;
     app.use((_req: unknown, _res: unknown, next: () => void) => {
       const header = (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'];
       const actorId = header === 'none' ? null : (header ?? MAKER);
@@ -59,7 +57,6 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     });
     await app.init();
     http = request(app.getHttpServer());
-    quantityLedger = app.get(QuantityLedgerService);
   });
 
   afterAll(async () => { await app?.close(); });
@@ -70,10 +67,23 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     const account = accountResponse.body;
     const opportunity = (await http.post('/api/v1/crm/opportunities').send({ title: TITLE, value: 600000, accountId: account.id, accountName: account.name, executionType: 'tender' }).expect(201)).body;
     const tender = (await http.post('/api/v1/tendering/tenders').send({ title: `${TITLE} Tender`, value: 600000, accountId: account.id, accountName: account.name, status: 'submitted', sourceOpportunityId: opportunity.id }).expect(201)).body;
-    const { boq } = (await http.get(`/api/v1/tendering/tenders/${tender.id}/boq`).expect(200)).body;
-    const itemResponse = await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/items`).send({ boqId: boq.id, itemCode: `${TITLE}-1`, description: TITLE, unit: 'nr', quantity: 100, rate: 100 });
-    if (itemResponse.status !== 201) throw new Error(`BOQ item setup failed: ${itemResponse.status} ${JSON.stringify(itemResponse.body)}`);
-    const item = itemResponse.body;
+    await http.post('/api/v1/tendering/bid-scores').send({ tenderId: tender.id, criteria: [{ name: 'Strategic fit', weight: 1, score: 8 }], notes: 'C4 governed fixture' }).expect(201);
+    const study = (await http.post(`/api/v1/tendering/tenders/${tender.id}/studies`).send({
+      title: `${TITLE} technical study`, inputRevision: 'Client specification Rev 01', reviewerId: CERTIFIER,
+      scopeSummary: TITLE,
+      systems: [{ discipline: 'ELV', name: 'CCTV', designBasis: 'Approved C4 basis', interfaces: [] }],
+      requirements: [{ category: 'client', statement: '100 nr required', acceptanceCriteria: 'Install and certify', compliance: 'compliant', response: 'Included' }],
+      surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+    }).expect(201)).body;
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/studies/${study.id}/submit`).send({}).expect(201);
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/studies/${study.id}/approve`).set('x-e2e-actor', CERTIFIER).send({ comment: 'Approved for estimation' }).expect(201);
+    await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'estimating' }).expect(200);
+    const takeoff = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff`).send({ lines: [{ description: TITLE, unit: 'nr', quantity: 100 }] }).expect(201)).body;
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/approve`).set('x-e2e-actor', CERTIFIER).send({}).expect(201);
+    const projection = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/project-to-boq`).send({}).expect(201)).body;
+    const item = projection.items[0];
+    await http.post('/api/v1/tendering/estimates').send({ boqItemId: item.id, components: [{ costType: 'material', description: TITLE, quantity: 1, unitCost: 100 }], applyToBoq: false }).expect(201);
+    await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'priced' }).expect(200);
     const quotation = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
     await establishGovernedQuotationReadiness(http, quotation.id, `c4-${tender.id}`);
     await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).send({ action: 'submit_review' }).expect(200);
@@ -90,8 +100,7 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     expect(frozen).toMatchObject({ sourceItemId: item.id, frozenItemKey: expect.any(String), unit: 'nr', soldQuantity: 100 });
 
     const wbs = (await http.post('/api/v1/projects/wbs').send({ projectId: project!.id, code: 'C4.1', title: TITLE, plannedValue: 100000, boqItemId: item.id }).expect(201)).body;
-    const mapping = (await http.post('/api/v1/projects/delivery-item-maps').send({ projectId: project!.id, handoverId: project!.handoverId, frozenItemKey: frozen.frozenItemKey, sourceKind: frozen.sourceKind, sourceId: frozen.sourceId, sourceRevisionRef: frozen.sourceRevisionRef, sourceItemId: frozen.sourceItemId, wbsNodeId: wbs.id }).expect(201)).body;
-    await tenantContext.run({ tenantId: TENANT, companyId: null, actorId: MAKER, correlationId: `c4-sold-${tender.id}` }, () => quantityLedger.postSold({ mapping, soldQuantity: frozen.soldQuantity, unit: frozen.unit }));
+    await http.post('/api/v1/projects/delivery-item-maps').send({ projectId: project!.id, frozenItemKey: frozen.frozenItemKey, wbsNodeId: wbs.id }).expect(201);
     await http.post('/api/v1/site/installations').send({ projectId: project!.id, boqItemId: item.id, date: '2026-09-01', description: TITLE, quantity: 40, unit: 'nr' }).expect(201);
 
     const certificate = (await http.post('/api/v1/contracts/certificates').set('x-e2e-actor', MAKER).send({ contractId: contract!.id, cumulativeWorkDone: 4000, reference: `C4-${tender.id}` }).expect(201)).body;

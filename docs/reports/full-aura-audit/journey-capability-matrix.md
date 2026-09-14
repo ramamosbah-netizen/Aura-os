@@ -142,7 +142,7 @@
 | Award | AWD-02 | PARTIAL |
 | Award | AWD-03 | PARTIAL |
 | Award | AWD-04 | PARTIAL |
-| Award | AWD-05 | DISCONNECTED |
+| Award | AWD-05 | COMPLETE |
 | Award | AWD-06 | UNVERIFIED |
 | Award | AWD-07 | PARTIAL |
 | Award | OUT-01 | PARTIAL |
@@ -200,7 +200,7 @@
 | Mobilisation | AWD-02 | PARTIAL |
 | Mobilisation | AWD-03 | PARTIAL |
 | Mobilisation | AWD-04 | PARTIAL |
-| Mobilisation | AWD-05 | DISCONNECTED |
+| Mobilisation | AWD-05 | COMPLETE |
 | Mobilisation | AWD-06 | UNVERIFIED |
 | Mobilisation | AWD-07 | PARTIAL |
 | Mobilisation | OUT-01 | PARTIAL |
@@ -942,4 +942,3 @@
 | Closeout | MGT-13 | UNVERIFIED |
 | Closeout | MGT-14 | PARTIAL |
 | Closeout | MGT-15 | WRONG_BEHAVIOR |
-

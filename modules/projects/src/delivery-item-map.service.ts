@@ -10,6 +10,13 @@ import { type DeliveryItemMap, makeDeliveryItemMap, type NewDeliveryItemMap } fr
 import { DELIVERY_ITEM_MAP_STORE, type DeliveryItemMapFilter, type DeliveryItemMapStore } from './delivery-item-map-store';
 
 export type DeliveryItemMapInput = NewDeliveryItemMap;
+export interface CanonicalDeliveryItemMapInput {
+  tenantId: Id;
+  projectId: Id;
+  frozenItemKey: string;
+  wbsNodeId?: Id | null;
+  cbsNodeId?: Id | null;
+}
 
 /** Owns the immutable handover-item → WBS/CBS membership proof. */
 @Injectable()
@@ -84,6 +91,37 @@ export class DeliveryItemMapService {
       }
     }
     return persisted;
+  }
+
+  /**
+   * Public command boundary for delivery planning. The caller chooses the frozen item and the
+   * project's delivery nodes; every source identity is re-read from the signed handover snapshot.
+   * This keeps a request from moving an item to another tender, revision or handover.
+   */
+  async createFromFrozenItem(input: CanonicalDeliveryItemMapInput): Promise<DeliveryItemMap> {
+    const project = assertSameTenant(
+      await this.projects.get(input.projectId),
+      this.tenant?.boundTenantId() ?? input.tenantId,
+      'project',
+      input.projectId,
+    );
+    if (project.tenantId !== input.tenantId) {
+      throw new Error(`project ${input.projectId} does not belong to tenant ${input.tenantId}`);
+    }
+    if (!project.handoverId) throw new Error(`project ${project.id} has no immutable commercial handover`);
+    const item = this.frozenItem(project, input.frozenItemKey);
+    return this.create({
+      tenantId: project.tenantId,
+      projectId: project.id,
+      handoverId: project.handoverId,
+      frozenItemKey: item.frozenItemKey,
+      sourceKind: item.sourceKind,
+      sourceId: item.sourceId,
+      sourceRevisionRef: item.sourceRevisionRef,
+      sourceItemId: item.sourceItemId,
+      wbsNodeId: input.wbsNodeId ?? null,
+      cbsNodeId: input.cbsNodeId ?? null,
+    });
   }
 
   /** Validate a persisted mapping against the B1 snapshot before another ledger can consume it. */

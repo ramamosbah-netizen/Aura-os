@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
-import { AccessService, AuthService, TenantContext } from '@aura/core';
+import { AccessService, AuthService, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -20,6 +20,7 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
   const tenantId = 'j2-j6-audit-only';
   for (const userId of ['delivery-maker', 'delivery-checker']) {
     access.grant({ userId, roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: tenantId }, approvalLimit: 1000000 });
+    app.get(UsersService).save({ tenantId, userId, displayName: userId, active: true });
   }
   app.use(async (req: { headers: { authorization?: string } }, res: { status: (n: number) => { end: () => void } }, next: () => void) => {
     const context = await auth.contextFromHeader(req.headers.authorization);
@@ -31,7 +32,11 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     expect(auth.enabled).toBe(true);
     const http = request.agent(app.getHttpServer()).set('Authorization', `Bearer ${auth.mint({ sub: 'delivery-maker', tenantId })}`);
     const checker = request.agent(app.getHttpServer()).set('Authorization', `Bearer ${auth.mint({ sub: 'delivery-checker', tenantId })}`);
-    const post = async (path: string, body: unknown = {}) => (await http.post(`/api/v1${path}`).send(body).expect(201)).body;
+    const post = async (path: string, body: unknown = {}) => {
+      const response = await http.post(`/api/v1${path}`).send(body);
+      if (response.status !== 201) throw new Error(`POST ${path} failed ${response.status}: ${JSON.stringify(response.body)}`);
+      return response.body;
+    };
     const get = async (path: string) => (await http.get(`/api/v1${path}`).expect(200)).body;
     const put = async (path: string, body: unknown = {}) => (await http.put(`/api/v1${path}`).send(body).expect(200)).body;
     const patch = async (path: string, body: unknown) => (await http.patch(`/api/v1${path}`).send(body).expect(200)).body;
@@ -49,8 +54,27 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const account = await post('/crm/accounts', { name: 'Fictional delivery client' });
     const opportunity = await post('/crm/opportunities', { title: 'Audit CCTV job', value: 1000, accountId: account.id, accountName: account.name, executionType: 'tender' });
     const tender = await post('/tendering/tenders', { title: 'Audit CCTV tender', value: 1000, accountId: account.id, accountName: account.name, status: 'submitted', sourceOpportunityId: opportunity.id });
-    const { boq } = await get(`/tendering/tenders/${tender.id}/boq`);
-    const item = await post(`/tendering/tenders/${tender.id}/boq/items`, { boqId: boq.id, itemCode: 'CAM-01', description: 'CCTV cameras', unit: 'no', quantity: 10, rate: 100 });
+    await post('/tendering/bid-scores', { tenderId: tender.id, criteria: [{ name: 'Strategic fit', weight: 1, score: 8 }], notes: 'Governed delivery fixture' });
+    const study = await post(`/tendering/tenders/${tender.id}/studies`, {
+      title: 'CCTV technical study', inputRevision: 'Client specification Rev 01', reviewerId: 'delivery-checker',
+      scopeSummary: 'Supply, install, test and commission CCTV cameras.',
+      systems: [{ discipline: 'ELV', name: 'CCTV', designBasis: 'IP cameras and NVR', interfaces: ['LAN'] }],
+      requirements: [{ category: 'client', statement: 'Ten CCTV cameras', acceptanceCriteria: 'Ten installed and tested cameras', compliance: 'compliant', response: 'Included' }],
+      surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+    });
+    await post(`/tendering/tenders/${tender.id}/studies/${study.id}/submit`);
+    await checker.post(`/api/v1/tendering/tenders/${tender.id}/studies/${study.id}/approve`).send({ comment: 'Approved for estimation' }).expect(201);
+    await patch(`/tendering/tenders/${tender.id}/status`, { status: 'estimating' });
+    const takeoff = await post(`/tendering/tenders/${tender.id}/quantity-takeoff`, { lines: [{ description: 'CCTV cameras', unit: 'no', quantity: 10 }] });
+    await checker.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/approve`).send({}).expect(201);
+    const projection = await post(`/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/project-to-boq`);
+    const item = projection.items[0];
+    await post('/tendering/estimates', {
+      boqItemId: item.id,
+      components: [{ costType: 'material', description: 'CCTV camera', quantity: 1, unitCost: 100 }],
+      applyToBoq: false,
+    });
+    await patch(`/tendering/tenders/${tender.id}/status`, { status: 'priced' });
     const quote = await post(`/tendering/tenders/${tender.id}/quotation`);
     await post('/document-requirements/seed', { entityType: 'crm.quotation', entityId: quote.id });
     const checklist = await get(`/document-requirements?entityType=crm.quotation&entityId=${quote.id}`);
@@ -72,8 +96,10 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const frozen = project.handoverSnapshot.sourceItems[0];
     expect(frozen.soldQuantity).toBe(10);
     const wbs = await post('/projects/wbs', { projectId, code: '1.1', title: 'Install CCTV', plannedValue: 800, boqItemId: item.id });
-    const mapping = await post('/projects/delivery-item-maps', { projectId, handoverId: project.handoverId, frozenItemKey: frozen.frozenItemKey, sourceKind: frozen.sourceKind, sourceId: frozen.sourceId, sourceRevisionRef: frozen.sourceRevisionRef, sourceItemId: frozen.sourceItemId, wbsNodeId: wbs.id });
+    const mapping = await post('/projects/delivery-item-maps', { projectId, frozenItemKey: frozen.frozenItemKey, wbsNodeId: wbs.id });
     expect(mapping.projectId).toBe(projectId);
+    const soldPosition = await eventually(() => get(`/projects/quantity-ledger/position/${item.id}`), position => position.sold === 10);
+    expect(soldPosition.sold).toBe(10);
     console.log('J2_HANDOVER', JSON.stringify({ authOn: true, fixtureAdministrators: true, tenderId: tender.id, contractId: contract.id, projectId, frozenQuantity: frozen.soldQuantity, mapped: true }));
 
     // J3/J4: release, install and report use this same project. P2P and stock
@@ -101,9 +127,8 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const receipt = await post(`/finance/customer-invoices/${invoice.id}/receipts`, { amount: invoice.total });
     const afterBilling = await get(`/projects/quantity-ledger/position/${item.id}`);
     expect(receipt.status).toBe('paid');
-    // Known audit gaps: public mapping does not post Sold; the auto-drafted
-    // aggregate invoice has no frozen line identity for the Billed subscriber.
-    expect(afterBilling.sold).toBeNull();
+    // The auto-drafted aggregate invoice still has no frozen line identity for the Billed subscriber.
+    expect(afterBilling.sold).toBe(10);
     expect(afterBilling.billed).toBeNull();
     console.log('J5_BILLING_RECEIPT', JSON.stringify({ localReceiptStatus: receipt.status, amountReceived: receipt.amountPaid, quantityPosition: afterBilling, bankSettlementTested: false }));
 

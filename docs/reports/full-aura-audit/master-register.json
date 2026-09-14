@@ -1253,7 +1253,7 @@
         "Award",
         "Mobilisation"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Contracts / Projects",
       "evidence": [
         "R-J1",
@@ -1262,17 +1262,17 @@
       "source": "apps/api/test/j2-j6-delivery-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Reused J2-02/J2-03: mapping write API not in UI; Sold projection remains null.",
-      "acceptanceProof": "PM maps frozen items through UI and ledger receives source-backed sold quantity."
+      "currentBehavior": "Fresh Wave 3 proof maps a frozen sold item from Project 360 to a persisted WBS node. Projects derives handover, source, revision and item identity from the immutable snapshot; the outbox reactor posts SOLD quantity once to the quantity ledger. Browser replay with forged source fields resolves to the same canonical mapping.",
+      "acceptanceProof": "Regression keeps browser mapping, wrong-project denial, canonical source derivation, idempotent SOLD projection and project/functional authorization green."
     },
     {
       "id": "AWD-06",
@@ -7457,13 +7457,13 @@
     },
     {
       "id": "J2-02",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "BLOCKER",
-      "currentBehavior": "frozen delivery mapping واجهة read-only بلا إجراء إنشاء، رغم أن API يوفّر write محكومًا.",
-      "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J2-02",
+      "currentBehavior": "Project 360 now provides the governed frozen-item to WBS/CBS mapping action. The API accepts only the selected frozen key and delivery nodes, derives immutable source lineage from the persisted handover, and the outbox reactor posts canonical SOLD quantity to the ledger idempotently.",
+      "evidence": "FRESH Wave 3 iteration 1: modules/projects/src/delivery-item-map.service.test.ts; apps/api/src/events/delivery-item-map-quantity-subscriber.test.ts; apps/api/test/j2-j6-delivery-audit.e2e-spec.ts; apps/web/e2e/wave2-offer-output.spec.ts",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "AWD-05"
       ],
@@ -7480,17 +7480,17 @@
       "expectedOperationalBehavior": "Delivery item mapping works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "PM maps frozen items through UI and ledger receives source-backed sold quantity."
+      "acceptanceProof": "PASSED: Project 360 browser mapping and reload; canonical source lineage; forged source/revision request ignored; unknown item and wrong-project WBS refused; SOLD quantity projected from the frozen award basis."
     },
     {
       "id": "J2-03",
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "originalClassification": "DISCONNECTED",
-      "currentBehavior": "frozen soldQuantity=10 وmapping موجودان؛ Sold projection يبقى null في public journey. لا يوجد subscriber لـdelivery_item_map.created يستدعي postSold.",
-      "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J2-03",
+      "currentBehavior": "Project 360 now provides the governed frozen-item to WBS/CBS mapping action. The API accepts only the selected frozen key and delivery nodes, derives immutable source lineage from the persisted handover, and the outbox reactor posts canonical SOLD quantity to the ledger idempotently.",
+      "evidence": "FRESH Wave 3 iteration 1: modules/projects/src/delivery-item-map.service.test.ts; apps/api/src/events/delivery-item-map-quantity-subscriber.test.ts; apps/api/test/j2-j6-delivery-audit.e2e-spec.ts; apps/web/e2e/wave2-offer-output.spec.ts",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "AWD-05"
       ],
@@ -7507,7 +7507,7 @@
       "expectedOperationalBehavior": "Delivery item mapping works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "PM maps frozen items through UI and ledger receives source-backed sold quantity."
+      "acceptanceProof": "PASSED: Project 360 browser mapping and reload; canonical source lineage; forged source/revision request ignored; unknown item and wrong-project WBS refused; SOLD quantity projected from the frozen award basis."
     },
     {
       "id": "J3-01",
@@ -8529,14 +8529,14 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 0,
+      "COMPLETE": 1,
       "PARTIAL": 89,
       "BACKEND_ONLY": 10,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
-      "DISCONNECTED": 12,
+      "DISCONNECTED": 11,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
       "UNVERIFIED": 55,

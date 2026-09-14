@@ -2,11 +2,11 @@
 
 55 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
 
-## Wave 2 closure update
+## Closure updates
 
-The bounded Direct/Tender study-to-offer gate is verified in [the Wave 2 closure report](./wave-2-progress-report.md). Its proof covers maker/checker approval, Rev 0 immutability, persisted negotiation, stale/concurrent revision protection, Rev 1 re-approval and issue, complete revision history, actual final PDF/XLSX files, and final Rev 1 award-basis consumption.
+The bounded Direct/Tender study-to-offer gate is verified in [the Wave 2 closure report](./wave-2-progress-report.md). Its maker/checker, revision, final output and frozen award-basis proof does not remove the supplier comparison leaves sequenced with Wave 4.
 
-This does not remove or conceal any row in the frozen queue. `EST-07`, `EST-11`, `EST-12` and `EST-13` remain UNVERIFIED and are now executed with Wave 4, where supplier quotation selection, normalized landed cost and technical/commercial comparison have their canonical authority. Queue total remains **55**.
+Wave 3 iteration 1 is verified in [the Wave 3 progress report](./wave-3-progress-report.md). AWD-05 and historical findings J2-02/J2-03 are closed after Project 360 mapping, canonical lineage, spoof refusal and automatic SOLD projection passed. Wave 3 remains open for responsibility assignment, engineering release and connected planning.
 
 | ID | Capability | Roles | Stages | Authority | Current evidence boundary | Acceptance proof |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -120,12 +120,7 @@ class CreateCbsNodeDto {
 
 class CreateDeliveryItemMapDto {
   @IsString() projectId!: string;
-  @IsString() handoverId!: string;
   @IsString() frozenItemKey!: string;
-  @IsString() sourceKind!: string;
-  @IsOptional() @IsString() sourceId?: string | null;
-  @IsOptional() @IsString() sourceRevisionRef?: string | null;
-  @IsOptional() @IsString() sourceItemId?: string | null;
   @IsOptional() @IsString() wbsNodeId?: string | null;
   @IsOptional() @IsString() cbsNodeId?: string | null;
 }
@@ -512,19 +507,15 @@ export class ProjectsController {
 
   @Post('delivery-item-maps')
   async createDeliveryItemMap(@Body() dto: CreateDeliveryItemMapDto): Promise<DeliveryItemMap> {
-    if (!dto?.projectId || !dto?.handoverId) throw new BadRequestException('projectId and handoverId are required');
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.frozenItemKey?.trim()) throw new BadRequestException('frozenItemKey is required');
+    if (!dto?.wbsNodeId?.trim()) throw new BadRequestException('wbsNodeId is required');
     const ctx = this.tenant.get();
     try {
-      return await this.deliveryItemMaps.create({
+      return await this.deliveryItemMaps.createFromFrozenItem({
         tenantId: ctx.tenantId,
         projectId: dto.projectId,
-        handoverId: dto.handoverId,
         frozenItemKey: dto.frozenItemKey,
-        sourceKind: dto.sourceKind as 'DIRECT' | 'TENDER',
-        sourceId: dto.sourceId ?? null,
-        sourceRevisionRef: dto.sourceRevisionRef ?? null,
-        sourceItemId: dto.sourceItemId ?? null,
         wbsNodeId: dto.wbsNodeId ?? null,
         cbsNodeId: dto.cbsNodeId ?? null,
       });

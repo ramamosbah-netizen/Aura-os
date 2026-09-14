@@ -38,13 +38,26 @@ export interface Project360Project {
   handoverSnapshot?: {
     schemaVersion?: number;
     source?: Record<string, unknown>;
-    sourceItems?: Array<Record<string, unknown>>;
+    sourceItems?: FrozenDeliveryItem[];
     [key: string]: unknown;
   } | null;
   originalContractValue?: number | null;
   currency?: string | null;
   commercialBaselineId?: string | null;
   wbsBaselineSnapshot?: { baselineId?: string; approvedAt?: string; originalBac?: number; allocations?: Array<{ nodeId: string; code: string; title: string; plannedValue: number }> } | null;
+}
+interface FrozenDeliveryItem {
+  frozenItemKey: string;
+  sourceKind: 'DIRECT' | 'TENDER';
+  sourceId: string | null;
+  sourceRevisionRef: string | null;
+  sourceItemId: string | null;
+  itemCode?: string | null;
+  description?: string | null;
+  unit?: string | null;
+  soldQuantity?: number | null;
+  customerUnitPrice?: number | null;
+  customerLineValue?: number | null;
 }
 interface Variation { id: string; reference: string | null; title: string; kind: string; value: number; status: string; createdAt: string; }
 interface VariationImpact { originalValue: number; approvedAdditions: number; approvedOmissions: number; revisedValue: number; pendingValue: number; }
@@ -835,6 +848,11 @@ function CrossDomainHealthPanel({ health }: { health: CrossDomainHealth | null }
 
 function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Project360Project; wbs: WbsNode[]; cbs: CbsNode[]; maps: DeliveryMap[]; busy: boolean; call: Action }) {
   const snapshot = project.handoverSnapshot;
+  const frozenItems = snapshot?.sourceItems ?? [];
+  const unmappedItems = frozenItems.filter((item) => !maps.some((map) => map.frozenItemKey === item.frozenItemKey));
+  const [mapItemKey, setMapItemKey] = useState('');
+  const [mapWbsId, setMapWbsId] = useState('');
+  const [mapCbsId, setMapCbsId] = useState('');
   const [wbsCode, setWbsCode] = useState('');
   const [wbsTitle, setWbsTitle] = useState('');
   const [wbsValue, setWbsValue] = useState('');
@@ -869,6 +887,18 @@ function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Proje
     if (!editTitle.trim()) return;
     if (await call(`/api/projects/cbs/${id}`, 'PATCH', { title: editTitle.trim(), category: editCategory, notes: editNotes }, 'CBS metadata updated.')) setEditingCbs(null);
   };
+  const createMapping = async (): Promise<void> => {
+    const frozenItemKey = mapItemKey || unmappedItems[0]?.frozenItemKey || '';
+    if (!frozenItemKey || !mapWbsId) return;
+    if (await call('/api/projects/delivery-item-maps', 'POST', {
+      projectId: project.id,
+      frozenItemKey,
+      wbsNodeId: mapWbsId,
+      cbsNodeId: mapCbsId || null,
+    }, 'Frozen sold item mapped to delivery.')) {
+      setMapItemKey(''); setMapWbsId(''); setMapCbsId('');
+    }
+  };
   return (
     <div style={{ display: 'grid', gap: 18 }} data-testid="project-delivery-panel">
       <section className={clientStyles.wbsHero} aria-labelledby="wbs-workspace-title">
@@ -898,7 +928,36 @@ function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Proje
       </div>
       <div>
         <h2 style={panelTitle}>Frozen item mapping</h2>
-        {maps.length === 0 ? <p style={st.muted}>No DeliveryItemMap rows yet. Mapping is an explicit governed step after handover.</p> : (
+        <p style={{ ...st.muted, marginBottom: 10 }}>
+          Assign each sold item to the work package that will deliver it. Source, revision, quantity and price remain locked to the approved offer.
+        </p>
+        {frozenItems.length === 0 ? (
+          <p style={st.muted}>No frozen sold items are available in this project handover.</p>
+        ) : unmappedItems.length > 0 ? (
+          <form data-testid="delivery-mapping-form" onSubmit={(event) => { event.preventDefault(); void createMapping(); }} style={{ ...authoringCard, marginBottom: 14 }}>
+            <h3 style={formTitle}>Map the next sold item</h3>
+            <select aria-label="Frozen sold item" value={mapItemKey || unmappedItems[0]?.frozenItemKey} onChange={(event) => setMapItemKey(event.target.value)}>
+              {unmappedItems.map((item) => (
+                <option key={item.frozenItemKey} value={item.frozenItemKey}>
+                  {item.itemCode ? `${item.itemCode} · ` : ''}{item.description || item.frozenItemKey} · {item.soldQuantity ?? 'Unknown'} {item.unit ?? ''}
+                </option>
+              ))}
+            </select>
+            <select aria-label="Delivery work package" value={mapWbsId} onChange={(event) => setMapWbsId(event.target.value)}>
+              <option value="">Select WBS work package</option>
+              {wbs.map((node) => <option key={node.id} value={node.id}>{node.code} · {node.title}</option>)}
+            </select>
+            <select aria-label="Delivery cost code" value={mapCbsId} onChange={(event) => setMapCbsId(event.target.value)}>
+              <option value="">No CBS cost code</option>
+              {cbs.map((node) => <option key={node.id} value={node.id}>{node.code} · {node.title}</option>)}
+            </select>
+            <button className="btn btn-primary" type="submit" disabled={busy || !mapWbsId}>Map sold item</button>
+            {wbs.length === 0 && <small style={st.muted}>Create a WBS work package before mapping sold scope.</small>}
+          </form>
+        ) : (
+          <p data-testid="delivery-mapping-complete" style={{ color: 'var(--success)', fontWeight: 700 }}>All frozen sold items are mapped to delivery.</p>
+        )}
+        {maps.length > 0 && (
           <SimpleTable ariaLabel="Frozen delivery item mappings" headers={['Frozen item', 'Source', 'WBS', 'CBS', 'Created']}>
             {maps.map((row) => <tr key={row.id}><td style={cellMono}>{row.frozenItemKey}</td><td>{row.sourceKind}{row.sourceItemId ? ` · ${row.sourceItemId}` : ''}</td><td style={cellMono}>{row.wbsNodeId ?? '—'}</td><td style={cellMono}>{row.cbsNodeId ?? '—'}</td><td>{fmt(row.createdAt)}</td></tr>)}
           </SimpleTable>

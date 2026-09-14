@@ -6,7 +6,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { AccessService, TenantContext, UsersService } from '@aura/core';
 import { QuantityLedgerService } from '@aura/projects';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -14,7 +14,6 @@ import { AppModule } from '../src/app.module';
 import { establishGovernedQuotationReadiness } from './helpers/governed-quotation-readiness';
 
 const TENANT = `qty-tenant-${Date.now()}`;
-let activeTenantContext: TenantContext;
 
 /** Poll until the fetcher returns a truthy value (reactor handlers are async). */
 async function until<T>(fetcher: () => Promise<T | null>, tries = 25): Promise<T | null> {
@@ -50,20 +49,42 @@ async function createGovernedDeliveryFixture(
     status: 'submitted',
     sourceOpportunityId: opportunity.id,
   }).expect(201)).body;
-  const { boq } = (await http.get(`/api/v1/tendering/tenders/${tender.id}/boq`).expect(200)).body;
-  await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/items`).send({
-    boqId: boq.id,
-    itemCode: `${title}-1`,
-    description: title,
-    unit,
-    quantity,
-    rate: 100,
+  await http.post('/api/v1/tendering/bid-scores').send({
+    tenderId: tender.id,
+    criteria: [{ name: 'Strategic fit', weight: 1, score: 8 }],
+    notes: 'Governed quantity-ledger fixture',
   }).expect(201);
+  const studyResponse = await http.post(`/api/v1/tendering/tenders/${tender.id}/studies`).send({
+    title: `${title} technical study`,
+    inputRevision: 'Client specification Rev 01',
+    reviewerId: 'qty-checker',
+    scopeSummary: title,
+    systems: [{ discipline: 'ELV', name: 'CCTV', designBasis: 'Approved test basis', interfaces: [] }],
+    requirements: [{ category: 'client', statement: `${quantity} ${unit} required`, acceptanceCriteria: 'Install and test', compliance: 'compliant', response: 'Included' }],
+    surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+  });
+  if (studyResponse.status !== 201) throw new Error(`technical study setup failed: ${studyResponse.status} ${JSON.stringify(studyResponse.body)}`);
+  const study = studyResponse.body;
+  await http.post(`/api/v1/tendering/tenders/${tender.id}/studies/${study.id}/submit`).send({}).expect(201);
+  await http.post(`/api/v1/tendering/tenders/${tender.id}/studies/${study.id}/approve`).set('x-e2e-actor', 'qty-checker').send({ comment: 'Approved for estimation' }).expect(201);
+  await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'estimating' }).expect(200);
+  const takeoff = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff`).send({
+    lines: [{ description: title, unit, quantity }],
+  }).expect(201)).body;
+  await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/approve`).set('x-e2e-actor', 'qty-checker').send({}).expect(201);
+  const projection = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/project-to-boq`).send({}).expect(201)).body;
+  const projectedItem = projection.items[0];
+  await http.post('/api/v1/tendering/estimates').send({
+    boqItemId: projectedItem.id,
+    components: [{ costType: 'material', description: title, quantity: 1, unitCost: 100 }],
+    applyToBoq: false,
+  }).expect(201);
+  await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'priced' }).expect(200);
   const quotation = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
   await establishGovernedQuotationReadiness(http, quotation.id, `quantity-ledger-${title}`);
   await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).send({ action: 'submit_review' }).expect(200);
-  await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).send({ action: 'approve' }).expect(200);
-  const awardResponse = await http.post(`/api/v1/tendering/tenders/${tender.id}/award`).set('x-e2e-actor', 'u-c3-e2e').send({
+  await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).set('x-e2e-actor', 'qty-checker').send({ action: 'approve' }).expect(200);
+  const awardResponse = await http.post(`/api/v1/tendering/tenders/${tender.id}/award`).set('x-e2e-actor', 'qty-checker').send({
     awardedValue: 600_000,
     currency: 'AED',
     awardedAt: '2026-08-25T07:30:00.000Z',
@@ -92,19 +113,12 @@ async function createGovernedDeliveryFixture(
     plannedValue: 100_000,
     boqItemId: item.sourceItemId,
   }).expect(201)).body;
-  const mapping = (await http.post('/api/v1/projects/delivery-item-maps').send({
+  await http.post('/api/v1/projects/delivery-item-maps').send({
     projectId: project.id,
-    handoverId: project.handoverId,
     frozenItemKey: item.frozenItemKey,
-    sourceKind: item.sourceKind,
-    sourceId: item.sourceId,
-    sourceRevisionRef: item.sourceRevisionRef,
-    sourceItemId: item.sourceItemId,
     wbsNodeId: wbs.id,
-  }).expect(201)).body;
-  await activeTenantContext.run({ tenantId: TENANT, companyId: null, actorId: null, correlationId: 'e2e-qty-sold' }, () =>
-    quantityLedger.postSold({ mapping, soldQuantity: item.soldQuantity, unit: item.unit }),
-  );
+  }).expect(201);
+  await until(async () => (await quantityLedger.position(TENANT, item.sourceItemId)).sold === quantity ? true : null);
   return { project, contract, item, boqItemId: item.sourceItemId, wbs };
 }
 
@@ -118,12 +132,16 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
     const tenant = app.get(TenantContext);
-    activeTenantContext = tenant;
+    const access = app.get(AccessService);
+    access.grant({ userId: 'qty-maker', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 1_000_000 });
+    access.grant({ userId: 'qty-checker', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 1_000_000 });
+    app.get(UsersService).save({ tenantId: TENANT, userId: 'qty-maker', displayName: 'Quantity maker', active: true });
+    app.get(UsersService).save({ tenantId: TENANT, userId: 'qty-checker', displayName: 'Quantity checker', active: true });
     app.use((_req: unknown, _res: unknown, next: () => void) =>
       tenant.run({
         tenantId: TENANT,
         companyId: null,
-        actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null,
+        actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? 'qty-maker',
         correlationId: 'e2e-qty',
       }, () => next()),
     );
@@ -235,7 +253,7 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     const ipc = (await http.post('/api/v1/contracts/certificates').send({ contractId: contract.id, cumulativeWorkDone: 200_000 }).expect(201)).body;
     await http.post(`/api/v1/contracts/certificates/${ipc.id}/lines`)
       .send({ projectId: project.id, boqItemId, description: 'Blockwork L1', quantity: 350, unit: 'nr', rate: 25 }).expect(201);
-    await http.patch(`/api/v1/contracts/certificates/${ipc.id}/status`).send({ status: 'certified' }).expect(200);
+    await http.patch(`/api/v1/contracts/certificates/${ipc.id}/status`).set('x-e2e-actor', 'qty-checker').send({ status: 'certified' }).expect(200);
 
     // The whole chain, each figure = SUM(ledger) by type; the gaps are the operational signals.
     const pos = await until(async () => { const p = await position(boqItemId); return p.invoiced === 350 && p.approved === 400 && p.installed === 450 && p.issued === 500 && p.received === 700 && p.ordered === 800 ? p : null; });

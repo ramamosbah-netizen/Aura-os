@@ -1,14 +1,14 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 0,
+    "COMPLETE": 1,
     "PARTIAL": 89,
     "BACKEND_ONLY": 10,
     "UI_ONLY": 0,
     "ABSENT": 1,
     "DUPLICATED": 0,
     "WRONG_AUTHORITY": 0,
-    "DISCONNECTED": 12,
+    "DISCONNECTED": 11,
     "WRONG_BEHAVIOR": 13,
     "UNREACHABLE": 0,
     "UNVERIFIED": 55,

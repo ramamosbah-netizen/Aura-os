@@ -95,6 +95,42 @@ function input(fx: Awaited<ReturnType<typeof fixture>>) {
 }
 
 describe('DeliveryItemMapService — immutable frozen item lineage', () => {
+  it('derives handover and source identity from the persisted project snapshot', async () => {
+    const fx = await fixture();
+    const map = await fx.service.createFromFrozenItem({
+      tenantId,
+      projectId: fx.project.id,
+      frozenItemKey: fx.snapshot.sourceItems![0].frozenItemKey,
+      wbsNodeId: fx.wbsNode.id,
+      cbsNodeId: fx.cbsNode.id,
+    });
+    expect(map).toMatchObject({
+      handoverId: fx.snapshot.handoverId,
+      sourceKind: 'DIRECT',
+      sourceId: 'opp-b2',
+      sourceRevisionRef: 'quote-revision-b2',
+      sourceItemId: null,
+    });
+  });
+
+  it('refuses a frozen item or WBS that is not owned by the persisted project', async () => {
+    const fx = await fixture();
+    await expect(fx.service.createFromFrozenItem({
+      tenantId,
+      projectId: fx.project.id,
+      frozenItemKey: 'DIRECT|another-revision|LINE|0',
+      wbsNodeId: fx.wbsNode.id,
+    })).rejects.toThrow('not present in the immutable handover snapshot');
+    const otherWbs = makeWbsNode({ tenantId, projectId: 'another-project', code: '9', title: 'Other' });
+    await fx.wbs.create(otherWbs);
+    await expect(fx.service.createFromFrozenItem({
+      tenantId,
+      projectId: fx.project.id,
+      frozenItemKey: fx.snapshot.sourceItems![0].frozenItemKey,
+      wbsNodeId: otherWbs.id,
+    })).rejects.toThrow('does not belong to project');
+  });
+
   it('accepts a valid Direct frozen-item mapping', async () => {
     const fx = await fixture();
     const map = await fx.service.create(input(fx));

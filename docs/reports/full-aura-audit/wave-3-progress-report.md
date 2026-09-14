@@ -58,6 +58,16 @@ The durable drawing event creates and sends the DocControl transmittal, links it
 
 The source lookup is deliberately one-to-many: one issued drawing may have named Site, Project and Procurement recipients, while each responsibility remains immutable against reassignment to another source. The executed proof covers an Engineering assignee and an Auth-ON administrator browser journey. **ENG-06 is PARTIAL** until representative Site Engineer, Project Engineer and Procurement recipients independently receive and progress their records, and material-submittal release follows the same governed pattern.
 
+## Iteration 5 — Schedule activity to canonical WBS package
+
+Every new schedule activity now requires a persisted WBS node from the same tenant and project. The API does not accept the request project as ownership proof: ScheduleService reloads the WBS node, compares its persisted project, rejects missing or foreign nodes, and preserves an established link when a client omits it on an ordinary edit. It also refuses moving an activity to a different package after the link is established.
+
+Migration 0315 stores `wbs_node_id` on the schedule-task row and adds a tenant/project/WBS composite foreign key with delete restriction. Existing pre-migration activities remain explicitly nullable and the Gantt labels them as legacy/unlinked rather than inventing a package.
+
+The project schedule UI now requires a package before Create, filters the selector to the current project and displays the WBS code/title beneath the activity. Auth-ON browser proof created and reloaded `Install CCTV devices` under `1.1 · CCTV installation`; the HTTP proof separately returned 400 for a missing node and a node persisted in another project.
+
+**PLN-01 moves from DISCONNECTED to PARTIAL.** WBS identity is now canonical through Domain → PostgreSQL → API → UI → browser reload. Employee/equipment requirements, cost and quantity-driven progress do not yet share that activity identity, so the capability is not COMPLETE.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -76,6 +86,9 @@ The source lookup is deliberately one-to-many: one issued drawing may have named
 | Caller nominates another project's responsibility | Controller reloads drawing and responsibility and rejects persisted project mismatch before transmission |
 | Caller reuses an old receipt for a new drawing | Controller and service reject a responsibility already linked to another canonical drawing |
 | UI reports success before the delivery receipt exists | Browser polls both drawing transmittal and responsibility lineage before refresh |
+| Caller omits a work package for a new activity | Schedule service returns 400; the UI explains that a WBS package is required |
+| Caller supplies another project's WBS node | Service reloads persisted WBS ownership and returns 400; the database also enforces the composite lineage |
+| Edit silently drops or moves an established activity package | Missing input preserves the stored link; a different node is refused |
 
 ## Verification completed
 
@@ -95,23 +108,25 @@ The source lookup is deliberately one-to-many: one issued drawing may have named
 | Engineering drawing API journey | 1/1 passed; missing recipient denied and resulting conveyance is sent with purpose |
 | Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
 | Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal and linked delivery receipt |
-| Database migration posture | 314/314 applied; delivery responsibility stores canonical drawing/revision/transmittal lineage with forced RLS |
+| Database migration posture | 315/315 applied; schedule activities now carry a same-project WBS foreign key |
 | Full API unit/fitness suite | 495 passed / 4 skipped |
 | Project responsibility domain | 4/4 passed; canonical assignee grant, transition authority, idempotent source binding and concurrent-source refusal covered |
 | Engineering/responsibility HTTP journeys | 5/5 passed; lifecycle plus missing/wrong-project delivery owner denial and exact My Work receipt |
 | Project responsibility HTTP journey | 4/4 passed; positive handoff and release plus wrong-project/wrong-user/wrong-permission denials |
 | My Work service and self-scoped fitness | 15/15 passed, including per-item project filtering |
 | Project responsibility browser journey | 1/1 passed in Chromium; manager UI assignment → member My Work → Start/Complete → retained history |
-| Full Projects module suite | 431 passed / 12 PostgreSQL-only skips |
+| Full Projects module suite | 433 passed / 12 PostgreSQL-only skips |
+| Schedule WBS domain/service proof | 2/2 passed; required, wrong-project, persisted, edit-preserved and immutable-link cases covered |
+| Schedule WBS Auth-ON HTTP proof | missing 400; foreign-project 400; canonical create 201; GET returned the same WBS id |
+| Schedule WBS browser journey | 1/1 passed in Chromium; required selector, project filtering, create/reload and visible package identity |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. WBS-linked schedule activities instead of an independent task list.
-3. Real employee/team/equipment requirements, availability, conflict resolution and My Work handoff.
-4. Milestone, baseline, look-ahead, delay/recovery and forecast evidence from the connected plan.
+2. Real employee/team/equipment requirements tied to the WBS-linked activity, availability, conflict resolution and My Work handoff.
+3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state
 

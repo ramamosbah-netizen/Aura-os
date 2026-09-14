@@ -11,6 +11,7 @@ export const dynamic = 'force-dynamic';
 interface ScheduleTask {
   /** Stable task identity — carried through to the Gantt so an edit stays an edit. */
   id: string;
+  wbsNodeId: string | null;
   name: string; plannedStart: string; plannedEnd: string;
   baselineStart: string | null; baselineEnd: string | null;
   actualStart: string | null; actualEnd: string | null; percentComplete: number;
@@ -19,12 +20,14 @@ interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
 }
 interface Project { id: string; title: string }
+interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
-  const [schedules, projects] = await Promise.all([
+  const [schedules, projects, wbsNodes] = await Promise.all([
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
+    getJson<WbsNode[]>(projectId ? `/api/projects/wbs?projectId=${encodeURIComponent(projectId)}` : '/api/projects/wbs'),
   ]);
   const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
@@ -119,7 +122,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             <div><strong>Schedule data is unavailable</strong><p>We could not reach the project service. Try again in a moment.</p></div>
           </div>
         ) : (
-          <GanttClient schedules={rows} projects={scopedProjects ?? []} selectedProjectId={projectId} />
+          <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} selectedProjectId={projectId} />
         )}
       </section>
 

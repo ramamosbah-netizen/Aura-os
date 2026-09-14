@@ -319,7 +319,7 @@
 | Engineering | MGT-13 | UNVERIFIED |
 | Engineering | MGT-14 | PARTIAL |
 | Engineering | MGT-15 | WRONG_BEHAVIOR |
-| Planning | PLN-01 | DISCONNECTED |
+| Planning | PLN-01 | PARTIAL |
 | Planning | PLN-02 | BACKEND_ONLY |
 | Planning | PLN-03 | BACKEND_ONLY |
 | Planning | PLN-04 | UNVERIFIED |
@@ -544,7 +544,7 @@
 | QA/QC & HSE | XOP-15 | PARTIAL |
 | QA/QC & HSE | XOP-16 | WRONG_BEHAVIOR |
 | QA/QC & HSE | XOP-17 | PARTIAL |
-| Progress | PLN-01 | DISCONNECTED |
+| Progress | PLN-01 | PARTIAL |
 | Progress | PLN-02 | BACKEND_ONLY |
 | Progress | PLN-03 | BACKEND_ONLY |
 | Progress | PLN-04 | UNVERIFIED |

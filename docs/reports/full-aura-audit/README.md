@@ -17,11 +17,11 @@ The J1 and J2–J6 reports remain evidence only for the scenarios they identify.
 - [Cross-cutting matrix](cross-cutting-matrix.md).
 - [System-specific T&C, output/report, handoff and UX matrices](systems-outputs-handoffs.md).
 - [End-user UX acceptance standard](ux-acceptance-standard.md) — the shared screen, launcher, role-workspace and usability contract for every remediation wave.
-- [Pinned verification queue](verification-queue.md) — the exact 55 capabilities that need operational proof before promotion.
+- [Pinned verification queue](verification-queue.md) — the exact 52 capabilities that still need operational proof before promotion.
 - [Wave rationale and runtime record](remediation-waves-and-open-proof.md).
 - [Machine-readable master](master-register.json) and [reconciliation totals](reconciliation.json).
 
-Current leaf statuses: 89 PARTIAL + 10 BACKEND_ONLY + 1 ABSENT + 12 DISCONNECTED + 13 WRONG_BEHAVIOR + 55 UNVERIFIED + 0 NOT_AUDITED = **180**. Zero COMPLETE means no leaf has been granted the expanded all-role acceptance in this pass; it does not mean the product has no working functions. The 999 applicable role pairs and 938 journey pairs reuse capability IDs and are not additional capabilities or gaps. Representative employee-role acceptance is pinned in the roadmap and role matrix.
+Current post-remediation leaf statuses: 2 COMPLETE + 92 PARTIAL + 10 BACKEND_ONLY + 1 ABSENT + 10 DISCONNECTED + 13 WRONG_BEHAVIOR + 52 UNVERIFIED + 0 NOT_AUDITED = **180**. The frozen discovery baseline is retained in history; these promotions record only the bounded acceptance evidence described in the wave reports. The 999 applicable role pairs and 938 journey pairs reuse capability IDs and are not additional capabilities or gaps.
 
 ## Current evidence ledger
 
@@ -65,4 +65,4 @@ New unique executed total: **566 tests across 89 files**: 563 passed and 3 faile
 
 ## Scope-freeze rule
 
-Every capability has an explicit classification and evidence level. COMPLETE still requires applicable domain, persistence, API, permissions, UI, actual output and cross-role handoff proof. A classified verification gap is not a confirmed missing feature. The discovery scope is frozen because all 180 leaves are classified and the remaining 55 proof gaps are explicit acceptance work; no new broad capability may be added during remediation without a controlled scope-change record. This is not AURA functional completion, Business Journeys CLOSED/VERIFIED or Production Ready.
+Every capability has an explicit classification and evidence level. COMPLETE still requires applicable domain, persistence, API, permissions, UI, actual output and cross-role handoff proof. A classified verification gap is not a confirmed missing feature. The discovery scope is frozen because all 180 leaves are classified and the remaining 52 proof gaps are explicit acceptance work; no new broad capability may be added during remediation without a controlled scope-change record. This is not AURA functional completion, Business Journeys CLOSED/VERIFIED or Production Ready.

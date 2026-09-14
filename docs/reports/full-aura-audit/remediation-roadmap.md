@@ -11,7 +11,7 @@
 | 0 | COMPLETE for its bounded safety scope | [Wave 0 Closure Report](./wave-0-closure-report.md): nine planned defects plus J1-08 corrected; wider capabilities remain assigned to later waves. |
 | 1 | COMPLETE for its bounded journey scope | [Wave 1 Closure Report](./wave-1-progress-report.md): direct and Tender paths now have canonical inputs, versioned DMS evidence, persisted structured Technical Studies and independent approval. Bid/No-Bid is immutable with governed amendment history. PostgreSQL browser proof includes a real Sales Manager session and Tender study save/reload/submit. |
 | 2 | CLOSED / VERIFIED | [Wave 2 closure](./wave-2-progress-report.md): Direct and Tender both prove issued Rev 0 → recorded negotiation → immutable revised Rev 0 → editable/re-approved/issued Rev 1 → complete history → final frozen award basis. Actual final-revision PDF/XLSX files reconcile and request data cannot nominate an old revision. |
-| 3 | IN PROGRESS | [Wave 3 progress](./wave-3-progress-report.md): the frozen Rev 1 basis maps canonically into WBS/CBS and the SOLD ledger; project responsibility reaches My Work; an exact For Construction drawing revision and sent transmittal now reach the named delivery owner. Governed files, representative Site/Project/Procurement receipt, material release and connected planning remain open. |
+| 3 | IN PROGRESS | [Wave 3 progress](./wave-3-progress-report.md): the frozen Rev 1 basis maps canonically into WBS/CBS and the SOLD ledger; responsibility reaches My Work; a For Construction revision reaches its named owner; every new schedule activity now resolves a same-project WBS package. Governed files, representative Site/Project/Procurement receipt, material release and resource/progress/cost continuity remain open. |
 | 4–10 | NOT STARTED as remediation waves | Audit evidence and acceptance gates remain frozen below. |
 
 ## Programme rules
@@ -61,7 +61,7 @@ The estimates below are relative planning ranges for a staffed product squad, no
 | 9 | Manager and CEO decision acceptance | J2-01, F-06, F-10 | MGT-02, MGT-04, MGT-05, MGT-06, MGT-09, MGT-12, MGT-13 | 2–4 iterations after source facts exist |
 | 10 | Full role journeys, regression and closure decision | No new scope; closes every remaining row | All role-specific and page/output acceptance evidence | 2–3 iterations |
 
-The gap allocation reconciles to 46/46. The pinned verification allocation reconciles to 55/55.
+The gap allocation reconciles to 46/46. The frozen programme allocated 55/55 verification leaves; 52 remain UNVERIFIED after bounded wave evidence promoted three leaves out of that queue.
 
 ## Wave 0 — Safety containment and proof harness
 

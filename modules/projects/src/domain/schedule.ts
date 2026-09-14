@@ -17,6 +17,8 @@ export interface ScheduleTask {
    * committed to, and nothing said so.
    */
   id: Id;
+  /** Canonical delivery work package. Null is retained only for pre-0315 legacy activities. */
+  wbsNodeId: Id | null;
   /** Display and business data. Mutable, and never identity. */
   name: string;
   plannedStart: string; // YYYY-MM-DD
@@ -98,6 +100,8 @@ export interface NewScheduleTask {
    * because resurrecting a deleted task by matching its name is the defect this replaces.
    */
   id?: Id;
+  /** Required for every new activity; existing legacy activities can be linked on their next edit. */
+  wbsNodeId?: Id | null;
   name: string;
   plannedStart: string;
   plannedEnd: string;
@@ -134,6 +138,7 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
   const requirements = buildRequirements(input.requirements ?? [], input.name);
   return {
     id: input.id ?? newId(),
+    wbsNodeId: input.wbsNodeId ?? null,
     name: input.name.trim(),
     plannedStart: input.plannedStart,
     plannedEnd: input.plannedEnd,

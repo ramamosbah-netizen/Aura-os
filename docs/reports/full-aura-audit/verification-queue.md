@@ -6,7 +6,7 @@
 
 The bounded Direct/Tender study-to-offer gate is verified in [the Wave 2 closure report](./wave-2-progress-report.md). Its maker/checker, revision, final output and frozen award-basis proof does not remove the supplier comparison leaves sequenced with Wave 4.
 
-Wave 3 iterations 1–4 are verified in [the Wave 3 progress report](./wave-3-progress-report.md). AWD-05, AWD-06 and historical findings J2-02/J2-03 are closed after canonical sold-item mapping, automatic SOLD projection and persisted manager-to-assignee responsibility handoff through My Work passed. ENG-06 is now PARTIAL: an exact For Construction drawing revision and sent transmittal reach its named delivery owner, while representative Site/Project/Procurement-role receipt and material-submittal release remain open with governed files and connected planning.
+Wave 3 iterations 1–5 are verified in [the Wave 3 progress report](./wave-3-progress-report.md). AWD-05, AWD-06 and historical findings J2-02/J2-03 are closed after canonical sold-item mapping, automatic SOLD projection and persisted manager-to-assignee responsibility handoff through My Work passed. ENG-06 remains PARTIAL for representative release receipt. PLN-01 is now PARTIAL: each new activity resolves a persisted same-project WBS node and reloads it in the Gantt, while resource, quantity-progress and cost continuity remain open.
 
 | ID | Capability | Roles | Stages | Authority | Current evidence boundary | Acceptance proof |
 | --- | --- | --- | --- | --- | --- | --- |

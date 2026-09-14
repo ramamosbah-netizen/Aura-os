@@ -8,7 +8,7 @@
 
 The operational discovery pass is finished. It freezes a finite remediation scope across Sales, Pre-Sales, Award, Project Mobilisation, Engineering, Planning, Procurement, Site, QA/QC, HSE, Progress, Commercial, Finance, T&C, Handover, Service and Closeout.
 
-Scope freeze means that every required capability has a named owner, journey stage, authority, evidence boundary and acceptance proof. It does not promote any capability to COMPLETE. Fifty-five capabilities still require live operational proof, and 46 gap records remain open.
+Scope freeze means that every required capability has a named owner, journey stage, authority, evidence boundary and acceptance proof. Subsequent bounded remediation has promoted two leaves to COMPLETE and reduced the live operational proof queue from 55 to 52; 46 reconciled gap records remain tracked until their full acceptance criteria close.
 
 Post-audit remediation has closed Waves 0, 1 and 2 for their bounded scopes. Direct Sale and Tender now prove canonical technical/quantity truth through estimate, maker/checker approval, issued Rev 0, persisted negotiation, immutable revised Rev 0, re-approved/issued Rev 1 and a final frozen award basis. Actual final-revision customer PDFs and internal XLSX workbooks were downloaded, reopened and reconciled; old or forged lineage cannot nominate the award source. Wave 3 is ready to start from that basis without re-entering BOQ quantity or selling price. These corrections do not change the frozen discovery totals, supplier-comparison verification remains sequenced with Wave 4, and AURA overall remains open, not functionally complete and not Production Ready. Evidence is recorded in the [Wave 1 Closure Report](./wave-1-progress-report.md) and [Wave 2 Closure Report](./wave-2-progress-report.md).
 
@@ -17,13 +17,13 @@ Post-audit remediation has closed Waves 0, 1 and 2 for their bounded scopes. Dir
 | Measure | Total |
 | --- | ---: |
 | Capability leaves | 180 |
-| COMPLETE | 0 |
-| PARTIAL | 89 |
+| COMPLETE | 2 |
+| PARTIAL | 92 |
 | BACKEND_ONLY | 10 |
 | ABSENT | 1 |
-| DISCONNECTED | 12 |
+| DISCONNECTED | 10 |
 | WRONG_BEHAVIOR | 13 |
-| UNVERIFIED | 55 |
+| UNVERIFIED | 52 |
 | NOT_AUDITED | 0 |
 | Reused J1–J6/UX findings | 34 |
 | New source/live findings | 12 |
@@ -111,7 +111,7 @@ Backend finance/cost/risk evidence reduces uncertainty, but it does not close th
 
 ## Required before functional completion
 
-All 46 gaps must be corrected or closed with evidence. All 55 UNVERIFIED leaves must be executed and either promoted using saved proof or converted into a controlled, specifically classified gap. Required journeys must pass with representative roles, functional permissions, project/tenant containment, persisted records, actual documents/files and next-role receipt. The same approved business truth must survive from enquiry and study through estimate, award, project delivery, certification, finance, T&C, handover and service without manual re-entry.
+All 46 tracked gaps must be corrected or closed with evidence. All 52 remaining UNVERIFIED leaves must be executed and either promoted using saved proof or converted into a controlled, specifically classified gap. Required journeys must pass with representative roles, functional permissions, project/tenant containment, persisted records, actual documents/files and next-role receipt. The same approved business truth must survive from enquiry and study through estimate, award, project delivery, certification, finance, T&C, handover and service without manual re-entry.
 
 Every employee workspace must also meet the shared UX acceptance standard: obvious next action, retained customer/project context, one primary action, honest labels, useful empty/error states, keyboard and mobile viability where the workforce requires them, and no button that claims an output without producing it.
 

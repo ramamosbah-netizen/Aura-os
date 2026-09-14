@@ -14,6 +14,7 @@ import {
   summariseSchedule,
 } from './domain/schedule';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
+import { WBS_STORE, type WbsStore } from './wbs-store';
 import { type PlanInput, type SchedulePlan, planSchedule } from './domain/schedule-planning';
 import type { ResourceRef } from './domain/resource-ref';
 import { resolvePlanFacts, dedupeRefs } from './domain/resource-facts';
@@ -54,17 +55,19 @@ export class ScheduleService {
     // The working calendar (Step 8). When bound and the tenant has a calendar, a planning run counts
     // working days rather than raw calendar days; absent, every day is worked (the prior behaviour).
     @Optional() @Inject(CalendarService) private readonly calendars: CalendarService | null = null,
+    @Inject(WBS_STORE) private readonly wbs: WbsStore,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
   async save(input: NewProjectSchedule): Promise<ProjectSchedule> {
     const existing = await this.store.getByProject(input.tenantId, input.projectId);
+    const tasks = await this.resolveAndValidateWbs(input, existing);
     let sch: ProjectSchedule;
     if (existing) {
-      sch = setScheduleTasks(existing, input.tasks ?? []);
+      sch = setScheduleTasks(existing, tasks);
       await this.store.update(sch);
     } else {
-      sch = makeProjectSchedule(input);
+      sch = makeProjectSchedule({ ...input, tasks });
       await this.store.create(sch);
     }
     await this.events.append([
@@ -76,6 +79,44 @@ export class ScheduleService {
       }),
     ]);
     return sch;
+  }
+
+  /**
+   * Resolve an activity's scope from the persisted WBS node, never from projectId alone.
+   * Existing pre-0315 activities may remain unlinked until edited, but every new activity must
+   * name a canonical node and an established link cannot be removed or moved silently.
+   */
+  private async resolveAndValidateWbs(
+    input: NewProjectSchedule,
+    existing: ProjectSchedule | null,
+  ): Promise<NewScheduleTask[]> {
+    const prior = new Map((existing?.tasks ?? []).map((task) => [task.id, task]));
+    const resolved: NewScheduleTask[] = [];
+    for (const task of input.tasks ?? []) {
+      const persisted = task.id ? prior.get(task.id) : undefined;
+      let wbsNodeId = task.wbsNodeId;
+
+      if (persisted?.wbsNodeId) {
+        if (wbsNodeId !== undefined && wbsNodeId !== persisted.wbsNodeId) {
+          throw new BadRequestException(`activity ${task.id} is already linked to WBS node ${persisted.wbsNodeId}`);
+        }
+        wbsNodeId = persisted.wbsNodeId;
+      }
+
+      const isNew = !persisted;
+      if (isNew && !wbsNodeId) {
+        throw new BadRequestException('wbsNodeId is required for every new schedule activity');
+      }
+
+      if (wbsNodeId) {
+        const node = await this.wbs.get(wbsNodeId);
+        if (!node || node.tenantId !== input.tenantId || node.projectId !== input.projectId) {
+          throw new BadRequestException(`WBS node ${wbsNodeId} does not belong to project ${input.projectId}`);
+        }
+      }
+      resolved.push({ ...task, wbsNodeId: wbsNodeId ?? null });
+    }
+    return resolved;
   }
 
   async setBaseline(tenantId: Id, projectId: Id): Promise<ProjectSchedule> {

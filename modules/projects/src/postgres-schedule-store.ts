@@ -24,6 +24,7 @@ interface Row {
 
 interface TaskRow {
   id: string; schedule_id: string; name: string;
+  wbs_node_id: string | null;
   planned_start: Date | string; planned_end: Date | string;
   baseline_start: Date | string | null; baseline_end: Date | string | null;
   actual_start: Date | string | null; actual_end: Date | string | null;
@@ -55,6 +56,7 @@ const rowToReq = (r: ReqRow): TaskResourceRequirement => ({
 
 const rowToTask = (r: TaskRow, requirements: TaskResourceRequirement[] = []): ScheduleTask => ({
   id: r.id,
+  wbsNodeId: r.wbs_node_id,
   name: r.name,
   plannedStart: day(r.planned_start)!,
   plannedEnd: day(r.planned_end)!,
@@ -152,11 +154,12 @@ export class PostgresScheduleStore implements ScheduleStore {
     for (const t of s.tasks) {
       await executor.query(
         `INSERT INTO public.aura_projects_schedule_tasks
-           (id, tenant_id, project_id, schedule_id, name, planned_start, planned_end,
+           (id, tenant_id, project_id, schedule_id, wbs_node_id, name, planned_start, planned_end,
             baseline_start, baseline_end, actual_start, actual_end, percent_complete,
             duration_working_days, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
          ON CONFLICT (id) DO UPDATE SET
+           wbs_node_id = EXCLUDED.wbs_node_id,
            name = EXCLUDED.name,
            planned_start = EXCLUDED.planned_start, planned_end = EXCLUDED.planned_end,
            baseline_start = EXCLUDED.baseline_start, baseline_end = EXCLUDED.baseline_end,
@@ -164,7 +167,7 @@ export class PostgresScheduleStore implements ScheduleStore {
            percent_complete = EXCLUDED.percent_complete,
            duration_working_days = EXCLUDED.duration_working_days,
            updated_at = now()`,
-        [t.id, s.tenantId, s.projectId, s.id, t.name, t.plannedStart, t.plannedEnd,
+        [t.id, s.tenantId, s.projectId, s.id, t.wbsNodeId, t.name, t.plannedStart, t.plannedEnd,
          t.baselineStart, t.baselineEnd, t.actualStart, t.actualEnd, t.percentComplete,
          t.durationWorkingDays],
       );
@@ -255,7 +258,7 @@ export class PostgresScheduleStore implements ScheduleStore {
     const reqs = await this.reqsFor(scheduleIds);
     // One query for every schedule in the result, not one per schedule.
     const res = await this.pool.query<TaskRow>(
-      `SELECT id, schedule_id, name, planned_start, planned_end, baseline_start, baseline_end,
+      `SELECT id, schedule_id, wbs_node_id, name, planned_start, planned_end, baseline_start, baseline_end,
               actual_start, actual_end, percent_complete, duration_working_days
          FROM public.aura_projects_schedule_tasks
         WHERE schedule_id = ANY($1::uuid[])

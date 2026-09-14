@@ -184,7 +184,7 @@
 | apps/web/app/projects/dashboard/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/projects/projects/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/projects/projects/[id]/page.tsx | NOT_AUDITED | UNVERIFIED |
-| apps/web/app/projects/schedule/page.tsx | PARTIAL | Live schedule, planning proposal and governed acceptance |
+| apps/web/app/projects/schedule/page.tsx | PARTIAL | Wave 3 Auth-ON proof requires a same-project WBS package, creates/reloads the linked activity and displays its package; resource/progress/cost continuity remains open |
 | apps/web/app/projects/variations/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/calibrations/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/control/page.tsx | NOT_AUDITED | UNVERIFIED |

@@ -24,7 +24,8 @@
 .statusChip.ready { color: var(--good); background: color-mix(in srgb, var(--good) 11%, transparent); }
 .rows { display: flex; flex-direction: column; gap: 7px; padding: 14px 16px 8px; }
 .row { display: flex; align-items: center; gap: 10px; min-height: 27px; }
-.label { width: 170px; min-width: 170px; overflow: hidden; color: var(--text); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.label { display: flex; width: 170px; min-width: 170px; overflow: hidden; flex-direction: column; gap: 2px; color: var(--text); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.label small { overflow: hidden; color: var(--muted); font-size: 9px; font-weight: 500; text-overflow: ellipsis; }
 .track { position: relative; flex: 1; height: 24px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--border) 72%, transparent); border-radius: 6px; background-color: var(--panel-2); background-image: linear-gradient(to right, color-mix(in srgb, var(--border) 45%, transparent) 1px, transparent 1px); background-size: 25% 100%; }
 .baseline { position: absolute; top: 18px; height: 3px; border-radius: 2px; background: var(--border); opacity: .95; }
 .bar { position: absolute; top: 3px; height: 15px; overflow: hidden; border: 1px solid color-mix(in srgb, var(--accent) 75%, transparent); border-radius: 4px; background: color-mix(in srgb, var(--accent) 22%, transparent); }

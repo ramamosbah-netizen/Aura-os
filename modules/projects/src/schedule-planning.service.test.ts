@@ -5,6 +5,7 @@ import { ScheduleService } from './schedule.service';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
 import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
+import { InMemoryWbsStore } from './in-memory-wbs-store';
 import { makeProjectSchedule, type ProjectSchedule } from './domain/schedule';
 import { makeResourceCapacity } from './domain/resource-pool';
 import { commitBooking } from './domain/resource-booking';
@@ -55,7 +56,7 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
     runs = new InMemoryPlanningRunStore();
     events = { append: vi.fn(async () => undefined), appendWithClient: vi.fn(async () => undefined) } as unknown as EventStore;
     audit = { log: vi.fn(async () => undefined) } as unknown as AuditService;
-    svc = new ScheduleService(store, events, facts, runs, null, audit);
+    svc = new ScheduleService(store, events, facts, runs, null, audit, null, new InMemoryWbsStore());
   });
 
   it('runs the solver against resolved capacity, persists a proposal, and moves no stored date', async () => {
@@ -138,7 +139,7 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
     calendar.registerInMemoryCalendar(
       { id: 'gulf', tenantId: TENANT, companyId: null, name: 'Gulf week', weekends: [5, 6], standardHoursPerDay: 8 },
     );
-    const withCal = new ScheduleService(store, events, facts, runs, null, audit, calendar);
+    const withCal = new ScheduleService(store, events, facts, runs, null, audit, calendar, new InMemoryWbsStore());
     // Thursday 2026-03-12, two working days, wide authored end so the horizon covers the weekend.
     await store.create(makeProjectSchedule({
       tenantId: TENANT, projectId: PROJECT,

@@ -1545,7 +1545,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1562,8 +1562,8 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Live schedule tasks are stored separately from WBS work packages; the create/edit surface has no WBS selector.",
-      "acceptanceProof": "Create a task from its WBS package and prove progress, resources and cost keep the same work-package identity."
+      "currentBehavior": "Wave 3 iteration 5 makes a canonical same-project WBS node mandatory for every new schedule activity. The service reloads the persisted node, rejects missing/foreign project links, preserves an established link through edits and PostgreSQL enforces tenant/project/WBS lineage. Auth-ON browser proof creates and reloads the activity from a project-filtered WBS selector. Resource requirements, cost and quantity-driven progress are not yet connected through the same activity.",
+      "acceptanceProof": "Continue the established WBS identity into employee/equipment demand, quantity-driven progress and cost; prove the planning and delivery views reconcile without re-entry."
     },
     {
       "id": "PLN-02",
@@ -8304,11 +8304,11 @@
     },
     {
       "id": "F-07",
-      "title": "Schedule tasks are disconnected from WBS work packages",
+      "title": "WBS-linked activities still need connected resources, progress and cost",
       "capabilityIds": [
         "PLN-01"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "PARTIAL",
       "kind": "capability / verification gap",
       "status": "OPEN",
       "roles": [
@@ -8320,13 +8320,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Live schedule tasks are stored separately from WBS work packages; the create/edit surface has no WBS selector.",
+      "currentBehavior": "Wave 3 iteration 5 makes a canonical same-project WBS node mandatory for every new schedule activity. The service reloads the persisted node, rejects missing/foreign project links, preserves an established link through edits and PostgreSQL enforces tenant/project/WBS lineage. Auth-ON browser proof creates and reloads the activity from a project-filtered WBS selector. Resource requirements, cost and quantity-driven progress are not yet connected through the same activity.",
       "expectedOperationalBehavior": "WBS and activity linkage from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "CRITICAL",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Create a task from its WBS package and prove progress, resources and cost keep the same work-package identity."
+      "acceptanceProof": "Continue the established WBS identity into employee/equipment demand, quantity-driven progress and cost; prove the planning and delivery views reconcile without re-entry."
     },
     {
       "id": "F-08",
@@ -8533,13 +8533,13 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 2,
-      "PARTIAL": 91,
+      "PARTIAL": 92,
       "BACKEND_ONLY": 10,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
-      "DISCONNECTED": 11,
+      "DISCONNECTED": 10,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
       "UNVERIFIED": 52,

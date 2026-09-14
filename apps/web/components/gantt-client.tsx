@@ -13,7 +13,8 @@ interface ScheduleTask {
    * EDIT rather than a replacement, and what keeps each task's baseline attached to it through a
    * rename. Omitting it would silently mint new tasks and drop their baselines.
    */
-  id: string;
+  id?: string;
+  wbsNodeId: string | null;
   name: string; plannedStart: string; plannedEnd: string;
   baselineStart: string | null; baselineEnd: string | null;
   actualStart: string | null; actualEnd: string | null; percentComplete: number;
@@ -22,6 +23,7 @@ interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
 }
 interface Project { id: string; title: string }
+interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
 
 const DAY = 86_400_000;
 const d = (s: string) => Date.parse(s);
@@ -36,10 +38,10 @@ function span(tasks: ScheduleTask[]): { min: number; total: number } {
   return { min, total: Math.max(1, (max - min) / DAY + 1) };
 }
 
-interface NewTask { name: string; plannedStart: string; plannedEnd: string; percentComplete: string }
-const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0' });
+interface NewTask { name: string; plannedStart: string; plannedEnd: string; percentComplete: string; wbsNodeId: string }
+const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0', wbsNodeId: '' });
 
-export default function GanttClient({ schedules, projects = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; selectedProjectId?: string }) {
+export default function GanttClient({ schedules, projects = [], wbsNodes = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; wbsNodes?: WbsNode[]; selectedProjectId?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -51,10 +53,11 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
   const unscheduled = projects.filter((p) => !scheduledProjectIds.has(p.id));
 
   function toTask(nt: NewTask): ScheduleTask | null {
-    if (!nt.name.trim() || !nt.plannedStart || !nt.plannedEnd) return null;
+    if (!nt.name.trim() || !nt.plannedStart || !nt.plannedEnd || !nt.wbsNodeId) return null;
     return {
       // No id: this task does not exist yet, and the server mints one.
-      id: '',
+      id: undefined,
+      wbsNodeId: nt.wbsNodeId,
       name: nt.name.trim(), plannedStart: nt.plannedStart, plannedEnd: nt.plannedEnd,
       baselineStart: null, baselineEnd: null, actualStart: null, actualEnd: null,
       percentComplete: Math.min(100, Math.max(0, Number(nt.percentComplete) || 0)),
@@ -104,7 +107,7 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
 
   async function handleAddTask(sch: ProjectSchedule) {
     const t = toTask(addTask[sch.projectId] ?? emptyTask());
-    if (!t) { setError('Task needs a name and planned start/end dates.'); return; }
+    if (!t) { setError('Task needs a WBS work package, name and planned start/end dates.'); return; }
     await saveSchedule(sch.projectId, sch.projectName, [...sch.tasks, t]);
     setAddTask({ ...addTask, [sch.projectId]: emptyTask() });
   }
@@ -113,7 +116,7 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
     e.preventDefault();
     if (!newProjectId) { setError('Pick a project.'); return; }
     const t = toTask(newTask);
-    if (!t) { setError('First task needs a name and planned start/end dates.'); return; }
+    if (!t) { setError('First task needs a WBS work package, name and planned start/end dates.'); return; }
     const proj = projects.find((p) => p.id === newProjectId);
     await saveSchedule(newProjectId, proj?.title ?? null, [t]);
     setNewTask(emptyTask()); setNewProjectId('');
@@ -128,12 +131,16 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
 
       {/* Start a schedule for a project that has none */}
       {unscheduled.length > 0 && (
-        <form onSubmit={handleStartSchedule} className={styles.startCard}>
+        <form onSubmit={handleStartSchedule} className={styles.startCard} data-testid="start-schedule-form">
           <strong className={styles.startTitle}><CalendarPlus size={16} /> Start a schedule</strong>
           <div className={styles.formRow}>
             <select value={newProjectId} onChange={(e) => setNewProjectId(e.target.value)} className={styles.input}>
               <option value="">Select a project…</option>
               {unscheduled.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+            </select>
+            <select value={newTask.wbsNodeId} onChange={(e) => setNewTask({ ...newTask, wbsNodeId: e.target.value })} className={styles.input} disabled={!newProjectId} aria-label="WBS work package">
+              <option value="">Select WBS package…</option>
+              {wbsNodes.filter((node) => node.projectId === newProjectId).map((node) => <option key={node.id} value={node.id}>{node.code} · {node.title}</option>)}
             </select>
             <input placeholder="First task" value={newTask.name} onChange={(e) => setNewTask({ ...newTask, name: e.target.value })} className={styles.input} />
             <input type="date" value={newTask.plannedStart} onChange={(e) => setNewTask({ ...newTask, plannedStart: e.target.value })} className={styles.input} />
@@ -178,7 +185,10 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
             <div className={styles.rows}>
               {sch.tasks.map((t, idx) => (
                 <div key={`${t.name}-${idx}`} className={styles.row}>
-                  <div className={styles.label} title={t.name}>{t.name}</div>
+                  <div className={styles.label} title={t.name}>
+                    {t.name}
+                    <small>{t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'WBS record unavailable'; })() : 'Legacy activity · WBS not linked'}</small>
+                  </div>
                   <div className={styles.track} aria-label={`${t.name}, ${t.percentComplete}% complete`}>
                     {t.baselineStart && t.baselineEnd && (
                       <div className={styles.baseline} style={{ left: `${pct(t.baselineStart)}%`, width: `${wid(t.baselineStart, t.baselineEnd)}%` }} />
@@ -213,6 +223,10 @@ export default function GanttClient({ schedules, projects = [], selectedProjectI
 
             {/* Add task */}
             <div className={styles.addRow}>
+              <select value={nt.wbsNodeId} onChange={(e) => upd(sch.projectId, { wbsNodeId: e.target.value })} className={styles.input} aria-label={`WBS work package for ${sch.projectName ?? sch.projectId}`}>
+                <option value="">Select WBS package…</option>
+                {wbsNodes.filter((node) => node.projectId === sch.projectId).map((node) => <option key={node.id} value={node.id}>{node.code} · {node.title}</option>)}
+              </select>
               <input placeholder="Task name" value={nt.name} onChange={(e) => upd(sch.projectId, { name: e.target.value })} className={styles.input} style={{ flex: 2 }} />
               <input type="date" value={nt.plannedStart} onChange={(e) => upd(sch.projectId, { plannedStart: e.target.value })} className={styles.input} />
               <input type="date" value={nt.plannedEnd} onChange={(e) => upd(sch.projectId, { plannedEnd: e.target.value })} className={styles.input} />

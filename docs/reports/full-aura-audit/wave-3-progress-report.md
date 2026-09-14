@@ -26,6 +26,18 @@ After the canonical mapping is persisted, the transactional outbox publishes `pr
 | J2-02 — Mapping UI unavailable | WRONG_BEHAVIOR | CLOSED / VERIFIED | Auth-ON browser maps the final Tender item to a WBS node |
 | J2-03 — SOLD projection missing | DISCONNECTED | CLOSED / VERIFIED | API journey and browser poll the quantity ledger to SOLD = frozen quantity |
 
+## Iteration 2 — Project drawing to controlled conveyance
+
+The next slice keeps the engineer inside the owning Project 360 while registering a shop drawing, then proves:
+
+`project drawing → submit → review → approve → named recipient/purpose → transmitted drawing → sent DocControl transmittal → linked reference`
+
+The transmit command now refuses a blank recipient or purpose at both the HTTP and service boundaries. The outbox reactor creates one transmittal using the full immutable drawing-revision identity, records recipient and purpose, advances the conveyance to `sent`, and links its reference back to the drawing. A replay resumes unfinished work and repairs a missing link; failures escape to the durable event handler for retry instead of being logged and discarded. The UI waits for this durable link before presenting completion.
+
+The general DocControl screen now calls a manually created transmittal a draft and exposes the real Send → Record receipt → Acknowledge lifecycle. This removes the previous false label “Dispatch & Send” on an operation that only created a draft.
+
+ENG-01, ENG-02 and ENG-05 remain **PARTIAL**: the browser and API prove the connected workflow, but governed file storage/versioning, independent maker-checker roles, exact register-item package linkage and recipient-role receipt remain open. ENG-06 remains open until assigned Site/Project/Procurement users receive an actionable release item.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -52,13 +64,18 @@ After the canonical mapping is persisted, the transactional outbox publishes `pr
 | Repository typecheck | 51/51 passed |
 | Repository production build | 27/27 passed, including Next.js and Nest builds |
 | Register reconciliation | 180 capabilities / 46 gap records / 999 role pairs / 938 journey pairs |
+| Engineering drawing API journey | 1/1 passed; missing recipient denied and resulting conveyance is sent with purpose |
+| Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
+| Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal reference |
+| Database migration posture | 312/312 applied; transmittal purpose persisted |
+| Full API unit/fitness suite | 493 passed / 4 skipped |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Project team and responsibility assignment with clear owner, due date and handoff.
-2. Controlled engineering release, material-submittal/transmittal lineage and receipt by the assigned Site/Project/Procurement roles.
+2. Governed engineering file storage, material-submittal/register-item lineage and receipt by the assigned Site/Project/Procurement roles.
 3. WBS-linked schedule activities instead of an independent task list.
 4. Real employee/team/equipment requirements, availability, conflict resolution and My Work handoff.
 5. Milestone, baseline, look-ahead, delay/recovery and forecast evidence from the connected plan.

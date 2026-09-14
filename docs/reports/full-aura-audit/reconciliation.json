@@ -2,7 +2,7 @@
   "capabilities": 180,
   "capabilityStatus": {
     "COMPLETE": 1,
-    "PARTIAL": 89,
+    "PARTIAL": 90,
     "BACKEND_ONLY": 10,
     "UI_ONLY": 0,
     "ABSENT": 1,
@@ -11,7 +11,7 @@
     "DISCONNECTED": 11,
     "WRONG_BEHAVIOR": 13,
     "UNREACHABLE": 0,
-    "UNVERIFIED": 55,
+    "UNVERIFIED": 54,
     "NOT_AUDITED": 0
   },
   "gapRecords": 46,
@@ -68,8 +68,8 @@
   "rolePairs": 999,
   "journeyPairs": 938,
   "pageTemplates": 213,
-  "newPageAudited": 32,
-  "newPageNotAudited": 181,
+  "newPageAudited": 35,
+  "newPageNotAudited": 178,
   "newTestsPassed": 563,
   "newTestsFailed": 3,
   "newTestFilesExecuted": 89,

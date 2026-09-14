@@ -19,6 +19,7 @@ interface Transmittal {
   projectName: string | null;
   sender: string | null;
   recipient: string | null;
+  purpose: string | null;
   status: 'draft' | 'sent' | 'received' | 'acknowledged';
   ownerId: string | null;
   createdBy: string | null;
@@ -106,6 +107,7 @@ export default function DocControlClient({
   const [transTitle, setTransTitle] = useState('');
   const [transSender, setTransSender] = useState('');
   const [transRecipient, setTransRecipient] = useState('');
+  const [transPurpose, setTransPurpose] = useState('For Information');
 
   const [corrCode, setCorrCode] = useState('');
   const [corrSubject, setCorrSubject] = useState('');
@@ -194,6 +196,7 @@ export default function DocControlClient({
           title: transTitle,
           sender: transSender || undefined,
           recipient: transRecipient || undefined,
+          purpose: transPurpose || undefined,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -203,8 +206,21 @@ export default function DocControlClient({
       setTransTitle('');
       setTransSender('');
       setTransRecipient('');
+      setTransPurpose('For Information');
     } catch (err: any) {
       setError(err.message || 'Failed to create transmittal');
+    }
+  };
+
+  const handleTransmittalAction = async (id: string, action: 'send' | 'receive') => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/doccontrol/transmittals/${id}/${action}`, { method: 'POST' });
+      const updated = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(updated?.message || updated?.error || `Failed to ${action}`);
+      setTransmittals(transmittals.map((t) => (t.id === id ? updated : t)));
+    } catch (err: any) {
+      setError(err.message || `Failed to ${action}`);
     }
   };
 
@@ -458,8 +474,17 @@ export default function DocControlClient({
                   style={st.input}
                 />
               </div>
+              <div style={st.field}>
+                <label style={st.label}>Purpose</label>
+                <select value={transPurpose} onChange={(e) => setTransPurpose(e.target.value)} style={st.input}>
+                  <option>For Information</option>
+                  <option>For Review</option>
+                  <option>For Approval</option>
+                  <option>For Construction</option>
+                </select>
+              </div>
             </div>
-            <button type="submit" style={st.btn}>Dispatch & Send Transmittal</button>
+            <button type="submit" style={st.btn}>Create draft transmittal</button>
           </form>
 
           {/* List panel */}
@@ -471,7 +496,7 @@ export default function DocControlClient({
               <table style={st.table}>
                 <thead>
                   <tr>
-                    {['Code', 'Title', 'Project', 'Sender', 'Recipient', 'Status', 'Actions'].map((h) => (
+                    {['Code', 'Title', 'Project', 'Sender', 'Recipient', 'Purpose', 'Status', 'Actions'].map((h) => (
                       <th key={h} style={st.th}>{h}</th>
                     ))}
                   </tr>
@@ -484,16 +509,27 @@ export default function DocControlClient({
                       <td style={st.tdMuted}>{t.projectName || '—'}</td>
                       <td style={st.tdMuted}>{t.sender || '—'}</td>
                       <td style={st.tdMuted}>{t.recipient || '—'}</td>
+                      <td style={st.tdMuted}>{t.purpose || '—'}</td>
                       <td style={st.td}>
                         <span style={t.status === 'acknowledged' ? st.tagApproved : st.tagPending}>
                           {t.status}
                         </span>
                       </td>
                       <td style={st.td}>
-                        {t.status !== 'acknowledged' && (
+                        {t.status === 'draft' && (
+                          <button onClick={() => handleTransmittalAction(t.id, 'send')} style={st.btnApprove}>
+                            Send
+                          </button>
+                        )}
+                        {t.status === 'sent' && (
+                          <button onClick={() => handleTransmittalAction(t.id, 'receive')} style={st.btnApprove}>
+                            Record receipt
+                          </button>
+                        )}
+                        {(t.status === 'sent' || t.status === 'received') && (
                           <button
                             onClick={() => handleAcknowledgeTransmittal(t.id)}
-                            style={st.btnApprove}
+                            style={{ ...st.btnApprove, marginLeft: 6 }}
                           >
                             Acknowledge
                           </button>

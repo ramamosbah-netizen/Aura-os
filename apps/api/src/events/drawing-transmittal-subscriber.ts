@@ -27,8 +27,7 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
 
   onModuleInit(): void {
     this.bus.subscribe('engineering.drawing.transmitted', async (e: DomainEvent) => {
-      try {
-        const p = e.payload as {
+      const p = e.payload as {
           code?: string;
           title?: string;
           revision?: string;
@@ -36,15 +35,20 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
           projectName?: string;
           recipient?: string | null;
           purpose?: string | null;
-        };
-        const revision = p.revision ?? '0';
-        const code = `TR-${e.aggregateId.slice(0, 8)}-${revision}`;
+      };
+      const revision = p.revision ?? '0';
+      // Keep the full aggregate id: the database uniqueness key is tenant+project+code, so
+      // truncating UUIDs would turn a rare prefix collision into the wrong drawing's conveyance.
+      const code = `TR-${e.aggregateId}-${revision}`;
 
-        // Idempotency: skip if a transmittal for this drawing revision already exists.
-        const existing = await this.doccontrol.listTransmittals(e.tenantId);
-        if (existing.some((t) => t.code === code)) return;
+      // Idempotency is based on the immutable drawing-revision identity. A replay resumes any
+      // unfinished work instead of returning early, so a prior failure cannot leave an unlinked
+      // draft behind while the outbox marks the event complete.
+      const existing = await this.doccontrol.listTransmittals(e.tenantId);
+      let transmittal = existing.find((t) => t.code === code);
 
-        const transmittal = await this.doccontrol.createTransmittal({
+      if (!transmittal) {
+        transmittal = await this.doccontrol.createTransmittal({
           tenantId: e.tenantId,
           companyId: e.companyId ?? undefined,
           code,
@@ -53,18 +57,21 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
           projectName: p.projectName ?? undefined,
           sender: 'Engineering',
           recipient: p.recipient ?? undefined,
+          purpose: p.purpose ?? undefined,
           // System-initiated conveyance: no createdBy → no cross-module permission coupling.
         });
-
-        // Link the transmittal reference back onto the transmitted drawing revision.
-        await this.engineering.linkTransmittal(e.tenantId, e.aggregateId, transmittal.code);
-
-        this.logger.log(
-          `⚡ drawing.transmitted → doccontrol transmittal ${transmittal.code} for ${p.code} Rev ${revision}`,
-        );
-      } catch (err) {
-        this.logger.error(`Failed to create transmittal from drawing.transmitted: ${err}`);
       }
+
+      if (transmittal.status === 'draft') {
+        transmittal = await this.doccontrol.sendTransmittal(e.tenantId, null, transmittal.id);
+      }
+
+      // Link on every delivery, including a replay that found the conveyance already present.
+      await this.engineering.linkTransmittal(e.tenantId, e.aggregateId, transmittal.code);
+
+      this.logger.log(
+        `drawing.transmitted → sent doccontrol transmittal ${transmittal.code} for ${p.code} Rev ${revision}`,
+      );
     });
   }
 }

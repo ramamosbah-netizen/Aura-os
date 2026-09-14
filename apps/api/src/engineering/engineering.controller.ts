@@ -212,6 +212,8 @@ export class EngineeringController {
 
   @Post('drawings/:id/transmit')
   transmitDrawing(@Param('id') id: string, @Body() dto: TransmitDrawingDto): Promise<Drawing> {
+    if (!dto?.recipient?.trim()) throw new BadRequestException('recipient is required');
+    if (!dto?.purpose?.trim()) throw new BadRequestException('purpose is required');
     const ctx = this.tenant.get();
     return this.engineeringService.transmitDrawing(ctx.tenantId, ctx.actorId, id, {
       recipient: dto?.recipient,

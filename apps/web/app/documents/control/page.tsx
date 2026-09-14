@@ -19,6 +19,7 @@ interface Transmittal {
   projectName: string | null;
   sender: string | null;
   recipient: string | null;
+  purpose: string | null;
   status: 'draft' | 'sent' | 'received' | 'acknowledged';
   ownerId: string | null;
   createdBy: string | null;

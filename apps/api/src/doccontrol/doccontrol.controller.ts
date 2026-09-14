@@ -25,6 +25,7 @@ class CreateTransmittalDto {
   @IsString() title!: string;
   @IsOptional() @IsString() sender?: string;
   @IsOptional() @IsString() recipient?: string;
+  @IsOptional() @IsString() purpose?: string;
 }
 
 class CreateCorrespondenceDto {
@@ -79,6 +80,7 @@ export class DocControlController {
       title: dto.title,
       sender: dto.sender,
       recipient: dto.recipient,
+      purpose: dto.purpose,
       createdBy: ctx.actorId || undefined,
     });
   }

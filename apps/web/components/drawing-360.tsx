@@ -115,7 +115,7 @@ export default function Drawing360({
       </div>
 
       {/* Workflow actions (client) */}
-      <DrawingWorkflowActions id={drawing.id} status={drawing.status} />
+      <DrawingWorkflowActions id={drawing.id} projectId={drawing.projectId} status={drawing.status} />
 
       {/* Revisions */}
       <Section title="Revisions" testid="tab-revisions">

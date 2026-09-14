@@ -38,4 +38,3 @@
 | XOP-15 | Automatic classification | PARTIAL | Identity resolution automatically links exact customer/contact matches and surfaces weaker candidates; typed system classification is validated. Operational auto-classification across documents/systems remains unproven. |
 | XOP-16 | AI extraction | WRONG_BEHAVIOR | Scope Assist is genuinely grounded and tested, with heuristic fallback and cross-tenant citation rejection. The prominent Tender AI OCR action is explicitly implemented as simulated CSV/tab paste while PDF/OCR is described in source as a later slice. |
 | XOP-17 | Human review before truth mutation | PARTIAL | Fresh Scope Assist tests proved suggestion-only generation, evidence provenance/staleness, cross-tenant citation rejection and Accept → editable Draft rather than approval. The form AI review surface can apply extracted text fields, but live role/browser proof is absent. |
-

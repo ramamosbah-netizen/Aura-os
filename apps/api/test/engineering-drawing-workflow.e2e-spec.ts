@@ -91,12 +91,14 @@ describe('G-32 engineering drawing workflow (HTTP)', () => {
 
     // 7. Transmit → drawing goes transmitted AND the doccontrol reactor creates a Transmittal,
     //    whose reference is linked back onto the drawing.
+    await http.post(`${B}/drawings/${id1}/transmit`).send({ purpose: 'For Construction' }).expect(400);
     await http.post(`${B}/drawings/${id1}/transmit`).send({ recipient: 'Consultant', purpose: 'For Construction' }).expect(201);
     const transmitted = (await http.get(`${B}/drawings/${id1}`).expect(200)).body;
     expect(transmitted.status).toBe('transmitted');
     const transmittals = (await http.get('/api/v1/doccontrol/transmittals').expect(200)).body;
     const list = Array.isArray(transmittals) ? transmittals : (transmittals.items ?? []);
-    expect(list.some((t: { title?: string }) => (t.title ?? '').includes('ELV-CCTV-001'))).toBe(true);
+    const conveyed = list.find((t: { title?: string }) => (t.title ?? '').includes('ELV-CCTV-001'));
+    expect(conveyed).toMatchObject({ status: 'sent', recipient: 'Consultant', purpose: 'For Construction' });
     expect(transmitted.transmittalRef).toBeTruthy();
 
     // 8. Close → closed and immutable (a further submit is refused by the state machine).

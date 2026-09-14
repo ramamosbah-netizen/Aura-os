@@ -1370,8 +1370,8 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh browser proof created a drawing through the authenticated web API and found it through the project-grouped Drawing Register. The UI create/revision path and real drawing file were not exercised.",
-      "acceptanceProof": "Engineer creates a drawing and controlled revision from the UI, uploads the real file, reloads it and proves prior revisions remain immutable."
+      "currentBehavior": "Wave 3 browser proof registered a shop drawing directly inside its owning Project 360 context and opened the new revision without a project selector. AURA still stores only an external file URL, so real governed file upload/version proof remains open.",
+      "acceptanceProof": "Engineer uploads a real controlled drawing file from the project, reloads it and proves prior files/revisions remain immutable and downloadable under project authorization."
     },
     {
       "id": "ENG-02",
@@ -1402,7 +1402,7 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh browser proof completed Draft → Submitted → Under Review → Approved and displayed submission/review audit entries. Transmit was only shown, not executed.",
+      "currentBehavior": "Wave 3 browser proof completed Draft → Submitted → Under Review → Approved → Transmitted, displayed the review audit trail and waited for the durable DocControl reference. Maker-checker role separation and Site receipt remain open.",
       "acceptanceProof": "Separate authorized roles submit, review, approve and release a real controlled drawing; self/wrong-role actions are denied and Site receives the released revision."
     },
     {
@@ -1479,7 +1479,7 @@
       "stages": [
         "Engineering"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Engineering / DocControl",
       "evidence": [
         "R-J26"
@@ -1494,9 +1494,10 @@
         "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Design / Technical Engineer, Project Engineer, Technical Manager role executes Document transmittal in the canonical Engineering / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "Wave 3 API and browser proof require a named recipient and purpose, create one deterministic DocControl transmittal for the exact drawing revision, advance it to sent, preserve recipient/purpose, repair the drawing link on event replay and retry failures. Multi-document register-item packaging and recipient acknowledgement are not yet proved.",
+      "acceptanceProof": "Attach the exact controlled register revision(s), send once, show recipient receipt/acknowledgement and retain revision/purpose lineage under representative project and functional permissions."
     },
     {
       "id": "ENG-06",
@@ -8530,7 +8531,7 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 1,
-      "PARTIAL": 89,
+      "PARTIAL": 90,
       "BACKEND_ONLY": 10,
       "UI_ONLY": 0,
       "ABSENT": 1,
@@ -8539,7 +8540,7 @@
       "DISCONNECTED": 11,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 55,
+      "UNVERIFIED": 54,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

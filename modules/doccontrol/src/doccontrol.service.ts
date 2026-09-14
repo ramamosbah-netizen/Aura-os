@@ -83,6 +83,7 @@ export class DocControlService {
     projectName?: string;
     sender?: string;
     recipient?: string;
+    purpose?: string;
     createdBy?: string;
   }): Promise<Transmittal> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);

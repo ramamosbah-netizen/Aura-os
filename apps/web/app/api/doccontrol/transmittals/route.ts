@@ -8,6 +8,7 @@ export async function POST(request: Request): Promise<Response> {
     title?: string;
     sender?: string;
     recipient?: string;
+    purpose?: string;
   };
 
   if (!body.projectId || !body.code || !body.title) {

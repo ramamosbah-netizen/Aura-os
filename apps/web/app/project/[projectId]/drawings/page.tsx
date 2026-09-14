@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import DrawingsByProject, { type DrawingRow, type ProjectRef } from '@/components/engineering-drawings-by-project';
+import ProjectDrawingRegisterForm from '@/components/project-drawing-register-form';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,10 +46,11 @@ export default async function ProjectDrawingsPage({ params }: { params: Promise<
         <a href="/engineering/drawings" style={st.link}>Engineering → Drawing Register</a>.
       </p>
 
+      <ProjectDrawingRegisterForm projectId={projectId} projectName={name} />
+
       {rows.length === 0 ? (
         <div style={st.empty} data-testid="project-drawings-empty">
-          No drawings on this project yet. Register one from the{' '}
-          <a href="/engineering?section=drawings" style={st.link}>Engineering workspace</a>.
+          No drawings on this project yet. Use the form above to register the first controlled revision.
         </div>
       ) : (
         <DrawingsByProject drawings={rows} projects={projects} scopedProjectId={projectId} />

@@ -9,7 +9,7 @@ import { useHydrated } from '@/lib/use-hydrated';
  * POSTs them to the state-machine endpoints — it never sets `status` directly. The backend enforces
  * the transition; on success we refresh the server-rendered 360 so records/lineage update.
  */
-export default function DrawingWorkflowActions({ id, status }: { id: string; status: string }) {
+export default function DrawingWorkflowActions({ id, projectId, status }: { id: string; projectId: string; status: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   // Controls stay inert until React attaches — see `useHydrated`. A click or a keystroke
@@ -35,6 +35,17 @@ export default function DrawingWorkflowActions({ id, status }: { id: string; sta
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
         throw new Error(data.message || data.error || `Command failed (${res.status})`);
+      }
+      if (command === 'transmit') {
+        // The drawing and its DocControl conveyance are separate bounded contexts joined through
+        // the durable outbox. Keep the action busy until the linked reference is observable so the
+        // engineer sees completion rather than a misleading "not transmitted yet" refresh.
+        for (let attempt = 0; attempt < 20; attempt += 1) {
+          const linked = await fetch(`/api/engineering/drawings/${id}?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+          const current = (await linked.json().catch(() => ({}))) as { transmittalRef?: string | null };
+          if (linked.ok && current.transmittalRef) break;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
       }
       router.refresh();
     } catch (e) {
@@ -90,11 +101,21 @@ export default function DrawingWorkflowActions({ id, status }: { id: string; sta
 
       {status === 'approved' && (
         <div style={st.group}>
-          <input style={st.input} placeholder="Recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)} disabled={locked} />
-          <input style={st.input} placeholder="Purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} disabled={locked} />
-          <button style={st.primary} disabled={locked} data-testid="btn-transmit" onClick={() => run('transmit', { recipient, purpose: purpose || 'For Construction' })}>
+          <label style={st.fieldLabel}>Recipient
+            <input style={st.input} aria-label="Transmit recipient" placeholder="Consultant / client / contractor" value={recipient} onChange={(e) => setRecipient(e.target.value)} disabled={locked} data-testid="transmit-recipient" />
+          </label>
+          <label style={st.fieldLabel}>Purpose
+            <select style={st.input} aria-label="Transmit purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} disabled={locked} data-testid="transmit-purpose">
+              <option>For Approval</option>
+              <option>For Construction</option>
+              <option>For Information</option>
+              <option>For Review</option>
+            </select>
+          </label>
+          <button style={st.primary} disabled={locked || !recipient.trim() || !purpose.trim()} data-testid="btn-transmit" onClick={() => run('transmit', { recipient: recipient.trim(), purpose })}>
             Transmit
           </button>
+          <span style={st.help}>Creates and sends the controlled DocControl transmittal for this exact revision.</span>
         </div>
       )}
 
@@ -115,6 +136,8 @@ const st = {
   wrap: { display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center', padding: '14px 16px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, background: 'var(--surface, var(--panel-2))' } as CSSProperties,
   group: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', fontSize: 13, background: 'var(--bg, #fff)', color: 'inherit', minWidth: 180 } as CSSProperties,
+  fieldLabel: { display: 'grid', gap: 4, fontSize: 11, color: 'var(--muted)' } as CSSProperties,
+  help: { maxWidth: 280, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.35 } as CSSProperties,
   primary: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--info)', color: 'var(--accent-ink)', fontWeight: 600, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   warn: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--warn)', color: 'var(--accent-ink)', fontWeight: 600, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   danger: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--bad)', color: 'var(--accent-ink)', fontWeight: 600, fontSize: 13, cursor: 'pointer' } as CSSProperties,

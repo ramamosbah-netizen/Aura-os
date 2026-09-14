@@ -266,7 +266,7 @@
 | Engineering | ENG-02 | PARTIAL |
 | Engineering | ENG-03 | UNVERIFIED |
 | Engineering | ENG-04 | UNVERIFIED |
-| Engineering | ENG-05 | UNVERIFIED |
+| Engineering | ENG-05 | PARTIAL |
 | Engineering | ENG-06 | UNVERIFIED |
 | Engineering | OUT-01 | PARTIAL |
 | Engineering | OUT-02 | PARTIAL |

@@ -1,6 +1,6 @@
 // AURA OS — G-32 drawing workflow, browser E2E.
-// Drives the shop-drawing lifecycle through the real UI: Drawing Register → Drawing 360 →
-// Submit → Start review → Approve, asserting the status badge advances at each step.
+// Drives the shop-drawing lifecycle through the real project UI: register → Drawing 360 →
+// Submit → Start review → Approve → controlled transmit, asserting each state and conveyance.
 // The API is seeded through the web BFF; if the API is unreachable the spec skips (the web shell
 // degrades gracefully, so there is nothing to drive).
 import { expect, test } from '@playwright/test';
@@ -8,30 +8,19 @@ import { projectFixtureId } from './fixtures';
 
 const code = `ELV-E2E-${Date.now().toString().slice(-6)}`;
 
-test('drawing register → 360 → submit → review → approve (UI)', async ({ page, baseURL }) => {
-  // Seed a drawing via the BFF (same proxy the UI uses). Skip the spec if the API is down.
-  const create = await page.request.post(`${baseURL}/api/engineering/drawings`, {
-    data: { projectId: await projectFixtureId(page.request, baseURL), projectName: 'E2E Project', code, title: 'E2E CCTV Layout' },
-  });
-  test.skip(create.status() === 502 || create.status() === 404, 'engineering API not running behind the web shell');
-  expect(create.ok()).toBeTruthy();
+test('project drawing → review → sent DocControl transmittal (UI)', async ({ page, baseURL }) => {
+  const projectId = await projectFixtureId(page.request, baseURL);
 
-  // 1. Register shows the new drawing.
-  await page.goto('/engineering/drawings', { waitUntil: 'domcontentloaded' });
-  await expect(page.getByTestId('eng-drawings-projects')).toBeVisible();
-  // The register groups by project and shows twenty projects at a time, so a drawing registered
-  // a moment ago is not necessarily on the page you land on. Searched for by CODE — the search
-  // matches a project by the drawings it holds, which is exactly why it was built that way — and
-  // then the project is opened to reach the row.
-  await page.getByTestId('eng-drawings-search').fill(code);
-  const projectCard = page.locator('[data-testid^="eng-project-open-"]').first();
-  await expect(projectCard).toBeEnabled();
-  await projectCard.click();
-  const openLink = page.locator('[data-testid^="eng-drawing-open-"]').first();
-  await expect(openLink).toBeVisible();
+  // 1. Register in the owning project's workspace. The user never loses project context or
+  //    supplies a project selector that could point the drawing somewhere else.
+  await page.goto(`/project/${projectId}/drawings`, { waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('project-drawing-register')).toBeVisible();
+  await page.getByTestId('project-drawing-code').fill(code);
+  await page.getByTestId('project-drawing-title').fill('E2E CCTV Layout');
+  await page.getByTestId('project-drawing-discipline').selectOption('elv');
+  await page.getByTestId('project-drawing-create').click();
 
-  // 2. Open the Drawing 360 — status is Draft.
-  await openLink.click();
+  // 2. Creation opens Drawing 360 in the same project — status is Draft.
   await expect(page.getByTestId('drawing-status')).toHaveText('Draft');
 
   // 3. Submit for review → Submitted.
@@ -42,10 +31,18 @@ test('drawing register → 360 → submit → review → approve (UI)', async ({
   await page.getByTestId('btn-start-review').click();
   await expect(page.getByTestId('drawing-status')).toHaveText('Under Review');
 
-  // 5. Approve → Approved, and the Transmit action becomes available.
+  // 5. Approve → Approved. Conveyance stays disabled until a named recipient is recorded.
   await page.getByTestId('btn-approve').click();
   await expect(page.getByTestId('drawing-status')).toHaveText('Approved');
   await expect(page.getByTestId('btn-transmit')).toBeVisible();
+  await expect(page.getByTestId('btn-transmit')).toBeDisabled();
+
+  // 6. Transmit this exact approved revision. The UI proves the resulting DocControl reference.
+  await page.getByTestId('transmit-recipient').fill('Consultant');
+  await page.getByTestId('transmit-purpose').selectOption({ label: 'For Construction' });
+  await page.getByTestId('btn-transmit').click();
+  await expect(page.getByTestId('drawing-status')).toHaveText('Transmitted');
+  await expect(page.getByTestId('transmittal-ref')).toContainText('TR-');
 
   // A submission and a review record are now shown on the 360 (audit trail).
   await expect(page.getByTestId('tab-submissions')).toContainText('For Approval');

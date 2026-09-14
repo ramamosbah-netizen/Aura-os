@@ -36,6 +36,8 @@ export interface Transmittal {
   projectName: string | null;
   sender: string | null;
   recipient: string | null;
+  /** Business reason for the conveyance (for approval, construction, information, etc.). */
+  purpose: string | null;
   status: TransmittalStatus;
   sentAt: string | null;
   receivedAt: string | null;
@@ -55,6 +57,7 @@ export interface NewTransmittal {
   projectName?: string | null;
   sender?: string | null;
   recipient?: string | null;
+  purpose?: string | null;
   status?: Transmittal['status'];
   ownerId?: string | null;
   createdBy?: string | null;
@@ -72,6 +75,7 @@ export function makeTransmittal(input: NewTransmittal): Transmittal {
     projectName: input.projectName ?? null,
     sender: input.sender ?? null,
     recipient: input.recipient ?? null,
+    purpose: input.purpose?.trim() || null,
     status: input.status ?? 'draft',
     sentAt: null,
     receivedAt: null,

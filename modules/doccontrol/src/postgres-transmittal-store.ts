@@ -12,8 +12,8 @@ export class PostgresTransmittalStore implements TransmittalStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_transmittals (
-        id, tenant_id, company_id, code, title, project_id, project_name, sender, recipient, status, owner_id, created_by, created_at, updated_at, sent_at, received_at, acknowledged_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        id, tenant_id, company_id, code, title, project_id, project_name, sender, recipient, purpose, status, owner_id, created_by, created_at, updated_at, sent_at, received_at, acknowledged_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       on conflict (id) do update set
         company_id = excluded.company_id,
         code = excluded.code,
@@ -22,6 +22,7 @@ export class PostgresTransmittalStore implements TransmittalStore {
         project_name = excluded.project_name,
         sender = excluded.sender,
         recipient = excluded.recipient,
+        purpose = excluded.purpose,
         status = excluded.status,
         owner_id = excluded.owner_id,
         updated_at = excluded.updated_at,
@@ -38,6 +39,7 @@ export class PostgresTransmittalStore implements TransmittalStore {
         transmittal.projectName,
         transmittal.sender,
         transmittal.recipient,
+        transmittal.purpose,
         transmittal.status,
         transmittal.ownerId,
         transmittal.createdBy,
@@ -91,6 +93,7 @@ export class PostgresTransmittalStore implements TransmittalStore {
       projectName: row.project_name,
       sender: row.sender,
       recipient: row.recipient,
+      purpose: row.purpose,
       status: row.status,
       sentAt: row.sent_at ? new Date(row.sent_at).toISOString() : null,
       receivedAt: row.received_at ? new Date(row.received_at).toISOString() : null,

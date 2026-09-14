@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-213 page.tsx templates enumerated. Enumeration is not audit. 32 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+213 page.tsx templates enumerated. Enumeration is not audit. 35 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -87,7 +87,7 @@
 | apps/web/app/doccontrol/register/[id]/page.tsx | PARTIAL | Live revision/review/issue lifecycle test passed |
 | apps/web/app/doccontrol/submittals/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/doccontrol/transmittals/page.tsx | NOT_AUDITED | UNVERIFIED |
-| apps/web/app/documents/control/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/documents/control/page.tsx | PARTIAL | Transmittal UI now distinguishes draft, sent, receipt and acknowledgement and displays purpose |
 | apps/web/app/documents/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/documents/[id]/pdf/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/engineering/drawings/page.tsx | PARTIAL | Live grouped register/search/open path passed |
@@ -172,8 +172,8 @@
 | apps/web/app/procurement/suppliers/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/three-way-match/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/controls/page.tsx | NOT_AUDITED | UNVERIFIED |
-| apps/web/app/project/[projectId]/drawings/page.tsx | NOT_AUDITED | UNVERIFIED |
-| apps/web/app/project/[projectId]/drawings/[drawingId]/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/project/[projectId]/drawings/page.tsx | PARTIAL | Wave 3 live project-scoped drawing registration path passed |
+| apps/web/app/project/[projectId]/drawings/[drawingId]/page.tsx | PARTIAL | Wave 3 live review and sent DocControl transmittal path passed |
 | apps/web/app/project/[projectId]/page.tsx | PARTIAL | Live authorized/anonymous/forbidden project context test passed |
 | apps/web/app/project/[projectId]/team/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/workspace/[section]/page.tsx | NOT_AUDITED | UNVERIFIED |
@@ -217,4 +217,3 @@
 | apps/web/app/tendering/tenders/[id]/pricing/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/views/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/workspace/page.tsx | NOT_AUDITED | UNVERIFIED |
-

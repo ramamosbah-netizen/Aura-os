@@ -324,7 +324,7 @@
 | Planning | PLN-03 | BACKEND_ONLY |
 | Planning | PLN-04 | UNVERIFIED |
 | Planning | PLN-05 | PARTIAL |
-| Planning | PLN-06 | BACKEND_ONLY |
+| Planning | PLN-06 | PARTIAL |
 | Planning | PLN-07 | BACKEND_ONLY |
 | Planning | PLN-08 | BACKEND_ONLY |
 | Planning | PLN-09 | BACKEND_ONLY |
@@ -549,7 +549,7 @@
 | Progress | PLN-03 | BACKEND_ONLY |
 | Progress | PLN-04 | UNVERIFIED |
 | Progress | PLN-05 | PARTIAL |
-| Progress | PLN-06 | BACKEND_ONLY |
+| Progress | PLN-06 | PARTIAL |
 | Progress | PLN-07 | BACKEND_ONLY |
 | Progress | PLN-08 | BACKEND_ONLY |
 | Progress | PLN-09 | BACKEND_ONLY |

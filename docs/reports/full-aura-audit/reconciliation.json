@@ -2,8 +2,8 @@
   "capabilities": 180,
   "capabilityStatus": {
     "COMPLETE": 2,
-    "PARTIAL": 92,
-    "BACKEND_ONLY": 10,
+    "PARTIAL": 93,
+    "BACKEND_ONLY": 9,
     "UI_ONLY": 0,
     "ABSENT": 1,
     "DUPLICATED": 0,

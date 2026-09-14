@@ -68,6 +68,16 @@ The project schedule UI now requires a package before Create, filters the select
 
 **PLN-01 moves from DISCONNECTED to PARTIAL.** WBS identity is now canonical through Domain → PostgreSQL → API → UI → browser reload. Employee/equipment requirements, cost and quantity-driven progress do not yet share that activity identity, so the capability is not COMPLETE.
 
+## Iteration 6 — Activity resource demand from canonical registers
+
+The planning desk now captures an authored working-day duration and any number of people/equipment demand lines while creating a WBS-linked activity. The selector reads a purpose-limited catalog from the HR, Fleet and Assets authorities and stores only the typed canonical reference, quantity and unit on the activity. The schedule displays the current authority label on every reload rather than copying an employee, vehicle or asset name into Projects.
+
+The API catalog exposes only planning-safe fields. Before saving, the application-layer bridge resolves each employee, vehicle or asset against the authenticated tenant and returns 400 for an invented, deleted or cross-tenant id. It also refuses `pool` until the governed team/resource-pool register exists, so a free-text team cannot silently become planning truth.
+
+Auth-ON browser proof created `Install CCTV devices` with three authored working days, two people from HR and one Fluke tester from Assets; reload and the schedule API returned the same requirements. The same journey first submitted a fabricated employee UUID and received 400.
+
+**PLN-06 moves from BACKEND_ONLY to PARTIAL.** New-activity demand is connected through owning register → safe catalog → UI → API validation → task requirement persistence → solver input. Existing-activity demand editing, team pools, held allocation/bookings, availability integration and My Work receipts remain open.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -89,6 +99,9 @@ The project schedule UI now requires a package before Create, filters the select
 | Caller omits a work package for a new activity | Schedule service returns 400; the UI explains that a WBS package is required |
 | Caller supplies another project's WBS node | Service reloads persisted WBS ownership and returns 400; the database also enforces the composite lineage |
 | Edit silently drops or moves an established activity package | Missing input preserves the stored link; a different node is refused |
+| Caller invents an employee/equipment id | The API reloads the authenticated tenant's HR/Fleet/Assets catalogs and returns 400 before schedule persistence |
+| Projects copies names from owning registers | The task stores only typed ids; the current label is read through the safe planning catalog on render |
+| Caller submits an ungoverned free-text team | `pool` is refused until the canonical resource-pool register is connected |
 
 ## Verification completed
 
@@ -109,7 +122,7 @@ The project schedule UI now requires a package before Create, filters the select
 | Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
 | Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal and linked delivery receipt |
 | Database migration posture | 315/315 applied; schedule activities now carry a same-project WBS foreign key |
-| Full API unit/fitness suite | 495 passed / 4 skipped |
+| Full API unit/fitness suite | 497 passed / 4 skipped |
 | Project responsibility domain | 4/4 passed; canonical assignee grant, transition authority, idempotent source binding and concurrent-source refusal covered |
 | Engineering/responsibility HTTP journeys | 5/5 passed; lifecycle plus missing/wrong-project delivery owner denial and exact My Work receipt |
 | Project responsibility HTTP journey | 4/4 passed; positive handoff and release plus wrong-project/wrong-user/wrong-permission denials |
@@ -119,13 +132,15 @@ The project schedule UI now requires a package before Create, filters the select
 | Schedule WBS domain/service proof | 2/2 passed; required, wrong-project, persisted, edit-preserved and immutable-link cases covered |
 | Schedule WBS Auth-ON HTTP proof | missing 400; foreign-project 400; canonical create 201; GET returned the same WBS id |
 | Schedule WBS browser journey | 1/1 passed in Chromium; required selector, project filtering, create/reload and visible package identity |
+| Schedule resource catalog service | 2/2 passed; safe display projection plus canonical/invented/pool reference decisions |
+| Resourced activity Auth-ON browser journey | 1/1 passed in Chromium; fabricated id denied, HR employee + Assets equipment selected, duration/demand persisted and reloaded |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. Real employee/team/equipment requirements tied to the WBS-linked activity, availability, conflict resolution and My Work handoff.
+2. Governed team pools plus employee/equipment booking, availability, conflict resolution and My Work handoff from the WBS-linked demand.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

@@ -18,8 +18,8 @@ Post-audit remediation has closed Waves 0, 1 and 2 for their bounded scopes. Dir
 | --- | ---: |
 | Capability leaves | 180 |
 | COMPLETE | 2 |
-| PARTIAL | 92 |
-| BACKEND_ONLY | 10 |
+| PARTIAL | 93 |
+| BACKEND_ONLY | 9 |
 | ABSENT | 1 |
 | DISCONNECTED | 10 |
 | WRONG_BEHAVIOR | 13 |

@@ -15,19 +15,34 @@ interface ScheduleTask {
   name: string; plannedStart: string; plannedEnd: string;
   baselineStart: string | null; baselineEnd: string | null;
   actualStart: string | null; actualEnd: string | null; percentComplete: number;
+  durationWorkingDays: number | null;
+  requirements: Array<{
+    id: string;
+    resource: { resourceType: 'employee' | 'vehicle' | 'asset' | 'pool'; canonicalResourceId: string };
+    quantity: number;
+    unit: 'hours' | 'persons' | 'crews' | 'units';
+  }>;
 }
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
+interface ResourceCatalogItem {
+  resourceType: 'employee' | 'vehicle' | 'asset';
+  canonicalResourceId: string;
+  label: string;
+  secondary: string | null;
+  status: string;
+}
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
-  const [schedules, projects, wbsNodes] = await Promise.all([
+  const [schedules, projects, wbsNodes, resourceCatalog] = await Promise.all([
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<WbsNode[]>(projectId ? `/api/projects/wbs?projectId=${encodeURIComponent(projectId)}` : '/api/projects/wbs'),
+    getJson<ResourceCatalogItem[]>('/api/projects/schedules/resource-catalog'),
   ]);
   const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
@@ -122,7 +137,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             <div><strong>Schedule data is unavailable</strong><p>We could not reach the project service. Try again in a moment.</p></div>
           </div>
         ) : (
-          <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} selectedProjectId={projectId} />
+          <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} resourceCatalog={resourceCatalog ?? []} selectedProjectId={projectId} />
         )}
       </section>
 

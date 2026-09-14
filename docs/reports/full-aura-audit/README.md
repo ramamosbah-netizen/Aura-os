@@ -21,7 +21,7 @@ The J1 and J2–J6 reports remain evidence only for the scenarios they identify.
 - [Wave rationale and runtime record](remediation-waves-and-open-proof.md).
 - [Machine-readable master](master-register.json) and [reconciliation totals](reconciliation.json).
 
-Current post-remediation leaf statuses: 2 COMPLETE + 92 PARTIAL + 10 BACKEND_ONLY + 1 ABSENT + 10 DISCONNECTED + 13 WRONG_BEHAVIOR + 52 UNVERIFIED + 0 NOT_AUDITED = **180**. The frozen discovery baseline is retained in history; these promotions record only the bounded acceptance evidence described in the wave reports. The 999 applicable role pairs and 938 journey pairs reuse capability IDs and are not additional capabilities or gaps.
+Current post-remediation leaf statuses: 2 COMPLETE + 93 PARTIAL + 9 BACKEND_ONLY + 1 ABSENT + 10 DISCONNECTED + 13 WRONG_BEHAVIOR + 52 UNVERIFIED + 0 NOT_AUDITED = **180**. The frozen discovery baseline is retained in history; these promotions record only the bounded acceptance evidence described in the wave reports. The 999 applicable role pairs and 938 journey pairs reuse capability IDs and are not additional capabilities or gaps.
 
 ## Current evidence ledger
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { CalendarPlus, Layers3, Trash2 } from 'lucide-react';
+import { CalendarPlus, Layers3, Plus, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import EmptyState from './ui/empty-state';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
@@ -18,12 +18,26 @@ interface ScheduleTask {
   name: string; plannedStart: string; plannedEnd: string;
   baselineStart: string | null; baselineEnd: string | null;
   actualStart: string | null; actualEnd: string | null; percentComplete: number;
+  durationWorkingDays: number | null;
+  requirements: Array<{
+    id?: string;
+    resource: { resourceType: 'employee' | 'vehicle' | 'asset' | 'pool'; canonicalResourceId: string };
+    quantity: number;
+    unit: 'hours' | 'persons' | 'crews' | 'units';
+  }>;
 }
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
+interface ResourceCatalogItem {
+  resourceType: 'employee' | 'vehicle' | 'asset';
+  canonicalResourceId: string;
+  label: string;
+  secondary: string | null;
+  status: string;
+}
 
 const DAY = 86_400_000;
 const d = (s: string) => Date.parse(s);
@@ -38,10 +52,12 @@ function span(tasks: ScheduleTask[]): { min: number; total: number } {
   return { min, total: Math.max(1, (max - min) / DAY + 1) };
 }
 
-interface NewTask { name: string; plannedStart: string; plannedEnd: string; percentComplete: string; wbsNodeId: string }
-const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0', wbsNodeId: '' });
+interface RequirementDraft { resourceKey: string; quantity: string; unit: 'hours' | 'persons' | 'crews' | 'units' }
+interface NewTask { name: string; plannedStart: string; plannedEnd: string; percentComplete: string; durationWorkingDays: string; wbsNodeId: string; requirements: RequirementDraft[] }
+const emptyRequirement = (): RequirementDraft => ({ resourceKey: '', quantity: '1', unit: 'persons' });
+const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0', durationWorkingDays: '', wbsNodeId: '', requirements: [] });
 
-export default function GanttClient({ schedules, projects = [], wbsNodes = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; wbsNodes?: WbsNode[]; selectedProjectId?: string }) {
+export default function GanttClient({ schedules, projects = [], wbsNodes = [], resourceCatalog = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; wbsNodes?: WbsNode[]; resourceCatalog?: ResourceCatalogItem[]; selectedProjectId?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +69,9 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
   const unscheduled = projects.filter((p) => !scheduledProjectIds.has(p.id));
 
   function toTask(nt: NewTask): ScheduleTask | null {
-    if (!nt.name.trim() || !nt.plannedStart || !nt.plannedEnd || !nt.wbsNodeId) return null;
+    const duration = Number(nt.durationWorkingDays);
+    if (!nt.name.trim() || !nt.plannedStart || !nt.plannedEnd || !nt.wbsNodeId || !Number.isInteger(duration) || duration < 1) return null;
+    if (nt.requirements.some((item) => !item.resourceKey || !(Number(item.quantity) > 0))) return null;
     return {
       // No id: this task does not exist yet, and the server mints one.
       id: undefined,
@@ -61,8 +79,55 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
       name: nt.name.trim(), plannedStart: nt.plannedStart, plannedEnd: nt.plannedEnd,
       baselineStart: null, baselineEnd: null, actualStart: null, actualEnd: null,
       percentComplete: Math.min(100, Math.max(0, Number(nt.percentComplete) || 0)),
+      durationWorkingDays: duration,
+      requirements: nt.requirements.map((item) => {
+        const [resourceType, canonicalResourceId] = item.resourceKey.split(':', 2) as ['employee' | 'vehicle' | 'asset', string];
+        return { resource: { resourceType, canonicalResourceId }, quantity: Number(item.quantity), unit: item.unit };
+      }),
     };
   }
+
+  const catalogLabel = (resourceType: string, id: string): string => {
+    const item = resourceCatalog.find((candidate) => candidate.resourceType === resourceType && candidate.canonicalResourceId === id);
+    return item ? `${item.label}${item.secondary ? ` · ${item.secondary}` : ''}` : 'Canonical resource unavailable';
+  };
+
+  const requirementsEditor = (task: NewTask, setTask: (next: NewTask) => void, label: string) => (
+    <div className={styles.resourceEditor} aria-label={label}>
+      <div className={styles.resourceEditorHead}>
+        <span>People &amp; equipment needed</span>
+        <button type="button" className={styles.resourceAdd} onClick={() => setTask({ ...task, requirements: [...task.requirements, emptyRequirement()] })}>
+          <Plus size={13} /> Add resource
+        </button>
+      </div>
+      {task.requirements.length === 0 ? <small>No resource demand recorded yet.</small> : task.requirements.map((requirement, index) => (
+        <div className={styles.resourceRow} key={index}>
+          <select
+            className={styles.input}
+            aria-label={`Resource ${index + 1}`}
+            value={requirement.resourceKey}
+            onChange={(event) => setTask({ ...task, requirements: task.requirements.map((item, i) => i === index ? { ...item, resourceKey: event.target.value, unit: event.target.value.startsWith('employee:') ? 'persons' : 'units' } : item) })}
+          >
+            <option value="">Select employee or equipment…</option>
+            {(['employee', 'vehicle', 'asset'] as const).map((type) => (
+              <optgroup key={type} label={type === 'employee' ? 'Employees' : type === 'vehicle' ? 'Vehicles' : 'Equipment & assets'}>
+                {resourceCatalog.filter((item) => item.resourceType === type).map((item) => (
+                  <option key={`${type}:${item.canonicalResourceId}`} value={`${type}:${item.canonicalResourceId}`}>
+                    {item.label}{item.secondary ? ` · ${item.secondary}` : ''}{item.status !== 'active' ? ` (${item.status})` : ''}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <input className={styles.input} aria-label={`Resource quantity ${index + 1}`} type="number" min="0.01" step="0.01" value={requirement.quantity} onChange={(event) => setTask({ ...task, requirements: task.requirements.map((item, i) => i === index ? { ...item, quantity: event.target.value } : item) })} />
+          <select className={styles.input} aria-label={`Resource unit ${index + 1}`} value={requirement.unit} onChange={(event) => setTask({ ...task, requirements: task.requirements.map((item, i) => i === index ? { ...item, unit: event.target.value as RequirementDraft['unit'] } : item) })}>
+            <option value="persons">people</option><option value="crews">crews</option><option value="hours">hours</option><option value="units">units</option>
+          </select>
+          <button type="button" className={styles.removeButton} aria-label={`Remove resource ${index + 1}`} onClick={() => setTask({ ...task, requirements: task.requirements.filter((_, i) => i !== index) })}><Trash2 size={13} /></button>
+        </div>
+      ))}
+    </div>
+  );
 
   async function saveSchedule(projectId: string, projectName: string | null, tasks: ScheduleTask[]) {
     setBusy(projectId); setError(null);
@@ -107,7 +172,7 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
 
   async function handleAddTask(sch: ProjectSchedule) {
     const t = toTask(addTask[sch.projectId] ?? emptyTask());
-    if (!t) { setError('Task needs a WBS work package, name and planned start/end dates.'); return; }
+    if (!t) { setError('Task needs a WBS package, name, dates, working-day duration and complete resource lines.'); return; }
     await saveSchedule(sch.projectId, sch.projectName, [...sch.tasks, t]);
     setAddTask({ ...addTask, [sch.projectId]: emptyTask() });
   }
@@ -116,7 +181,7 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
     e.preventDefault();
     if (!newProjectId) { setError('Pick a project.'); return; }
     const t = toTask(newTask);
-    if (!t) { setError('First task needs a WBS work package, name and planned start/end dates.'); return; }
+    if (!t) { setError('First task needs a WBS package, name, dates, working-day duration and complete resource lines.'); return; }
     const proj = projects.find((p) => p.id === newProjectId);
     await saveSchedule(newProjectId, proj?.title ?? null, [t]);
     setNewTask(emptyTask()); setNewProjectId('');
@@ -145,8 +210,10 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
             <input placeholder="First task" value={newTask.name} onChange={(e) => setNewTask({ ...newTask, name: e.target.value })} className={styles.input} />
             <input type="date" value={newTask.plannedStart} onChange={(e) => setNewTask({ ...newTask, plannedStart: e.target.value })} className={styles.input} />
             <input type="date" value={newTask.plannedEnd} onChange={(e) => setNewTask({ ...newTask, plannedEnd: e.target.value })} className={styles.input} />
+            <input aria-label="Working-day duration" type="number" min={1} step={1} placeholder="Working days" value={newTask.durationWorkingDays} onChange={(e) => setNewTask({ ...newTask, durationWorkingDays: e.target.value })} className={styles.input} />
             <button type="submit" className={styles.btnPrimary} disabled={busy === newProjectId}>Create</button>
           </div>
+          {requirementsEditor(newTask, setNewTask, 'Resource needs for first activity')}
         </form>
       )}
 
@@ -188,6 +255,8 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
                   <div className={styles.label} title={t.name}>
                     {t.name}
                     <small>{t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'WBS record unavailable'; })() : 'Legacy activity · WBS not linked'}</small>
+                    <small>{t.durationWorkingDays ? `${t.durationWorkingDays} working day${t.durationWorkingDays === 1 ? '' : 's'}` : 'Working duration not authored'}</small>
+                    {(t.requirements ?? []).map((requirement) => <small key={`${requirement.resource.resourceType}:${requirement.resource.canonicalResourceId}`}>{requirement.quantity} {requirement.unit} · {catalogLabel(requirement.resource.resourceType, requirement.resource.canonicalResourceId)}</small>)}
                   </div>
                   <div className={styles.track} aria-label={`${t.name}, ${t.percentComplete}% complete`}>
                     {t.baselineStart && t.baselineEnd && (
@@ -230,9 +299,11 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], s
               <input placeholder="Task name" value={nt.name} onChange={(e) => upd(sch.projectId, { name: e.target.value })} className={styles.input} style={{ flex: 2 }} />
               <input type="date" value={nt.plannedStart} onChange={(e) => upd(sch.projectId, { plannedStart: e.target.value })} className={styles.input} />
               <input type="date" value={nt.plannedEnd} onChange={(e) => upd(sch.projectId, { plannedEnd: e.target.value })} className={styles.input} />
+              <input aria-label={`Working-day duration for ${sch.projectName ?? sch.projectId}`} type="number" min={1} step={1} placeholder="Working days" value={nt.durationWorkingDays} onChange={(e) => upd(sch.projectId, { durationWorkingDays: e.target.value })} className={styles.input} />
               <input type="number" min={0} max={100} value={nt.percentComplete} onChange={(e) => upd(sch.projectId, { percentComplete: e.target.value })} className={styles.input} style={{ width: 64 }} title="% complete" />
               <button type="button" className={styles.btn} disabled={busy === sch.projectId} onClick={() => handleAddTask(sch)}>+ Add task</button>
             </div>
+            {requirementsEditor(nt, (next) => setAddTask((current) => ({ ...current, [sch.projectId]: next })), `Resource needs for ${sch.projectName ?? sch.projectId}`)}
 
             <div className={styles.legend}><span><i className={styles.swatch} style={{ background: 'var(--accent)' }} /> planned</span><span><i className={styles.swatch} style={{ background: 'var(--good)' }} /> % complete</span><span><i className={styles.swatch} style={{ background: 'var(--border)' }} /> baseline</span></div>
           </section>

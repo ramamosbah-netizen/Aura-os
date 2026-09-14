@@ -1709,7 +1709,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "BACKEND_ONLY",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1721,13 +1721,13 @@
         "persistence": "UNVERIFIED",
         "api": "UNVERIFIED",
         "permissions": "UNVERIFIED",
-        "ui": "PARTIAL",
+        "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Task resource requirements persist and feed the solver, but the live task form has no resource requirement fields.",
-      "acceptanceProof": "Planner assigns employee/team/equipment demand to a task in the UI and reloads the same canonical requirements."
+      "currentBehavior": "Wave 3 iteration 6 lets the planner author working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. Team/resource-pool authoring and editing demand on an established activity remain unavailable.",
+      "acceptanceProof": "Add the governed team/resource-pool register and an edit flow for established activity demand; prove each requirement continues into bookings, conflict resolution and My Work without re-entry."
     },
     {
       "id": "PLN-07",
@@ -1759,7 +1759,7 @@
         "browser": "NOT_AUDITED",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Typed resource references and bookings can represent labour resources; no live employee/team allocation surface was found in the schedule workspace.",
+      "currentBehavior": "The live schedule now records named employee demand from the canonical HR catalog, and typed bookings can represent labour resources. It still has no governed employee/team allocation action that creates a held booking or a My Work receipt.",
       "acceptanceProof": "Allocate named employee/team with capacity, dates and responsibility; prove conflicts across projects and handoff to My Work."
     },
     {
@@ -1792,7 +1792,7 @@
         "browser": "NOT_AUDITED",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Typed resource references and bookings can represent equipment; no live equipment allocation surface was found in the schedule workspace.",
+      "currentBehavior": "The live schedule now records vehicle/asset demand from canonical Fleet/Assets catalogs, and typed bookings can represent equipment. It still has no governed equipment allocation action or availability/breakdown bridge.",
       "acceptanceProof": "Allocate canonical equipment, detect breakdown/availability and preserve the booking against the task."
     },
     {
@@ -8334,7 +8334,7 @@
       "capabilityIds": [
         "PLN-06"
       ],
-      "classification": "BACKEND_ONLY",
+      "classification": "PARTIAL",
       "kind": "capability / verification gap",
       "status": "OPEN",
       "roles": [
@@ -8346,13 +8346,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Task resource requirements persist and feed the solver, but the live task form has no resource requirement fields.",
+      "currentBehavior": "Wave 3 iteration 6 lets the planner author working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. Team/resource-pool authoring and editing demand on an established activity remain unavailable.",
       "expectedOperationalBehavior": "Resource requirements from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Planner assigns employee/team/equipment demand to a task in the UI and reloads the same canonical requirements."
+      "acceptanceProof": "Add the governed team/resource-pool register and an edit flow for established activity demand; prove each requirement continues into bookings, conflict resolution and My Work without re-entry."
     },
     {
       "id": "F-09",
@@ -8533,8 +8533,8 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 2,
-      "PARTIAL": 92,
-      "BACKEND_ONLY": 10,
+      "PARTIAL": 93,
+      "BACKEND_ONLY": 9,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,

@@ -61,6 +61,7 @@ import {
 } from '@aura/projects';
 import { AccountService } from '@aura/crm';
 import { resolveAccountSnapshot } from '../common/account-snapshot';
+import { ScheduleResourceCatalogService, type ScheduleResourceCatalogItem } from './schedule-resource-catalog.service';
 
 class CreateProjectDto {
   @IsString() title!: string;
@@ -276,6 +277,7 @@ export class ProjectsController {
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
     private readonly deliveryItemMaps: DeliveryItemMapService,
+    private readonly scheduleResources: ScheduleResourceCatalogService,
     private readonly accounts: AccountService,
     private readonly tenant: TenantContext,
   ) {}
@@ -1180,7 +1182,15 @@ export class ProjectsController {
   async saveSchedule(@Body() dto: { projectId: string; projectName?: string; tasks?: NewScheduleTask[] }): Promise<ProjectSchedule> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     const ctx = this.tenant.get();
+    await this.scheduleResources.assertCanonicalReferences(ctx.tenantId, dto.tasks ?? []);
     return await this.schedule.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, tasks: dto.tasks, createdBy: ctx.actorId });
+  }
+
+  /** Safe planning directory: ids and display labels from each owning register, no copied master. */
+  @Permissions('projects.schedule.read')
+  @Get('schedules/resource-catalog')
+  listScheduleResources(): Promise<ScheduleResourceCatalogItem[]> {
+    return this.scheduleResources.list(this.tenant.get().tenantId);
   }
 
   @Get('schedules')

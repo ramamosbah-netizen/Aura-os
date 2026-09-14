@@ -12,7 +12,7 @@ async function post<T>(request: APIRequestContext, path: string, data: unknown):
   return response.json() as Promise<T>;
 }
 
-test.describe('WBS-linked schedule activity', () => {
+test.describe('WBS-linked and resourced schedule activity', () => {
   test.setTimeout(180_000);
 
   test('makes the canonical work package mandatory and retains it on the Gantt', async ({ page, request, baseURL }) => {
@@ -38,6 +38,24 @@ test.describe('WBS-linked schedule activity', () => {
       title: 'Other-project package',
       plannedValue: 5_000,
     });
+    const employee = await post<{ id: string }>(request, '/hr/employees', {
+      firstName: 'Maya', lastName: `Planner ${run}`, role: 'Site Engineer', department: 'Projects', joinedDate: '2026-01-01',
+    });
+    const asset = await post<{ id: string }>(request, '/assets', {
+      name: `Fluke tester ${run}`, serialNumber: `FL-${run}`, category: 'Test equipment', purchaseDate: '2026-01-01', purchaseCost: 2500,
+    });
+
+    const spoofed = await request.post(`${API}/projects/schedules`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: {
+        projectId: project.id,
+        tasks: [{
+          wbsNodeId: workPackage.id, name: 'Spoofed resource', plannedStart: '2026-09-20', plannedEnd: '2026-09-22', durationWorkingDays: 3,
+          requirements: [{ resource: { resourceType: 'employee', canonicalResourceId: '00000000-0000-4000-8000-000000000999' }, quantity: 1, unit: 'persons' }],
+        }],
+      },
+    });
+    expect(spoofed.status()).toBe(400);
 
     await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
     const form = page.getByTestId('start-schedule-form');
@@ -46,24 +64,38 @@ test.describe('WBS-linked schedule activity', () => {
     const dates = form.locator('input[type="date"]');
     await dates.nth(0).fill('2026-09-20');
     await dates.nth(1).fill('2026-09-22');
+    await form.getByLabel('Working-day duration').fill('3');
 
     await form.getByRole('button', { name: 'Create' }).click();
-    await expect(page.locator('[role="alert"]').filter({ hasText: 'WBS work package' })).toContainText('WBS work package');
+    await expect(page.locator('[role="alert"]').filter({ hasText: 'WBS package' })).toContainText('WBS package');
 
     const selector = form.getByLabel('WBS work package');
     await expect(selector.locator('option')).toHaveCount(2);
     expect((await selector.locator('option').allTextContents()).join(' ')).not.toContain('Other-project package');
     await selector.selectOption(workPackage.id);
+    await form.getByRole('button', { name: 'Add resource' }).click();
+    await form.getByRole('button', { name: 'Add resource' }).click();
+    await form.getByLabel('Resource 1', { exact: true }).selectOption(`employee:${employee.id}`);
+    await form.getByLabel('Resource quantity 1').fill('2');
+    await form.getByLabel('Resource 2', { exact: true }).selectOption(`asset:${asset.id}`);
+    await form.getByLabel('Resource quantity 2').fill('1');
     await form.getByRole('button', { name: 'Create' }).click();
 
     await expect(page.getByText(`Install CCTV devices ${run}`)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('small').filter({ hasText: '1.1 · CCTV installation' })).toBeVisible();
+    await expect(page.locator('small').filter({ hasText: `2 persons · Maya Planner ${run}` })).toBeVisible();
+    await expect(page.locator('small').filter({ hasText: `1 units · Fluke tester ${run}` })).toBeVisible();
 
     const schedules = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
     expect(schedules.ok(), await schedules.text()).toBe(true);
-    const saved = ((await schedules.json()) as Array<{ projectId: string; tasks: Array<{ wbsNodeId: string }> }>).find(
+    const saved = ((await schedules.json()) as Array<{ projectId: string; tasks: Array<{ wbsNodeId: string; durationWorkingDays: number; requirements: Array<{ resource: { resourceType: string; canonicalResourceId: string }; quantity: number; unit: string }> }> }>).find(
       (schedule) => schedule.projectId === project.id,
     );
     expect(saved?.tasks[0].wbsNodeId).toBe(workPackage.id);
+    expect(saved?.tasks[0].durationWorkingDays).toBe(3);
+    expect(saved?.tasks[0].requirements).toEqual(expect.arrayContaining([
+      expect.objectContaining({ resource: { resourceType: 'employee', canonicalResourceId: employee.id }, quantity: 2, unit: 'persons' }),
+      expect.objectContaining({ resource: { resourceType: 'asset', canonicalResourceId: asset.id }, quantity: 1, unit: 'units' }),
+    ]));
   });
 });

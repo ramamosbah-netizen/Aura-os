@@ -75,7 +75,7 @@ export class OpportunityService {
     if (input.actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.opportunity.create', orgPath };
       this.access.assert(input.actorId, target);
     }
 
@@ -134,7 +134,7 @@ export class OpportunityService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
       if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.opportunity.update', orgPath };
       this.access.assert(actorId, target);
     }
 
@@ -718,7 +718,7 @@ export class OpportunityService {
     if (input.actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
       if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.opportunity.update', orgPath };
       this.access.assert(input.actorId, target);
     }
 

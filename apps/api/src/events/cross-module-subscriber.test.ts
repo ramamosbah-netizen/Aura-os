@@ -230,6 +230,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
     mockVariations, // VariationService
     tenant,
     noop, // PurchaseOrderService
+    { receivedQuantityForPo: async () => null } as any, // GoodsReceiptService
     mockPurchaseRequests,
     tenders,
     { restampFromAward: async () => 0 } as any, // EstimateSourcingService (R5)
@@ -915,8 +916,8 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
       companyId: null,
       actorId: null,
       aggregateType: 'inventory.stock',
-      aggregateId: 'move-dup-1',
-      payload: { boqItemId: 'BOQ-MOVE-1', projectId: 'project-1', direction: 'out', quantity: 9, unit: 'nr', code: 'CAB-01' },
+      aggregateId: 'stock-item-1',
+      payload: { movementId: 'move-dup-1', boqItemId: 'BOQ-MOVE-1', projectId: 'project-1', direction: 'out', quantity: 9, unit: 'nr', code: 'CAB-01' },
     });
 
     await h.bus.publish(movement());

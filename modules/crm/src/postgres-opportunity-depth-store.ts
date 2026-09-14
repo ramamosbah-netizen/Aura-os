@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+import type { TxHandle } from '@aura/core';
 import type {
   Id, Commitment, CommitmentDirection, CommitmentStatus, InfluenceLevel, Sentiment,
   OpportunityDealMember, OpportunityStakeholder, StakeholderRole, DealTeamRole,
@@ -106,7 +107,14 @@ export class PostgresOpportunityDepthStore implements OpportunityDepthStore {
   }
 
   async saveDealMember(m: OpportunityDealMember): Promise<void> {
-    await this.pool.query(
+    await this.saveDealMemberWith(this.pool, m);
+  }
+  async saveDealMemberWithClient(tx: TxHandle | null, m: OpportunityDealMember): Promise<void> {
+    if (tx === null) return this.saveDealMember(m);
+    await this.saveDealMemberWith(tx as PoolClient, m);
+  }
+  private async saveDealMemberWith(executor: Pool | PoolClient, m: OpportunityDealMember): Promise<void> {
+    await executor.query(
       `INSERT INTO public.aura_crm_opportunity_deal_team (${T_COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (id) DO UPDATE SET user_name=EXCLUDED.user_name, role=EXCLUDED.role,

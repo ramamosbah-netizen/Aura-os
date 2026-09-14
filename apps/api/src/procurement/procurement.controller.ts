@@ -29,7 +29,6 @@ class CreatePurchaseOrderDto {
   @IsOptional() @IsNumber() orderedQuantity?: number | null;
   @IsOptional() @IsString() unit?: string | null;
   @IsOptional() @IsString() discipline?: Discipline;
-  @IsOptional() @IsString() status?: PurchaseOrderStatus;
   @IsOptional() @IsNumber() value?: number;
 }
 
@@ -109,7 +108,6 @@ export class ProcurementController {
       orderedQuantity: dto.orderedQuantity ?? null,
       unit: dto.unit ?? null,
       discipline: dto.discipline,
-      status: dto.status,
       value: dto.value,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
@@ -175,7 +173,11 @@ export class ProcurementController {
     if (!dto?.status) throw new BadRequestException('status is required');
     const found = await this.pos.get(id);
     if (!found) throw new NotFoundException(`purchase order ${id} not found`);
-    return this.pos.changeStatus(id, dto.status);
+    try {
+      return await this.pos.changeStatus(id, dto.status);
+    } catch (error) {
+      throw new BadRequestException((error as Error).message);
+    }
   }
 
   @Permissions('procurement.po.submit')

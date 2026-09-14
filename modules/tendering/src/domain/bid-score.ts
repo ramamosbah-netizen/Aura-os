@@ -19,6 +19,12 @@ export interface BidScore {
   totalScore: number;
   recommendation: BidRecommendation;
   notes: string | null;
+  /** Previous locked decision replaced by this governed amendment. */
+  supersedesId: Id | null;
+  amendmentReason: string | null;
+  /** Non-null only after a newer governed decision supersedes this record. */
+  supersededAt: string | null;
+  supersededBy: Id | null;
   decidedBy: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -31,6 +37,8 @@ export interface NewBidScore {
   tenderTitle?: string | null;
   criteria: BidCriterion[];
   notes?: string | null;
+  supersedesId?: Id | null;
+  amendmentReason?: string | null;
   decidedBy?: Id | null;
   createdBy?: Id | null;
 }
@@ -52,6 +60,10 @@ export function makeBidScore(input: NewBidScore): BidScore {
     totalScore,
     recommendation: recommendationFor(totalScore),
     notes: input.notes?.trim() || null,
+    supersedesId: input.supersedesId ?? null,
+    amendmentReason: input.amendmentReason?.trim() || null,
+    supersededAt: null,
+    supersededBy: null,
     decidedBy: input.decidedBy ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
@@ -60,4 +72,5 @@ export function makeBidScore(input: NewBidScore): BidScore {
 
 export const BID_SCORE_EVENT = {
   scored: 'tendering.bid_score.created',
+  amended: 'tendering.bid_score.amended',
 } as const;

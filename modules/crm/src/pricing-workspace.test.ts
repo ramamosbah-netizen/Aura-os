@@ -60,6 +60,41 @@ describe('domain — the commercial decision is cost-in, price-out', () => {
     expect(frozen.status).toBe('frozen');
     expect(() => applyPricingPolicy(frozen, { method: 'markup', percent: 5 }, null)).toThrow(/only a draft/i);
   });
+
+  it('projects the priced technical items into the quotation without losing quantity, unit, source or total', () => {
+    const draft = openCommercialPricing({
+      tenantId: 't1', name: 'CCTV offer', opportunityId: 'o1', packageId: 'pk1',
+      estimateRevisionId: 'e1', baselineCost: 200,
+      costLines: [
+        {
+          description: 'IP camera', quantity: 2, unit: 'no', sourceItemId: 'camera-line',
+          materialUnitCost: 50, labour: { hoursPerUnit: 0, hourlyRate: 0, crewSize: 1 },
+          equipmentUnitCost: 0, consumablesUnitCost: 0, subcontractUnitCost: 0,
+          wastagePercent: 0, overheadPercent: 0, riskPercent: 0, warrantyPercent: 0,
+          contingencyPercent: 0, targetMarginPercent: 0,
+        },
+        {
+          description: 'Network video recorder', quantity: 1, unit: 'no', sourceItemId: 'nvr-line',
+          materialUnitCost: 100, labour: { hoursPerUnit: 0, hourlyRate: 0, crewSize: 1 },
+          equipmentUnitCost: 0, consumablesUnitCost: 0, subcontractUnitCost: 0,
+          wastagePercent: 0, overheadPercent: 0, riskPercent: 0, warrantyPercent: 0,
+          contingencyPercent: 0, targetMarginPercent: 0,
+        },
+      ],
+    });
+    const frozen = freezeSheet(
+      applyPricingPolicy(draft, { method: 'markup', percent: 25 }, { kind: 'amount', value: 10 }),
+      'commercial-manager',
+    );
+    const lines = quotationLinesFromSheet(frozen);
+
+    expect(lines).toMatchObject([
+      { description: 'IP camera', quantity: 2, unit: 'no', sourceItemId: 'camera-line' },
+      { description: 'Network video recorder', quantity: 1, unit: 'no', sourceItemId: 'nvr-line' },
+    ]);
+    expect(Math.round(lines.reduce((sum, line) => sum + line.quantity * line.unitPrice, 0) * 100) / 100)
+      .toBe(frozen.commercial!.figures!.sellingPrice);
+  });
 });
 
 describe('service — the pricing lifecycle', () => {

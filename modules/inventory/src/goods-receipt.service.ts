@@ -88,4 +88,8 @@ export class GoodsReceiptService implements OnModuleInit {
   listPaged(filter: GoodsReceiptFilter, page: import('@aura/shared').PageParams) {
     return this.store.listPaged(filter, page);
   }
+
+  receivedQuantityForPo(tenantId: Id, poId: Id): Promise<number | null> {
+    return this.store.receivedQuantityForPo(tenantId, poId);
+  }
 }

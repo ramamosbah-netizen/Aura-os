@@ -23,6 +23,7 @@ export class InMemoryOpportunityDepthStore implements OpportunityDepthStore {
   async deleteStakeholder(id: Id): Promise<void> { this.stakeholders.delete(id); }
 
   async saveDealMember(m: OpportunityDealMember): Promise<void> { this.dealTeam.set(m.id, { ...m }); }
+  async saveDealMemberWithClient(_tx: unknown, m: OpportunityDealMember): Promise<void> { await this.saveDealMember(m); }
   async getDealMember(id: Id): Promise<OpportunityDealMember | null> {
     const m = this.dealTeam.get(id); return m ? { ...m } : null;
   }

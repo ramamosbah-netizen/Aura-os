@@ -1,6 +1,8 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Type } from 'class-transformer';
+import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { DmsService, Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import {
   parsePageParams, assessLeadQualification, contextCompleteness,
   ELV_SYSTEMS, ELV_SECTORS, PROJECT_STAGES,
@@ -64,6 +66,14 @@ class AssessLeadDto {
   @IsOptional() @IsString() notes?: string;
 }
 
+class PreSalesAssignmentDto {
+  @IsString() assigneeId!: string;
+  @IsString() reviewerId!: string;
+  @IsString() dueDate!: string;
+  @IsString() inputRevision!: string;
+  @IsArray() @IsString({ each: true }) deliverables!: string[];
+}
+
 class ConvertLeadDto {
   @IsOptional() @IsString() accountId?: string;
   @IsOptional() @IsBoolean() createNewAccount?: boolean;
@@ -75,6 +85,7 @@ class ConvertLeadDto {
   @IsOptional() @IsBoolean() requiresTender?: boolean;
   @IsOptional() @IsString() closeDate?: string;
   @IsOptional() @IsString() ownerId?: string;
+  @IsOptional() @ValidateNested() @Type(() => PreSalesAssignmentDto) preSalesAssignment?: PreSalesAssignmentDto;
 }
 
 @Controller('crm/leads')
@@ -83,7 +94,13 @@ export class CrmLeadsController {
     private readonly leads: LeadService,
     private readonly conversion: LeadConversionService,
     private readonly tenant: TenantContext,
+    private readonly dms: DmsService,
   ) {}
+
+  private documentActor() {
+    const ctx = this.tenant.get();
+    return { userId: ctx.actorId ?? 'anonymous', tenantId: ctx.tenantId, companyId: ctx.companyId ?? null };
+  }
 
   @Post()
   create(@Body() dto: CreateLeadDto): Promise<Lead> {
@@ -111,6 +128,11 @@ export class CrmLeadsController {
       estimatedValue: dto.estimatedValue,
       projectStage: dto.projectStage,
       expectedTimeline: dto.expectedTimeline,
+      // A salesperson who captures an enquiry owns it immediately. Explicit reassignment remains
+      // behind PATCH :id/assign; this simply prevents newly-created work from starting unowned.
+      assignedTo: ctx.actorId,
+      assignedAt: ctx.actorId ? new Date().toISOString() : null,
+      acceptedAt: ctx.actorId ? new Date().toISOString() : null,
       actorId: ctx.actorId,
     });
   }
@@ -190,6 +212,62 @@ export class CrmLeadsController {
     return this.leads.qualificationDecisions(id);
   }
 
+  /** Client-issued Sales intake files remain canonically attached to the enquiry Lead. */
+  @Get(':id/evidence')
+  @Permissions('crm.lead.read')
+  async listEvidence(@Param('id', ParseUuidOr404Pipe) id: string) {
+    const lead = await this.leads.get(id);
+    if (!lead) throw new NotFoundException(`Lead ${id} not found`);
+    return this.dms.listFor({ aggregateType: 'crm.lead', aggregateId: lead.id, limit: 200 }, this.documentActor());
+  }
+
+  @Post(':id/evidence')
+  @Permissions('crm.lead.update')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024, files: 1 } }))
+  async uploadEvidence(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() body: { category?: string; title?: string },
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    const lead = await this.leads.get(id);
+    if (!lead) throw new NotFoundException(`Lead ${id} not found`);
+    const categories = ['client_enquiry', 'drawing', 'client_specification', 'client_requirement', 'authority_requirement', 'site_information', 'correspondence'];
+    if (!body.category || !categories.includes(body.category)) throw new BadRequestException('choose a valid enquiry document category');
+    if (!body.title?.trim() || body.title.length > 240) throw new BadRequestException('a document title of up to 240 characters is required');
+    if (!file?.buffer.length) throw new BadRequestException('choose a file to upload');
+    const actorId = this.tenant.get().actorId;
+    if (!actorId) throw new BadRequestException('authenticated Sales owner is required');
+    return this.dms.createDocument({
+      tenantId: lead.tenantId, companyId: lead.companyId, kind: body.category, title: body.title.trim(),
+      aggregateType: 'crm.lead', aggregateId: lead.id, createdBy: actorId,
+    }, {
+      fileName: file.originalname.split(/[\\/]/).pop() || 'enquiry-document',
+      contentType: file.mimetype || 'application/octet-stream', data: file.buffer,
+    });
+  }
+
+  @Post(':id/evidence/:documentId/versions')
+  @Permissions('crm.lead.update')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024, files: 1 } }))
+  async addEvidenceVersion(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('documentId', ParseUuidOr404Pipe) documentId: string,
+    @Body() body: { note?: string },
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    const lead = await this.leads.get(id);
+    if (!lead) throw new NotFoundException(`Lead ${id} not found`);
+    if (!file?.buffer.length) throw new BadRequestException('choose a file for the new revision');
+    const resolved = await this.dms.getFor(documentId, this.documentActor());
+    if (resolved.document.aggregateType !== 'crm.lead' || resolved.document.aggregateId !== lead.id) {
+      throw new BadRequestException('enquiry document must belong to this lead');
+    }
+    return this.dms.addVersion(documentId, {
+      fileName: file.originalname.split(/[\\/]/).pop() || 'enquiry-document',
+      contentType: file.mimetype || 'application/octet-stream', data: file.buffer,
+    }, this.documentActor(), body.note);
+  }
+
   /** Dry run — which Account/Contact would convert link vs. create (possible-duplicate check). */
   @Get(':id/convert-preview')
   convertPreview(@Param('id', ParseUuidOr404Pipe) id: string): Promise<ConvertPreview> {
@@ -200,11 +278,12 @@ export class CrmLeadsController {
   @Post(':id/convert')
   convert(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: ConvertLeadDto): Promise<ConvertLeadResult> {
     const ctx = this.tenant.get();
-    const { title, value, stage, requiresTender, closeDate, ownerId, ...rest } = dto ?? {};
+    const { title, value, stage, requiresTender, closeDate, ownerId, preSalesAssignment, ...rest } = dto ?? {};
     return this.conversion.convert(id, {
       ...rest,
       actorId: ctx.actorId,
       opportunity: { title, value, stage: stage as OpportunityStage | undefined, requiresTender, closeDate, ownerId },
+      preSalesAssignment,
     });
   }
 

@@ -1,0 +1,161 @@
+{
+  "date": "2026-09-14",
+  "timezone": "Asia/Dubai",
+  "sourceLog": ".aura-j2-j6-auth.log",
+  "authOn": true,
+  "employeeAcceptance": false,
+  "observations": {
+    "J6_HANDOVER": {
+      "projectId": "4234917c-6023-487b-8225-e1e04ee251ef",
+      "accepted": "accepted",
+      "dossierIssues": 1,
+      "transmittal": {
+        "id": "6e467c33-c8e4-49c7-ba05-f834654e99d1",
+        "code": "TR-AUD-HO-1",
+        "status": "draft",
+        "recipient": null,
+        "sentAt": null,
+        "receivedAt": null,
+        "acknowledgedAt": null,
+        "acknowledgedBy": null
+      },
+      "amcProjectId": null,
+      "amcClientName": "Audit CCTV job",
+      "amcScope": "Warranty & AMC — Audit CCTV job (from handover 2c70b82b)",
+      "closeout": {
+        "ready": false,
+        "checks": [
+          {
+            "id": "quality-ncrs",
+            "domain": "quality",
+            "label": "Non-conformances resolved",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef/workspace/quality"
+          },
+          {
+            "id": "quality-snags",
+            "domain": "quality",
+            "label": "Snags cleared",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef/workspace/quality"
+          },
+          {
+            "id": "commissioning-systems",
+            "domain": "commissioning",
+            "label": "Systems commissioned",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef/workspace/testing"
+          },
+          {
+            "id": "commissioning-punch",
+            "domain": "commissioning",
+            "label": "Punch list closed",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef/workspace/testing"
+          },
+          {
+            "id": "documents-approvals",
+            "domain": "documents",
+            "label": "Controlled documents approved",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef/workspace/documents"
+          },
+          {
+            "id": "documents-asbuilts",
+            "domain": "documents",
+            "label": "As-builts approved",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef/workspace/documents"
+          },
+          {
+            "id": "commercial-change",
+            "domain": "commercial",
+            "label": "Change decided",
+            "state": "pass",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef?tab=variations"
+          },
+          {
+            "id": "handover-checklist",
+            "domain": "checklist",
+            "label": "Handover checklist complete",
+            "state": "blocked",
+            "detail": "No closeout checklist has been started.",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef?tab=closeout"
+          }
+        ],
+        "blocked": [
+          {
+            "id": "handover-checklist",
+            "domain": "checklist",
+            "label": "Handover checklist complete",
+            "state": "blocked",
+            "detail": "No closeout checklist has been started.",
+            "href": "/project/4234917c-6023-487b-8225-e1e04ee251ef?tab=closeout"
+          }
+        ],
+        "unknown": []
+      }
+    },
+    "J5_BILLING_RECEIPT": {
+      "localReceiptStatus": "paid",
+      "amountReceived": 1050,
+      "quantityPosition": {
+        "boqItemId": "efbf67fe-90b9-4608-8edf-2ceda029acb5",
+        "unit": "no",
+        "boq": 0,
+        "sold": null,
+        "legacyBoq": 0,
+        "ordered": 0,
+        "received": 0,
+        "issued": 0,
+        "installed": 10,
+        "approved": 0,
+        "invoiced": 10,
+        "certified": 10,
+        "billed": null,
+        "legacyInvoiced": 0,
+        "remainingToOrder": 0,
+        "inTransit": 0,
+        "onSite": 0,
+        "wastage": -10,
+        "pendingApproval": 10,
+        "pendingBilling": -10,
+        "progressPct": 0
+      },
+      "bankSettlementTested": false
+    },
+    "J6_CLOSEOUT": {
+      "closeoutStatus": "completed",
+      "projectStatus": "planned",
+      "dlpEndDate": "2027-09-14",
+      "checklistAcknowledgementsOnly": true
+    },
+    "J2_HANDOVER": {
+      "authOn": true,
+      "fixtureAdministrators": true,
+      "tenderId": "3c2e117e-d7da-4829-a690-5d013ec021dc",
+      "contractId": "423ffd1a-d073-43c4-84b3-96f2c3256b17",
+      "projectId": "4234917c-6023-487b-8225-e1e04ee251ef",
+      "frozenQuantity": 10,
+      "mapped": true
+    },
+    "J5_CERTIFICATION": {
+      "certified": 10,
+      "installed": 10,
+      "invoiceStatus": "draft",
+      "invoiceProjectId": null,
+      "invoiceLines": [
+        {
+          "description": "Interim Payment Certificate AUD-IPC-1 — work certified to date",
+          "quantity": 1,
+          "unitPrice": 1000,
+          "vatRate": 5,
+          "lineNet": 1000,
+          "lineVat": 50,
+          "lineId": "d1dfbd0f-db73-45aa-96ed-d01696f69d8e:line:1"
+        }
+      ],
+      "cashSettlementTested": false
+    }
+  }
+}

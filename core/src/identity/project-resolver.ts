@@ -39,12 +39,55 @@ import type { Id } from '@aura/shared';
  * anyone it was not asked to.
  */
 export type ProjectOf = (id: Id) => Promise<Id | null>;
+export interface ProjectSubjectRequest {
+  method?: string;
+  params?: Record<string, unknown>;
+  body?: Record<string, unknown>;
+}
 
 @Injectable()
 export class ProjectResolverRegistry {
   private readonly logger = new Logger('ProjectResolver');
   /** `module:entity` → the lookup that answers which project a record belongs to. */
   private readonly resolvers = new Map<string, ProjectOf>();
+  private projectExists: ((tenantId: Id, projectId: Id) => Promise<boolean>) | null = null;
+  private readonly subjects = new Map<string, (req: ProjectSubjectRequest) => Promise<Id | null>>();
+
+  /** A child collection may have a different canonical parent than its controller's noun. */
+  registerSubject(controller: string, prefix: string, resolve: (req: ProjectSubjectRequest) => Promise<Id | null>): void {
+    const key = `${controller}/${prefix}`;
+    if (this.subjects.has(key)) throw new Error(`Project subject ${key} already registered`);
+    this.subjects.set(key, resolve);
+  }
+
+  registeredSubjects(): string[] { return [...this.subjects.keys()].sort(); }
+
+  /** Undefined means no special subject; null means handled but no canonical ownership. */
+  async subjectProject(controller: string, handler: string, req: ProjectSubjectRequest): Promise<Id | null | undefined> {
+    if ((req.method === 'GET' || req.method === 'HEAD') && !req.params?.id) return undefined;
+    const prefix = handler.split('/')[0];
+    const resolve = this.subjects.get(`${controller}/${prefix}`);
+    if (!resolve) return undefined;
+    try { return await resolve(req); }
+    catch {
+      this.logger.warn(`Project subject ${controller}/${prefix} unavailable — org-scoped authorization only`);
+      return null;
+    }
+  }
+
+  /** Projects owns this lookup; consumers never read another module's tables. */
+  registerProjectLookup(lookup: (tenantId: Id, projectId: Id) => Promise<boolean>): void {
+    if (this.projectExists) throw new Error('Project existence lookup already registered');
+    this.projectExists = lookup;
+  }
+
+  /** Creates must name a real project in the authenticated tenant, even for org grant holders. */
+  async requireProject(tenantId: Id, projectId: Id): Promise<void> {
+    if (!this.projectExists) throw new Error('Project existence lookup is unavailable');
+    if (!projectId || !(await this.projectExists(tenantId, projectId))) {
+      throw new Error(`project ${projectId} not found`);
+    }
+  }
 
   /**
    * Register the lookup for one aggregate. Called by each module at boot — the module owns its

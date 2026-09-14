@@ -11,6 +11,10 @@ export class InMemoryActivityStore implements ActivityStore {
     this.activities.set(activity.id, { ...activity });
   }
 
+  async saveWithClient(_tx: unknown, activity: Activity): Promise<void> {
+    await this.save(activity);
+  }
+
   async get(id: Id): Promise<Activity | null> {
     const a = this.activities.get(id);
     return a ? { ...a } : null;

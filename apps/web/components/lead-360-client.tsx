@@ -1,11 +1,12 @@
 'use client';
 
-import { type CSSProperties, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { LEAD_QUALIFICATION_DIMENSIONS, LEAD_QUALIFICATION_LABELS, elvSystemLabel, type ElvSystem, type AssessmentInput } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import Timeline from './timeline';
+import DocumentFileLink from './document-file-link';
 import { requestQualifyAssist } from '@/lib/qualify-assist';
 import { buildOutreach, toE164Digits, mailtoHref, whatsappHref, requestOutreachDraft } from '@/lib/lead-outreach';
 import {
@@ -77,6 +78,10 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
   // Context tabs (lazy): DMS documents + the conversion-readiness preview.
   const [docs, setDocs] = useState<DocRow[] | null>(null);
+  const [docCategory, setDocCategory] = useState('client_enquiry');
+  const [docTitle, setDocTitle] = useState('');
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const docInput = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<ConvertPreview | null>(null);
   // AURA Qualification Assist — read-only AI advice (cannot mutate the lead).
   const [aiBusy, setAiBusy] = useState(false);
@@ -103,14 +108,47 @@ export default function Lead360Client({ lead, qualification, accounts }: {
   const a = qualification?.assessment;
   const assessed = !!a && a.coverage.rated > 0;
 
-  // Documents tab: read this lead's linked documents from the DMS (read-only, no store in CRM).
+  // Documents tab: Sales owns the source files here. Conversion exposes these exact records and
+  // versions to the persisted Opportunity study team; nothing is uploaded twice.
   useEffect(() => {
     if (tab !== 'documents' || docs !== null) return;
-    void fetch(`/api/documents?aggregateType=crm.lead&aggregateId=${lead.id}`, { cache: 'no-store' })
+    void fetch(`/api/crm/leads/${lead.id}/evidence`, { cache: 'no-store' })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('dms'))))
       .then((x: unknown) => setDocs(Array.isArray(x) ? (x as DocRow[]) : []))
       .catch(() => setDocs([]));
   }, [tab, docs, lead.id]);
+
+  const uploadDocument = async (event: React.FormEvent): Promise<void> => {
+    event.preventDefault(); setErr(null); setMsg(null);
+    if (!docFile || docFile.size > 25 * 1024 * 1024) { setErr('Choose one enquiry file up to 25 MB.'); return; }
+    if (!docTitle.trim()) { setErr('Enter a clear document title.'); return; }
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.set('category', docCategory); form.set('title', docTitle.trim()); form.set('file', docFile);
+      const response = await fetch(`/api/crm/leads/${lead.id}/evidence`, { method: 'POST', body: form });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { setErr(result.message ?? result.error ?? `Upload refused (${response.status})`); return; }
+      setDocTitle(''); setDocFile(null); if (docInput.current) docInput.current.value = '';
+      setMsg('Document saved on this enquiry. It will follow the Opportunity and Technical Study automatically after conversion.');
+      setDocs(null);
+    } catch { setErr('Enquiry documents service unavailable'); }
+    finally { setBusy(false); }
+  };
+
+  const uploadDocumentRevision = async (document: DocRow, file: File | null): Promise<void> => {
+    if (!file || busy) return;
+    if (file.size > 25 * 1024 * 1024) { setErr('Choose one revision file up to 25 MB.'); return; }
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const form = new FormData(); form.set('file', file); form.set('note', `Sales intake revision for ${document.title}`);
+      const response = await fetch(`/api/crm/leads/${lead.id}/evidence/${encodeURIComponent(document.id)}/versions`, { method: 'POST', body: form });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) { setErr(result.message ?? result.error ?? `Revision refused (${response.status})`); return; }
+      setMsg(`Revision ${result.version} saved. The Technical Study will see this same version.`); setDocs(null);
+    } catch { setErr('Enquiry documents service unavailable'); }
+    finally { setBusy(false); }
+  };
 
   // Convert tab: read the conversion-readiness preview (same resolveIdentity engine as convert).
   useEffect(() => {
@@ -232,8 +270,8 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       {!converted && lead.status !== 'disqualified' && (
         <ActionButton disabled={busy} onClick={() => void patch({ status: 'disqualified' }, 'Lead disqualified.')}>Disqualify</ActionButton>
       )}
-      {err && <span style={{ color: 'var(--bad)', fontSize: 13 }}>{err}</span>}
-      {msg && <span style={{ color: 'var(--good)', fontSize: 13 }}>{msg}</span>}
+      {err && <span role="alert" style={{ color: 'var(--bad)', fontSize: 13 }}>{err}</span>}
+      {msg && <span role="status" style={{ color: 'var(--good)', fontSize: 13 }}>{msg}</span>}
     </>
   );
 
@@ -415,7 +453,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
               <InfoRow label="Company" value={lead.companyName ?? '—'} />
               <InfoRow label="First response" value={lead.firstRespondedAt ? d(lead.firstRespondedAt) : <span style={{ color: 'var(--warn)' }}>not yet</span>} />
             </RecordCard>
-            <RecordCard title="The job (ELV context)">
+            <RecordCard title="The job (ELV / MEP context)">
               <InfoRow label="Requirement" value={lead.requirement ?? '—'} />
               <InfoRow label="Systems" value={lead.systems?.length ? <span style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>{lead.systems.map((x) => <span key={x} style={s.tag}>{elvSystemLabel(x as ElvSystem)}</span>)}</span> : '—'} />
               <InfoRow label="Sector" value={lead.sector ?? '—'} />
@@ -548,18 +586,24 @@ export default function Lead360Client({ lead, qualification, accounts }: {
       )}
 
       {tab === 'documents' && (
-        <RecordCard title="Documents">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 8 }}>
-            <p style={{ ...s.muted, maxWidth: 520 }}>Documents linked to this lead in <b style={{ color: 'var(--text)' }}>Document Control</b> (the DMS). Read-only here — upload and versions live there.</p>
-            <ActionButton href="/documents/control">Open Document Control →</ActionButton>
-          </div>
+        <RecordCard title="Enquiry documents">
+          <p style={{ ...s.muted, maxWidth: 720 }}>Upload the client enquiry, drawings, specifications and requirements once. When this Lead becomes an Opportunity, the assigned Pre-Sales engineer and technical reviewer receive these same governed files and versions automatically.</p>
+          {!converted && <form onSubmit={(event) => void uploadDocument(event)} style={s.docForm}>
+            <label style={s.docField}>Document type<select aria-label="Enquiry document type" value={docCategory} onChange={(event) => setDocCategory(event.target.value)} style={s.commInput}><option value="client_enquiry">Client enquiry / RFQ</option><option value="drawing">Client drawing</option><option value="client_specification">Client specification</option><option value="client_requirement">Client requirement</option><option value="authority_requirement">Government / authority requirement</option><option value="site_information">Site information</option><option value="correspondence">Client correspondence</option></select></label>
+            <label style={s.docField}>Clear title<input aria-label="Enquiry document title" value={docTitle} onChange={(event) => setDocTitle(event.target.value)} placeholder="CCTV specification · Rev 01" style={s.commInput} /></label>
+            <label style={s.docField}>Source file · up to 25 MB<input aria-label="Enquiry source file" ref={docInput} type="file" onChange={(event) => { const file = event.target.files?.[0] ?? null; setDocFile(file); if (file && !docTitle) setDocTitle(file.name); }} style={s.commInput} /></label>
+            <button type="submit" disabled={busy} style={s.commSend}>{busy ? 'Uploading…' : 'Upload document'}</button>
+          </form>}
           {docs === null ? (
             <p style={s.muted}>Loading documents…</p>
           ) : docs.length === 0 ? (
-            <p style={s.muted}>No documents linked to this lead yet — attach them from Document Control.</p>
+            <p style={s.muted}>No client documents are attached yet.</p>
           ) : (
             docs.map((dc) => (
-              <InfoRow key={dc.id} label={dc.title} value={<span style={s.muted}>{dc.kind?.replace(/[._]/g, ' ')}{dc.currentVersion != null ? ` · v${dc.currentVersion}` : ''}{dc.updatedAt ? ` · ${d(dc.updatedAt)}` : ''}</span>} />
+              <div key={dc.id} style={s.docRow}>
+                <span><b>{dc.title}</b><br /><small style={s.muted}>{dc.kind?.replace(/[._]/g, ' ')}{dc.currentVersion != null ? ` · v${dc.currentVersion}` : ''}{dc.updatedAt ? ` · ${d(dc.updatedAt)}` : ''}</small></span>
+                <span style={s.docActions}><DocumentFileLink documentId={dc.id} title={dc.title} />{!converted && <label style={s.revisionLink}>Add revision<input aria-label={`Upload a new revision for ${dc.title}`} type="file" disabled={busy} onChange={(event) => { void uploadDocumentRevision(dc, event.target.files?.[0] ?? null); event.currentTarget.value = ''; }} style={{ display: 'none' }} /></label>}</span>
+              </div>
             ))
           )}
         </RecordCard>
@@ -629,6 +673,11 @@ const s: Record<string, CSSProperties> = {
   commHint: { color: 'var(--muted)', fontSize: 11.5, margin: 0 },
   assignSelect: { marginLeft: 8, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '2px 6px', fontSize: 12, outline: 'none' },
   assignReason: { marginLeft: 6, width: 150, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 6, color: 'var(--text)', padding: '2px 8px', fontSize: 12, outline: 'none' },
+  docForm: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10, alignItems: 'end', margin: '14px 0', padding: 12, border: '1px solid var(--border)', borderRadius: 10, background: 'var(--panel-2, var(--panel))' },
+  docField: { display: 'flex', flexDirection: 'column', gap: 5, color: 'var(--muted)', fontSize: 11, fontWeight: 700 },
+  docRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: '1px solid var(--border)', fontSize: 13 },
+  docActions: { display: 'flex', alignItems: 'center', gap: 10 },
+  revisionLink: { color: 'var(--accent)', fontSize: 12, fontWeight: 700, cursor: 'pointer' },
 };
 
 /**

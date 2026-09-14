@@ -1,0 +1,212 @@
+[
+  {
+    "file": "modules/doccontrol/src/doccontrol.service.ts",
+    "method": "approveDocument",
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId)"
+  },
+  {
+    "file": "modules/doccontrol/src/doccontrol.service.ts",
+    "method": "createRevision",
+    "call": "this.assertDocPerm(actorId, source.tenantId, source.companyId, 'doccontrol.document.revise', source.projectId)"
+  },
+  {
+    "file": "modules/doccontrol/src/doccontrol.service.ts",
+    "method": "issueDocument",
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.issue', rev.projectId)"
+  },
+  {
+    "file": "modules/doccontrol/src/doccontrol.service.ts",
+    "method": "rejectDocument",
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId)"
+  },
+  {
+    "file": "modules/doccontrol/src/doccontrol.service.ts",
+    "method": "startReviewDocument",
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.review', rev.projectId)"
+  },
+  {
+    "file": "modules/doccontrol/src/doccontrol.service.ts",
+    "method": "submitDocument",
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.submit', rev.projectId)"
+  },
+  {
+    "file": "modules/engineering/src/engineering.service.ts",
+    "method": "closeDrawing",
+    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.close', drawing.projectId)"
+  },
+  {
+    "file": "modules/engineering/src/engineering.service.ts",
+    "method": "reviewDrawing",
+    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.review', drawing.projectId)"
+  },
+  {
+    "file": "modules/engineering/src/engineering.service.ts",
+    "method": "reviseDrawing",
+    "call": "this.assertDrawingPerm(actorId, source.tenantId, source.companyId, 'engineering.drawing.revise', source.projectId)"
+  },
+  {
+    "file": "modules/engineering/src/engineering.service.ts",
+    "method": "startReviewDrawing",
+    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.review', drawing.projectId)"
+  },
+  {
+    "file": "modules/engineering/src/engineering.service.ts",
+    "method": "submitDrawing",
+    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.submit', drawing.projectId)"
+  },
+  {
+    "file": "modules/engineering/src/engineering.service.ts",
+    "method": "transmitDrawing",
+    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.transmit', drawing.projectId)"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "closeIncident",
+    "call": "this.assertIncidentPermission(incident, actorId, 'hse.incident.close')"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "closePermit",
+    "call": "this.assertPermitPermission(found, actorId)"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "expirePermit",
+    "call": "this.assertPermitPermission(found, actorId)"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "investigateIncident",
+    "call": "this.assertIncidentPermission(incident, actorId, 'hse.incident.close')"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "rejectPermit",
+    "call": "this.assertPermitPermission(found, actorId)"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "reopenIncident",
+    "call": "this.assertIncidentPermission(incident, actorId, 'hse.incident.close')"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "reopenPermit",
+    "call": "this.assertPermitPermission(found, actorId)"
+  },
+  {
+    "file": "modules/hse/src/hse.service.ts",
+    "method": "requestPermitApproval",
+    "call": "this.assertPermitPermission(found, actorId)"
+  },
+  {
+    "file": "modules/projects/src/delay-eot.service.ts",
+    "method": "createDelay",
+    "call": "this.assertProjectAccess(input.projectId, input.tenantId, input.actorId)"
+  },
+  {
+    "file": "modules/projects/src/delay-eot.service.ts",
+    "method": "createEotClaim",
+    "call": "this.assertProjectAccess(input.projectId, input.tenantId, input.actorId)"
+  },
+  {
+    "file": "modules/projects/src/delay-eot.service.ts",
+    "method": "decideEotClaim",
+    "call": "this.assertProjectAccess(existing.projectId, existing.tenantId, decision.decidedBy)"
+  },
+  {
+    "file": "modules/projects/src/delay-eot.service.ts",
+    "method": "submitEotClaim",
+    "call": "this.assertProjectAccess(existing.projectId, existing.tenantId, actorId)"
+  },
+  {
+    "file": "modules/projects/src/project-issue.service.ts",
+    "method": "guard",
+    "call": "assertProjectWriteAllowed({ projects: this.projects, access: this.access }, { projectId, tenantId, actorId, permission })"
+  },
+  {
+    "file": "modules/projects/src/project-issue.service.ts",
+    "method": "raise",
+    "call": "this.guard(input.projectId, input.tenantId, input.actorId, 'projects.issue.create')"
+  },
+  {
+    "file": "modules/projects/src/project-issue.service.ts",
+    "method": "setStatus",
+    "call": "this.guard(existing.projectId, existing.tenantId, input.actorId, 'projects.issue.update')"
+  },
+  {
+    "file": "modules/projects/src/project-issue.service.ts",
+    "method": "update",
+    "call": "this.guard(existing.projectId, existing.tenantId, actorId, 'projects.issue.update')"
+  },
+  {
+    "file": "modules/projects/src/project-risk-materialisation.service.ts",
+    "method": "materialise",
+    "call": "assertProjectWriteAllowed({ projects: this.projects, access: this.access }, { projectId: existing.projectId, tenantId: existing.tenantId, actorId: input.actorId, permission })"
+  },
+  {
+    "file": "modules/projects/src/project-risk.service.ts",
+    "method": "guard",
+    "call": "assertProjectWriteAllowed({ projects: this.projects, access: this.access }, { projectId, tenantId, actorId, permission })"
+  },
+  {
+    "file": "modules/projects/src/project-risk.service.ts",
+    "method": "raise",
+    "call": "this.guard(input.projectId, input.tenantId, input.actorId, 'projects.risk.create')"
+  },
+  {
+    "file": "modules/projects/src/project-risk.service.ts",
+    "method": "setStatus",
+    "call": "this.guard(existing.projectId, existing.tenantId, input.actorId, 'projects.risk.update')"
+  },
+  {
+    "file": "modules/projects/src/project-risk.service.ts",
+    "method": "update",
+    "call": "this.guard(existing.projectId, existing.tenantId, actorId, 'projects.risk.update')"
+  },
+  {
+    "file": "modules/quality/src/quality.service.ts",
+    "method": "markNcrCorrected",
+    "call": "this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.correct', ncr.projectId)"
+  },
+  {
+    "file": "modules/quality/src/quality.service.ts",
+    "method": "planNcrAction",
+    "call": "this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.plan', ncr.projectId)"
+  },
+  {
+    "file": "modules/quality/src/quality.service.ts",
+    "method": "verifyNcr",
+    "call": "this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.close', ncr.projectId)"
+  },
+  {
+    "file": "modules/site/src/site.service.ts",
+    "method": "addLine",
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, permission, report.projectId)"
+  },
+  {
+    "file": "modules/site/src/site.service.ts",
+    "method": "approveDailyReport",
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId)"
+  },
+  {
+    "file": "modules/site/src/site.service.ts",
+    "method": "createDailyReport",
+    "call": "this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create', input.projectId)"
+  },
+  {
+    "file": "modules/site/src/site.service.ts",
+    "method": "rejectDailyReport",
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId)"
+  },
+  {
+    "file": "modules/site/src/site.service.ts",
+    "method": "startReviewReport",
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.review', report.projectId)"
+  },
+  {
+    "file": "modules/site/src/site.service.ts",
+    "method": "submitDailyReport",
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.submit', report.projectId)"
+  }
+]

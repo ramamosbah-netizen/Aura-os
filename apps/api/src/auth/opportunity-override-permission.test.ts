@@ -19,20 +19,20 @@ function seeded(): AccessService {
 describe('crm.opportunity.override — manual-override permission gate', () => {
   it('Sales is DENIED — crm.*.update / create / read do not cover the override action', () => {
     const a = seeded();
-    a.grant({ userId: 'u-sales', roleId: 'sales', scope });
+    a.grant({ userId: 'u-sales', roleId: 'r-sales', scope });
     expect(a.can('u-sales', target).allowed).toBe(false);
     expect(() => a.assert('u-sales', target)).toThrow();
   });
 
   it('Sales Manager is ALLOWED — explicitly granted crm.opportunity.override', () => {
     const a = seeded();
-    a.grant({ userId: 'u-mgr', roleId: 'salesManager', scope });
+    a.grant({ userId: 'u-mgr', roleId: 'r-sales-manager', scope });
     expect(a.can('u-mgr', target).allowed).toBe(true);
   });
 
   it('Admin is ALLOWED — the * wildcard', () => {
     const a = seeded();
-    a.grant({ userId: 'u-admin', roleId: 'admin', scope });
+    a.grant({ userId: 'u-admin', roleId: 'r-admin', scope });
     expect(a.can('u-admin', target).allowed).toBe(true);
   });
 

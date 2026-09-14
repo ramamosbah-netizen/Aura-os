@@ -9,10 +9,11 @@ import styles from './document-file-link.module.css';
 interface VersionMetadata { version: number; contentType: string }
 interface DocumentMetadata { document: { currentVersion: number }; versions: VersionMetadata[] }
 
-export default function DocumentFileLink({ documentId, title, label = 'Open file' }: {
+export default function DocumentFileLink({ documentId, title, label = 'Open file', version }: {
   documentId: string;
   title: string;
   label?: string;
+  version?: number;
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -31,9 +32,10 @@ export default function DocumentFileLink({ documentId, title, label = 'Open file
         return;
       }
       const metadata = await response.json() as DocumentMetadata;
-      const current = metadata.versions.find((version) => version.version === metadata.document.currentVersion);
+      const requestedVersion = version ?? metadata.document.currentVersion;
+      const current = metadata.versions.find((row) => row.version === requestedVersion);
       if (!current) {
-        setError('Current version unavailable');
+        setError(`Revision ${requestedVersion} unavailable`);
         return;
       }
       const content = `/api/documents/${encodeURIComponent(documentId)}/content?version=${current.version}`;

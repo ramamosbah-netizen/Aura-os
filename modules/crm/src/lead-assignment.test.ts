@@ -8,7 +8,8 @@ import { LeadService } from './lead.service';
 /**
  * Lead Assignment — the authorization boundary (Phase 1). Uses the REAL AccessService with the REAL
  * standard roles + grants, so the capability split is proven against the ACTUAL catalog: r-sales
- * (crm.lead.*) can self-claim but NOT reassign-others, while r-sales-manager (crm.*) can. The stub
+ * (crm.lead.* + explicit receive capability) can self-claim but NOT reassign-others, while
+ * r-sales-manager (crm.*) can. Read-only CRM visibility never makes Finance assignable. The stub
  * supplies only grant/user data; the self-vs-others decision stays inside LeadService.
  */
 function harness() {

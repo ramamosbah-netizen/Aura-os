@@ -1,6 +1,6 @@
 import { fetchJson } from '@/lib/api';
 import RecordChrome from '@/components/record-chrome';
-import Quotation360Client, { type Quotation, type QuotationPricingView } from '@/components/quotation-360-client';
+import Quotation360Client, { type Quotation, type QuotationActionAccess, type QuotationPricingView } from '@/components/quotation-360-client';
 import Sales360Journey from '@/components/sales-360-journey';
 import DataStateNotice from '@/components/ui/data-state';
 
@@ -11,9 +11,10 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
   const quotationResult = await fetchJson<Quotation>(`/api/crm/quotations/${id}`);
   if (!quotationResult.ok) return <div style={{ maxWidth: 960, margin: '0 auto', padding: '40px 28px' }}><DataStateNotice error={quotationResult.error} subject="quotation" /></div>;
   const q = quotationResult.data;
-  const [revisionsResult, pricingResult] = await Promise.all([
+  const [revisionsResult, pricingResult, actionAccessResult] = await Promise.all([
     fetchJson<Quotation[]>(`/api/crm/quotations/${id}/revisions`),
     fetchJson<QuotationPricingView>(`/api/crm/quotations/${id}/pricing`),
+    fetchJson<QuotationActionAccess>(`/api/crm/quotations/${id}/action-access`),
   ]);
 
   return (
@@ -29,6 +30,10 @@ export default async function QuotationDetailPage({ params }: { params: Promise<
         pricingView={pricingResult.ok ? pricingResult.data : null}
         revisionsError={revisionsResult.ok ? null : revisionsResult.error}
         pricingError={pricingResult.ok ? null : pricingResult.error}
+        actionAccess={actionAccessResult.ok ? actionAccessResult.data : null}
+        canAccessInternalPricing={actionAccessResult.ok
+          ? actionAccessResult.data.internalPricing
+          : pricingResult.ok || pricingResult.error.kind !== 'forbidden'}
       />
     </div>
   );

@@ -6,6 +6,9 @@ import { computeBidScore, recommendationFor, DEFAULT_BID_CRITERIA, type BidCrite
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import TenderAwardDialog from './tender-award-dialog';
 import Tender360Context from './tender-360-context';
+import BidCriterionHelp from './bid-criterion-help';
+import TechnicalStudyWorkspace from './technical-study-workspace';
+import TenderTakeoffPanel from './tender-takeoff-panel';
 
 interface Tender {
   id: string;
@@ -38,11 +41,15 @@ const SOURCE_LABELS: Record<string, string> = { invitation: 'Invitation to bid',
 interface BOQ {
   id: string;
   tenderId: string;
+  sourceBasisRevisionId: string | null;
+  sourceRevisionRef: string | null;
+  projectedAt: string | null;
 }
 
 interface BOQItem {
   id: string;
   boqId: string;
+  sourceBasisLineId: string | null;
   itemCode: string;
   description: string;
   unit: string;
@@ -52,11 +59,25 @@ interface BOQItem {
   ifcGuid: string | null;
 }
 
+interface SubmissionReadiness {
+  ready: boolean;
+  technicalStudyApproved: boolean;
+  technicalStudyId: string | null;
+  technicalStudyRevision: number | null;
+  quantityTakeoffProjected: boolean;
+  quantityTakeoffRevisionId: string | null;
+  commercialOfferApproved: boolean;
+  commercialQuotationId: string | null;
+  commercialQuoteNumber: string | null;
+  commercialQuotationRevision: number | null;
+  gaps: string[];
+}
+
 function money(n: number): string {
   return typeof n === 'number' ? 'AED ' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 }
 
-export default function TenderDetail({ tender }: { tender: Tender }) {
+export default function TenderDetail({ tender, workspace = 'dashboard' }: { tender: Tender; workspace?: 'dashboard' | 'boq' }) {
   const router = useRouter();
   
   // Component State
@@ -65,6 +86,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [submissionReadiness, setSubmissionReadiness] = useState<SubmissionReadiness | null>(null);
 
   // Forms State
   const [addingItem, setAddingItem] = useState(false);
@@ -84,7 +106,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
   const [editItemRate, setEditItemRate] = useState('');
   const [editItemIfc, setEditItemIfc] = useState('');
 
-  // AI Import State
+  // BOQ import state
   const [showImportModal, setShowImportModal] = useState(false);
   const [rawText, setRawText] = useState('');
   const [importing, setImporting] = useState(false);
@@ -95,8 +117,16 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
 
   // Load BOQ on mount
   useEffect(() => {
-    fetchBOQ();
-  }, [tender.id]);
+    if (workspace === 'boq') void fetchBOQ();
+  }, [tender.id, workspace]);
+
+  useEffect(() => {
+    if (workspace !== 'dashboard') return;
+    void fetch(`/api/tendering/tenders/${tender.id}/submission-readiness`, { cache: 'no-store' })
+      .then(async (res) => res.ok ? res.json() as Promise<SubmissionReadiness> : null)
+      .then(setSubmissionReadiness)
+      .catch(() => setSubmissionReadiness(null));
+  }, [tender.id, workspace]);
 
   async function fetchBOQ() {
     setLoading(true);
@@ -128,7 +158,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.error || 'Failed to update status');
+        throw new Error(d.message || d.error || 'Failed to update status');
       }
       router.refresh();
       // Reload tender value in local view
@@ -243,7 +273,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
     }
   }
 
-  // Simulate AI OCR / PDF parsing
+  // Parse pasted CSV/tabular rows. This path performs no OCR or AI extraction.
   async function handleAIImport() {
     if (!boq) return;
     setImporting(true);
@@ -342,7 +372,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
   return (
     <div style={s.container}>
       {/* HEADER CARD */}
-      <section style={s.panelHeader}>
+      <section id="status" style={s.panelHeader}>
         <div style={s.headerMain}>
           <div>
             <span style={s.refTag}>{tender.reference || 'REF-PENDING'}</span>
@@ -355,8 +385,8 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
           </div>
           <div style={s.headerStats}>
             <div style={s.statCard}>
-              <span style={s.statLabel}>Total Cost Estimate</span>
-              <span style={s.statVal}>{money(tender.value)}</span>
+              <span style={s.statLabel}>{workspace === 'boq' ? 'Total Cost Estimate' : 'Tender dashboard'}</span>
+              <span style={{ ...s.statVal, fontSize: workspace === 'boq' ? 24 : 16 }}>{workspace === 'boq' ? money(tender.value) : 'Scope & qualification'}</span>
             </div>
           </div>
         </div>
@@ -387,40 +417,85 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
               Mark Lost
             </button>
             <button
-              disabled={tender.status === 'submitted' || statusBusy}
+              disabled={tender.status === 'submitted' || statusBusy || submissionReadiness?.ready === false}
               onClick={() => updateStatus('submitted')}
               style={s.btnSecondary}
+              title={submissionReadiness?.ready === false ? submissionReadiness.gaps.join(' ') : 'Record the approved bid submission'}
             >
               Submit Tender
             </button>
+            {submissionReadiness?.ready && (
+              <a
+                href={`/api/tendering/tenders/${tender.id}/technical-proposal.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ ...s.btnSecondary, textDecoration: 'none' }}
+                title={`Technical Study S-${submissionReadiness.technicalStudyRevision} with ${submissionReadiness.commercialQuoteNumber} Rev ${submissionReadiness.commercialQuotationRevision}`}
+              >
+                Download Technical Proposal
+              </a>
+            )}
           </div>
         </div>
+        {workspace === 'dashboard' && submissionReadiness && tender.status !== 'submitted' && (
+          <div style={s.submissionGate} aria-label="Tender submission readiness">
+            <strong>{submissionReadiness.ready ? 'Ready for submission' : 'Before submitting'}</strong>
+            <span style={submissionReadiness.technicalStudyApproved ? s.gateDone : s.gatePending}>
+              {submissionReadiness.technicalStudyApproved ? '✓' : '1'} Technical Study approved
+            </span>
+            <span style={submissionReadiness.quantityTakeoffProjected ? s.gateDone : s.gatePending}>
+              {submissionReadiness.quantityTakeoffProjected ? '✓' : '2'} Quantity Take-Off approved and sent to Estimation
+            </span>
+            <span style={submissionReadiness.commercialOfferApproved ? s.gateDone : s.gatePending}>
+              {submissionReadiness.commercialOfferApproved ? '✓' : '3'} Commercial offer internally approved
+            </span>
+            {!submissionReadiness.technicalStudyApproved && <a href="#study" style={s.gateLink}>Open Technical Study</a>}
+            {submissionReadiness.technicalStudyApproved && !submissionReadiness.quantityTakeoffProjected && <a href={`/tendering/tenders/${tender.id}/boq`} style={s.gateLink}>Complete Quantity Take-Off</a>}
+            {submissionReadiness.quantityTakeoffProjected && !submissionReadiness.commercialOfferApproved && <a href={`/tendering/tenders/${tender.id}/pricing`} style={s.gateLink}>Open estimation &amp; offer</a>}
+            {submissionReadiness.ready && <span style={s.gateDone}>Customer technical and commercial documents are ready as separate governed outputs.</span>}
+          </div>
+        )}
       </section>
 
       {err && <div style={s.errorBar}>{err}</div>}
       {importNote && <div style={{ ...s.errorBar, borderColor: 'var(--good, #10b981)', color: 'var(--good, #10b981)' }}>{importNote}</div>}
 
-      <Tender360Context tender={tender} />
-
       {/* GO / NO-GO QUALIFICATION (T-A) — the bid/no-bid gate, before any estimating */}
-      <div id="qualification"><QualificationPanel tenderId={tender.id} /></div>
+      {workspace === 'dashboard' && <>
+        <div id="qualification"><QualificationPanel tenderId={tender.id} /></div>
+        <div id="study"><TechnicalStudyWorkspace opportunityId="" route="tender" tenderId={tender.id} /></div>
+      </>}
 
       {/* BOQ SECTION */}
-      <section id="boq" style={s.boqSection}>
+      {workspace === 'boq' && (
+        <TenderTakeoffPanel
+          tenderId={tender.id}
+          projectedBasisId={boq?.sourceBasisRevisionId ?? null}
+          onProjected={fetchBOQ}
+        />
+      )}
+      {workspace === 'boq' && <section id="boq" style={s.boqSection}>
         <div style={s.sectionHeader}>
-          <h2 style={s.sectionTitle}>Bill of Quantities (BOQ) & Pricing Breakdown</h2>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div>
+            <h2 style={s.sectionTitle}>Commercial BOQ &amp; Costing</h2>
+            <p style={{ ...s.muted, margin: '5px 0 0' }}>
+              {boq?.sourceBasisRevisionId
+                ? `Quantities locked to ${boq.sourceRevisionRef ?? 'the approved take-off'}. Build rates in Estimation; revise quantities through a new take-off revision.`
+                : 'Client BOQ files are study inputs. Complete and approve the Quantity Take-Off above before any lines can become the commercial pricing basis.'}
+            </p>
+          </div>
+          {!boq?.sourceBasisRevisionId && <div style={{ display: 'flex', gap: 10 }}>
             <button type="button" onClick={() => setShowImportModal(true)} style={s.btnAI}>
-              ✦ AI Import (OCR/Excel)
+              Import client BOQ
             </button>
             <button type="button" onClick={() => setAddingItem(!addingItem)} style={s.btnAccent}>
               {addingItem ? 'Cancel' : '+ Add Line Item'}
             </button>
-          </div>
+          </div>}
         </div>
 
         {/* Add Item form panel */}
-        {addingItem && (
+        {addingItem && !boq?.sourceBasisRevisionId && (
           <form onSubmit={handleAddItem} style={s.formPanel}>
             <h3 style={s.formTitle}>Add New Estimating Line</h3>
             <div style={s.formFields}>
@@ -488,16 +563,16 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
             <div style={s.emptyState}>
               <p style={{ margin: 0, fontWeight: 500 }}>No BOQ items exist yet.</p>
               <p style={{ margin: '4px 0 16px', color: 'var(--muted)', fontSize: 13 }}>
-                Populate the estimate manually or import a BOQ spreadsheet using AURA AI.
+                Upload any client BOQ with the study documents, then complete the governed Quantity Take-Off above.
               </p>
-              <div style={{ display: 'flex', gap: 10 }}>
+              {!boq?.sourceBasisRevisionId && <div style={{ display: 'flex', gap: 10 }}>
                 <button type="button" onClick={() => setShowImportModal(true)} style={s.btnAI}>
-                  ✦ AI Import PDF/Excel
+                  Import client BOQ
                 </button>
                 <button type="button" onClick={() => setAddingItem(true)} style={s.btnSecondary}>
                   Add Line Item Manually
                 </button>
-              </div>
+              </div>}
             </div>
           ) : (
             <table style={s.table}>
@@ -614,20 +689,21 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                           </td>
                           <td style={s.td}>
                             <div style={{ display: 'flex', gap: 6 }}>
-                              <button
+                              {!boq?.sourceBasisRevisionId && <button
                                 type="button"
                                 onClick={() => startEdit(item)}
                                 style={s.btnTableAction}
                               >
                                 Edit
-                              </button>
-                              <button
+                              </button>}
+                              {!boq?.sourceBasisRevisionId && <button
                                 type="button"
                                 onClick={() => handleDeleteItem(item.id)}
                                 style={{ ...s.btnTableAction, color: 'var(--bad)' }}
                               >
                                 Delete
-                              </button>
+                              </button>}
+                              {boq?.sourceBasisRevisionId && <span style={{ color: 'var(--good)', fontSize: 11, fontWeight: 700 }}>Linked ✓</span>}
                             </div>
                           </td>
                         </>
@@ -641,15 +717,19 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
         </div>
       </section>
 
+      }
       {/* CLARIFICATIONS & ADDENDA (T4) */}
-      <div id="clarifications"><ClarificationsPanel tenderId={tender.id} onDeadlineMoved={() => router.refresh()} /></div>
+      {workspace === 'dashboard' && <>
+        <div id="clarifications"><ClarificationsPanel tenderId={tender.id} onDeadlineMoved={() => router.refresh()} /></div>
+        <Tender360Context tender={tender} />
+      </>}
 
-      {/* AI IMPORT DIALOG MODAL */}
+      {/* BOQ IMPORT DIALOG MODAL */}
       {showImportModal && (
         <div style={s.modalOverlay}>
           <div style={s.modalContent}>
             <div style={s.modalHeader}>
-              <h3 style={{ margin: 0, fontSize: 18 }}>AURA AI - Bill of Quantities OCR Engine</h3>
+              <h3 style={{ margin: 0, fontSize: 18 }}>Import Bill of Quantities</h3>
               <button
                 type="button"
                 onClick={() => {
@@ -706,7 +786,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
 
                   <div style={{ display: 'flex', alignItems: 'center', margin: '20px 0', color: 'var(--muted)' }}>
                     <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
-                    <span style={{ padding: '0 10px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>OR AI OCR Extraction</span>
+                    <span style={{ padding: '0 10px', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5 }}>Or paste rows</span>
                     <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
                   </div>
 
@@ -735,7 +815,7 @@ export default function TenderDetail({ tender }: { tender: Tender }) {
                       Cancel
                     </button>
                     <button type="button" onClick={handleAIImport} style={s.btnAI}>
-                      ✦ Run AI Extraction & Import
+                      Validate and import rows
                     </button>
                   </div>
                 </>
@@ -830,6 +910,21 @@ const s = {
     flexWrap: 'wrap',
     gap: 12,
   } as CSSProperties,
+  submissionGate: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+    marginTop: 12,
+    padding: '10px 12px',
+    borderRadius: 10,
+    border: '1px solid var(--border)',
+    background: 'var(--panel-2)',
+    fontSize: 12.5,
+  } as CSSProperties,
+  gateDone: { color: 'var(--good)', fontWeight: 700 } as CSSProperties,
+  gatePending: { color: 'var(--warn)', fontWeight: 700 } as CSSProperties,
+  gateLink: { color: 'var(--accent)', fontWeight: 700, textDecoration: 'none' } as CSSProperties,
   btnGroup: {
     display: 'flex',
     gap: 8,
@@ -1170,12 +1265,16 @@ interface BidScore {
   recommendation: BidRecommendation;
   notes: string | null;
   createdAt: string;
+  supersedesId: string | null;
+  amendmentReason: string | null;
+  supersededAt: string | null;
+  supersededBy: string | null;
 }
 
 const REC: Record<BidRecommendation, { label: string; color: string; bg: string }> = {
-  go: { label: 'GO', color: 'var(--good)', bg: 'var(--good-soft)' },
-  conditional: { label: 'CONDITIONAL', color: 'var(--warn)', bg: 'var(--warn-soft)' },
-  no_go: { label: 'NO-GO', color: 'var(--bad)', bg: 'var(--bad-soft)' },
+  go: { label: 'BID', color: 'var(--good)', bg: 'var(--good-soft)' },
+  conditional: { label: 'CONDITIONAL BID', color: 'var(--warn)', bg: 'var(--warn-soft)' },
+  no_go: { label: 'NO BID', color: 'var(--bad)', bg: 'var(--bad-soft)' },
 };
 
 /**
@@ -1190,14 +1289,17 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [amending, setAmending] = useState(false);
+  const [amendmentReason, setAmendmentReason] = useState('');
   const [criteria, setCriteria] = useState<BidCriterion[]>(() => DEFAULT_BID_CRITERIA.map((c) => ({ ...c, score: 5 })));
   const [notes, setNotes] = useState('');
 
   const load = async (): Promise<void> => {
     const res = await fetch(`/api/tendering/bid-scores?tenderId=${tenderId}`, { cache: 'no-store' });
-    if (res.ok) setRecords(await res.json());
+    if (!res.ok) throw new Error('Could not load the registered qualification. Please retry.');
+    setRecords(await res.json());
   };
-  useEffect(() => { void load(); }, [tenderId]);
+  useEffect(() => { void load().catch((error: Error) => setErr(error.message)); }, [tenderId]);
 
   // Live, from the shared engine — the estimator sees the verdict move as they score.
   const liveTotal = computeBidScore(criteria);
@@ -1209,6 +1311,7 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
     setCriteria((cs) => cs.map((c, j) => (j === i ? { ...c, weight } : c)));
 
   const save = async (): Promise<void> => {
+    if (busy || records.length) return;
     setBusy(true); setErr(null);
     try {
       const res = await fetch(`/api/tendering/bid-scores`, {
@@ -1217,15 +1320,45 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
         body: JSON.stringify({ tenderId, criteria, notes: notes || undefined }),
       });
       const d = await res.json().catch(() => ({}));
-      if (!res.ok) { setErr(d.message ?? d.error ?? 'Failed to record the decision'); return; }
+      if (!res.ok) {
+        setErr(d.message ?? d.error ?? 'Failed to record the decision');
+        if (res.status === 409) await load();
+        return;
+      }
+      setRecords([d as BidScore]);
       setAdding(false);
-      setCriteria(DEFAULT_BID_CRITERIA.map((c) => ({ ...c, score: 5 })));
-      setNotes('');
-      await load();
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Could not confirm the decision. Reload to check whether it was registered.');
     } finally { setBusy(false); }
   };
 
-  const latest = records[0] ?? null;
+  const beginAmendment = (current: BidScore): void => {
+    setCriteria(current.criteria.map((criterion) => ({ ...criterion })));
+    setNotes(current.notes ?? '');
+    setAmendmentReason('');
+    setAmending(true);
+    setErr(null);
+  };
+
+  const saveAmendment = async (current: BidScore): Promise<void> => {
+    if (busy || !amendmentReason.trim()) return;
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(`/api/tendering/bid-scores/${current.id}/amend`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ criteria, notes: notes || undefined, reason: amendmentReason.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setErr(data.message ?? data.error ?? 'The amendment was refused'); return; }
+      await load();
+      setAmending(false);
+      setAmendmentReason('');
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : 'Could not register the amended decision. Reload to verify the current record.');
+    } finally { setBusy(false); }
+  };
+
+  const latest = records.find((record) => !record.supersededAt) ?? records[0] ?? null;
   const input: CSSProperties = { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13, outline: 'none' };
 
   return (
@@ -1235,7 +1368,8 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
           Bid / No-Bid Qualification
           {records.length > 0 && <span style={{ color: 'var(--muted)', fontWeight: 500 }}> · {records.length} assessment{records.length > 1 ? 's' : ''}</span>}
         </h2>
-        <button style={s.btnSecondary} onClick={() => setAdding((v) => !v)}>{adding ? 'Close' : latest ? '+ Re-assess' : '+ Assess Go/No-Go'}</button>
+        {!latest && <button disabled={busy} style={s.btnSecondary} onClick={() => setAdding((v) => !v)}>{adding ? 'Close' : '+ Assess Go/No-Go'}</button>}
+        {latest && <button disabled={busy} style={s.btnSecondary} onClick={() => amending ? setAmending(false) : beginAmendment(latest)}>{amending ? 'Cancel amendment' : 'Governed amendment'}</button>}
       </div>
 
       {err && <div style={s.errorBar}>{err}</div>}
@@ -1248,28 +1382,40 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
           </span>
           <span style={{ fontSize: 22, fontWeight: 800 }}>{latest.totalScore}<span style={{ fontSize: 13, color: 'var(--muted)', fontWeight: 500 }}>/100</span></span>
           <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>decided {new Date(latest.createdAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</span>
+          {latest.amendmentReason && <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>Amendment reason: {latest.amendmentReason}</span>}
           {latest.notes && <span style={{ fontSize: 13, color: 'var(--text)', fontStyle: 'italic' }}>“{latest.notes}”</span>}
         </div>
       ) : (
         !adding && <p style={{ color: 'var(--muted)', fontSize: 13, margin: '4px 0 0' }}>Not yet qualified — score the tender against the checklist to make the bid/no-bid call before estimating.</p>
       )}
 
+      {latest && <div style={{ borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <p role="status" style={{ color: 'var(--good)', fontSize: 13 }}>Confirmed and registered · Ratings and decision are locked.</p>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {latest.criteria.map((criterion, index) => <div key={`${criterion.name}-${index}`} style={{ display: 'flex', gap: 16, justifyContent: 'space-between', fontSize: 13 }}>
+            <span>{criterion.name}</span><span>Weight {criterion.weight} · <strong>{criterion.score}/10</strong></span>
+          </div>)}
+        </div>
+      </div>}
       {/* The weighted checklist. */}
-      {adding && (
+      {((adding && !latest) || (amending && latest)) && (
         <div style={{ display: 'grid', gap: 10, padding: '12px 0 0', borderTop: latest ? '1px solid var(--border)' : 'none', marginTop: latest ? 12 : 0 }}>
+          {amending && <div style={{ border: '1px solid var(--accent)', borderRadius: 8, background: 'var(--panel)', padding: 10, fontSize: 12.5 }}><strong>New locked decision</strong><br />The confirmed record stays in history. Enter why an authorized manager is replacing it, then confirm the complete new rating.</div>}
           {criteria.map((c, i) => (
             <div key={c.name} style={{ display: 'grid', gridTemplateColumns: '1fr 64px 210px 40px', gap: 12, alignItems: 'center' }}>
-              <span style={{ fontSize: 13 }}>{c.name}</span>
+              <BidCriterionHelp name={c.name} score={c.score} weight={c.weight} totalWeight={criteria.reduce((sum, criterion) => sum + criterion.weight, 0)} id={`criterion-help-${i}`} />
               <label style={{ display: 'flex', gap: 5, alignItems: 'center', fontSize: 11, color: 'var(--muted)' }} title="Weight — relative importance">
                 w
-                <input type="number" min={0} max={9} step={1} value={c.weight} onChange={(e) => setWeight(i, Number(e.target.value) || 0)} style={{ ...input, width: 44, padding: '4px 6px' }} />
+                <input aria-label={`${c.name} weight`} type="number" min={0} max={9} step={1} value={c.weight} onChange={(e) => setWeight(i, Math.min(9, Math.max(0, Math.round(Number(e.target.value) || 0))))} style={{ ...input, width: 44, padding: '4px 6px' }} />
               </label>
-              <input type="range" min={0} max={10} step={1} value={c.score} onChange={(e) => setScore(i, Number(e.target.value))} style={{ accentColor: 'var(--accent)' }} />
+              <input aria-label={`${c.name} score`} type="range" min={0} max={10} step={1} value={c.score} onChange={(e) => setScore(i, Number(e.target.value))} style={{ accentColor: 'var(--accent)' }} />
               <span style={{ fontSize: 13, fontWeight: 700, textAlign: 'right' }}>{c.score}<span style={{ color: 'var(--muted)', fontWeight: 400, fontSize: 11 }}>/10</span></span>
             </div>
           ))}
 
+          <p style={s.muted}>Total = sum of (score × weight) ÷ sum of weights × 10, rounded to two decimals. Go: 70–100; Conditional: 50–69.99; No-go: below 50. Initial scores of 5 are placeholders for your assessment.</p>
           <textarea style={{ ...input, minHeight: 48 }} placeholder="Rationale — why this go/no-go call (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+          {amending && <textarea aria-label="Amendment reason" style={{ ...input, minHeight: 48 }} placeholder="Amendment reason — changed client input, corrected evidence, management direction…" value={amendmentReason} onChange={(e) => setAmendmentReason(e.target.value)} />}
 
           {/* Live verdict from the shared engine. */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
@@ -1278,10 +1424,11 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
             <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: 0.5, color: REC[liveRec].color, background: REC[liveRec].bg, border: `1px solid ${REC[liveRec].color}`, borderRadius: 7, padding: '4px 10px' }}>
               → {REC[liveRec].label}
             </span>
-            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: 'var(--accent-ink)', marginLeft: 'auto' }} disabled={busy} onClick={() => void save()}>
-              {busy ? 'Recording…' : 'Record decision'}
+            <button style={{ ...s.btnStatus, background: 'var(--accent)', color: 'var(--accent-ink)', marginLeft: 'auto' }} disabled={busy || (amending && !amendmentReason.trim())} onClick={() => void (amending && latest ? saveAmendment(latest) : save())}>
+              {busy ? 'Confirming…' : amending ? `Confirm new locked ${REC[liveRec].label.toLowerCase()}` : `Confirm & lock ${REC[liveRec].label.toLowerCase()}`}
             </button>
           </div>
+          <p style={s.muted}>Confirmation permanently registers these ratings and the decision. A later correction creates another locked decision with its reason and keeps this one in history.</p>
         </div>
       )}
 
@@ -1293,11 +1440,12 @@ function QualificationPanel({ tenderId }: { tenderId: string }) {
           </button>
           {showHistory && (
             <div style={{ display: 'grid', gap: 6, marginTop: 10 }}>
-              {records.slice(1).map((r) => (
+              {records.slice(1).map((r, index) => (
                 <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
                   <span style={{ fontWeight: 700, color: REC[r.recommendation].color, minWidth: 96 }}>{REC[r.recommendation].label}</span>
                   <span style={{ fontWeight: 700, color: 'var(--text)' }}>{r.totalScore}/100</span>
                   <span>{new Date(r.createdAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE })}</span>
+                  {records[index]?.amendmentReason && <span>Superseded because: {records[index].amendmentReason}</span>}
                   {r.notes && <span style={{ fontStyle: 'italic' }}>“{r.notes}”</span>}
                 </div>
               ))}

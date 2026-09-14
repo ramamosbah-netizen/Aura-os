@@ -37,6 +37,7 @@ export * from './postgres-commercial-baseline-store';
 export * from './domain/solution-scope';
 export * from './domain/quotation-readiness';
 export * from './domain/pre-award-package';
+export * from './domain/technical-study';
 export * from './pre-award-package-store';
 export * from './in-memory-pre-award-package-store';
 export * from './postgres-pre-award-package-store';

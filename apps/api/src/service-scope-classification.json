@@ -1,0 +1,951 @@
+[
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#acknowledgeTransmittal",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical transmittal.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "doccontrol.acknowledgeTransmittal",
+    "security": {
+      "target": "{ permission: 'doccontrol.transmittal.acknowledge', orgPath, resource: { type: 'project', id: transmittal.projectId } }",
+      "checks": [],
+      "provenance": [
+        "transmittal = await this.transmittalStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#assertDocPerm",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded drawing/revision or validated project; all helper callers are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "doccontrol.assertDocPerm",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#closeCorrespondence",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical correspondence.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "doccontrol.closeCorrespondence",
+    "security": {
+      "target": "{ permission: 'doccontrol.correspondence.close', orgPath, resource: { type: 'project', id: correspondence.projectId } }",
+      "checks": [],
+      "provenance": [
+        "correspondence = await this.correspondenceStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#createCorrespondence",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "doccontrol.createCorrespondence",
+    "security": {
+      "target": "{ permission: 'doccontrol.correspondence.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#createRegisterEntry",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "doccontrol.createRegisterEntry",
+    "security": {
+      "target": "{ permission: 'doccontrol.register.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#createSubmittal",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "doccontrol.createSubmittal",
+    "security": {
+      "target": "{ permission: 'doccontrol.submittal.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#createTransmittal",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "doccontrol.createTransmittal",
+    "security": {
+      "target": "{ permission: 'doccontrol.transmittal.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#transitionTransmittal",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical transmittal.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "doccontrol.transitionTransmittal",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: transmittal.projectId } }",
+      "checks": [],
+      "provenance": [
+        "transmittal = await this.transmittalStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#answerRfi",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical rfi.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "engineering.answerRfi",
+    "security": {
+      "target": "{ permission: 'engineering.rfi.answer', orgPath, resource: { type: 'project', id: rfi.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#assertDrawingPerm",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded drawing/revision or validated project; all helper callers are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "engineering.assertDrawingPerm",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#createDesignChange",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "engineering.createDesignChange",
+    "security": {
+      "target": "{ permission: 'engineering.design_change.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#createDocument",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "engineering.createDocument",
+    "security": {
+      "target": "{ permission: 'engineering.document.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#createDrawing",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "engineering.createDrawing",
+    "security": {
+      "target": "{ permission: 'engineering.drawing.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#createRfi",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "engineering.createRfi",
+    "security": {
+      "target": "{ permission: 'engineering.rfi.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#createSubmittal",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "engineering.createSubmittal",
+    "security": {
+      "target": "{ permission: 'engineering.submittal.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#createTechnicalQuery",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "engineering.createTechnicalQuery",
+    "security": {
+      "target": "{ permission: 'engineering.tq.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#decideDesignChange",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical dc.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "engineering.decideDesignChange",
+    "security": {
+      "target": "{ permission: 'engineering.design_change.decide', orgPath, resource: { type: 'project', id: dc.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#registerBimModel",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "engineering.registerBimModel",
+    "security": {
+      "target": "{ permission: 'engineering.bim_model.register', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#respondTechnicalQuery",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical tq.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "engineering.respondTechnicalQuery",
+    "security": {
+      "target": "{ permission: 'engineering.tq.respond', orgPath, resource: { type: 'project', id: tq.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#transitionDocument",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical doc.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "engineering.transitionDocument",
+    "security": {
+      "target": "{ permission: 'engineering.document.transition', orgPath, resource: { type: 'project', id: doc.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#updateSubmittalStatus",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical submittal.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "engineering.updateSubmittalStatus",
+    "security": {
+      "target": "{ permission: 'engineering.submittal.update_status', orgPath, resource: { type: 'project', id: submittal.projectId } }",
+      "checks": [],
+      "provenance": [
+        "latestDrawing = await this.drawingStore.getLatestByCode(tenantId, submittal.projectId, submittal.code)"
+      ]
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#approvePermit",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical found.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "hse.approvePermit",
+    "security": {
+      "target": "{ permission: 'hse.ptw.approve', orgPath, resource: { type: 'project', id: found.projectId } }",
+      "checks": [],
+      "provenance": [
+        "found = await this.ptwStore.findById(id, tenantId)",
+        "ra = await this.riskStore.findById(found.riskAssessmentId, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#assertIncidentPermission",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical incident.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "hse.assertIncidentPermission",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: incident.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#assertPermitPermission",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical permit.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "hse.assertPermitPermission",
+    "security": {
+      "target": "{ permission: 'hse.ptw.approve', orgPath, resource: { type: 'project', id: permit.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#completeCapa",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical capa.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "hse.completeCapa",
+    "security": {
+      "target": "{ permission: 'hse.capa.complete', orgPath, resource: { type: 'project', id: capa.projectId } }",
+      "checks": [],
+      "provenance": [
+        "capa = await this.capaStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#createRiskAssessment",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "hse.createRiskAssessment",
+    "security": {
+      "target": "{ permission: 'hse.risk_assessment.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#raiseCapa",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "hse.raiseCapa",
+    "security": {
+      "target": "{ permission: 'hse.capa.raise', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#recordSafetyTraining",
+    "classification": "NOT_PROJECT_OWNED",
+    "resolution": "Worker competence record (workerId), with no project ownership; tenant/company functional grant required.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Unchanged intentional worker authority",
+    "evidence": "safety training is worker competence",
+    "security": {
+      "target": "{ permission: 'hse.training.record', orgPath }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#recordToolboxTalk",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "hse.recordToolboxTalk",
+    "security": {
+      "target": "{ permission: 'hse.toolbox.record', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#reportIncident",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "hse.reportIncident",
+    "security": {
+      "target": "{ permission: 'hse.incident.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#requestPermit",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "hse.requestPermit",
+    "security": {
+      "target": "{ permission: 'hse.ptw.request', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/projects/src/cbs.service.ts#create",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "cbs.create",
+    "security": {
+      "target": "{ permission: 'projects.project.update', orgPath: [{ level: 'tenant', id: input.tenantId }], resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.assertProjectBaselineWritable(input.projectId, input.tenantId)",
+        "this.assertParentOwnership(input.parentId ?? null, input.projectId, input.tenantId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/projects/src/closeout.service.ts#start",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "closeout.start",
+    "security": {
+      "target": "{ permission: 'projects.closeout.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": [
+        "existing = await this.store.getByProject(input.tenantId, input.projectId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/delay-eot.service.ts#assertProjectAccess",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded drawing/revision or validated project; all helper callers are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "delay-eot.assertProjectAccess",
+    "security": {
+      "target": "{ permission: 'projects.project.update', orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }], resource: { type: 'project', id: projectId } }",
+      "checks": [
+        "this.assertProjectOwnership(projectId, tenantId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/projects/src/delivery-item-map.service.ts#create",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical candidate.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "delivery-item-map.create",
+    "security": {
+      "target": "{ permission: 'projects.project.update', orgPath: [{ level: 'tenant', id: input.tenantId }], resource: { type: 'project', id: candidate.projectId }, }",
+      "checks": [
+        "this.validate(candidate)"
+      ],
+      "provenance": [
+        "persisted = await this.store.create(candidate)"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/project-write-guard.ts#assertProjectWriteAllowed",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "project-write-guard.assertProjectWriteAllowed",
+    "security": {
+      "target": "{ permission: input.permission, orgPath: [{ level: 'tenant' as OrgLevel, id: input.tenantId }], resource: { type: 'project', id: input.projectId }, }",
+      "checks": [],
+      "provenance": [
+        "project = await deps.projects.get(input.projectId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/variation.service.ts#changeStatus",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical existing.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "variation.changeStatus",
+    "security": {
+      "target": "{ permission, orgPath: [{ level: 'tenant', id: existing.tenantId }], resource: { type: 'project', id: existing.projectId } }",
+      "checks": [],
+      "provenance": [
+        "cbsNode = await this.cbs.get(existing.cbsNodeId)",
+        "applied = await this.store.update(updated, existing.status)"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/variation.service.ts#create",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical project.id loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "variation.create",
+    "security": {
+      "target": "{ permission: 'projects.variation.create', orgPath, resource: { type: 'project', id: project.id } }",
+      "checks": [],
+      "provenance": [
+        "project = await this.projects.get(input.projectId)",
+        "cbsNode = await this.cbs.get(input.cbsNodeId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/wbs.service.ts#approveOpeningBaseline",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical project.id loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "wbs.approveOpeningBaseline",
+    "security": {
+      "target": "{ permission: 'projects.project.update', orgPath, resource: { type: 'project', id: project.id } }",
+      "checks": [],
+      "provenance": [
+        "project = await this.projects.get(projectId)",
+        "nodes = await this.store.list({ tenantId: project.tenantId, projectId })"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/wbs.service.ts#create",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "wbs.create",
+    "security": {
+      "target": "{ permission: 'projects.project.update', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [],
+      "provenance": [
+        "project = await this.projects.get(input.projectId)",
+        "parent = await this.store.get(input.parentId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/projects/src/wbs.service.ts#updateProgress",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical existing.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "wbs.updateProgress",
+    "security": {
+      "target": "{ permission: 'projects.project.update', orgPath, resource: { type: 'project', id: existing.projectId } }",
+      "checks": [],
+      "provenance": [
+        "children = await this.store.list({ parentId: existing.id })",
+        "gate = await this.itpGate.checkItpReleaseGate(existing.tenantId, existing.projectId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#assertNcrPerm",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded drawing/revision or validated project; all helper callers are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "quality.assertNcrPerm",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: projectId }, }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#createItp",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.createItp",
+    "security": {
+      "target": "{ permission: 'quality.itp.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#createMaterialApproval",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.createMaterialApproval",
+    "security": {
+      "target": "{ permission: 'quality.mar.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#logSnag",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.logSnag",
+    "security": {
+      "target": "{ permission: 'quality.snag.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#raiseNcr",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.raiseNcr",
+    "security": {
+      "target": "{ permission: 'quality.ncr.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#recordCalibration",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Optional selected project, validated by the Projects-owned lookup; absent project deliberately requires an organization grant.",
+    "organizationBranch": "ORG_SCOPE_INTENTIONAL: instrument calibration / organization audit without project",
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.recordCalibration",
+    "security": {
+      "target": "{ permission: 'quality.calibration.create', orgPath, ...(input.projectId ? { resource: { type: 'project' as const, id: input.projectId } } : {}) }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#requestInspection",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.requestInspection",
+    "security": {
+      "target": "{ permission: 'quality.ir.request', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#resolveInspection",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical ir.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "quality.resolveInspection",
+    "security": {
+      "target": "{ permission: 'quality.ir.approve', orgPath, resource: { type: 'project', id: ir.projectId } }",
+      "checks": [],
+      "provenance": [
+        "ir = await this.irStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#resolveSnag",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical snag.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "quality.resolveSnag",
+    "security": {
+      "target": "{ permission: 'quality.snag.resolve', orgPath, resource: { type: 'project', id: snag.projectId } }",
+      "checks": [],
+      "provenance": [
+        "snag = await this.snagStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#scheduleAudit",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Optional selected project, validated by the Projects-owned lookup; absent project deliberately requires an organization grant.",
+    "organizationBranch": "ORG_SCOPE_INTENTIONAL: instrument calibration / organization audit without project",
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "quality.scheduleAudit",
+    "security": {
+      "target": "{ permission: 'quality.calibration.create', orgPath, ...(input.projectId ? { resource: { type: 'project' as const, id: input.projectId } } : {}) }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#startInspection",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical ir.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "quality.startInspection",
+    "security": {
+      "target": "{ permission: 'quality.ir.approve', orgPath, resource: { type: 'project', id: ir.projectId } }",
+      "checks": [],
+      "provenance": [
+        "ir = await this.irStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#assertReportPerm",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded drawing/revision or validated project; all helper callers are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "site.assertReportPerm",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: projectId }, }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#createDelayLog",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "site.createDelayLog",
+    "security": {
+      "target": "{ permission: 'site.delay.log', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#createInstallation",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "site.createInstallation",
+    "security": {
+      "target": "{ permission: 'site.labour.log', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#createLabourAllocation",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "site.createLabourAllocation",
+    "security": {
+      "target": "{ permission: 'site.labour.log', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#createMaterialConsumption",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "site.createMaterialConsumption",
+    "security": {
+      "target": "{ permission: 'site.consumption.log', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#createPlantUsage",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "Added canonical project scope",
+    "evidence": "site.createPlantUsage",
+    "security": {
+      "target": "{ permission: 'site.labour.log', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#issueSiteInstruction",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Validated creation/ownership; retained project scope",
+    "evidence": "site.issueSiteInstruction",
+    "security": {
+      "target": "{ permission: 'site.instruction.issue', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "checks": [
+        "this.projectScope?.requireProject(input.tenantId, input.projectId)"
+      ],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#resolveDelayLog",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical log.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Retained canonical project scope",
+    "evidence": "site.resolveDelayLog",
+    "security": {
+      "target": "{ permission: 'site.delay.resolve', orgPath, resource: { type: 'project', id: log.projectId } }",
+      "checks": [],
+      "provenance": [
+        "log = await this.delayLogStore.findById(id, tenantId)"
+      ]
+    }
+  }
+]

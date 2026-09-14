@@ -226,6 +226,7 @@ export class PermissionsGuard implements CanActivate {
       const moduleId = ctrlPath.split('/')[0];
       if (PROJECT_SCOPED_MODULES.has(moduleId)) {
         const req = context.switchToHttp().getRequest() ?? {};
+        let entityAddressed = false;
 
         /**
          * RESOLUTION FIRST, and the order is the point.
@@ -248,19 +249,30 @@ export class PermissionsGuard implements CanActivate {
            * something to match.
            */
           const handlerPath = (Reflect.getMetadata('path', context.getHandler()) as string) ?? '';
+          const subject = await this.projects.subjectProject(ctrlPath, handlerPath, req);
+          if (subject !== undefined) {
+            entityAddressed = true;
+            if (subject) resource = { type: 'project', id: subject };
+          }
           const entity = singular(`${ctrlPath}/${handlerPath}`.split('/').filter((x) => x && !x.startsWith(':'))[1] ?? '');
           const entityId = pickEntityId(ctrlPath, handlerPath, req.params);
-          if (entity && entityId && this.projects.handles(moduleId, entity)) {
+          if (!entityAddressed && entity && entityId && this.projects.handles(moduleId, entity)) {
+            entityAddressed = true;
             const resolved = await this.projects.projectOf(moduleId, entity, entityId);
             if (resolved) resource = { type: 'project', id: resolved };
           }
         }
 
-        // Nothing resolved — no record on this route, or none registered for it. The request is
-        // then the only thing that can say which project is touched, and it is used as before.
-        if (!resource) {
+        // An addressed entity with no canonical project (including lookup failures) stays
+        // org-scoped. A caller's query/body must never manufacture ownership for it.
+        if (!resource && !entityAddressed) {
           const stated = pickProjectId(req);
           if (stated) resource = { type: 'project', id: stated };
+        }
+        // A new project-owned entity has no resolver row yet. Validate the requested parent
+        // through Projects before authorizing it; an org grant cannot create orphan ownership.
+        if ((!entityAddressed || !req.params?.id) && req.method === 'POST' && typeof req.body?.projectId === 'string' && this.projects) {
+          await this.projects.requireProject(tenantId, req.body.projectId);
         }
       }
     }

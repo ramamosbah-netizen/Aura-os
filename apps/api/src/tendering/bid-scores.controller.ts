@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type BidScore, type BidCriterion, BidScoreService } from '@aura/tendering';
 
@@ -9,6 +9,11 @@ class CreateBidScoreDto {
   @IsOptional() @IsString() tenderTitle?: string;
   @IsArray() criteria!: BidCriterion[];
   @IsOptional() @IsString() notes?: string;
+}
+class AmendBidScoreDto {
+  @IsArray() criteria!: BidCriterion[];
+  @IsOptional() @IsString() notes?: string;
+  @IsString() reason!: string;
 }
 
 /** Tender bid-scoring (go/no-go) API — delegates to BidScoreService. */
@@ -34,6 +39,16 @@ export class BidScoresController {
       decidedBy: ctx.actorId,
       createdBy: ctx.actorId,
     });
+  }
+
+  @Post(':id/amend')
+  @Permissions('tendering.bid-score.amend')
+  amend(@Param('id') id: string, @Body() dto: AmendBidScoreDto): Promise<BidScore> {
+    if (!Array.isArray(dto?.criteria) || dto.criteria.length === 0) throw new BadRequestException('at least one criterion is required');
+    if (!dto?.reason?.trim()) throw new BadRequestException('amendment reason is required');
+    const actorId = this.tenant.get().actorId;
+    if (!actorId) throw new BadRequestException('authenticated decision maker is required');
+    return this.bidScores.amend(id, { criteria: dto.criteria, notes: dto.notes ?? null }, dto.reason, actorId);
   }
 
   @Get()

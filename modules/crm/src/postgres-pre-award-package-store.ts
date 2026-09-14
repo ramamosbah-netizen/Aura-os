@@ -1,7 +1,9 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PreAwardPackageStore } from './pre-award-package-store';
 import type { PreAwardPackage, EstimationBasisRevision, EstimateRevision, EstimateBuildUp } from './domain/pre-award-package';
+import type { TechnicalStudyContent, TechnicalStudyRevision } from './domain/technical-study';
 
 export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
   constructor(private readonly pool: Pool) {}
@@ -12,6 +14,36 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
        values ($1,$2,$3,$4,$5,$6,$7,$8)
        on conflict (id) do update set status=excluded.status, updated_at=now()`,
       [p.id, p.tenantId, p.companyId, p.opportunityId, p.tenderId, p.route, p.status, p.createdBy]);
+  }
+
+  async saveStudy(s: TechnicalStudyRevision): Promise<void> {
+    await this.saveStudyWith(this.pool, s);
+  }
+
+  async saveStudyWithClient(tx: TxHandle | null, s: TechnicalStudyRevision): Promise<void> {
+    if (tx === null) return this.saveStudy(s);
+    await this.saveStudyWith(tx as PoolClient, s);
+  }
+
+  private async saveStudyWith(executor: Pool | PoolClient, s: TechnicalStudyRevision): Promise<void> {
+    const content: TechnicalStudyContent = {
+      scopeSummary: s.scopeSummary, systems: s.systems, requirements: s.requirements,
+      surveyFindings: s.surveyFindings, clarifications: s.clarifications, deviations: s.deviations,
+      assumptions: s.assumptions, exclusions: s.exclusions, evidence: s.evidence,
+    };
+    await executor.query(
+      `insert into public.aura_crm_technical_study_revisions
+       (id,tenant_id,company_id,package_id,revision_no,parent_study_id,title,input_revision,status,content,
+        author_id,reviewer_id,created_at,updated_at,submitted_at,reviewed_by,reviewed_at,review_comment)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       on conflict (id) do update set title=excluded.title,input_revision=excluded.input_revision,
+         status=excluded.status,content=excluded.content,reviewer_id=excluded.reviewer_id,
+         updated_at=excluded.updated_at,submitted_at=excluded.submitted_at,reviewed_by=excluded.reviewed_by,
+         reviewed_at=excluded.reviewed_at,review_comment=excluded.review_comment`,
+      [s.id, s.tenantId, s.companyId, s.packageId, s.revisionNo, s.parentStudyId, s.title,
+       s.inputRevision, s.status, JSON.stringify(content), s.authorId, s.reviewerId, s.createdAt,
+       s.updatedAt, s.submittedAt, s.reviewedBy, s.reviewedAt, s.reviewComment],
+    );
   }
 
   /**
@@ -55,6 +87,42 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
     const p = r.rows[0];
     if (!p) return null;
     return { id: p.id, tenantId: p.tenant_id, companyId: p.company_id, opportunityId: p.opportunity_id, tenderId: p.tender_id, route: p.route as PreAwardPackage['route'], status: p.status as PreAwardPackage['status'], createdBy: p.created_by, createdAt: p.created_at.toISOString(), updatedAt: p.updated_at.toISOString() };
+  }
+
+  async getByTender(tenantId: Id, tenderId: Id): Promise<PreAwardPackage | null> {
+    const r = await this.pool.query<{ id: string; tenant_id: string; company_id: string | null; opportunity_id: string | null; tender_id: string | null; route: string; status: string; created_by: string | null; created_at: Date; updated_at: Date }>(
+      'select id,tenant_id,company_id,opportunity_id,tender_id,route,status,created_by,created_at,updated_at from public.aura_crm_pre_award_packages where tenant_id=$1 and tender_id=$2 limit 1',
+      [tenantId, tenderId]);
+    const p = r.rows[0];
+    if (!p) return null;
+    return { id: p.id, tenantId: p.tenant_id, companyId: p.company_id, opportunityId: p.opportunity_id, tenderId: p.tender_id, route: p.route as PreAwardPackage['route'], status: p.status as PreAwardPackage['status'], createdBy: p.created_by, createdAt: p.created_at.toISOString(), updatedAt: p.updated_at.toISOString() };
+  }
+
+  async listStudies(tenantId: Id, packageId: Id): Promise<TechnicalStudyRevision[]> {
+    const result = await this.pool.query<{
+      id: string; tenant_id: string; company_id: string | null; package_id: string; revision_no: number;
+      parent_study_id: string | null; title: string; input_revision: string; status: TechnicalStudyRevision['status'];
+      content: TechnicalStudyContent; author_id: string; reviewer_id: string; created_at: Date; updated_at: Date;
+      submitted_at: Date | null; reviewed_by: string | null; reviewed_at: Date | null; review_comment: string | null;
+    }>(
+      `select id,tenant_id,company_id,package_id,revision_no,parent_study_id,title,input_revision,status,content,
+              author_id,reviewer_id,created_at,updated_at,submitted_at,reviewed_by,reviewed_at,review_comment
+         from public.aura_crm_technical_study_revisions
+        where tenant_id=$1 and package_id=$2 order by revision_no`,
+      [tenantId, packageId],
+    );
+    return result.rows.map((row) => ({
+      id: row.id, tenantId: row.tenant_id, companyId: row.company_id, packageId: row.package_id,
+      revisionNo: row.revision_no, parentStudyId: row.parent_study_id, title: row.title,
+      inputRevision: row.input_revision, status: row.status, authorId: row.author_id,
+      reviewerId: row.reviewer_id, ...(row.content ?? {
+        scopeSummary: '', systems: [], requirements: [], surveyFindings: [], clarifications: [],
+        deviations: [], assumptions: [], exclusions: [], evidence: [],
+      }),
+      createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
+      submittedAt: row.submitted_at?.toISOString() ?? null, reviewedBy: row.reviewed_by,
+      reviewedAt: row.reviewed_at?.toISOString() ?? null, reviewComment: row.review_comment,
+    }));
   }
 
   async listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]> {

@@ -194,7 +194,8 @@ export function supersedeSheet(
 /** Open a DRAFT package pricing sheet on a cost baseline — no policy decided yet. */
 export function openCommercialPricing(input: {
   tenantId: Id; companyId?: Id | null; name: string; opportunityId: Id; packageId: Id;
-  estimateRevisionId: Id; baselineCost: number; version?: number; parentSheetId?: Id | null; createdBy?: Id | null;
+  estimateRevisionId: Id; baselineCost: number; costLines?: EstimationLineInput[];
+  version?: number; parentSheetId?: Id | null; createdBy?: Id | null;
 }, now = new Date()): PricingSheet {
   const commercial: CommercialDecision = {
     baselineCost: round2(Math.max(0, Number(input.baselineCost) || 0)),
@@ -204,7 +205,9 @@ export function openCommercialPricing(input: {
   const sheet = makePricingSheet({
     tenantId: input.tenantId, companyId: input.companyId ?? null, name: input.name,
     opportunityId: input.opportunityId, packageId: input.packageId, estimateRevisionId: input.estimateRevisionId,
-    version: input.version, parentSheetId: input.parentSheetId ?? null, lines: [], commercial, createdBy: input.createdBy ?? null,
+    version: input.version, parentSheetId: input.parentSheetId ?? null,
+    lines: input.costLines?.map((line) => ({ ...line, labour: { ...line.labour }, targetMarginPercent: 0 })) ?? [],
+    commercial, createdBy: input.createdBy ?? null,
   }, now);
   // Cost is known; sell is undecided until a policy is set.
   return { ...sheet, totals: { totalCost: commercial.baselineCost, totalSell: 0, marginPercent: 0 } };
@@ -233,16 +236,18 @@ export function applyPricingPolicy(sheet: PricingSheet, policy: PricingPolicy, d
   const figures = computeCommercialPricing(baselineCost, policy, discount ?? undefined);
   // Carrier line: cost = baselineCost, margin chosen so estimateLine reproduces figures.sellingPrice.
   const marginToReproduce = figures.sellingPrice > 0 ? (1 - baselineCost / figures.sellingPrice) * 100 : 0;
-  const line: EstimationLineInput = {
-    ...emptyEstimationInput(),
-    description: `Selling price — ${policy.method === 'markup' ? `${policy.percent}% markup` : `${policy.percent}% target margin`}${discount ? ` less ${discount.kind === 'percent' ? `${discount.value}%` : `AED ${discount.value}`}` : ''}`,
-    quantity: 1,
-    subcontractUnitCost: baselineCost,
-    targetMarginPercent: marginToReproduce,
-  };
+  const lines: EstimationLineInput[] = sheet.lines.length > 0
+    ? sheet.lines.map((line) => ({ ...line, labour: { ...line.labour }, targetMarginPercent: marginToReproduce }))
+    : [{
+        ...emptyEstimationInput(),
+        description: `Selling price — ${policy.method === 'markup' ? `${policy.percent}% markup` : `${policy.percent}% target margin`}${discount ? ` less ${discount.kind === 'percent' ? `${discount.value}%` : `AED ${discount.value}`}` : ''}`,
+        quantity: 1,
+        subcontractUnitCost: baselineCost,
+        targetMarginPercent: marginToReproduce,
+      }];
   const commercial: CommercialDecision = { ...sheet.commercial, policy, discount: discount ?? null, figures };
   const totals: PricingSheetTotals = { totalCost: baselineCost, totalSell: figures.sellingPrice, marginPercent: figures.marginPercent };
-  return { ...sheet, lines: [line], commercial, totals };
+  return { ...sheet, lines, commercial, totals };
 }
 
 /** Replace the sheet's lines. Only a draft can change — a frozen build-up is what was committed to. */
@@ -277,6 +282,8 @@ export function freezeSheet(sheet: PricingSheet, actorId: Id | null, now = new D
 export interface QuotationLineDraft {
   description: string;
   quantity: number;
+  unit?: string;
+  sourceItemId?: string;
   unitPrice: number;
   vatRate: number;
 }
@@ -290,12 +297,26 @@ export function quotationLinesFromSheet(sheet: PricingSheet, vatRate = 5): Quota
     throw new Error(`only a frozen pricing sheet can be quoted — ${sheet.name} v${sheet.version} is ${sheet.status}`);
   }
   if (sheet.lines.length === 0) throw new Error('an empty pricing sheet has no lines to quote');
-  return sheet.lines.map((line) => {
-    const sellPrice = estimateLine(line).sellPrice;
-    const quantity = Math.max(0, Number(line.quantity) || 0);
-    // Unit price is derived so quantity × unitPrice === the line's committed sell price.
-    const unitPrice = quantity > 0 ? round2(sellPrice / quantity) : round2(sellPrice);
-    return { description: line.description, quantity: quantity > 0 ? quantity : 1, unitPrice, vatRate };
+  const costs = sheet.lines.map((line) => estimateLine({ ...line, targetMarginPercent: 0 }).totalCost);
+  const costTotal = round2(costs.reduce((sum, value) => sum + value, 0));
+  const committedSell = sheet.commercial?.figures?.sellingPrice ?? sheet.totals.totalSell;
+  let allocated = 0;
+  return sheet.lines.map((line, index) => {
+    const quantity = Math.max(0, Number(line.quantity) || 0) || 1;
+    const lineSell = sheet.commercial && costTotal > 0
+      ? index === sheet.lines.length - 1
+        ? round2(committedSell - allocated)
+        : round2(committedSell * (costs[index] / costTotal))
+      : estimateLine(line).sellPrice;
+    allocated = round2(allocated + lineSell);
+    return {
+      description: line.description,
+      quantity,
+      ...(line.unit?.trim() ? { unit: line.unit.trim() } : {}),
+      ...(line.sourceItemId?.trim() ? { sourceItemId: line.sourceItemId.trim() } : {}),
+      unitPrice: lineSell / quantity,
+      vatRate,
+    };
   });
 }
 

@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+import type { TxHandle } from '@aura/core';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
 import type { Activity } from './domain/activity';
@@ -68,7 +69,16 @@ export class PostgresActivityStore implements ActivityStore {
   constructor(private readonly pool: Pool) {}
 
   async save(a: Activity): Promise<void> {
-    await this.pool.query(
+    await this.saveWith(this.pool, a);
+  }
+
+  async saveWithClient(tx: TxHandle | null, a: Activity): Promise<void> {
+    if (tx === null) return this.save(a);
+    await this.saveWith(tx as PoolClient, a);
+  }
+
+  private async saveWith(executor: Pool | PoolClient, a: Activity): Promise<void> {
+    await executor.query(
       `INSERT INTO public.aura_crm_activities (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        ON CONFLICT (id) DO UPDATE SET
          subject = EXCLUDED.subject, notes = EXCLUDED.notes, due_date = EXCLUDED.due_date,

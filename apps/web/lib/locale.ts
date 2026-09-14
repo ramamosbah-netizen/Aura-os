@@ -36,3 +36,15 @@ export const DISPLAY_TIME_ZONE = 'Asia/Dubai';
 export function viewerTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone || DISPLAY_TIME_ZONE;
 }
+
+/** A YYYY-MM-DD value for business date inputs in AURA's pinned UAE operating timezone. */
+export function businessDateInputValue(at: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: DISPLAY_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(at);
+  const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${value.year}-${value.month}-${value.day}`;
+}

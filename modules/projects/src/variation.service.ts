@@ -51,7 +51,7 @@ export class VariationService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'projects.variation.create', orgPath };
+      const target: AccessTarget = { permission: 'projects.variation.create', orgPath, resource: { type: 'project', id: project.id } };
       this.access.assert(input.createdBy, target);
     }
     const vo = makeVariationOrder(input);
@@ -93,7 +93,7 @@ export class VariationService {
           : status === 'rejected'
             ? 'projects.variation.reject'
             : 'projects.variation.update';
-      this.access.assert(actorId, { permission, orgPath: [{ level: 'tenant', id: existing.tenantId }] });
+      this.access.assert(actorId, { permission, orgPath: [{ level: 'tenant', id: existing.tenantId }], resource: { type: 'project', id: existing.projectId } });
     }
     if (existing.status === status) return existing;
     const allowed: Record<VariationStatus, VariationStatus[]> = {

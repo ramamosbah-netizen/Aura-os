@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type HealthSignal, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
   type HseIncident,
@@ -63,6 +63,7 @@ export class HseService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   // ── Incidents ──────────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ export class HseService {
     locationDetail: string;
     createdBy?: string;
   }): Promise<HseIncident> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -172,7 +174,7 @@ export class HseService {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: incident.tenantId }];
     if (incident.companyId) orgPath.push({ level: 'company', id: incident.companyId });
-    this.access.assert(actorId, { permission, orgPath });
+    this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: incident.projectId } });
   }
 
   /** Optionally narrowed to one project — see the workspace project scope (server-side). */
@@ -200,6 +202,7 @@ export class HseService {
     riskAssessmentId?: string | null;
     createdBy?: string;
   }): Promise<PermitToWork> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -412,6 +415,7 @@ export class HseService {
     notes?: string;
     createdBy?: string | null;
   }): Promise<ToolboxTalk> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -456,6 +460,7 @@ export class HseService {
     dueDate: string;
     createdBy?: string;
   }): Promise<CapaAction> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -584,6 +589,7 @@ export class HseService {
   // ── Risk assessments (JSA) ──────────────────────────────────────────────────
 
   async createRiskAssessment(input: NewRiskAssessment): Promise<RiskAssessment> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });

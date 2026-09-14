@@ -10,6 +10,15 @@ import { ProjectResolverRegistry } from './project-resolver';
  * would have authorised anyway. It must fail to "unknown", loudly enough to notice.
  */
 describe('ProjectResolverRegistry', () => {
+  it('requires a tenant-owned project and fails closed without its owning module', async () => {
+    const registry = new ProjectResolverRegistry();
+    await expect(registry.requireProject('t1', 'p1')).rejects.toThrow(/unavailable/);
+    registry.registerProjectLookup(async (tenant, id) => tenant === 't1' && id === 'p1');
+    await expect(registry.requireProject('t1', 'p1')).resolves.toBeUndefined();
+    await expect(registry.requireProject('t2', 'p1')).rejects.toThrow(/not found/);
+    await expect(registry.requireProject('t1', 'missing')).rejects.toThrow(/not found/);
+    expect(() => registry.registerProjectLookup(async () => true)).toThrow(/already registered/);
+  });
   it('answers with the project a record belongs to', async () => {
     const registry = new ProjectResolverRegistry();
     registry.register('engineering', 'drawing', async (id) => (id === 'd-1' ? 'p-1' : null));

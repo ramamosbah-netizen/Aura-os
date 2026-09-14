@@ -29,15 +29,16 @@ export class DeliveryItemMapService {
     if (input.sourceKind !== 'DIRECT' && input.sourceKind !== 'TENDER') {
       throw new Error('mapping source kind must be DIRECT or TENDER');
     }
+    const candidate = makeDeliveryItemMap(input);
+    await this.validate(candidate);
     const actorId = this.tenant?.get().actorId ?? null;
     if (actorId && this.access) {
       this.access.assert(actorId, {
         permission: 'projects.project.update',
         orgPath: [{ level: 'tenant', id: input.tenantId }],
+        resource: { type: 'project', id: candidate.projectId },
       });
     }
-    const candidate = makeDeliveryItemMap(input);
-    await this.validate(candidate);
     const persisted = await this.store.create(candidate);
     if (!this.sameMapping(persisted, candidate)) {
       throw new Error(`conflicting immutable delivery item mapping for ${input.frozenItemKey}`);

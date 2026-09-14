@@ -1,0 +1,97 @@
+{
+  "date": "2026-09-14",
+  "timezone": "Asia/Dubai",
+  "sourceLog": ".aura-j1-continuation.log",
+  "testFilesPassed": 1,
+  "testsPassed": 1,
+  "acceptance": false,
+  "observations": {
+    "J1_CANONICAL_CHAIN": {
+      "authOn": true,
+      "fixtureAdministrators": true,
+      "quantity": 24,
+      "cost": 2400,
+      "sellBeforeTax": 3000,
+      "quoteTotal": 3150,
+      "pricingSheetId": "b81ce349-6de7-4ef0-9ff6-8e8635b5670e",
+      "quotationId": "335daf44-675b-4ea1-945a-83a92e1838b3",
+      "repeatGenerationSameId": true,
+      "selfApprovalHttp": 403,
+      "beforeEvidenceHttp": 409,
+      "finalStatus": "approved"
+    },
+    "J1_OFFER_SCOPE_OBSERVATION": {
+      "basisQuantity": 24,
+      "quotationLines": [
+        {
+          "description": "Selling price — 20% target margin",
+          "quantity": 1
+        }
+      ]
+    },
+    "J1_AUDIT_OBSERVATIONS": {
+      "authOn": true,
+      "salesRole": "r-sales",
+      "intakeHttp": 403,
+      "qualifyHttp": 403,
+      "convertHttp": 403,
+      "adminFixtureContinuation": true,
+      "leadLineagePreserved": true,
+      "capturedLeadRequirement": "24 cameras with 30-day retention",
+      "opportunityRequirementsAfterConversion": 0,
+      "opportunityOwner": null,
+      "quotationBeforeStudyHttp": 201,
+      "scopeAuthorPermissions": [
+        "crm.opportunity.scope",
+        "crm.opportunity.read"
+      ],
+      "explicitScopeApprovalHttp": 403,
+      "inlineScopeApprovalHttp": 201,
+      "inlineScopeStatus": "approved",
+      "approvedBasisQuantity": 24,
+      "callerEstimateQuantity": 240,
+      "alteredEstimateHttp": 201,
+      "alteredEstimateCost": 24000
+    },
+    "J1_TENDER_OBSERVATION": {
+      "authOn": true,
+      "fixtureAdministrator": true,
+      "technicalStudyCreated": false,
+      "internalOfferApprovalCreated": false,
+      "submissionHttp": 201,
+      "submittedStatus": "submitted"
+    },
+    "J1_HANDOFF_OBSERVATION": {
+      "fixtureRole": "j1-study-reader",
+      "beforeHttp": 200,
+      "beforeCount": 0,
+      "afterHttp": 200,
+      "manualActivityVisible": true
+    },
+    "J1_REVISION_CHAIN_GAP": {
+      "rootCount": 2,
+      "leafCount": 1,
+      "parentLinked": true,
+      "legacyQuoteCoexists": true,
+      "classification": "WRONG BEHAVIOR: characterization, not acceptance"
+    },
+    "J1_REVISION_OBSERVATION": {
+      "fixtureAdministrators": true,
+      "parentLinked": true,
+      "oldSell": 3000,
+      "revisedSell": 2880,
+      "requestedDiscountPercent": 5,
+      "actualSellReductionPercent": 4,
+      "prematureSendHttp": 400,
+      "finalStatus": "accepted",
+      "revisionMoves": [
+        {
+          "revision": 1,
+          "total": 3024,
+          "delta": 0,
+          "at": "2026-09-13T20:13:39.929Z"
+        }
+      ]
+    }
+  }
+}

@@ -10,6 +10,7 @@ import type { PickerProject } from './ui/project-picker';
 import SaveViewButton from './save-view-button';
 import SignatureCanvas from './ui/signature-canvas';
 import { fetchWithOfflineFallback, generateUUID } from '@/lib/offline-sync';
+import { businessDateInputValue } from '@/lib/locale';
 
 export interface DailyReport {
   id: string;
@@ -35,7 +36,7 @@ export interface LabourAllocation {
   notes: string | null;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function DailyReportClient({ reports, labour, initialProjectId = '', projects, projectsUnavailable = false }: { reports: DailyReport[]; labour: LabourAllocation[]; initialProjectId?: string; projects?: PickerProject[]; projectsUnavailable?: boolean }) {
   const [rows, setRows] = useState(reports);

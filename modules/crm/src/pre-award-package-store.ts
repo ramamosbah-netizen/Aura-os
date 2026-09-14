@@ -1,5 +1,7 @@
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { PreAwardPackage, EstimationBasisRevision, EstimateRevision, EstimateBuildUp } from './domain/pre-award-package';
+import type { TechnicalStudyRevision } from './domain/technical-study';
 
 export const CRM_PRE_AWARD_PACKAGE_STORE = Symbol('CRM_PRE_AWARD_PACKAGE_STORE');
 
@@ -24,6 +26,8 @@ export const UNGOVERNED: PreAwardGovernance = {
 export interface PreAwardPackageStore {
   // ── writes ──
   savePackage(p: PreAwardPackage): Promise<void>;
+  saveStudy(s: TechnicalStudyRevision): Promise<void>;
+  saveStudyWithClient(tx: TxHandle | null, s: TechnicalStudyRevision): Promise<void>;
   saveBasis(b: EstimationBasisRevision): Promise<void>;
   saveEstimate(e: EstimateRevision): Promise<void>;
   saveBuildUps(tenantId: Id, companyId: Id | null, estimateRevisionId: Id, buildUps: EstimateBuildUp[]): Promise<void>;
@@ -31,6 +35,8 @@ export interface PreAwardPackageStore {
   // ── reads (governance is composed by PreAwardPackageService from these + the pricing store, so
   //    pricingFrozen always reflects a real frozen pricing sheet, never a toggle) ──
   getByOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardPackage | null>;
+  getByTender(tenantId: Id, tenderId: Id): Promise<PreAwardPackage | null>;
+  listStudies(tenantId: Id, packageId: Id): Promise<TechnicalStudyRevision[]>;
   listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]>;
   listEstimates(tenantId: Id, packageId: Id): Promise<EstimateRevision[]>;
   /** The per-line build-ups of one estimate revision — the material/labour/plant detail. */

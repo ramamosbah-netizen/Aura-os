@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
+import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
   type Drawing,
@@ -60,15 +60,17 @@ export class EngineeringService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   // ── Shop Drawings ──────────────────────────────────────────────────────────
 
   async createDrawing(input: NewDrawing): Promise<Drawing> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'engineering.drawing.create', orgPath };
+      const target: AccessTarget = { permission: 'engineering.drawing.create', orgPath, resource: { type: 'project', id: input.projectId } };
       this.access.assert(input.createdBy, target);
     }
 
@@ -93,11 +95,11 @@ export class EngineeringService {
   }
 
   /** Fail-closed access check for a drawing workflow command (no-op when actor/auth is off). */
-  private assertDrawingPerm(actorId: Id | null, tenantId: Id, companyId: Id | null, permission: string): void {
+  private assertDrawingPerm(actorId: Id | null, tenantId: Id, companyId: Id | null, permission: string, projectId: Id): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
     if (companyId) orgPath.push({ level: 'company', id: companyId });
-    this.access.assert(actorId, { permission, orgPath });
+    this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: projectId } });
   }
 
   /** Tenant-scoped load (N-08): never operate on another tenant's drawing. */
@@ -113,7 +115,7 @@ export class EngineeringService {
     input: { recipient?: string; purpose?: string; dueDate?: string; comments?: string } = {},
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.submit');
+    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.submit', drawing.projectId);
 
     const updated = applySubmit(drawing, actorId); // enforces draft → submitted
     const submission = makeDrawingSubmission({
@@ -150,7 +152,7 @@ export class EngineeringService {
   /** submitted → under_review. The reviewer picks up the submission. */
   async startReviewDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.review');
+    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.review', drawing.projectId);
 
     const updated = applyStartReview(drawing, actorId); // enforces submitted → under_review
     const event = makeEvent({
@@ -181,7 +183,7 @@ export class EngineeringService {
     input: { outcome: ReviewOutcome; comments?: string },
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.review');
+    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.review', drawing.projectId);
 
     const decision = outcomeToDecision(input.outcome);
     const review = makeDrawingReview({
@@ -231,7 +233,7 @@ export class EngineeringService {
     input: { reason: string; revision?: string; title?: string; fileUrl?: string | null },
   ): Promise<Drawing> {
     const source = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, tenantId, source.companyId, 'engineering.drawing.revise');
+    this.assertDrawingPerm(actorId, source.tenantId, source.companyId, 'engineering.drawing.revise', source.projectId);
 
     const { revised, superseded } = applyRevise(source, { ...input, actorId });
     const event = makeEvent({
@@ -263,7 +265,7 @@ export class EngineeringService {
     input: { recipient?: string; purpose?: string; transmittalRef?: string } = {},
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.transmit');
+    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.transmit', drawing.projectId);
 
     const updated = applyTransmit(drawing, input.transmittalRef ?? null); // enforces approved → transmitted
     const event = makeEvent({
@@ -294,7 +296,7 @@ export class EngineeringService {
   /** transmitted → closed. The revision is immutable thereafter. */
   async closeDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, tenantId, drawing.companyId, 'engineering.drawing.close');
+    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.close', drawing.projectId);
 
     const updated = applyClose(drawing); // enforces transmitted → closed
     const event = makeEvent({
@@ -416,6 +418,7 @@ export class EngineeringService {
   // ── RFIs (Request For Information) ─────────────────────────────────────────
 
   async createRfi(input: NewRfi): Promise<Rfi> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -490,6 +493,7 @@ export class EngineeringService {
   // ── Technical/Material Submittals ──────────────────────────────────────────
 
   async createSubmittal(input: NewSubmittal): Promise<Submittal> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -613,6 +617,7 @@ export class EngineeringService {
   // ── Technical Queries (TQ) ──────────────────────────────────────────────────
 
   async createTechnicalQuery(input: NewTechnicalQuery): Promise<TechnicalQuery> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -762,6 +767,7 @@ export class EngineeringService {
   // ── Design Changes (engineering-originated; approval → commercial Variation) ──
 
   async createDesignChange(input: NewDesignChange): Promise<DesignChange> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -835,6 +841,7 @@ export class EngineeringService {
   // ── Engineering Documents (one aggregate, many docTypes; ADR-0011 point-6) ────
 
   async createDocument(input: NewEngineeringDocument): Promise<EngineeringDocument> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -905,6 +912,7 @@ export class EngineeringService {
   // ── BIM / model registry (viewer backbone) ──────────────────────────────────
 
   async registerBimModel(input: NewBimModel): Promise<BimModel> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.uploadedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });

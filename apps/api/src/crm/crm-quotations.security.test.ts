@@ -4,7 +4,7 @@ import { classifyDomainMessage } from '../common/all-exceptions.filter';
 import { permissionMatches } from '@aura/shared';
 import { describe, expect, it, vi } from 'vitest';
 import { ELV_ROLE_MATRIX } from '../auth/elv-roles';
-import { CrmQuotationsController } from './crm-quotations.controller';
+import { CrmQuotationsController, QUOTATION_ACTION_PERMISSION } from './crm-quotations.controller';
 
 const permissionOf = (handler: keyof CrmQuotationsController): string[] | undefined =>
   Reflect.getMetadata(PERMISSIONS_KEY, CrmQuotationsController.prototype[handler]);
@@ -13,7 +13,9 @@ describe('CRM quotation authorization contract', () => {
   it('maps authoring and lifecycle actions to explicit business capabilities', () => {
     expect(permissionOf('create')).toEqual(['crm.quotation.create']);
     expect(permissionOf('updateTerms')).toEqual(['crm.quotation.update']);
-    expect(permissionOf('changeStatus')).toEqual(['crm.quotation.update']);
+    // The route requires visibility; the command then asserts the exact action capability from
+    // QUOTATION_ACTION_PERMISSION against the persisted quotation company.
+    expect(permissionOf('changeStatus')).toEqual(['crm.quotation.read']);
     expect(permissionOf('revise')).toEqual(['crm.quotation.update']);
     // Conversion is a contract-creation capability, not a derived quotation route grant.
     expect(permissionOf('convertToContract')).toEqual(['contracts.contract.create']);
@@ -21,15 +23,39 @@ describe('CRM quotation authorization contract', () => {
 
   it('keeps all quotation reads on the tenant-scoped read capability', () => {
     for (const handler of [
-      'list', 'priceHistory', 'paged', 'revisions', 'getPricing',
-      'pricingAdvice', 'get', 'baseline',
+      'list', 'priceHistory', 'paged', 'revisions', 'documentIdentity', 'get', 'actionAccess', 'baseline',
     ] as Array<keyof CrmQuotationsController>) {
       expect(permissionOf(handler), `${String(handler)} must declare crm.quotation.read`).toEqual(['crm.quotation.read']);
     }
   });
 
+  it('pins distinct authority for commercial approval and customer submission', () => {
+    expect(QUOTATION_ACTION_PERMISSION).toMatchObject({
+      submit_review: 'crm.quotation.update',
+      approve: 'crm.quotation.approve',
+      send: 'crm.quotation.send',
+    });
+    expect(QUOTATION_ACTION_PERMISSION.approve).not.toBe(QUOTATION_ACTION_PERMISSION.submit_review);
+    expect(QUOTATION_ACTION_PERMISSION.approve).not.toBe(QUOTATION_ACTION_PERMISSION.send);
+  });
+
+  it('separates customer quotation visibility from internal cost and margin access', () => {
+    for (const handler of ['getPricing', 'pricingWorkbook', 'pricingAdvice'] as Array<keyof CrmQuotationsController>) {
+      expect(permissionOf(handler), `${String(handler)} must protect internal pricing`).toEqual([
+        'crm.quotation.read',
+        'crm.internal-pricing.access',
+      ]);
+    }
+    const sales = ELV_ROLE_MATRIX.find((role) => role.id === 'r-sales')!;
+    const estimator = ELV_ROLE_MATRIX.find((role) => role.id === 'r-estimator')!;
+    const commercial = ELV_ROLE_MATRIX.find((role) => role.id === 'r-commercial-manager')!;
+    expect(sales.permissions.some((permission) => permissionMatches(permission, 'crm.internal-pricing.access'))).toBe(false);
+    expect(estimator.permissions.some((permission) => permissionMatches(permission, 'crm.internal-pricing.access'))).toBe(true);
+    expect(commercial.permissions.some((permission) => permissionMatches(permission, 'crm.internal-pricing.access'))).toBe(true);
+  });
+
   it('does not grant quotation lifecycle mutations to a read-only role', () => {
-    const client = ELV_ROLE_MATRIX.find((role) => role.id === 'client')!;
+    const client = ELV_ROLE_MATRIX.find((role) => role.id === 'r-client')!;
     expect(client.permissions.some((permission) => permissionMatches(permission, 'crm.quotation.create'))).toBe(false);
     expect(client.permissions.some((permission) => permissionMatches(permission, 'crm.quotation.update'))).toBe(false);
     expect(client.permissions.some((permission) => permissionMatches(permission, 'contracts.contract.create'))).toBe(false);
@@ -48,14 +74,40 @@ describe('CRM quotation authorization contract', () => {
 
   it('passes the authenticated actor to the canonical approval command', async () => {
     const changeStatus = vi.fn().mockResolvedValue({ id: 'q-1', status: 'approved' });
-    const controller = {
-      quotations: { changeStatus },
+    const get = vi.fn().mockResolvedValue({ id: 'q-1', tenantId: 'tenant-a', companyId: null });
+    const assert = vi.fn();
+    const controller = Object.assign(Object.create(CrmQuotationsController.prototype) as CrmQuotationsController, {
+      quotations: { get, changeStatus },
       tenant: { get: () => ({ tenantId: 'tenant-a', actorId: 'approver-a' }) },
-    } as unknown as CrmQuotationsController;
+      access: { assert },
+    });
 
     await CrmQuotationsController.prototype.changeStatus.call(controller, 'q-1', { action: 'approve' });
 
+    expect(assert).toHaveBeenCalledWith('approver-a', {
+      permission: 'crm.quotation.approve',
+      orgPath: [{ level: 'tenant', id: 'tenant-a' }],
+    });
     expect(changeStatus).toHaveBeenCalledWith('q-1', 'approve', 'approver-a');
+  });
+
+  it('returns UI action access from the same permission decisions', async () => {
+    const can = vi.fn((_actor: string, target: { permission: string }) => ({
+      allowed: target.permission !== 'crm.quotation.approve' && target.permission !== 'crm.internal-pricing.access',
+    }));
+    const controller = Object.assign(Object.create(CrmQuotationsController.prototype) as CrmQuotationsController, {
+      quotations: { get: vi.fn().mockResolvedValue({ id: 'q-1', tenantId: 'tenant-a', companyId: 'company-a' }) },
+      tenant: { get: () => ({ tenantId: 'tenant-a', actorId: 'sales-a' }) },
+      access: { can },
+    });
+
+    const result = await CrmQuotationsController.prototype.actionAccess.call(controller, 'q-1');
+
+    expect(result).toMatchObject({ submitReview: true, approve: false, send: true, internalPricing: false });
+    expect(can).toHaveBeenCalledWith('sales-a', {
+      permission: 'crm.quotation.approve',
+      orgPath: [{ level: 'tenant', id: 'tenant-a' }, { level: 'company', id: 'company-a' }],
+    });
   });
 
   it('rejects unknown lifecycle actions before reaching the mutation service', async () => {

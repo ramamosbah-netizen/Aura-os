@@ -284,18 +284,19 @@ export class QuotationService {
 
     // Up to the root, then down through the children — the component containing `q`.
     let root = q;
-    const guard = new Set<Id>([q.id]);
+    const upward = new Set<Id>([q.id]);
     while (root.parentQuotationId) {
       const parent = byId.get(root.parentQuotationId);
-      if (!parent || guard.has(parent.id)) break; // missing link, or a cycle in bad data
-      guard.add(parent.id);
+      if (!parent || upward.has(parent.id)) break; // missing link, or a cycle in bad data
+      upward.add(parent.id);
       root = parent;
     }
     const chain = [root];
+    const visited = new Set<Id>([root.id]);
     for (;;) {
-      const child = candidates.find((c) => c.parentQuotationId === chain[chain.length - 1].id && !guard.has(c.id));
+      const child = candidates.find((c) => c.parentQuotationId === chain[chain.length - 1].id && !visited.has(c.id));
       if (!child) break;
-      guard.add(child.id);
+      visited.add(child.id);
       chain.push(child);
     }
 

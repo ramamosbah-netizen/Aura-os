@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { TX_RUNNER, type TxRunner, NullTxRunner } from '@aura/core';
 import {
   type Id, newId, moneyNumber, computeCostBuildUp, computeCommercialPricing, compileResourceBreakdown,
@@ -7,6 +7,7 @@ import {
 } from '@aura/shared';
 import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
+import { CRM_PRE_AWARD_STORE, type PreAwardStore } from './pre-award-store';
 import {
   type PricingSheet, makePricingSheet, freezeSheet, linkQuotation, supersedeSheet,
   openCommercialPricing, applyPricingPolicy, previewCommercialPricing,
@@ -16,6 +17,11 @@ import {
   makePreAwardPackage, makeBasisRevision, approveBasis, updateBasisLines, assertBasisQuantitiesKnown,
   makeEstimateRevision, freezeEstimate, approveEstimate, packageGovernance,
 } from './domain/pre-award-package';
+import {
+  type NewTechnicalStudy, type TechnicalStudyContent, type TechnicalStudyRevision,
+  makeTechnicalStudy, updateTechnicalStudy, submitTechnicalStudy, approveTechnicalStudy,
+  requestTechnicalStudyChanges, supersedeTechnicalStudy, technicalStudyReadiness,
+} from './domain/technical-study';
 
 /**
  * One line's cost build-up. Note there is NO profit/margin here: a Direct estimate answers "what will
@@ -49,6 +55,7 @@ export class PreAwardPackageService {
     // write. @Optional with a NullTxRunner default so no-DB boots and unit tests degrade to
     // sequential (non-atomic) writes exactly as before.
     @Optional() @Inject(TX_RUNNER) private readonly tx: TxRunner = new NullTxRunner(),
+    @Optional() @Inject(CRM_PRE_AWARD_STORE) private readonly evidence: PreAwardStore | null = null,
   ) {}
 
   /** Idempotent: one direct package per opportunity. */
@@ -59,6 +66,222 @@ export class PreAwardPackageService {
     await this.store.savePackage(pkg);
     this.logger.log(`Direct pre-award package opened for opportunity ${input.opportunityId} (${pkg.id})`);
     return pkg;
+  }
+
+  /** Idempotent: one governed package per canonical Tender. */
+  async openTender(input: { tenantId: Id; companyId?: Id | null; tenderId: Id; createdBy?: Id | null }): Promise<PreAwardPackage> {
+    const existing = await this.store.getByTender(input.tenantId, input.tenderId);
+    if (existing) return existing;
+    const pkg = makePreAwardPackage({ tenantId: input.tenantId, companyId: input.companyId ?? null, tenderId: input.tenderId, createdBy: input.createdBy ?? null });
+    await this.store.savePackage(pkg);
+    this.logger.log(`Tender pre-award package opened for tender ${input.tenderId} (${pkg.id})`);
+    return pkg;
+  }
+
+  // ── Technical study revisions ────────────────────────────────────────────────────────────────
+
+  /**
+   * Start the first study or the next revision. An unfinished revision must be completed or returned
+   * before another one is opened. When an approved revision is replaced, supersession and creation
+   * commit together so there is never a package with two current approved technical truths.
+   */
+  private async canonicalizeStudyRequirements(
+    tenantId: Id,
+    opportunityId: Id,
+    studyContent: TechnicalStudyContent,
+  ): Promise<TechnicalStudyContent> {
+    const linkedIds = studyContent.requirements
+      .map((requirement) => requirement.sourceRequirementId)
+      .filter((id): id is Id => Boolean(id));
+    if (linkedIds.length === 0 || !this.evidence) return studyContent;
+    const canonical = await this.evidence.listRequirements(tenantId, opportunityId);
+    const byId = new Map(canonical.map((requirement) => [requirement.id, requirement]));
+    const invalid = [...new Set(linkedIds)].filter((id) => !byId.has(id));
+    if (invalid.length > 0) {
+      throw new BadRequestException('technical-study requirements must reference requirements persisted on this opportunity');
+    }
+    return {
+      ...studyContent,
+      requirements: studyContent.requirements.map((requirement) => {
+        if (!requirement.sourceRequirementId) return requirement;
+        const source = byId.get(requirement.sourceRequirementId)!;
+        return {
+          ...requirement,
+          statement: source.title,
+          sourceRef: source.detail ?? `Opportunity requirement ${source.id}`,
+        };
+      }),
+    };
+  }
+
+  async createTechnicalStudy(input: Omit<NewTechnicalStudy, 'packageId'> & { packageId: Id; opportunityId?: Id | null }): Promise<TechnicalStudyRevision> {
+    const existing = await this.store.listStudies(input.tenantId, input.packageId);
+    const current = existing.filter((study) => study.status !== 'superseded').at(-1) ?? null;
+    if (current && current.status !== 'approved') {
+      throw new BadRequestException(`study revision ${current.revisionNo} is ${current.status}; update or complete it before creating another revision`);
+    }
+    const canonicalContent = input.opportunityId
+      ? await this.canonicalizeStudyRequirements(input.tenantId, input.opportunityId, input)
+      : input;
+    const next = makeTechnicalStudy({ ...input, ...canonicalContent }, existing.length + 1, current?.id ?? null);
+    if (!current) {
+      await this.store.saveStudy(next);
+      return next;
+    }
+    const prior = supersedeTechnicalStudy(current);
+    await this.tx.run(async (tx) => {
+      await this.store.saveStudyWithClient(tx, prior);
+      await this.store.saveStudyWithClient(tx, next);
+    });
+    return next;
+  }
+
+  async listTechnicalStudies(tenantId: Id, packageId: Id): Promise<Array<TechnicalStudyRevision & { readiness: ReturnType<typeof technicalStudyReadiness> }>> {
+    const studies = await this.store.listStudies(tenantId, packageId);
+    return studies.map((study) => ({ ...study, readiness: technicalStudyReadiness(study) }));
+  }
+
+  /** The one technical revision that may feed quantity take-off and estimating. */
+  async approvedTechnicalStudy(tenantId: Id, packageId: Id): Promise<TechnicalStudyRevision> {
+    const approved = (await this.store.listStudies(tenantId, packageId))
+      .filter((study) => study.status === 'approved')
+      .sort((a, b) => b.revisionNo - a.revisionNo)[0];
+    if (!approved) throw new BadRequestException('an approved technical study is required before creating the scope / quantity take-off basis');
+    return approved;
+  }
+
+  /** Resolve Tender study authority without creating an empty package during a failed submission. */
+  async approvedTechnicalStudyForTender(tenantId: Id, tenderId: Id): Promise<TechnicalStudyRevision> {
+    const pkg = await this.store.getByTender(tenantId, tenderId);
+    if (!pkg) throw new BadRequestException('an approved technical study is required before tender submission');
+    return this.approvedTechnicalStudy(tenantId, pkg.id);
+  }
+
+  /**
+   * Public workflow bridge. The source identity and revision come from the persisted approved study;
+   * callers provide only the take-off lines and cannot label an arbitrary URL/body id as approved.
+   */
+  async addScopeBasisFromApprovedStudy(input: {
+    tenantId: Id; companyId?: Id | null; packageId: Id; lines: BasisLine[]; createdBy?: Id | null;
+  }): Promise<EstimationBasisRevision> {
+    const study = await this.approvedTechnicalStudy(input.tenantId, input.packageId);
+    return this.addScopeBasis({
+      ...input,
+      sourceId: study.id,
+      sourceRevRef: `technical-study:S-${String(study.revisionNo).padStart(3, '0')}:${study.inputRevision}`,
+    });
+  }
+
+  /**
+   * Tender-specific quantity take-off creation. Identity and provenance are assigned here from the
+   * persisted approved study; callers cannot invent basis ids or move the source to another Tender.
+   */
+  async createTenderTakeoff(input: {
+    tenantId: Id; companyId?: Id | null; tenderId: Id; packageId: Id; createdBy?: Id | null;
+    lines: Array<{ description: string; unit: string; quantity: number | null; sourceStudyItemId?: Id | null }>;
+  }): Promise<EstimationBasisRevision> {
+    if (input.lines.length === 0) throw new BadRequestException('a quantity take-off needs at least one line');
+    const pkg = await this.store.getByTender(input.tenantId, input.tenderId);
+    if (!pkg || pkg.id !== input.packageId) throw new NotFoundException('Tender pre-award package not found');
+    const study = await this.approvedTechnicalStudy(input.tenantId, pkg.id);
+    const sourceIds = new Set<Id>([
+      study.id,
+      ...study.systems.map((item) => item.id).filter((id): id is Id => typeof id === 'string' && id.length > 0),
+      ...study.requirements.map((item) => item.id).filter((id): id is Id => typeof id === 'string' && id.length > 0),
+      ...study.surveyFindings.map((item) => item.id).filter((id): id is Id => typeof id === 'string' && id.length > 0),
+    ]);
+    const invalid = input.lines
+      .map((line) => line.sourceStudyItemId)
+      .filter((id): id is Id => typeof id === 'string' && id.length > 0 && !sourceIds.has(id));
+    if (invalid.length > 0) throw new BadRequestException('quantity take-off lines must reference items in the approved technical study');
+    return this.addScopeBasis({
+      tenantId: input.tenantId,
+      companyId: input.companyId,
+      packageId: pkg.id,
+      sourceId: study.id,
+      sourceRevRef: `technical-study:S-${String(study.revisionNo).padStart(3, '0')}:${study.inputRevision}`,
+      createdBy: input.createdBy,
+      lines: input.lines.map((line) => ({
+        lineId: newId(),
+        description: line.description.trim(),
+        unit: line.unit.trim(),
+        quantity: line.quantity,
+        sourceLineId: line.sourceStudyItemId ?? study.id,
+      })),
+    });
+  }
+
+  /** Edit quantities/descriptions on an existing Tender draft without accepting caller provenance. */
+  async updateTenderTakeoff(input: {
+    tenantId: Id; tenderId: Id; packageId: Id; basisId: Id; editedBy: Id | null;
+    lines: Array<{ lineId: Id; description: string; unit: string; quantity: number | null }>;
+  }): Promise<EstimationBasisRevision> {
+    const pkg = await this.store.getByTender(input.tenantId, input.tenderId);
+    if (!pkg || pkg.id !== input.packageId) throw new NotFoundException('Tender pre-award package not found');
+    const basis = (await this.store.listBasis(input.tenantId, pkg.id)).find((row) => row.id === input.basisId);
+    if (!basis) throw new NotFoundException(`quantity take-off ${input.basisId} not found`);
+    const originalIds = new Set(basis.lines.map((line) => line.lineId));
+    if (input.lines.some((line) => !originalIds.has(line.lineId))) {
+      throw new BadRequestException('new quantity take-off line ids are assigned only when a revision is created');
+    }
+    const sourceByLine = new Map(basis.lines.map((line) => [line.lineId, line.sourceLineId]));
+    return this.updateBasisLinesById(input.tenantId, pkg.id, basis.id, input.lines.map((line) => ({
+      ...line,
+      sourceLineId: sourceByLine.get(line.lineId)!,
+    })), input.editedBy);
+  }
+
+  /** Resolve an approved basis strictly through the Tender-owned package. */
+  async approvedTenderTakeoff(tenantId: Id, tenderId: Id, basisId: Id): Promise<EstimationBasisRevision> {
+    const pkg = await this.store.getByTender(tenantId, tenderId);
+    if (!pkg) throw new NotFoundException('Tender pre-award package not found');
+    const basis = (await this.store.listBasis(tenantId, pkg.id)).find((row) => row.id === basisId);
+    if (!basis) throw new NotFoundException(`quantity take-off ${basisId} not found`);
+    if (basis.status !== 'approved') throw new BadRequestException('quantity take-off must be approved before it can become the Tender BOQ');
+    return basis;
+  }
+
+  private async technicalStudy(tenantId: Id, packageId: Id, studyId: Id): Promise<TechnicalStudyRevision> {
+    const study = (await this.store.listStudies(tenantId, packageId)).find((row) => row.id === studyId);
+    if (!study) throw new NotFoundException(`technical study ${studyId} not found`);
+    return study;
+  }
+
+  async updateTechnicalStudy(input: {
+    tenantId: Id; opportunityId?: Id | null; packageId: Id; studyId: Id; actorId: Id; expectedUpdatedAt: string;
+    patch: Partial<Pick<TechnicalStudyRevision, 'title' | 'inputRevision' | 'reviewerId'>> & Partial<TechnicalStudyContent>;
+  }): Promise<TechnicalStudyRevision> {
+    const current = await this.technicalStudy(input.tenantId, input.packageId, input.studyId);
+    let patch = input.patch;
+    if (input.patch.requirements && input.opportunityId) {
+      const canonicalContent = await this.canonicalizeStudyRequirements(
+        input.tenantId,
+        input.opportunityId,
+        { ...current, ...input.patch },
+      );
+      patch = { ...input.patch, requirements: canonicalContent.requirements };
+    }
+    const updated = updateTechnicalStudy(current, patch, input.actorId, input.expectedUpdatedAt);
+    await this.store.saveStudy(updated);
+    return updated;
+  }
+
+  async submitTechnicalStudy(tenantId: Id, packageId: Id, studyId: Id, actorId: Id): Promise<TechnicalStudyRevision> {
+    const submitted = submitTechnicalStudy(await this.technicalStudy(tenantId, packageId, studyId), actorId);
+    await this.store.saveStudy(submitted);
+    return submitted;
+  }
+
+  async approveTechnicalStudy(tenantId: Id, packageId: Id, studyId: Id, actorId: Id, comment?: string | null): Promise<TechnicalStudyRevision> {
+    const approved = approveTechnicalStudy(await this.technicalStudy(tenantId, packageId, studyId), actorId, comment);
+    await this.store.saveStudy(approved);
+    return approved;
+  }
+
+  async requestTechnicalStudyChanges(tenantId: Id, packageId: Id, studyId: Id, actorId: Id, comment: string): Promise<TechnicalStudyRevision> {
+    const returned = requestTechnicalStudyChanges(await this.technicalStudy(tenantId, packageId, studyId), actorId, comment);
+    await this.store.saveStudy(returned);
+    return returned;
   }
 
   /** Create a new scope basis revision (draft) from projected lines. */
@@ -146,12 +369,34 @@ export class PreAwardPackageService {
    * revision is SEEDED with one zero-cost line per basis line, so the Estimation Workspace opens with the
    * approved scope laid out and ready to fill. The selling decision is made later, in `freezePricing`.
    */
-  async addEstimate(input: { tenantId: Id; companyId?: Id | null; packageId: Id; basisRevisionId: Id; lines: BasisLine[]; buildUps: BuildUpInput[]; createdBy?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
-    const qtyByLine = this.assertLinesCostable(input.lines);
+  async addEstimate(input: { tenantId: Id; companyId?: Id | null; packageId: Id; basisRevisionId: Id; lines?: BasisLine[]; buildUps: BuildUpInput[]; createdBy?: Id | null }): Promise<{ estimate: EstimateRevision; buildUps: EstimateBuildUp[] }> {
+    const basis = (await this.store.listBasis(input.tenantId, input.packageId)).find((row) => row.id === input.basisRevisionId);
+    if (!basis) throw new NotFoundException(`scope basis ${input.basisRevisionId} not found`);
+    const qtyByLine = this.assertLinesCostable(basis.lines);
+    if (basis.status !== 'approved') throw new BadRequestException('an estimate can only be created from an approved scope basis');
+
+    // Older callers echoed the basis lines back to this command. Keep accepting that shape while
+    // refusing any drift: quantity and identity come from the persisted approved revision below.
+    if (input.lines) {
+      const supplied = new Map(input.lines.map((line) => [line.lineId, line]));
+      const mismatch = basis.lines.find((line) => {
+        const echoed = supplied.get(line.lineId);
+        return !echoed || echoed.quantity !== line.quantity;
+      });
+      const foreign = input.lines.find((line) => !basis.lines.some((basisLine) => basisLine.lineId === line.lineId));
+      if (mismatch || foreign || input.lines.length !== basis.lines.length) {
+        throw new BadRequestException('estimate lines must match the persisted approved scope basis; create an approved scope revision to change quantities');
+      }
+    }
+
+    const canonicalLines = basis.lines;
+    const allowed = new Set(canonicalLines.map((line) => line.lineId));
+    const foreignBuildUp = input.buildUps.find((line) => !allowed.has(line.basisLineId));
+    if (foreignBuildUp) throw new BadRequestException(`cannot cost a line that is not in the approved basis: ${foreignBuildUp.basisLineId}`);
     // Open Estimation with no build-ups yet ⇒ seed a zero-cost row per basis line, preserving basisLineId.
     const seed: BuildUpInput[] = input.buildUps.length > 0
       ? input.buildUps
-      : input.lines.map((l) => ({ basisLineId: l.lineId, components: [] }));
+      : canonicalLines.map((l) => ({ basisLineId: l.lineId, components: [] }));
     const buildUps = seed.map((b) => this.buildCostLine(b, qtyByLine.get(b.basisLineId) ?? 0));
     const totals = this.estimateTotals(buildUps, qtyByLine);
 
@@ -349,7 +594,9 @@ export class PreAwardPackageService {
   // here is the selling price; it is computed by computeCommercialPricing (one engine), never by the UI.
 
   /** The approved estimate's cost baseline for a deal — the read-only starting point of pricing. */
-  private async pricingBaseline(tenantId: Id, opportunityId: Id): Promise<{ pkg: { id: Id; companyId: Id | null }; estimateId: Id; baselineCost: number }> {
+  private async pricingBaseline(tenantId: Id, opportunityId: Id): Promise<{
+    pkg: { id: Id; companyId: Id | null }; estimateId: Id; baselineCost: number; costLines: EstimationLineInput[];
+  }> {
     const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
     if (!pkg) throw new Error('a pre-award package is required before pricing can start');
     const estimates = await this.store.listEstimates(tenantId, pkg.id);
@@ -361,7 +608,66 @@ export class PreAwardPackageService {
     const baselineCost = totals.estimatedCost !== undefined
       ? moneyNumber(Number(totals.estimatedCost) || 0)
       : await this.legacyEstimatedCost(tenantId, pkg.id, approved);
-    return { pkg: { id: pkg.id, companyId: pkg.companyId }, estimateId: approved.id, baselineCost };
+    const buildUps = await this.store.listBuildUps(tenantId, approved.id);
+    const byBasisLine = new Map(buildUps.map((buildUp) => [buildUp.basisLineId, buildUp]));
+    const costLines = (basis?.lines ?? []).map((basisLine): EstimationLineInput => {
+      const buildUp = byBasisLine.get(basisLine.lineId);
+      const quantity = basisLine.quantity ?? 0;
+      const components = buildUp?.components ?? [];
+      const componentAmount = (kind: CostComponent['costType']): number =>
+        components.filter((component) => component.costType === kind).reduce((sum, component) => sum + component.amount, 0);
+      const labourComponents = components.filter((component) => component.costType === 'labour');
+      const labourHoursPerUnit = labourComponents.reduce((sum, component) => sum + component.quantity, 0);
+      const labourCostPerUnit = componentAmount('labour');
+      const resources = buildUp?.resources;
+      const resourceManHours = resources
+        ? resources.technician.count * resources.technician.hours
+          + resources.engineer.count * resources.engineer.hours
+          + resources.projectManager.count * resources.projectManager.hours
+        : 0;
+      const resourceLabourCost = resources
+        ? resources.technician.count * resources.technician.hours * resources.technician.rate
+          + resources.engineer.count * resources.engineer.hours * resources.engineer.rate
+          + resources.projectManager.count * resources.projectManager.hours * resources.projectManager.rate
+        : 0;
+      const directCost = buildUp?.directCost ?? 0;
+      return {
+        ...emptyEstimationInput(),
+        description: basisLine.description,
+        quantity,
+        unit: basisLine.unit,
+        sourceItemId: basisLine.lineId,
+        materialUnitCost: moneyNumber(resources?.supplyUnitPrice ?? componentAmount('material')),
+        wastagePercent: resources?.wastagePercent ?? 0,
+        labour: resources && quantity > 0
+          ? {
+              hoursPerUnit: resourceManHours / quantity,
+              crewSize: Math.max(1, resources.technician.count + resources.engineer.count + resources.projectManager.count),
+              hourlyRate: resourceManHours > 0 ? resourceLabourCost / resourceManHours : 0,
+            }
+          : {
+              hoursPerUnit: labourHoursPerUnit,
+              crewSize: 1,
+              hourlyRate: labourHoursPerUnit > 0 ? labourCostPerUnit / labourHoursPerUnit : 0,
+            },
+        equipmentUnitCost: moneyNumber(resources && quantity > 0
+          ? (resources.transport + resources.equipmentRent) / quantity
+          : componentAmount('plant')),
+        consumablesUnitCost: moneyNumber(resources && quantity > 0
+          ? (resources.accessories + resources.otherDirect) / quantity
+          : componentAmount('other')),
+        subcontractUnitCost: moneyNumber(resources && quantity > 0
+          ? resources.subcontract / quantity
+          : componentAmount('subcontract')),
+        overheadPercent: directCost > 0
+          ? ((buildUp?.indirectAmount ?? 0) + (buildUp?.overheadAmount ?? 0)) / directCost * 100
+          : 0,
+        // EstimationLine applies risk to direct cost. Convert the already-computed canonical
+        // risk amount back to that equivalent percentage so the amount, and total, stay exact.
+        riskPercent: directCost > 0 ? (buildUp?.riskAmount ?? 0) / directCost * 100 : 0,
+      };
+    });
+    return { pkg: { id: pkg.id, companyId: pkg.companyId }, estimateId: approved.id, baselineCost, costLines };
   }
 
   /**
@@ -370,7 +676,7 @@ export class PreAwardPackageService {
    * draft on the approved estimate's cost. Never creates a second draft.
    */
   async openPricing(input: { tenantId: Id; companyId?: Id | null; opportunityId: Id; actorId?: Id | null }): Promise<PricingSheet> {
-    const { pkg, estimateId, baselineCost } = await this.pricingBaseline(input.tenantId, input.opportunityId);
+    const { pkg, estimateId, baselineCost, costLines } = await this.pricingBaseline(input.tenantId, input.opportunityId);
     const sheets = await this.pricing.list({ tenantId: input.tenantId, packageId: pkg.id, limit: 50 });
     const draft = sheets.find((s) => s.status === 'draft');
     if (draft) return draft;
@@ -378,7 +684,7 @@ export class PreAwardPackageService {
     if (frozen) return frozen; // read-only current price; caller may open a new revision explicitly
     const sheet = openCommercialPricing({
       tenantId: input.tenantId, companyId: input.companyId ?? pkg.companyId, name: `Pre-Award pricing — package ${pkg.id.slice(0, 8)}`,
-      opportunityId: input.opportunityId, packageId: pkg.id, estimateRevisionId: estimateId, baselineCost, createdBy: input.actorId,
+      opportunityId: input.opportunityId, packageId: pkg.id, estimateRevisionId: estimateId, baselineCost, costLines, createdBy: input.actorId,
     });
     await this.pricing.save(sheet);
     this.logger.log(`Pricing draft P-${String(sheet.version).padStart(3, '0')} opened for opportunity ${input.opportunityId} (baseline ${baselineCost})`);
@@ -387,14 +693,14 @@ export class PreAwardPackageService {
 
   /** Explicitly open the NEXT pricing revision from the current frozen sheet (re-pricing). */
   async openPricingRevision(input: { tenantId: Id; companyId?: Id | null; opportunityId: Id; actorId?: Id | null }): Promise<PricingSheet> {
-    const { pkg, estimateId, baselineCost } = await this.pricingBaseline(input.tenantId, input.opportunityId);
+    const { pkg, estimateId, baselineCost, costLines } = await this.pricingBaseline(input.tenantId, input.opportunityId);
     const sheets = await this.pricing.list({ tenantId: input.tenantId, packageId: pkg.id, limit: 50 });
     if (sheets.some((s) => s.status === 'draft')) throw new Error('a pricing draft is already open — freeze or edit it before opening a new revision');
     const frozen = [...sheets].sort((a, b) => b.version - a.version)[0];
     if (!frozen || frozen.status !== 'frozen') throw new Error('cannot open a pricing revision: there is no frozen pricing yet');
     const sheet = openCommercialPricing({
       tenantId: input.tenantId, companyId: input.companyId ?? pkg.companyId, name: frozen.name,
-      opportunityId: input.opportunityId, packageId: pkg.id, estimateRevisionId: estimateId, baselineCost,
+      opportunityId: input.opportunityId, packageId: pkg.id, estimateRevisionId: estimateId, baselineCost, costLines,
       version: frozen.version + 1, parentSheetId: frozen.id, createdBy: input.actorId,
     });
     await this.pricing.save(sheet);
@@ -498,19 +804,41 @@ export class PreAwardPackageService {
 
   async readAggregate(tenantId: Id, opportunityId: Id): Promise<PreAwardAggregate> {
     const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
-    if (!pkg) return { package: null, basis: [], estimates: [], pricing: [], governance: UNGOVERNED };
-    const [basis, estimates, pricing] = await Promise.all([
+    if (!pkg) return { package: null, studies: [], basis: [], estimates: [], pricing: [], governance: UNGOVERNED };
+    const [studies, basis, estimates, pricing] = await Promise.all([
+      this.store.listStudies(tenantId, pkg.id),
       this.store.listBasis(tenantId, pkg.id),
       this.store.listEstimates(tenantId, pkg.id),
       this.pricing.list({ tenantId, packageId: pkg.id, limit: 50 }),
     ]);
     const governance = packageGovernance(pkg.id, basis, estimates, pricing.some((s) => s.status === 'frozen'));
-    return { package: pkg, basis, estimates, pricing, governance };
+    return { package: pkg, studies: studies.map((study) => ({ ...study, readiness: technicalStudyReadiness(study) })), basis, estimates, pricing, governance };
+  }
+
+  /** Tender-owned view for its Technical Study → Quantity Take-Off handoff. */
+  async readTenderAggregate(tenantId: Id, tenderId: Id): Promise<PreAwardAggregate> {
+    const pkg = await this.store.getByTender(tenantId, tenderId);
+    if (!pkg) return { package: null, studies: [], basis: [], estimates: [], pricing: [], governance: UNGOVERNED };
+    const [studies, basis, estimates, pricing] = await Promise.all([
+      this.store.listStudies(tenantId, pkg.id),
+      this.store.listBasis(tenantId, pkg.id),
+      this.store.listEstimates(tenantId, pkg.id),
+      this.pricing.list({ tenantId, packageId: pkg.id, limit: 50 }),
+    ]);
+    return {
+      package: pkg,
+      studies: studies.map((study) => ({ ...study, readiness: technicalStudyReadiness(study) })),
+      basis,
+      estimates,
+      pricing,
+      governance: packageGovernance(pkg.id, basis, estimates, pricing.some((sheet) => sheet.status === 'frozen')),
+    };
   }
 }
 
 export interface PreAwardAggregate {
   package: PreAwardPackage | null;
+  studies: Array<TechnicalStudyRevision & { readiness: ReturnType<typeof technicalStudyReadiness> }>;
   basis: EstimationBasisRevision[];
   estimates: EstimateRevision[];
   pricing: PricingSheet[];

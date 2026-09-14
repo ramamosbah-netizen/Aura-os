@@ -19,6 +19,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 describe('G-33 Document Control workflow (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
+  let projectId: string;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -31,6 +32,7 @@ describe('G-33 Document Control workflow (HTTP)', () => {
     );
     await app.init();
     http = request(app.getHttpServer());
+    projectId = (await http.post('/api/v1/projects/projects').send({ title: 'Workflow fixture project' }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -43,7 +45,7 @@ describe('G-33 Document Control workflow (HTTP)', () => {
   it('enforces the document + transmittal lifecycles and records every step', async () => {
     // 1. Create the document — register header + Rev A draft revision.
     const entry = (
-      await http.post(`${B}/register`).send({ projectId: 'proj-1', documentNumber: 'ELV-SPEC-001', title: 'CCTV Specification', discipline: 'elv' }).expect(201)
+      await http.post(`${B}/register`).send({ projectId: projectId, documentNumber: 'ELV-SPEC-001', title: 'CCTV Specification', discipline: 'elv' }).expect(201)
     ).body;
     expect(entry.currentRevision).toBe('A');
     const registerId = entry.id;
@@ -85,7 +87,7 @@ describe('G-33 Document Control workflow (HTTP)', () => {
     await http.post(`${B}/revisions/${revB.id}/submit`).send({}).expect(409);
 
     // 5. Transmittal lifecycle: create (draft) → add Rev B item → send → receive → acknowledge.
-    const tr = (await http.post(`${B}/transmittals`).send({ projectId: 'proj-1', code: 'TR-001', title: 'Issue ELV-SPEC-001 Rev B' }).expect(201)).body;
+    const tr = (await http.post(`${B}/transmittals`).send({ projectId: projectId, code: 'TR-001', title: 'Issue ELV-SPEC-001 Rev B' }).expect(201)).body;
     expect(tr.status).toBe('draft');
     await http.post(`${B}/transmittals/${tr.id}/items`).send({ items: [{ registerEntryId: registerId, revision: 'B', purpose: 'for_construction' }] }).expect(201);
     // Illegal: cannot acknowledge a draft transmittal (409).

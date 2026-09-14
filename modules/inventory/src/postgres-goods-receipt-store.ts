@@ -118,4 +118,14 @@ export class PostgresGoodsReceiptStore implements GoodsReceiptStore {
     );
     return makePage(res.rows.map(rowToGrn), total, page);
   }
+
+  async receivedQuantityForPo(tenantId: Id, poId: Id): Promise<number | null> {
+    const res = await this.pool.query<{ total: string | null; facts: string | number }>(
+      `SELECT SUM(received_quantity)::text AS total, COUNT(received_quantity)::int AS facts
+         FROM public.aura_inventory_grns
+        WHERE tenant_id = $1 AND po_id = $2 AND status = 'received'`,
+      [tenantId, poId],
+    );
+    return Number(res.rows[0]?.facts ?? 0) > 0 ? Number(res.rows[0]?.total ?? 0) : null;
+  }
 }

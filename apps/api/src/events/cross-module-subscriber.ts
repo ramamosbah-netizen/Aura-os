@@ -19,6 +19,7 @@ import { AccountService, OpportunityService, QuotationService, SignalService, Pr
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
+import { GoodsReceiptService } from '@aura/inventory';
 import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney, newId } from '@aura/shared';
 
 /**
@@ -38,7 +39,7 @@ import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mu
  *   finance.customer_invoice.issued ──► (post item-level Billed quantity when frozen lineage is present)
  *   subcontracts.backcharge.recovered ──► (auto-draft a supplier AP debit note — negative invoice — reducing the subcontractor payable)
  *   procurement.po.created  ──► (log committed cost against project)
- *   inventory.grn.created   ──► (auto-transition PO to 'received' & suggest AP invoice)
+ *   inventory.grn.created   ──► (reconcile PO partial/full receipt & suggest AP invoice)
  *   inventory.stock.movement_recorded ──► (low-stock crossing reorder level → auto-draft a replenishment PR)
  *   inventory.stock.movement_recorded ──► (perpetual-inventory GL: receipt Dr Inventory/Cr GRNI; issue Dr COGS/Cr Inventory)
  *   amc.workorder.completed ──► (auto-draft a client AR invoice for the billable service visit)
@@ -59,6 +60,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly variations: VariationService,
     private readonly tenant: TenantContext,
     private readonly pos: PurchaseOrderService,
+    private readonly goodsReceipts: GoodsReceiptService,
     private readonly purchaseRequests: PurchaseRequestService,
     private readonly tenders: TenderService,
     private readonly estimateSourcing: EstimateSourcingService,
@@ -1301,7 +1303,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }),
     );
 
-    // ── Operate: GRN created → auto-transition PO to 'received' & suggest AP invoice ─────
+    // ── Operate: GRN created → reconcile partial/full PO receipt & suggest AP invoice ─────
     this.bus.subscribe('inventory.grn.created', (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
       const po = p.po as { id: string; title: string } | null;
@@ -1309,12 +1311,13 @@ export class CrossModuleSubscriber implements OnModuleInit {
         `💡 grn.created → suggest AP invoice for "${p.title}" (PO: ${po ? po.id : 'none'}, value: ${p.value})`,
       );
       if (!po?.id) return Promise.resolve();
-      // BEST-EFFORT: the PO status transition is not guarded for replay. It used to share grn.created
-      // with a non-idempotent received-quantity reactor too; since TC-GATE-20 that one is keyed, so
-      // this handler is now the only reason a rethrow on this event is unsafe.
-      return this.bestEffort('auto-transition PO status on grn.created', e, 'the PO status transition is not replay-guarded', async () => {
-        await this.pos.changeStatus(po.id, 'received');
-        this.logger.log(`⚡ grn.created → auto-transitioned PO ${po.id} to 'received' status`);
+      // The GRN is already persisted when the event is delivered. Sum all accepted receipts for
+      // this PO so one unit against an order of one hundred is explicitly partial, while later
+      // batches converge to received even when events are delivered out of order.
+      return this.retryable('reconcile PO receipt status on grn.created', e, async () => {
+        const receivedQuantity = await this.goodsReceipts.receivedQuantityForPo(e.tenantId, po.id);
+        const updated = await this.pos.reconcileReceipt(po.id, receivedQuantity);
+        this.logger.log(`⚡ grn.created → reconciled PO ${po.id} to '${updated.status}' (${receivedQuantity ?? 'quantity unknown'} received)`);
       });
     });
 
@@ -1482,8 +1485,11 @@ export class CrossModuleSubscriber implements OnModuleInit {
           unit: (p.unit as string | null) ?? null,
           source: direction === 'out' ? 'material_issue' : 'material_return',
           sourceRef: `${code} — material ${direction === 'out' ? 'issue' : 'return'}`,
-          dimensions: { movementId: e.aggregateId, itemCode: code },
-          dedupeKey: `stock-movement:${e.aggregateId}`,
+          // The aggregate is the stock-item id and is shared by every movement. The persisted
+          // movement id identifies the business transaction even if a producer re-emits it as a
+          // fresh event; old events fall back to their immutable event id.
+          dimensions: { movementId: (p.movementId as string | undefined) ?? e.id, itemCode: code },
+          dedupeKey: `stock-movement:${(p.movementId as string | undefined) ?? e.id}`,
         });
         this.logger.log(`📏 material ${direction === 'out' ? 'issue' : 'return'} → posted issued ${sign * quantity} on BOQ ${boqItemId}`);
       }),

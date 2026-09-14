@@ -17,6 +17,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 describe('QA/QC NCR workflow (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
+  let projectId: string;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -29,6 +30,7 @@ describe('QA/QC NCR workflow (HTTP)', () => {
     );
     await app.init();
     http = request(app.getHttpServer());
+    projectId = (await http.post('/api/v1/projects/projects').send({ title: 'Workflow fixture project' }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -40,7 +42,7 @@ describe('QA/QC NCR workflow (HTTP)', () => {
   it('enforces IR + NCR lifecycles and records every transition', async () => {
     // 1. Request an inspection, start it, then FAIL it.
     const ir = (
-      await http.post(`${B}/irs`).send({ projectId: 'proj-1', irNumber: 'IR-001', discipline: 'electrical', locationDetail: 'L02 corridor', inspectionDate: '2026-08-20' }).expect(201)
+      await http.post(`${B}/irs`).send({ projectId: projectId, irNumber: 'IR-001', discipline: 'electrical', locationDetail: 'L02 corridor', inspectionDate: '2026-08-20' }).expect(201)
     ).body;
     expect(ir.status).toBe('requested');
     await http.post(`${B}/irs/${ir.id}/start-inspection`).send({}).expect(201);

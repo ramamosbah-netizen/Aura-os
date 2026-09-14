@@ -10,6 +10,9 @@ export class InMemoryPreAwardStore implements PreAwardStore {
   async saveRequirement(r: Requirement): Promise<void> {
     this.requirements.set(r.id, { ...r });
   }
+  async saveRequirementWithClient(_tx: unknown, r: Requirement): Promise<void> {
+    await this.saveRequirement(r);
+  }
   async listRequirements(tenantId: Id, opportunityId: Id): Promise<Requirement[]> {
     return [...this.requirements.values()]
       .filter((r) => r.tenantId === tenantId && r.opportunityId === opportunityId)

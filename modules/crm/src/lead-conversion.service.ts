@@ -1,12 +1,25 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, assertSameTenant, CRM_EVENT, elvSystemLabel, type Id, type IdentityMatch, type IdentityResolution, type Lead, makeEvent, makeOpportunity, type MatchConfidence, type Opportunity, type OpportunityStage, type OrgLevel, resolveIdentity } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
+import { type AccessTarget, assertSameTenant, CRM_EVENT, CRM_OPPORTUNITY_DEPTH_EVENT, elvSystemLabel, type Id, type IdentityMatch, type IdentityResolution, type Lead, makeDealMember, makeEvent, makeOpportunity, type MatchConfidence, type Opportunity, type OpportunityDealMember, type OpportunityStage, type OrgLevel, resolveIdentity } from '@aura/shared';
+import { AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner, UsersService } from '@aura/core';
 import { CRM_LEAD_STORE, type LeadStore } from './lead-store';
 import { CRM_ACCOUNT_STORE, type AccountStore } from './account-store';
 import { CRM_CONTACT_STORE, type ContactStore } from './contact-store';
 import { CRM_OPPORTUNITY_STORE, type OpportunityStore } from './opportunity-store';
 import { makeAccount, CRM_EVENT as CRM_ACCOUNT_EVENT } from './domain/account';
 import { makeContact, CRM_CONTACT_EVENT } from './domain/contact';
+import { makeRequirement, PREAWARD_EVENT } from './domain/solution-scope';
+import { CRM_PRE_AWARD_STORE, type PreAwardStore } from './pre-award-store';
+import { CRM_ACTIVITY_STORE, type ActivityStore } from './activity-store';
+import { CRM_OPPORTUNITY_DEPTH_STORE, type OpportunityDepthStore } from './opportunity-depth-store';
+import { CRM_ACTIVITY_EVENT, makeActivity, type Activity } from './domain/activity';
+
+export interface PreSalesAssignmentInput {
+  assigneeId: Id;
+  reviewerId: Id;
+  dueDate: string;
+  inputRevision: string;
+  deliverables: string[];
+}
 
 export interface ConvertLeadInput {
   actorId?: Id | null;
@@ -26,6 +39,8 @@ export interface ConvertLeadInput {
     closeDate?: string | null;
     ownerId?: Id | null;
   };
+  /** Optional for compatibility with existing integrations; the primary UI always supplies it. */
+  preSalesAssignment?: PreSalesAssignmentInput;
 }
 
 export interface IdentityLink {
@@ -44,6 +59,7 @@ export interface ConvertLeadResult {
   opportunity: Opportunity;
   account: IdentityLink;
   contact: IdentityLink | null;
+  preSalesAssignment: { member: OpportunityDealMember; reviewerMember: OpportunityDealMember; activity: Activity } | null;
 }
 
 export interface ConvertPreview {
@@ -87,6 +103,10 @@ export class LeadConversionService {
     // @Optional() @Inject(...) explicitly: a union-typed ctor param emits `Object` for
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    @Optional() @Inject(CRM_PRE_AWARD_STORE) private readonly preAward: PreAwardStore | null = null,
+    @Optional() @Inject(CRM_ACTIVITY_STORE) private readonly activityStore: ActivityStore | null = null,
+    @Optional() @Inject(CRM_OPPORTUNITY_DEPTH_STORE) private readonly depthStore: OpportunityDepthStore | null = null,
+    @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
   ) {}
 
   /** Dry run: what would convert link or create? Drives the "possible duplicate" UI. */
@@ -158,7 +178,7 @@ export class LeadConversionService {
     if (input.actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: lead.tenantId }];
       if (lead.companyId) orgPath.push({ level: 'company', id: lead.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.lead.convert', orgPath };
       this.access.assert(input.actorId, target);
     }
 
@@ -172,6 +192,7 @@ export class LeadConversionService {
         opportunity: existing,
         account: { action: 'linked', id: existing.accountId ?? '' },
         contact: null,
+        preSalesAssignment: null,
       };
     }
 
@@ -278,6 +299,85 @@ export class LeadConversionService {
       firstRespondedAt: lead.firstRespondedAt ?? now,
       updatedAt: now,
     };
+    // The customer's words are the first technical input. Preserve them as an opportunity
+    // requirement in the SAME transaction as conversion so Pre-Sales receives the exact enquiry
+    // instead of retyping it or finding an empty study workspace.
+    const seededRequirement = this.preAward && lead.requirement?.trim()
+      ? makeRequirement({
+          tenantId: lead.tenantId,
+          opportunityId: opp.id,
+          title: lead.requirement,
+          detail: `Captured from enquiry ${lead.id}`,
+          priority: 'must',
+        })
+      : null;
+
+    const assignmentInput = input.preSalesAssignment;
+    let assignmentMember: OpportunityDealMember | null = null;
+    let reviewerMember: OpportunityDealMember | null = null;
+    let assignmentActivity: Activity | null = null;
+    if (assignmentInput) {
+      if (!input.actorId) throw new Error('actor is required to assign Pre-Sales work');
+      if (!this.activityStore || !this.depthStore || !this.users) {
+        throw new Error('Pre-Sales assignment services are unavailable');
+      }
+      const deliverables = [...new Set(assignmentInput.deliverables.map((item) => item.trim()).filter(Boolean))];
+      if (!assignmentInput.assigneeId?.trim()) throw new Error('Pre-Sales assignee is required');
+      if (!assignmentInput.reviewerId?.trim()) throw new Error('technical reviewer is required');
+      if (assignmentInput.assigneeId === assignmentInput.reviewerId) throw new Error('technical reviewer must be independent from the Pre-Sales assignee');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(assignmentInput.dueDate)) throw new Error('Pre-Sales due date is required');
+      if (!assignmentInput.inputRevision?.trim()) throw new Error('input revision is required');
+      if (deliverables.length === 0) throw new Error('at least one Pre-Sales deliverable is required');
+
+      this.access.assert(input.actorId, {
+        permission: 'crm.activity.create',
+        orgPath: [{ level: 'tenant', id: lead.tenantId }, ...(lead.companyId ? [{ level: 'company' as const, id: lead.companyId }] : [])],
+      });
+      await this.users.ensureTenant(lead.tenantId);
+      const assignee = this.users.get(lead.tenantId, assignmentInput.assigneeId);
+      const reviewer = this.users.get(lead.tenantId, assignmentInput.reviewerId);
+      if (!assignee?.active) throw new Error('Pre-Sales assignee must be an active workspace user');
+      if (!reviewer?.active) throw new Error('technical reviewer must be an active workspace user');
+
+      const responsibility = `Study ${deliverables.join(', ')} from input revision ${assignmentInput.inputRevision.trim()}; reviewer ${assignmentInput.reviewerId}`;
+      assignmentMember = makeDealMember({
+        tenantId: lead.tenantId,
+        opportunityId: opp.id,
+        userId: assignmentInput.assigneeId,
+        userName: assignee.displayName,
+        role: 'PRESALES',
+        responsibility,
+      });
+      // The reviewer is part of the same canonical deal team. This is also the persisted relation
+      // used by DMS to grant read-only access to the original Sales intake documents; no copied file
+      // or caller-supplied opportunity id is trusted later.
+      reviewerMember = makeDealMember({
+        tenantId: lead.tenantId,
+        opportunityId: opp.id,
+        userId: assignmentInput.reviewerId,
+        userName: reviewer.displayName,
+        role: 'TECHNICAL_REVIEWER',
+        responsibility: `Review the Pre-Sales study based on input revision ${assignmentInput.inputRevision.trim()}`,
+      });
+      assignmentActivity = makeActivity({
+        tenantId: lead.tenantId,
+        companyId: lead.companyId,
+        type: 'task',
+        subject: `Complete Pre-Sales study — ${opp.title}`,
+        notes: [
+          `Deliverables: ${deliverables.join(', ')}`,
+          `Input revision: ${assignmentInput.inputRevision.trim()}`,
+          `Technical reviewer: ${reviewer.displayName} (${assignmentInput.reviewerId})`,
+          `Source enquiry: ${lead.id}`,
+        ].join('\n'),
+        relatedType: 'opportunity',
+        relatedId: opp.id,
+        relatedName: opp.title,
+        dueDate: assignmentInput.dueDate,
+        assigneeId: assignmentInput.assigneeId,
+        createdBy: input.actorId,
+      });
+    }
 
     const evs = [
       ...(newAccount
@@ -304,17 +404,74 @@ export class LeadConversionService {
         actorId: input.actorId ?? null, aggregateType: 'crm.lead', aggregateId: lead.id,
         payload: { opportunityId: opp.id, accountId, contactId: contactLink?.id ?? null, source: lead.source },
       }),
+      ...(seededRequirement
+        ? [makeEvent({
+            type: PREAWARD_EVENT.requirementAdded,
+            tenantId: lead.tenantId,
+            companyId: lead.companyId,
+            actorId: input.actorId ?? null,
+            aggregateType: 'crm.opportunity',
+            aggregateId: opp.id,
+            payload: { requirementId: seededRequirement.id, title: seededRequirement.title, priority: seededRequirement.priority, sourceLeadId: lead.id },
+          })]
+        : []),
+      ...(assignmentMember
+        ? [makeEvent({
+            type: CRM_OPPORTUNITY_DEPTH_EVENT.dealMemberAdded,
+            tenantId: lead.tenantId,
+            companyId: lead.companyId,
+            actorId: input.actorId ?? null,
+            aggregateType: 'crm.opportunity',
+            aggregateId: opp.id,
+            payload: { memberId: assignmentMember.id, userId: assignmentMember.userId, role: assignmentMember.role },
+          })]
+        : []),
+      ...(reviewerMember
+        ? [makeEvent({
+            type: CRM_OPPORTUNITY_DEPTH_EVENT.dealMemberAdded,
+            tenantId: lead.tenantId,
+            companyId: lead.companyId,
+            actorId: input.actorId ?? null,
+            aggregateType: 'crm.opportunity',
+            aggregateId: opp.id,
+            payload: { memberId: reviewerMember.id, userId: reviewerMember.userId, role: reviewerMember.role },
+          })]
+        : []),
+      ...(assignmentActivity
+        ? [makeEvent({
+            type: CRM_ACTIVITY_EVENT.created,
+            tenantId: lead.tenantId,
+            companyId: lead.companyId,
+            actorId: input.actorId ?? null,
+            aggregateType: 'crm.activity',
+            aggregateId: assignmentActivity.id,
+            payload: { type: assignmentActivity.type, subject: assignmentActivity.subject, relatedType: assignmentActivity.relatedType, relatedId: assignmentActivity.relatedId },
+          })]
+        : []),
     ];
 
     await this.tx.run(async (handle) => {
       if (newAccount) await this.accounts.createWithClient(handle, newAccount);
       if (newContact) await this.contacts.saveWithClient(handle, newContact);
       await this.opportunities.createWithClient(handle, opp);
+      if (seededRequirement) await this.preAward!.saveRequirementWithClient(handle, seededRequirement);
+      if (assignmentMember) await this.depthStore!.saveDealMemberWithClient(handle, assignmentMember);
+      if (reviewerMember) await this.depthStore!.saveDealMemberWithClient(handle, reviewerMember);
+      if (assignmentActivity) await this.activityStore!.saveWithClient(handle, assignmentActivity);
       await this.leads.updateWithClient(handle, convertedLead);
       await this.events.appendWithClient(handle, evs);
     });
 
     this.logger.log(`Lead converted: ${lead.name} (${lead.id}) → opportunity ${opp.id} (account ${accountLink.action} ${accountId})`);
-    return { idempotentReplay: false, lead: convertedLead, opportunity: opp, account: accountLink, contact: contactLink };
+    return {
+      idempotentReplay: false,
+      lead: convertedLead,
+      opportunity: opp,
+      account: accountLink,
+      contact: contactLink,
+      preSalesAssignment: assignmentMember && reviewerMember && assignmentActivity
+        ? { member: assignmentMember, reviewerMember, activity: assignmentActivity }
+        : null,
+    };
   }
 }

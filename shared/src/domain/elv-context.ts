@@ -27,16 +27,34 @@ export const ELV_SYSTEMS = [
   // passive cabling it runs over. The commissioning module had it and this list did not, which is
   // how the two taxonomies drifted apart.
   'network',
+  'wifi',
   'bms',
+  'ems_metering',
   'audio_visual',
   'intercom',
   'nurse_call',
   'gate_barrier',
   'parking_management',
+  // MEP systems share the same enquiry-routing vocabulary. Keeping them outside this list made
+  // Sales choose "Other" and destroyed the system identity before the job reached Engineering.
+  'mechanical',
+  'hvac',
+  'electrical_power',
+  'lighting',
+  'plumbing',
+  'drainage',
+  'fire_fighting',
+  'fire_suppression',
   'other',
 ] as const;
 
 export type ElvSystem = (typeof ELV_SYSTEMS)[number];
+
+/** Systems routed to MEP disciplines rather than a coarse ELV drawing package. */
+export const MEP_SYSTEMS: readonly ElvSystem[] = [
+  'ems_metering', 'mechanical', 'hvac', 'electrical_power', 'lighting',
+  'plumbing', 'drainage', 'fire_fighting', 'fire_suppression',
+] as const;
 
 /** One source for labels, so API, UI and reports never drift apart. */
 export const ELV_SYSTEM_LABELS: Record<ElvSystem, string> = {
@@ -47,12 +65,22 @@ export const ELV_SYSTEM_LABELS: Record<ElvSystem, string> = {
   public_address: 'Public Address / Voice Alarm',
   structured_cabling: 'Structured Cabling',
   network: 'Network & Active Equipment',
+  wifi: 'Wi-Fi',
   bms: 'BMS',
+  ems_metering: 'EMS & Metering',
   audio_visual: 'Audio Visual',
   intercom: 'Intercom',
   nurse_call: 'Nurse Call',
   gate_barrier: 'Gate & Barrier',
   parking_management: 'Parking Management',
+  mechanical: 'Mechanical',
+  hvac: 'HVAC',
+  electrical_power: 'Electrical Power',
+  lighting: 'Lighting & Lighting Control',
+  plumbing: 'Plumbing',
+  drainage: 'Drainage',
+  fire_fighting: 'Fire Fighting',
+  fire_suppression: 'Fire Suppression',
   other: 'Other',
 };
 
@@ -140,6 +168,14 @@ export const ELV_SYSTEM_ALIASES: Readonly<Record<string, ElvSystem>> = {
   access: 'access_control',
   sc: 'structured_cabling',
   lan: 'network',
+  wireless: 'wifi',
+  wifi_network: 'wifi',
+  ems: 'ems_metering',
+  metering: 'ems_metering',
+  electrical: 'electrical_power',
+  power: 'electrical_power',
+  firefighting: 'fire_fighting',
+  fire_suppression_system: 'fire_suppression',
 };
 
 /**

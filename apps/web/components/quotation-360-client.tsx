@@ -50,6 +50,26 @@ export interface QuotationPricingView {
   marginPercent: number | null;
 }
 
+export interface QuotationActionAccess {
+  submitReview: boolean;
+  approve: boolean;
+  send: boolean;
+  negotiate: boolean;
+  accept: boolean;
+  reject: boolean;
+  expire: boolean;
+  cancel: boolean;
+  revise: boolean;
+  convertToContract: boolean;
+  internalPricing: boolean;
+}
+
+const NO_ACTION_ACCESS: QuotationActionAccess = {
+  submitReview: false, approve: false, send: false, negotiate: false,
+  accept: false, reject: false, expire: false, cancel: false,
+  revise: false, convertToContract: false, internalPricing: false,
+};
+
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Draft', internal_review: 'Internal review', approved: 'Approved', sent: 'Sent',
   under_negotiation: 'Under negotiation', revised: 'Revised', accepted: 'Accepted',
@@ -66,18 +86,21 @@ const money = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { 
 const aed0 = (n: number): string => `AED ${Number(n).toLocaleString('en-AE', { maximumFractionDigits: 0 })}`;
 const pct = (n: number): string => `${n.toFixed(1)}%`;
 
-export default function Quotation360Client({ quotation: q, revisions, pricingView, revisionsError = null, pricingError = null }: {
+export default function Quotation360Client({ quotation: q, revisions, pricingView, revisionsError = null, pricingError = null, actionAccess, canAccessInternalPricing = true }: {
   quotation: Quotation;
   revisions: Quotation[];
   pricingView?: QuotationPricingView | null;
   revisionsError?: DataError | null;
   pricingError?: DataError | null;
+  actionAccess?: QuotationActionAccess | null;
+  canAccessInternalPricing?: boolean;
 }) {
   const router = useRouter();
   const [tab, setTab] = useTab('overview');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const allowed = actionAccess ?? NO_ACTION_ACCESS;
   const operationKeys = useRef<Record<string, string>>({});
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -173,31 +196,28 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
   const actions = (
     <>
-      {q.status === 'draft' && (
-        <>
-          <ActionButton kind="ghost" disabled={busy} onClick={() => act('submit_review')}>Review →</ActionButton>
-          <ActionButton kind="primary" disabled={busy} onClick={() => act('approve')}>Approve ✓</ActionButton>
-        </>
+      {q.status === 'draft' && allowed.submitReview && (
+        <ActionButton kind="primary" disabled={busy} onClick={() => act('submit_review')}>Submit for review →</ActionButton>
       )}
-      {q.status === 'internal_review' && <ActionButton kind="primary" disabled={busy} onClick={() => act('approve')}>Approve ✓</ActionButton>}
-      {q.status === 'approved' && <ActionButton kind="primary" disabled={busy} onClick={() => act('send')}>Send</ActionButton>}
-      {q.status === 'sent' && <ActionButton kind="ghost" disabled={busy} onClick={() => act('negotiate')}>Negotiate</ActionButton>}
+      {q.status === 'internal_review' && allowed.approve && <ActionButton kind="primary" disabled={busy} onClick={() => act('approve')}>Approve ✓</ActionButton>}
+      {q.status === 'approved' && allowed.send && <ActionButton kind="primary" disabled={busy} onClick={() => act('send')}>Record as sent</ActionButton>}
+      {q.status === 'sent' && allowed.negotiate && <ActionButton kind="ghost" disabled={busy} onClick={() => act('negotiate')}>Start negotiation</ActionButton>}
       {(q.status === 'sent' || q.status === 'under_negotiation') && (
         <>
-          <ActionButton kind="ghost" disabled={busy} onClick={() => act('accept')}>Accept ✓</ActionButton>
-          <ActionButton kind="ghost" disabled={busy} onClick={() => act('reject')}>Reject ✕</ActionButton>
+          {allowed.accept && <ActionButton kind="ghost" disabled={busy} onClick={() => act('accept')}>Record accepted ✓</ActionButton>}
+          {allowed.reject && <ActionButton kind="ghost" disabled={busy} onClick={() => act('reject')}>Record rejected ✕</ActionButton>}
         </>
       )}
-      {['sent', 'under_negotiation', 'rejected', 'expired'].includes(q.status) && (
+      {allowed.revise && ['sent', 'under_negotiation', 'rejected', 'expired'].includes(q.status) && (
         <ActionButton kind="ghost" disabled={busy} onClick={() => void revise()}>Revise ↺</ActionButton>
       )}
-      {q.status === 'accepted' && !q.convertedContractId && (
+      {allowed.convertToContract && q.status === 'accepted' && !q.convertedContractId && (
         <ActionButton kind="primary" disabled={busy} onClick={() => void toContract()}>→ Contract</ActionButton>
       )}
-      <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/print`} target="_blank" rel="noopener noreferrer">⭳ Export PDF</ActionButton>
-      <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`} target="_blank" rel="noopener noreferrer">⊞ Pricing sheet</ActionButton>
-      {pastValidity && isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => void act('expire')}>Expire</ActionButton>}
-      {isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => act('cancel')}>Cancel</ActionButton>}
+      <ActionButton kind="ghost" href={`/api/crm/quotations/${q.id}/pdf`} target="_blank" rel="noopener noreferrer">⭳ Download PDF</ActionButton>
+      {canAccessInternalPricing && <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`} target="_blank" rel="noopener noreferrer">⊞ Pricing sheet</ActionButton>}
+      {allowed.expire && pastValidity && isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => void act('expire')}>Record expired</ActionButton>}
+      {allowed.cancel && isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => act('cancel')}>Cancel</ActionButton>}
     </>
   );
 
@@ -206,10 +226,10 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
     { label: 'Total (incl. VAT)', value: aed0(q.total), tone: 'accent' },
     { label: 'Subtotal', value: aed0(q.subtotal) },
     { label: 'VAT', value: aed0(q.vatTotal) },
-    {
+    ...(canAccessInternalPricing ? [{
       label: 'Margin', tone: pricing ? (pricing.marginPct >= 20 ? 'good' : pricing.marginPct >= 10 ? 'warn' : 'bad') : 'neutral',
       value: pricingError ? '—' : pricing ? pct(pricing.marginPct) : '—', hint: pricingError ? 'Pricing unavailable' : pricing ? `${aed0(pricing.totalMargin)} over cost ${aed0(pricing.totalCost)}` : 'No pricing sheet',
-    },
+    } as KpiItem] : []),
     { label: 'Lines', value: q.lines.length },
     {
       label: 'Valid until', value: q.validUntil ?? '—',
@@ -220,27 +240,45 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
   // ── Insights rail ─────────────────────────────────────────────────────────────
   const insights: Insight[] = [];
-  if (q.status === 'draft' || q.status === 'internal_review') {
-    insights.push({ tone: 'accent', title: 'Approval required before sending', detail: 'Send is gated on approved — approving locks the commercial baseline.', action: { label: 'Approve now', onClick: () => void act('approve') } });
+  if (q.status === 'draft') {
+    insights.push({
+      tone: 'accent',
+      title: allowed.submitReview ? 'Ready for internal review' : 'Draft offer is being prepared',
+      detail: allowed.submitReview ? 'Submit the completed offer to Commercial Management.' : 'The offer must be submitted before Commercial Management can approve it.',
+      ...(allowed.submitReview ? { action: { label: 'Submit for review', onClick: () => void act('submit_review') } } : {}),
+    });
+  }
+  if (q.status === 'internal_review') {
+    insights.push({
+      tone: 'accent',
+      title: allowed.approve ? 'Commercial approval required' : 'Waiting for Commercial Management',
+      detail: allowed.approve ? 'Approval locks the commercial baseline before customer submission.' : 'An authorised commercial approver must review and lock the offer.',
+      ...(allowed.approve ? { action: { label: 'Approve now', onClick: () => void act('approve') } } : {}),
+    });
   }
   if (q.status === 'approved') {
-    insights.push({ tone: 'good', title: 'Ready to send', detail: 'Baseline is locked — send the quote to the customer.', action: { label: 'Send', onClick: () => void act('send') } });
+    insights.push({
+      tone: 'good',
+      title: allowed.send ? 'Ready for customer submission' : 'Approved — waiting for Sales',
+      detail: allowed.send ? 'Download the approved PDF, send it through the agreed channel, then record it as sent.' : 'Sales must submit the approved document to the customer and record the submission.',
+      ...(allowed.send ? { action: { label: 'Record as sent', onClick: () => void act('send') } } : {}),
+    });
   }
   if (pastValidity) {
     insights.push({ tone: 'bad', title: 'Validity has lapsed', detail: `Valid until ${q.validUntil} — revise or re-confirm with the customer.` });
   } else if (expiresSoon) {
     insights.push({ tone: 'warn', title: 'Expiring within 7 days', detail: `Valid until ${q.validUntil} — chase a decision now.` });
   }
-  if (!pricing && !pricingError && isOpen) {
+  if (canAccessInternalPricing && !pricing && !pricingError && isOpen) {
     insights.push({ tone: 'warn', title: 'No pricing sheet linked', detail: 'Margin is unknown — build the cost breakdown before negotiating.', action: { label: 'Open pricing sheet', href: `/crm/quotations/${q.id}/pricing` } });
   }
   if (pricing && pricing.marginPct < 10 && isOpen) {
     insights.push({ tone: 'bad', title: `Thin margin — ${pct(pricing.marginPct)}`, detail: 'Below the 10% floor. Review costs or price before it goes further.' });
   }
-  if (q.status === 'accepted' && !q.convertedContractId) {
+  if (allowed.convertToContract && q.status === 'accepted' && !q.convertedContractId) {
     insights.push({ tone: 'good', title: 'Accepted — convert to contract', detail: 'Close the loop: award this quote into a contract.', action: { label: 'Convert', onClick: () => void toContract() } });
   }
-  if (q.status === 'rejected' || q.status === 'expired') {
+  if (allowed.revise && (q.status === 'rejected' || q.status === 'expired')) {
     insights.push({ tone: 'warn', title: 'Not dead yet — revise', detail: `Supersede Rev ${q.revision} and draft Rev ${q.revision + 1} with updated commercials.`, action: { label: 'Revise ↺', onClick: () => void revise() } });
   }
 
@@ -248,7 +286,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   // on those fronts — the rail must say so rather than fall silent and look clean.
   const insightsAssessment: AssessmentInput = {
     attentionCount: insights.filter((i) => i.tone === 'warn' || i.tone === 'bad').length,
-    required: ['APPROVAL_WORKFLOW', 'VALIDITY_DATES', 'PRICING_MARGIN'],
+    required: ['APPROVAL_WORKFLOW', 'VALIDITY_DATES', ...(canAccessInternalPricing ? (['PRICING_MARGIN'] as const) : [])],
     assessed: [
       'APPROVAL_WORKFLOW' as const,
       ...(q.validUntil ? (['VALIDITY_DATES'] as const) : []),
@@ -280,7 +318,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   const missing: string[] = [];
   if (isOpen) {
     if (q.status === 'draft' || q.status === 'internal_review') missing.push('Approval');
-    if (!pricing && !pricingError) missing.push('Pricing sheet');
+    if (canAccessInternalPricing && !pricing && !pricingError) missing.push('Pricing sheet');
     if (!q.validUntil) missing.push('Validity date');
     if (!q.contactName) missing.push('Customer contact');
     // A quote with no payment terms, no delivery terms, no exclusions AND no notes has no
@@ -291,13 +329,15 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
   // The ONE next best action — mapped to the lifecycle.
   let nba: NextBestAction | undefined;
-  if (q.status === 'accepted' && !q.convertedContractId) nba = { label: '→ Convert to contract', hint: 'award the quote', onClick: () => void toContract() };
-  else if (q.status === 'draft' || q.status === 'internal_review') nba = { label: 'Approve', hint: 'locks the commercial baseline', onClick: () => void act('approve') };
-  else if (q.status === 'approved') nba = { label: 'Send to customer', onClick: () => void act('send') };
-  else if (pastValidity) nba = { label: 'Expire quotation', hint: `valid until ${q.validUntil}`, onClick: () => void act('expire') };
-  else if (q.status === 'rejected' || q.status === 'expired') nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
-  else if (q.status === 'sent' || q.status === 'under_negotiation') nba = { label: 'Chase a decision', hint: 'awaiting customer', onClick: () => setTab('activity') };
-  else if (!pricing && isOpen) nba = { label: 'Build the pricing sheet', href: `/crm/quotations/${q.id}/pricing` };
+  if (allowed.convertToContract && q.status === 'accepted' && !q.convertedContractId) nba = { label: '→ Convert to contract', hint: 'award the quote', onClick: () => void toContract() };
+  else if (q.status === 'draft' && allowed.submitReview) nba = { label: 'Submit for review', hint: 'send to Commercial Management', onClick: () => void act('submit_review') };
+  else if (q.status === 'internal_review' && allowed.approve) nba = { label: 'Approve', hint: 'locks the commercial baseline', onClick: () => void act('approve') };
+  else if (q.status === 'approved' && allowed.send) nba = { label: 'Record as sent', hint: 'after customer submission', onClick: () => void act('send') };
+  else if (pastValidity && allowed.expire) nba = { label: 'Record expired', hint: `valid until ${q.validUntil}`, onClick: () => void act('expire') };
+  else if ((q.status === 'rejected' || q.status === 'expired') && allowed.revise) nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
+  else if ((q.status === 'sent' || q.status === 'under_negotiation') && allowed.negotiate) nba = { label: 'Record negotiation', hint: 'customer response received', onClick: () => void act('negotiate') };
+  else if (q.status === 'sent' || q.status === 'under_negotiation') nba = { label: 'Open activity', hint: 'awaiting customer', onClick: () => setTab('activity') };
+  else if (canAccessInternalPricing && !pricing && isOpen) nba = { label: 'Build the pricing sheet', href: `/crm/quotations/${q.id}/pricing` };
 
   // Outcome Loop — writes a real activity linked to this quotation (§17 activity stream).
   const logOutcome = async (choiceId: string): Promise<void> => {
@@ -325,7 +365,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   // ── Tabs ─────────────────────────────────────────────────────────────────────
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'pricing', label: 'Pricing & margin' },
+    ...(canAccessInternalPricing ? [{ id: 'pricing', label: 'Pricing & margin' } as TabDef] : []),
     { id: 'revisions', label: 'Revisions', count: revisions.length > 1 ? revisions.length : undefined },
     { id: 'terms', label: 'Terms' },
     { id: 'negotiation', label: 'Negotiation' },

@@ -14,7 +14,7 @@ interface SpendAnalytics {
   byMonth: Bucket[];      // last 12 months, chronological
 }
 
-const COMMITTED = new Set(['approved', 'issued', 'received', 'closed']);
+const COMMITTED = new Set(['approved', 'issued', 'partially_received', 'received', 'closed']);
 
 function bucket(rows: { key: string; value: number }[]): Bucket[] {
   const m = new Map<string, Bucket>();

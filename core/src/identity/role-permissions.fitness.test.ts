@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { permissionMatches } from '@aura/shared';
 import { derivePermissionFromRoute } from './permissions.guard';
+import { STANDARD_ELV_ROLES } from './standard-elv-roles';
 
 /**
  * A role permission pattern must be able to match something.
@@ -21,31 +20,12 @@ import { derivePermissionFromRoute } from './permissions.guard';
  * Nothing failed loudly because a grant that matches nothing is indistinguishable from a grant that
  * was never meant to apply. That is exactly the kind of silence a fitness test is for.
  */
-const SOURCES = [
-  join(__dirname, 'access.service.ts'),
-  join(__dirname, '../../../apps/api/src/auth/elv-roles.ts'),
-];
-
-/** Every quoted permission pattern in a role definition, with the file it came from. */
+/** Every effective pattern in the canonical role catalog used by AccessService and the API seeder. */
 function declaredPatterns(): Array<{ file: string; pattern: string }> {
-  const found: Array<{ file: string; pattern: string }> = [];
-  for (const file of SOURCES) {
-    let src: string;
-    try {
-      src = readFileSync(file, 'utf8');
-    } catch {
-      continue; // the API package may not be present in every build context
-    }
-    for (const block of src.matchAll(/permissions: \[([\s\S]*?)\]/g)) {
-      for (const raw of block[1].split(',')) {
-        const pattern = raw.trim().replace(/^'|'$/g, '');
-        // Skip identifiers (e.g. the COMMS constant), comments and empties — only literals matter.
-        if (!pattern || !/^[a-z0-9*.-]+$/.test(pattern)) continue;
-        found.push({ file: file.split(/[\\/]/).pop()!, pattern });
-      }
-    }
-  }
-  return found;
+  return STANDARD_ELV_ROLES.flatMap((role) => role.permissions.map((pattern) => ({
+    file: `standard-elv-roles.ts:${role.id}`,
+    pattern,
+  })));
 }
 
 describe('role permission patterns', () => {

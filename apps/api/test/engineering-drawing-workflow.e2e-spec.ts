@@ -17,6 +17,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 describe('G-32 engineering drawing workflow (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
+  let projectId: string;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -29,6 +30,7 @@ describe('G-32 engineering drawing workflow (HTTP)', () => {
     );
     await app.init();
     http = request(app.getHttpServer());
+    projectId = (await http.post('/api/v1/projects/projects').send({ title: 'Workflow fixture project' }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -40,7 +42,7 @@ describe('G-32 engineering drawing workflow (HTTP)', () => {
   it('enforces the lifecycle and records every transition end-to-end', async () => {
     // 1. Create the drawing at Rev 0 / draft.
     const created = (
-      await http.post(`${B}/drawings`).send({ projectId: 'proj-1', code: 'ELV-CCTV-001', title: 'CCTV Layout — Ground Floor' }).expect(201)
+      await http.post(`${B}/drawings`).send({ projectId: projectId, code: 'ELV-CCTV-001', title: 'CCTV Layout — Ground Floor' }).expect(201)
     ).body;
     expect(created.status).toBe('draft');
     expect(created.revision).toBe('0');
@@ -78,7 +80,7 @@ describe('G-32 engineering drawing workflow (HTTP)', () => {
     expect((await http.get(`${B}/drawings/${id0}`).expect(200)).body.status).toBe('superseded');
 
     // Revision lineage shows both revisions.
-    const lineage = (await http.get(`${B}/drawings/revisions?projectId=proj-1&code=ELV-CCTV-001`).expect(200)).body;
+    const lineage = (await http.get(`${B}/drawings/revisions?projectId=${projectId}&code=ELV-CCTV-001`).expect(200)).body;
     expect(lineage.map((d: { revision: string }) => d.revision).sort()).toEqual(['0', '1']);
 
     // 6. Resubmit Rev 1 → review → APPROVE.

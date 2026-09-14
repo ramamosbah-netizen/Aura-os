@@ -205,9 +205,9 @@ export class ScopeAssistService {
       quantity: it.quantity,
       sourceLineId: it.provenance[0]?.sourceId ?? it.id,
     }));
-    const basis = await this.packages.addScopeBasis({
+    const basis = await this.packages.addScopeBasisFromApprovedStudy({
       tenantId: input.tenantId, companyId: input.companyId ?? p.companyId, packageId: pkg.id,
-      sourceId: p.id, sourceRevRef: `scope-assist:v${p.version}`, lines, createdBy: input.actorId,
+      lines, createdBy: input.actorId,
     });
     const accepted = acceptProposal(p, input.actorId ?? null, basis.id);
     await this.store.save(accepted);

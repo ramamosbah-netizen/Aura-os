@@ -43,6 +43,10 @@ export class ProjectsProjectResolvers implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
+    this.registry.registerProjectLookup(async (tenantId, projectId) => {
+      const project = await this.projects.get(projectId);
+      return !!project && project.tenantId === tenantId;
+    });
     // The entity names are the singular forms the guard derives from the route, so `wbs` → `wb`
     // and `cbs` → `cb`. Ugly, and deliberately not prettified: matching the guard is what makes a
     // registration reach the route it is for.

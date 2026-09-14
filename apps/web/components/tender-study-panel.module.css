@@ -1,0 +1,19 @@
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 20px; }
+.panel h2 { font-size: 18px; margin: 0 0 12px; }
+.panel h3 { font-size: 14px; margin-top: 24px; }
+.panel p, .panel small { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.categories { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.categories span { border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 12px; }
+.categories b { color: var(--accent); margin-left: 6px; }
+.form fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 14px; min-width: 0; }
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form label { display: grid; gap: 6px; font-size: 13px; min-width: 0; }
+.form input, .form select, .form textarea { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--border); border-radius: 8px; color: var(--text); background: var(--panel-2, var(--panel)); font: inherit; }
+.form textarea { resize: vertical; }
+.form button { justify-self: start; padding: 10px 16px; background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; font-weight: 700; cursor: pointer; }
+.files { list-style: none; padding: 0; display: grid; gap: 10px; }
+.files li { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px; border: 1px solid var(--border); border-radius: 8px; overflow-wrap: anywhere; }
+.files small { display: block; }
+.error { color: var(--bad) !important; }
+.note { margin-bottom: 0; }
+@media(max-width: 600px) { .row { grid-template-columns: 1fr; } .files li { align-items: start; flex-direction: column; } }

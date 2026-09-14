@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
   type Transmittal,
@@ -69,6 +69,7 @@ export class DocControlService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   // ── Transmittals ──────────────────────────────────────────────────────────
@@ -84,10 +85,11 @@ export class DocControlService {
     recipient?: string;
     createdBy?: string;
   }): Promise<Transmittal> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'doccontrol.transmittal.create', orgPath };
+      const target: AccessTarget = { permission: 'doccontrol.transmittal.create', orgPath, resource: { type: 'project', id: input.projectId } };
       this.access.assert(input.createdBy, target);
     }
 
@@ -125,7 +127,7 @@ export class DocControlService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (transmittal.companyId) orgPath.push({ level: 'company', id: transmittal.companyId });
-      this.access.assert(actorId, { permission, orgPath });
+      this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: transmittal.projectId } });
     }
     const updated = apply(transmittal); // enforces the transition (throws 409 on illegal)
     const event = makeEvent({
@@ -159,7 +161,7 @@ export class DocControlService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (transmittal.companyId) orgPath.push({ level: 'company', id: transmittal.companyId });
-      this.access.assert(actorId, { permission: 'doccontrol.transmittal.acknowledge', orgPath });
+      this.access.assert(actorId, { permission: 'doccontrol.transmittal.acknowledge', orgPath, resource: { type: 'project', id: transmittal.projectId } });
     }
     const updated = ackTransmittalDomain(transmittal); // enforces sent|received → acknowledged
     const ack = makeTransmittalAcknowledgement({
@@ -288,6 +290,7 @@ export class DocControlService {
     recipient?: string;
     createdBy?: string;
   }): Promise<Correspondence> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -356,6 +359,7 @@ export class DocControlService {
     revision?: number;
     createdBy?: string | null;
   }): Promise<Submittal> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -418,6 +422,7 @@ export class DocControlService {
    * revision is what walks the approval lifecycle; the register holds the current/issued state.
    */
   async createRegisterEntry(input: NewDrawingRegisterEntry): Promise<DrawingRegisterEntry> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -457,11 +462,11 @@ export class DocControlService {
     return rev;
   }
 
-  private assertDocPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string): void {
+  private assertDocPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string, projectId: Id): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
     if (companyId) orgPath.push({ level: 'company', id: companyId });
-    this.access.assert(actorId, { permission, orgPath });
+    this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: projectId } });
   }
 
   private async saveRevisionWithEvent(rev: DocumentRevision, actorId: Id | null, type: string): Promise<DocumentRevision> {
@@ -481,28 +486,28 @@ export class DocControlService {
   /** draft → submitted. */
   async submitDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, tenantId, rev.companyId, 'doccontrol.document.submit');
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.submit', rev.projectId);
     return this.saveRevisionWithEvent(submitDocument(rev, actorId), actorId, DOCCONTROL_EVENT.documentSubmitted);
   }
 
   /** submitted → under_review. */
   async startReviewDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, tenantId, rev.companyId, 'doccontrol.document.review');
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.review', rev.projectId);
     return this.saveRevisionWithEvent(startReviewDocument(rev, actorId), actorId, DOCCONTROL_EVENT.documentReviewStarted);
   }
 
   /** under_review → approved. */
   async approveDocument(tenantId: Id, actorId: Id | null, revisionId: Id, comments?: string): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, tenantId, rev.companyId, 'doccontrol.document.approve');
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId);
     return this.saveRevisionWithEvent(approveDocument(rev, actorId, comments), actorId, DOCCONTROL_EVENT.documentApproved);
   }
 
   /** under_review → rejected. Reason is mandatory. */
   async rejectDocument(tenantId: Id, actorId: Id | null, revisionId: Id, reason: string): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, tenantId, rev.companyId, 'doccontrol.document.approve');
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId);
     return this.saveRevisionWithEvent(rejectDocument(rev, actorId, reason), actorId, DOCCONTROL_EVENT.documentRejected);
   }
 
@@ -512,7 +517,7 @@ export class DocControlService {
    */
   async issueDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, tenantId, rev.companyId, 'doccontrol.document.issue');
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.issue', rev.projectId);
     const issued = issueDocument(rev, actorId);
 
     const entry = await this.registerStore.findById(rev.registerEntryId, tenantId);
@@ -543,7 +548,7 @@ export class DocControlService {
   /** Raise the next revision (draft) of a rejected/issued document. The source stays immutable. */
   async createRevision(tenantId: Id, actorId: Id | null, revisionId: Id, reason: string, revision?: string): Promise<DocumentRevision> {
     const source = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, tenantId, source.companyId, 'doccontrol.document.revise');
+    this.assertDocPerm(actorId, source.tenantId, source.companyId, 'doccontrol.document.revise', source.projectId);
     const next = createNextRevision(source, { reason, revision, actorId });
     return this.saveRevisionWithEvent(next, actorId, DOCCONTROL_EVENT.documentRevised);
   }

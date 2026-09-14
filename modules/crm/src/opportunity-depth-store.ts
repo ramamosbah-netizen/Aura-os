@@ -2,6 +2,7 @@ import type {
   Id, Commitment, CommitmentStatus, DealRegisterItem, OpportunityDealMember, OpportunityStakeholder,
   OpportunityRisk,
 } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 
 export const CRM_OPPORTUNITY_DEPTH_STORE = Symbol('CRM_OPPORTUNITY_DEPTH_STORE');
 
@@ -21,6 +22,7 @@ export interface OpportunityDepthStore {
   deleteStakeholder(id: Id): Promise<void>;
 
   saveDealMember(m: OpportunityDealMember): Promise<void>;
+  saveDealMemberWithClient(tx: TxHandle | null, m: OpportunityDealMember): Promise<void>;
   getDealMember(id: Id): Promise<OpportunityDealMember | null>;
   listDealTeam(filter: DealTeamFilter): Promise<OpportunityDealMember[]>;
   deleteDealMember(id: Id): Promise<void>;

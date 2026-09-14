@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PermissionsGuard, derivePermissionFromRoute } from './permissions.guard';
 import { AccessService } from './access.service';
+import { ProjectResolverRegistry } from './project-resolver';
 import type { AuthService } from './auth.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { Reflector } from '@nestjs/core';
@@ -128,6 +129,21 @@ describe('PermissionsGuard', () => {
   // ── Project scope (Project Delivery Workspace, slice P2) ─────────────────────────────────────
   const tenantU1 = { get: () => ({ tenantId: 't1', companyId: null, actorId: 'u1' }) } as unknown as TenantContext;
   const noDeco = { getAllAndOverride: vi.fn().mockReturnValue(null) } as unknown as Reflector;
+
+  it('never turns a null/failed canonical lookup into ownership claimed by the caller', async () => {
+    for (const fail of [false, true]) {
+      const access = new AccessService();
+      access.registerRole({ id: 'reader', name: 'Reader', permissions: ['quality.calibration.read'] });
+      access.grant({ userId: 'u1', roleId: 'reader', scope: { kind: 'resource', resourceType: 'project', resourceId: 'PA' } });
+      const registry = new ProjectResolverRegistry();
+      registry.register('quality', 'calibration', async () => { if (fail) throw new Error('offline'); return null; });
+      const guard = new PermissionsGuard(noDeco, access, tenantU1, authOn, null, null, registry);
+      const ctx = httpContext('GET', 'quality', 'calibrations/:id', { params: { id: 'org-instrument' }, query: { projectId: 'PA' } });
+      await expect(guard.canActivate(ctx)).rejects.toThrow(/Access denied/);
+      access.grant({ userId: 'u1', roleId: 'reader', scope: { kind: 'org', level: 'tenant', id: 't1' } });
+      await expect(guard.canActivate(ctx)).resolves.toBe(true);
+    }
+  });
 
   it('stamps the touched project onto the target on a project-scoped module (body/query/param)', async () => {
     const cases: Array<[string, string, string, Record<string, unknown>]> = [

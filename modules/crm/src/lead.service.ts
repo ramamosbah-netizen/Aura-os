@@ -18,8 +18,8 @@ import { makeQualificationDecision, QUALIFICATION_DECISION_EVENT } from './domai
  * giving the manager/admin-only split WITHOUT editing the role catalog or tying authz to a role name.
  */
 const PERM_ASSIGN_OTHERS = 'crm.lead-assignment.others';
-/** The "works leads at all" capability — a self-claim requires it, and any assignee must hold it. */
-const PERM_LEAD_WORK = 'crm.lead.read';
+/** Explicit sales-routing capability. Read-only CRM visibility must never make a user a lead owner. */
+const PERM_LEAD_WORK = 'crm.lead-assignment.receive';
 
 /** A user the acting caller is allowed to assign the lead to (already scoped by the backend policy). */
 export interface AssignableUser {
@@ -53,7 +53,7 @@ export class LeadService {
     if (input.actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.lead.create', orgPath };
       this.access.assert(input.actorId, target);
     }
 
@@ -113,7 +113,7 @@ export class LeadService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
       if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.lead.update', orgPath };
       this.access.assert(actorId, target);
     }
 
@@ -185,7 +185,7 @@ export class LeadService {
       if (actorId) {
         const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
         if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
-        const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+        const target: AccessTarget = { permission: 'crm.lead.update', orgPath };
         this.access.assert(actorId, target);
       }
 
@@ -474,7 +474,7 @@ export class LeadService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
       if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
-      const target: AccessTarget = { permission: 'crm.account.create', orgPath };
+      const target: AccessTarget = { permission: 'crm.lead.update', orgPath };
       this.access.assert(actorId, target);
     }
 

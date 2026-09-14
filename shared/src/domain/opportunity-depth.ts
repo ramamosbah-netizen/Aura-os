@@ -112,7 +112,7 @@ export function stakeholderCoverage(stakeholders: OpportunityStakeholder[]): Sta
 
 export type DealTeamRole =
   | 'OWNER' | 'ACCOUNT_OWNER' | 'SALES_MANAGER' | 'PRESALES' | 'ESTIMATION'
-  | 'PROCUREMENT' | 'FINANCE' | 'LEGAL' | 'EXECUTIVE_SPONSOR' | 'OTHER';
+  | 'TECHNICAL_REVIEWER' | 'PROCUREMENT' | 'FINANCE' | 'LEGAL' | 'EXECUTIVE_SPONSOR' | 'OTHER';
 
 export interface OpportunityDealMember {
   id: Id;

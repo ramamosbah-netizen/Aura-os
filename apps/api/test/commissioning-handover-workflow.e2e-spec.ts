@@ -3,8 +3,11 @@
 // The full close-out journey over the wire:
 //   register system → add test points → record results (one FAILS) → raise a punch item
 //     → commission BLOCKED (open defect, 409) → close the punch → pass the remaining point
-//     → COMMISSION (witnessed) → (reactor opens/finds handover) → build handover checklist
-//     → submit → REJECT → fix → submit → ACCEPT (warranty clock starts).
+//     → COMMISSION (witnessed) → open handover → prove that manual readiness ticks are refused.
+//
+// The full evidence-derived handover acceptance chain is covered in
+// modules/commissioning/src/handover-readiness.test.ts. This HTTP test deliberately does not
+// recreate the retired boolean-checklist authority.
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
@@ -39,7 +42,7 @@ describe('Commissioning → Handover workflow (HTTP)', () => {
   const CX = '/api/v1/commissioning/records';
   const H = '/api/v1/commissioning/handovers';
 
-  it('drives commissioning with a test sheet + punch gate, then project handover', async () => {
+  it('drives commissioning with a test sheet + punch gate, then protects handover authority', async () => {
     // 1. Register a CCTV commissioning record.
     const rec = (await http.post(CX).send({ projectId: 'proj-cx', code: 'CX-CCTV-01', title: 'CCTV T&C', system: 'cctv' }).expect(201)).body;
     const id = rec.id;
@@ -76,19 +79,22 @@ describe('Commissioning → Handover workflow (HTTP)', () => {
     // Immutable: cannot add test items to a commissioned record (409).
     await http.post(`${CX}/${id}/test-items`).send({ pointNo: '3', description: 'x' }).expect(409);
 
-    // 6. Handover: build the deliverables checklist, submit, reject, fix, submit, accept.
+    // 6. Handover readiness is derived from canonical T&C, DocControl, O&M, training and spares
+    // evidence. The old manual booleans must not be able to buy submission.
     const pkg = (await http.post(H).send({ projectId: 'proj-cx', code: 'HO-01', title: 'Project Handover' }).expect(201)).body;
-    // cannot submit without the core deliverables (409)
     await http.put(`${H}/${pkg.id}/submit`).send({}).expect(409);
-    await http.put(`${H}/${pkg.id}/checklist`).send({ omManuals: true, asBuilts: true, testCertificates: true }).expect(200);
-    await http.put(`${H}/${pkg.id}/submit`).send({}).expect(200);
-    await http.put(`${H}/${pkg.id}/reject`).send({ reason: 'Warranty certificates missing' }).expect(200);
-    await http.put(`${H}/${pkg.id}/checklist`).send({ warrantyDocs: true }).expect(200);
-    await http.put(`${H}/${pkg.id}/submit`).send({}).expect(200);
-    const accepted = (await http.put(`${H}/${pkg.id}/accept`).send({ clientRepresentative: 'Client PM', warrantyMonths: 24 }).expect(200)).body;
-    expect((accepted.package ?? accepted).status).toBe('accepted');
-
-    // Immutable: an accepted package cannot be re-submitted (409).
-    await http.put(`${H}/${pkg.id}/submit`).send({}).expect(409);
+    const manualTick = await http.put(`${H}/${pkg.id}/checklist`).send({
+      omManuals: true,
+      asBuilts: true,
+      testCertificates: true,
+      warrantyDocs: true,
+      training: true,
+      spares: true,
+    });
+    expect(manualTick.status).toBe(409);
+    expect(String(manualTick.body.message)).toMatch(/owning authority|derived/i);
+    const protectedPackage = (await http.get(`${H}/${pkg.id}`).expect(200)).body;
+    expect(protectedPackage.status).toBe('draft');
+    expect(protectedPackage.readiness.readyToSubmit).toBe(false);
   });
 });

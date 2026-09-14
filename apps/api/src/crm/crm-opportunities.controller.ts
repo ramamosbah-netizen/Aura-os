@@ -187,7 +187,14 @@ export class CrmOpportunitiesController {
     const gov = await this.packages.governance(this.tenant.get().tenantId, id);
     const readiness = quotationReadiness(
       { stage: opp.stage, executionType: opp.executionType, tenderId: opp.tenderId },
-      { governed: gov.governed, scopeApproved: gov.scopeApproved, estimateApproved: gov.estimateApproved, pricingFrozen: gov.pricingFrozen },
+      {
+        // Lead-converted opportunities are current governed work even before their package is first
+        // opened. Historical/manual opportunities retain the explicit compatibility path.
+        governed: gov.governed || Boolean(opp.leadId),
+        scopeApproved: gov.scopeApproved,
+        estimateApproved: gov.estimateApproved,
+        pricingFrozen: gov.pricingFrozen,
+      },
     );
     if (!readiness.ready) throw new BadRequestException(quotationReadinessMessage(readiness.gaps));
     const ctx = this.tenant.get();

@@ -1,0 +1,5 @@
+.help { position: relative; min-width: 0; }
+.label { font: inherit; font-size: 13px; color: var(--text); background: none; border: 0; padding: 4px 0; text-align: left; cursor: help; }
+.label span { color: var(--accent); }
+.label:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+.tooltip { position: absolute; z-index: 30; top: 100%; left: 0; width: min(380px, 75vw); display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel); color: var(--text); box-shadow: 0 12px 36px #0008; font-size: 12px; line-height: 1.6; }

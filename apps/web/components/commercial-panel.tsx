@@ -20,7 +20,8 @@ interface Estimate { id: string; revisionNo: number; status: string; basisRevisi
 interface PricingSheet { id: string; version: number; status: string; estimateRevisionId: string | null; totals: { totalCost: number; totalSell: number; marginPercent: number }; frozenAt: string | null; quotationId: string | null }
 interface QuotationLite { id: string; quoteNumber: string; status: string; total: number }
 interface Deal { executionType: string; tenderId: string | null; stage: string }
-interface Aggregate { package: Pkg | null; basis: Basis[]; estimates: Estimate[]; pricing: PricingSheet[]; governance: Governance; quotations: QuotationLite[]; deal: Deal }
+interface TechnicalStudyLite { id: string; revisionNo: number; status: string; inputRevision: string }
+interface Aggregate { package: Pkg | null; studies: TechnicalStudyLite[]; basis: Basis[]; estimates: Estimate[]; pricing: PricingSheet[]; governance: Governance; quotations: QuotationLite[]; deal: Deal }
 
 interface ScopeLineForm { description: string; unit: string; quantity: string }
 
@@ -114,13 +115,14 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
 
   const g = agg?.governance;
   const approvedBasis = useMemo(() => agg?.basis.find((b) => b.status === 'approved') ?? null, [agg]);
+  const approvedStudy = useMemo(() => [...(agg?.studies ?? [])].reverse().find((study) => study.status === 'approved') ?? null, [agg]);
 
   const createBasis = async () => {
     const lines = scopeLines
       .filter((l) => l.description.trim() && Number(l.quantity) > 0)
       .map((l, i) => ({ lineId: `L${i + 1}`, description: l.description, unit: l.unit || 'no', quantity: Number(l.quantity), sourceLineId: `S${i + 1}` }));
     if (lines.length === 0) return;
-    if (await cmd('/pre-award-package/scope', { sourceId: `scope-${Date.now()}`, lines })) setScopeLines([blankScopeLine()]);
+    if (await cmd('/pre-award-package/scope', { lines })) setScopeLines([blankScopeLine()]);
   };
 
   /**
@@ -132,10 +134,10 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
     if (!approvedBasis) return;
     setBusy(true); setErr(null);
     try {
-      const lines = approvedBasis.lines.map((l) => ({ lineId: l.lineId, description: l.description, unit: l.unit, quantity: l.quantity, sourceLineId: l.sourceLineId }));
       const res = await fetch(`${base}/pre-award-package/estimate`, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ basisRevisionId: approvedBasis.id, lines, buildUps: [] }),
+        // Quantity and scope identity come from the persisted approved basis on the server.
+        body: JSON.stringify({ basisRevisionId: approvedBasis.id, buildUps: [] }),
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
@@ -205,6 +207,8 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
       <div style={st.strip}>
         <Chip label="Package" ok={!!g?.governed} pend={!g?.governed ? 'not opened' : undefined} />
         <Arrow />
+        <Chip label="Technical study approved" ok={!!approvedStudy} />
+        <Arrow />
         <Chip label="Scope approved" ok={!!g?.scopeApproved} />
         <Arrow />
         <Chip label="Estimate approved" ok={!!g?.estimateApproved} />
@@ -223,7 +227,9 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
       {/* AURA Scope Assist — a grounded suggestion over this deal's OWN evidence. Accept spins the
           suggestion off into an EDITABLE draft basis (opening the package if needed); approving that
           basis stays the separate human step in the chain below. */}
-      <ScopeAssistCard key={evidenceVersion} opportunityId={opportunityId} onAccepted={() => void reload()} />
+      {approvedStudy
+        ? <ScopeAssistCard key={evidenceVersion} opportunityId={opportunityId} onAccepted={() => void reload()} />
+        : <div style={st.block}><p style={st.empty}>Complete and approve the Technical Study before creating the quantity take-off / scope basis. This keeps estimating tied to the reviewed engineering input.</p><a href="?area=study" style={st.quoteLink}>Open Technical Study →</a></div>}
 
       {!g?.governed && (
         <div style={st.block}>
@@ -302,7 +308,7 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
             );})}
             {/* A draft (or the very first) basis can be authored. Once approved it's immutable — a new
                 basis becomes the next revision. */}
-            <div style={st.builder}>
+            {approvedStudy && <div style={st.builder}>
               <div style={st.builderTitle}>{agg.basis.length === 0 ? 'New scope basis' : `New basis revision (B-${String(agg.basis.length + 1).padStart(3, '0')})`}</div>
               {scopeLines.map((l, i) => (
                 <div key={i} style={st.lineForm}>
@@ -315,7 +321,7 @@ export default function CommercialPanel({ opportunityId }: { opportunityId: stri
                 <button style={st.btnGhost} onClick={() => setScopeLines([...scopeLines, blankScopeLine()])}>+ line</button>
                 <button style={st.btn} disabled={busy || scopeLines.every((l) => !l.description.trim())} onClick={() => void createBasis()}>Create scope basis (draft)</button>
               </div>
-            </div>
+            </div>}
           </div>
 
           {/* ── Estimate — a SUMMARY here; the detail lives in the Estimation Workspace (Slice 6B). ── */}

@@ -43,6 +43,16 @@ export default async function QuotationPricingPage({ params }: { params: Promise
         >
           🖨 Print cost breakdown
         </a>
+        {workingSheet && (
+          <a
+            href={`/api/crm/quotations/${id}/pricing.xlsx`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ fontSize: 12.5, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+          >
+            Download Excel workbook
+          </a>
+        )}
       </div>
       <p style={{ color: 'var(--muted)', margin: '0 0 20px', fontSize: 13, maxWidth: 760, lineHeight: 1.5 }}>
         Build up each item’s cost — materials, labour by productivity, equipment, and the overhead / risk /

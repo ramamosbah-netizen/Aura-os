@@ -20,4 +20,6 @@ export interface GoodsReceiptStore {
   get(id: Id): Promise<GoodsReceipt | null>;
   list(filter?: GoodsReceiptFilter): Promise<GoodsReceipt[]>;
   listPaged(filter: GoodsReceiptFilter, page: PageParams): Promise<Page<GoodsReceipt>>;
+  /** Complete accepted quantity for one PO. Null means no quantity-bearing GRN exists. */
+  receivedQuantityForPo(tenantId: Id, poId: Id): Promise<number | null>;
 }

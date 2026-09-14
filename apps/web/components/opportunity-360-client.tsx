@@ -5,6 +5,7 @@ import type { CSSProperties } from 'react';
 import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeholder-meta';
 import Timeline from './timeline';
 import CommercialPanel from './commercial-panel';
+import TechnicalStudyWorkspace from './technical-study-workspace';
 import BuyingJourneyPanel from './buying-journey-panel';
 import WinPlanPanel from './win-plan-panel';
 import DealDepthPanel from './deal-depth-panel';
@@ -415,6 +416,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
   // 13 tabs becoming 6 tabs with sub-tabs is the same problem wearing a different shape.
   const tabs: TabDef[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'study', label: 'Technical Study' },
     { id: 'strategy', label: 'Strategy' },
     { id: 'commercial', label: 'Commercial', count: quotations.length || undefined },
     { id: 'engagement', label: 'Engagement', count: activities.length || undefined },
@@ -599,6 +601,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       )}
 
       {tab === 'commercial' && <CommercialPanel opportunityId={o.id} />}
+      {tab === 'study' && <TechnicalStudyWorkspace opportunityId={o.id} route={data.route} tenderId={data.tenders[0]?.id ?? null} />}
       {tab === 'strategy' && <BuyingJourneyPanel opportunityId={o.id} />}
 
       {tab === 'strategy' && (

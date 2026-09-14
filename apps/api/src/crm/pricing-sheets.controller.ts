@@ -2,7 +2,7 @@ import { Body, Controller, Get, NotFoundException, Param, Post, Put, Query } fro
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import type { EstimationLineInput } from '@aura/shared';
 import { PricingSheetService, type PricingSheet } from '@aura/crm';
-import { ParseUuidOr404Pipe, TenantContext } from '@aura/core';
+import { ParseUuidOr404Pipe, Permissions, TenantContext } from '@aura/core';
 
 class CreateSheetDto {
   @IsString() name!: string;
@@ -23,6 +23,7 @@ export class PricingSheetsController {
     private readonly tenant: TenantContext,
   ) {}
 
+  @Permissions('crm.pricing-sheet.create', 'crm.internal-pricing.access')
   @Post()
   create(@Body() dto: CreateSheetDto): Promise<PricingSheet> {
     const ctx = this.tenant.get();
@@ -38,11 +39,13 @@ export class PricingSheetsController {
   }
 
   /** Sheets on a deal or behind a quote — newest first, so the working version tops the list. */
+  @Permissions('crm.pricing-sheet.read', 'crm.internal-pricing.access')
   @Get()
   list(@Query('opportunityId') opportunityId?: string, @Query('quotationId') quotationId?: string): Promise<PricingSheet[]> {
     return this.sheets.list({ tenantId: this.tenant.get().tenantId, opportunityId, quotationId, limit: 50 });
   }
 
+  @Permissions('crm.pricing-sheet.read', 'crm.internal-pricing.access')
   @Get(':id')
   async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<PricingSheet> {
     const sheet = await this.sheets.get(id);
@@ -51,36 +54,42 @@ export class PricingSheetsController {
   }
 
   /** Change analysis vs an earlier version (the frozen parent by default): money moved, and where. */
+  @Permissions('crm.pricing-sheet.read', 'crm.internal-pricing.access')
   @Get(':id/compare')
   compare(@Param('id', ParseUuidOr404Pipe) id: string, @Query('with') withId?: string) {
     return this.sheets.compare(id, withId);
   }
 
   /** Opportunity-level Copilot facts — real counts (quotes to this account, frozen-sheet margins). */
+  @Permissions('crm.pricing-sheet.read', 'crm.internal-pricing.access')
   @Get(':id/deal-context')
   dealContext(@Param('id', ParseUuidOr404Pipe) id: string) {
     return this.sheets.dealContext(id);
   }
 
   /** Save the draft's lines. The domain refuses on a frozen sheet (409 via the taxonomy). */
+  @Permissions('crm.pricing-sheet.update', 'crm.internal-pricing.access')
   @Put(':id/lines')
   saveLines(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { lines?: EstimationLineInput[] }): Promise<PricingSheet> {
     return this.sheets.saveLines(id, Array.isArray(dto?.lines) ? dto.lines : []);
   }
 
   /** Freeze the baseline — the commercial commitment. */
+  @Permissions('crm.pricing-sheet.freeze', 'crm.internal-pricing.access')
   @Post(':id/freeze')
   freeze(@Param('id', ParseUuidOr404Pipe) id: string): Promise<PricingSheet> {
     return this.sheets.freeze(id, this.tenant.get().actorId);
   }
 
   /** A new draft version from a frozen sheet. */
+  @Permissions('crm.pricing-sheet.revise', 'crm.internal-pricing.access')
   @Post(':id/revise')
   revise(@Param('id', ParseUuidOr404Pipe) id: string): Promise<PricingSheet> {
     return this.sheets.revise(id, this.tenant.get().actorId);
   }
 
   /** Generate the linked quotation from the FROZEN sheet — refused on a draft. */
+  @Permissions('crm.pricing-sheet.generate', 'crm.internal-pricing.access')
   @Post(':id/generate-quotation')
   generate(@Param('id', ParseUuidOr404Pipe) id: string): Promise<{ sheet: PricingSheet; quotationId: string }> {
     return this.sheets.generateQuotation(id);

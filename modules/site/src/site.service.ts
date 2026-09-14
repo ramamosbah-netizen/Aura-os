@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent, type Page, type PageParams, paginate } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
   type DailyReport,
@@ -114,6 +114,7 @@ export class SiteService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   // ── Daily Reports ──────────────────────────────────────────────────────────
@@ -132,6 +133,7 @@ export class SiteService {
     equipmentCount?: number;
     createdBy?: string;
   }): Promise<DailyReport> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create', input.projectId);
     await this.assertNoReportForDate(input.tenantId, input.projectId, input.date);
     const report = makeDailyReport(input);
@@ -201,7 +203,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     tenantId: Id,
     companyId: string | null,
     permission: string,
-    projectId?: Id | null,
+    projectId: Id,
   ): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -209,7 +211,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     this.access.assert(actorId, {
       permission,
       orgPath,
-      ...(projectId ? { resource: { type: 'project', id: projectId } } : {}),
+      resource: { type: 'project', id: projectId },
     });
   }
 
@@ -351,6 +353,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     impactHours?: number;
     createdBy?: string;
   }): Promise<DelayLog> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -425,6 +428,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     timeImplication?: boolean;
     createdBy?: string | null;
   }): Promise<SiteInstruction> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -503,6 +507,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     unit: string;
     createdBy?: string;
   }): Promise<MaterialConsumption> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -558,10 +563,11 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     notes?: string;
     createdBy?: string;
   }): Promise<LabourAllocation> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
+      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const allocation = makeLabourAllocation(input);
     // Carry the labour cost + coding so the Transaction Engine posts it as ACTUAL on the CBS line.
@@ -621,10 +627,11 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     notes?: string;
     createdBy?: string;
   }): Promise<PlantUsage> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
+      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const usage = makePlantUsage(input);
     // Carry the plant cost + coding so the Transaction Engine posts it as ACTUAL on the CBS line.
@@ -672,10 +679,11 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     notes?: string;
     createdBy?: string;
   }): Promise<InstallationRecord> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath });
+      this.access.assert(input.createdBy, { permission: 'site.labour.log', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const record = makeInstallationRecord(input);
     // Carry the installed quantity + BOQ coding so the Quantity Ledger posts +installed on this line.

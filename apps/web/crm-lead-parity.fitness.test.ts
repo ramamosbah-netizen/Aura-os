@@ -16,14 +16,18 @@ describe('Lead/Pipeline canonical parity', () => {
     const pipeline = read('components/crm-pipeline-client.tsx');
     const leads = read('components/leads-workspace.tsx');
     const capture = read('components/lead-capture.tsx');
-    expect(pipeline).toContain("import LeadCapture from './lead-capture'");
-    expect(leads).toContain("import LeadCapture from './lead-capture'");
+    for (const surface of [pipeline, leads]) {
+      expect(surface).toMatch(/import LeadCapture(?:,\s*\{[^}]+\})? from '\.\/lead-capture'/);
+    }
     expect(capture).toContain("fetch('/api/crm/leads'");
     for (const field of ['companyName', 'name', 'phone', 'email', 'requirement', 'source']) {
       expect(capture, `capture field ${field}`).toContain(field);
     }
-    // Ownership is a separate audited command; capture must not silently pretend to assign it.
-    expect(capture).not.toContain('assignedTo');
+    // Ownership is a separate audited command; the create payload must not silently pretend to
+    // assign it. The persisted response type may still expose assignedTo for immediate rendering.
+    const createPayload = capture.match(/body:\s*JSON\.stringify\(\{([\s\S]*?)\}\),\s*\n\s*\}\);/)?.[1];
+    expect(createPayload).toBeDefined();
+    expect(createPayload).not.toContain('assignedTo');
   });
 
   it('routes qualification and conversion through the canonical Lead service endpoints', () => {

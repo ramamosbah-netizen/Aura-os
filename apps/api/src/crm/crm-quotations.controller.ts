@@ -1,6 +1,6 @@
-import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Patch, Post, Query, Req, Res } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Patch, Post, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { AiService, FormCustomValuesService, FormOverridesService, NumberingService, Permissions, TenantContext } from '@aura/core';
+import { AccessService, AiService, CompaniesService, FormCustomValuesService, FormOverridesService, NumberingService, Permissions, SettingsService, TenantContext } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema, toCsv } from '@aura/shared';
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
@@ -9,6 +9,7 @@ import {
 import { MarketItemService } from '@aura/market-intelligence';
 import { type Contract, ContractService } from '@aura/contracts';
 import { QuotationReferenceService } from './quotation-reference.service';
+import * as XLSX from 'xlsx';
 
 class CreateQuotationDto {
   /** Optional: left blank, the server allocates the next auto-incrementing reference. */
@@ -49,6 +50,36 @@ interface CsvResponse {
   end(): void;
 }
 
+/**
+ * A quotation status is not a permission. Keep the business action → capability mapping in one
+ * place so the command and Quotation 360 expose the same authority decision. Sales may record
+ * submission and customer outcomes; only a commercial approver may lock the approved baseline.
+ */
+export const QUOTATION_ACTION_PERMISSION: Record<QuotationAction, string> = {
+  submit_review: 'crm.quotation.update',
+  approve: 'crm.quotation.approve',
+  send: 'crm.quotation.send',
+  negotiate: 'crm.quotation.update',
+  accept: 'crm.quotation.update',
+  reject: 'crm.quotation.update',
+  expire: 'crm.quotation.update',
+  cancel: 'crm.quotation.update',
+};
+
+export interface QuotationActionAccess {
+  submitReview: boolean;
+  approve: boolean;
+  send: boolean;
+  negotiate: boolean;
+  accept: boolean;
+  reject: boolean;
+  expire: boolean;
+  cancel: boolean;
+  revise: boolean;
+  convertToContract: boolean;
+  internalPricing: boolean;
+}
+
 /** CRM customer-quotation API — stamps tenant/actor, delegates to QuotationService. */
 @Controller('crm/quotations')
 export class CrmQuotationsController {
@@ -62,7 +93,27 @@ export class CrmQuotationsController {
     private readonly marketItems: MarketItemService,
     private readonly ai: AiService,
     private readonly references: QuotationReferenceService,
+    private readonly companies: CompaniesService,
+    private readonly settings: SettingsService,
+    private readonly access: AccessService,
   ) {}
+
+  private accessTarget(q: Pick<Quotation, 'tenantId' | 'companyId'>, permission: string) {
+    return {
+      permission,
+      orgPath: [
+        { level: 'tenant' as const, id: q.tenantId },
+        ...(q.companyId ? [{ level: 'company' as const, id: q.companyId }] : []),
+      ],
+    };
+  }
+
+  private can(q: Pick<Quotation, 'tenantId' | 'companyId'>, permission: string): boolean {
+    const actorId = this.tenant.get().actorId;
+    // Auth-off local development follows the PermissionsGuard pass-through. With auth enabled the
+    // guard has already rejected a missing actor before this method can run.
+    return !actorId || this.access.can(actorId, this.accessTarget(q, permission)).allowed;
+  }
 
   /** One-click convert an accepted quotation into a draft contract (carries value + account). */
   @Permissions('contracts.contract.create')
@@ -290,16 +341,132 @@ export class CrmQuotationsController {
   }
 
   /**
+   * Legal identity used on customer output. The quotation's persisted companyId selects the
+   * company; the browser cannot switch the letterhead by changing a query or active-company UI.
+   * Tenant profile fields fill attributes the current company master does not yet store.
+   */
+  @Permissions('crm.quotation.read')
+  @Get(':id/document-identity')
+  async documentIdentity(@Param('id') id: string) {
+    const quotation = await this.quotations.get(id);
+    if (!quotation) throw new NotFoundException(`quotation ${id} not found`);
+    const tenantId = this.tenant.get().tenantId;
+    const companies = await this.companies.list(tenantId);
+    const company = quotation.companyId ? companies.find((entry) => entry.id === quotation.companyId) ?? null : null;
+    const setting = async (key: string): Promise<string> => (await this.settings.get(tenantId, key).catch(() => null))?.trim() ?? '';
+    const [profileName, legalName, profileTrn, address, phone, email, website, currency] = await Promise.all([
+      setting('company.name'), setting('company.legalName'), setting('company.trn'), setting('company.address'),
+      setting('company.phone'), setting('company.email'), setting('company.website'), setting('finance.defaultCurrency'),
+    ]);
+    const name = company?.name || legalName || profileName;
+    return {
+      companyId: quotation.companyId,
+      name: name || 'Company identity not configured',
+      configured: Boolean(name),
+      legalName: legalName || name || '',
+      trn: company?.trn || profileTrn,
+      address,
+      phone,
+      email,
+      website,
+      currency: company?.baseCurrency || currency || 'AED',
+    };
+  }
+
+  /**
    * Internal rate build-up view (cost factors → direct/indirect → margin) + lock state. READ ONLY:
    * all pricing WRITES go through the PricingSheet aggregate (crm/pricing-sheets — draft → freeze →
    * generate). The legacy write endpoints (set/apply/generate-lines/estimation) were removed once
    * the sheet became the single source; the quotation is an output, not a place prices are typed.
    */
-  @Permissions('crm.quotation.read')
+  @Permissions('crm.quotation.read', 'crm.internal-pricing.access')
   @Get(':id/pricing')
   getPricing(@Param('id') id: string) {
     // Domain errors flow to the taxonomy filter: "not found" → 404.
     return this.quotations.getPricing(id);
+  }
+
+  /** Native internal workbook. Numeric cells stay numeric and the detail sheet is filterable. */
+  @Permissions('crm.quotation.read', 'crm.internal-pricing.access')
+  @Get(':id/pricing.xlsx')
+  async pricingWorkbook(@Param('id') id: string): Promise<StreamableFile> {
+    const quotation = await this.quotations.get(id);
+    if (!quotation) throw new NotFoundException(`quotation ${id} not found`);
+    if (!(quotation.estimation?.length || quotation.pricing?.lines?.length)) {
+      throw new BadRequestException('an internal pricing workbook requires a persisted cost build-up for this quotation revision');
+    }
+    const [view, identity] = await Promise.all([
+      this.quotations.getPricing(id),
+      this.documentIdentity(id),
+    ]);
+    const summary = XLSX.utils.aoa_to_sheet([
+      ['Internal pricing workbook', ''],
+      ['Company', identity.legalName || identity.name],
+      ['Quotation', view.quoteNumber],
+      ['Revision', view.revision],
+      ['Customer', quotation.customerName],
+      ['Subject', quotation.subject ?? ''],
+      ['Status', view.status],
+      ['Total direct cost', view.totalDirect],
+      ['Total indirect cost', view.totalIndirect],
+      ['Total cost', view.totalCost],
+      ['Total sell', view.totalSell],
+      ['Profit', view.profit],
+      ['Margin %', view.marginPercent ?? ''],
+      ['Markup %', view.markupPercent ?? ''],
+      ['Locked commercial basis', view.locked ? 'Yes' : 'No'],
+    ]);
+    summary['!cols'] = [{ wch: 28 }, { wch: 42 }];
+    const detailRows = view.lines.map((line) => ({
+      Description: line.description,
+      Quantity: line.quantity,
+      'Supply unit price': line.supplyUnitPrice,
+      'Supply total': line.supplyTotal,
+      'Wastage %': line.wastagePercent,
+      'Wastage total': line.wastageTotal,
+      'Accessories / consumables': line.accessories,
+      'Material total': line.materialTotal,
+      'Technician man-hours': line.technician.manHours,
+      'Technician cost': line.technician.total,
+      'Engineer man-hours': line.engineer.manHours,
+      'Engineer cost': line.engineer.total,
+      'PM man-hours': line.projectManager.manHours,
+      'PM cost': line.projectManager.total,
+      'Labour total': line.labourTotal,
+      Transport: line.transport,
+      Equipment: line.equipmentRent,
+      Subcontract: line.subcontract,
+      'Other direct': line.otherDirect,
+      'Direct cost': line.directCost,
+      'Indirect %': line.indirectPercent,
+      'Indirect cost': line.indirectCost,
+      'Total cost': line.costTotal,
+      'Unit cost': line.unitCostTotal,
+      'Unit sell': line.unitPrice,
+      'Sell total': line.sellTotal,
+      Profit: line.profit,
+      'Margin %': line.marginPercent ?? '',
+      'Markup %': line.markupPercent ?? '',
+    }));
+    const detail = XLSX.utils.json_to_sheet(detailRows);
+    if (detailRows.length > 0) detail['!autofilter'] = { ref: detail['!ref']! };
+    detail['!cols'] = [{ wch: 42 }, ...Array.from({ length: 28 }, () => ({ wch: 16 }))];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, summary, 'Summary');
+    XLSX.utils.book_append_sheet(workbook, detail, 'Cost Breakdown');
+    workbook.Props = {
+      Title: `${view.quoteNumber} internal pricing`,
+      Subject: `Quotation revision ${view.revision} cost and selling basis`,
+      Author: identity.legalName || identity.name,
+      Comments: `Generated from quotation ${quotation.id}; customer-facing PDF excludes this internal cost data.`,
+    };
+    const bytes = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', compression: true }) as Buffer;
+    const safeNumber = view.quoteNumber.replace(/[^a-zA-Z0-9._-]+/g, '-');
+    return new StreamableFile(bytes, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${safeNumber}-rev-${view.revision}-internal-pricing.xlsx"`,
+      length: bytes.length,
+    });
   }
 
   /**
@@ -308,7 +475,7 @@ export class CrmQuotationsController {
    * verified. The AI only narrates them into advice; it never invents a number. When no AI provider
    * is configured the findings still stand, and `narrative` is null.
    */
-  @Permissions('crm.quotation.read')
+  @Permissions('crm.quotation.read', 'crm.internal-pricing.access')
   @Get(':id/pricing/advice')
   async pricingAdvice(@Param('id') id: string): Promise<{ advice: ReturnType<typeof analysePricing>; narrative: string | null; provider: string }> {
     const tenantId = this.tenant.get().tenantId;
@@ -372,6 +539,27 @@ export class CrmQuotationsController {
     return found;
   }
 
+  /** Permission-aware controls for Quotation 360, resolved from the persisted quotation company. */
+  @Permissions('crm.quotation.read')
+  @Get(':id/action-access')
+  async actionAccess(@Param('id') id: string): Promise<QuotationActionAccess> {
+    const q = await this.quotations.get(id);
+    if (!q) throw new NotFoundException(`quotation ${id} not found`);
+    return {
+      submitReview: this.can(q, QUOTATION_ACTION_PERMISSION.submit_review),
+      approve: this.can(q, QUOTATION_ACTION_PERMISSION.approve),
+      send: this.can(q, QUOTATION_ACTION_PERMISSION.send),
+      negotiate: this.can(q, QUOTATION_ACTION_PERMISSION.negotiate),
+      accept: this.can(q, QUOTATION_ACTION_PERMISSION.accept),
+      reject: this.can(q, QUOTATION_ACTION_PERMISSION.reject),
+      expire: this.can(q, QUOTATION_ACTION_PERMISSION.expire),
+      cancel: this.can(q, QUOTATION_ACTION_PERMISSION.cancel),
+      revise: this.can(q, 'crm.quotation.update'),
+      convertToContract: this.can(q, 'contracts.contract.create'),
+      internalPricing: this.can(q, 'crm.internal-pricing.access'),
+    };
+  }
+
   /** The locked Commercial Baseline (approved-price snapshot) for this quotation, or null. */
   @Permissions('crm.quotation.read')
   @Get(':id/baseline')
@@ -391,12 +579,16 @@ export class CrmQuotationsController {
   }
 
   @Patch(':id/status')
-  @Permissions('crm.quotation.update')
+  @Permissions('crm.quotation.read')
   async changeStatus(@Param('id') id: string, @Body() dto: { action: QuotationAction }): Promise<Quotation> {
     if (!QUOTATION_ACTIONS.includes(dto?.action)) {
       throw new BadRequestException(`action must be one of ${QUOTATION_ACTIONS.join(', ')}`);
     }
+    const q = await this.quotations.get(id);
+    if (!q) throw new NotFoundException(`quotation ${id} not found`);
+    const actorId = this.tenant.get().actorId;
+    if (actorId) this.access.assert(actorId, this.accessTarget(q, QUOTATION_ACTION_PERMISSION[dto.action]));
     // Pass the actor so approval records who locked the commercial baseline (R3 governance).
-    return await this.quotations.changeStatus(id, dto.action, this.tenant.get().actorId);
+    return await this.quotations.changeStatus(id, dto.action, actorId);
   }
 }

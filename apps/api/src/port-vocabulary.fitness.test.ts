@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ELV_SYSTEMS, ELV_SYSTEM_DISCIPLINES, DISCIPLINES, disciplinesForElvSystem } from '@aura/shared';
+import { ELV_SYSTEMS, MEP_SYSTEMS, ELV_SYSTEM_DISCIPLINES, DISCIPLINES, disciplinesForElvSystem } from '@aura/shared';
 import { makeDrawingRegisterEntry, type RegisterStatus } from '@aura/doccontrol';
 import { makeDrawing, type DrawingStatus } from '@aura/engineering';
 import { ELV_DEVICE_STATUSES } from '@aura/elv';
@@ -108,9 +108,10 @@ describe('TC-GATE-6 — cross-module vocabulary agreement', () => {
       expect(disciplinesForElvSystem('CCTV'), 'case is not a different system').toEqual(ELV_SYSTEM_DISCIPLINES.cctv);
     });
 
-    it('includes elv for every system, because a coarse ELV package is the common case', () => {
+    it('pins every system to its coarse ELV or MEP package', () => {
       for (const system of ELV_SYSTEMS) {
-        expect(ELV_SYSTEM_DISCIPLINES[system], `${system} must recognise the coarse elv package`).toContain('elv');
+        const coarse = MEP_SYSTEMS.includes(system) ? 'mep' : 'elv';
+        expect(ELV_SYSTEM_DISCIPLINES[system], `${system} must recognise the coarse ${coarse} package`).toContain(coarse);
       }
     });
   });

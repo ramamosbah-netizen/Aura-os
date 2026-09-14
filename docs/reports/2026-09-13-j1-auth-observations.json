@@ -1,0 +1,68 @@
+{
+  "audit": "J1 Enquiry to Approved Offer",
+  "date": "2026-09-13",
+  "environment": "isolated in-memory API; no customer transmission",
+  "sourceLog": ".aura-j1-final.log",
+  "testFilesPassed": 9,
+  "testsPassed": 61,
+  "authentication": "ON for new characterization; eight existing HTTP suites retain their individual test contexts",
+  "observations": {
+    "intake": {
+      "role": "r-sales",
+      "createLeadHttp": 403,
+      "qualifyLeadHttp": 403,
+      "convertLeadHttp": 403,
+      "adminFixtureContinuation": true
+    },
+    "lineage": {
+      "leadIdPreserved": true,
+      "leadRequirement": "24 cameras with 30-day retention",
+      "opportunityRequirementsAfterConversion": 0,
+      "opportunityOwner": null,
+      "quotationBeforeStudyHttp": 201
+    },
+    "handoff": {
+      "fixtureRole": "j1-study-reader",
+      "beforeInboxHttp": 200,
+      "beforeInboxCount": 0,
+      "afterInboxHttp": 200,
+      "manualAssignedActivityVisible": true
+    },
+    "scopeApproval": {
+      "authorPermissions": ["crm.opportunity.scope", "crm.opportunity.read"],
+      "explicitApproveHttp": 403,
+      "inlineApproveHttp": 201,
+      "inlineApproveStatus": "approved"
+    },
+    "estimateMismatch": {
+      "approvedBasisQuantity": 24,
+      "callerQuantity": 240,
+      "createHttp": 201,
+      "storedEstimatedCost": 24000
+    },
+    "correctFinancialContinuation": {
+      "fixtureAdministrators": true,
+      "quantity": 24,
+      "cost": 2400,
+      "targetMarginPercent": 20,
+      "sellBeforeTax": 3000,
+      "quoteTotal": 3150,
+      "pricingSheetId": "c0b039fb-3dc8-4731-9f59-008f445e359a",
+      "quotationId": "29878ee0-c14f-4624-9b86-7f5ac3521232",
+      "repeatGenerationSameId": true,
+      "selfApprovalHttp": 403,
+      "approvalBeforeEvidenceHttp": 409,
+      "statusAfterSecondActorApproval": "approved",
+      "customerLineQuantity": 1,
+      "customerLineDescription": "Selling price — 20% target margin"
+    },
+    "tender": {
+      "fixtureAdministrator": true,
+      "technicalStudyCreated": false,
+      "internalOfferApprovalCreated": false,
+      "submissionHttp": 201,
+      "status": "submitted"
+    }
+  },
+  "acceptance": "OPEN: characterization captures defects, not acceptance of those behaviors"
+}

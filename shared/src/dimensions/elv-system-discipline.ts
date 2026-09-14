@@ -22,10 +22,10 @@ import { ELV_SYSTEMS, type ElvSystem } from '../domain/elv-context';
  * private version was strings on both sides, which is how `issued_for_construction` — a value no
  * domain has ever produced — survived in a sibling set for as long as it did.
  *
- * DELIBERATELY GENEROUS. Every system includes `elv`, because a project that files one coarse
- * "ELV" drawing package is the common case and its drawings genuinely do cover each system. The map
- * decides what a system RECOGNISES, not what proves it: a matched drawing still has to be approved
- * for the readiness gate to pass, and the gate says UNKNOWN — never READY — when nothing matches.
+ * DELIBERATELY GENEROUS. ELV systems include `elv`, while MEP systems include `mep`, because projects
+ * commonly file one coarse coordinated package for the relevant trade. The map decides what a
+ * system RECOGNISES, not what proves it: a matched drawing still has to be approved for the
+ * readiness gate to pass, and the gate says UNKNOWN — never READY — when nothing matches.
  */
 export const ELV_SYSTEM_DISCIPLINES: Record<ElvSystem, readonly Discipline[]> = {
   cctv: ['cctv', 'elv', 'security'],
@@ -35,12 +35,22 @@ export const ELV_SYSTEM_DISCIPLINES: Record<ElvSystem, readonly Discipline[]> = 
   public_address: ['elv'],
   structured_cabling: ['ict', 'elv'],
   network: ['ict', 'elv'],
+  wifi: ['ict', 'elv'],
   bms: ['bms', 'elv'],
+  ems_metering: ['bms', 'electrical', 'mep'],
   audio_visual: ['elv'],
   intercom: ['elv'],
   nurse_call: ['elv'],
   gate_barrier: ['security', 'elv'],
   parking_management: ['security', 'elv'],
+  mechanical: ['mechanical', 'mep'],
+  hvac: ['hvac', 'mechanical', 'mep'],
+  electrical_power: ['electrical', 'mep'],
+  lighting: ['electrical', 'mep'],
+  plumbing: ['plumbing', 'mep'],
+  drainage: ['plumbing', 'mep'],
+  fire_fighting: ['fire_fighting', 'mechanical', 'mep'],
+  fire_suppression: ['fire_fighting', 'mechanical', 'mep'],
   other: ['elv'],
 };
 

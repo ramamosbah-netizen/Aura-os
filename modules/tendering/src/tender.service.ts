@@ -547,6 +547,13 @@ export class TenderService implements OnModuleInit {
 
   // ── BOQ & Cost Estimating ─────────────────────────────────────
 
+  /** Read the Tender's existing BOQ without creating one as a side effect. */
+  async getBOQByTender(tenantId: string, tenderId: Id): Promise<{ boq: BOQ; items: BOQItem[] } | null> {
+    const boq = await this.boqStore.getBOQByTender(tenantId, tenderId);
+    if (!boq) return null;
+    return { boq, items: await this.boqStore.getBOQItems(tenantId, boq.id) };
+  }
+
   async getOrCreateBOQ(tenantId: string, companyId: string | null, tenderId: Id): Promise<{ boq: BOQ; items: BOQItem[] }> {
     let boq = await this.boqStore.getBOQByTender(tenantId, tenderId);
     if (!boq) {
@@ -557,12 +564,89 @@ export class TenderService implements OnModuleInit {
     return { boq, items };
   }
 
+  /**
+   * Project one APPROVED quantity take-off into the Tender BOQ. The caller resolves the basis from
+   * the Tender's persisted Pre-Award package; this command stores that frozen identity on the BOQ
+   * and every projected line. Repeating the same command is idempotent. A new approved revision
+   * replaces the prior projection and deliberately removes its obsolete rate build-ups/sources.
+   */
+  async projectApprovedTakeoff(input: {
+    tenantId: Id;
+    companyId: Id | null;
+    tenderId: Id;
+    basisRevisionId: Id;
+    sourceRevisionRef: string | null;
+    projectedBy: Id | null;
+    lines: Array<{ lineId: Id; description: string; unit: string; quantity: number | null }>;
+  }): Promise<{ boq: BOQ; items: BOQItem[]; replaced: number }> {
+    const unknown = input.lines.filter((line) => line.quantity === null || line.quantity === undefined);
+    if (unknown.length > 0) {
+      throw new Error(`cannot project quantity take-off: ${unknown.length} line(s) still have an unknown quantity`);
+    }
+    if (input.lines.length === 0) throw new Error('cannot project an empty quantity take-off');
+
+    const current = await this.getOrCreateBOQ(input.tenantId, input.companyId, input.tenderId);
+    if (current.boq.sourceBasisRevisionId === input.basisRevisionId && current.items.length === input.lines.length) {
+      return { ...current, replaced: 0 };
+    }
+
+    const projected = await this.importBOQItems(
+      input.tenantId,
+      input.companyId,
+      current.boq.id,
+      input.lines.map((line, index) => ({
+        itemCode: String(index + 1),
+        description: line.description,
+        unit: line.unit,
+        quantity: line.quantity ?? 0,
+        rate: 0,
+        sourceBasisLineId: line.lineId,
+      })),
+      { replace: true, allowGovernedReplacement: true },
+    );
+    const now = new Date().toISOString();
+    const boq: BOQ = {
+      ...current.boq,
+      sourceBasisRevisionId: input.basisRevisionId,
+      sourceRevisionRef: input.sourceRevisionRef,
+      projectedBy: input.projectedBy,
+      projectedAt: now,
+      updatedAt: now,
+    };
+    await this.boqStore.saveBOQ(boq);
+    return { boq, items: projected.items, replaced: projected.replaced };
+  }
+
+  private async assertManualBOQMutable(tenantId: Id, boqId: Id): Promise<void> {
+    const boq = await this.boqStore.findBOQ(tenantId, boqId);
+    if (!boq) throw new Error(`BOQ ${boqId} not found`);
+    if (boq.sourceBasisRevisionId) {
+      throw new Error('only a new approved quantity take-off revision can change lines in this projected BOQ');
+    }
+  }
+
+  /** Canonical URL owner check for commands that still receive a legacy boqId in their payload. */
+  async assertBOQOwnedByTender(tenantId: Id, tenderId: Id, boqId: Id): Promise<BOQ> {
+    const boq = await this.boqStore.findBOQ(tenantId, boqId);
+    if (!boq || boq.tenderId !== tenderId) throw new Error('BOQ does not belong to this Tender');
+    return boq;
+  }
+
+  /** Canonical item → BOQ → Tender check; the route Tender id can never redirect an item command. */
+  async assertBOQItemOwnedByTender(tenantId: Id, tenderId: Id, itemId: Id): Promise<BOQItem> {
+    const item = await this.boqStore.getBOQItem(tenantId, itemId);
+    if (!item) throw new Error(`BOQ item ${itemId} not found`);
+    await this.assertBOQOwnedByTender(tenantId, tenderId, item.boqId);
+    return item;
+  }
+
   async addBOQItem(
     tenantId: string,
     companyId: string | null,
     boqId: Id,
     input: Omit<NewBOQItem, 'tenantId' | 'companyId' | 'boqId'>,
   ): Promise<BOQItem> {
+    await this.assertManualBOQMutable(tenantId, boqId);
     const item = makeBOQItem({
       tenantId,
       companyId,
@@ -581,6 +665,7 @@ export class TenderService implements OnModuleInit {
   ): Promise<BOQItem> {
     const existing = await this.boqStore.getBOQItem(tenantId, id);
     if (!existing) throw new Error(`BOQ item ${id} not found`);
+    await this.assertManualBOQMutable(tenantId, existing.boqId);
 
     // T3 — the estimate is the UNIQUE author of a priced item's rate. Once a build-up exists,
     // a hand-typed rate would silently diverge from the governed roll-up; the only ways to
@@ -617,6 +702,7 @@ export class TenderService implements OnModuleInit {
   async deleteBOQItem(tenantId: string, id: Id): Promise<void> {
     const existing = await this.boqStore.getBOQItem(tenantId, id);
     if (!existing) return;
+    await this.assertManualBOQMutable(tenantId, existing.boqId);
     // T3 — one build-up per BOQ item means no orphans: the item's build-up (and that build-up's
     // bid-time source links) leave with it.
     const buildUp = await this.estimates.getByBoqItem(tenantId, id);
@@ -639,8 +725,9 @@ export class TenderService implements OnModuleInit {
     companyId: string | null,
     boqId: Id,
     itemsInput: Array<Omit<NewBOQItem, 'tenantId' | 'companyId' | 'boqId'>>,
-    options: { replace?: boolean } = {},
+    options: { replace?: boolean; allowGovernedReplacement?: boolean } = {},
   ): Promise<{ items: BOQItem[]; replaced: number }> {
+    if (!options.allowGovernedReplacement) await this.assertManualBOQMutable(tenantId, boqId);
     let replaced = 0;
     if (options.replace) {
       const existing = await this.boqStore.getBOQItems(tenantId, boqId);

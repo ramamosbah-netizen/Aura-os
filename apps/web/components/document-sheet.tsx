@@ -56,8 +56,8 @@ export default function DocumentSheet(props: DocumentSheetProps) {
       <div className="sheet" style={s.sheet}>
         <header style={s.header}>
           <div>
-            <div style={s.company}>AURA OS Contracting LLC</div>
-            <div style={s.companyMeta}>Dubai, United Arab Emirates · TRN 100000000000003</div>
+            <div style={s.company}>{from.lines[0] || 'Company identity not configured'}</div>
+            <div style={s.companyMeta}>{from.lines.slice(1).join(' · ')}</div>
           </div>
           <div style={s.docBox}>
             <div style={s.kind}>{kind}</div>

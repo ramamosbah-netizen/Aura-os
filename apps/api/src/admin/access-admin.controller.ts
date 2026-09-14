@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Post, Query } from '@nestjs/common';
-import { AccessService, AuditService, Permissions, TenantContext } from '@aura/core';
+import { AccessService, AuditService, Permissions, STANDARD_ELV_ROLES, TenantContext } from '@aura/core';
 import type { Grant, Role } from '@aura/shared';
 
 /**
@@ -33,7 +33,11 @@ export class AccessAdminController {
     const permissions = Array.isArray(dto.permissions)
       ? dto.permissions.map((p) => String(p).trim()).filter(Boolean)
       : [];
-    const role: Role = { id, name, permissions };
+    // Retain the job description and recommended assignment scope when an administrator adjusts a
+    // standard role. Those fields guide the non-technical UI but never participate in access
+    // evaluation; permissions remain the enforced authority.
+    const standard = STANDARD_ELV_ROLES.find((candidate) => candidate.id === id);
+    const role: Role = standard ? { ...standard, name, permissions } : { id, name, permissions };
     this.access.registerRole(role);
     const ctx = this.tenant.get();
     void this.audit.log(ctx.tenantId, ctx.companyId ?? null, ctx.actorId ?? null, 'admin', 'role', id, 'upserted', { name, permissions });

@@ -14,6 +14,8 @@ interface Role {
   id: string;
   name: string;
   permissions: string[];
+  description?: string;
+  assignmentScope?: 'tenant' | 'project' | 'tenant-or-project';
 }
 interface Grant {
   userId: string;
@@ -52,6 +54,7 @@ export default function RolesAdminClient({
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [roleSearch, setRoleSearch] = useState('');
 
   // new-role composer
   const [rId, setRId] = useState('');
@@ -163,20 +166,64 @@ export default function RolesAdminClient({
       .filter((id) => !users.some((u) => u.username === id))
       .map((id) => ({ id })),
   ];
+  const roleQuery = roleSearch.trim().toLowerCase();
+  const visibleRoles = roleQuery
+    ? roles.filter((role) =>
+        [role.name, role.id, role.description ?? ''].some((value) => value.toLowerCase().includes(roleQuery)),
+      )
+    : roles;
+  const scopeLabel = (scope: Role['assignmentScope']): string => {
+    if (scope === 'project') return 'Assign inside a project';
+    if (scope === 'tenant') return 'Assign across the company';
+    if (scope === 'tenant-or-project') return 'Company or project';
+    return 'Custom role';
+  };
 
   return (
     <div>
       <ErrorBanner>{err}</ErrorBanner>
 
+      <section style={st.guide} aria-label="How role access works">
+        <div style={st.guideStep}><b>1. Choose the job</b><span>Pick the role that matches what the employee is responsible for.</span></div>
+        <div style={st.guideStep}><b>2. Choose where it applies</b><span>Company roles cover the tenant. Delivery roles should normally be assigned from the Project Team page.</span></div>
+        <div style={st.guideStep}><b>3. Keep approvals separate</b><span>Author, reviewer and approver roles are separated. Approval limits still apply.</span></div>
+      </section>
+
+      <section style={st.card}>
+        <div style={st.cardHead}>
+          <div>
+            <h2 style={st.h2}>Role catalog</h2>
+            <p style={st.sub}>Start from the employee&apos;s real job. The description explains the work; the badge shows where the role should normally be assigned.</p>
+          </div>
+          <input
+            className="input"
+            style={st.search}
+            value={roleSearch}
+            onChange={(event) => setRoleSearch(event.target.value)}
+            placeholder="Find Sales, Planning, T&C…"
+            aria-label="Find a role"
+          />
+        </div>
+        <div style={st.roleGrid}>
+          {visibleRoles.map((role) => (
+            <article key={role.id} style={st.roleCard} data-testid={`role-card-${role.id}`}>
+              <div style={st.roleCardHead}><b>{role.name}</b><span style={st.scopeBadge}>{scopeLabel(role.assignmentScope)}</span></div>
+              <p style={st.roleDescription}>{role.description ?? 'Custom permission bundle created by an administrator.'}</p>
+              <span style={st.roleId}>{role.id}</span>
+            </article>
+          ))}
+          {visibleRoles.length === 0 ? <p style={st.empty}>No role matches “{roleSearch}”.</p> : null}
+        </div>
+      </section>
+
       {/* ── Permission matrix: roles × modules ─────────────────────────── */}
       <section style={st.card}>
         <div style={st.cardHead}>
           <div>
-            <h2 style={st.h2}>Permission matrix</h2>
+            <h2 style={st.h2}>Advanced permission matrix</h2>
             <p style={st.sub}>
-              A filled cell grants the whole module (<code style={st.code}>module.*</code>). <b>ALL</b> = the
-              full <code style={st.code}>*</code> wildcard (soft cells are inherited from it). Finer keys
-              appear as chips — the guard enforces down to <code style={st.code}>module.entity.action</code>.
+              Use this only when maintaining a custom role. A filled cell grants the whole module;
+              detailed capabilities appear below the role. Changes take effect in the API guard.
             </p>
           </div>
         </div>
@@ -193,10 +240,10 @@ export default function RolesAdminClient({
               </tr>
             </thead>
             <tbody>
-              {roles.length === 0 ? (
+              {visibleRoles.length === 0 ? (
                 <tr><td colSpan={MODULES.length + 2} style={{ color: 'var(--muted)' }}>No roles yet — add one below.</td></tr>
               ) : (
-                roles.map((r) => {
+                visibleRoles.map((r) => {
                   const all = hasAll(r.permissions);
                   const extra = customKeys(r.permissions);
                   return (
@@ -266,7 +313,7 @@ export default function RolesAdminClient({
             <thead>
               <tr>
                 <th>User</th>
-                {roles.map((r) => (
+                {visibleRoles.map((r) => (
                   <th key={r.id} title={r.id}>{r.name}</th>
                 ))}
                 <th>Security</th>
@@ -274,7 +321,7 @@ export default function RolesAdminClient({
             </thead>
             <tbody>
               {matrixUsers.length === 0 ? (
-                <tr><td colSpan={roles.length + 2} style={{ color: 'var(--muted)' }}>No users in the directory yet.</td></tr>
+                <tr><td colSpan={visibleRoles.length + 2} style={{ color: 'var(--muted)' }}>No users in the directory yet.</td></tr>
               ) : (
                 matrixUsers.map((u) => (
                   <tr key={u.id}>
@@ -282,7 +329,7 @@ export default function RolesAdminClient({
                       {u.id}
                       {u.label ? <span style={st.roleId}>{u.label}</span> : null}
                     </td>
-                    {roles.map((r) => (
+                    {visibleRoles.map((r) => (
                       <td key={r.id}>
                         <MatrixCell
                           on={granted(u.id, r.id)}
@@ -305,8 +352,8 @@ export default function RolesAdminClient({
         </div>
 
         <p style={st.legend}>
-          <Pill tone="info">tip</Pill> Deal-chain dev roles are seeded; new grants write through to
-          <code style={st.code}> aura_access_grants</code> and hydrate on boot.
+          <Pill tone="info">tip</Pill> Use this grid for company-wide assignments. Add delivery staff
+          from the Project Team workspace so their role is limited to the selected project.
         </p>
       </section>
     </div>
@@ -314,6 +361,23 @@ export default function RolesAdminClient({
 }
 
 const st = {
+  guide: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+    gap: 10,
+    marginBottom: 16,
+  } as CSSProperties,
+  guideStep: {
+    display: 'grid',
+    gap: 5,
+    padding: 14,
+    border: '1px solid var(--border)',
+    borderRadius: 12,
+    background: 'var(--panel)',
+    color: 'var(--muted)',
+    fontSize: 12.5,
+    lineHeight: 1.45,
+  } as CSSProperties,
   card: {
     border: '1px solid var(--border)',
     borderRadius: 14,
@@ -322,9 +386,32 @@ const st = {
     background: 'var(--panel)',
     boxShadow: 'var(--shadow-sm)',
   } as CSSProperties,
-  cardHead: { marginBottom: 12 } as CSSProperties,
+  cardHead: { marginBottom: 12, display: 'flex', alignItems: 'end', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } as CSSProperties,
   h2: { fontSize: 15, fontWeight: 700, margin: 0 } as CSSProperties,
   sub: { fontSize: 12.5, color: 'var(--muted)', margin: '4px 0 0', lineHeight: 1.5, maxWidth: 720 } as CSSProperties,
+  search: { width: 280, maxWidth: '100%', padding: '8px 10px', fontSize: 13 } as CSSProperties,
+  roleGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+    gap: 10,
+  } as CSSProperties,
+  roleCard: {
+    border: '1px solid var(--border)',
+    borderRadius: 10,
+    padding: 12,
+    background: 'var(--panel-2)',
+  } as CSSProperties,
+  roleCardHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 8 } as CSSProperties,
+  scopeBadge: {
+    border: '1px solid var(--border-strong)',
+    borderRadius: 999,
+    padding: '2px 7px',
+    color: 'var(--muted)',
+    fontSize: 10,
+    whiteSpace: 'nowrap',
+  } as CSSProperties,
+  roleDescription: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.45, margin: '7px 0' } as CSSProperties,
+  empty: { color: 'var(--muted)', margin: 0 } as CSSProperties,
   scroll: { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10 } as CSSProperties,
   roleId: {
     display: 'block',

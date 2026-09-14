@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import AuraTabLink from './aura-tab-link';
 import {
   BadgeCheck,
   Calculator,
@@ -47,12 +47,21 @@ export default function Tender360Context({ tender }: { tender: TenderContext }) 
       tone: 'teal',
     },
     {
-      label: 'Scope & BOQ',
-      detail: 'Tender scope, quantities and assumptions',
+      label: 'Scope & specifications',
+      detail: 'Review deliverables and technical requirements',
       owner: 'Sales & Commercial',
-      href: '#boq',
+      href: '#scope',
       icon: ListChecks,
       state: 'Current record',
+      tone: 'blue',
+    },
+    {
+      label: 'BOQ workspace',
+      detail: 'Prepare quantities after scope review and qualification',
+      owner: 'Sales & Commercial',
+      href: `/tendering/tenders/${tender.id}/boq`,
+      icon: ListChecks,
+      state: 'Open workspace',
       tone: 'blue',
     },
     {
@@ -93,9 +102,9 @@ export default function Tender360Context({ tender }: { tender: TenderContext }) 
     },
     {
       label: 'Documents & evidence',
-      detail: 'Controlled tender files and supporting evidence',
+      detail: 'Drawings, specifications and tender study files',
       owner: 'DMS authority',
-      href: '/documents',
+      href: '#scope',
       icon: FolderOpen,
       state: 'Canonical DMS',
       tone: 'slate',
@@ -125,13 +134,13 @@ export default function Tender360Context({ tender }: { tender: TenderContext }) 
       <div className={styles.header}>
         <div>
           <span className={styles.kicker}>SALES &amp; COMMERCIAL / TENDER 360</span>
-          <h2 id="tender-360-heading">Pre-award context for {tender.reference || tender.title}</h2>
-          <p>Coordinate the bid from one place while each specialist team keeps ownership of its records.</p>
+          <h2 id="tender-360-heading">Tender workspaces · {tender.reference || tender.title}</h2>
+          <p>Select a workspace to open its tools, or return to a review section on this dashboard.</p>
         </div>
         <span className={styles.status}>{tender.status}</span>
       </div>
 
-      <div className={styles.grid}>
+      <nav className={styles.grid} aria-label="Tender workspace launcher">
         {items.map((item) => {
           const Icon = item.icon;
           const isAnchor = item.href.startsWith('#');
@@ -149,10 +158,10 @@ export default function Tender360Context({ tender }: { tender: TenderContext }) 
           return isAnchor ? (
             <a key={item.label} href={item.href} className={styles.card}>{content}</a>
           ) : (
-            <Link key={item.label} href={item.href} className={styles.card}>{content}</Link>
+            <AuraTabLink key={item.label} href={item.href} tabTitle={`${tender.reference || tender.title} · ${item.label}`} tabType="Tender workspace" className={styles.card}>{content}</AuraTabLink>
           );
         })}
-      </div>
+      </nav>
 
       <div className={styles.ownership}>
         <FileText size={15} aria-hidden />
@@ -160,7 +169,7 @@ export default function Tender360Context({ tender }: { tender: TenderContext }) 
       </div>
       <div className={styles.handoff}>
         <span>PRE-AWARD</span><b>→</b><span>GOVERNED AWARD</span><b>→</b><span>PROJECT 360</span>
-        <Link href="/projects/projects">Open Projects after award ↗</Link>
+        <AuraTabLink href="/projects/projects" tabTitle="Projects" tabType="Tender handoff">Open Projects after award ↗</AuraTabLink>
       </div>
     </section>
   );

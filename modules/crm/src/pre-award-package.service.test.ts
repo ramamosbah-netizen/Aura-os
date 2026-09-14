@@ -85,6 +85,23 @@ describe('Direct Pre-Award — governance loop closes', () => {
     expect(second.id).toBe(first.id); // no second frozen sheet; the policy is not re-applied
   });
 
+  it('rejects a caller quantity that differs from the persisted approved basis', async () => {
+    const { service } = svc();
+    const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'opp-quantity-spoof' });
+    const basis = await service.addScopeBasis({ tenantId: 't1', packageId: pkg.id, sourceId: 'scope-1', lines });
+    await service.approveScopeBasis(basis, 'u1');
+
+    await expect(service.addEstimate({
+      tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id,
+      lines: [{ ...lines[0], quantity: 1000 }], buildUps,
+    })).rejects.toThrow(/persisted approved scope basis/i);
+
+    const canonical = await service.addEstimate({
+      tenantId: 't1', packageId: pkg.id, basisRevisionId: basis.id, buildUps,
+    });
+    expect(canonical.estimate.totals.estimatedCost).toBe(8800);
+  });
+
   it('freezePricing REFUSES a cost-only estimate with no pricing policy — pricing is a decision', async () => {
     const { service } = svc();
     const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'opp-3' });

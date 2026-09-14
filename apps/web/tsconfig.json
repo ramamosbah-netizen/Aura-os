@@ -41,7 +41,9 @@
     ".next-e2e-diag/types/**/*.ts",
     ".next-e2e-diag/dev/types/**/*.ts",
     ".next-e2e-a11y/types/**/*.ts",
-    ".next-e2e-a11y/dev/types/**/*.ts"
+    ".next-e2e-a11y/dev/types/**/*.ts",
+    ".next-closure-build/types/**/*.ts",
+    ".next-closure-build/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

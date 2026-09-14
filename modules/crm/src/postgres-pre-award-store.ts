@@ -1,5 +1,6 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Requirement, RequirementPriority, RequirementStatus, ScopeLine, ScopeStatus, SolutionScope } from './domain/solution-scope';
 import type { PreAwardStore } from './pre-award-store';
 
@@ -34,7 +35,14 @@ export class PostgresPreAwardStore implements PreAwardStore {
   constructor(private readonly pool: Pool) {}
 
   async saveRequirement(r: Requirement): Promise<void> {
-    await this.pool.query(
+    await this.saveRequirementWith(this.pool, r);
+  }
+  async saveRequirementWithClient(tx: TxHandle | null, r: Requirement): Promise<void> {
+    if (tx === null) return this.saveRequirement(r);
+    await this.saveRequirementWith(tx as PoolClient, r);
+  }
+  private async saveRequirementWith(executor: Pool | PoolClient, r: Requirement): Promise<void> {
+    await executor.query(
       `INSERT INTO public.aura_crm_requirements (${REQ_COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (id) DO UPDATE SET title=$4, detail=$5, priority=$6, status=$7, updated_at=$9`,

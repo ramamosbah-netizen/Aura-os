@@ -35,4 +35,12 @@ export class InMemoryGoodsReceiptStore implements GoodsReceiptStore {
     const all = await this.list({ ...filter, limit: undefined });
     return paginate(all, page);
   }
+
+  async receivedQuantityForPo(tenantId: Id, poId: Id): Promise<number | null> {
+    const quantities = [...this.grns.values()]
+      .filter((g) => g.tenantId === tenantId && g.poId === poId && g.status === 'received')
+      .map((g) => g.receivedQuantity)
+      .filter((quantity): quantity is number => quantity !== null && Number.isFinite(quantity));
+    return quantities.length > 0 ? quantities.reduce((total, quantity) => total + quantity, 0) : null;
+  }
 }

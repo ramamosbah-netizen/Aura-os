@@ -119,7 +119,8 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
   const load = useCallback(async (): Promise<void> => {
     const res = await fetch(`/api/tendering/tenders/${tenderId}/pricing`, { cache: 'no-store' });
     if (!res.ok) {
-      setErr('Failed to load the pricing sheet');
+      const body = await res.json().catch(() => ({}));
+      setErr(body.message ?? body.error ?? 'Failed to load the pricing sheet');
       return;
     }
     setData(await res.json());
@@ -129,7 +130,15 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
     void load();
   }, [load]);
 
-  if (!data) return <p style={{ color: 'var(--muted)' }}>{err ?? 'Loading pricing sheet…'}</p>;
+  if (!data) return err ? (
+    <section style={{ padding: 24, border: '1px solid var(--line)', borderRadius: 14, background: 'var(--panel)' }}>
+      <h2 style={{ margin: '0 0 8px' }}>Estimation is waiting for approved quantities</h2>
+      <p style={{ color: 'var(--muted)', margin: '0 0 16px', maxWidth: 720 }}>{err}</p>
+      <a href={`/tendering/tenders/${tenderId}/boq`} style={{ color: 'var(--accent)', fontWeight: 700 }}>
+        Open Technical Study &amp; Quantity Take-Off →
+      </a>
+    </section>
+  ) : <p style={{ color: 'var(--muted)' }}>Loading pricing sheet…</p>;
 
   const { items, buildUps, estimate, rates, quotations, locked, lockedBy } = data;
 
@@ -423,7 +432,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           {quotations.length > 0 && (
             <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {quotations.map((q) => (
-                <a key={q.id} href="/crm/quotations" style={st.quoteChip}>
+                <a key={q.id} href={`/crm/quotations/${q.id}`} style={st.quoteChip}>
                   {q.quoteNumber} · {q.status} · AED {aed(q.total)}
                 </a>
               ))}
@@ -431,7 +440,8 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <a href={`/api/tendering/tenders/${tenderId}/pricing/csv`} style={st.btnGhostLink}>⤓ Export sheet (CSV)</a>
+          <a href={`/api/tendering/tenders/${tenderId}/pricing.xlsx`} style={st.btnGhostLink}>Download pricing workbook (.xlsx)</a>
+          <a href={`/api/tendering/tenders/${tenderId}/pricing/csv`} style={st.btnGhostLink}>Export data (.csv)</a>
           <button style={st.btnPrimary} disabled={busy || items.length === 0} onClick={() => void generateQuotation()}>
             Generate quotation →
           </button>

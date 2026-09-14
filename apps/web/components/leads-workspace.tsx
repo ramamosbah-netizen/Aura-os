@@ -1,8 +1,8 @@
 'use client';
 
-import { useMemo, useState, type CSSProperties, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import LeadCapture from './lead-capture';
+import LeadCapture, { type CapturedLeadRow } from './lead-capture';
 
 // Leads — the Lead OS. A lead is captured interest, NOT yet a deal: it moves through a qualification
 // lifecycle (New → Contacted → Qualifying → Qualified → Disqualified), and only a Qualified lead may
@@ -50,6 +50,10 @@ export default function LeadsWorkspace({ leads: initial }: { leads: LeadRow[] })
   const [dropKey, setDropKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // A server refresh supplies a new canonical register after create/update. Mirror that new prop;
+  // otherwise the client-state snapshot keeps showing the old count until a full browser reload.
+  useEffect(() => setLeads(initial), [initial]);
 
   const todayIso = isoDaysAhead(0);
   const active = useMemo(() => leads.filter((l) => l.status !== 'converted'), [leads]);
@@ -105,7 +109,12 @@ export default function LeadsWorkspace({ leads: initial }: { leads: LeadRow[] })
           <p style={st.sub}>Captured interest, qualified by hand. Drag a lead along the funnel; open a lead to qualify and convert it.</p>
         </div>
         <div style={st.headActions}>
-          <LeadCapture onSaved={() => router.refresh()} />
+          <LeadCapture onSaved={(saved: CapturedLeadRow) => {
+            // The POST response is the persisted canonical record, so show it immediately while the
+            // server refresh reconciles the complete register in the background.
+            setLeads((rows) => [saved, ...rows.filter((row) => row.id !== saved.id)]);
+            router.refresh();
+          }} />
           <div style={st.viewSwitch}>
             <button type="button" onClick={() => setView('board')} style={view === 'board' ? st.viewOn : st.viewOff}>Board</button>
             <button type="button" onClick={() => setView('list')} style={view === 'list' ? st.viewOn : st.viewOff}>List</button>

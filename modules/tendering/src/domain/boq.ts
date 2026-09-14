@@ -6,6 +6,12 @@ export interface BOQ {
   tenantId: Id;
   companyId: Id | null;
   tenderId: Id;
+  /** Approved quantity take-off revision last projected into this commercial BOQ. */
+  sourceBasisRevisionId: Id | null;
+  /** Human-readable frozen source reference (for example technical-study:S-001:Client Rev03). */
+  sourceRevisionRef: string | null;
+  projectedBy: Id | null;
+  projectedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -15,6 +21,8 @@ export interface BOQItem {
   tenantId: Id;
   companyId: Id | null;
   boqId: Id;
+  /** Canonical line in the approved quantity take-off; null for legacy/client-imported BOQs. */
+  sourceBasisLineId: Id | null;
   itemCode: string; // e.g. "1.1", "1.1.2"
   description: string;
   unit: string;
@@ -30,12 +38,17 @@ export interface NewBOQ {
   tenantId: Id;
   companyId?: Id | null;
   tenderId: Id;
+  sourceBasisRevisionId?: Id | null;
+  sourceRevisionRef?: string | null;
+  projectedBy?: Id | null;
+  projectedAt?: string | null;
 }
 
 export interface NewBOQItem {
   tenantId: Id;
   companyId?: Id | null;
   boqId: Id;
+  sourceBasisLineId?: Id | null;
   itemCode: string;
   description: string;
   unit: string;
@@ -50,6 +63,10 @@ export function makeBOQ(input: NewBOQ): BOQ {
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     tenderId: input.tenderId,
+    sourceBasisRevisionId: input.sourceBasisRevisionId ?? null,
+    sourceRevisionRef: input.sourceRevisionRef ?? null,
+    projectedBy: input.projectedBy ?? null,
+    projectedAt: input.projectedAt ?? null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -70,6 +87,7 @@ export function makeBOQItem(input: NewBOQItem): BOQItem {
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
     boqId: input.boqId,
+    sourceBasisLineId: input.sourceBasisLineId ?? null,
     itemCode: input.itemCode.trim(),
     description: input.description.trim(),
     unit: input.unit.trim(),

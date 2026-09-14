@@ -41,7 +41,7 @@ function harness() {
   // Only bus/tenant/opportunities/quotations/preAwardPackages matter for the accept reactor; the rest
   // are noops — onModuleInit only registers bus subscriptions, it never calls a service.
   const subscriber = new CrossModuleSubscriber(
-    bus, noop, noop, noop, noop, noop, noop, noop, tenant, noop, noop, noop, noop, noop,
+    bus, noop, noop, noop, noop, noop, noop, noop, tenant, noop, noop, noop, noop, noop, noop,
     opportunities, noop, quotations, packages, noop, noop, noop, noop, noop,
   );
   subscriber.onModuleInit();

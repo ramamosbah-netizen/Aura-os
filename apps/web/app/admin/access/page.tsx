@@ -8,6 +8,8 @@ interface Role {
   id: string;
   name: string;
   permissions: string[];
+  description?: string;
+  assignmentScope?: 'tenant' | 'project' | 'tenant-or-project';
 }
 interface Grant {
   userId: string;
@@ -47,7 +49,7 @@ export default async function AccessAdminPage() {
         title="Roles & Access"
         glyph="🔐"
         backToHub
-        subtitle="Roles are named bundles of permission patterns (e.g. procurement.*, finance.invoice.approve). Grant them to users here — exactly what the API's permission guard enforces once authentication is on."
+        subtitle="Choose the employee's real job, assign it at company or project level, and keep preparation separate from approval."
         kpis={kpis}
       />
       <RolesAdminClient initialRoles={roles} initialGrants={grants} />

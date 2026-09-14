@@ -40,9 +40,6 @@ export default async function TenderDetailPage({
       <Sales360Journey current="tender" />
       <div style={st.navRow}>
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>
-        <a href={`/tendering/tenders/${tender.id}/pricing`} style={{ ...st.link, marginLeft: 16 }}>
-          Pricing sheet (internal) →
-        </a>
       </div>
       <TenderDetail tender={tender} />
     </div>

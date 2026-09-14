@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
+import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   CLOSEOUT_EVENT,
   type ProjectCloseout,
@@ -39,13 +39,15 @@ export class CloseoutService {
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(CLOSEOUT_READINESS_GATE) private readonly readiness: CloseoutReadinessGate | null = null,
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   async start(input: NewProjectCloseout): Promise<ProjectCloseout> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      const target: AccessTarget = { permission: 'projects.closeout.create', orgPath };
+      const target: AccessTarget = { permission: 'projects.closeout.create', orgPath, resource: { type: 'project', id: input.projectId } };
       this.access.assert(input.createdBy, target);
     }
     const existing = await this.store.getByProject(input.tenantId, input.projectId);

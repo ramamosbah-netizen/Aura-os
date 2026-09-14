@@ -135,6 +135,11 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
                           Ready to Receive
                         </span>
                       )}
+                      {po.status === 'partially_received' && (
+                        <span style={{ color: 'var(--warn)', fontSize: 13, fontWeight: 500 }}>
+                          Partially received
+                        </span>
+                      )}
                       {po.status === 'received' && (
                         <span style={{ color: 'var(--good)', fontSize: 13, fontWeight: 500 }}>
                           Received ✓
@@ -234,6 +239,10 @@ const s = {
       background = 'var(--good-soft)';
     } else if (status === 'issued') {
       color = 'var(--accent)';
+      border = '1px solid var(--warn-soft)';
+      background = 'var(--warn-soft)';
+    } else if (status === 'partially_received') {
+      color = 'var(--warn)';
       border = '1px solid var(--warn-soft)';
       background = 'var(--warn-soft)';
     } else if (status === 'received') {

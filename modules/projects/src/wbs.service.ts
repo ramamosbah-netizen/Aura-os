@@ -48,7 +48,7 @@ export class WbsService {
   }): Promise<WbsNode> {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      const target: AccessTarget = { permission: 'projects.project.update', orgPath, resource: { type: 'project', id: input.projectId } };
       this.access.assert(input.createdBy, target);
     }
 
@@ -57,6 +57,13 @@ export class WbsService {
       if (!project || project.tenantId !== input.tenantId) throw new Error(`project ${input.projectId} not found`);
       if (project.wbsBaselineId) {
         throw new Error(`WBS baseline ${project.wbsBaselineId} is immutable; use a governed rebaseline`);
+      }
+    }
+
+    if (input.parentId) {
+      const parent = await this.store.get(input.parentId);
+      if (!parent || parent.tenantId !== input.tenantId || parent.projectId !== input.projectId) {
+        throw new Error(`WBS parent ${input.parentId} not found`);
       }
     }
 
@@ -104,7 +111,7 @@ export class WbsService {
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      const target: AccessTarget = { permission: 'projects.project.update', orgPath, resource: { type: 'project', id: existing.projectId } };
       this.access.assert(actorId, target);
     }
 
@@ -187,10 +194,10 @@ export class WbsService {
     const project = await this.projects.get(projectId);
     const tenantId = this.tenant?.boundTenantId() ?? project?.tenantId;
     if (!project || !tenantId || project.tenantId !== tenantId) throw new Error(`project ${projectId} not found`);
-    if (project.wbsBaselineSnapshot) return project;
 
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: project.tenantId }];
-    this.access.assert(actorId, { permission: 'projects.project.update', orgPath });
+    this.access.assert(actorId, { permission: 'projects.project.update', orgPath, resource: { type: 'project', id: project.id } });
+    if (project.wbsBaselineSnapshot) return project;
 
     const nodes = await this.store.list({ tenantId: project.tenantId, projectId });
     const leaves = nodes.filter((node) => !nodes.some((child) => child.parentId === node.id));

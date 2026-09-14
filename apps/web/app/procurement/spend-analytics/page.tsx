@@ -38,7 +38,7 @@ function BarList({ title, rows, accent }: { title: string; rows: Bucket[]; accen
 
 const STATUS_LABEL: Record<string, string> = {
   draft: 'Draft', pending_approval: 'Pending approval', approved: 'Approved',
-  issued: 'Issued', received: 'Received', closed: 'Closed',
+  issued: 'Issued', partially_received: 'Partially received', received: 'Received', closed: 'Closed', cancelled: 'Cancelled',
 };
 
 export default async function SpendAnalyticsPage() {
@@ -74,7 +74,7 @@ export default async function SpendAnalyticsPage() {
       <h1 style={st.h1}>Procurement · Spend Analytics</h1>
       <p style={st.sub}>
         Where the money is going: total and committed PO spend, broken down by status, supplier,
-        project and month. Committed = approved/issued/received/closed (real obligations).
+        project and month. Committed includes approved, issued, partially received, received and closed obligations.
       </p>
 
       <div style={st.kpiRow}>

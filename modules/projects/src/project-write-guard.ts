@@ -26,6 +26,7 @@ export async function assertProjectWriteAllowed(
     const target: AccessTarget = {
       permission: input.permission,
       orgPath: [{ level: 'tenant' as OrgLevel, id: input.tenantId }],
+      resource: { type: 'project', id: input.projectId },
     };
     deps.access.assert(input.actorId, target);
   }

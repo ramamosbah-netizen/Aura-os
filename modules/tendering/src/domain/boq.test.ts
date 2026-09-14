@@ -169,4 +169,52 @@ describe('TenderService BOQ Integration Workflows', () => {
     const tenderAfterDelete = await service.get(tender.id);
     expect(tenderAfterDelete?.value).toBe(45000);
   });
+
+  it('projects an approved take-off with durable lineage and locks manual quantity changes', async () => {
+    const tender = await service.create({ tenantId: 't-takeoff', title: 'CCTV Tender', value: 0 });
+    const basisId = 'cda2ac27-7738-4c56-9e5a-6dc8be8ee001';
+    const projected = await service.projectApprovedTakeoff({
+      tenantId: 't-takeoff', companyId: null, tenderId: tender.id,
+      basisRevisionId: basisId, sourceRevisionRef: 'technical-study:S-001:Client Rev03',
+      projectedBy: 'u-estimator',
+      lines: [
+        { lineId: 'line-camera', description: 'IP CCTV camera', unit: 'no', quantity: 24 },
+        { lineId: 'line-cable', description: 'Cat6 cable', unit: 'm', quantity: 1800 },
+      ],
+    });
+
+    expect(projected.boq.sourceBasisRevisionId).toBe(basisId);
+    expect(projected.boq.sourceRevisionRef).toBe('technical-study:S-001:Client Rev03');
+    expect(projected.items.map((item) => item.sourceBasisLineId)).toEqual(['line-camera', 'line-cable']);
+    expect(projected.items.map((item) => item.quantity)).toEqual([24, 1800]);
+
+    const repeated = await service.projectApprovedTakeoff({
+      tenantId: 't-takeoff', companyId: null, tenderId: tender.id,
+      basisRevisionId: basisId, sourceRevisionRef: 'technical-study:S-001:Client Rev03',
+      projectedBy: 'u-estimator',
+      lines: [
+        { lineId: 'line-camera', description: 'IP CCTV camera', unit: 'no', quantity: 24 },
+        { lineId: 'line-cable', description: 'Cat6 cable', unit: 'm', quantity: 1800 },
+      ],
+    });
+    expect(repeated.replaced).toBe(0);
+    expect(repeated.items.map((item) => item.id)).toEqual(projected.items.map((item) => item.id));
+
+    await expect(service.updateBOQItem('t-takeoff', projected.items[0].id, { quantity: 99 }))
+      .rejects.toThrow('only a new approved quantity take-off revision can change');
+    await expect(service.addBOQItem('t-takeoff', null, projected.boq.id, {
+      itemCode: '3', description: 'Spoofed manual line', unit: 'no', quantity: 1, rate: 0,
+    })).rejects.toThrow('only a new approved quantity take-off revision can change');
+    await expect(service.assertBOQOwnedByTender('t-takeoff', 'another-tender', projected.boq.id))
+      .rejects.toThrow('does not belong to this Tender');
+  });
+
+  it('refuses to project a take-off while any quantity is unknown', async () => {
+    await expect(service.projectApprovedTakeoff({
+      tenantId: 't-takeoff-unknown', companyId: null, tenderId: 'tender-unknown',
+      basisRevisionId: 'basis-unknown', sourceRevisionRef: 'technical-study:S-001:Rev A',
+      projectedBy: 'u-estimator',
+      lines: [{ lineId: 'line-unknown', description: 'Unsurveyed cable', unit: 'm', quantity: null }],
+    })).rejects.toThrow('unknown quantity');
+  });
 });

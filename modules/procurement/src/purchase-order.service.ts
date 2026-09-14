@@ -152,7 +152,23 @@ export class PurchaseOrderService implements OnModuleInit {
    *  Value is NOT editable — committed project cost was posted as a delta at creation. */
   async update(id: Id, patch: Partial<Pick<PurchaseOrder, 'title' | 'reference' | 'supplierId' | 'supplierName'>>): Promise<PurchaseOrder> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
-    const defined = Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined));
+    let normalized = patch;
+    if (patch.supplierId !== undefined) {
+      if (patch.supplierId === null) {
+        normalized = { ...patch, supplierId: null, supplierName: null };
+      } else {
+        const supplier = await this.suppliers.get(patch.supplierId);
+        if (!supplier || supplier.tenantId !== existing.tenantId) throw new Error(`supplier ${patch.supplierId} not found`);
+        if (!isApproved(supplier)) throw new Error(`supplier ${supplier.name} is not approved (status ${supplier.status})`);
+        normalized = { ...patch, supplierId: supplier.id, supplierName: supplier.name };
+      }
+    } else if (patch.supplierName !== undefined && existing.supplierId) {
+      const supplier = await this.suppliers.get(existing.supplierId);
+      if (!supplier || supplier.tenantId !== existing.tenantId) throw new Error(`supplier ${existing.supplierId} not found`);
+      if (!isApproved(supplier)) throw new Error(`supplier ${supplier.name} is not approved (status ${supplier.status})`);
+      normalized = { ...patch, supplierName: supplier.name };
+    }
+    const defined = Object.fromEntries(Object.entries(normalized).filter(([, v]) => v !== undefined));
     const updated: PurchaseOrder = { ...existing, ...defined };
     // Audit trail (P1-2 / gap register G-12): capture the field-level before→after so the timeline
     // can answer "who re-pointed this PO at a different supplier, and from whom" — previously the
@@ -183,6 +199,10 @@ export class PurchaseOrderService implements OnModuleInit {
 
   async changeStatus(id: Id, status: PurchaseOrderStatus): Promise<PurchaseOrder> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
+
+    if (!['draft', 'issued', 'closed', 'cancelled'].includes(status)) {
+      throw new Error(`PO status ${status} requires its governed submit, approve or receipt command`);
+    }
 
     // Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue.
     if (status === 'issued' && existing.status !== 'approved' && !requiredApproval(existing.value).autoApproved) {
@@ -236,6 +256,24 @@ export class PurchaseOrderService implements OnModuleInit {
     });
     this.logger.log(`PO ${updated.title} (${updated.id}) status changed to ${status}`);
     return updated;
+  }
+
+  /** Reconcile the PO receipt state from the complete canonical GRN quantity for this order. */
+  async reconcileReceipt(id: Id, receivedQuantity: number | null): Promise<PurchaseOrder> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
+    const ordered = existing.orderedQuantity;
+    const received = receivedQuantity !== null && Number.isFinite(receivedQuantity)
+      ? Math.max(0, Number(receivedQuantity))
+      : null;
+    const status: PurchaseOrderStatus = ordered !== null && ordered > 0 && received !== null && received < ordered
+      ? 'partially_received'
+      : 'received';
+    if (existing.status === status) return existing;
+    return this.transition(existing, status, PROCUREMENT_EVENT.poUpdated, {
+      orderedQuantity: ordered,
+      receivedQuantity: received,
+      outstandingQuantity: ordered !== null && received !== null ? Math.max(0, ordered - received) : null,
+    });
   }
 
   /** Atomic status transition + spine event (shared by submit/approve/changeStatus paths). */

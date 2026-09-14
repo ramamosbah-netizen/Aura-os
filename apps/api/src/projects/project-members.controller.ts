@@ -1,5 +1,12 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
-import { AccessService, AuditService, Permissions, TenantContext, UsersService } from '@aura/core';
+import {
+  AccessService,
+  AuditService,
+  Permissions,
+  PROJECT_DELIVERY_ROLE_IDS,
+  TenantContext,
+  UsersService,
+} from '@aura/core';
 import type { Role, Scope } from '@aura/shared';
 
 /**
@@ -18,8 +25,6 @@ import type { Role, Scope } from '@aura/shared';
  * manage/see the projects they belong to is slice P2 (scope-aware PermissionsGuard). Until then,
  * `projects.member.manage` (held by r-pm / r-admin) authorises management on any project.
  */
-
-const DELIVERY_ROLE_IDS = ['r-pm', 'r-site-engineer', 'r-qa-qc', 'r-hse'] as const;
 
 function projectScope(projectId: string): Scope {
   return { kind: 'resource', resourceType: 'project', resourceId: projectId };
@@ -72,8 +77,8 @@ export class ProjectMembersController {
     const roleId = dto?.roleId?.trim();
     if (!userId) throw new BadRequestException('userId is required');
     if (!roleId) throw new BadRequestException('roleId is required');
-    if (!DELIVERY_ROLE_IDS.includes(roleId as (typeof DELIVERY_ROLE_IDS)[number])) {
-      throw new BadRequestException(`roleId must be a delivery role (${DELIVERY_ROLE_IDS.join(', ')})`);
+    if (!PROJECT_DELIVERY_ROLE_IDS.includes(roleId as (typeof PROJECT_DELIVERY_ROLE_IDS)[number])) {
+      throw new BadRequestException(`roleId must be a delivery role (${PROJECT_DELIVERY_ROLE_IDS.join(', ')})`);
     }
     const ctx = this.tenant.get();
     this.access.grant({ userId, roleId, scope: projectScope(projectId) });
@@ -108,7 +113,7 @@ export class ProjectMembersController {
   /** The whitelisted delivery roles, resolved against the live role registry (names stay in sync). */
   private deliveryRoles(): Role[] {
     const byId = new Map(this.access.listRoles().map((r) => [r.id, r]));
-    return DELIVERY_ROLE_IDS.map((id) => byId.get(id)).filter((r): r is Role => Boolean(r));
+    return PROJECT_DELIVERY_ROLE_IDS.map((id) => byId.get(id)).filter((r): r is Role => Boolean(r));
   }
 
   /** Members of a project = grants scoped to `resource:project:<id>`, joined to user + role names. */

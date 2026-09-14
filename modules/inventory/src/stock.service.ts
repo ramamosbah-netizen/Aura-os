@@ -135,6 +135,7 @@ export class StockService {
         aggregateType: 'inventory.stock',
         aggregateId: item.id,
         payload: {
+          movementId: movement.id,
           code: item.code,
           name: item.name,
           unit: item.unit,

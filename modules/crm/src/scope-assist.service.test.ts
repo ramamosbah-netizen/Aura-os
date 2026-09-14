@@ -27,6 +27,19 @@ async function seedReq(evidence: InMemoryPreAwardStore, tenantId: string, opport
   return r;
 }
 
+async function approveStudy(packages: PreAwardPackageService, tenantId = 't1', opportunityId = 'o1') {
+  const pkg = await packages.openDirect({ tenantId, opportunityId });
+  const study = await packages.createTechnicalStudy({
+    tenantId, companyId: null, packageId: pkg.id, opportunityId, title: 'Technical study', inputRevision: 'Client Rev 01',
+    authorId: 'engineer', reviewerId: 'manager', scopeSummary: 'Reviewed technical basis',
+    systems: [{ id: 'sys-1', discipline: 'ELV', name: 'CCTV', designBasis: 'IP', interfaces: [] }],
+    requirements: [{ id: 'sr-1', category: 'client', statement: 'System required', acceptanceCriteria: '', sourceRef: 'Enquiry', sourceRequirementId: null, compliance: 'compliant', response: 'Included' }],
+    surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+  });
+  await packages.submitTechnicalStudy(tenantId, pkg.id, study.id, 'engineer');
+  await packages.approveTechnicalStudy(tenantId, pkg.id, study.id, 'manager');
+}
+
 describe('ScopeAssistService — grounded generation', () => {
   it('grounds items on the deal\'s own evidence, each with real provenance (heuristic floor when no model)', async () => {
     const { svc, evidence } = harness();
@@ -97,6 +110,10 @@ describe('ScopeAssistService — accept ≠ approve', () => {
     await seedReq(evidence, 't1', 'o1', 'Intercom for 12 apartments');
     const p = await svc.generate({ tenantId: 't1', opportunityId: 'o1' });
 
+    await expect(svc.accept({ tenantId: 't1', opportunityId: 'o1', proposalId: p.id, actorId: 'u1' }))
+      .rejects.toThrow(/approved technical study/i);
+    await approveStudy(packages);
+
     const { proposal, basis } = await svc.accept({ tenantId: 't1', opportunityId: 'o1', proposalId: p.id, actorId: 'u1' });
     expect(proposal.status).toBe('accepted');
     expect(proposal.acceptedBasisRevisionId).toBe(basis.id);
@@ -128,9 +145,10 @@ describe('ScopeAssistService — accept ≠ approve', () => {
   });
 
   it('a proposal cannot be accepted twice', async () => {
-    const { svc, evidence } = harness();
+    const { svc, evidence, packages } = harness();
     await seedReq(evidence, 't1', 'o1', 'Barrier gate x2');
     const p = await svc.generate({ tenantId: 't1', opportunityId: 'o1' });
+    await approveStudy(packages);
     await svc.accept({ tenantId: 't1', opportunityId: 'o1', proposalId: p.id });
     await expect(svc.accept({ tenantId: 't1', opportunityId: 'o1', proposalId: p.id })).rejects.toThrow(/only a suggested proposal/i);
   });
@@ -138,7 +156,7 @@ describe('ScopeAssistService — accept ≠ approve', () => {
 
 describe('ScopeAssistService — regenerate + evidence staleness', () => {
   it('regenerate = a new version; a still-open suggestion is superseded, an accepted one is preserved', async () => {
-    const { svc, evidence } = harness();
+    const { svc, evidence, packages } = harness();
     await seedReq(evidence, 't1', 'o1', 'CCTV');
 
     const v1 = await svc.generate({ tenantId: 't1', opportunityId: 'o1' }); // suggested
@@ -148,6 +166,7 @@ describe('ScopeAssistService — regenerate + evidence staleness', () => {
     expect(read.find((x) => x.id === v1.id)!.status).toBe('superseded');
 
     // Accept v2, then regenerate v3 — v2 stays accepted (historical), not rewritten.
+    await approveStudy(packages);
     await svc.accept({ tenantId: 't1', opportunityId: 'o1', proposalId: v2.id });
     const v3 = await svc.generate({ tenantId: 't1', opportunityId: 'o1' });
     expect(v3.version).toBe(3);

@@ -29,7 +29,9 @@ export class AuthSeeder implements OnModuleInit {
     // The standard ELV role set. Separated from the dev grants below: these are the roles a
     // real deployment starts from, the grants below are demo identities.
     for (const role of ELV_ROLE_MATRIX) {
-      this.access.registerRole({ id: role.id, name: role.name, permissions: role.permissions });
+      // Keep the human-facing description and recommended assignment scope in the live registry;
+      // the admin UI uses them to explain the employee job without changing authorization logic.
+      this.access.registerRole(role);
     }
     this.logger.log(
       `Seeded ${ELV_ROLE_MATRIX.length} standard ELV roles: ${ELV_ROLE_MATRIX.map((r) => r.id).join(' · ')}.`,

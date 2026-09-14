@@ -1,4 +1,5 @@
 import type { Id, Page, PageParams } from '@aura/shared';
+import type { TxHandle } from '@aura/core';
 import type { Activity } from './domain/activity';
 
 /** DI token for the CRM activity store. */
@@ -33,6 +34,7 @@ export interface ActivitySummary {
 /** Persistence for CRM activities. Postgres in production; in-memory for no-DB boots. */
 export interface ActivityStore {
   save(activity: Activity): Promise<void>;
+  saveWithClient(tx: TxHandle | null, activity: Activity): Promise<void>;
   get(id: Id): Promise<Activity | null>;
   list(filter?: ActivityFilter): Promise<Activity[]>;
   listPaged(filter: ActivityFilter, page: PageParams): Promise<Page<Activity>>;

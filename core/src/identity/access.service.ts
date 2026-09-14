@@ -10,6 +10,7 @@ import {
   evaluateAccess,
 } from '@aura/shared';
 import { PG_POOL } from '../events/pg-pool';
+import { STANDARD_ELV_ROLES } from './standard-elv-roles';
 
 /** Structural equality for a grant scope (used to de-dupe grants and target a revoke). */
 function sameScope(a: Grant['scope'], b: Grant['scope']): boolean {
@@ -95,78 +96,10 @@ export class AccessService implements OnModuleInit {
     );
   }
 
-  /** Seed default enterprise roles across all 19 ELV business modules if not registered. */
+  /** Register the canonical ELV/MEP role catalog without granting it to any person. */
   seedStandardRoles(): void {
-    // Communication is a baseline capability, not a departmental one: every staffed role needs
-    // chat and internal mail. The permission guard DERIVES `comms.*` from the /comms routes, so
-    // before this line every standard role was already refused chat and mail the moment auth was
-    // switched on — only the wildcard admin roles worked. Granting it back repairs that rather
-    // than widening anything.
-    const COMMS = 'comms.*';
-    /**
-     * PATTERNS ARE THREE SEGMENTS: `module.entity.action`, which is what
-     * `derivePermissionFromRoute` produces for all ~600 handlers. A two-segment pattern like
-     * `site.read` therefore matches NOTHING — `permissionMatches` compares segment by segment and
-     * requires equal length, so it can only ever match a literal permission `site.read`, which no
-     * route derives. Read-only across a module is `site.*.read`.
-     *
-     * Six such patterns were live here, across all four delivery roles used for project
-     * membership — so a project member held a role that granted no cross-module read at all, and
-     * every such request was refused with no sign that the role was the cause.
-     */
-    const DEFAULT_ROLES: Role[] = [
-      { id: 'r-admin', name: 'System Administrator', permissions: ['*'] },
-      {
-        id: 'r-sales',
-        name: 'Sales Representative',
-        permissions: ['crm.lead.*', 'crm.opportunity.*', 'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.activity.*', 'crm.signal.*', COMMS],
-      },
-      {
-        id: 'r-sales-manager',
-        name: 'Sales Manager',
-        permissions: ['crm.*', 'tendering.*', 'contracts.contract.read', COMMS],
-      },
-      {
-        id: 'r-pm',
-        name: 'Project Manager',
-        permissions: ['projects.*', 'contracts.ipc.create', 'contracts.contract.read', 'site.*.read', 'quality.*.read', 'doccontrol.*.read', COMMS],
-      },
-      {
-        id: 'r-site-engineer',
-        name: 'Site Engineer',
-        permissions: ['site.*', 'quality.inspection-request.create', 'quality.*.read', 'hse.*.read', 'engineering.*.read', COMMS],
-      },
-      {
-        id: 'r-qa-qc',
-        name: 'QA/QC Inspector',
-        permissions: ['quality.*', 'commissioning.*', 'site.*.read', 'engineering.*.read', COMMS],
-      },
-      {
-        id: 'r-hse',
-        name: 'HSE Officer',
-        permissions: ['hse.*', 'site.*.read', COMMS],
-      },
-      {
-        id: 'r-procurement',
-        name: 'Procurement Specialist',
-        permissions: ['procurement.*', 'inventory.*.read', 'suppliers.*', COMMS],
-      },
-      {
-        id: 'r-store',
-        name: 'Store Keeper',
-        permissions: ['inventory.*', 'procurement.po.read', COMMS],
-      },
-      {
-        id: 'r-finance',
-        name: 'Finance Controller',
-        permissions: ['finance.*', 'contracts.ipc.certify', 'procurement.po.read', 'hr.expense-claims.approve', COMMS],
-      },
-    ];
-
-    for (const r of DEFAULT_ROLES) {
-      if (!this.roles.has(r.id)) {
-        this.registerRole(r);
-      }
+    for (const role of STANDARD_ELV_ROLES) {
+      if (!this.roles.has(role.id)) this.registerRole(role);
     }
   }
 

@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type HealthSignal, type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr } from './domain/ncr';
 import { makeNcrVerification } from './domain/ncr-verification';
@@ -73,6 +73,7 @@ export class QualityService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   // ── NCR (Non-Conformance Reports) ──────────────────────────────────────────
@@ -93,6 +94,7 @@ export class QualityService {
     sourceIrId?: string;
     sourceIrNumber?: string;
   }): Promise<Ncr> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.raisedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -138,7 +140,7 @@ export class QualityService {
     tenantId: Id,
     companyId: string | null,
     permission: string,
-    projectId?: Id | null,
+    projectId: Id,
   ): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -146,7 +148,7 @@ export class QualityService {
     this.access.assert(actorId, {
       permission,
       orgPath,
-      ...(projectId ? { resource: { type: 'project', id: projectId } } : {}),
+      resource: { type: 'project', id: projectId },
     });
   }
 
@@ -284,6 +286,7 @@ export class QualityService {
     approvedQuantity?: number | null;
     unit?: string | null;
   }): Promise<InspectionRequest> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.inspectedBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -380,6 +383,7 @@ export class QualityService {
     createdBy?: string;
     assignedTo?: string;
   }): Promise<Snag> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -533,6 +537,7 @@ export class QualityService {
     points: Array<{ activity: string; pointType: 'hold' | 'witness' | 'review' | 'surveillance'; acceptanceCriteria?: string }>;
     createdBy?: string | null;
   }): Promise<Itp> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -660,6 +665,7 @@ export class QualityService {
   // ── Material Approval Requests (MAR) ───────────────────────────────────────
 
   async createMaterialApproval(input: NewMaterialApproval): Promise<MaterialApproval> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -783,6 +789,7 @@ export class QualityService {
   // ── Equipment calibration ──────────────────────────────────────────────────
 
   async recordCalibration(input: NewCalibration): Promise<Calibration> {
+    if (input.projectId) await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -807,6 +814,7 @@ export class QualityService {
   // ── ISO Checklists & Audits ───────────────────────────────────────────────
 
   async scheduleAudit(actorId: string | null, input: NewAuditSchedule): Promise<AuditSchedule> {
+    if (input.projectId) await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (actorId && this.access) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });

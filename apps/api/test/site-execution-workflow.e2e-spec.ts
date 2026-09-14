@@ -18,6 +18,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 describe('G-34 Site Execution workflow (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
+  let projectId: string;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -30,6 +31,7 @@ describe('G-34 Site Execution workflow (HTTP)', () => {
     );
     await app.init();
     http = request(app.getHttpServer());
+    projectId = (await http.post('/api/v1/projects/projects').send({ title: 'Workflow fixture project' }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -42,7 +44,7 @@ describe('G-34 Site Execution workflow (HTTP)', () => {
   it('drives the full daily-report journey and enforces the state machine', async () => {
     // 1. Create the report (draft).
     const report = (
-      await http.post(`${B}/daily-reports`).send({ projectId: 'proj-1', date: '2026-08-12', workDescription: 'Second fix ELV — L2 west', siteConditions: 'Clear, 34°C' }).expect(201)
+      await http.post(`${B}/daily-reports`).send({ projectId: projectId, date: '2026-08-12', workDescription: 'Second fix ELV — L2 west', siteConditions: 'Clear, 34°C' }).expect(201)
     ).body;
     expect(report.status).toBe('draft');
     const id = report.id;

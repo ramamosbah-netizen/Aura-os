@@ -4,6 +4,7 @@ import { PurchaseOrderService } from './purchase-order.service';
 import { InMemoryPurchaseOrderStore } from './in-memory-purchase-order-store';
 import { InMemorySupplierStore } from './in-memory-supplier-store';
 import { makePurchaseOrder } from './domain/purchase-order';
+import { approveSupplier, makeSupplier } from './domain/supplier';
 
 /** A TxRunner that just runs the callback — these tests assert events, not transactionality. */
 const tx = { run: async (fn: (h: unknown) => Promise<void>) => fn(null) } as unknown as TxRunner;
@@ -30,12 +31,18 @@ async function harness(actorId: string | null = null) {
       } as unknown as TenantContext)
     : null;
   const store = new InMemoryPurchaseOrderStore();
+  const supplierStore = new InMemorySupplierStore();
+  await supplierStore.create(approveSupplier({ ...makeSupplier({ tenantId: 't1', code: 'SUP-1', name: 'Hikvision MEA' }), id: 'sup-1' }));
+  await supplierStore.create(approveSupplier({ ...makeSupplier({ tenantId: 't1', code: 'SUP-2', name: 'Dahua Gulf' }), id: 'sup-2' }));
+  await supplierStore.create({ ...makeSupplier({ tenantId: 't1', code: 'SUP-3', name: 'Pending Vendor' }), id: 'sup-pending' });
   const po = makePurchaseOrder({
     tenantId: 't1',
     title: 'CCTV cameras',
     value: 120_000,
     supplierId: 'sup-1',
     supplierName: 'Hikvision MEA',
+    orderedQuantity: 100,
+    unit: 'nr',
     createdBy: 'u-buyer',
   });
   await store.create(po);
@@ -46,11 +53,11 @@ async function harness(actorId: string | null = null) {
     commands,
     numbering,
     audit,
-    new InMemorySupplierStore(),
+    supplierStore,
     undefined,
     tenant,
   );
-  return { svc, appended, po };
+  return { svc, appended, po, supplierStore };
 }
 
 // G-12 — the last uncovered value mutation in the audit trail. The PO event recorded only the new
@@ -90,7 +97,7 @@ describe('PurchaseOrderService.update — audit diff (G-12)', () => {
   it('stamps the real acting user from the request context, not the PO creator', async () => {
     const { svc, appended, po } = await harness('u-manager'); // the PO's createdBy is u-buyer
 
-    await svc.update(po.id, { supplierName: 'Dahua Gulf' });
+    await svc.update(po.id, { title: 'CCTV cameras — manager revision' });
 
     expect(appended.at(-1)!.actorId).toBe('u-manager');
   });
@@ -101,5 +108,33 @@ describe('PurchaseOrderService.update — audit diff (G-12)', () => {
     await svc.update(po.id, { supplierName: 'Dahua Gulf' });
 
     expect(appended.at(-1)!.actorId).toBe('u-buyer');
+  });
+});
+
+describe('PurchaseOrderService — governed supplier and status boundaries', () => {
+  it('derives the supplier snapshot from an approved master record', async () => {
+    const { svc, po } = await harness();
+    const updated = await svc.update(po.id, { supplierId: 'sup-2', supplierName: 'Spoofed name' });
+    expect(updated).toMatchObject({ supplierId: 'sup-2', supplierName: 'Dahua Gulf' });
+  });
+
+  it('refuses missing and unapproved supplier references', async () => {
+    const { svc, po } = await harness();
+    await expect(svc.update(po.id, { supplierId: 'missing-supplier' })).rejects.toThrow(/not found/);
+    await expect(svc.update(po.id, { supplierId: 'sup-pending' })).rejects.toThrow(/not approved/);
+  });
+
+  it('keeps approval and receipt states behind their governed commands', async () => {
+    const { svc, po } = await harness();
+    await expect(svc.changeStatus(po.id, 'approved')).rejects.toThrow(/governed submit, approve or receipt command/);
+    await expect(svc.changeStatus(po.id, 'received')).rejects.toThrow(/governed submit, approve or receipt command/);
+  });
+
+  it('distinguishes partial receipt from full receipt using canonical cumulative quantity', async () => {
+    const { svc, po } = await harness();
+    const partial = await svc.reconcileReceipt(po.id, 1);
+    expect(partial.status).toBe('partially_received');
+    const complete = await svc.reconcileReceipt(po.id, 100);
+    expect(complete.status).toBe('received');
   });
 });

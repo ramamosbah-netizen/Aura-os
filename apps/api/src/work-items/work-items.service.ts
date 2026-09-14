@@ -501,7 +501,7 @@ export class WorkItemsService {
   private addPo(put: (item: WorkItem) => void, p: PurchaseOrder, actor: string): void {
     const assigned = p.ownerId === actor, created = p.createdBy === actor;
     if (!assigned && !created) return;
-    const status: WorkItemStatus = p.status === 'closed' ? 'done' : ['pending_approval', 'received'].includes(p.status) ? 'waiting' : ['approved', 'issued'].includes(p.status) ? 'in_progress' : 'todo';
+    const status: WorkItemStatus = p.status === 'closed' ? 'done' : ['pending_approval', 'partially_received', 'received'].includes(p.status) ? 'waiting' : ['approved', 'issued'].includes(p.status) ? 'in_progress' : 'todo';
     put({ id: `procurement-po:${p.id}`, source: 'procurement-po', sourceId: p.id, module: 'Procurement', kind: 'Purchase order', title: p.title, detail: p.supplierName ?? p.reference, href: `/procurement/purchase-orders/${p.id}`, projectId: p.projectId, projectName: p.projectName, status, sourceStatus: p.status, priority: 'normal', dueAt: null, createdAt: p.createdAt, updatedAt: p.createdAt, scopes: scopes(assigned, created), isFollowUp: false, actions: [], origin: origin(p.createdBy, actor) });
   }
 }

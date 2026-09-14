@@ -21,6 +21,7 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 describe('HSE permit-to-work + incident workflow (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
+  let projectId: string;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -33,6 +34,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
     );
     await app.init();
     http = request(app.getHttpServer());
+    projectId = (await http.post('/api/v1/projects/projects').send({ title: 'Workflow fixture project' }).expect(201)).body.id;
   });
 
   afterAll(async () => {
@@ -54,7 +56,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
     const bare = (
       await http
         .post(PTW)
-        .send({ projectId: 'proj-hse', permitType: 'hot_work', ...openWindow(), description: 'Welding riser' })
+        .send({ projectId: projectId, permitType: 'hot_work', ...openWindow(), description: 'Welding riser' })
         .expect(201)
     ).body;
     expect(bare.status).toBe('requested');
@@ -67,7 +69,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
       await http
         .post(RA)
         .send({
-          projectId: 'proj-hse',
+          projectId: projectId,
           reference: 'RA-E2E-1',
           activity: 'Hot work on riser',
           hazards: [{ hazard: 'Fire', likelihood: 4, severity: 4, controls: 'Fire watch', residualLikelihood: 2, residualSeverity: 2 }],
@@ -80,7 +82,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
       await http
         .post(PTW)
         .send({
-          projectId: 'proj-hse',
+          projectId: projectId,
           permitType: 'hot_work',
           ...openWindow(),
           description: 'Welding riser (assessed)',
@@ -112,7 +114,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
       await http
         .post(RA)
         .send({
-          projectId: 'proj-hse',
+          projectId: projectId,
           reference: 'RA-E2E-2',
           activity: 'Excavation',
           hazards: [{ hazard: 'Collapse', likelihood: 3, severity: 5, controls: 'Shoring', residualLikelihood: 1, residualSeverity: 3 }],
@@ -125,7 +127,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
       await http
         .post(PTW)
         .send({
-          projectId: 'proj-hse',
+          projectId: projectId,
           permitType: 'excavation',
           validFrom: '2026-01-01T00:00:00Z',
           validTo: '2026-01-02T00:00:00Z',
@@ -143,7 +145,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
     const permit = (
       await http
         .post(PTW)
-        .send({ projectId: 'proj-hse', permitType: 'height_work', ...openWindow(), description: 'Facade access' })
+        .send({ projectId: projectId, permitType: 'height_work', ...openWindow(), description: 'Facade access' })
         .expect(201)
     ).body;
 
@@ -167,7 +169,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
       await http
         .post(INC)
         .send({
-          projectId: 'proj-hse',
+          projectId: projectId,
           date: '2026-08-01',
           severity: 'major',
           description: 'Slip on wet ramp',
@@ -190,7 +192,7 @@ describe('HSE permit-to-work + incident workflow (HTTP)', () => {
       await http
         .post(CAPA)
         .send({
-          projectId: 'proj-hse',
+          projectId: projectId,
           sourceType: 'incident',
           sourceId: incident.id,
           actionRequired: 'Install anti-slip strips',

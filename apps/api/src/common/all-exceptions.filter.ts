@@ -45,7 +45,7 @@ export function classifyDomainMessage(m: string): DomainClassification {
     || /-owned;|is not allowed for\b/i.test(m)
     // Prerequisites the aggregate needs and does not have: no frozen evidence, no FX rate, no
     // handover, a closeout that is not ready. The request is well-formed; the state is not.
-    || /\bis unavailable\b|\bis not ready\b|\bis not prepared\b|\bapproval not submitted\b|only available\b|has no immutable\b/i.test(m)
+    || /\b(?:is|are) unavailable\b|\bis not ready\b|\bis not prepared\b|\bnot approval-ready\b|\bapproval not submitted\b|only available\b|has no immutable\b/i.test(m)
   ) {
     return { status: 409, code: 'CONFLICT' };
   }

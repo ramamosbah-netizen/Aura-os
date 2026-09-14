@@ -9,19 +9,26 @@ interface Q {
   quoteNumber: string; customerName: string; issueDate: string; validUntil: string | null;
   status: string; subtotal: number; vatTotal: number; total: number; lines: Line[];
 }
+interface Identity { name: string; legalName: string; trn: string; address: string; phone: string; email: string; website: string; currency: string }
 const money = (n: number) => `AED ${Number(n).toLocaleString('en-AE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function QuotationPrint({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const result = await fetchJson<Q>(`/api/crm/quotations/${id}`);
+  const [result, identityResult] = await Promise.all([
+    fetchJson<Q>(`/api/crm/quotations/${id}`),
+    fetchJson<Identity>(`/api/crm/quotations/${id}/document-identity`),
+  ]);
   if (!result.ok) return <div style={{ padding: 40 }}><DataStateNotice error={result.error} subject="quotation" /></div>;
+  if (!identityResult.ok) return <div style={{ padding: 40 }}><DataStateNotice error={identityResult.error} subject="company identity" /></div>;
   const q = result.data;
+  const identity = identityResult.data;
+  const sellerLines = [identity.name, identity.address, identity.trn ? `TRN ${identity.trn}` : '', identity.phone, identity.email, identity.website].filter(Boolean);
   return (
     <DocumentSheet
       kind="QUOTATION"
       reference={q.quoteNumber}
       status={q.status}
-      from={{ heading: 'From', lines: ['AURA OS Contracting LLC', 'Dubai, UAE', 'TRN 100000000000003'] }}
+      from={{ heading: 'From', lines: sellerLines }}
       to={{ heading: 'Quote To', lines: [q.customerName] }}
       meta={[{ label: 'Issue Date', value: q.issueDate }, ...(q.validUntil ? [{ label: 'Valid Until', value: q.validUntil }] : [])]}
       columns={[

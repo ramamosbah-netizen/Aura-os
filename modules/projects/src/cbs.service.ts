@@ -22,7 +22,7 @@ export class CbsService {
   async create(input: NewCbsNode & { createdBy?: Id | null }): Promise<CbsNode> {
     await this.assertProjectBaselineWritable(input.projectId, input.tenantId);
     if (input.createdBy && this.access) {
-      this.access.assert(input.createdBy, { permission: 'projects.project.update', orgPath: [{ level: 'tenant', id: input.tenantId }] });
+      this.access.assert(input.createdBy, { permission: 'projects.project.update', orgPath: [{ level: 'tenant', id: input.tenantId }], resource: { type: 'project', id: input.projectId } });
     }
     await this.assertParentOwnership(input.parentId ?? null, input.projectId, input.tenantId);
     return this.persistNode(makeCbsNode(input));

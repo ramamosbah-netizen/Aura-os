@@ -1,0 +1,41 @@
+# Cross-cutting capabilities
+
+| ID | Capability | Status | Output proof |
+| --- | --- | --- | --- |
+| OUT-01 | PDF actual document generation | PARTIAL | CRM Accounts exposes a clean browser print view suitable for Save as PDF; no generated PDF file was inspected. |
+| OUT-02 | Native Excel operational workbook | PARTIAL | Actual CRM Accounts XLSX was downloaded and opened: correct 12-column row and Unicode, but all values are text and the workbook has no table, filter, freeze pane, branding or images. Shared generic Excel remains HTML .xls. |
+| OUT-03 | CSV full authorized dataset | UNVERIFIED | Specific output/role proof pending; no absence claim |
+| OUT-04 | Print layout and pagination | PARTIAL | The CRM Accounts print view renders a clear one-page table; multi-page pagination and the resulting PDF remain unverified. |
+| OUT-05 | Company letterhead and tax identity | WRONG_BEHAVIOR | DocumentSheet hardcodes company name/TRN. |
+| OUT-06 | Template variables from canonical record | PARTIAL | Template PDF preview uses sample values and placeholder logo/table. |
+| OUT-07 | Document numbering | PARTIAL | The live Document Control journey registered a numbered document and retained the number through reject, revise, approve and issue. Automatic numbering rules across document types were not proven. |
+| OUT-08 | Document revision and approval | PARTIAL | Live Document Control browser proof completed Draft → Submitted → Under Review → Rejected → new revision → Approved → Issued and refused an illegal transition with 409. |
+| OUT-09 | Generated output access control | UNVERIFIED | Specific output/role proof pending; no absence claim |
+| MAIL-01 | External send | PARTIAL | Worker registers internal provider; external transport not established. |
+| MAIL-02 | External receive | UNVERIFIED | Sync engine fake-provider tests pass; actual external inbound transport not established. |
+| MAIL-03 | Customer and contact linking | DISCONNECTED | Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage. |
+| MAIL-04 | Enquiry and opportunity linking | DISCONNECTED | Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage. |
+| MAIL-05 | Tender linking | DISCONNECTED | Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage. |
+| MAIL-06 | Supplier linking | DISCONNECTED | Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage. |
+| MAIL-07 | Project linking | DISCONNECTED | Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage. |
+| MAIL-08 | Attachments and download | DISCONNECTED | The live composer explicitly says attachments from AURA Documents are not yet wired; no attachment selector is rendered. |
+| MAIL-09 | Communication history and threading | PARTIAL | Fresh browser proof persisted channel and direct-message history across reload, preserved deep links, prevented cross-conversation leakage and duplicate rendering, denied a third party and completed meeting → minutes → decision/action → close. Business-record email threading remains disconnected. |
+| MAIL-10 | Delivery failure and retry | UNVERIFIED | Specific output/role proof pending; no absence claim |
+| XOP-01 | Notifications | PARTIAL | Notification subscriber handles selected business events; coverage is not universal. |
+| XOP-02 | Reminders | PARTIAL | Fresh browser proof showed My Day as the cross-module daily focus with source coverage and stable in-app links. Reminder creation, acknowledgement and recurrence were not exercised. |
+| XOP-03 | Assignments and acceptance | PARTIAL | Fresh browser proof showed My Work aggregation, domain-source links, Tasks and the dedicated Approvals decision queue without duplicating source records. Assignment creation/acceptance/reassignment was not executed. |
+| XOP-04 | Due dates | PARTIAL | Fresh My Work/My Day browser proof rendered cross-module dated work and attention sources. Editing, timezone boundaries and overdue escalation were not exercised. |
+| XOP-05 | Escalation | PARTIAL | Repository tracing found event-driven notifications for selected SLA breaches, CRM automation sweeps, AMC escalation levels and commissioning punch escalation. Complete scheduler delivery, role recipients and live acknowledgement were not executed. |
+| XOP-06 | Full dataset search | PARTIAL | Fresh browser proof searched drawing projects/conversations and exposed decision-queue search. Complete authorized dataset behavior was not established. |
+| XOP-07 | Filtering and sorting | PARTIAL | Fresh browser proof exposed decision filters by domain, record type and source plus customer workspace views. Sort behavior and server-side coverage remain unproven. |
+| XOP-08 | Pagination | PARTIAL | Shared table components implement page/page-size and several registers page locally or by query; fresh drawing proof also encountered a 20-project register boundary. Full authorized population, stable server totals and next-page browser proof remain unverified. |
+| XOP-09 | File upload and storage | WRONG_BEHAVIOR | Document/file routes and controlled document models exist, but the fresh canonical tender drawing upload returned HTTP 500. Other browser lifecycles mostly used metadata or seeded references rather than a real uploaded binary. |
+| XOP-10 | Download permissions | UNVERIFIED | Repository search found document content/download links and permission seams, but no fresh allowed-versus-denied real-file download proof was executed. |
+| XOP-11 | File versioning | PARTIAL | Fresh Document Control and handover browser proofs retained revisions and prevented later superseding content from rewriting the issued dossier. Real binary version retrieval and permission cases remain unproven. |
+| XOP-12 | Signature evidence | WRONG_BEHAVIOR | Witness/client identity fields exist in T&C/Handover, but real signature files were not proved and the reused site defect shows displayed signature/evidence omitted from the save payload. |
+| XOP-13 | Import and bulk validation | PARTIAL | Fresh tender BOQ import proof performed dry-run parsing, per-row issues, header detection, replace-mode cascade and invalid-input refusal. Cross-module bulk permissions, rollback and operational workbook formats remain unproven. |
+| XOP-14 | Automatic numbering | PARTIAL | Fresh Document Control browser proof retained a governed document number through reject/revise/approve/issue; numbering services also exist across transactional controllers. Cross-type/company sequence uniqueness remains unproven. |
+| XOP-15 | Automatic classification | PARTIAL | Identity resolution automatically links exact customer/contact matches and surfaces weaker candidates; typed system classification is validated. Operational auto-classification across documents/systems remains unproven. |
+| XOP-16 | AI extraction | WRONG_BEHAVIOR | Scope Assist is genuinely grounded and tested, with heuristic fallback and cross-tenant citation rejection. The prominent Tender AI OCR action is explicitly implemented as simulated CSV/tab paste while PDF/OCR is described in source as a later slice. |
+| XOP-17 | Human review before truth mutation | PARTIAL | Fresh Scope Assist tests proved suggestion-only generation, evidence provenance/staleness, cross-tenant citation rejection and Accept → editable Draft rather than approval. The form AI review surface can apply extracted text fields, but live role/browser proof is absent. |
+

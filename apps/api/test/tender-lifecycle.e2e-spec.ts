@@ -61,6 +61,42 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
       .send({ tenderId, criteria: [{ name: 'fit', weight: 1, score }] })
       .expect(201);
 
+  it('registers one immutable qualification and rejects direct API reassessment', async () => {
+    const tender = await newTender();
+    const original = (await scoreBid(tender.id, 8)).body;
+    const replacement = await http.post('/api/v1/tendering/bid-scores')
+      .send({ tenderId: tender.id, criteria: [{ name: 'fit', weight: 1, score: 1 }] });
+    expect(replacement.status).toBe(409);
+    expect(replacement.body.message).toContain('already confirmed');
+    const records = (await http.get(`/api/v1/tendering/bid-scores?tenderId=${tender.id}`).expect(200)).body;
+    expect(records).toEqual([original]);
+    expect(records[0].recommendation).toBe('go');
+  });
+
+  it('stores tender study attachments and written requirements in DMS against the canonical tender', async () => {
+    const tender = await newTender();
+    const binary = Buffer.from('%PDF-1.7\nTender drawing\n\x00\xff', 'binary');
+    const uploaded = (await http.post(`/api/v1/tendering/tenders/${tender.id}/study-files`)
+      .field('category', 'drawing').field('title', 'Client drawing A')
+      .field('aggregateId', 'spoofed-tender')
+      .attach('file', binary, { filename: 'drawing.pdf', contentType: 'application/pdf' }).expect(201)).body;
+    expect(uploaded.document.aggregateId).toBe(tender.id);
+    expect(uploaded.versions[0].sizeBytes).toBe(binary.length);
+    const downloaded = await http.get(`/api/v1/documents/${uploaded.document.id}/content`).expect(200);
+    expect(downloaded.body).toEqual(binary);
+    const note = (await http.post(`/api/v1/tendering/tenders/${tender.id}/study-files`)
+      .field('category', 'government_requirement').field('title', 'Authority review')
+      .field('notes', 'Identify jurisdiction and applicable approval requirements.').expect(201)).body;
+    expect(note.document.kind).toBe('government_requirement');
+    const files = (await http.get(`/api/v1/tendering/tenders/${tender.id}/study-files`).expect(200)).body;
+    expect(files.map((file: { id: string }) => file.id).sort()).toEqual([uploaded.document.id, note.document.id].sort());
+    const other = await newTender();
+    expect((await http.get(`/api/v1/tendering/tenders/${other.id}/study-files`).expect(200)).body).toEqual([]);
+    await http.post(`/api/v1/tendering/tenders/${other.id}/study-files`).field('category', 'drawing').field('title', 'Missing file').expect(400);
+    await http.post('/api/v1/tendering/tenders/00000000-0000-4000-8000-000000000000/study-files')
+      .field('category', 'study_note').field('title', 'Orphan').field('notes', 'must not save').expect(404);
+  });
+
   // Price one BOQ item so `hasPricedEstimate` becomes true. The item carries a real rate — adding a
   // BOQ item recomputes the tender value from the BOQ total, so a zero-rate item would zero the bid
   // value. `applyToBoq: false` keeps that manual rate rather than overwriting it with the build-up.

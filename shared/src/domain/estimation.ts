@@ -130,6 +130,10 @@ export function estimateLine(input: EstimationInput): EstimationResult {
 export interface EstimationLineInput extends EstimationInput {
   description: string;
   marketItemId?: string | null;
+  /** Canonical scope presentation retained when an approved estimate becomes a customer offer. */
+  unit?: string | null;
+  /** Stable line identity in the approved scope/BOQ revision. */
+  sourceItemId?: string | null;
 }
 
 /** An empty estimation input — every factor zero, one unit, ready to build up. */

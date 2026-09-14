@@ -11,7 +11,7 @@ interface Account { id: string; name: string }
 
 /**
  * Lead 360 — the acquisition command center for a single lead. Qualification verdict,
- * conversion target (Account/Contact match), the ELV context of the job, timeline, and
+ * conversion target (Account/Contact match), the ELV / MEP context of the job, timeline, and
  * every action (qualify, assess, assign, convert) in one place.
  */
 export default async function LeadDetailPage({ params }: { params: Promise<{ id: string }> }) {

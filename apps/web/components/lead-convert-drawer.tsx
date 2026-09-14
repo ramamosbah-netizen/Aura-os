@@ -22,6 +22,7 @@ interface Preview {
 
 interface LeadLite { id: string; name: string; companyName: string | null }
 interface AccountLite { id: string; name: string }
+interface DirectoryUser { username: string; roleLabel?: string; active?: boolean }
 
 const CONF_COLOR: Record<Exclude<Confidence, 'NONE'>, string> = {
   EXACT: 'var(--good)', PROBABLE: 'var(--warn)', POSSIBLE: 'var(--muted)',
@@ -38,6 +39,7 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
+  const [users, setUsers] = useState<DirectoryUser[]>([]);
 
   // choices
   const [accountMode, setAccountMode] = useState<'link' | 'create'>('create');
@@ -46,6 +48,11 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
   const [value, setValue] = useState('');
   const [requiresTender, setRequiresTender] = useState('true');
   const [closeDate, setCloseDate] = useState('');
+  const [presalesAssigneeId, setPresalesAssigneeId] = useState('');
+  const [reviewerId, setReviewerId] = useState('');
+  const [studyDueDate, setStudyDueDate] = useState('');
+  const [inputRevision, setInputRevision] = useState('Enquiry capture v1');
+  const [deliverables, setDeliverables] = useState('Site survey\nRequirements and compliance matrix\nTechnical study and clarifications\nApproved quantity take-off basis');
 
   const accountName = useCallback(
     (id: string) => accounts.find((a) => a.id === id)?.name ?? id,
@@ -55,9 +62,10 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
     try {
-      const [pRes, cRes] = await Promise.all([
+      const [pRes, cRes, uRes] = await Promise.all([
         fetch(`/api/crm/leads/${lead.id}/convert-preview`, { cache: 'no-store' }),
         fetch('/api/crm/contacts', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/workspace/users', { cache: 'no-store' }).catch(() => null),
       ]);
       if (!pRes.ok) { setErr('Could not load the conversion preview.'); return; }
       const p = (await pRes.json()) as Preview;
@@ -69,6 +77,10 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
       if (cRes?.ok) {
         const cs = (await cRes.json().catch(() => [])) as Array<{ id: string; name: string; accountName: string | null }>;
         setContactNames(Object.fromEntries(cs.map((c) => [c.id, c.accountName ? `${c.name} · ${c.accountName}` : c.name])));
+      }
+      if (uRes?.ok) {
+        const directory = (await uRes.json().catch(() => [])) as DirectoryUser[];
+        setUsers(Array.isArray(directory) ? directory.filter((user) => user.active !== false) : []);
       }
     } catch {
       setErr('CRM API unreachable.');
@@ -90,6 +102,11 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
 
   const submit = async () => {
     if (busy || !preview) return;
+    const selectedDeliverables = deliverables.split('\n').map((item) => item.trim()).filter(Boolean);
+    if (!presalesAssigneeId || !reviewerId || !studyDueDate || !inputRevision.trim() || selectedDeliverables.length === 0) {
+      setErr('Select the Pre-Sales engineer and reviewer, then enter the due date, input revision and required deliverables.');
+      return;
+    }
     setBusy(true); setErr(null);
     const accMatch = preview.account.matches[0];
     const conMatch = preview.contact.matches[0];
@@ -98,6 +115,13 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
       value: value ? Number(value) : undefined,
       requiresTender: requiresTender === 'true',
       closeDate: closeDate || undefined,
+      preSalesAssignment: {
+        assigneeId: presalesAssigneeId,
+        reviewerId,
+        dueDate: studyDueDate,
+        inputRevision: inputRevision.trim(),
+        deliverables: selectedDeliverables,
+      },
     };
     // Account: link to the match, or force-create a new one when a match exists but was declined.
     if (accountMode === 'link' && accMatch) body.accountId = accMatch.id;
@@ -233,6 +257,39 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
                       </label>
                     </div>
                   </div>
+
+                  <div style={st.section}>
+                    <div style={st.sectionTitle}>4 · Pre-Sales handoff</div>
+                    <p style={st.help}>Assign the technical study now. The engineer receives this as work linked to the new Opportunity.</p>
+                    <div style={st.grid}>
+                      <label style={st.field}>
+                        <span style={st.lbl}>Pre-Sales / Engineer *</span>
+                        <select style={st.input} value={presalesAssigneeId} onChange={(e) => setPresalesAssigneeId(e.target.value)}>
+                          <option value="">Select engineer</option>
+                          {users.map((user) => <option key={user.username} value={user.username}>{user.username}{user.roleLabel ? ` · ${user.roleLabel}` : ''}</option>)}
+                        </select>
+                      </label>
+                      <label style={st.field}>
+                        <span style={st.lbl}>Technical reviewer *</span>
+                        <select style={st.input} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)}>
+                          <option value="">Select reviewer</option>
+                          {users.map((user) => <option key={user.username} value={user.username}>{user.username}{user.roleLabel ? ` · ${user.roleLabel}` : ''}</option>)}
+                        </select>
+                      </label>
+                      <label style={st.field}>
+                        <span style={st.lbl}>Study due date *</span>
+                        <input style={st.input} type="date" value={studyDueDate} onChange={(e) => setStudyDueDate(e.target.value)} />
+                      </label>
+                      <label style={st.field}>
+                        <span style={st.lbl}>Input revision *</span>
+                        <input style={st.input} value={inputRevision} onChange={(e) => setInputRevision(e.target.value)} placeholder="e.g. Client RFQ Rev 02" />
+                      </label>
+                      <label style={{ ...st.field, gridColumn: '1 / -1' }}>
+                        <span style={st.lbl}>Required deliverables * — one per line</span>
+                        <textarea style={{ ...st.input, minHeight: 96, resize: 'vertical' }} value={deliverables} onChange={(e) => setDeliverables(e.target.value)} />
+                      </label>
+                    </div>
+                  </div>
                 </>
               )}
             </div>
@@ -259,6 +316,7 @@ const st: Record<string, CSSProperties> = {
   badge: { marginLeft: 8, fontSize: 10.5, fontWeight: 700, borderWidth: 1, borderStyle: 'solid', borderRadius: 999, padding: '1px 7px', textTransform: 'uppercase', letterSpacing: 0.4 },
   reasons: { color: 'var(--muted)', fontSize: 12 },
   noMatch: { color: 'var(--muted)', fontSize: 12.5, margin: '0 0 6px' },
+  help: { color: 'var(--muted)', fontSize: 12.5, margin: '0 0 10px', lineHeight: 1.45 },
   grid: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 },
   field: { display: 'flex', flexDirection: 'column', gap: 4 },
   lbl: { fontSize: 11, color: 'var(--muted)' },

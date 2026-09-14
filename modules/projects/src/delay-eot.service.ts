@@ -166,7 +166,7 @@ export class DelayEotService {
   private async assertProjectAccess(projectId: Id, tenantId: Id, actorId?: Id | null): Promise<void> {
     await this.assertProjectOwnership(projectId, tenantId);
     if (actorId && this.access) {
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }] };
+      const target: AccessTarget = { permission: 'projects.project.update', orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }], resource: { type: 'project', id: projectId } };
       this.access.assert(actorId, target);
     }
   }

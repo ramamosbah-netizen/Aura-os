@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProjectTeam from './project-team';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
@@ -264,8 +264,10 @@ export default function Project360Client({ project, initialTab }: { project: Pro
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [loadFailures, setLoadFailures] = useState(0);
+  const loadSequence = useRef(0);
 
   const load = useCallback(async () => {
+    const sequence = ++loadSequence.current;
     let failures = 0;
     const j = async <T,>(url: string, fallback: T): Promise<T> => {
       try {
@@ -307,6 +309,10 @@ export default function Project360Client({ project, initialTab }: { project: Pro
         } catch { return null; }
       })(),
     ]);
+    // A slow earlier read must never overwrite the response to a later action. This matters most
+    // for issue resolution: the mutation succeeds, the refresh returns "resolved", then an older
+    // in-flight register read used to put the issue back on screen as open.
+    if (sequence !== loadSequence.current) return;
     setVariations(Array.isArray(vs) ? vs : []);
     setImpact(imp?.impact ?? null);
     setEots(Array.isArray(eot) ? eot : []);

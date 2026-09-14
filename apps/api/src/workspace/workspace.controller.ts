@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Put } from '@nestjs/common';
-import { ModulesService, TenantContext } from '@aura/core';
+import { ModulesService, TenantContext, UsersService } from '@aura/core';
 import type { WorkspaceConfig, WorkspaceMe } from '@aura/shared';
-import { WorkspaceConfigService, type WorkspaceUser } from './workspace-config.service';
+import { WorkspaceConfigService } from './workspace-config.service';
 
 /** Dev fallback identity when auth enforcement is off (actorId is null). */
 const DEV_USER = process.env.WORKSPACE_DEV_USER ?? 'u-admin';
@@ -19,6 +19,7 @@ export class WorkspaceController {
     private readonly workspace: WorkspaceConfigService,
     private readonly tenant: TenantContext,
     private readonly modules: ModulesService,
+    private readonly usersDirectory: UsersService,
   ) {}
 
   /** Disabled business modules for this tenant — the sidebar hides them (Module Manager). */
@@ -47,7 +48,27 @@ export class WorkspaceController {
   }
 
   @Get('users')
-  users(): Promise<WorkspaceUser[]> {
-    return this.workspace.users(this.tenant.get().tenantId);
+  async users(): Promise<Array<{ username: string; displayName: string; active: boolean; role: string | null; roleLabel: string; isAdmin: boolean }>> {
+    const tenantId = this.tenant.get().tenantId;
+    await this.usersDirectory.ensureTenant(tenantId);
+    const [configured, registered] = await Promise.all([
+      this.workspace.users(tenantId),
+      Promise.resolve(this.usersDirectory.list(tenantId)),
+    ]);
+    const roleByUser = new Map(configured.map((user) => [user.username, user]));
+    // Assignment pickers must use the enforceable user registry. Showing workspace-config names that
+    // are not registered makes the UI offer assignees the API must reject, while hiding registered
+    // users makes valid maker/checker workflows impossible to complete.
+    return registered.map((user) => {
+      const role = roleByUser.get(user.userId);
+      return {
+        username: user.userId,
+        displayName: user.displayName,
+        active: user.active,
+        role: role?.role ?? null,
+        roleLabel: role?.roleLabel ?? 'Registered user',
+        isAdmin: role?.isAdmin ?? false,
+      };
+    });
   }
 }

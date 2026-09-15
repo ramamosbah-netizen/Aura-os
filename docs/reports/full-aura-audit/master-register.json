@@ -1644,7 +1644,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1652,16 +1652,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "PARTIAL",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Planning Engineer, Project Engineer, Project Manager role executes Milestones in the canonical Projects schedule / resource facts context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "A milestone is a point where something must be TRUE, and deliberately NOT a zero-duration activity: the planner refuses a duration below one day — rightly, since an activity that takes no time is not one — so modelling one as a task would force a fake day onto every path it sits on, and a milestone is not work anyway. Nobody performs it. It is a statement about when OTHER work must finish, so it holds its own table and points at the activities (migration 0328). THREE DATES, kept apart as PLN-16 keeps them: the TARGET is authored and does not move when the plan moves — a milestone that recomputes its own deadline can never be missed; the FORECAST is read out of the schedule’s OWN forecast run rather than a second CPM pass, because two runs over one plan eventually disagree and a project answering “when does this finish” differently on two screens has no answer; the ACHIEVED date is the day it was met, which is not the day it was typed — signed off on site on Friday and entered on Monday was met on Friday. THE STATUS IS DERIVED ON EVERY READ AND STORED NOWHERE; there is no status column, because a stored verdict is stale the moment an activity moves. MISSED and AT_RISK stay different words for different things — one a fact about a date that has passed, the other a prediction about one that has not — and a milestone nothing gates reads UNKNOWN with its reason in words, never ON_TRACK, because a date with no work behind it is a wish. THE CONTRADICTION IS STATED: an achievement recorded while the gating work is unfinished is ACCEPTED, since real milestones are signed off with snags by people entitled to accept them, and the unfinished activities are then named beside it on every read. The lie was never the sign-off; it was the silence. NAMING AN OWNER IS NAMING A RECIPIENT: the operation either tells them or refuses the naming, with nothing saved in between — a non-member owner is refused outright and no milestone is written, and a receipt that fails after a valid owner passes removes the milestone rather than leaving a half-written record. Authoring is planning work; declaring one MET is a statement to the client and is the Project Manager’s act, the same separation schedule.progress-override makes.",
+      "acceptanceProof": "Auth-ON browser and HTTP proof: a project with no milestones says so rather than showing an empty list; one authored from the plan screen and gated on the activities already there reloads from the API re-derived; the gating work landing before the committed date reads ON_TRACK with the working-day gap, and stretching the plan moves the FORECAST to AT_RISK while the committed date stays exactly where it was; the milestone’s forecast equals the project’s own forecastFinish for the same work, proving one CPM run rather than two; a milestone nothing gates reads UNKNOWN with its reason; a sign-off against unfinished work is accepted and the open activities are named beside it, surviving reload. Denials: the Planning Engineer authors and reads but is refused 403 both on recording an achievement and on withdrawing one, while the Project Manager holds it; unauthenticated 401; another tenant’s milestone 404 rather than 403, since confirming an id exists elsewhere is itself a disclosure; an activity from another project 400; a duplicate name 409; a second achievement 409; a future achievement date 400; a reasonless withdrawal 400. NEXT-ROLE RECEIPT: the named owner holds “Milestone: <name>” in their own My Work with project context and the COMMITTED date as the due date, through the responsibility chain AWD-06 proved rather than a second inbox; an owner who is not a project member is REFUSED and nothing is saved; an unowned milestone tells nobody rather than defaulting into its author’s list. Twenty-six domain rules cover the edges. ACCEPTED LIMIT: no exported or printable milestone document (actualOutput) — Wave 8 owns that; and nothing notifies an owner whose milestone later crosses its committed date."
     },
     {
       "id": "PLN-05",
@@ -8532,7 +8533,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 12,
+      "COMPLETE": 13,
       "PARTIAL": 91,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -8542,7 +8543,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 52,
+      "UNVERIFIED": 51,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

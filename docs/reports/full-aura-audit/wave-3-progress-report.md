@@ -1158,9 +1158,10 @@ with save/reload, applicable permission denials, actual output and next-role rec
 | Next-role receipt | the named owner receives `Milestone: <name>` in their own My Work, with project context and the COMMITTED date as the due date — through the responsibility chain AWD-06 proved, not a second inbox | no |
 | Actual output | proven on screen and over the API; no exported or printable milestone document exists | **yes** |
 
-**Proposed: `PLN-04` UNVERIFIED → COMPLETE**, with `actualOutput` **PARTIAL** on promotion — the
-eighth planning row carrying that same gap, and the same basis on which `PLN-05`, `PLN-11`–`PLN-16`
-were promoted.
+**`PLN-04` UNVERIFIED → COMPLETE — applied on 2026-09-15 by the programme owner's decision**, with
+`actualOutput` **PARTIAL** — the eighth planning row carrying that same gap, and the same basis on
+which `PLN-05` and `PLN-11`–`PLN-16` were promoted. That makes thirteen COMPLETE capabilities of 180,
+and **eleven of the sixteen planning rows**.
 
 This promotion was proposed once before and **withheld by the programme owner**, on a point that was
 not `actualOutput`: an `ownerId` could be saved for somebody who is not a project member, the
@@ -1289,15 +1290,15 @@ waived, and nothing outside it may be added.
 
 ### The answer
 
-**Five capabilities remain to close Wave 3: `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04`.**
+**Five capabilities remained to close Wave 3: `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04`.**
 
-Four are engineering / document-control rows and one is planning. `ENG-06` is counted once but
-discharges two lines — it carries a gate clause of its own as well as a pinned proof — so the wave
-closes on five rows rather than six.
+`PLN-04` is now COMPLETE (iteration 19 above), so **four remain: `ENG-03`, `ENG-04`, `ENG-05`,
+`ENG-06`** — all of them engineering / document-control rows. `ENG-06` is counted once but discharges
+two lines, carrying a gate clause of its own as well as a pinned proof.
 
-The planning line is otherwise done. Of sixteen planning capabilities, ten are COMPLETE, and of the
-six that are not, five (`PLN-01`, `PLN-06`, `PLN-07`, `PLN-08`, `PLN-09`) carry gaps the roadmap
-assigns to later waves rather than to this gate. `PLN-04` is the only planning row this wave owes.
+**The planning line is finished for this wave.** Of sixteen planning capabilities eleven are
+COMPLETE, and the five that are not (`PLN-01`, `PLN-06`, `PLN-07`, `PLN-08`, `PLN-09`) carry gaps the
+roadmap assigns to later waves rather than to this gate. Wave 3 owes no further planning work.
 
 ### What the number would be under two other readings
 

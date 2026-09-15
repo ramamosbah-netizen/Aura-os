@@ -4,6 +4,7 @@ export * from './domain/inspection-request';
 export * from './domain/snag';
 export * from './domain/itp';
 export * from './domain/material-approval';
+export * from './domain/material-approval-verdict';
 export * from './domain/calibration';
 export * from './domain/audit-schedule';
 export * from './quality.service';

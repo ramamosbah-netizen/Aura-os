@@ -10,7 +10,17 @@ import { isApproved } from './domain/supplier';
 /** Optional quality gate — injected when the Quality module is loaded. */
 export const QUALITY_GATE = Symbol('QUALITY_GATE');
 export interface QualityGate {
-  checkMaterialApprovalGate(tenantId: string, projectId: string, supplierName: string): Promise<{ passed: boolean; reason?: string }>;
+  /**
+   * May the material on this order be bought? (ENG-04)
+   *
+   * `verdict` travels with `passed` deliberately. A refusal and a silent pass are not the only two
+   * outcomes: UNKNOWN — no material approval request on file at all — is permitted here, because
+   * not every purchase needs one, but it must be SEEN rather than being indistinguishable from an
+   * approval, which is exactly what it was before.
+   */
+  checkMaterialApprovalGate(
+    tenantId: string, projectId: string, supplierName: string,
+  ): Promise<{ passed: boolean; verdict?: string; reason?: string; references?: string[] }>;
 }
 
 const CREATE_PO = 'procurement.po.create';
@@ -209,11 +219,17 @@ export class PurchaseOrderService implements OnModuleInit {
       throw new Error(`PO ${existing.reference ?? id} (value ${existing.value}) requires approval before it can be issued`);
     }
 
-    // Quality gate: reject issuance if the supplier has rejected MARs on the same project.
+    // Quality gate (ENG-04): may the material on this order actually be bought?
+    //
+    // This used to refuse only a REJECTED request and pass otherwise, so a material nobody had ever
+    // submitted — and one still with the consultant — issued exactly like an approved one. It now
+    // refuses a decision against the material and one not yet made, and carries UNKNOWN through as
+    // a stated fact rather than an invisible pass.
+    let materialApproval: { passed: boolean; verdict?: string; reason?: string } | null = null;
     if (status === 'issued' && this.qualityGate && existing.projectId && existing.supplierName) {
-      const gate = await this.qualityGate.checkMaterialApprovalGate(existing.tenantId, existing.projectId, existing.supplierName);
-      if (!gate.passed) {
-        throw new Error(`Quality gate blocked PO issuance: ${gate.reason}`);
+      materialApproval = await this.qualityGate.checkMaterialApprovalGate(existing.tenantId, existing.projectId, existing.supplierName);
+      if (!materialApproval.passed) {
+        throw new Error(`Quality gate blocked PO issuance: ${materialApproval.reason}`);
       }
     }
 
@@ -238,6 +254,12 @@ export class PurchaseOrderService implements OnModuleInit {
         status: updated.status,
         value: updated.value,
         supplier: updated.supplierName,
+        // What the material approval actually said at the moment of issue (ENG-04). Recorded on the
+        // event because "issued with no material approval on file" is a fact somebody will need to
+        // answer for later, and a pass that leaves no trace is indistinguishable from an approval.
+        materialApproval: materialApproval
+          ? { verdict: materialApproval.verdict ?? null, reason: materialApproval.reason ?? null }
+          : null,
         // Carried so the cost engine can REVERSE the committed cost when the PO is cancelled
         // (a negative ledger entry on this same cost line) — the ledger never mutates.
         cbsNodeId: updated.cbsNodeId,

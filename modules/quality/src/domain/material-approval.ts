@@ -18,7 +18,16 @@ export interface MaterialApproval {
   reference: string;
   materialName: string;
   manufacturer: string;
+  /** Free text, retained for requests raised before suppliers were linked canonically. */
   supplier: string;
+  /**
+   * The canonical supplier this material comes from.
+   *
+   * The procurement gate matched on the free-text `supplier` alone, which is the same defect a
+   * free-text WBS code was on a delay and a free-text drawing reference on a technical query: two
+   * suppliers share a name, one supplier gets typed three ways, and the link silently misses.
+   */
+  supplierId: string | null;
   specification: string;
   discipline: string;
   status: MarStatus;
@@ -40,6 +49,7 @@ export interface NewMaterialApproval {
   materialName: string;
   manufacturer?: string;
   supplier?: string;
+  supplierId?: string | null;
   specification?: string;
   discipline?: string;
   createdBy?: string | null;
@@ -62,6 +72,7 @@ export function makeMaterialApproval(input: NewMaterialApproval): MaterialApprov
     materialName: input.materialName.trim(),
     manufacturer: input.manufacturer?.trim() || '',
     supplier: input.supplier?.trim() || '',
+    supplierId: input.supplierId ?? null,
     specification: input.specification?.trim() || '',
     discipline: input.discipline?.trim() || 'general',
     status: 'draft',

@@ -361,7 +361,7 @@ export class QualityController {
   // ── Material Approval Requests (MAR) ───────────────────────────────────────
 
   @Post('material-approvals')
-  async createMar(@Body() dto: { projectId: string; projectName?: string; reference: string; materialName: string; manufacturer?: string; supplier?: string; specification?: string; discipline?: string }): Promise<MaterialApproval> {
+  async createMar(@Body() dto: { projectId: string; projectName?: string; reference: string; materialName: string; manufacturer?: string; supplier?: string; supplierId?: string; specification?: string; discipline?: string }): Promise<MaterialApproval> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
     if (!dto?.materialName?.trim()) throw new BadRequestException('materialName is required');
@@ -375,6 +375,8 @@ export class QualityController {
       materialName: dto.materialName,
       manufacturer: dto.manufacturer,
       supplier: dto.supplier,
+      // The canonical supplier, so the procurement gate is not matching on typed names.
+      supplierId: dto.supplierId ?? null,
       specification: dto.specification,
       discipline: dto.discipline,
       createdBy: ctx.actorId || null,

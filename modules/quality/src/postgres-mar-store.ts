@@ -12,13 +12,13 @@ export class PostgresMaterialApprovalStore implements MaterialApprovalStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_quality_material_approvals (
-        id, tenant_id, company_id, project_id, project_name, reference, material_name, manufacturer, supplier,
+        id, tenant_id, company_id, project_id, project_name, reference, material_name, manufacturer, supplier, supplier_id,
         specification, discipline, status, revision, review_comments, reviewed_by, reviewed_at, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       on conflict (id) do update set
         status = excluded.status, revision = excluded.revision, review_comments = excluded.review_comments,
         reviewed_by = excluded.reviewed_by, reviewed_at = excluded.reviewed_at, updated_at = excluded.updated_at`,
-      [mar.id, mar.tenantId, mar.companyId, mar.projectId, mar.projectName, mar.reference, mar.materialName, mar.manufacturer, mar.supplier,
+      [mar.id, mar.tenantId, mar.companyId, mar.projectId, mar.projectName, mar.reference, mar.materialName, mar.manufacturer, mar.supplier, mar.supplierId,
        mar.specification, mar.discipline, mar.status, mar.revision, mar.reviewComments, mar.reviewedBy, mar.reviewedAt, mar.createdBy, mar.createdAt, mar.updatedAt],
     );
   }
@@ -49,6 +49,7 @@ export class PostgresMaterialApprovalStore implements MaterialApprovalStore {
       materialName: row.material_name,
       manufacturer: row.manufacturer || '',
       supplier: row.supplier || '',
+      supplierId: row.supplier_id ?? null,
       specification: row.specification || '',
       discipline: row.discipline,
       status: row.status,

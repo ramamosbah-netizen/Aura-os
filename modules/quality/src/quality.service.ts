@@ -16,6 +16,7 @@ import {
   reviewMaterialApproval,
   reviseMaterialApproval,
 } from './domain/material-approval';
+import { materialApprovalVerdict, type MaterialApprovalVerdict } from './domain/material-approval-verdict';
 
 import { type Calibration, type NewCalibration, makeCalibration, calibrationStatus } from './domain/calibration';
 import { type AuditSchedule, type ChecklistItem, type NewAuditSchedule, makeAuditSchedule, QUALITY_AUDIT_EVENT } from './domain/audit-schedule';
@@ -742,25 +743,46 @@ export class QualityService {
    * Checks if the given supplier has any **rejected** MARs on the project.
    * Returns `{ passed: true }` if clear, or `{ passed: false, reason }` if blocked.
    */
+  /**
+   * May this material be bought? (ENG-04)
+   *
+   * This asked the question BACKWARDS. It looked for a REJECTED request and passed whenever it
+   * found none — so a material nobody had ever submitted, and one still sitting with the
+   * consultant, issued a purchase order exactly like an approved one. Absence of a rejection was
+   * being read as approval.
+   *
+   * It now reports the VERDICT, and the two things are deliberately separate:
+   *
+   *   `answer.mayProceed`  a fact about the material: only a decision in its favour is approval,
+   *                        and UNKNOWN is never one.
+   *   `passed`             the POLICY the purchase-order path applies to that fact. A decision
+   *                        against the material (REJECTED) or one not yet made (PENDING) refuses;
+   *                        UNKNOWN does not refuse, because not every purchase needs a material
+   *                        approval — consumables, hire and services do not — but it is REPORTED
+   *                        rather than passing silently, so "issued with nothing on file" is a
+   *                        visible state instead of an invisible one.
+   *
+   * Whether UNKNOWN should also refuse is a procurement policy decision, and it is left to be made
+   * rather than assumed here.
+   */
   async checkMaterialApprovalGate(
     tenantId: string,
     projectId: string,
-    supplierName: string,
-  ): Promise<{ passed: boolean; rejectedMars?: string[]; reason?: string }> {
-    if (!projectId || !supplierName) return { passed: true };
-    const mars = await this.marStore.findByProject(projectId, tenantId);
-    const rejected = mars.filter(
-      (m) => m.status === 'rejected' && m.supplier.toLowerCase() === supplierName.toLowerCase(),
-    );
-    if (rejected.length > 0) {
-      const refs = rejected.map((m) => m.reference);
-      return {
-        passed: false,
-        rejectedMars: refs,
-        reason: `Supplier "${supplierName}" has ${rejected.length} rejected Material Approval Request(s) on this project: ${refs.join(', ')}`,
-      };
+    supplier: string | { id?: string | null; name?: string | null },
+  ): Promise<{ passed: boolean; verdict: MaterialApprovalVerdict; reason: string; references: string[] }> {
+    const asked = typeof supplier === 'string' ? { name: supplier } : supplier;
+    if (!projectId || (!asked.id && !asked.name)) {
+      return { passed: true, verdict: 'UNKNOWN', reason: 'no project or supplier to check against', references: [] };
     }
-    return { passed: true };
+    const mars = await this.marStore.findByProject(projectId, tenantId);
+    const answer = materialApprovalVerdict(mars, asked);
+    return {
+      // UNKNOWN is surfaced, not enforced — see the doc comment.
+      passed: answer.mayProceed || answer.verdict === 'UNKNOWN',
+      verdict: answer.verdict,
+      reason: answer.reason,
+      references: answer.references,
+    };
   }
 
   /**

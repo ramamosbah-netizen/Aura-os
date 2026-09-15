@@ -259,16 +259,30 @@ describe('Engineering Module Bounded Context', () => {
         mockAccess
       );
 
-      const sub = await service.createSubmittal({
+      // ENG-04: a MATERIAL submittal is refused here and named where it belongs. This register can
+      // mark one `approved` with no reviewer, no comments and nothing downstream reading it, while
+      // Quality's Material Approval Request carries the consultant decision and gates procurement.
+      // Two registers answering "is this material approved?" is one of them being wrong, silently,
+      // on the day they disagree.
+      await expect(service.createSubmittal({
         tenantId: 't1',
         projectId: 'p1',
         code: 'SUB-MEP-001',
         title: 'HVAC Ductwork Material Submittal',
         submittalType: 'material',
+      })).rejects.toThrow(/Material Approval Request in Quality/);
+
+      // The three types this register does own are unaffected, and still walk their states.
+      const sub = await service.createSubmittal({
+        tenantId: 't1',
+        projectId: 'p1',
+        code: 'SUB-MEP-002',
+        title: 'HVAC Ductwork Method Statement',
+        submittalType: 'technical',
       });
 
       expect(sub.status).toBe('draft');
-      expect(sub.submittalType).toBe('material');
+      expect(sub.submittalType).toBe('technical');
 
       const submitted = await service.updateSubmittalStatus('t1', null, sub.id, 'submitted');
       expect(submitted.status).toBe('submitted');

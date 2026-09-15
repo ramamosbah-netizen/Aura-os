@@ -512,6 +512,22 @@ export class EngineeringService {
       this.access.assert(input.createdBy, { permission: 'engineering.submittal.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
 
+    // ENG-04 — ONE AUTHORITY FOR AN APPROVED MATERIAL.
+    //
+    // This register can mark a submittal `approved` with no reviewer, no comments, no revision and
+    // nothing downstream reading it. Quality's Material Approval Request is the canonical record:
+    // it carries the product, the consultant's decision, who made it and when, a revision chain,
+    // and it is what the procurement gate consults. Two registers answering "is this material
+    // approved?" is one of them being wrong, silently, on the day they disagree.
+    //
+    // So a MATERIAL submittal is refused here and named where it belongs. The other three types —
+    // technical, sample, drawing — are this register's own and are unaffected.
+    if (input.submittalType === 'material') {
+      throw new BadRequestException(
+        'a material submittal is raised as a Material Approval Request in Quality, which records the consultant decision and gates procurement; this register carries technical, sample and drawing submittals',
+      );
+    }
+
     const submittal = makeSubmittal(input);
     const event = makeEvent({
       type: ENGINEERING_EVENT.submittalCreated,

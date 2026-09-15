@@ -16,7 +16,7 @@ import {
   reviewMaterialApproval,
   reviseMaterialApproval,
 } from './domain/material-approval';
-import { materialApprovalVerdict, type MaterialApprovalVerdict } from './domain/material-approval-verdict';
+import { supplierMaterialStanding, type SupplierMaterialStanding } from './domain/supplier-material-standing';
 
 import { type Calibration, type NewCalibration, makeCalibration, calibrationStatus } from './domain/calibration';
 import { type AuditSchedule, type ChecklistItem, type NewAuditSchedule, makeAuditSchedule, QUALITY_AUDIT_EVENT } from './domain/audit-schedule';
@@ -744,44 +744,41 @@ export class QualityService {
    * Returns `{ passed: true }` if clear, or `{ passed: false, reason }` if blocked.
    */
   /**
-   * May this material be bought? (ENG-04)
+   * Procurement's owned rule: is there a standing REFUSAL against this supplier on this project?
    *
-   * This asked the question BACKWARDS. It looked for a REJECTED request and passed whenever it
-   * found none — so a material nobody had ever submitted, and one still sitting with the
-   * consultant, issued a purchase order exactly like an approved one. Absence of a rejection was
-   * being read as approval.
+   * The rule is Procurement's, not Quality's, and it is pinned in Procurement's own suite — "blocks
+   * PO issuance when the supplier has a rejected MAR", and, decisively, "ALLOWS PO issuance when the
+   * supplier has no rejected MARs". That second one is the boundary: no refusal means allow.
    *
-   * It now reports the VERDICT, and the two things are deliberately separate:
+   * ENG-04 briefly widened this to refuse a PENDING request too. That was reverted. It read as a
+   * stricter, therefore better, control — but nothing owned it: no frozen Procurement authority says
+   * an undecided request stops a purchase, and a supplier-level PENDING for one material would have
+   * blocked an order for a different one. A partial control that a later wave must replace is a
+   * temporary authority, and renaming it would not have earned it a place.
    *
-   *   `answer.mayProceed`  a fact about the material: only a decision in its favour is approval,
-   *                        and UNKNOWN is never one.
-   *   `passed`             the POLICY the purchase-order path applies to that fact. A decision
-   *                        against the material (REJECTED) or one not yet made (PENDING) refuses;
-   *                        UNKNOWN does not refuse, because not every purchase needs a material
-   *                        approval — consumables, hire and services do not — but it is REPORTED
-   *                        rather than passing silently, so "issued with nothing on file" is a
-   *                        visible state instead of an invisible one.
-   *
-   * Whether UNKNOWN should also refuse is a procurement policy decision, and it is left to be made
-   * rather than assumed here.
+   * What the answer CANNOT say is whether the material on a given order is the approved one. That
+   * needs a canonical purchased-material identity, which does not exist here; the frozen roadmap
+   * gives it to Wave 4 (`BUY-01`). The read is therefore returned in full and honestly named so the
+   * caller can see supplier-level evidence for what it is, while `passed` reflects only the one rule
+   * Procurement actually owns.
    */
   async checkMaterialApprovalGate(
     tenantId: string,
     projectId: string,
     supplier: string | { id?: string | null; name?: string | null },
-  ): Promise<{ passed: boolean; verdict: MaterialApprovalVerdict; reason: string; references: string[] }> {
+  ): Promise<{ passed: boolean; standing: SupplierMaterialStanding; reason: string; references: string[] }> {
     const asked = typeof supplier === 'string' ? { name: supplier } : supplier;
     if (!projectId || (!asked.id && !asked.name)) {
-      return { passed: true, verdict: 'UNKNOWN', reason: 'no project or supplier to check against', references: [] };
+      return { passed: true, standing: 'UNKNOWN', reason: 'no project or supplier to check against', references: [] };
     }
     const mars = await this.marStore.findByProject(projectId, tenantId);
-    const answer = materialApprovalVerdict(mars, asked);
+    const read = supplierMaterialStanding(mars, asked);
     return {
-      // UNKNOWN is surfaced, not enforced — see the doc comment.
-      passed: answer.mayProceed || answer.verdict === 'UNKNOWN',
-      verdict: answer.verdict,
-      reason: answer.reason,
-      references: answer.references,
+      // Exactly Procurement's rule: a standing refusal blocks, everything else allows.
+      passed: !read.hasStandingRefusal,
+      standing: read.standing,
+      reason: read.reason,
+      references: read.references,
     };
   }
 

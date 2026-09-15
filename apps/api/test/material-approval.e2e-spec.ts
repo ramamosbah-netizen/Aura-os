@@ -1,21 +1,20 @@
-// AURA OS — ENG-04: an approved material submittal, and what "approved" is allowed to mean.
+// AURA OS — ENG-04: the canonical material approval record, and the one rule Procurement owns.
 //
-// The Material Approval Request is the canonical record: the contractor proposes a product —
-// manufacturer, supplier, specification — and the consultant approves it, approves it as noted, or
-// rejects it BEFORE anything is bought or fixed to the building. That record was already sound.
+// A Material Approval Request is the governed record of an approved material submittal: the
+// contractor proposes a product — manufacturer, supplier, specification — and the consultant
+// approves it, approves it as noted, or rejects it. Quality owns that decision.
 //
-// What the word "approved" meant was not. The procurement gate asked whether the supplier had a
-// REJECTED request and passed whenever the answer was no, so a material nobody had ever submitted,
-// and one still sitting with the consultant, issued a purchase order exactly like an approved one.
-// Absence of a rejection was being read as approval.
+// PROCUREMENT OWNS EXACTLY ONE RULE ABOUT IT, and this suite is careful not to imply a second: a
+// supplier with a REJECTED request on the project cannot have a purchase order issued against it.
+// Its own pinned tests say so in both directions — blocks on a rejection, ALLOWS when there is
+// none. ENG-04 briefly widened that to refuse undecided requests too; it was reverted, because
+// nothing owned it and a supplier-level PENDING for one material would have blocked an order for a
+// different one.
 //
-// What is proven here:
-//   · the request runs draft → submitted → decided, and the decision records WHO made it;
-//   · an approved material lets a purchase order issue;
-//   · a REJECTED one refuses it, and a PENDING one refuses it too — not yet approved is not approved;
-//   · nothing on file reads as UNKNOWN and is carried onto the issue event rather than passing
-//     invisibly, so "bought with no approval on file" is a fact somebody can answer for later;
-//   · and a material submittal cannot be raised in the second, ungoverned register.
+// What NO rule here can say is whether the material on a given order is the approved one. That
+// needs a canonical purchased-material identity carried from requisition line through RFQ, PO, GRN
+// and site issue, which does not exist in this system; the frozen roadmap gives it to Wave 4
+// (`BUY-01 Material requisition lines`). The last test states that limit rather than hiding it.
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
@@ -35,7 +34,7 @@ interface Mar {
 }
 interface Po { id: string; reference: string | null; status: string }
 
-describe('what an approved material submittal is allowed to mean (HTTP)', () => {
+describe('the canonical material approval, and the rule Procurement owns (HTTP)', () => {
   let app: INestApplication;
   let http: ReturnType<typeof request>;
   let projectId: string;
@@ -85,43 +84,27 @@ describe('what an approved material submittal is allowed to mean (HTTP)', () => 
     expect(mar).toMatchObject({ status: 'draft', revision: 0, reviewedBy: null, reviewedAt: null, reviewComments: '' });
   });
 
-  it('REFUSES a purchase order while the material is only a draft — nobody has been asked', async () => {
-    // The state that used to be indistinguishable from approval.
-    const po = await orderFrom('Gulf Cables LLC', 'PO-DRAFT');
-    const refused = await issue(po);
-    expect(refused.status).toBe(400);
-    expect(refused.body.message).toMatch(/still in draft, never submitted/);
-  });
-
-  it('REFUSES it while the consultant is still holding it — not yet approved is not approved', async () => {
+  it('moves draft → submitted → decided, and records WHO decided it', async () => {
     const mars = (await http.get(`/api/v1/quality/material-approvals?projectId=${projectId}`).expect(200)).body as Mar[];
     const draft = mars.find((m) => m.reference === 'MAR-001')!;
     await http.put(`/api/v1/quality/material-approvals/${draft.id}/submit`).expect(200);
 
-    const po = await orderFrom('Gulf Cables LLC', 'PO-PENDING');
-    const refused = await issue(po);
-    expect(refused.status).toBe(400);
-    expect(refused.body.message).toMatch(/awaiting the consultant/);
-  });
-
-  it('records WHO decided it when the consultant approves', async () => {
-    const mars = (await http.get(`/api/v1/quality/material-approvals?projectId=${projectId}`).expect(200)).body as Mar[];
-    const submitted = mars.find((m) => m.reference === 'MAR-001')!;
-    const decided = (await http.put(`/api/v1/quality/material-approvals/${submitted.id}/review`)
+    const decided = (await http.put(`/api/v1/quality/material-approvals/${draft.id}/review`)
       .set('x-e2e-actor', 'mar-consultant')
       .send({ decision: 'approved' }).expect(200)).body as Mar;
     expect(decided).toMatchObject({ status: 'approved', reviewedBy: 'mar-consultant' });
     expect(decided.reviewedAt).not.toBeNull();
   });
 
-  it('lets the purchase order issue once the material is approved', async () => {
-    const po = await orderFrom('Gulf Cables LLC', 'PO-APPROVED');
+  it('allows a purchase order where the supplier carries no refusal', async () => {
+    // Procurement's owned rule, in the direction its own suite pins: no rejection means allow.
+    const po = await orderFrom('Gulf Cables LLC', 'PO-CLEAR');
     const issued = await issue(po);
     expect(issued.status, JSON.stringify(issued.body)).toBe(200);
     expect(issued.body.status).toBe('issued');
   });
 
-  it('REFUSES one whose material the consultant rejected', async () => {
+  it('REFUSES one where the consultant rejected something this supplier proposed', async () => {
     const rejected = await raise('MAR-002', 'Dodgy Trading LLC');
     await http.put(`/api/v1/quality/material-approvals/${rejected.id}/submit`).expect(200);
     await http.put(`/api/v1/quality/material-approvals/${rejected.id}/review`)
@@ -134,7 +117,7 @@ describe('what an approved material submittal is allowed to mean (HTTP)', () => 
     expect(refused.body.message).toMatch(/rejected material approval request/);
   });
 
-  it('reports a refusal sitting beside an approval, rather than the approval', async () => {
+  it('reports the refusal sitting beside an approval, rather than the approval', async () => {
     // Reporting only the approval would hide the refusal behind it, and the refusal is the one that
     // stops a purchase order.
     const second = await raise('MAR-003', 'Gulf Cables LLC');
@@ -149,19 +132,24 @@ describe('what an approved material submittal is allowed to mean (HTTP)', () => 
     expect(refused.body.message).toMatch(/MAR-003/);
   });
 
-  it('lets an order through where nothing was ever submitted — and says so on the record', async () => {
-    // UNKNOWN is permitted, because not every purchase needs a material approval: consumables,
-    // hire and services do not. What it must never be is INVISIBLE, which is what it was.
-    const po = await orderFrom('Office Supplies Co', 'PO-UNKNOWN');
-    const issued = await issue(po);
-    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+  it('does NOT claim the material on an order is the approved one — the stated limit', async () => {
+    // An approved request for fire-rated cable says nothing about the containment bought from the
+    // same company, and this system cannot tell the two orders apart: a purchase order carries no
+    // material identity at all. The supplier rule passes both, which is what it is entitled to do
+    // and no more. Wave 4 (`BUY-01`) owns the identity that would answer the real question, and
+    // recording that here stops the passing order being read as an approved material.
+    const clean = await raise('MAR-004', 'Clean Supplier LLC');
+    await http.put(`/api/v1/quality/material-approvals/${clean.id}/submit`).expect(200);
+    await http.put(`/api/v1/quality/material-approvals/${clean.id}/review`)
+      .set('x-e2e-actor', 'mar-consultant').send({ decision: 'approved' }).expect(200);
 
-    const events = (await http.get('/api/v1/events?type=procurement.po.issued').expect(200)).body as
-      Array<{ payload?: { supplier?: string; materialApproval?: { verdict: string | null; reason: string | null } } }>;
-    const issuedEvent = events.find((event) => event.payload?.supplier === 'Office Supplies Co');
-    expect(issuedEvent, 'the issue was not recorded').toBeDefined();
-    expect(issuedEvent!.payload!.materialApproval).toMatchObject({ verdict: 'UNKNOWN' });
-    expect(issuedEvent!.payload!.materialApproval!.reason).toMatch(/no material approval request exists/);
+    // A completely different material from the same supplier. Nothing distinguishes it.
+    const other = await orderFrom('Clean Supplier LLC', 'PO-OTHER-MATERIAL');
+    const issued = await issue(other);
+    expect(issued.status).toBe(200);
+    // The order names no material, which is exactly why the question cannot be asked yet.
+    const po = (await http.get(`/api/v1/procurement/purchase-orders/${other.id}`).expect(200)).body as { boqItemId: string | null };
+    expect(po.boqItemId).toBeNull();
   });
 
   it('refuses a MATERIAL submittal in the second, ungoverned register', async () => {

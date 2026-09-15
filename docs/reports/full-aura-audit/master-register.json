@@ -1907,7 +1907,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1915,17 +1915,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "PARTIAL",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "The live Gantt accepts a manual percent-complete value; no canonical installed-quantity or approved progress source is linked to that field.",
-      "acceptanceProof": "Actual progress derives from approved site/quantity evidence with an explicit governed override path."
+      "currentBehavior": "An activity’s progress is resolved on every read from three states kept apart by name and never stored as one number. EVIDENCE is the work package’s measured progress, derived through the Quantity Ledger from quantity installed against the frozen sold item; it is not copied onto the activity, because a copy is only correct as of the last refresh. OVERRIDE is somebody stating a different figure against that measurement, and it costs a reason, a name, a timestamp and its own permission (`projects.schedule.progress-override`) — held by a Project Manager and deliberately not by a Planning Engineer, because authoring a programme and claiming progress the site has not measured are different acts. DECLARED is a plain number where nothing has been measured at all: unchanged in behaviour and now labelled rather than passing for measurement. An override exists only where evidence does, so a typed figure can never acquire a reason and a signature it did not earn. Saving a plan can neither mint a statement nor drop one — the four override fields are resolved from the persisted activity and ignored off the payload. A measured zero and a declared zero are rendered as the different facts they are, and UNKNOWN is never drawn as 0. Every surface that shows an activity’s progress reads the same resolved figure through one helper: the Gantt (naming the source under each bar and replacing the plain box with a reason-bearing control wherever something is measured), the plan screen’s headline, the operations overview, the site workspace’s Actual Progress panel and in-progress count, and the Project 360 activity table with its Source column.",
+      "acceptanceProof": "Promoted on 2026-09-15 by the programme owner after reconciliation against the acceptance criterion — actual progress derives from approved site/quantity evidence with an explicit governed override path — with the table in the Wave 3 report. Proven through a real governed award (independently approved study, take-off, offer and award): 150 of 200 m² installed moves the bar to 75% with nobody opening the programme; a plan save typing 10% over it changes nothing while the same edit on an unmeasured activity is honoured; 90% is refused without a reason and accepted with one, rendering as “Stated 90% against a measured 75%” with both numbers kept visible; withdrawal returns the bar to the measurement; a further 50 m² takes it to 100%. Under a live verifier a planner who may author the same plan is refused the statement (403) while the manager reaches the rule itself (400). Regression keeps the domain rules (10), the HTTP journey (12) and the Auth-ON browser journey green, with migration 0322 constraining range, reason and provenance. KNOWINGLY ACCEPTED AND STILL OPEN: a statement needs one person and not two, nobody is told when a stated figure disagrees with the measurement, and no exported progress document exists — which is why `actualOutput` remains PARTIAL rather than COMPLETE on an otherwise complete row."
     },
     {
       "id": "PLN-13",
@@ -8532,14 +8532,14 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 3,
+      "COMPLETE": 4,
       "PARTIAL": 95,
       "BACKEND_ONLY": 6,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
-      "DISCONNECTED": 10,
+      "DISCONNECTED": 9,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
       "UNVERIFIED": 52,

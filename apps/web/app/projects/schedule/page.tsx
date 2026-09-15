@@ -52,12 +52,22 @@ interface ResourceBookingView {
     overCapacityReason: string | null; releasedReason: string | null;
     response: 'pending' | 'accepted' | 'declined'; responseReason: string | null; responseBy: string | null;
   };
+  conflictingCommitments: Array<
+    | {
+        access: 'visible'; bookingId: string; requirementId: string | null;
+        projectId: string; projectName: string | null;
+        activityId: string | null; activityName: string | null;
+        wbsNodeId: string | null; wbsCode: string | null; wbsTitle: string | null;
+        quantity: number; unit: 'hours' | 'persons' | 'crews' | 'units'; from: string; to: string; overlapDays: string[];
+      }
+    | { access: 'restricted'; quantity: number; unit: 'hours' | 'persons' | 'crews' | 'units'; overlapDays: string[] }
+  >;
   conflictOwner: {
     id: string; ownerId: string; from: string; to: string;
     status: 'owned' | 'resolved' | 'accepted'; decision: string | null;
   } | null;
   assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
-  resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };
+  resourceConflict: { projectsInvolved: string[]; restrictedProjects: number; conflictDays: string[] };
 }
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {

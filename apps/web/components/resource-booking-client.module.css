@@ -34,3 +34,11 @@
 .owner input, .owner select { flex: 1; min-width: 150px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12px; }
 .owner button { padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
 .owner button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* The other side of a conflict. A restricted row is visually a row like any other: what is not
+   shown is not shown because it never arrived, not because it is styled away. */
+.otherSide { margin-top: 6px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; display: grid; gap: 5px; }
+.otherSide > strong { font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.otherSide > div { display: grid; gap: 2px; }
+.otherSide span { font-size: 12px; font-weight: 650; }
+.otherSide small { color: var(--muted); font-size: 10px; }

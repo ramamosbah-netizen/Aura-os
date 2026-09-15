@@ -42,6 +42,15 @@ export interface ResourceBookingView {
 export interface ResourceAssignmentView {
   booking: ResourceBooking;
   activityName: string | null;
+  /**
+   * The canonical work package the activity is linked to (migration 0315), read through with it.
+   *
+   * Carried because the lineage a conflict has to show — resource, booking, requirement, activity,
+   * WBS, project — is only complete with this link, and it must come from the PERSISTED activity
+   * rather than from anything a caller supplies. `null` when the activity is gone, or is a pre-0315
+   * legacy one that never named a package.
+   */
+  wbsNodeId: Id | null;
 }
 
 @Injectable()
@@ -159,9 +168,9 @@ export class ResourceBookingService {
     const held = await this.facts.heldBookingsFor(tenantId, [resource], interval);
     if (held.length === 0) return [];
 
-    const names = await this.activityNames(tenantId, held);
+    const tasks = await this.activityNames(tenantId, held);
     return held
-      .map((booking) => ({ booking, activityName: this.activityName(names, booking) }))
+      .map((booking) => ({ booking, ...this.activityOf(tasks, booking) }))
       .sort((a, b) => a.booking.from.localeCompare(b.booking.from) || a.booking.committedAt.localeCompare(b.booking.committedAt));
   }
 
@@ -171,18 +180,34 @@ export class ResourceBookingService {
    * A person committed to six activities on one project is one read, and the alternative is how a
    * personal work list becomes slow enough that people stop opening it.
    */
-  private async activityNames(tenantId: Id, bookings: readonly ResourceBooking[]): Promise<Map<string, string>> {
-    const names = new Map<string, string>();
+  private async activityNames(
+    tenantId: Id,
+    bookings: readonly ResourceBooking[],
+  ): Promise<Map<string, { name: string; wbsNodeId: Id | null }>> {
+    const tasks = new Map<string, { name: string; wbsNodeId: Id | null }>();
     await Promise.all([...new Set(bookings.map((booking) => booking.projectId))].map(async (projectId) => {
       const schedule = await this.schedules.getByProject(tenantId, projectId);
-      for (const task of schedule?.tasks ?? []) names.set(`${projectId}:${task.id}`, task.name);
+      for (const task of schedule?.tasks ?? []) {
+        tasks.set(`${projectId}:${task.id}`, { name: task.name, wbsNodeId: task.wbsNodeId });
+      }
     }));
-    return names;
+    return tasks;
   }
 
-  /** Null when the booking names no task, or the task it named is gone — never a stale name. */
-  private activityName(names: Map<string, string>, booking: ResourceBooking): string | null {
-    return booking.taskId ? names.get(`${booking.projectId}:${booking.taskId}`) ?? null : null;
+  /**
+   * The activity a booking was made for, read from the PERSISTED schedule.
+   *
+   * Both halves come from the same lookup on purpose: the name and the work package are two facts
+   * about one activity, and resolving them separately is how a screen ends up showing one
+   * activity's name beside another's package. Null when the booking names no task, or the task it
+   * named is gone — never a stale name.
+   */
+  private activityOf(
+    tasks: Map<string, { name: string; wbsNodeId: Id | null }>,
+    booking: ResourceBooking,
+  ): { activityName: string | null; wbsNodeId: Id | null } {
+    const found = booking.taskId ? tasks.get(`${booking.projectId}:${booking.taskId}`) : undefined;
+    return { activityName: found?.name ?? null, wbsNodeId: found?.wbsNodeId ?? null };
   }
 
   /**
@@ -225,8 +250,8 @@ export class ResourceBookingService {
     }
     // The same answer again writes nothing, and still reports the current state to the caller.
     if (answered !== booking) await this.store.update(answered);
-    const names = await this.activityNames(input.tenantId, [answered]);
-    return { booking: answered, activityName: this.activityName(names, answered) };
+    const tasks = await this.activityNames(input.tenantId, [answered]);
+    return { booking: answered, ...this.activityOf(tasks, answered) };
   }
 
   async release(input: { tenantId: Id; projectId: Id; bookingId: Id; reason: string; actorId?: Id | null }): Promise<ResourceBooking> {

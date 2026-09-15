@@ -18,7 +18,24 @@ interface BookingView {
     response: 'pending' | 'accepted' | 'declined'; responseReason: string | null; responseBy: string | null;
   };
   assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
-  resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };
+  resourceConflict: { projectsInvolved: string[]; restrictedProjects: number; conflictDays: string[] };
+  /**
+   * The other commitments competing for this resource, resolved and REDACTED by the server.
+   *
+   * A restricted entry arrives already stripped: there is no project name, activity or work
+   * package in the payload to hide. Nothing here decides what may be seen — by the time it is
+   * rendered, that decision has been made where it belongs.
+   */
+  conflictingCommitments: Array<
+    | {
+        access: 'visible'; bookingId: string; requirementId: string | null;
+        projectId: string; projectName: string | null;
+        activityId: string | null; activityName: string | null;
+        wbsNodeId: string | null; wbsCode: string | null; wbsTitle: string | null;
+        quantity: number; unit: Unit; from: string; to: string; overlapDays: string[];
+      }
+    | { access: 'restricted'; quantity: number; unit: Unit; overlapDays: string[] }
+  >;
   /** Who took this resource's conflicts on, and what they decided. Null when nobody has. */
   conflictOwner: {
     id: string; ownerId: string; from: string; to: string;
@@ -119,7 +136,24 @@ export default function ResourceBookingClient({
           </div>
           <div className={styles.lineage}><Link2 size={13} />{view.booking.from} → {view.booking.to} · demand {view.booking.demandAtCommitment} / capacity {view.booking.capacityAtCommitment ?? 'unknown'} at commitment</div>
           {view.assessment.reason && <p className={styles.reason}><TriangleAlert size={14} />{view.assessment.reason}</p>}
-          {view.resourceConflict.projectsInvolved.length > 1 && <p className={styles.reason}><TriangleAlert size={14} />Shared-resource conflict involves {view.resourceConflict.projectsInvolved.length} projects on {view.resourceConflict.conflictDays.length} day(s).</p>}
+          {view.resourceConflict.projectsInvolved.length + view.resourceConflict.restrictedProjects > 1 && <p className={styles.reason}><TriangleAlert size={14} />Shared-resource conflict involves {view.resourceConflict.projectsInvolved.length + view.resourceConflict.restrictedProjects} projects on {view.resourceConflict.conflictDays.length} day(s).</p>}
+          {view.booking.status === 'held' && view.conflictingCommitments.length > 0 && <div className={styles.otherSide} data-testid={`conflict-parties-${view.booking.id}`}>
+            <strong>Competing for this resource</strong>
+            {view.conflictingCommitments.map((other, index) => other.access === 'visible'
+              ? <div key={other.bookingId} data-testid={`conflict-party-${other.bookingId}`}>
+                  <span>{other.projectName ?? 'Unnamed project'}</span>
+                  <small>
+                    {other.activityName ?? 'Archived activity'}
+                    {other.wbsCode ? ` · ${other.wbsCode} ${other.wbsTitle ?? ''}` : ''}
+                    {` · ${other.quantity} ${other.unit} · ${other.from} → ${other.to}`}
+                    {` · overlaps ${other.overlapDays.length} day(s)`}
+                  </small>
+                </div>
+              : <div key={`restricted-${index}`} data-testid="conflict-party-restricted">
+                  <span>Restricted conflicting commitment</span>
+                  <small>{`${other.quantity} ${other.unit} · overlaps ${other.overlapDays.length} day(s)`} · you do not have access to the project holding it</small>
+                </div>)}
+          </div>}
           {view.booking.status === 'held' && view.assessment.feasibility === 'CONFLICTED' && (
             view.conflictOwner
               ? <div className={styles.owner} data-testid={`conflict-owner-${view.booking.id}`}>

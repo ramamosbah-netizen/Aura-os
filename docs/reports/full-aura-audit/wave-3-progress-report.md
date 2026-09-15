@@ -170,6 +170,13 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Recording a decision silences the derived verdict | It cannot: the clash is still computed from the facts, and the desk shows both — owned, decided, still conflicted |
 | A project-scoped grant resolves a conflict that spans projects | Ownership is organization-governed; the route carries no project, so only an org grant reaches it |
 | An owner is appointed over a resource the tenant does not have | The resource is checked against the canonical catalogue (400) |
+| The other side of a conflict is taken from what the client sent | Never: the request names only the desk being read, and every competing party is discovered from the booking store, with each further id — requirement, activity, WBS, project — read off the stored rows |
+| Only the first overlapping party is shown | Every overlapping commitment is returned; three projects on one crane return two competing parties from each desk |
+| Owning conflicts quietly grants reading other projects | Separate permissions, checked separately: `projects.resource-conflict.*` tenant-wide with no project grant sees only `restricted` parties, and the other project's own desk stays 403 |
+| A restricted party is hidden by the browser | Nothing to hide: the payload carries no project, activity or work package for it — proven by asserting those strings are absent from the response body |
+| The cross-project report leaks what the lineage redacts | Repaired in the same pass: the report's contributors and project list are redacted by the same rule, with `restrictedProjects` keeping the involved count honest |
+| The link is stored, so it lingers after the clash ends | Wholly derived: moving or releasing the other commitment removes it on the next read, and a new clash names the new activity — while the ownership and decision recorded about it are untouched |
+| The conflict screen edits what it points at | Nothing on the conflict path writes: the booking, its activity, its dates and its work package are asserted unchanged after reading, owning and deciding |
 
 ## Verification completed
 
@@ -243,13 +250,46 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Project-scope coverage fitness | 4/4 passed; a conflict is recorded as organization-scoped with the reason it belongs to no single project |
 | Conflict ownership Auth-ON browser journey | 1/1 passed in Chromium; unowned said plainly, owner assigned, second owner 409, invented resource 400, wordless close 400, decision accepted and shown beside a still-CONFLICTED verdict, second decision 409 |
 | Database migration posture | 321/321 applied; ownership is tenant-isolated under FORCE RLS with one open row per resource, and a closed row must carry its decision and provenance |
+| Conflict lineage and redaction | 11/11 passed; the party is discovered not supplied, the whole canonical chain resolves, every party is returned, a restricted one carries no identity and is never even looked up, the check names `projects.schedule.read` on the other project, and a foreign-tenant work package is refused |
+| Conflict lineage Auth-ON browser/API journey | 1/1 passed in Chromium; A+B+C overlapping on one crane, both sides and the full lineage from each desk, three-way overlap listing every party, a conflict-only identity leaking nothing about B or C and refused on B's desk, the other activity moved away removing the relationship while the decision survives, a new clash naming the new activity, a scheduled overhaul conflicting a standing commitment, and nothing it points at altered |
+| Full API unit/fitness suite | 541 passed / 4 skipped |
+
+### PLN-10 reconciliation
+
+Every acceptance criterion this capability has carried across Wave 3, and where it is proven:
+
+| Criterion (as written in the register over time) | Evidence | Open? |
+| --- | --- | :---: |
+| Two-project employee booking | `employee-account-allocation.spec.ts` — one pool and one employee committed from two projects | no |
+| Two-project equipment booking | `resource-conflict-lineage.spec.ts` — one crane, three projects | no |
+| Leave conflict | `employee-account-allocation.spec.ts` — approved leave turns a standing commitment CONFLICTED, naming it | no |
+| Breakdown conflict | `resource-conflict-lineage.spec.ts` — a scheduled overhaul turns a standing commitment CONFLICTED, naming it | no |
+| Authorized resolution | ownership refused to a second owner (409), to an invented resource (400), closed only with a decision (400), decided once (409) | no |
+| Visible planner action | the desk shows the owner, the decision and the competing parties | no |
+| Named resolver assigned | migration 0321 with one open owner per resource, proven Auth-ON | no |
+| Resolution recorded | `resolved` and `accepted` kept apart, decision text required | no |
+| Link to every activity involved across projects | canonical chain from stored rows, all parties, server-side redaction | no |
+
+**Proposed: `PLN-10` PARTIAL → COMPLETE.** Not applied — the register still reads PARTIAL, and the
+promotion is the owner's call. Two judgement calls sit behind it: a conflict raises no notification
+to its owner (they learn by opening the desk), and no conflict register is exported as a document,
+which is why the `actualOutput` layer stays UNVERIFIED.
+
+### Observed while proving it, not fixed
+
+A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
+key (migration 0316) is `ON DELETE RESTRICT` and a RELEASED booking still references it. Releasing
+therefore frees the capacity but not the plan, and an activity that was once committed cannot be
+dropped. That is adjacent to PLN-10 rather than part of it — no acceptance criterion here depends
+on it — and it is recorded rather than quietly changed, because narrowing the constraint to HELD
+bookings would drop the lineage of released commitments and needs deciding on its own merits.
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, which closes the second half of the temporal invariant (PLN-09); and a conflict now has a named owner and a recorded decision without ever becoming a stored verdict (PLN-10). What remains open here is the last link: a conflict does not reach the other project's activity from the clash that names it, and an allocated non-member still gets no project access from being booked.
+2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

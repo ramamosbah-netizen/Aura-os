@@ -73,6 +73,7 @@ import { AccountService } from '@aura/crm';
 import { SupplierService } from '@aura/procurement';
 import { resolveAccountSnapshot } from '../common/account-snapshot';
 import { ScheduleResourceCatalogService, type ScheduleResourceCatalogItem } from './schedule-resource-catalog.service';
+import { ConflictLineageService, type ResourceBookingViewWithLineage } from './conflict-lineage.service';
 
 class CreateProjectDto {
   @IsString() title!: string;
@@ -318,6 +319,7 @@ export class ProjectsController {
     private readonly schedule: ScheduleService,
     private readonly resourcePlanning: ResourcePlanningService,
     private readonly resourceBookings: ResourceBookingService,
+    private readonly conflictLineage: ConflictLineageService,
     private readonly deliveryItemMaps: DeliveryItemMapService,
     private readonly scheduleResources: ScheduleResourceCatalogService,
     private readonly accounts: AccountService,
@@ -1365,24 +1367,36 @@ export class ProjectsController {
     });
   }
 
-  /** Project-owned commitments derive resource, quantity and dates from persisted activity demand. */
+  /**
+   * Project-owned commitments derive resource, quantity and dates from persisted activity demand.
+   *
+   * Each also carries the OTHER side of its conflict — the competing activities, their work
+   * packages and their projects — resolved from the stored rows and authorized per project before
+   * it leaves the server. Reading this project's desk grants nothing about anybody else's plan:
+   * see conflict-lineage.service.ts.
+   */
   @Permissions('projects.resource-booking.read')
   @Get(':projectId/resource-bookings')
-  listResourceBookings(@Param('projectId') projectId: string): Promise<ResourceBookingView[]> {
-    return this.resourceBookings.listProject(this.tenant.get().tenantId, projectId);
+  async listResourceBookings(@Param('projectId') projectId: string): Promise<ResourceBookingViewWithLineage[]> {
+    const ctx = this.tenant.get();
+    const views = await this.resourceBookings.listProject(ctx.tenantId, projectId);
+    return this.conflictLineage.attach(ctx.tenantId, ctx.actorId, ctx.companyId ?? null, views);
   }
 
   @Permissions('projects.resource-booking.create')
   @Post(':projectId/resource-bookings')
-  commitResourceRequirement(
+  async commitResourceRequirement(
     @Param('projectId') projectId: string,
     @Body() dto: CommitResourceRequirementDto,
-  ): Promise<ResourceBookingView> {
+  ): Promise<ResourceBookingViewWithLineage> {
     const ctx = this.tenant.get();
-    return this.resourceBookings.commitRequirement({
+    const view = await this.resourceBookings.commitRequirement({
       tenantId: ctx.tenantId, projectId, requirementId: dto.requirementId,
       overCapacityReason: dto.overCapacityReason ?? null, committedBy: ctx.actorId,
     });
+    // The commit answer carries the same cross-project report the desk does, so it carries the
+    // same redaction. A leak is a leak whichever verb produced it.
+    return this.conflictLineage.attachOne(ctx.tenantId, ctx.actorId, ctx.companyId ?? null, view);
   }
 
   @Permissions('projects.resource-booking.release')

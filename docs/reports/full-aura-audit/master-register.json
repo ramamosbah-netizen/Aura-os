@@ -1726,8 +1726,8 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Wave 3 iterations 6-7 let the planner author and later edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity. A safe project-context catalog reads current labels from HR/Fleet/Assets and the tenant resource-pool authority; the API rejects invented or cross-tenant ids and refuses a pool unit that differs from its persisted measurement contract. PostgreSQL persists the requirements and the Auth-ON browser reloads the same demand while preserving established task, requirement, WBS, baseline and actual identities.",
-      "acceptanceProof": "Convert established demand into held employee/equipment/pool bookings; prove conflict resolution and My Work receipt without re-entry."
+      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. HR/Fleet availability and My Work receipt remain open.",
+      "acceptanceProof": "Connect HR/Fleet availability and map named employee bookings to user identities so the commitment becomes actionable My Work without re-entry."
     },
     {
       "id": "PLN-07",
@@ -1742,7 +1742,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "BACKEND_ONLY",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1754,13 +1754,13 @@
         "persistence": "UNVERIFIED",
         "api": "UNVERIFIED",
         "permissions": "UNVERIFIED",
-        "ui": "PARTIAL",
+        "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "The live schedule now records named employee demand from the canonical HR catalog, and typed bookings can represent labour resources. It still has no governed employee/team allocation action that creates a held booking or a My Work receipt.",
-      "acceptanceProof": "Allocate named employee/team with capacity, dates and responsibility; prove conflicts across projects and handoff to My Work."
+      "currentBehavior": "A named employee demand from the canonical HR catalog can now become a held, dated booking through the live planning desk. The employee record still has no governed Employee-to-User identity link, so AURA cannot safely turn that booking into the named person’s My Work item or prove acceptance/completion by the employee.",
+      "acceptanceProof": "Add canonical Employee-to-User identity, then emit an actionable allocation receipt with project/activity/dates and prove it in the assignee’s My Work."
     },
     {
       "id": "PLN-08",
@@ -1825,8 +1825,8 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "A Technical Manager can now govern tenant-wide internal or subcontract resource pools and dated capacity windows in the planning workspace. Pool measurement units are immutable across capacity and project demand, and project-scoped planners consume the same canonical pool through the safe schedule catalog. HR/Fleet availability sources, held bookings and cross-project conflict inspection remain disconnected.",
-      "acceptanceProof": "Connect HR/Fleet availability and create held bookings from activity demand; show dated conflicts across projects with links to each canonical source record."
+      "currentBehavior": "A Technical Manager governs tenant-wide internal or subcontract resource pools and dated capacity windows. Project planners commit persisted activity demand into held bookings; current feasibility is recomputed from all same-tenant project commitments, and the UI shows dated cross-project conflicts, explicit capacity exceptions and reasoned release history. HR/Fleet availability, conflict-owner workflow and links to the other project records remain incomplete.",
+      "acceptanceProof": "Connect HR/Fleet availability and a named conflict-resolution responsibility; provide authorized links from each conflict to the involved project activities."
     },
     {
       "id": "PLN-10",
@@ -8346,13 +8346,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Wave 3 iterations 6-7 let the planner author and later edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity. A safe project-context catalog reads current labels from HR/Fleet/Assets and the tenant resource-pool authority; the API rejects invented or cross-tenant ids and refuses a pool unit that differs from its persisted measurement contract. PostgreSQL persists the requirements and the Auth-ON browser reloads the same demand while preserving established task, requirement, WBS, baseline and actual identities.",
+      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. HR/Fleet availability and My Work receipt remain open.",
       "expectedOperationalBehavior": "Resource requirements from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Convert established demand into held employee/equipment/pool bookings; prove conflict resolution and My Work receipt without re-entry."
+      "acceptanceProof": "Connect HR/Fleet availability and map named employee bookings to user identities so the commitment becomes actionable My Work without re-entry."
     },
     {
       "id": "F-09",
@@ -8533,8 +8533,8 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 2,
-      "PARTIAL": 94,
-      "BACKEND_ONLY": 8,
+      "PARTIAL": 95,
+      "BACKEND_ONLY": 7,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,

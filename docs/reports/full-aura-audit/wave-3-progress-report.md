@@ -90,6 +90,20 @@ The measurement unit is canonical. Capacity and schedule demand must use the per
 
 **PLN-09 moves from BACKEND_ONLY to PARTIAL.** The capacity source is now governed and visible, but activity demand still does not create held bookings. HR/Fleet availability, cross-project conflict decisions, named allocation and My Work receipts remain open.
 
+## Iteration 8 — Activity demand to held capacity commitment
+
+The planner can now promote one persisted activity requirement into a held resource commitment without re-entering the resource, unit, quantity or dates:
+
+`WBS activity demand → canonical requirement lineage → held booking → current cross-project feasibility → reasoned release history`
+
+The public command accepts only the requirement identity and an optional capacity-exception reason. ResourceBookingService reloads the project schedule and derives the schedule, task, resource, unit, quantity and date range from that persisted requirement. A requirement from another project is refused, and migration 0316 adds a composite requirement foreign key plus one-held-booking-per-requirement protection. Unknown request fields cannot move the commitment to another resource, date or project.
+
+Current feasibility remains derived rather than stored. The booking keeps the capacity/demand snapshot that was true when committed, while each read recomputes the present load from all held bookings for the same tenant resource. An over-capacity commitment is permitted only with an explicit reason, and release retains its own mandatory reason and actor history. The project planning UI separates authored demand from held commitments and shows AVAILABLE, CONFLICTED, UNKNOWN or RELEASED with the cross-project conflict count.
+
+Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. Project A held one crew and Project B attempted to hold two over the same three days. The silent overrun was denied; a reason-governed commitment succeeded and both projects appeared in the conflict report. Releasing Project B returned Project A to AVAILABLE. The same proof injected a false resource, quantity, unit, dates and project in the request; the stored booking still matched the employee requirement’s canonical values. A Planning Engineer could create only on the granted project, changing the URL to another project was denied, Site Engineer membership did not grant create, and the organization-governed grant remained allowed.
+
+**PLN-07 moves from BACKEND_ONLY to PARTIAL.** Named employee demand can now be held as a booking. Employee records currently have no canonical User identity relation, so the system cannot safely deliver that booking to the employee’s My Work. **PLN-06 and PLN-09 remain PARTIAL** until HR/Fleet availability, the named conflict-owner workflow and My Work receipt are connected.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -117,6 +131,10 @@ The measurement unit is canonical. Capacity and schedule demand must use the per
 | Caller invents or reinterprets a shared pool | The catalog reloads the tenant-owned pool and both capacity and schedule services enforce its persisted measurement unit |
 | Caller forges a subcontract pool supplier | The controller reloads the same-tenant supplier and accepts only an approved supplier classified as subcontractor; internal pools discard request supplier ids |
 | Project member attempts tenant pool administration | Pool/capacity routes require separate organization-governed functional permissions; Technical Manager grant and Planning Engineer denial are pinned in role fitness proof |
+| Caller changes resource, quantity, unit, dates or project while committing | The DTO strips those fields and the service derives every booking fact from the persisted same-project activity requirement |
+| Caller nominates another project’s requirement | Service resolves the requirement only inside the persisted schedule identified by the authorized URL project and returns 400 |
+| Shared demand silently exceeds known capacity | Domain and database both require a non-blank exception reason; Auth-ON proof denies the silent overrun |
+| Project membership replaces booking functionality | Planning Engineer create is allowed on its granted project; Site Engineer membership receives 403 for create; changing the URL project receives 403 |
 
 ## Verification completed
 
@@ -136,14 +154,14 @@ The measurement unit is canonical. Capacity and schedule demand must use the per
 | Engineering drawing API journey | 1/1 passed; missing recipient denied and resulting conveyance is sent with purpose |
 | Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
 | Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal and linked delivery receipt |
-| Database migration posture | 315/315 applied; schedule activities now carry a same-project WBS foreign key |
+| Database migration posture | 316/316 applied; bookings now carry same-project schedule/task/requirement lineage and one held booking per requirement |
 | Full API unit/fitness suite | 498 passed / 4 skipped |
 | Project responsibility domain | 4/4 passed; canonical assignee grant, transition authority, idempotent source binding and concurrent-source refusal covered |
 | Engineering/responsibility HTTP journeys | 5/5 passed; lifecycle plus missing/wrong-project delivery owner denial and exact My Work receipt |
 | Project responsibility HTTP journey | 4/4 passed; positive handoff and release plus wrong-project/wrong-user/wrong-permission denials |
 | My Work service and self-scoped fitness | 15/15 passed, including per-item project filtering |
 | Project responsibility browser journey | 1/1 passed in Chromium; manager UI assignment → member My Work → Start/Complete → retained history |
-| Full Projects module suite | 435 passed / 12 PostgreSQL-only skips |
+| Full Projects module suite | 439 passed / 12 PostgreSQL-only skips |
 | Schedule WBS domain/service proof | 2/2 passed; required, wrong-project, persisted, edit-preserved and immutable-link cases covered |
 | Schedule WBS Auth-ON HTTP proof | missing 400; foreign-project 400; canonical create 201; GET returned the same WBS id |
 | Schedule WBS browser journey | 1/1 passed in Chromium; required selector, project filtering, create/reload and visible package identity |
@@ -153,13 +171,16 @@ The measurement unit is canonical. Capacity and schedule demand must use the per
 | Resource pool role fitness | 22/22 passed; Technical Manager can govern pools/capacity and Planning Engineer cannot acquire those operations from project membership |
 | Shared-pool Auth-ON browser journey | 1/1 passed in Chromium; pool/capacity authored, wrong unit denied with 409, canonical pool demand persisted and reloaded |
 | Pool supplier provenance Auth-ON API | forged subcontractor source denied with 400; injected source on an internal pool discarded |
+| Resource booking service | 4/4 passed; canonical derivation, shared in-memory facts, duplicate refusal, cross-project over-capacity reason and retained release history |
+| Resource booking Auth-ON browser/API journey | 1/1 passed; request spoof ignored, foreign requirement denied, silent overrun denied, two-project conflict visible, release restored availability, history retained |
+| Resource booking scope/function matrix | correct project + Planning Engineer create 201; changed project URL 403; correct project + Site Engineer create 403; organization-governed read 200 |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. Employee/equipment/pool booking, HR/Fleet availability, cross-project conflict resolution and My Work handoff from the WBS-linked demand.
+2. HR/Fleet availability, named conflict-resolution ownership, Employee-to-User identity and My Work handoff from the now-booked WBS demand.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

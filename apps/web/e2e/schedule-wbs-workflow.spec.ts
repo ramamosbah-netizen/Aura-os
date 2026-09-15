@@ -242,10 +242,14 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     const memberLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
     expect(memberLogin.ok(), await memberLogin.text()).toBe(true);
     const memberToken = ((await memberLogin.json()) as { token: string }).token;
-    const memberStatus = async (id: string) => (await request.get(`${API}/projects/${id}/resource-bookings`, { headers: { Authorization: `Bearer ${memberToken}` } })).status();
-    expect(await memberStatus(project.id), 'correct project + planning permission').toBe(200);
-    expect(await memberStatus(other.id), 'wrong project').toBe(403);
-    expect(await memberStatus(siteOnly.id), 'correct project + wrong functional permission').toBe(403);
+    const memberHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${memberToken}` };
+    const memberReadStatus = async (id: string) => (await request.get(`${API}/projects/${id}/resource-bookings`, { headers: memberHeaders })).status();
+    const memberCreateStatus = async (id: string, requirementId: string) => (await request.post(`${API}/projects/${id}/resource-bookings`, { headers: memberHeaders, data: { requirementId } })).status();
+    expect(await memberReadStatus(project.id), 'correct project + planning read permission').toBe(200);
+    expect(await memberCreateStatus(project.id, poolRequirementId!), 'correct project + planning create permission').toBe(201);
+    expect(await memberReadStatus(other.id), 'wrong project').toBe(403);
+    expect(await memberCreateStatus(other.id, otherRequirementId), 'wrong project cannot be targeted by changing the URL').toBe(403);
+    expect(await memberCreateStatus(siteOnly.id, '00000000-0000-4000-8000-000000000001'), 'correct project + wrong functional permission').toBe(403);
     const orgStatus = await request.get(`${API}/projects/${other.id}/resource-bookings`, { headers: apiAuthHeaders() });
     expect(orgStatus.status(), 'organisation-governed projects permission remains allowed').toBe(200);
   });

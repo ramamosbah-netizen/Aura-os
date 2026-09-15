@@ -71,8 +71,12 @@ function variance(view: MilestoneView): { text: string; className?: string } {
 export default function MilestonesPanel({ projectId, tasks = [], members = [] }: {
   projectId: string;
   tasks?: Array<{ id: string; name: string }>;
-  /** Accounts that can be named answerable for a milestone. Empty when this reader may not see them. */
-  members?: Array<{ userId: string }>;
+  /**
+   * The project's OWN members — the only people who can be made answerable for one of its
+   * milestones. The API refuses anybody else, so this list is never widened to the whole tenant:
+   * a picker offering a choice the server will reject is worse than no picker.
+   */
+  members?: Array<{ userId: string; displayName?: string }>;
 }) {
   const [views, setViews] = useState<MilestoneView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -175,7 +179,9 @@ export default function MilestonesPanel({ projectId, tasks = [], members = [] }:
                 <span>Answerable</span>
                 <select value={ownerId} onChange={(event) => setOwnerId(event.target.value)} data-testid="milestone-owner">
                   <option value="">Nobody named</option>
-                  {members.map((member) => <option key={member.userId} value={member.userId}>{member.userId}</option>)}
+                  {members.map((member) => (
+                    <option key={member.userId} value={member.userId}>{member.displayName || member.userId}</option>
+                  ))}
                 </select>
               </label>
             )}
@@ -204,6 +210,13 @@ export default function MilestonesPanel({ projectId, tasks = [], members = [] }:
                 cannot be forecast, and this panel will show it as not established. */}
             {gates.length === 0 && tasks.length > 0 && (
               <small>Nothing selected — this milestone will read as not established until something gates it.</small>
+            )}
+            {/* Said rather than left to a rejected submission: naming an owner requires somebody on
+                the project, and if nobody is on it there is nobody who could receive the milestone. */}
+            {members.length === 0 && (
+              <small data-testid="milestone-no-members">
+                This project has no members yet, so no one can be made answerable for a milestone.
+              </small>
             )}
           </div>
           <div className={styles.actions}>

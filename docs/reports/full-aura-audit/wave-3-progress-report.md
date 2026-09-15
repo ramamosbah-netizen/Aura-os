@@ -1162,6 +1162,34 @@ with save/reload, applicable permission denials, actual output and next-role rec
 eighth planning row carrying that same gap, and the same basis on which `PLN-05`, `PLN-11`–`PLN-16`
 were promoted.
 
+This promotion was proposed once before and **withheld by the programme owner**, on a point that was
+not `actualOutput`: an `ownerId` could be saved for somebody who is not a project member, the
+responsibility service would rightly refuse to assign to them, and the milestone would still save
+successfully while the named recipient received nothing — with only a log line to say so. That is a
+direct contradiction of this wave's exit gate, which requires a next-role receipt to be PROVED, and
+the objection was correct.
+
+The reasoning it overturned is worth keeping, because it sounded right: *the milestone is the record,
+the notification is a consequence of it, and losing the second must not destroy the first.* That
+holds for a transient infrastructure failure. It was applied to an **invalid recipient**, which is
+not a failure of delivery at all — it is invalid input, and the two were conflated. A log is not a
+receipt.
+
+Naming an owner is naming a recipient, so the operation now either tells them or refuses the naming:
+
+| State | Result |
+| --- | --- |
+| No owner named | milestone saved, nobody told — unowned is a state, not an error |
+| Owner named, member of the project | milestone saved, owner holds it in My Work |
+| Owner named, NOT a member | **400, and nothing is saved** — no milestone, no orphan owner |
+| Owner named and valid, but the receipt fails anyway | the milestone is removed and the caller is told; it is never left half-written |
+
+The membership question is asked of `ProjectResponsibilityService.canReceive` — the same rule
+`assign` itself uses, extracted rather than copied, so the check and the act cannot drift apart. And
+the owner picker now lists the **project's own members** rather than every account in the tenant: a
+picker offering a choice the server will reject is worse than no picker, and a project with no
+members says so instead of presenting an empty one.
+
 ### Found while proving it, and fixed rather than worked around
 
 Three of these were found by the repository's own gates, which is what they are for:
@@ -1203,11 +1231,8 @@ its `project_id` is `uuid` rather than `text`. Both settled in the migration.
   when the milestone is created; a milestone going from `ON_TRACK` to `AT_RISK` reaches nobody who is
   not looking at the screen. The seventh such signal, and still one shared notification authority
   rather than seven bespoke ones.
-- **An owner who is not a project member is recorded but never told.** The responsibility service
-  rightly refuses to assign work to a non-member; the milestone still saves with that `ownerId`, the
-  failure is logged, and nothing on the screen says the receipt did not happen. This is the weakest
-  point of the slice and the first thing to close if the promotion is taken — it is the same class of
-  quiet gap the `@Inject` defect above turned out to be.
+- **Nothing prompts anybody when a gating activity is deleted.** The gate cascades away and the
+  milestone reads `UNKNOWN` with its reason — loud on the screen, silent everywhere else.
 - **Deleting a gating activity cascades the gate away.** Chosen over `RESTRICT`, which would block
   ordinary replanning; the milestone then reads `UNKNOWN` with its reason printed rather than
   silently staying "on track", so losing a gate is loud on the screen — but nothing tells the owner.

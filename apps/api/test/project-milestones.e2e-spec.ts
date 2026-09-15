@@ -274,6 +274,28 @@ describe('a point in the programme where something must be true (HTTP)', () => {
     expect(received!.id.startsWith('project-responsibility:')).toBe(true);
   });
 
+  it('REFUSES an owner who could never receive it, and saves nothing', async () => {
+    // Naming an owner is naming a recipient. The responsibility service rightly refuses to assign
+    // work to a non-member — so a milestone that saved anyway would report an owner who was never
+    // told, which is precisely the silent gap between two records that the Wave 3 exit gate's
+    // "next-role receipt must be proved" exists to forbid. A log line is not a receipt.
+    const before = (await milestones()).length;
+    const refused = await http.post(`/api/v1/projects/schedules/${projectId}/milestones`).send({
+      name: 'Owned by an outsider', targetDate: day(19), ownerId: 'ms-stranger', gatingTaskIds: [firstTaskId],
+    }).expect(400);
+    expect(refused.body.message).toMatch(/is not a member of project/);
+    // Nothing half-written: no milestone, so no owner recorded against a receipt that never happened.
+    expect(await milestones()).toHaveLength(before);
+    expect((await milestones()).some((view) => view.milestone.name === 'Owned by an outsider')).toBe(false);
+  });
+
+  it('still allows a milestone with no owner at all — unowned is a state, not an error', async () => {
+    await http.post(`/api/v1/projects/schedules/${projectId}/milestones`).send({
+      name: 'Nobody answerable', targetDate: day(21), gatingTaskIds: [firstTaskId],
+    }).expect(201);
+    expect((await named('Nobody answerable')).milestone.ownerId).toBeNull();
+  });
+
   it('tells nobody when no owner was named, rather than assigning it to whoever created it', async () => {
     // A milestone with no owner is unowned. Defaulting it to its author would put a due date in
     // somebody's list that they never accepted.

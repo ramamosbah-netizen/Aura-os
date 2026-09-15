@@ -26,6 +26,15 @@ export interface MilestoneStore {
   update(milestone: ProjectMilestone): Promise<void>;
   get(id: Id): Promise<ProjectMilestone | null>;
   list(filter: MilestoneFilter): Promise<ProjectMilestone[]>;
+  /**
+   * Remove a milestone.
+   *
+   * Exists for ONE purpose: to undo a create whose owner receipt could not be raised. Naming an
+   * owner is naming a recipient, so a milestone that was saved while its recipient was never told
+   * is a half-written record, and the caller compensates rather than leaving one behind. It is not
+   * a user-facing delete, and nothing else calls it.
+   */
+  remove(tenantId: Id, id: Id): Promise<void>;
 }
 
 const clone = (milestone: ProjectMilestone): ProjectMilestone => ({
@@ -54,6 +63,11 @@ export class InMemoryMilestoneStore implements MilestoneStore {
   async get(id: Id): Promise<ProjectMilestone | null> {
     const row = this.rows.get(id);
     return row ? clone(row) : null;
+  }
+
+  async remove(tenantId: Id, id: Id): Promise<void> {
+    const row = this.rows.get(id);
+    if (row && row.tenantId === tenantId) this.rows.delete(id);
   }
 
   async list(filter: MilestoneFilter): Promise<ProjectMilestone[]> {
@@ -193,6 +207,13 @@ export class PostgresMilestoneStore implements MilestoneStore {
   async get(id: Id): Promise<ProjectMilestone | null> {
     const { rows } = await this.pool.query<MilestoneRow>(`${SELECT} WHERE m.id = $1`, [id]);
     return rows[0] ? toMilestone(rows[0]) : null;
+  }
+
+  async remove(tenantId: Id, id: Id): Promise<void> {
+    // The gates go with it: migration 0328 cascades them from the milestone.
+    await this.pool.query(
+      'DELETE FROM public.aura_projects_milestones WHERE id = $1 AND tenant_id = $2', [id, tenantId],
+    );
   }
 
   async list(filter: MilestoneFilter): Promise<ProjectMilestone[]> {

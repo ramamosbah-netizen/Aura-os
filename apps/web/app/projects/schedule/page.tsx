@@ -114,6 +114,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const poolMembers = (await Promise.all((resourcePools ?? []).map(async (item) =>
     (await getJson<PoolMember[]>(`/api/projects/resource-pools/${encodeURIComponent(item.id)}/members`)) ?? [],
   ))).flat();
+  // Who may be made answerable for a milestone: the project's OWN members, not every account in the
+  // tenant. The API refuses a non-member outright, so offering one here would be a picker whose
+  // choices the server rejects — the UI must not present an option that cannot succeed.
+  const projectMembers = projectId
+    ? await getJson<Array<{ userId: string; displayName: string }>>(`/api/projects/${encodeURIComponent(projectId)}/members`)
+    : null;
   const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
   const projectName = scopedProjects?.[0]?.title ?? scopedSchedules?.[0]?.projectName;
@@ -241,7 +247,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               <MilestonesPanel
                 projectId={projectId}
                 tasks={selectedSchedule.tasks.map((task) => ({ id: task.id, name: task.name }))}
-                members={(directory?.users ?? []).filter((user) => user.active).map((user) => ({ userId: user.userId }))}
+                members={(projectMembers ?? []).map((member) => ({ userId: member.userId, displayName: member.displayName }))}
               />
             )}
           </>

@@ -79,6 +79,18 @@ export class MilestoneService {
       }
     }
 
+    // NAMING AN OWNER IS NAMING A RECIPIENT, and the rule is settled before anything is written:
+    // this operation either tells them or refuses the naming. There is no third state in which a
+    // milestone is saved successfully against somebody who will never receive it.
+    //
+    // Asked of the responsibility service rather than answered here, so there is ONE definition of
+    // who may be given work on a project instead of a second copy that drifts.
+    if (input.ownerId && this.responsibilities && !this.responsibilities.canReceive(input.projectId, input.ownerId)) {
+      throw new BadRequestException(
+        `${input.ownerId} is not a member of project ${input.projectId}, so they cannot be made answerable for this milestone — add them to the project first, or leave the owner unnamed`,
+      );
+    }
+
     const milestone = makeProjectMilestone({
       tenantId: input.tenantId,
       projectId: input.projectId,
@@ -104,9 +116,15 @@ export class MilestoneService {
    * chain rather than inventing a parallel inbox, so the owner accepts, starts and completes it in
    * the one place they already look.
    *
-   * A failure here does NOT fail the milestone. The milestone is the record; the notification is a
-   * consequence of it, and losing the second must not destroy the first — the milestone's own
-   * `ownerId` still says who is answerable, so the fact survives even when the receipt does not.
+   * A FAILURE HERE UNDOES THE MILESTONE. That is a deliberate reversal of what this did first, and
+   * the reasoning it replaces is worth stating because it sounded right: "the milestone is the
+   * record, the notification is a consequence, and losing the second must not destroy the first."
+   * True for a transient infrastructure failure — and this was applied to an invalid recipient,
+   * which is a different thing entirely. The result was a milestone that saved successfully,
+   * reported an owner, and told that owner nothing, with only a log line to say so.
+   *
+   * A log is not a next-role receipt. So the only states this leaves are: no owner named and nobody
+   * told; or an owner named, valid, and told. Nothing is saved in between.
    */
   private async raiseOwnerReceipt(milestone: ProjectMilestone, actorId: Id | null): Promise<void> {
     if (!milestone.ownerId || !this.responsibilities || !actorId) return;
@@ -122,11 +140,15 @@ export class MilestoneService {
         dueDate: milestone.targetDate,
       });
     } catch (error) {
-      // The milestone stands — but the failure is never silent. A receipt that disappeared without
-      // a word would leave a milestone whose owner believes they were told and was not, which is
-      // exactly the kind of quiet gap between two records this programme exists to remove.
+      // Membership was checked before anything was written, so reaching here means the receipt
+      // failed for some other reason. The milestone is removed rather than left standing as a
+      // half-written record, and the caller is told — never a warning in a log nobody reads.
       this.logger.warn(
-        `milestone "${milestone.name}" was saved, but its owner ${milestone.ownerId} was NOT given a My Work item: ${(error as Error).message}`,
+        `milestone "${milestone.name}" was withdrawn because its owner ${milestone.ownerId} could not be given a My Work item: ${(error as Error).message}`,
+      );
+      await this.store.remove(milestone.tenantId, milestone.id);
+      throw new BadRequestException(
+        `this milestone was not saved: ${milestone.ownerId} could not be made answerable for it (${(error as Error).message})`,
       );
     }
   }

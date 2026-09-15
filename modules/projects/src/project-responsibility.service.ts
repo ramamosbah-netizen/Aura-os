@@ -19,12 +19,30 @@ export class ProjectResponsibilityService {
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
   ) {}
 
+  /**
+   * Can this person be given work on this project at all?
+   *
+   * Public, and asked BEFORE anything is written by callers that raise a responsibility as part of
+   * a larger act (a milestone naming its owner, PLN-04). Such a caller must be able to refuse its
+   * whole operation rather than save a record naming a recipient who will never receive anything —
+   * and it must decide that by THIS rule, not a second copy of it that can drift out of step.
+   *
+   * A composition with no AccessService cannot answer, and says yes: membership is not knowable
+   * there, and refusing every assignment because the question cannot be asked would be a different
+   * false confidence.
+   */
+  canReceive(projectId: Id, assigneeId: Id): boolean {
+    if (!this.access) return true;
+    return this.access.grantsOf(assigneeId).some((grant) =>
+      grant.scope.kind === 'resource' && grant.scope.resourceType === 'project' && grant.scope.resourceId === projectId,
+    );
+  }
+
   async assign(input: NewProjectResponsibility): Promise<ProjectResponsibility> {
     await this.guard(input.projectId, input.tenantId, input.assignedBy, 'projects.responsibility.create');
-    const isMember = this.access?.grantsOf(input.assigneeId).some((grant) =>
-      grant.scope.kind === 'resource' && grant.scope.resourceType === 'project' && grant.scope.resourceId === input.projectId,
-    );
-    if (this.access && !isMember) throw new BadRequestException('assignee must be a member of this project');
+    if (!this.canReceive(input.projectId, input.assigneeId)) {
+      throw new BadRequestException('assignee must be a member of this project');
+    }
     const value = makeProjectResponsibility(input);
     await this.rows.create(value);
     await this.emit('projects.responsibility.assigned', value, input.assignedBy);

@@ -351,7 +351,7 @@ successor on the **Sunday** rather than the Friday under the project's Gulf cale
 run is what moves the stored dates, and the run alone moves nothing. Removing an activity removes its
 edge with it.
 
-**PLN-02 moves from BACKEND_ONLY to PARTIAL, and COMPLETE is proposed below.**
+**PLN-02 moves from BACKEND_ONLY to COMPLETE** — see the reconciliation below.
 
 ## Security and authority proof
 
@@ -630,8 +630,8 @@ selects calendar and duration, saves and reloads, and the solver excludes non-wo
 
 **`PLN-03` BACKEND_ONLY → COMPLETE — applied on 2026-09-15 by the programme owner's decision**,
 in one step: BACKEND_ONLY was plainly false once a proven UI existed, and the reconciliation above
-leaves no acceptance row open. This makes six COMPLETE capabilities in the register (AWD-05, AWD-06,
-PLN-03, PLN-10, PLN-11, PLN-12) out of 180.
+leaves no acceptance row open. That was six COMPLETE capabilities out of 180 (AWD-05, AWD-06,
+PLN-03, PLN-10, PLN-11, PLN-12); PLN-02 below makes seven.
 
 One limit is knowingly carried with the proposal: **one calendar governs a whole project**. A night
 shift, or a subcontractor working a different week from the main contractor, is counted under the
@@ -659,15 +659,17 @@ dependency.
 | An edge cannot leave the plan | a predecessor outside this schedule is refused, not created | no |
 | The network survives editing the plan | an activity's edges are removed with the activity | no |
 
-**Proposed: `PLN-02` PARTIAL → COMPLETE.** The row is moved off BACKEND_ONLY because a proven UI
-makes that classification plainly false; the promotion itself is left to the programme owner.
+**`PLN-02` BACKEND_ONLY → COMPLETE — applied on 2026-09-15 by the programme owner's decision**, in
+one step, the reconciliation above leaving no acceptance row open. This makes seven COMPLETE
+capabilities in the register (AWD-05, AWD-06, PLN-02, PLN-03, PLN-10, PLN-11, PLN-12) out of 180.
 
 One limit is carried with the proposal: **only finish-to-start is authored.** Start-to-start,
 finish-to-finish and lag are understood by the solver — `lagDays` is a field on its input — and have
 no way in, so a plan needing them still expresses them by moving dates by hand. Exposing a
 relationship type the engine reads but no screen can set would repeat the very defect this slice
-corrects, so it is recorded rather than half-built. As on PLN-03/10/11/12, `actualOutput` would
-remain **PARTIAL** on promotion: the rendered plan is proven and no exported network document exists.
+corrects, so it is recorded rather than half-built. As on PLN-03/10/11/12, `actualOutput` remains
+**PARTIAL** on an otherwise complete row: the rendered plan is proven and no exported network
+document exists.
 
 ### Observed while proving it, not fixed
 
@@ -684,7 +686,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

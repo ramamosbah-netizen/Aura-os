@@ -1578,7 +1578,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1586,14 +1586,14 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "PARTIAL",
-        "api": "PARTIAL",
-        "permissions": "PARTIAL",
-        "ui": "PARTIAL",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "PARTIAL",
-        "browser": "PARTIAL",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
       "currentBehavior": "A planner authors the network on the plan screen — which activity waits for which, finish to start, within this plan only. The dependency graph, its cycle refusal and the CPM forward pass have existed in the planning domain and in PostgreSQL since Step 8, and NOTHING COULD REACH THEM: `setScheduleDependencies` had no caller anywhere in the product, so every plan carried an empty network and the critical path was computed over a graph nobody could author. The engine was right and unreachable, which is its own kind of absent. The WHOLE network is sent and judged at once, because a cycle is a property of the graph and never of one edge: an endpoint taking edges singly could be walked into a loop one individually-legal step at a time. Everything is refused rather than repaired — a self-edge, a duplicate, an edge naming an activity outside this plan, and a cycle whose loop is named back to the author — because which of two activities waits for the other is a decision and not arithmetic, and a refused save is never a partial save. Authoring the network carries `projects.schedule.plan`: it decides what the solver may move and what the critical path runs through. Deleting an activity takes its edges with it rather than leaving the network pointing at a task that no longer exists. The accepted dates FOLLOW the network, stepping over the days the project’s own calendar says are not worked (PLN-03), so a successor never starts on a Friday the crew was never asked to work.",
       "acceptanceProof": "Auth-ON browser and HTTP proof: two activities parked on the same Monday are separated only by a dependency the planner authors in the activity editor, and the plan says “Waits for …” beneath the successor; a loop is refused (400) naming the cycle with the existing network left untouched; a self-edge, a duplicate and an edge naming a task outside the plan are each refused in their own words; a planning run places a four-day predecessor Mon–Thu and starts the successor on the SUNDAY rather than the Friday under the project’s Gulf calendar; accepting the run is what moves the stored dates, and the run alone moves nothing; and removing an activity removes its edge with it. STILL OPEN: only finish-to-start is authored — start-to-start, finish-to-finish and lag are understood by the engine (`lagDays`) and have no way in, so a plan needing them still expresses them by moving dates by hand."
@@ -8532,8 +8532,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 6,
-      "PARTIAL": 96,
+      "COMPLETE": 7,
+      "PARTIAL": 95,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 1,

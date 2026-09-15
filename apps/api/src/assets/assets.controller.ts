@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, Param, Post, Put, Query, NotFoundException } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
+import { HrService } from '@aura/hr';
 import {
   type Asset,
   type AssetMaintenance,
@@ -49,6 +50,8 @@ export class AssetsController {
   constructor(
     private readonly assetsService: AssetsService,
     private readonly tenant: TenantContext,
+    // HR owns who is an employee. Assets records custody; it does not decide who exists.
+    private readonly hr: HrService,
   ) {}
 
   // ── Assets ────────────────────────────────────────────────────────────────
@@ -87,6 +90,28 @@ export class AssetsController {
   restoreAsset(@Param('id') id: string): Promise<Asset> {
     // "asset not found" is classified to 404 by the global error taxonomy.
     return this.assetsService.restoreAsset(this.tenant.get().tenantId, id);
+  }
+
+  /**
+   * Hand an asset to somebody, or take it back by sending no employee.
+   *
+   * Explicitly permissioned rather than route-derived, for the same reason as the HR account link:
+   * the taxonomy would invent `assets.custodian.create` from the path, which nobody holds and
+   * which says nothing about the asset register. Custody is its own authority because it decides
+   * who a commitment on this machine reaches.
+   */
+  @Permissions('assets.asset.custody')
+  @Post(':id/custodian')
+  async assignCustodian(@Param('id') id: string, @Body() dto: { employeeId?: string | null }): Promise<Asset> {
+    const ctx = this.tenant.get();
+    const employeeId = dto?.employeeId?.trim() || null;
+    if (employeeId) {
+      const employee = await this.hr.getEmployee(ctx.tenantId, employeeId);
+      if (!employee || employee.status !== 'active') {
+        throw new BadRequestException('custody must be given to an active employee of this tenant');
+      }
+    }
+    return this.assetsService.assignCustodian(ctx.tenantId, ctx.actorId, id, employeeId);
   }
 
   @Get('paged')

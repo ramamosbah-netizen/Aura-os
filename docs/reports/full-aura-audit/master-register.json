@@ -1759,8 +1759,8 @@
         "browser": "PARTIAL",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "An administrator binds an employment record to a platform account in HR (migration 0317): one account holds at most one employment record, unregistered, deactivated and already-claimed accounts are refused, and who declared the link and when is recorded. A held employee booking reaches that person’s My Work as a read-through allocation carrying project, activity name, quantity and committed dates, and the person ACCEPTS or DECLINES it there (migration 0318) — an answer that needs a reason to refuse, changes no quantity, status or capacity, and lands on the planning desk beside the capacity verdict for the planner to resolve. TEAM allocation now travels the same road: a pool carries a named roster (migration 0319, membership kept strictly apart from capacity), and a crew booking reaches every current member as a crew commitment — worded as news about their crew rather than a claim on their own time, and carrying no accept/decline because one member cannot answer for a crew. Removing someone from the roster stops it reaching them while the crew still holds it. Auth-ON browser proof covers the whole chain end to end, including a second claim on one account (409), an unregistered account (400), an HR-read role refused the link authority (403), a reasonless decline (400), one person answering for another (403), a member answering for the crew (403), a duplicate roster entry (409) and an invented employee id (400). An allocated non-member still gets no project access from being booked, and equipment allocation reaches no owner.",
-      "acceptanceProof": "Give an allocated non-member a governed path to the project access the work implies, and prove equipment allocation reaching a custodian."
+      "currentBehavior": "A held commitment now reaches the person answerable for it, whichever of the three kinds of resource it names. PERSON: an administrator binds an employment record to a platform account in HR (migration 0317) — one account per record, unregistered/deactivated/already-claimed accounts refused, provenance recorded — and the employee’s allocation arrives in their My Work carrying project, activity, quantity and dates, where they accept or decline it (migration 0318). CREW: a pool carries a named roster (migration 0319, membership kept strictly apart from capacity) and a crew booking reaches every current member as news about their crew, carrying no answer because one member cannot speak for a crew. EQUIPMENT: the owning register names one person per machine — Fleet’s driver, and an asset’s custodian (migration 0320) — and that person answers for the MACHINE, not for their own time. Every answer is the same fifth fact: a refusal needs a reason, changes no quantity, status or capacity, and surfaces on the planning desk beside the capacity verdict. Handing equipment on, or leaving a crew, stops the commitment reaching that person while the commitment itself stands. One Auth-ON browser journey proves the whole chain, including a second claim on one account (409), an unregistered account (400), an HR-read role refused the link authority (403), a reasonless decline (400), one person answering for another (403), a member answering for a crew (403), answering for equipment no longer held (403), a duplicate roster entry (409), an invented employee id (400) and custody given to a stranger (400). An allocated non-member still gets no project access from being booked.",
+      "acceptanceProof": "Give an allocated non-member a governed path to the project access the work implies."
     },
     {
       "id": "PLN-08",
@@ -1775,7 +1775,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "BACKEND_ONLY",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1787,13 +1787,13 @@
         "persistence": "UNVERIFIED",
         "api": "UNVERIFIED",
         "permissions": "UNVERIFIED",
-        "ui": "PARTIAL",
+        "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "The live schedule now records vehicle/asset demand from canonical Fleet/Assets catalogs, and typed bookings can represent equipment. It still has no governed equipment allocation action or availability/breakdown bridge.",
-      "acceptanceProof": "Allocate canonical equipment, detect breakdown/availability and preserve the booking against the task."
+      "currentBehavior": "The live schedule records vehicle/asset demand from canonical Fleet/Assets catalogs and commits it into typed, dated bookings. An asset now carries a custodian in its own register (migration 0320, shaped like Fleet’s existing driver link), so an equipment commitment reaches the one person answerable for that machine and is accepted or declined by them with a reason — proven Auth-ON in the browser, including the refusal for somebody who no longer holds it. Breakdown and availability are still not bridged: a machine going out of service does not change the feasibility of a commitment already made against it.",
+      "acceptanceProof": "Bridge Fleet/Assets availability and breakdown into current feasibility, so a machine out of service surfaces as a conflict on the commitments that depend on it."
     },
     {
       "id": "PLN-09",
@@ -8533,8 +8533,8 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 2,
-      "PARTIAL": 95,
-      "BACKEND_ONLY": 7,
+      "PARTIAL": 96,
+      "BACKEND_ONLY": 6,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,

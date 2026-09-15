@@ -3,6 +3,7 @@ import { ActivityService, type Activity, type TaskRecurrence } from '@aura/crm';
 import { AccessService, AuthService, NotificationService } from '@aura/core';
 import { EngineeringService, type Drawing, type Rfi, type TechnicalQuery } from '@aura/engineering';
 import { HrService, type Employee } from '@aura/hr';
+import { ScheduleResourceCatalogService, type ScheduleResourceCatalogItem } from '../projects/schedule-resource-catalog.service';
 import { HseService, type CapaAction } from '@aura/hse';
 import { PurchaseOrderService, PurchaseRequestService, RfqService, type PurchaseOrder, type PurchaseRequest, type Rfq } from '@aura/procurement';
 import { QualityService, type Ncr, type Snag } from '@aura/quality';
@@ -147,6 +148,7 @@ export class WorkItemsService {
     private readonly projectResponsibilities: ProjectResponsibilityService,
     private readonly resourceBookings: ResourceBookingService,
     private readonly resourcePlanning: ResourcePlanningService,
+    private readonly resourceCatalog: ScheduleResourceCatalogService,
     private readonly hr: HrService,
     private readonly projects: ProjectService,
     private readonly access: AccessService,
@@ -277,20 +279,34 @@ export class WorkItemsService {
     // Two kinds of commitment reach one person, and they are gathered separately because they mean
     // different things (see `crewItem`): the bookings that name THEM, and the bookings that name a
     // CREW they belong to.
-    const memberships = await this.resourcePlanning.listPoolsForEmployee(tenantId, employee.id);
-    const pools = new Map<string, ResourcePool>(
-      (await this.resourcePlanning.listPools(tenantId)).map((pool) => [pool.id, pool]),
-    );
-    const [personal, ...crews] = await Promise.all([
+    const [memberships, poolList, custody] = await Promise.all([
+      this.resourcePlanning.listPoolsForEmployee(tenantId, employee.id),
+      this.resourcePlanning.listPools(tenantId),
+      // Fleet's driver and Assets' custodian, read through their own registers.
+      this.resourceCatalog.custodianResources(tenantId, employee.id),
+    ]);
+    const pools = new Map<string, ResourcePool>(poolList.map((pool) => [pool.id, pool]));
+    const [personal, ...rest] = await Promise.all([
       // Read wide, list narrow: what lies past the horizon is counted and reported in coverage,
       // never silently absent.
       this.resourceBookings.listAssignments(tenantId, { resourceType: 'employee', canonicalResourceId: employee.id }, window),
       ...memberships.map((membership) =>
         this.resourceBookings.listAssignments(tenantId, { resourceType: 'pool', canonicalResourceId: membership.poolId }, window)),
+      ...custody.map((item) =>
+        this.resourceBookings.listAssignments(tenantId, { resourceType: item.resourceType, canonicalResourceId: item.canonicalResourceId }, window)),
     ]);
+    const crews = rest.slice(0, memberships.length);
+    const equipment = rest.slice(memberships.length);
     const everything = [
-      ...personal.map((view) => ({ view, pool: null as ResourcePool | null })),
-      ...crews.flat().map((view) => ({ view, pool: pools.get(view.booking.resource.canonicalResourceId) ?? null })),
+      ...personal.map((view) => ({ view, pool: null as ResourcePool | null, held: null as ScheduleResourceCatalogItem | null })),
+      ...crews.flat().map((view) => ({ view, pool: pools.get(view.booking.resource.canonicalResourceId) ?? null, held: null as ScheduleResourceCatalogItem | null })),
+      ...equipment.flat().map((view) => ({
+        view,
+        pool: null as ResourcePool | null,
+        held: custody.find((item) =>
+          item.resourceType === view.booking.resource.resourceType
+          && item.canonicalResourceId === view.booking.resource.canonicalResourceId) ?? null,
+      })),
     ];
     const within = everything.filter((entry) => entry.view.booking.from <= horizon);
 
@@ -304,9 +320,9 @@ export class WorkItemsService {
       employee,
       items: within.map((entry) => {
         const projectName = projectNames.get(entry.view.booking.projectId) ?? null;
-        return entry.pool
-          ? this.crewItem(entry.view, entry.pool, actorId, projectName, today)
-          : this.allocationItem(entry.view, actorId, projectName, today);
+        if (entry.pool) return this.crewItem(entry.view, entry.pool, actorId, projectName, today);
+        if (entry.held) return this.custodyItem(entry.view, entry.held, actorId, projectName, today);
+        return this.allocationItem(entry.view, actorId, projectName, today);
       }),
       beyondHorizon: everything.length - within.length,
     };
@@ -348,6 +364,59 @@ export class WorkItemsService {
       scopes: ['assigned'],
       isFollowUp: false,
       actions: [],
+      origin: origin(booking.committedBy, actorId),
+      editable: false,
+      deletable: false,
+      reschedulable: false,
+    };
+  }
+
+  /**
+   * A commitment made against EQUIPMENT this person is answerable for.
+   *
+   * Between the other two kinds. Like a crew commitment it is not a claim on the custodian's own
+   * time — a booked crane needs to be somewhere, which is not the same as its keeper being there.
+   * Unlike a crew commitment it IS answerable, because the register names exactly one person for
+   * this machine, and their "it is in for service that week" is authoritative about it in a way
+   * one member's answer never is about a crew.
+   */
+  private custodyItem(
+    view: ResourceAssignmentView,
+    held: ScheduleResourceCatalogItem,
+    actorId: string,
+    projectName: string | null,
+    today: string,
+  ): WorkItem {
+    const { booking, activityName } = view;
+    const running = booking.from <= today && booking.to >= today;
+    const name = held.secondary ? `${held.label} (${held.secondary})` : held.label;
+    return {
+      id: `resource-allocation:${booking.id}`,
+      source: 'resource-allocation',
+      sourceId: booking.id,
+      module: 'Planning',
+      kind: 'equipment commitment',
+      title: activityName ? `${name} committed to ${activityName}` : `${name} committed to project work`,
+      detail: [
+        `In your custody · ${booking.quantity} ${booking.unit} held · ${booking.from} → ${booking.to}`,
+        booking.response === 'declined' ? `You declined this: ${booking.responseReason}` : null,
+        booking.response === 'accepted' ? 'You confirmed this equipment can be there.' : null,
+      ].filter(Boolean).join(' · '),
+      href: `/projects/schedule?projectId=${booking.projectId}`,
+      projectId: booking.projectId,
+      projectName,
+      status: running ? 'in_progress' : 'todo',
+      sourceStatus: `${booking.status}/${booking.response}`,
+      priority: derivedPriority(booking.from),
+      dueAt: booking.from,
+      createdAt: booking.committedAt,
+      updatedAt: booking.committedAt,
+      scopes: ['assigned'],
+      isFollowUp: false,
+      // Answering for the MACHINE, not for their own time.
+      actions: booking.response === 'accepted' ? ['decline']
+        : booking.response === 'declined' ? ['accept']
+          : ['accept', 'decline'],
       origin: origin(booking.committedBy, actorId),
       editable: false,
       deletable: false,
@@ -540,7 +609,18 @@ export class WorkItemsService {
       // One member's "I cannot" is not the crew's answer — see `crewItem`.
       throw new ForbiddenException('A crew commitment is answered by whoever can speak for the crew, not by one of its members.');
     }
-    if (booking.resource.resourceType !== 'employee' || booking.resource.canonicalResourceId !== employee.id) {
+    if (booking.resource.resourceType === 'vehicle' || booking.resource.resourceType === 'asset') {
+      // The owning register names exactly one person for a machine (Fleet's driver, Assets'
+      // custodian), and that person answers for it. Anybody else would be answering about
+      // equipment that is not theirs to speak for.
+      const custody = await this.resourceCatalog.custodianResources(tenantId, employee.id);
+      const holds = custody.some((item) =>
+        item.resourceType === booking.resource.resourceType
+        && item.canonicalResourceId === booking.resource.canonicalResourceId);
+      if (!holds) {
+        throw new ForbiddenException('Only the person who holds this equipment can answer for it.');
+      }
+    } else if (booking.resource.resourceType !== 'employee' || booking.resource.canonicalResourceId !== employee.id) {
       throw new ForbiddenException('Only the person an allocation names can answer it.');
     }
     this.assertCanUse(tenantId, companyId, actorId, booking.projectId);
@@ -553,7 +633,15 @@ export class WorkItemsService {
       actorId,
     });
     const project = await this.projects.get(answered.booking.projectId);
-    return this.allocationItem(answered, actorId, project?.title ?? null, new Date().toISOString().slice(0, 10));
+    const today = new Date().toISOString().slice(0, 10);
+    if (answered.booking.resource.resourceType !== 'employee') {
+      const custody = await this.resourceCatalog.custodianResources(tenantId, employee.id);
+      const held = custody.find((item) =>
+        item.resourceType === answered.booking.resource.resourceType
+        && item.canonicalResourceId === answered.booking.resource.canonicalResourceId);
+      if (held) return this.custodyItem(answered, held, actorId, project?.title ?? null, today);
+    }
+    return this.allocationItem(answered, actorId, project?.title ?? null, today);
   }
 
   private activityStatus(status: Activity['status']): WorkItemStatus {

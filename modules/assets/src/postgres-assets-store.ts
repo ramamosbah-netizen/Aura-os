@@ -76,8 +76,8 @@ export class PostgresAssetStore implements AssetStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_assets (
-        id, tenant_id, company_id, name, serial_number, category, purchase_date, purchase_cost, status, warranty_expiry, next_calibration_date, next_inspection_date, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        id, tenant_id, company_id, name, serial_number, category, purchase_date, purchase_cost, status, warranty_expiry, next_calibration_date, next_inspection_date, custodian_employee_id, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       on conflict (id) do update set
         name = excluded.name,
         serial_number = excluded.serial_number,
@@ -88,6 +88,7 @@ export class PostgresAssetStore implements AssetStore {
         warranty_expiry = excluded.warranty_expiry,
         next_calibration_date = excluded.next_calibration_date,
         next_inspection_date = excluded.next_inspection_date,
+        custodian_employee_id = excluded.custodian_employee_id,
         updated_at = excluded.updated_at`,
       [
         asset.id,
@@ -102,6 +103,7 @@ export class PostgresAssetStore implements AssetStore {
         asset.warrantyExpiry,
         asset.nextCalibrationDate,
         asset.nextInspectionDate,
+        asset.custodianEmployeeId,
         asset.createdAt,
         asset.updatedAt,
       ],
@@ -147,6 +149,7 @@ export class PostgresAssetStore implements AssetStore {
       warrantyExpiry: dateOnly(row.warranty_expiry),
       nextCalibrationDate: dateOnly(row.next_calibration_date),
       nextInspectionDate: dateOnly(row.next_inspection_date),
+      custodianEmployeeId: row.custodian_employee_id ?? null,
       deletedAt: row.deleted_at ? row.deleted_at.toISOString() : null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),

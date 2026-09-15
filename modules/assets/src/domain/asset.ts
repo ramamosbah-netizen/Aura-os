@@ -33,6 +33,20 @@ export function canTransitionAsset(from: AssetStatus, to: AssetStatus): boolean 
   return ASSET_TRANSITIONS[from]?.includes(to) ?? false;
 }
 
+/**
+ * Hand an asset to somebody, or take it back (`null`).
+ *
+ * A DISPOSED asset is refused: it has left the register, and naming a holder for it would put a
+ * live responsibility on a person for a thing the company no longer owns.
+ */
+export function assignAssetCustodian(asset: Asset, employeeId: string | null): Asset {
+  if (asset.status === 'disposed') throw new Error('a disposed asset cannot be given a custodian');
+  if (asset.deletedAt) throw new Error('a deleted asset cannot be given a custodian');
+  const next = employeeId?.trim() || null;
+  if (next === asset.custodianEmployeeId) return asset;
+  return { ...asset, custodianEmployeeId: next, updatedAt: new Date().toISOString() };
+}
+
 export function assertAssetTransition(from: AssetStatus, to: AssetStatus): void {
   if (!canTransitionAsset(from, to)) throw new AssetTransitionError(from, to);
 }
@@ -50,6 +64,18 @@ export interface Asset {
   warrantyExpiry: string | null;
   nextCalibrationDate: string | null;
   nextInspectionDate: string | null;
+  /**
+   * The employee who currently holds this asset (migration 0320), or null.
+   *
+   * Shaped like Fleet's `driverEmployeeId`, because the two registers answer the same question and
+   * anyone reading one will read the other. `null` is a normal, permanent state for plenty of
+   * assets — a rack in a store room is held by nobody — and must never be read as "unassigned,
+   * therefore anybody's".
+   *
+   * Only ever "who has it now". Custody changes often; the sequence of changes is the audit log's,
+   * not this column's.
+   */
+  custodianEmployeeId: string | null;
   /** Soft-delete marker — deleted assets are hidden from finds but restorable. */
   deletedAt: string | null;
   createdAt: string;
@@ -88,6 +114,9 @@ export function makeAsset(input: {
     warrantyExpiry: input.warrantyExpiry || null,
     nextCalibrationDate: input.nextCalibrationDate || null,
     nextInspectionDate: input.nextInspectionDate || null,
+    // Never set at registration: custody is handed over, and recording it here would make an
+    // administrative default look like somebody having accepted the thing.
+    custodianEmployeeId: null,
     deletedAt: null,
     createdAt: input.createdAt || new Date().toISOString(),
     updatedAt: input.updatedAt || new Date().toISOString(),

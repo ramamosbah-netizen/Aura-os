@@ -153,6 +153,10 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Someone taken off a crew keeps receiving its commitments | The roster read is current-membership only; the removed member's item disappears while the crew still holds the booking |
 | A roster entry names somebody HR does not know | The employee id is checked against HR's canonical catalogue before the membership is stored; an invented id returns 400 |
 | One person appears twice on a crew | A partial unique index and the service both refuse a second active membership (409) |
+| Planning becomes a second register of who holds a crane | Custody stays in the owning register — Fleet's driver link and the asset custodian (migration 0320) — and §22 reads it through; handing a tester over in Assets changes whose work list its commitments appear on with nothing to update in Projects |
+| An equipment commitment is read as booking the custodian's own time | The item says the machine is committed and that the person is answering FOR THE MACHINE, not for their day |
+| Anyone with a work-item permission answers for a machine | Only the person the owning register names may answer; somebody who has handed the equipment on receives 403 |
+| Custody names somebody HR does not know, or a disposed asset | The employee is checked against HR and must be active (400); the domain refuses custody of a disposed or deleted asset |
 
 ## Verification completed
 
@@ -211,13 +215,18 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Project-scope coverage fitness | 4/4 passed; a pool is recorded as organization-scoped with the reason it carries no project |
 | Database migration posture | 319/319 applied; membership is tenant-isolated under FORCE RLS with one active row per person per pool |
 | Plan save with a held booking | Repaired: requirements are now diffed like tasks, so a plan with a held booking stays editable, and dropping the activity or demand a booking depends on is refused as a conflict instead of failing as an opaque server error |
+| Asset custody domain | 31/31 assets tests passed; custody handed over rather than assumed, idempotent re-assignment, returnable, and refused for a disposed or deleted asset |
+| Equipment commitments in My Work | 23/23 allocation tests passed, 5 of them new; custodian wording from the owning register, answerable for the machine, refused for equipment not held, all three kinds carried at once and actioned as themselves |
+| Full allocation browser journey | 1/1 passed in Chromium; person, crew and equipment proven in one Auth-ON run end to end |
+| Database migration posture | 320/320 applied; an asset carries its custodian in its own register, indexed for the work-list read |
+| Full API unit/fitness suite | 521 passed / 4 skipped |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. HR/Fleet availability and named conflict-resolution ownership. Employee-to-User identity, the My Work handoff from booked WBS demand, acceptance or refusal by the allocated employee, and crew commitments reaching a pool's named members are now proven (PLN-07); project access for an allocated non-member, and equipment allocation reaching a custodian, remain open.
+2. HR/Fleet availability and named conflict-resolution ownership. A held commitment now reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07, and PLN-08 moves off BACKEND_ONLY on the strength of the governed equipment action). What remains open here is availability itself: a leave approval or a breakdown still does not change the feasibility of a commitment already made. Project access for an allocated non-member also remains open.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

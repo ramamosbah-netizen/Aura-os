@@ -3,7 +3,7 @@ import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import QRCode from 'qrcode';
-import { type Asset, makeAsset, assertAssetTransition } from './domain/asset';
+import { type Asset, makeAsset, assertAssetTransition, assignAssetCustodian } from './domain/asset';
 import { type AssetTag, makeAssetTag } from './domain/asset-tag';
 import { type DepreciationSchedule, type DepreciationMethod, computeDepreciation } from './domain/depreciation';
 import { type AssetMaintenance, makeAssetMaintenance } from './domain/asset-maintenance';
@@ -107,6 +107,38 @@ export class AssetsService {
     if (!restored) throw new Error(`Asset with ID ${id} not found`);
     this.logger.log(`Asset restored: ${id}`);
     return restored;
+  }
+
+  /**
+   * Hand an asset to an employee, or take it back with `null`.
+   *
+   * Who the employee IS stays HR's question — this service is told an id and records it, exactly
+   * as Fleet records a driver. The caller that knows HR checks it is a real, active employee
+   * before getting here; an id this register cannot resolve would put a responsibility on nobody.
+   */
+  async assignCustodian(tenantId: string, actorId: string | null, id: string, employeeId: string | null): Promise<Asset> {
+    const asset = await this.assetStore.findById(tenantId, id);
+    if (!asset) throw new Error(`Asset with ID ${id} not found`);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (asset.companyId) orgPath.push({ level: 'company', id: asset.companyId });
+      this.access.assert(actorId, { permission: 'assets.asset.custody', orgPath });
+    }
+
+    const assigned = assignAssetCustodian(asset, employeeId);
+    if (assigned === asset) return asset; // the same holder again: nothing to write
+    await this.tx.run(async (handle) => {
+      await this.assetStore.save(assigned, handle);
+    });
+    this.logger.log(`Asset ${id} custody ${assigned.custodianEmployeeId ? `given to ${assigned.custodianEmployeeId}` : 'returned'}`);
+    return assigned;
+  }
+
+  /** Every asset this person currently holds. The read behind "which equipment is mine to bring?". */
+  async listAssetsInCustody(tenantId: string, employeeId: string): Promise<Asset[]> {
+    if (!employeeId) return [];
+    return (await this.assetStore.findByTenant(tenantId)).filter((asset) => asset.custodianEmployeeId === employeeId);
   }
 
   getAsset(tenantId: string, id: string): Promise<Asset | null> {

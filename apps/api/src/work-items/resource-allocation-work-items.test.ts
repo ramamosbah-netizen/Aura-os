@@ -28,9 +28,13 @@ const crewBooking = (over: Record<string, unknown> = {}) => booking({
   id: 'c1', resource: { resourceType: 'pool', canonicalResourceId: 'pool-elv' }, unit: 'crews', quantity: 1, ...over,
 });
 const elvCrew = { id: 'pool-elv', tenantId: 'tenant-a', name: 'ELV installation crew', unit: 'crews' };
+const craneBooking = (over: Record<string, unknown> = {}) => booking({
+  id: 'k1', resource: { resourceType: 'asset', canonicalResourceId: 'asset-crane' }, unit: 'units', quantity: 1, ...over,
+});
+const crane = { resourceType: 'asset', canonicalResourceId: 'asset-crane', label: 'Tower crane', secondary: 'TC-01 · Lifting' };
 const membership = { id: 'm1', tenantId: 'tenant-a', poolId: 'pool-elv', employeeId: 'emp-1', removedAt: null };
 
-function harness(options: { employee?: unknown; assignments?: unknown[]; allowed?: boolean; memberships?: unknown[]; pools?: unknown[] } = {}) {
+function harness(options: { employee?: unknown; assignments?: unknown[]; allowed?: boolean; memberships?: unknown[]; pools?: unknown[]; custody?: unknown[] } = {}) {
   const activities = { list: vi.fn(empty), get: vi.fn(), create: vi.fn(), updateDetails: vi.fn(), archive: vi.fn() };
   const engineering = { listDrawings: empty, listRfis: empty, listTechnicalQueries: empty };
   const quality = { listNcrs: empty, listSnags: empty };
@@ -61,6 +65,7 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
     listPoolsForEmployee: vi.fn(async () => options.memberships ?? []),
     listPools: vi.fn(async () => options.pools ?? []),
   };
+  const resourceCatalog = { custodianResources: vi.fn(async () => options.custody ?? []) };
   const hr = {
     findEmployeeByAccount: vi.fn(async () => options.employee ?? null),
   };
@@ -71,13 +76,95 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
     activities as never, engineering as never, quality as never, hse as never,
     prs as never, rfqs as never, pos as never,
     projectRisks as never, projectIssues as never, projectResponsibilities as never,
-    resourceBookings as never, resourcePlanning as never, hr as never,
+    resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never,
     projects as never, access as never, auth as never, notifications as never,
   );
-  return { service, resourceBookings, resourcePlanning, hr };
+  return { service, resourceBookings, resourcePlanning, resourceCatalog, hr };
 }
 
 const employee = { id: 'emp-1', tenantId: 'tenant-a', firstName: 'Maya', lastName: 'Haddad', userId: 'u-maya' };
+
+describe('equipment commitments reaching the person who holds the machine', () => {
+  it('tells the custodian their equipment is committed, naming it from its own register', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: craneBooking(), activityName: 'Lift the panels' }],
+      custody: [crane],
+    });
+
+    const { items } = await service.list('tenant-a', 'u-maya');
+    expect(resourceBookings.listAssignments).toHaveBeenCalledWith(
+      'tenant-a', { resourceType: 'asset', canonicalResourceId: 'asset-crane' }, expect.anything(),
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: 'equipment commitment',
+      title: 'Tower crane (TC-01 · Lifting) committed to Lift the panels',
+      projectId: 'p1',
+    });
+    expect(items[0].detail).toContain('In your custody');
+    expect(items[0].detail).toContain('1 units held');
+  });
+
+  it('lets the custodian answer FOR THE MACHINE, and says so when they have', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: craneBooking(), activityName: 'Lift the panels' }],
+      custody: [crane],
+    });
+    const { items } = await service.list('tenant-a', 'u-maya');
+    expect(items[0].actions).toEqual(['accept', 'decline']);
+
+    const declined = await service.act('tenant-a', 'u-maya', 'resource-allocation', 'k1', 'decline', null, 'in for calibration that week');
+    expect(resourceBookings.respond).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId: 'k1', response: 'declined', reason: 'in for calibration that week' }),
+    );
+    expect(declined.kind).toBe('equipment commitment');
+    expect(declined.detail).toContain('You declined this: in for calibration that week');
+    expect(declined.actions).toEqual(['accept']);
+  });
+
+  it('refuses somebody answering for equipment they do not hold', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: craneBooking(), activityName: 'Lift the panels' }],
+      custody: [], // this person holds nothing
+    });
+    await expect(service.act('tenant-a', 'u-maya', 'resource-allocation', 'k1', 'accept', null))
+      .rejects.toThrow(/holds this equipment/);
+    expect(resourceBookings.respond).not.toHaveBeenCalled();
+  });
+
+  it('stops reaching a custodian once the equipment is handed on', async () => {
+    const { service } = harness({
+      employee,
+      assignments: [{ booking: craneBooking(), activityName: 'Lift the panels' }],
+      custody: [],
+    });
+    expect((await service.list('tenant-a', 'u-maya')).items).toHaveLength(0);
+  });
+
+  it('carries all three kinds at once, each worded and actioned as itself', async () => {
+    const { service } = harness({
+      employee,
+      assignments: [
+        { booking: booking(), activityName: 'Terminate cameras' },
+        { booking: crewBooking(), activityName: 'Install CCTV devices' },
+        { booking: craneBooking(), activityName: 'Lift the panels' },
+      ],
+      memberships: [membership],
+      pools: [elvCrew],
+      custody: [crane],
+    });
+    const { items } = await service.list('tenant-a', 'u-maya');
+    const byKind = Object.fromEntries(items.map((item) => [item.kind, item]));
+    expect(Object.keys(byKind).sort()).toEqual(['crew commitment', 'equipment commitment', 'resource allocation']);
+    // Answerable where somebody can speak for the resource; silent where nobody can.
+    expect(byKind['resource allocation'].actions).toEqual(['accept', 'decline']);
+    expect(byKind['equipment commitment'].actions).toEqual(['accept', 'decline']);
+    expect(byKind['crew commitment'].actions).toEqual([]);
+  });
+});
 
 describe('crew commitments reaching a pool\u2019s named members', () => {
   it('tells a member their crew is committed, without claiming their own time', async () => {

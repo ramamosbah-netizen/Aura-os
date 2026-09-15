@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeAsset } from './asset';
+import { makeAsset, assignAssetCustodian } from './asset';
 import { makeAssetMaintenance } from './asset-maintenance';
 import { makeAssetInspection } from './asset-inspection';
 import {
@@ -38,6 +38,28 @@ describe('Assets Bounded Context', () => {
       expect(a.name).toBe('Generator 500kVA');
       expect(a.serialNumber).toBe('GEN-98765');
       expect(a.status).toBe('active');
+    });
+
+    it('records who holds the asset, and refuses one that has left the register', () => {
+      const asset = makeAsset({
+        tenantId: 't1', name: 'Fluke tester', serialNumber: 'fl-1', category: 'Test equipment',
+        purchaseDate: '2026-01-10', purchaseCost: 2500,
+      });
+      // Custody is handed over, never assumed at registration.
+      expect(asset.custodianEmployeeId).toBeNull();
+
+      const held = assignAssetCustodian(asset, ' emp-maya ');
+      expect(held.custodianEmployeeId).toBe('emp-maya');
+      // Re-stating the same holder writes nothing.
+      expect(assignAssetCustodian(held, 'emp-maya')).toBe(held);
+      // And it can be handed back.
+      expect(assignAssetCustodian(held, null).custodianEmployeeId).toBeNull();
+      expect(assignAssetCustodian(held, '   ').custodianEmployeeId).toBeNull();
+
+      // A disposed asset has left the register; naming a holder would put a live responsibility
+      // on somebody for a thing the company no longer owns.
+      expect(() => assignAssetCustodian({ ...asset, status: 'disposed' }, 'emp-maya')).toThrow(/disposed/);
+      expect(() => assignAssetCustodian({ ...asset, deletedAt: '2026-02-01T00:00:00.000Z' }, 'emp-maya')).toThrow(/deleted/);
     });
 
     it('manages asset lifecycle via service', async () => {

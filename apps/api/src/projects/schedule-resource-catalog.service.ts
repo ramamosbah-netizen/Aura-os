@@ -70,6 +70,48 @@ export class ScheduleResourceCatalogService {
     ].sort((a, b) => a.label.localeCompare(b.label));
   }
 
+  /**
+   * The equipment a named person is answerable for — Fleet's driver, Assets' custodian.
+   *
+   * The owning registers decide this, and neither field was invented for §22: Fleet has recorded a
+   * vehicle's driver since migration 0026, and an asset's custodian is migration 0320. Planning
+   * reads them; it does not keep a copy, so handing a tester over in the asset register changes
+   * whose work list its commitments appear on, with nothing in Projects to update.
+   *
+   * Retired vehicles and disposed assets are excluded: a commitment on something the company no
+   * longer runs is not somebody's work, and naming a custodian for it would be a live
+   * responsibility for a thing that is gone.
+   */
+  async custodianResources(tenantId: string, employeeId: string): Promise<ScheduleResourceCatalogItem[]> {
+    if (!employeeId) return [];
+    const [vehicles, assets] = await Promise.all([
+      this.fleet.listVehicles(tenantId),
+      this.assets.listAssets(tenantId),
+    ]);
+    return [
+      ...vehicles
+        .filter((vehicle) => vehicle.driverEmployeeId === employeeId && vehicle.status !== 'retired')
+        .map((vehicle) => ({
+          resourceType: 'vehicle' as const,
+          canonicalResourceId: vehicle.id,
+          label: `${vehicle.make} ${vehicle.model}`.trim(),
+          secondary: vehicle.plateNumber,
+          status: vehicle.status,
+          unit: null,
+        })),
+      ...assets
+        .filter((asset) => asset.custodianEmployeeId === employeeId && asset.status !== 'disposed')
+        .map((asset) => ({
+          resourceType: 'asset' as const,
+          canonicalResourceId: asset.id,
+          label: asset.name,
+          secondary: [asset.serialNumber, asset.category].filter(Boolean).join(' · ') || null,
+          status: asset.status,
+          unit: null,
+        })),
+    ].sort((a, b) => a.label.localeCompare(b.label));
+  }
+
   async assertCanonicalReferences(tenantId: string, tasks: readonly NewScheduleTask[]): Promise<void> {
     const requested = tasks.flatMap((task) => task.requirements ?? []);
     if (requested.length === 0) return;

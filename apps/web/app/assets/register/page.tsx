@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { fetchJson } from '@/lib/api';
 import DataStateNotice from '@/components/ui/data-state';
+import AssetCustodyCell from '@/components/asset-custody-cell';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,11 @@ interface Asset {
   purchaseCost: number;
   status: string;
   warrantyExpiry: string | null;
+  /** Who currently holds it (migration 0320). Null = in the store, which is a real state. */
+  custodianEmployeeId: string | null;
 }
+
+interface EmployeeOption { id: string; firstName: string; lastName: string; role: string; status: string }
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Active',
@@ -36,7 +41,11 @@ function statusStyle(status: string): CSSProperties {
 const money = (n: number): string => (n ? n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—');
 
 export default async function AssetRegisterPage() {
-  const result = await fetchJson<Asset[]>('/api/assets');
+  const [result, employeeResult] = await Promise.all([
+    fetchJson<Asset[]>('/api/assets'),
+    // Null when this reader may not see the workforce; the custody cell then shows nothing to set.
+    fetchJson<EmployeeOption[]>('/api/hr/employees'),
+  ]);
   if (!result.ok) {
     return (
       <div style={st.page}>
@@ -46,6 +55,7 @@ export default async function AssetRegisterPage() {
     );
   }
   const assets = result.data ?? [];
+  const employees = (employeeResult.ok ? employeeResult.data ?? [] : []).filter((employee) => employee.status === 'active');
   const rank = (s: string): number => (s === 'disposed' ? 1 : 0);
   const rows = [...assets].sort((a, b) => rank(a.status) - rank(b.status) || a.name.localeCompare(b.name));
 
@@ -81,7 +91,7 @@ export default async function AssetRegisterPage() {
           <table style={st.table} data-testid="asset-register">
             <thead>
               <tr>
-                {['Asset', 'Serial', 'Category', 'Purchased', 'Cost', 'Status', ''].map((h) => (
+                {['Asset', 'Serial', 'Category', 'Custody', 'Purchased', 'Cost', 'Status', ''].map((h) => (
                   <th key={h} style={st.th}>{h}</th>
                 ))}
               </tr>
@@ -92,6 +102,15 @@ export default async function AssetRegisterPage() {
                   <td style={st.tdName}>{a.name}</td>
                   <td style={st.tdCode}>{a.serialNumber}</td>
                   <td style={st.tdMuted}>{a.category}</td>
+                  <td style={st.td}>
+                    {/* A disposed asset has left the register; it is nobody's to hold. */}
+                    <AssetCustodyCell
+                      assetId={a.id}
+                      custodianEmployeeId={a.custodianEmployeeId}
+                      employees={employees}
+                      disabled={a.status === 'disposed' || employees.length === 0}
+                    />
+                  </td>
                   <td style={st.tdMuted}>{a.purchaseDate}</td>
                   <td style={st.tdMuted}>{money(a.purchaseCost)}</td>
                   <td style={st.td}>

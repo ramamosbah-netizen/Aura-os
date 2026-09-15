@@ -17,6 +17,10 @@ import { apiAuthHeaders } from './api-auth';
  * of one crew reaches every named member of that pool as news about THEIR CREW, carries no
  * accept/decline (one member cannot answer for a crew), and stops reaching anyone taken off it.
  *
+ * An equipment commitment reaches the ONE person the owning register names for that machine — an
+ * asset's custodian — who answers for the machine rather than for their own time, and stops
+ * receiving it the moment they hand it on.
+ *
  * The negatives matter as much as the positive: an employee with no link reaches no list, one
  * account cannot be held by two employment records, a decline with no reason is refused, nobody
  * can answer for somebody else, releasing the booking removes the item (proving it is read
@@ -334,6 +338,92 @@ test.describe('Employee account link carries an allocation into My Work', () => 
     const crewBookings = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
     expect(((await crewBookings.json()) as Array<{ booking: { id: string; status: string } }>)
       .find((view) => view.booking.id === crewHeld.booking.id)!.booking.status, 'the crew still holds it').toBe('held');
+
+    // ── An equipment commitment reaches whoever holds the machine ─────────────
+    const tester = await post<{ id: string; name: string }>(request, '/assets', {
+      name: `Fluke tester ${run}`, serialNumber: `FL-${run}`, category: 'Test equipment',
+      purchaseDate: '2026-01-01', purchaseCost: 2500,
+    });
+
+    // Custody is handed over in the asset register — the authority on who holds the thing.
+    await page.goto(`${baseURL}/assets/register`, { waitUntil: 'domcontentloaded' });
+    const custodyCell = page.getByTestId(`asset-custody-${tester.id}`);
+    await expect(custodyCell).toBeVisible({ timeout: 30_000 });
+    await custodyCell.getByRole('combobox').selectOption(mine.id);
+    await expect(page.getByTestId(`asset-custodian-${tester.id}`)).toHaveText(`Maya Linked ${run}`, { timeout: 30_000 });
+
+    // Custody names somebody HR knows, or it names nobody.
+    const strangerCustody = await request.post(`${API}/assets/${tester.id}/custodian`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { employeeId: '00000000-0000-4000-8000-000000000999' },
+    });
+    expect(strangerCustody.status()).toBe(400);
+    expect(await strangerCustody.text()).toContain('active employee');
+
+    const equipmentActivity = `Commission the head end ${run}`;
+    const equipmentTask = {
+      wbsNodeId: linkedPackage.id, name: equipmentActivity,
+      plannedStart: day(3), plannedEnd: day(5), durationWorkingDays: 3,
+      requirements: [{ resource: { resourceType: 'asset', canonicalResourceId: tester.id }, quantity: 1, unit: 'units' }],
+    };
+    const planWithEquipment = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
+    const currentPlan = ((await planWithEquipment.json()) as ScheduleResponse[]).find((schedule) => schedule.projectId === project.id)!;
+    await post<ScheduleResponse>(request, '/projects/schedules', {
+      projectId: project.id,
+      tasks: [
+        ...currentPlan.tasks.map((task) => ({
+          id: task.id, wbsNodeId: task.wbsNodeId, name: task.name,
+          plannedStart: task.plannedStart, plannedEnd: task.plannedEnd,
+          durationWorkingDays: task.durationWorkingDays,
+          requirements: task.requirements.map((requirement) => ({
+            id: requirement.id, resource: requirement.resource, quantity: requirement.quantity, unit: requirement.unit,
+          })),
+        })),
+        equipmentTask,
+      ],
+    });
+    const afterEquipment = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
+    const equipmentRequirementId = ((await afterEquipment.json()) as ScheduleResponse[])
+      .find((schedule) => schedule.projectId === project.id)!
+      .tasks.flatMap((task) => task.requirements)
+      .find((requirement) => requirement.resource.canonicalResourceId === tester.id)!.id;
+    const equipmentHeld = await post<{ booking: { id: string } }>(request, `/projects/${project.id}/resource-bookings`, {
+      requirementId: equipmentRequirementId,
+    });
+
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
+    await search.fill(run);
+    const equipmentItem = page.getByTestId('work-item').filter({ hasText: `committed to ${equipmentActivity}` });
+    await expect(equipmentItem).toBeVisible({ timeout: 30_000 });
+    await expect(equipmentItem).toContainText('equipment commitment');
+    await expect(equipmentItem).toContainText('In your custody');
+    await expect(equipmentItem).toContainText(`Fluke tester ${run} (FL-${run} · Test equipment)`);
+
+    // The custodian answers for the MACHINE — and a refusal still needs a reason.
+    await equipmentItem.getByRole('button', { name: 'Decline' }).click();
+    const equipmentDecline = page.getByTestId('decline-dialog');
+    await expect(equipmentDecline).toBeVisible({ timeout: 30_000 });
+    await equipmentDecline.getByRole('textbox').fill('in for calibration that week');
+    await equipmentDecline.getByRole('button', { name: 'Send decline' }).click();
+    await expect(equipmentItem).toContainText('You declined this: in for calibration that week', { timeout: 30_000 });
+
+    const equipmentAfter = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    const equipmentBooking = ((await equipmentAfter.json()) as Array<{ booking: { id: string; status: string; quantity: number; response: string; responseReason: string } }>)
+      .find((view) => view.booking.id === equipmentHeld.booking.id)!.booking;
+    // Same as every other answer: the commitment itself is untouched.
+    expect(equipmentBooking).toMatchObject({ status: 'held', quantity: 1, response: 'declined', responseReason: 'in for calibration that week' });
+
+    // Hand the tester on, and it stops being this person's to answer for.
+    await page.goto(`${baseURL}/assets/register`, { waitUntil: 'domcontentloaded' });
+    await page.getByTestId(`asset-custody-${tester.id}`).getByRole('button', { name: /^Return/ }).click();
+    await expect(page.getByTestId(`asset-custodian-${tester.id}`)).toHaveCount(0, { timeout: 30_000 });
+    const noLongerTheirs = await request.post(`${API}/work-items/resource-allocation/${equipmentHeld.booking.id}/accept`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: {},
+    });
+    expect(noLongerTheirs.status(), 'only the person who holds it may answer for it').toBe(403);
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
+    await search.fill(run);
+    await expect(page.getByTestId('work-item').filter({ hasText: equipmentActivity })).toHaveCount(0, { timeout: 30_000 });
 
     // ── Read through, not copied: releasing the booking removes the item ──────
     const released = await request.post(`${API}/projects/${project.id}/resource-bookings/${held.booking.id}/release`, {

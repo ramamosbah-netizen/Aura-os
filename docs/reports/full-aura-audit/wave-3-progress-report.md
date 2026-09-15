@@ -152,7 +152,7 @@ one, rendering as "Stated 90% against a measured 75%" — both numbers visible, 
 `percentComplete` still 10. Withdrawing it returned the bar to the measurement, and a further 50 m²
 took it to 100%.
 
-**PLN-12 moves from DISCONNECTED to PARTIAL, and COMPLETE is proposed below.** **PLN-11 remains
+**PLN-12 moves from DISCONNECTED to COMPLETE**, reconciled below. **PLN-11 remains
 DISCONNECTED**: planned quantities and productivity are a separate capability, and nothing here
 touches them.
 
@@ -336,7 +336,7 @@ row — the desk's rendered output is proven in the browser, and no exported doc
 headline is the owner's decision; the layer remains the evidence, and the two are allowed to
 disagree in public rather than be reconciled by rounding one up.
 
-This makes three COMPLETE capabilities in the register (AWD-05, AWD-06, PLN-10) out of 180.
+That was three COMPLETE capabilities out of 180; PLN-12 below makes four.
 
 ### PLN-12 reconciliation
 
@@ -355,9 +355,9 @@ progress derives from approved site/quantity evidence with an explicit governed 
 | Every surface agrees | Gantt, plan headline, operations overview, site "Actual Progress" panel and count, Project 360 activity table with a Source column | no |
 | Persistence | migration 0322 with range, reason and provenance constraints; the browser proof round-trips a statement through PostgreSQL | no |
 
-**Proposed: `PLN-12` PARTIAL → COMPLETE.** Not applied — the classification was moved from
-DISCONNECTED to PARTIAL, which the evidence above makes plainly true, and the promotion to COMPLETE
-is left to the programme owner as PLN-10's was.
+**`PLN-12` DISCONNECTED → COMPLETE — applied on 2026-09-15 by the programme owner's decision**,
+after the reconciliation above. This makes four COMPLETE capabilities in the register (AWD-05,
+AWD-06, PLN-10, PLN-12) out of 180.
 
 Three limits are stated rather than rounded away. A statement needs one person, not two: it carries
 a permission, a reason and a name, but no independent approval, and whether claiming progress the
@@ -382,7 +382,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is now proven (PLN-12, reconciled above and proposed for COMPLETE); what remains unproven in this line is PLN-11 — planned quantities and productivity, which nothing in this slice touches — and that a figure stated against the measurement reaches nobody who is not looking at the screen.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is now proven (PLN-12, reconciled above and COMPLETE); what remains unproven in this line is PLN-11 — planned quantities and productivity, which nothing in this slice touches — and that a figure stated against the measurement reaches nobody who is not looking at the screen.
 
 ## Programme state
 

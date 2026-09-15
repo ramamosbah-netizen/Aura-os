@@ -1,4 +1,4 @@
-import { BadRequestException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
@@ -27,6 +27,8 @@ import { ProjectResponsibilityService } from './project-responsibility.service';
  */
 @Injectable()
 export class MilestoneService {
+  private readonly logger = new Logger('ProjectMilestone');
+
   constructor(
     @Inject(MILESTONE_STORE) private readonly store: MilestoneStore,
     @Inject(SCHEDULE_STORE) private readonly schedules: ScheduleStore,
@@ -37,13 +39,18 @@ export class MilestoneService {
      * rather than a second one built for milestones. Optional like every seam: unbound, a milestone
      * still records its owner and only the My Work item is unavailable — which such a composition
      * then says, rather than pretending nobody was told.
+     *
+     * `@Inject` is NOT decoration here and must not be dropped: a parameter typed `X | null` emits
+     * `Object` as its design-time type, so Nest has no token to resolve and injects nothing at all.
+     * Without it this reads as an unbound seam in every composition, and the receipt silently never
+     * happens — which is exactly what it did until the handoff proof caught it.
      */
-    @Optional() private readonly responsibilities: ProjectResponsibilityService | null = null,
+    @Optional() @Inject(ProjectResponsibilityService) private readonly responsibilities: ProjectResponsibilityService | null = null,
     /**
      * Which days this project counts (PLN-03). A milestone's variance must be counted the same way
      * the forecast's is, or "four days late" means two different things on one screen.
      */
-    @Optional() private readonly calendars: ProjectCalendarService | null = null,
+    @Optional() @Inject(ProjectCalendarService) private readonly calendars: ProjectCalendarService | null = null,
   ) {}
 
   /**
@@ -114,8 +121,13 @@ export class MilestoneService {
         assignedBy: actorId,
         dueDate: milestone.targetDate,
       });
-    } catch {
-      // Swallowed deliberately and narrowly — see the doc comment. The milestone stands.
+    } catch (error) {
+      // The milestone stands — but the failure is never silent. A receipt that disappeared without
+      // a word would leave a milestone whose owner believes they were told and was not, which is
+      // exactly the kind of quiet gap between two records this programme exists to remove.
+      this.logger.warn(
+        `milestone "${milestone.name}" was saved, but its owner ${milestone.ownerId} was NOT given a My Work item: ${(error as Error).message}`,
+      );
     }
   }
 

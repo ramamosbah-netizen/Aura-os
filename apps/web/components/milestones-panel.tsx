@@ -68,9 +68,11 @@ function variance(view: MilestoneView): { text: string; className?: string } {
     : { text: `${days} working day${days === 1 ? '' : 's'} early`, className: styles.early };
 }
 
-export default function MilestonesPanel({ projectId, tasks = [] }: {
+export default function MilestonesPanel({ projectId, tasks = [], members = [] }: {
   projectId: string;
   tasks?: Array<{ id: string; name: string }>;
+  /** Accounts that can be named answerable for a milestone. Empty when this reader may not see them. */
+  members?: Array<{ userId: string }>;
 }) {
   const [views, setViews] = useState<MilestoneView[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,6 +81,7 @@ export default function MilestonesPanel({ projectId, tasks = [] }: {
   const [name, setName] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [gates, setGates] = useState<string[]>([]);
+  const [ownerId, setOwnerId] = useState('');
 
   const load = useCallback(async () => {
     setError(null);
@@ -103,11 +106,11 @@ export default function MilestonesPanel({ projectId, tasks = [] }: {
       const response = await fetch(`/api/projects/schedules/${projectId}/milestones`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name, targetDate, gatingTaskIds: gates }),
+        body: JSON.stringify({ name, targetDate, gatingTaskIds: gates, ownerId: ownerId || null }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result?.message || result?.error || 'Could not add the milestone');
-      setName(''); setTargetDate(''); setGates([]); setAdding(false);
+      setName(''); setTargetDate(''); setGates([]); setOwnerId(''); setAdding(false);
       await load();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Could not add the milestone');
@@ -165,6 +168,17 @@ export default function MilestonesPanel({ projectId, tasks = [] }: {
               <input type="date" value={targetDate} onChange={(event) => setTargetDate(event.target.value)}
                 data-testid="milestone-target" />
             </label>
+            {/* Naming an owner puts the milestone in that person's My Work, through the same
+                responsibility path every other project assignment uses — not a second inbox. */}
+            {members.length > 0 && (
+              <label className={styles.field}>
+                <span>Answerable</span>
+                <select value={ownerId} onChange={(event) => setOwnerId(event.target.value)} data-testid="milestone-owner">
+                  <option value="">Nobody named</option>
+                  {members.map((member) => <option key={member.userId} value={member.userId}>{member.userId}</option>)}
+                </select>
+              </label>
+            )}
           </div>
           <div className={styles.gates}>
             <span>What must finish for this to be true</span>

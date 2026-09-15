@@ -65,6 +65,7 @@ describe('a point in the programme where something must be true (HTTP)', () => {
   let projectId: string;
   let firstTaskId: string;
   let secondTaskId: string;
+  let access: AccessService;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
@@ -72,12 +73,15 @@ describe('a point in the programme where something must be true (HTTP)', () => {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
     app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
-    const access = app.get(AccessService);
+    access = app.get(AccessService);
     const users = app.get(UsersService);
     access.grant({ userId: 'ms-pm', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 1_000_000 });
     users.save({ tenantId: TENANT, userId: 'ms-pm', displayName: 'ms-pm', active: true });
+    users.save({ tenantId: TENANT, userId: 'ms-owner', displayName: 'ms-owner', active: true });
     app.use((req: { headers?: Record<string, string> }, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: TENANT, companyId: null, actorId: 'ms-pm', correlationId: 'e2e-milestone' }, () => next()),
+      // The actor is per-request, so the receipt below can be read as the OWNER rather than as the
+      // person who created the milestone — a handoff proved by one principal proves nothing.
+      tenant.run({ tenantId: TENANT, companyId: null, actorId: req.headers?.['x-e2e-actor'] ?? 'ms-pm', correlationId: 'e2e-milestone' }, () => next()),
     );
     await app.init();
     http = request(app.getHttpServer());
@@ -241,6 +245,41 @@ describe('a point in the programme where something must be true (HTTP)', () => {
     // And it is judged on its forecast again, rather than staying green.
     expect(withdrawn.status).toBe('AT_RISK');
     expect(withdrawn.achievedAgainstIncompleteWork).toBe(false);
+  });
+
+  it('puts a named owner’s milestone in THEIR My Work, through the canonical responsibility path', async () => {
+    // The next-role receipt. A milestone nobody was told about is a date in a database — and this
+    // reuses the assignment chain AWD-06 already proved rather than inventing a second inbox, so the
+    // owner accepts, starts and completes it in the one place they already look.
+    access.grant({
+      userId: 'ms-owner', roleId: 'r-pm',
+      scope: { kind: 'resource', resourceType: 'project', resourceId: projectId },
+    });
+
+    const inboxBefore = (await http.get('/api/v1/work-items').set('x-e2e-actor', 'ms-owner').expect(200))
+      .body as { items: Array<{ title: string }> };
+    expect(inboxBefore.items.some((item) => item.title.startsWith('Milestone:'))).toBe(false);
+
+    await http.post(`/api/v1/projects/schedules/${projectId}/milestones`).send({
+      name: 'Riser shaft handover', targetDate: day(18), ownerId: 'ms-owner', gatingTaskIds: [secondTaskId],
+    }).expect(201);
+
+    const inboxAfter = (await http.get('/api/v1/work-items').set('x-e2e-actor', 'ms-owner').expect(200))
+      .body as { items: Array<{ id: string; title: string; kind: string; dueAt: string | null; projectId: string }> };
+    const received = inboxAfter.items.find((item) => item.title === 'Milestone: Riser shaft handover');
+    expect(received, 'the owner did not receive the milestone').toBeDefined();
+    // Carried with the project context and the COMMITTED date as the due date — the owner is
+    // answerable for that day, not for whatever the plan currently forecasts.
+    expect(received).toMatchObject({ kind: 'planning', dueAt: day(18), projectId });
+    expect(received!.id.startsWith('project-responsibility:')).toBe(true);
+  });
+
+  it('tells nobody when no owner was named, rather than assigning it to whoever created it', async () => {
+    // A milestone with no owner is unowned. Defaulting it to its author would put a due date in
+    // somebody's list that they never accepted.
+    const ownerless = (await http.get('/api/v1/work-items').set('x-e2e-actor', 'ms-pm').expect(200))
+      .body as { items: Array<{ title: string }> };
+    expect(ownerless.items.some((item) => item.title === 'Milestone: Level 1 energisation')).toBe(false);
   });
 
   it('reports another tenant’s milestone as not found rather than forbidden', async () => {

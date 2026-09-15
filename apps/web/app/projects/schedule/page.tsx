@@ -241,6 +241,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               <MilestonesPanel
                 projectId={projectId}
                 tasks={selectedSchedule.tasks.map((task) => ({ id: task.id, name: task.name }))}
+                members={(directory?.users ?? []).filter((user) => user.active).map((user) => ({ userId: user.userId }))}
               />
             )}
           </>

@@ -38,7 +38,7 @@ const issue = (over: Record<string, unknown> = {}) => ({
 function harness(risks: unknown[] = [], issues: unknown[] = []) {
   const activities = { list: vi.fn(async () => []) };
   const engineering = { listDrawings: empty, listRfis: empty, listTechnicalQueries: empty };
-  const quality = { listNcrs: empty, listSnags: empty };
+  const quality = { listNcrs: empty, listSnags: empty, listMaterialApprovals: empty };
   const hse = { listCapas: empty };
   const prs = { list: empty }, rfqs = { list: empty }, pos = { list: empty };
   const projectRisks = { list: vi.fn(async () => risks) };

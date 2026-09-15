@@ -670,7 +670,12 @@ export class QualityService {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
-      this.access.assert(input.createdBy, { permission: 'quality.mar.create', orgPath, resource: { type: 'project', id: input.projectId } });
+      // `quality.material-approval.create`, not `quality.mar.create`. The route derives and declares
+      // the first spelling; this asserted the second, so the two guarded the same act under
+      // different names and NO role in the catalogue granted the abbreviation — it was reachable
+      // only through the `quality.*` wildcard, which is why only QA/QC and admin could ever raise a
+      // request. Exactly the defect ENG-03 found between the technical-query route and its service.
+      this.access.assert(input.createdBy, { permission: 'quality.material-approval.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
     const mar = makeMaterialApproval(input);
     const event = makeEvent({

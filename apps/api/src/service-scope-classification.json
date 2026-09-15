@@ -697,13 +697,13 @@
   {
     "key": "modules/quality/src/quality.service.ts#createMaterialApproval",
     "classification": "PROJECT_SCOPE_REQUIRED",
-    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "resolution": "Canonical mar.projectId from the request payload, asserted before the write. The permission is spelled as the route derives and declares it: the service previously asserted 'quality.mar.create' while the route guarded 'quality.material-approval.create', so one act was gated under two names and NO role in the catalogue granted the abbreviation — it was reachable only through the quality.* wildcard.",
     "organizationBranch": null,
     "baselineScope": "scoped",
-    "change": "Validated creation/ownership; retained project scope",
+    "change": "ENG-04: permission spelling aligned with the route (quality.mar.create -> quality.material-approval.create)",
     "evidence": "quality.createMaterialApproval",
     "security": {
-      "target": "{ permission: 'quality.mar.create', orgPath, resource: { type: 'project', id: input.projectId } }",
+      "target": "{ permission: 'quality.material-approval.create', orgPath, resource: { type: 'project', id: input.projectId } }",
       "checks": [
         "this.projectScope?.requireProject(input.tenantId, input.projectId)"
       ],

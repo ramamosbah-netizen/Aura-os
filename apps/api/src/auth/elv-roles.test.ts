@@ -123,6 +123,21 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-technical-engineer').permissions.some((p) => permissionMatches(p, 'engineering.tq.create'))).toBe(true);
   });
 
+  it('Engineering proposes a material; deciding it belongs elsewhere', () => {
+    // ENG-04. An engineer proposes the product they intend to install; the whole value of a Material
+    // Approval Request is that SOMEBODY ELSE answers it. The register itself is QA/QC's — the role
+    // catalogue says so — and the internal technical authority decides.
+    for (const role of ['r-technical-engineer', 'r-project-engineer']) {
+      expect(roleFor(role).permissions.some((p) => permissionMatches(p, 'quality.material-approval.create')), role).toBe(true);
+      expect(roleFor(role).permissions.some((p) => permissionMatches(p, 'quality.material-approval.submit')), role).toBe(true);
+      expect(roleFor(role).permissions.some((p) => permissionMatches(p, 'quality.material-approval.review')), role).toBe(false);
+    }
+    expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'quality.material-approval.review'))).toBe(true);
+    // …and QA/QC owns the register, which is where the capability actually lives.
+    expect(roleFor('r-qa-qc').permissions.some((p) => permissionMatches(p, 'quality.material-approval.review'))).toBe(true);
+    expect(roleFor('r-qa-qc').permissions.some((p) => permissionMatches(p, 'quality.material-approval.create'))).toBe(true);
+  });
+
   it('Technical management governs organization resource pools and capacity', () => {
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-pool.create'))).toBe(true);
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-capacity.create'))).toBe(true);

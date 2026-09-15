@@ -21,7 +21,7 @@ function harness() {
     start: vi.fn(), complete: vi.fn(), reopen: vi.fn(),
   };
   const engineering = { listDrawings: empty, listRfis: empty, listTechnicalQueries: empty };
-  const quality = { listNcrs: empty, listSnags: empty };
+  const quality = { listNcrs: empty, listSnags: empty, listMaterialApprovals: empty };
   const hse = { listCapas: empty };
   const prs = { list: empty }, rfqs = { list: empty }, pos = { list: empty };
   // §21 registers. Empty here on purpose: these tests are about the personal-task half of My

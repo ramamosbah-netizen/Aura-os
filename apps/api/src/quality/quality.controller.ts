@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { parsePageParams, DISCIPLINES } from '@aura/shared';
 import {
   type Ncr,
@@ -360,6 +360,9 @@ export class QualityController {
 
   // ── Material Approval Requests (MAR) ───────────────────────────────────────
 
+  // EXPLICIT for the reason ENG-03 exposed: route derivation and any service-side assert must
+  // agree on ONE word, or a role holding the one it names is refused by the other.
+  @Permissions('quality.material-approval.create')
   @Post('material-approvals')
   async createMar(@Body() dto: { projectId: string; projectName?: string; reference: string; materialName: string; manufacturer?: string; supplier?: string; supplierId?: string; specification?: string; discipline?: string }): Promise<MaterialApproval> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
@@ -383,6 +386,7 @@ export class QualityController {
     });
   }
 
+  @Permissions('quality.material-approval.read')
   @Get('material-approvals')
   listMars(): Promise<MaterialApproval[]> {
     return this.qualityService.listMaterialApprovals(this.tenant.get().tenantId);
@@ -401,17 +405,22 @@ export class QualityController {
     );
   }
 
+  @Permissions('quality.material-approval.submit')
   @Put('material-approvals/:id/submit')
   async submitMar(@Param('id') id: string): Promise<MaterialApproval> {
     return await this.qualityService.submitMaterialApproval(this.tenant.get().tenantId, id);
   }
 
+  // THE DECISION. A different permission from raising it: the engineer who proposed the product
+  // must not be the one who approves it.
+  @Permissions('quality.material-approval.review')
   @Put('material-approvals/:id/review')
   async reviewMar(@Param('id') id: string, @Body() dto: { decision: MarDecision; comments?: string }): Promise<MaterialApproval> {
     const ctx = this.tenant.get();
     return await this.qualityService.reviewMaterialApproval(ctx.tenantId, id, dto?.decision, ctx.actorId || null, dto?.comments);
   }
 
+  @Permissions('quality.material-approval.revise')
   @Put('material-approvals/:id/revise')
   async reviseMar(@Param('id') id: string): Promise<MaterialApproval> {
     return await this.qualityService.reviseMaterialApproval(this.tenant.get().tenantId, id);

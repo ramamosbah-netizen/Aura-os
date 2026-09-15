@@ -19,7 +19,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AccessService, TenantContext, UsersService } from '@aura/core';
+import { AccessService, AuthService, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -33,6 +33,7 @@ interface Mar {
   reviewComments: string; revision: number;
 }
 interface Po { id: string; reference: string | null; status: string }
+interface WorkItem { id: string; title: string; status: string; sourceStatus: string; projectId: string | null }
 
 describe('the canonical material approval, and the rule Procurement owns (HTTP)', () => {
   let app: INestApplication;
@@ -47,7 +48,7 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
     const tenant = app.get(TenantContext);
     const access = app.get(AccessService);
     const users = app.get(UsersService);
-    for (const userId of ['mar-engineer', 'mar-consultant']) {
+    for (const userId of ['mar-engineer', 'mar-consultant', 'mar-outsider']) {
       access.grant({ userId, roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 10_000_000 });
       users.save({ tenantId: TENANT, userId, displayName: userId, active: true });
     }
@@ -152,6 +153,56 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
     expect(po.boqItemId).toBeNull();
   });
 
+  // ── The next-role receipt (frozen DoD) ──────────────────────────────────────
+  //
+  // An engineer proposes a product and somebody else decides it. Without the decision coming back,
+  // the request lands in a register nobody is watching — it simply goes quiet, which from the
+  // proposer's side is indistinguishable from still waiting.
+
+  const inbox = async (actor: string): Promise<WorkItem[]> =>
+    ((await http.get('/api/v1/work-items').set('x-e2e-actor', actor).expect(200)).body as { items: WorkItem[] }).items;
+
+  it('puts the request in the proposer’s work list, and the decision brings it back', async () => {
+    const mar = (await http.post('/api/v1/quality/material-approvals').set('x-e2e-actor', 'mar-engineer').send({
+      projectId, reference: 'MAR-RECEIPT', materialName: 'Cable tray 300mm', manufacturer: 'Unitrunk',
+      supplier: 'Gulf Cables LLC',
+    }).expect(201)).body as Mar;
+    const id = `quality-material-approval:${mar.id}`;
+
+    // Drafted and not yet sent: it is the proposer's move.
+    expect((await inbox('mar-engineer')).find((i) => i.id === id)).toMatchObject({ status: 'todo', sourceStatus: 'draft', projectId });
+
+    // Submitted: the ball is with the decider, and the proposer is waiting rather than idle.
+    await http.put(`/api/v1/quality/material-approvals/${mar.id}/submit`).set('x-e2e-actor', 'mar-engineer').expect(200);
+    expect((await inbox('mar-engineer')).find((i) => i.id === id)).toMatchObject({ status: 'waiting', sourceStatus: 'submitted' });
+
+    // Approved as noted — THE RECEIPT. Binding conditions came back with it, so this is work for the
+    // proposer, not a finished item filed away where the conditions are never read.
+    await http.put(`/api/v1/quality/material-approvals/${mar.id}/review`).set('x-e2e-actor', 'mar-consultant')
+      .send({ decision: 'approved_as_noted', comments: 'LSZH variant only' }).expect(200);
+    const back = (await inbox('mar-engineer')).find((i) => i.id === id);
+    expect(back).toMatchObject({ status: 'todo', sourceStatus: 'approved_as_noted' });
+    expect(back!.title).toContain('MAR-RECEIPT');
+
+    // The decider holds it too, as their own decision.
+    expect((await inbox('mar-consultant')).find((i) => i.id === id)).toBeDefined();
+  });
+
+  it('settles it for both sides once approved outright', async () => {
+    const mar = (await http.post('/api/v1/quality/material-approvals').set('x-e2e-actor', 'mar-engineer').send({
+      projectId, reference: 'MAR-SETTLED', materialName: 'Fire collar', supplier: 'Gulf Cables LLC',
+    }).expect(201)).body as Mar;
+    await http.put(`/api/v1/quality/material-approvals/${mar.id}/submit`).set('x-e2e-actor', 'mar-engineer').expect(200);
+    await http.put(`/api/v1/quality/material-approvals/${mar.id}/review`).set('x-e2e-actor', 'mar-consultant')
+      .send({ decision: 'approved' }).expect(200);
+    expect((await inbox('mar-engineer')).find((i) => i.id === `quality-material-approval:${mar.id}`))
+      .toMatchObject({ status: 'done', sourceStatus: 'approved' });
+  });
+
+  it('shows it to nobody outside the exchange', async () => {
+    expect((await inbox('mar-outsider')).filter((i) => i.title.includes('MAR-RECEIPT'))).toEqual([]);
+  });
+
   it('refuses a MATERIAL submittal in the second, ungoverned register', async () => {
     // That register can mark one `approved` with no reviewer, no comments and nothing downstream
     // reading it. Two registers answering "is this material approved?" is one of them being wrong,
@@ -168,5 +219,104 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
       projectId, code: 'SUB-002', title: 'Method statement', submittalType: 'technical',
     }).expect(201);
     expect(technical.body).toMatchObject({ submittalType: 'technical', status: 'draft' });
+  });
+});
+
+/**
+ * The authority boundary, with JWT on.
+ *
+ * An engineer proposes the product they intend to install; somebody else decides it. That is the
+ * whole value of a Material Approval Request, and a permission is what makes it true rather than a
+ * convention. The shipped roles carry this same split — asserted over the role catalogue itself in
+ * src/auth/elv-roles.test.ts — and these are bespoke so the only variable is the one permission.
+ */
+describe('who may propose a material and who may decide it (JWT ON)', () => {
+  let app: INestApplication;
+  let engineer: ReturnType<typeof request.agent>;
+  let manager: ReturnType<typeof request.agent>;
+  let projectId: string;
+  let marId: string;
+  const AUTH_TENANT = `mar-auth-${Date.now()}`;
+
+  beforeAll(async () => {
+    process.env.AUTH_JWT_SECRET = 'material-approval-e2e-only';
+    app = await NestFactory.create(AppModule, { logger: false });
+    app.setGlobalPrefix('api/v1');
+    app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
+    app.useGlobalFilters(new AllExceptionsFilter());
+    const auth = app.get(AuthService);
+    const tenant = app.get(TenantContext);
+    const access = app.get(AccessService);
+    const users = app.get(UsersService);
+
+    access.registerRole({
+      id: 'r-e2e-mar-engineer', name: 'Design Engineer (e2e)',
+      permissions: ['quality.material-approval.create', 'quality.material-approval.submit',
+        'quality.material-approval.read', 'quality.material-approval.revise', 'projects.project.read', 'work-items.*'],
+    });
+    access.registerRole({
+      id: 'r-e2e-mar-manager', name: 'Technical Manager (e2e)',
+      permissions: ['quality.material-approval.review', 'quality.material-approval.read', 'projects.project.read', 'work-items.*'],
+    });
+    access.grant({ userId: 'mar-eng', roleId: 'r-e2e-mar-engineer', scope: { kind: 'org', level: 'tenant', id: AUTH_TENANT } });
+    access.grant({ userId: 'mar-mgr', roleId: 'r-e2e-mar-manager', scope: { kind: 'org', level: 'tenant', id: AUTH_TENANT } });
+    access.grant({ userId: 'mar-adm', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: AUTH_TENANT }, approvalLimit: 1_000_000 });
+    for (const userId of ['mar-eng', 'mar-mgr', 'mar-adm']) users.save({ tenantId: AUTH_TENANT, userId, displayName: userId, active: true });
+
+    app.use(async (req: { headers: { authorization?: string } }, res: { status: (n: number) => { end: () => void } }, next: () => void) => {
+      const context = await auth.contextFromHeader(req.headers.authorization);
+      if (!context) { res.status(401).end(); return; }
+      tenant.run(context, next);
+    });
+    await app.init();
+    expect(auth.enabled).toBe(true);
+
+    const server = app.getHttpServer();
+    engineer = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'mar-eng', tenantId: AUTH_TENANT })}`);
+    manager = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'mar-mgr', tenantId: AUTH_TENANT })}`);
+    const admin = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'mar-adm', tenantId: AUTH_TENANT })}`);
+    projectId = (await admin.post('/api/v1/projects/projects').send({ title: 'Guarded materials' }).expect(201)).body.id;
+  });
+
+  afterAll(async () => {
+    await app?.close();
+    delete process.env.AUTH_JWT_SECRET;
+  });
+
+  it('lets the engineer propose a material and send it', async () => {
+    // Establishes that the refusal below is about ONE permission, not about being shut out.
+    const mar = (await engineer.post('/api/v1/quality/material-approvals').send({
+      projectId, reference: 'MAR-AUTH-1', materialName: 'FP200 Gold', supplier: 'Gulf Cables LLC',
+    }).expect(201)).body as Mar;
+    marId = mar.id;
+    await engineer.put(`/api/v1/quality/material-approvals/${marId}/submit`).expect(200);
+  });
+
+  it('refuses the proposing engineer the act of DECIDING it', async () => {
+    await engineer.put(`/api/v1/quality/material-approvals/${marId}/review`)
+      .send({ decision: 'approved' }).expect(403);
+  });
+
+  it('lets the technical authority decide, and records who', async () => {
+    const decided = (await manager.put(`/api/v1/quality/material-approvals/${marId}/review`)
+      .send({ decision: 'approved' }).expect(200)).body as Mar;
+    expect(decided).toMatchObject({ status: 'approved', reviewedBy: 'mar-mgr' });
+  });
+
+  it('refuses the decider the act of raising one — they decide, they do not propose', async () => {
+    await manager.post('/api/v1/quality/material-approvals').send({
+      projectId, reference: 'MAR-AUTH-2', materialName: 'Self-proposed', supplier: 'Gulf Cables LLC',
+    }).expect(403);
+  });
+
+  it('reloads the decision from the API, not from the response that wrote it', async () => {
+    const reloaded = (await engineer.get(`/api/v1/quality/material-approvals?projectId=${projectId}`).expect(200)).body as Mar[];
+    expect(reloaded.find((m) => m.reference === 'MAR-AUTH-1')).toMatchObject({
+      status: 'approved', reviewedBy: 'mar-mgr',
+    });
+  });
+
+  it('refuses an unauthenticated caller outright', async () => {
+    await request(app.getHttpServer()).get('/api/v1/quality/material-approvals').expect(401);
   });
 });

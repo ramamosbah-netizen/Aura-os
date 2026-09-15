@@ -6,7 +6,7 @@ import { HrService, type Employee } from '@aura/hr';
 import { ScheduleResourceCatalogService, type ScheduleResourceCatalogItem } from '../projects/schedule-resource-catalog.service';
 import { HseService, type CapaAction } from '@aura/hse';
 import { PurchaseOrderService, PurchaseRequestService, RfqService, type PurchaseOrder, type PurchaseRequest, type Rfq } from '@aura/procurement';
-import { QualityService, type Ncr, type Snag } from '@aura/quality';
+import { QualityService, type MaterialApproval, type Ncr, type Snag } from '@aura/quality';
 import {
   ProjectRiskService,
   ProjectIssueService,
@@ -157,13 +157,14 @@ export class WorkItemsService {
   ) {}
 
   async list(tenantId: string, actorId: string, companyId: string | null = null): Promise<WorkItemsPayload> {
-    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities] = await Promise.all([
+    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, materialApprovals, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities] = await Promise.all([
       this.activities.list({ tenantId, assigneeId: actorId, limit: 1000 }),
       this.activities.list({ tenantId, createdBy: actorId, limit: 1000 }),
       this.engineering.listDrawings({ tenantId, limit: 1000 }),
       this.engineering.listRfis({ tenantId, limit: 1000 }),
       this.engineering.listTechnicalQueries({ tenantId, limit: 1000 }),
       this.quality.listNcrs(tenantId),
+      this.quality.listMaterialApprovals(tenantId),
       this.quality.listSnags(tenantId),
       this.hse.listCapas(tenantId),
       this.prs.list({ tenantId, limit: 1000 }),
@@ -197,6 +198,7 @@ export class WorkItemsService {
     for (const rfi of rfis) this.addRfi(put, rfi, actorId);
     for (const tq of tqs) this.addTq(put, tq, actorId);
     for (const ncr of ncrs) this.addNcr(put, ncr, actorId);
+    for (const mar of materialApprovals) this.addMaterialApproval(put, mar, actorId);
     for (const snag of snags) this.addSnag(put, snag, actorId);
     for (const capa of capas) this.addCapa(put, capa, actorId);
     for (const pr of prs) this.addPr(put, pr, actorId);
@@ -805,6 +807,45 @@ export class WorkItemsService {
       : t.status === 'responded' ? (created ? 'todo' : 'waiting')
       : 'todo';
     put({ id: `engineering-tq:${t.id}`, source: 'engineering-tq', sourceId: t.id, module: 'Engineering', kind: 'Technical query', title: `${t.code} — ${t.title}`, detail: t.query, href: `/engineering/technical-queries?projectId=${t.projectId}&record=${t.id}`, projectId: t.projectId, projectName: t.projectName, status, sourceStatus: t.status, priority: t.priority, dueAt: null, createdAt: t.createdAt, updatedAt: t.updatedAt, scopes: scopes(assigned, created), isFollowUp: false, actions: [], origin: origin(t.createdBy, actor) });
+  }
+
+  /**
+   * A material approval request in the work list of the engineer who proposed it (ENG-04).
+   *
+   * THE DECISION HAS TO COME BACK. An engineer proposes a product, somebody else decides it, and
+   * without this the decision lands in a register nobody is watching — the request simply goes
+   * quiet, which is indistinguishable from still waiting.
+   *
+   * Whose turn it is depends on who is looking, and on what the consultant said:
+   *
+   *   draft                        the proposer has not sent it yet            -> todo
+   *   submitted                    it is with the decider                      -> waiting
+   *   approved                     settled; nothing further is owed            -> done
+   *   approved_as_noted, rejected  the proposer must act on the comments,
+   *                                revising and resubmitting                   -> todo
+   *
+   * `approved_as_noted` is deliberately NOT done: it carries binding conditions somebody has to
+   * read and apply, and filing it as finished is how those conditions get missed.
+   */
+  private addMaterialApproval(put: (item: WorkItem) => void, mar: MaterialApproval, actor: string): void {
+    // Only the people in the exchange. A register everybody sees is not a work list.
+    const created = mar.createdBy === actor, decided = mar.reviewedBy === actor;
+    if (!created && !decided) return;
+    const status: WorkItemStatus = mar.status === 'approved' ? 'done'
+      : mar.status === 'submitted' ? (created ? 'waiting' : 'todo')
+      : 'todo';
+    put({
+      id: `quality-material-approval:${mar.id}`, source: 'quality-material-approval', sourceId: mar.id,
+      module: 'Quality', kind: 'Material approval',
+      title: `${mar.reference} — ${mar.materialName}`,
+      detail: mar.reviewComments || mar.specification || mar.manufacturer || null,
+      href: `/quality/material-approvals?projectId=${mar.projectId}&record=${mar.id}`,
+      projectId: mar.projectId, projectName: mar.projectName,
+      status, sourceStatus: mar.status, priority: 'normal', dueAt: null,
+      createdAt: mar.createdAt, updatedAt: mar.updatedAt,
+      scopes: scopes(decided, created), isFollowUp: false, actions: [],
+      origin: origin(mar.createdBy, actor),
+    });
   }
 
   private addNcr(put: (item: WorkItem) => void, n: Ncr, actor: string): void {

@@ -91,7 +91,7 @@ cases.push({ key: 'site.createInstallation', permission: 'site.labour.log', crea
 for (const [method, permission, field] of [
   ['raiseNcr','quality.ncr.create','raisedBy'], ['requestInspection','quality.ir.request','inspectedBy'],
   ['logSnag','quality.snag.create','createdBy'], ['createItp','quality.itp.create','createdBy'],
-  ['createMaterialApproval','quality.mar.create','createdBy'], ['recordCalibration','quality.calibration.create','createdBy'],
+  ['createMaterialApproval','quality.material-approval.create','createdBy'], ['recordCalibration','quality.calibration.create','createdBy'],
 ]) createCase('quality', method, permission, () => quality, {}, field);
 for (const [method, permission] of [
   ['reportIncident','hse.incident.create'], ['requestPermit','hse.ptw.request'],

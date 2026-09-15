@@ -104,6 +104,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // judging it good enough belongs to whoever has to build to it, and one person holding both
       // turns the whole exchange into a note they wrote to themselves.
       'engineering.tq.close',
+      // PROPOSES a material for approval and never decides one (ENG-04). Raising a Material Approval
+      // Request is engineering authorship — this is the product the engineer intends to install;
+      // `quality.material-approval.review` is deliberately absent, because the whole value of the
+      // request is that somebody else answers it.
+      'quality.material-approval.create', 'quality.material-approval.submit',
+      'quality.material-approval.read', 'quality.material-approval.revise',
       readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },
@@ -142,6 +148,8 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'projects.*.read', 'projects.issue.*', 'projects.risk.*', PROJECT_RESPONSIBILITY_WORK,
       // Also on the raising side of a technical query: accepts an answer as adequate, never gives one.
       'engineering.*.read', 'engineering.rfi.*', 'engineering.tq.close', 'site.*.read', 'quality.*.read',
+      // Also on the proposing side of a material approval; decides none.
+      'quality.material-approval.create', 'quality.material-approval.submit', 'quality.material-approval.revise',
       'procurement.*.read', 'commissioning.*.read', ...STAFF_BASE,
     ],
   },
@@ -166,6 +174,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
       'engineering.*', 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
+      // DECIDES a material approval (ENG-04). The engineer who proposed the product must not be the
+      // one who approves it, so this sits with the internal technical authority — alongside QA/QC,
+      // which owns the register itself and holds `quality.*`.
+      'quality.material-approval.review', 'quality.material-approval.read',
       readOnly('tendering'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },

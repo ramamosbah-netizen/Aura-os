@@ -37,7 +37,7 @@ const membership = { id: 'm1', tenantId: 'tenant-a', poolId: 'pool-elv', employe
 function harness(options: { employee?: unknown; assignments?: unknown[]; allowed?: boolean; memberships?: unknown[]; pools?: unknown[]; custody?: unknown[] } = {}) {
   const activities = { list: vi.fn(empty), get: vi.fn(), create: vi.fn(), updateDetails: vi.fn(), archive: vi.fn() };
   const engineering = { listDrawings: empty, listRfis: empty, listTechnicalQueries: empty };
-  const quality = { listNcrs: empty, listSnags: empty };
+  const quality = { listNcrs: empty, listSnags: empty, listMaterialApprovals: empty };
   const hse = { listCapas: empty };
   const prs = { list: empty }, rfqs = { list: empty }, pos = { list: empty };
   const projectRisks = { list: empty }, projectIssues = { list: empty };

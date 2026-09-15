@@ -15,6 +15,8 @@ interface MaterialApproval {
   status: string;
   revision: number;
   reviewComments: string;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 }
 
 export default async function MarPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {

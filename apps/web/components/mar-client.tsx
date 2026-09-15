@@ -15,6 +15,9 @@ interface MaterialApproval {
   status: string;
   revision: number;
   reviewComments: string;
+  /** WHO decided it. A material approval nobody is named on is a rumour the site builds to. */
+  reviewedBy: string | null;
+  reviewedAt: string | null;
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -114,22 +117,33 @@ export default function MarClient({ initialMars }: { initialMars: MaterialApprov
             <tr><td style={s.muted} colSpan={6}>No material approvals yet — add one above.</td></tr>
           ) : (
             mars.map((m) => (
-              <tr key={m.id} style={s.row}>
+              <tr key={m.id} style={s.row} data-testid={`mar-${m.id}`}>
                 <td style={s.tdCode}>{m.reference}</td>
-                <td style={s.td}>{m.materialName}{m.reviewComments && <div style={s.note}>“{m.reviewComments}”</div>}</td>
+                <td style={s.td}>
+                  {m.materialName}
+                  {m.reviewComments && <div style={s.note} data-testid={`mar-comments-${m.id}`}>“{m.reviewComments}”</div>}
+                  {/* WHO DECIDED IT, beside the decision. Site builds to an approved material, and
+                      an approval with nobody's name on it is a rumour — the same gap ENG-03 closed
+                      on a technical query answer. */}
+                  {m.reviewedBy && (
+                    <div style={s.note} data-testid={`mar-decided-by-${m.id}`}>
+                      Decided by {m.reviewedBy}{m.reviewedAt ? ` on ${m.reviewedAt.slice(0, 10)}` : ''}
+                    </div>
+                  )}
+                </td>
                 <td style={s.tdMuted}>{m.manufacturer || '—'}</td>
-                <td style={s.td}><span style={{ ...s.tag, color: STATUS_COLOR[m.status] ?? 'var(--text)', border: `1px solid ${STATUS_COLOR[m.status] ?? 'var(--border)'}` }}>{m.status.replace(/_/g, ' ')}</span></td>
-                <td style={s.tdR}>{m.revision}</td>
+                <td style={s.td} data-testid={`mar-status-${m.id}`}><span style={{ ...s.tag, color: STATUS_COLOR[m.status] ?? 'var(--text)', border: `1px solid ${STATUS_COLOR[m.status] ?? 'var(--border)'}` }}>{m.status.replace(/_/g, ' ')}</span></td>
+                <td style={s.tdR} data-testid={`mar-revision-${m.id}`}>{m.revision}</td>
                 <td style={s.tdR}>
-                  {m.status === 'draft' && <button type="button" style={s.btn} onClick={() => act(m.id, 'submit')}>Submit</button>}
+                  {m.status === 'draft' && <button type="button" style={s.btn} data-testid={`mar-submit-${m.id}`} onClick={() => act(m.id, 'submit')}>Submit</button>}
                   {m.status === 'submitted' && (
                     <>
-                      <button type="button" style={s.okBtn} onClick={() => review(m.id, 'approved')}>Approve</button>
+                      <button type="button" style={s.okBtn} data-testid={`mar-approve-${m.id}`} onClick={() => review(m.id, 'approved')}>Approve</button>
                       <button type="button" style={s.btn} onClick={() => review(m.id, 'approved_as_noted')}>As noted</button>
-                      <button type="button" style={s.badBtn} onClick={() => review(m.id, 'rejected')}>Reject</button>
+                      <button type="button" style={s.badBtn} data-testid={`mar-reject-${m.id}`} onClick={() => review(m.id, 'rejected')}>Reject</button>
                     </>
                   )}
-                  {(m.status === 'rejected' || m.status === 'approved_as_noted') && <button type="button" style={s.btn} onClick={() => act(m.id, 'revise')}>Revise</button>}
+                  {(m.status === 'rejected' || m.status === 'approved_as_noted') && <button type="button" style={s.btn} data-testid={`mar-revise-${m.id}`} onClick={() => act(m.id, 'revise')}>Revise</button>}
                 </td>
               </tr>
             ))

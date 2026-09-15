@@ -1085,6 +1085,133 @@ dropped. That is adjacent to PLN-10 rather than part of it — no acceptance cri
 on it — and it is recorded rather than quietly changed, because narrowing the constraint to HELD
 bookings would drop the lineage of released commitments and needs deciding on its own merits.
 
+## Iteration 19 — a milestone is a point where something must be true
+
+The remainder audit named five capabilities. This closes the first, and the smallest: `PLN-04`,
+which had **no implementation at all** — no domain rule, no table, no route — while Project 360 had
+been offering a link labelled *"Add task or milestone"* that opened a screen which could only add a
+task. A label for a capability that does not exist is the defect iteration 2 removed from
+DocControl's "Dispatch & Send", and it is removed the same way: by building the thing the label
+promises. That link is now true, unchanged.
+
+### Not a zero-duration activity
+
+The obvious modelling is a task with no duration, and it is wrong twice over here. The planner
+refuses a duration below one day — rightly, since an activity that takes no time is not one — so a
+milestone would have to carry a fake day inflating every path it sits on. And a milestone is not
+work: nobody performs it. It is a statement about *when other work must be finished*, so it lives in
+its own table (migration 0328) and points AT the activities.
+
+### Three dates, kept apart
+
+| | What it is | Moves when… |
+| --- | --- | --- |
+| **Target** | what was committed to | never. Authored, and deliberately not derived — a milestone that recomputes its own deadline can never be missed |
+| **Forecast** | when the gating work is heading to finish | the work moves |
+| **Achieved** | the day it was actually met | it is recorded, as an act with a person and a note |
+
+The forecast is read out of the **schedule's own forecast run**, not a second CPM pass:
+`forecastCompletion` now returns per-activity `placements` so anything gating on a subset of the
+programme reads that one run. Two runs over one plan would eventually disagree, and a project that
+answers "when does this finish" differently on two screens has no answer. The API proof asserts the
+milestone's forecast equals the project's `forecastFinish` for the same work.
+
+The status is **derived on every read and stored nowhere** — there is no status column. A stored
+verdict is stale the moment an activity moves, and a milestone reading "on track" against a
+programme that slipped last week is worse than having none. `MISSED` and `AT_RISK` stay different
+words for different things: one is a fact about a date that has passed, the other a prediction about
+one that has not, and collapsing them would report a forecast with the confidence of a measurement.
+
+### The contradiction is stated, not refused and not hidden
+
+An achievement recorded while the gating work is unfinished is the commonest way a programme lies to
+management: the row goes green, the work is at forty percent, and nothing anywhere says both at once.
+
+Refusing the sign-off would also be wrong — real milestones are accepted with snags by people
+entitled to accept them. So it is **accepted, and then the unfinished activities are named beside it
+on every read**, in the browser and over the API, surviving reload. The lie was never the sign-off;
+it was the silence.
+
+A milestone nothing gates reads `UNKNOWN` with the reason in words, never `ON_TRACK`: a date with no
+work behind it is a wish.
+
+### Authority
+
+Authoring a milestone is planning work and the Planning Engineer holds it. Declaring one **met** is a
+statement to the client about what has been delivered, and it is the Project Manager's act — the same
+separation `schedule.progress-override` makes, and for the same reason: the person who maintains the
+figure must not also be the one who declares it true. Asserted over the role catalogue and proven
+403 over HTTP with JWT on, in both directions (record and withdraw).
+
+### PLN-04 reconciliation
+
+The capability reads *Milestones*, and its acceptance criterion is that a representative Planning
+Engineer, Project Engineer and Project Manager execute it in the canonical Projects schedule context
+with save/reload, applicable permission denials, actual output and next-role receipt proved.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Representative roles execute it | Planning Engineer authors and reads (JWT ON); Project Manager declares met; Project Engineer reads through `projects.*.read`, asserted over the role catalogue | no |
+| Canonical schedule context | mounted on the plan screen, gated on the persisted schedule; every gate resolved from the persisted plan and enforced again by composite foreign key | no |
+| Save and reload | authored in the browser, reloaded from the API and re-derived, not re-rendered from the form that submitted it | no |
+| Permission denials | 403 planner on record and on withdraw; 401 unauthenticated; 404 another tenant's milestone (not found, never forbidden — confirming an id exists elsewhere is itself a disclosure); 400 an activity from another project; 409 a duplicate name; 409 a second achievement; 400 a future achievement date; 400 a reasonless withdrawal | no |
+| Next-role receipt | the named owner receives `Milestone: <name>` in their own My Work, with project context and the COMMITTED date as the due date — through the responsibility chain AWD-06 proved, not a second inbox | no |
+| Actual output | proven on screen and over the API; no exported or printable milestone document exists | **yes** |
+
+**Proposed: `PLN-04` UNVERIFIED → COMPLETE**, with `actualOutput` **PARTIAL** on promotion — the
+eighth planning row carrying that same gap, and the same basis on which `PLN-05`, `PLN-11`–`PLN-16`
+were promoted.
+
+### Found while proving it, and fixed rather than worked around
+
+Three of these were found by the repository's own gates, which is what they are for:
+
+1. **The project-scope fitness gate** refused `milestones/:id`: it names a record by id with nothing
+   resolving it to a project, so it would have been authorised org-wide only and **project members
+   would have been locked out of their own milestones**. Resolver registered.
+2. **The error-taxonomy gate** caught a refusal that would have escaped as a 500. Reworded so it
+   classifies as the 409 state conflict it is.
+3. **The handoff proof caught a receipt that had never worked at all.** The owner notification was
+   written, looked right, and did nothing:
+
+   ```ts
+   @Optional() private readonly responsibilities: ProjectResponsibilityService | null
+   ```
+
+   A constructor parameter typed `X | null` emits `Object` as its design-time type, so Nest has no
+   token to resolve and injects nothing. The seam then reads as unbound in *every* composition, the
+   guard returned at its first line, and a milestone with a named owner told that person nothing.
+   No error, no log, no failing test — this is exactly why `ScheduleService` writes
+   `@Optional() @Inject(Token)` on every optional dependency. Both of this service's were missing it.
+
+   It was caught only because the receipt was **proved rather than assumed**, which is the whole
+   argument for the handoff layer being part of the definition of done.
+
+Also corrected while there: the catch around the receipt swallowed its error entirely and now logs a
+warning naming the milestone and the owner who was not told; and the API proof's middleware
+hardcoded a single actor, so the handoff was being "proved" by the same principal that created the
+milestone — which proves nothing.
+
+`aura_projects_schedules` also had no lineage unique key for a composite foreign key to point at, and
+its `project_id` is `uuid` rather than `text`. Both settled in the migration.
+
+### Accepted limits, recorded rather than buried
+
+- **No exported milestone document** (`actualOutput`). The eighth planning row with this gap; Wave 8
+  owns it.
+- **Nothing notifies the owner when a milestone crosses its committed date.** The receipt arrives
+  when the milestone is created; a milestone going from `ON_TRACK` to `AT_RISK` reaches nobody who is
+  not looking at the screen. The seventh such signal, and still one shared notification authority
+  rather than seven bespoke ones.
+- **An owner who is not a project member is recorded but never told.** The responsibility service
+  rightly refuses to assign work to a non-member; the milestone still saves with that `ownerId`, the
+  failure is logged, and nothing on the screen says the receipt did not happen. This is the weakest
+  point of the slice and the first thing to close if the promotion is taken — it is the same class of
+  quiet gap the `@Inject` defect above turned out to be.
+- **Deleting a gating activity cascades the gate away.** Chosen over `RESTRICT`, which would block
+  ordinary replanning; the milestone then reads `UNKNOWN` with its reason printed rather than
+  silently staying "on track", so losing a gate is loud on the screen — but nothing tells the owner.
+
 ## Wave 3 remainder audit
 
 The section that stood here had become three paragraphs of accreted commentary. Every iteration

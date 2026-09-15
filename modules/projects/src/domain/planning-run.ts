@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { type Id, newId } from '@aura/shared';
 import type { ProjectSchedule } from './schedule';
 import {
@@ -68,6 +69,33 @@ export interface SolverProposal {
   planningDeficiencies: PlanningDeficiency[];
 }
 
+/**
+ * A stable fingerprint of everything the solver consumed.
+ *
+ * Taken at run time and compared at acceptance. It covers each task's dates and AUTHORED duration,
+ * the dependency edges, and the calendar the project named — because those are the inputs, and a
+ * change to any of them makes a proposal's dates answers to a question nobody is asking any more.
+ *
+ * Deliberately NOT a hash of the whole schedule: a renamed activity, a percentage typed against
+ * progress, or a resource requirement edited does not move a single date the solver produced, and
+ * refusing acceptance for those would train planners to re-run reflexively and read nothing.
+ */
+export function planningBasisFingerprint(input: {
+  tasks: ReadonlyArray<{ id: Id; plannedStart: string; plannedEnd: string; durationWorkingDays: number | null }>;
+  dependencies: ReadonlyArray<{ predecessorTaskId: Id; successorTaskId: Id }>;
+  calendarId: Id | null;
+}): string {
+  const tasks = [...input.tasks]
+    .map((task) => `${task.id}:${task.plannedStart}:${task.plannedEnd}:${task.durationWorkingDays ?? ''}`)
+    .sort();
+  const edges = [...input.dependencies]
+    .map((edge) => `${edge.predecessorTaskId}>${edge.successorTaskId}`)
+    .sort();
+  return createHash('sha256')
+    .update(JSON.stringify({ tasks, edges, calendarId: input.calendarId ?? null }))
+    .digest('hex');
+}
+
 /** An execution of the solver, and the proposal it produced. Persisted separately from the plan. */
 export interface PlanningRun {
   id: Id;
@@ -93,6 +121,32 @@ export interface PlanningRun {
   acceptanceReason?: string | null;
   /** Why a proposal was discarded, when a planner rejects it outright. */
   discardedReason?: string | null;
+
+  // -- Recovery lineage (PLN-15): null on an ordinary re-plan, which is not less legitimate ----
+  /**
+   * The delay this recovery was prepared for.
+   *
+   * Makes the hand-off from a delay assessment an explicit, recorded act rather than a re-plan
+   * somebody happened to run: an EOT file has to answer "what is this recovery FOR?", and without
+   * this the only answer was whoever was in the room.
+   */
+  sourceDelayId?: Id | null;
+  /**
+   * The assessed impact this proposal was prepared against, FROZEN at the hand-off.
+   *
+   * A later re-assessment must not rewrite what this proposal was justified by — the same reason
+   * the assessment itself does not move when the plan does.
+   */
+  sourceAssessmentImpactDays?: number | null;
+  /**
+   * What the solver actually consumed, fingerprinted at run time.
+   *
+   * A programme can move underneath a proposal without gaining or losing a task: a duration
+   * extended, a date moved, an edge added, a different calendar named. Every task id still matches,
+   * so the task-set guard passes and stale dates are written silently. Null on a run recorded
+   * before this existed, which reads as "cannot be checked" rather than as agreement.
+   */
+  basisFingerprint?: string | null;
 }
 
 /**

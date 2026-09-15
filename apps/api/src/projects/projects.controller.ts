@@ -51,6 +51,7 @@ import {
   type PlannedOutput,
   type LookAhead,
   type DelayImpact,
+  type RecoveryComparison,
   ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
@@ -1734,6 +1735,43 @@ export class ProjectsController {
    * different privileges, so a narrower role can be granted the first without the second. Both fall
    * under a `projects.*` grant, so the delivery roles already hold them.
    */
+  /**
+   * Prepare a recovery for an assessed delay — the explicit hand-off from PLN-14 to PLN-15.
+   *
+   * A SCENARIO, not a programme: the same solver over the same calendar and dependency network,
+   * stored beside the plan, changing not one stored date. Making it current is a separate governed
+   * act (`projects.schedule.accept`) held by somebody who may move a programme; preparing one is
+   * planning, and carries `projects.schedule.plan`.
+   *
+   * Explicit rather than automatic on purpose. An assessment that silently launched a re-plan would
+   * produce a proposal nobody asked for against a programme nobody agreed to move.
+   */
+  @Permissions('projects.schedule.plan')
+  @Post('delays/:id/recovery-proposal')
+  async prepareRecovery(@Param('id', ParseUuidOr404Pipe) id: string): Promise<PlanningRunView> {
+    const ctx = this.tenant.get();
+    const delay = await this.delayEot.getDelay(id);
+    if (!delay || delay.tenantId !== ctx.tenantId) throw new NotFoundException(`delay ${id} not found`);
+    return this.schedule.prepareRecovery({
+      tenantId: ctx.tenantId,
+      projectId: delay.projectId,
+      delay: { id: delay.id, projectId: delay.projectId, assessedImpactWorkingDays: delay.assessedImpactWorkingDays },
+      ranBy: ctx.actorId,
+    });
+  }
+
+  /**
+   * What this proposal would recover against the programme as it stands.
+   *
+   * Current finish, proposed finish, and the working days between them — the figure a recovery is
+   * judged on, never the proposal's own finish date alone. Derived on the read.
+   */
+  @Permissions('projects.schedule.read')
+  @Get('planning-runs/:runId/recovery')
+  async recoveryOf(@Param('runId', ParseUuidOr404Pipe) runId: string): Promise<RecoveryComparison> {
+    return this.schedule.recoveryOf(this.tenant.get().tenantId, runId);
+  }
+
   @Permissions('projects.schedule.accept')
   @Post('planning-runs/:runId/accept')
   async acceptPlanningRun(

@@ -29,6 +29,14 @@ export interface AcceptanceDecision {
   acceptedBy?: Id | null;
   /** Required when the proposal is not `established`. Ignored (recorded as null) when it is. */
   acknowledgeReason?: string | null;
+  /**
+   * The programme's basis as it stands NOW, resolved by the caller.
+   *
+   * Omitted, the basis is not checked at all — which is the pre-PLN-15 behaviour and remains valid
+   * for a caller that genuinely has no way to resolve it. Supplied, a proposal computed against a
+   * different basis is refused rather than silently written over a programme that has moved.
+   */
+  currentBasisFingerprint?: string;
 }
 
 export interface AcceptedPlan {
@@ -69,6 +77,25 @@ export function acceptProposal(
     scheduleIds.size === proposalIds.size && [...scheduleIds].every((id) => proposalIds.has(id));
   if (!sameTasks) {
     throw new Error('the schedule has changed since this proposal was produced; re-run before accepting');
+  }
+
+  // The basis guard. A programme can move underneath a proposal without gaining or losing a task —
+  // a duration extended, a date moved, an edge added, a different calendar named — and every task
+  // id still matches, so the check above passes and stale dates are written silently.
+  //
+  // A run with no fingerprint predates this check. That is stated as what it is rather than read as
+  // agreement: it CANNOT be verified, and the caller decides whether to re-run.
+  if (decision.currentBasisFingerprint !== undefined) {
+    if (!run.basisFingerprint) {
+      throw new Error(
+        'this proposal records no planning basis, so it cannot be checked against the current programme; re-run before accepting',
+      );
+    }
+    if (run.basisFingerprint !== decision.currentBasisFingerprint) {
+      throw new Error(
+        'the planning basis has changed since this proposal was produced — dates, durations, dependencies or the working calendar; re-run before accepting',
+      );
+    }
   }
 
   // Structural: a task the solver could not place has no dates to make current.

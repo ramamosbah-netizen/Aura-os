@@ -1137,10 +1137,24 @@ function DelayAssessment({ delay, schedule, busy, call }: {
         >Record assessment</button>
       </div>
       {delay.assessedAt && (
-        <small style={st.muted}>
-          Assessed at {delay.assessedImpactWorkingDays} working day{delay.assessedImpactWorkingDays === 1 ? '' : 's'} by {delay.assessedBy}
-          {delay.assessmentNote ? ` · ${delay.assessmentNote}` : ''}
-        </small>
+        <>
+          <small style={st.muted}>
+            Assessed at {delay.assessedImpactWorkingDays} working day{delay.assessedImpactWorkingDays === 1 ? '' : 's'} by {delay.assessedBy}
+            {delay.assessmentNote ? ` · ${delay.assessmentNote}` : ''}
+          </small>
+          {/* The hand-off, and deliberately a button rather than something that happens by itself:
+              an assessment that silently launched a re-plan would produce a proposal nobody asked
+              for against a programme nobody agreed to move. What it produces is a SCENARIO —
+              accepting it is a separate act, by somebody who may move a programme. */}
+          <button
+            className="btn" type="button" disabled={busy}
+            data-testid={`prepare-recovery-${delay.id}`}
+            onClick={() => void call(
+              `/api/projects/delays/${delay.id}/recovery-proposal`, 'POST', {},
+              'Recovery proposal prepared — review and accept it on the plan screen.',
+            )}
+          >Prepare recovery</button>
+        </>
       )}
     </div>
   );

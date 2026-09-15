@@ -96,6 +96,7 @@ export * from './domain/planned-output';
 export * from './domain/labour-productivity';
 export * from './domain/look-ahead';
 export * from './domain/delay-impact';
+export * from './domain/recovery-proposal';
 export * from './activity-output.service';
 export * from './project-calendar.service';
 export * from './domain/schedule';

@@ -97,3 +97,7 @@
 .dot.superseded { background: var(--warn); }
 .dot.discarded { background: var(--bad); }
 .dot.proposed { background: var(--accent); }
+
+/* The lineage line under the finish row: what this scenario was prepared FOR. Muted, because it is
+   provenance rather than the figure a reviewer is deciding on. */
+.hint { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; }

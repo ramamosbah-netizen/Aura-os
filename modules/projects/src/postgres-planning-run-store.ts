@@ -19,6 +19,9 @@ interface Row {
   proposal: SolverProposal; // pg parses jsonb into an object
   accepted_at: Date | string | null; accepted_by: string | null;
   acceptance_reason: string | null; discarded_reason: string | null;
+  source_delay_id: string | null;
+  source_assessment_impact_days: string | number | null;
+  basis_fingerprint: string | null;
 }
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
@@ -36,10 +39,14 @@ const rowToRun = (r: Row): PlanningRun => ({
   acceptedBy: r.accepted_by,
   acceptanceReason: r.acceptance_reason,
   discardedReason: r.discarded_reason,
+  sourceDelayId: r.source_delay_id ?? null,
+  sourceAssessmentImpactDays: r.source_assessment_impact_days === null || r.source_assessment_impact_days === undefined
+    ? null : Number(r.source_assessment_impact_days),
+  basisFingerprint: r.basis_fingerprint ?? null,
 });
 
 const COLS =
-  'id, tenant_id, project_id, schedule_id, ran_at, ran_by, status, proposal, accepted_at, accepted_by, acceptance_reason, discarded_reason';
+  'id, tenant_id, project_id, schedule_id, ran_at, ran_by, status, proposal, accepted_at, accepted_by, acceptance_reason, discarded_reason, source_delay_id, source_assessment_impact_days, basis_fingerprint';
 
 export class PostgresPlanningRunStore implements PlanningRunStore {
   constructor(private readonly pool: Pool) {}
@@ -47,9 +54,12 @@ export class PostgresPlanningRunStore implements PlanningRunStore {
   async create(run: PlanningRun): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_projects_planning_runs
-         (id, tenant_id, project_id, schedule_id, ran_at, ran_by, status, proposal)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,
-      [run.id, run.tenantId, run.projectId, run.scheduleId, run.ranAt, run.ranBy, run.status, JSON.stringify(run.proposal)],
+         (id, tenant_id, project_id, schedule_id, ran_at, ran_by, status, proposal,
+          source_delay_id, source_assessment_impact_days, basis_fingerprint)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)`,
+      [run.id, run.tenantId, run.projectId, run.scheduleId, run.ranAt, run.ranBy, run.status,
+       JSON.stringify(run.proposal), run.sourceDelayId ?? null, run.sourceAssessmentImpactDays ?? null,
+       run.basisFingerprint ?? null],
     );
   }
 

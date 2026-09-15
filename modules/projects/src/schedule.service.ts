@@ -8,6 +8,7 @@ import {
 } from './domain/activity-progress';
 import { resolvePlannedOutput, type PlannedOutput } from './domain/planned-output';
 import { resolveLookAhead, type LookAhead } from './domain/look-ahead';
+import { compareRecovery, type RecoveryComparison } from './domain/recovery-proposal';
 import { assessDelayImpact, type DelayImpact, type ConcurrentDelay } from './domain/delay-impact';
 import { ActivityOutputService } from './activity-output.service';
 import { ProjectCalendarService } from './project-calendar.service';
@@ -38,6 +39,7 @@ import {
   type ProposalComparison,
   runPlanning,
   compareProposalToCurrent,
+  planningBasisFingerprint,
 } from './domain/planning-run';
 import { type AcceptanceDecision, acceptProposal, discardProposal } from './domain/planning-acceptance';
 import { RESOURCE_FACTS_STORE, type ResourceFactsStore } from './resource-facts-store';
@@ -532,7 +534,11 @@ export class ScheduleService {
   async runPlanning(
     tenantId: Id,
     projectId: Id,
-    opts: { ranBy?: Id | null; projectStart?: string } = {},
+    opts: {
+      ranBy?: Id | null; projectStart?: string;
+      /** Set by the explicit hand-off from a delay assessment — see `prepareRecovery`. */
+      sourceDelayId?: Id | null; sourceAssessmentImpactDays?: number | null;
+    } = {},
   ): Promise<PlanningRunView> {
     const schedule = await this.store.getByProject(tenantId, projectId);
     if (!schedule) throw new NotFoundException(`no schedule for project ${projectId}`);
@@ -550,7 +556,20 @@ export class ScheduleService {
     const resolved = resolvePlanFacts(projectId, refs, windows, bookings, interval);
     const nonWorkingDays = await this.resolveCalendar(tenantId, projectId, interval);
 
-    const run = runPlanning(schedule, { projectStart, ...resolved, nonWorkingDays }, { ranBy: opts.ranBy ?? null });
+    const solved = runPlanning(schedule, { projectStart, ...resolved, nonWorkingDays }, { ranBy: opts.ranBy ?? null });
+    // What the solver actually consumed, fingerprinted now and checked at acceptance. The task set
+    // alone is not the basis: a duration, a date, an edge or the calendar can move without it.
+    const calendar = this.projectCalendar ? await this.projectCalendar.forProject(tenantId, projectId, interval) : null;
+    const run: PlanningRun = {
+      ...solved,
+      sourceDelayId: opts.sourceDelayId ?? null,
+      sourceAssessmentImpactDays: opts.sourceAssessmentImpactDays ?? null,
+      basisFingerprint: planningBasisFingerprint({
+        tasks: schedule.tasks,
+        dependencies: schedule.dependencies,
+        calendarId: calendar?.calendarId ?? null,
+      }),
+    };
     await this.runs.create(run);
     await this.events.append([
       makeEvent({
@@ -566,6 +585,70 @@ export class ScheduleService {
       { projectId, scheduleId: schedule.id, source: 'projects.schedule.planning_ran' },
     );
     return { run, comparison: compareProposalToCurrent(schedule, run.proposal) };
+  }
+
+  /**
+   * Prepare a recovery for an assessed delay — the EXPLICIT hand-off from PLN-14.
+   *
+   * A scenario, not a programme. It runs the same solver over the same calendar and the same
+   * dependency network, stores the proposal beside the plan, and changes not one stored date;
+   * making it current is a separate governed act by somebody who holds the authority to move a
+   * programme.
+   *
+   * The hand-off is deliberately EXPLICIT rather than automatic. A delay assessment that silently
+   * launched a re-plan would produce a proposal nobody asked for against a programme nobody agreed
+   * to move, and the planner who has to defend the recovery would not have chosen its starting
+   * point. Somebody presses this.
+   *
+   * REFUSES an unassessed delay. A recovery prepared against a delay nobody has assessed has
+   * nothing to be a recovery OF — the figure it would be read against does not exist yet.
+   */
+  async prepareRecovery(input: {
+    tenantId: Id; projectId: Id; delay: { id: Id; projectId: Id; assessedImpactWorkingDays: number | null };
+    ranBy?: Id | null;
+  }): Promise<PlanningRunView> {
+    if (input.delay.projectId !== input.projectId) {
+      // Recovering one project's programme because of another's delay is not a hand-off; it is two
+      // projects wired together by accident.
+      throw new BadRequestException('this delay belongs to a different project');
+    }
+    if (input.delay.assessedImpactWorkingDays === null || input.delay.assessedImpactWorkingDays === undefined) {
+      throw new BadRequestException('this delay has not been assessed, so there is nothing to prepare a recovery against');
+    }
+    return this.runPlanning(input.tenantId, input.projectId, {
+      ranBy: input.ranBy,
+      sourceDelayId: input.delay.id,
+      // Frozen at the hand-off: a later re-assessment must not rewrite what this was prepared for.
+      sourceAssessmentImpactDays: input.delay.assessedImpactWorkingDays,
+    });
+  }
+
+  /**
+   * What this proposal would recover against the programme as it stands.
+   *
+   * Derived on the read, and counted in working days under the project's calendar. The figure a
+   * recovery is judged on is the COMPARISON, never the proposal's finish date alone.
+   */
+  async recoveryOf(tenantId: Id, runId: Id): Promise<RecoveryComparison> {
+    const run = await this.loadRun(tenantId, runId);
+    const schedule = await this.store.get(run.scheduleId);
+    if (!schedule) throw new NotFoundException(`the schedule for run ${runId} no longer exists`);
+
+    const currentFinish = schedule.tasks.length === 0 ? null : schedule.tasks.reduce(
+      (latest, task) => (task.plannedEnd > latest ? task.plannedEnd : latest), schedule.tasks[0].plannedEnd);
+    const interval = this.horizon(schedule, schedule.tasks[0]?.plannedStart ?? run.proposal.projectStart);
+    const calendar = this.projectCalendar
+      ? await this.projectCalendar.forProject(tenantId, schedule.projectId, interval)
+      : null;
+
+    return compareRecovery({
+      currentFinish,
+      proposedFinish: run.proposal.projectFinish,
+      established: run.proposal.established,
+      calendar: calendar?.calendar,
+      sourceDelayId: run.sourceDelayId ?? null,
+      sourceAssessmentImpactDays: run.sourceAssessmentImpactDays ?? null,
+    });
   }
 
   listRuns(tenantId: Id, projectId: Id): Promise<PlanningRun[]> {
@@ -592,7 +675,20 @@ export class ScheduleService {
     const schedule = await this.store.get(run.scheduleId);
     if (!schedule) throw new NotFoundException(`the schedule for run ${runId} no longer exists`);
 
-    const accepted = acceptProposal(schedule, run, decision);
+    // The basis as it stands NOW, so a programme that moved under the proposal is caught even when
+    // every task id still matches.
+    const interval = this.horizon(schedule, schedule.tasks[0]?.plannedStart ?? new Date().toISOString().slice(0, 10));
+    const calendar = this.projectCalendar
+      ? await this.projectCalendar.forProject(tenantId, schedule.projectId, interval)
+      : null;
+    const accepted = acceptProposal(schedule, run, {
+      ...decision,
+      currentBasisFingerprint: planningBasisFingerprint({
+        tasks: schedule.tasks,
+        dependencies: schedule.dependencies,
+        calendarId: calendar?.calendarId ?? null,
+      }),
+    });
 
     if (this.pool) {
       // One transaction: task dates updated in place, run accepted, siblings superseded.

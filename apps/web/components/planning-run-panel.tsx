@@ -26,6 +26,9 @@ interface SolverProposal {
 type RunStatus = 'proposed' | 'accepted' | 'superseded' | 'discarded';
 interface PlanningRun {
   id: string; status: RunStatus; ranAt: string; acceptanceReason?: string | null; proposal: SolverProposal;
+  /** Set when this scenario was prepared through the explicit hand-off from a delay assessment. */
+  sourceDelayId?: string | null;
+  sourceAssessmentImpactDays?: number | null;
 }
 type ChangeKind = 'UNCHANGED' | 'MOVED' | 'NEWLY_PLACED' | 'BECAME_UNPLACEABLE' | 'STILL_UNPLACEABLE';
 interface TaskDateChange {
@@ -37,6 +40,24 @@ interface ProposalComparison {
   changes: TaskDateChange[]; movedCount: number; currentFinish: string | null; proposedFinish: string;
 }
 interface RunView { run: PlanningRun; comparison: ProposalComparison }
+
+/**
+ * What this proposal would recover, and what it was prepared FOR.
+ *
+ * The figure a recovery is judged on is the comparison, never the proposal's own finish date: zero
+ * is the honest answer that the re-plan found nothing, and a negative number means the scenario is
+ * worse than the programme it would replace — which is exactly the one nobody should accept by
+ * reflex, and the one a finish date alone hides.
+ */
+interface RecoveryComparison {
+  currentFinish: string | null;
+  proposedFinish: string | null;
+  workingDaysRecovered: number | null;
+  sourceDelayId: string | null;
+  sourceAssessmentImpactDays: number | null;
+  verdict: 'RECOVERS_TIME' | 'NO_CHANGE' | 'LOSES_TIME' | 'UNKNOWN';
+  unknownReason: string | null;
+}
 
 const shortRef = (r: ResourceRef): string => `${r.resourceType} · ${r.canonicalResourceId.slice(0, 8)}`;
 const CHANGE_CLASS: Record<ChangeKind, string> = {
@@ -50,6 +71,7 @@ const CHANGE_LABEL: Record<ChangeKind, string> = {
 
 export default function PlanningRunPanel({ projectId, projectName }: { projectId: string; projectName?: string | null }) {
   const [view, setView] = useState<RunView | null>(null);
+  const [recovery, setRecovery] = useState<RecoveryComparison | null>(null);
   const [history, setHistory] = useState<PlanningRun[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -74,6 +96,21 @@ export default function PlanningRunPanel({ projectId, projectName }: { projectId
       setError(e instanceof Error ? e.message : 'Planning run failed');
     } finally { setBusy(null); }
   }
+
+  // What this proposal would recover against the programme as it stands. Asked whenever one is on
+  // screen: an ordinary re-plan is judged on the same comparison a recovery is.
+  useEffect(() => {
+    const runId = view?.run.id;
+    if (!runId) { setRecovery(null); return; }
+    let live = true;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/projects/planning-runs/${runId}/recovery`, { cache: 'no-store' });
+        if (live) setRecovery(response.ok ? ((await response.json()) as RecoveryComparison) : null);
+      } catch { if (live) setRecovery(null); }
+    })();
+    return () => { live = false; };
+  }, [view?.run.id]);
 
   async function accept() {
     if (!view) return;
@@ -171,7 +208,25 @@ export default function PlanningRunPanel({ projectId, projectName }: { projectId
               <span>Current finish <strong>{view.comparison.currentFinish ?? '—'}</strong></span>
               <span>Proposed finish <strong>{view.comparison.proposedFinish}</strong></span>
               <span>Tasks moved <strong>{view.comparison.movedCount}</strong></span>
+              {/* The figure this is judged on. Zero says the re-plan found nothing; a negative
+                  number says the scenario is worse than what it would replace — the one nobody
+                  should accept by reflex, and the one a finish date alone hides. */}
+              <span data-testid="recovery-verdict">
+                {recovery === null ? 'Recovered —'
+                  : recovery.verdict === 'UNKNOWN' ? `Recovered — · ${recovery.unknownReason ?? 'not established'}`
+                  : recovery.verdict === 'NO_CHANGE' ? <>Recovered <strong>nothing</strong></>
+                  : recovery.verdict === 'LOSES_TIME' ? <>Loses <strong>{Math.abs(recovery.workingDaysRecovered ?? 0)} working days</strong></>
+                  : <>Recovered <strong>{recovery.workingDaysRecovered} working days</strong></>}
+              </span>
             </div>
+            {recovery?.sourceDelayId && (
+              // The lineage that makes this a recovery rather than a re-plan somebody happened to
+              // run: the assessment that justified it, frozen at the hand-off.
+              <small className={styles.hint} data-testid="recovery-lineage">
+                Prepared for an assessed delay of {recovery.sourceAssessmentImpactDays} working day
+                {recovery.sourceAssessmentImpactDays === 1 ? '' : 's'}
+              </small>
+            )}
             <div className={styles.scroll}>
               <table className={styles.table}>
                 <thead>

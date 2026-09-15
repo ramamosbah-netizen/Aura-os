@@ -450,6 +450,59 @@ exactly as it would refuse a planner.
 
 **PLN-14 stays PARTIAL, and COMPLETE is proposed below.**
 
+## Iteration 16 — From an assessed delay to a recovered programme
+
+The chain, and every link a stored row:
+
+`delay event → derived impact → recorded assessment → explicit prepare-recovery hand-off → recovery
+proposal → review → acceptance → the programme moves`
+
+**A recovery proposal is a scenario.** It is stored beside the programme, changes not one stored
+date, and becomes current only through a governed acceptance. That is the whole of this capability:
+a re-plan that quietly became the plan is how a project's dates stop meaning anything, because
+nobody can say when they were last agreed to.
+
+**The hand-off is deliberately explicit** — a button somebody presses. An assessment that silently
+launched a re-plan would produce a proposal nobody asked for against a programme nobody agreed to
+move, and the planner who has to defend the recovery would not have chosen its starting point. It
+refuses a delay nobody has assessed, because there is nothing to be a recovery *of*, and a delay
+belonging to another project.
+
+The proposal carries canonical lineage to the delay **and** to the assessed impact, frozen at the
+hand-off so a later re-assessment cannot rewrite what it was prepared against. The two are read side
+by side and are allowed to disagree: "assessed at 3 days lost, this recovers 8" is two assessments
+of two different things, and deriving either from the other would destroy both.
+
+It uses the same calendar, the same dependency network and the same CPM as the programme. And what
+it is judged on is the **comparison** — current finish, proposed finish, working days recovered
+under the project's calendar — never the proposal's own finish date. Zero says the re-plan found
+nothing. A **negative** figure says the scenario is worse than the programme it would replace, which
+is precisely the one nobody should accept by reflex and the one a finish date alone hides.
+
+**A gap found while building it.** Acceptance already refused a proposal whose task SET had changed,
+which catches an activity added or removed and nothing else. A programme can move underneath a
+proposal without gaining or losing a single task — a duration extended, a date moved, an edge added,
+a different calendar named — and every task id still matched, so stale dates were written silently.
+Migration 0326 adds a fingerprint of everything the solver actually consumed, taken at run time and
+compared at acceptance. Changed means re-run.
+
+Auth-ON browser and API proof of the whole chain: the hand-off refused for an unassessed delay and
+offered only once an assessment exists; a prepared proposal carrying its delay, its frozen assessed
+impact and a basis fingerprint; preparing one moving not a single stored date; the comparison
+reporting current 24 March, the proposed finish, and **8 working days** recovered under a Gulf
+calendar rather than the 12 calendar days between them; discarding leaving the programme untouched
+and a discarded proposal refusing a later acceptance (409); extending one activity's duration caught
+at acceptance as a changed planning basis (409) with the programme unmoved; and acceptance moving
+the programme to exactly the proposed finish, once.
+
+Under a live verifier: a Planning Engineer assesses the delay, prepares the recovery and reads what
+it would recover — and is **refused the acceptance (403)** with nothing moved. A stranger is refused
+the scenario, the hand-off and the acceptance alike, server-side rather than by a hidden button. The
+Project Manager accepts, and the programme moves.
+
+**PLN-15 stays PARTIAL; PLN-14's open acceptance row is now closed.** Both are reconciled together
+below.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -627,7 +680,12 @@ exactly as it would refuse a planner.
 | Delay impact Auth-ON browser journey | 1/1 passed in Chromium; the ledger carrying claimed beside assessed, and the derived verdict changing with the activity it names |
 | Role catalogue authority | 24/24 passed; a Planning Engineer assesses a delay's impact and does not decide the EOT claim that rests on it |
 | Database migration posture | 325/325 applied; a delay names its activities under FORCE RLS, and an assessment is a whole fact or none of it |
-| Full API unit/fitness suite | 542 passed / 4 skipped |
+| Recovery comparison domain rules | 10/10 passed; working days recovered under the calendar, a re-plan that found nothing, a proposal WORSE than what it would replace, lineage carried, and nothing stated for a proposal that is not established |
+| Recovery chain HTTP journey | 12/12 passed; the explicit hand-off refused for an unassessed delay, canonical lineage frozen at hand-off, a scenario moving no stored date, current/proposed/recovered reported together, a discarded proposal changing nothing and refusing acceptance, a changed planning basis caught (409), and acceptance moving the programme once |
+| Recovery acceptance authority (JWT ON) | 4/4 passed; the planner prepares and reads but is refused the acceptance (403), a stranger is refused the whole chain server-side, and the Project Manager accepts |
+| Recovery chain Auth-ON browser journey | 1/1 passed in Chromium; assessment → hand-off button → scenario with nothing moved → reviewed with what it recovers → accepted → programme moves |
+| Database migration posture | 326/326 applied; a proposal records the delay it recovers, the assessment that justified it, and a fingerprint of the basis it was computed against |
+| Full API unit/fitness suite | 543 passed / 4 skipped |
 
 ### PLN-10 reconciliation
 
@@ -815,21 +873,54 @@ proposal.
 | Produces an impact | claimed and lost kept apart, counted in working days under the project's calendar | no |
 | The impact is reviewed | a recorded act — figure, name and moment — that survives the plan moving | no |
 | Concurrency is not fudged | overlapping events named with their cause and never apportioned | no |
-| Produces a recovery proposal | a planning run is the recovery mechanism, and a planner starts one by hand | **yes** |
+| Produces a recovery proposal | **closed in iteration 16**: an explicit hand-off produces a proposal carrying canonical lineage to this delay and its assessment, proven Auth-ON from assessment to accepted programme | no |
 
-**Proposed: `PLN-14` PARTIAL → COMPLETE.** The row is left to the programme owner as the others
-were, and the open row above is the reason to read the proposal carefully rather than wave it
-through: the criterion says "and recovery proposal", and what exists is a recovery mechanism
-(PLN-15's planning runs, already PARTIAL) that an assessment does not hand off to automatically.
+**Proposed: `PLN-14` PARTIAL → COMPLETE**, together with PLN-15 below and on the joint evidence.
+The row that kept it PARTIAL through iteration 15 — "and recovery proposal" — is closed: an
+assessment now hands off explicitly to a proposal that names the delay and the assessed figure it
+was prepared against.
 
-That hand-off is deliberately not built here. A delay assessment that silently launched a
-re-plan would produce a proposal nobody asked for against a programme nobody agreed to move, and
-the acceptance of a recovery plan is PLN-15's governed act with its own reviewer. Whether the
-criterion is met by "the mechanism exists and is one click away" or requires the automatic hand-off
-is a judgement for the owner, not one to settle by promoting the row.
+The hand-off is a button somebody presses rather than an automatic re-plan, and that is a design
+decision rather than a shortfall: a proposal produced by itself would be one nobody asked for
+against a programme nobody agreed to move, and the planner who must defend the recovery would not
+have chosen its starting point. The criterion asks that a delay event "produces a reviewed impact
+and recovery proposal"; it does, and both the impact and the proposal are reviewed acts with named
+people behind them.
 
-One further limit is carried: a delay reaches nobody who is not looking at the screen — the same
+One limit is carried: a delay reaches nobody who is not looking at the screen — the same
 notification gap five other rows carry.
+
+### PLN-15 reconciliation
+
+The capability reads *Recovery proposal and acceptance*, and its acceptance criterion is that a
+planner accepts a reviewed recovery plan, with revisions, baseline and assignments staying
+traceable.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| A recovery plan exists as a reviewable thing | prepared by an explicit hand-off from an assessed delay, stored beside the programme | no |
+| It is reviewed before it is anything | current finish, proposed finish and working days recovered, plus per-activity date changes | no |
+| A planner accepts it | acceptance is a recorded act that moves the programme to exactly the proposed finish | no |
+| …and only the right authority may | a Planning Engineer prepares and reads it and is refused the acceptance (403) under a live verifier | no |
+| A proposal is not a programme | preparing one moves no stored date; rejecting one moves no stored date | no |
+| Revisions stay traceable | the proposal names the delay and the assessed impact it was prepared against, frozen at the hand-off | no |
+| A stale proposal is caught | the planning basis is fingerprinted at run time and compared at acceptance | no |
+| Unauthorised access fails server-side | a stranger is refused the scenario, the hand-off and the acceptance alike | no |
+| **Baseline stays traceable** | **acceptance deliberately does not re-baseline; the baseline and a recovered programme diverge until somebody re-baselines on purpose** | **yes** |
+
+**Proposed: `PLN-15` PARTIAL → COMPLETE**, jointly with PLN-14.
+
+The open row is a deliberate design decision and the owner should weigh it rather than have it
+waved through. Acceptance moves the current plan and leaves the baseline and the actuals exactly as
+they were — which is correct: a baseline is what performance is measured against, and a system that
+re-baselined every time a recovery was accepted would erase the very variance the recovery exists to
+answer for. But it means a recovered programme and its baseline diverge, and nothing yet prompts
+anybody to re-baseline deliberately. Whether "the baseline stays traceable" is satisfied by leaving
+it untouched, or requires a governed re-baseline act of its own, is a judgement for the programme
+owner. `PLN-05` (Baseline approval) is the row that would carry that work.
+
+As on the other planning rows, `actualOutput` would remain **PARTIAL** on promotion: the proposal is
+proven on screen and no exported recovery document exists.
 
 ### Observed while proving it, not fixed
 
@@ -846,7 +937,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, recovery and forecast evidence from the connected plan. Delay assessment is now proven (PLN-14, PARTIAL and proposed for COMPLETE, with the recovery hand-off deliberately unbuilt). The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost and forecast evidence from the connected plan. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both PARTIAL and proposed for COMPLETE together). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

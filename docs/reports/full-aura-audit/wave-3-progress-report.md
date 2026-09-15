@@ -394,7 +394,7 @@ making the activity ready again — derived, not stored; a package delivered by 
 contributing exactly one scope row; and an activity dragged into the window by an edit to the
 programme appearing on the next read with nothing authored.
 
-**PLN-13 moves from ABSENT to PARTIAL, and COMPLETE is proposed below.** This leaves the register
+**PLN-13 moves from ABSENT to COMPLETE** — see the reconciliation below. This leaves the register
 with no ABSENT capability at all.
 
 ## Security and authority proof
@@ -707,8 +707,8 @@ dependency.
 | The network survives editing the plan | an activity's edges are removed with the activity | no |
 
 **`PLN-02` BACKEND_ONLY → COMPLETE — applied on 2026-09-15 by the programme owner's decision**, in
-one step, the reconciliation above leaving no acceptance row open. This makes seven COMPLETE
-capabilities in the register (AWD-05, AWD-06, PLN-02, PLN-03, PLN-10, PLN-11, PLN-12) out of 180.
+one step, the reconciliation above leaving no acceptance row open. That was seven COMPLETE capabilities out of 180 (AWD-05,
+AWD-06, PLN-02, PLN-03, PLN-10, PLN-11, PLN-12); PLN-13 below makes eight.
 
 One limit is carried with the proposal: **only finish-to-start is authored.** Start-to-start,
 finish-to-finish and lag are understood by the solver — `lagDays` is a field on its input — and have
@@ -733,9 +733,10 @@ produces a dated, resource-aware two-to-six-week look-ahead from the accepted pr
 | Readiness is honest | an undeclared capacity reads NOT ESTABLISHED, never ready | no |
 | Scope is not double-counted | one row per work package, activities named rather than summed | no |
 
-**Proposed: `PLN-13` PARTIAL → COMPLETE.** The row is moved off ABSENT because the artefact plainly
-exists and is proven; the promotion is left to the programme owner. With it, the register has **no
-ABSENT capability left**.
+**`PLN-13` ABSENT → COMPLETE — applied on 2026-09-15 by the programme owner's decision**, in one
+step, the reconciliation above leaving no acceptance row open. With it the register has **no ABSENT
+capability left**, and eight are COMPLETE (AWD-05, AWD-06, PLN-02, PLN-03, PLN-10, PLN-11, PLN-12,
+PLN-13) out of 180.
 
 One limit is carried with the proposal: the look-ahead is **read on screen and has no exported or
 printable form**, which is how a site meeting is usually handed it. That is the same
@@ -758,7 +759,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, delay/recovery and forecast evidence from the connected plan. The look-ahead is now proven (PLN-13, PARTIAL and proposed for COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost, delay/recovery and forecast evidence from the connected plan. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

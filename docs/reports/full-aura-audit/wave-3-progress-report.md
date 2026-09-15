@@ -1336,6 +1336,137 @@ self-declared impact to a commercial assessment needs deciding on its own merits
 - **Nothing notifies anybody who is not looking at a screen.** My Work carries the turn, which is
   more than the planning signals have, but no message leaves the system.
 
+## Iteration 21 — ENG-04 authority investigation (no promotion)
+
+`ENG-04` began as an authority question and it has stayed one. This records what the repository
+actually contains, because the answer changes what the row can mean — and because a capability must
+not be relocated between contexts silently.
+
+**No promotion is proposed, and no user interface was built.** Building a screen over semantics this
+unsettled is how a gap becomes a feature nobody can take back.
+
+### The canonical record is Quality's Material Approval Request
+
+Three registers touch submittals. Only one models a material:
+
+| Register | What it carries | Verdict |
+| --- | --- | --- |
+| **`quality` MAR** | the product (material name, manufacturer, supplier, specification), the consultant's decision, **who made it and when**, review comments, a revision chain — and a procurement consumer | **canonical** |
+| `doccontrol` submittal | controlled documents with A/B/C/D review codes and revisions | a document register, not a material one |
+| `engineering` submittal | `submittalType: material` with a `status` that can read `approved` — no reviewer, no comments, no revision, nothing downstream reading it | duplicate; its material writer is now refused (`717c0124`) |
+
+**Audit correction, recorded and NOT applied silently:** the register gives `ENG-04` the authority
+*Engineering / DocControl*. The implementation that satisfies it is in **Quality**, and that is
+correct on the merits — a Material Approval Request is a QA/QC document in UAE practice, which the
+module's own doc comment says. The register's field was written from the capability's NAME rather
+than from discovery. Correcting it is proposed as an explicit audit correction for the programme
+owner to accept, not folded into a promotion.
+
+### What `717c0124` fixed, and what it did not
+
+It closed a real defect: the procurement gate asked whether the supplier had a **rejected** request
+and passed whenever the answer was no, so a material nobody had ever submitted issued a purchase
+order exactly like an approved one. The verdict now distinguishes APPROVED / APPROVED_AS_NOTED /
+PENDING / REJECTED / UNKNOWN, PENDING and REJECTED refuse, and a canonical `supplier_id` replaced a
+`lower(name) = lower(name)` match.
+
+Two things it did **not** fix, both raised by the programme owner and both correct:
+
+1. **UNKNOWN still passes the governed gate.** Recording it on the issue event makes the ambiguity
+   visible; it does not make it not-an-approval. In the governed path, `passed: true` is a pass.
+2. **A canonical supplier is identity, not material lineage.** One supplier supplies dozens of
+   materials. An approval for fire-rated cable authorises nothing about the containment, the
+   detectors or the panels bought from the same company — the question was fixed for precision and
+   left wrong in its SUBJECT.
+
+### The applicability authority does not exist
+
+The obvious repair — treat a purchase order with no BOQ line as not buying specified material — was
+**rejected before implementation**, because the repository does not support it:
+
+| Question | Finding |
+| --- | --- |
+| Is `boqItemId` mandatory on a purchase order? | **No.** `boqItemId: dto.boqItemId ?? null`. Only `title` is required to create a PO. |
+| Who supplies it? | The **buyer**, at order time, with no server-side validation. |
+| What is it for? | The Quantity Ledger's ORDERED posting — a commercial measurement, not a governance control. |
+| Is there a PO **line** model? | **No.** The purchase order is flat: one title, one value, one optional BOQ item, one quantity. |
+| Is there a type/category classifying an order as material / service / hire / consumable? | **No.** None on the PO, none on the purchase request. |
+| Is there any classification at all? | Only `SupplierCategory` on the supplier master (`materials`, `subcontractor`, `services`, `equipment`, `other`) — a property of the VENDOR, not of the order, and a materials supplier still invoices delivery charges. |
+
+Encoding `boqItemId == null → NOT_APPLICABLE` would therefore have moved the defect rather than
+closing it:
+
+```
+    before:  no MAR         -> pass
+    after:   no boqItemId   -> pass
+```
+
+and the second is worse, because the field is optional and supplied by the person being gated. **A
+missing field would have become an authorisation.** `NOT_APPLICABLE` must be an authoritative fact
+somebody declares, and there is nothing in this system that declares it.
+
+### There is no canonical material or product identity
+
+Every candidate, and why none of them closes the chain:
+
+| Candidate | What it is | Why it does not serve |
+| --- | --- | --- |
+| `StockItem` (inventory) | warehouse item master: code, name, unit, barcode | no manufacturer or model; **not referenced by a purchase order at all** |
+| `ElvDevice` (elv) | `manufacturer` + `model` + tag + serial | an **installed instance** on a project, created at or after installation — it exists after the purchase, not before it |
+| `MarketItem` (market-intelligence) | `manufacturer` | competitor/market intelligence, not a governed catalogue |
+| `MaterialApproval` (quality) | `materialName`, `manufacturer`, `specification` | **all free text** |
+| `GoodsReceipt` | `boqItemId`, quantity | scope lineage, no product identity |
+| approved make/model register | — | **does not exist anywhere in the repository** |
+
+A BOQ item is scope, not product: *"Supply and install CCTV camera"* can carry several proposed
+manufacturers, models and revisions, and approving one of them approves one of them.
+
+### So the chain cannot be completed today
+
+The lineage the invariant needs —
+
+```
+    PO line -> canonical material/product -> BOQ scope -> exact MAR revision -> consultant decision
+```
+
+— breaks at its **first two links**: there are no purchase-order lines, and there is no canonical
+material or product. Everything downstream of those is buildable; nothing upstream of them exists.
+
+Any gate built now is necessarily weaker than the invariant. That is a structural gap wider than one
+capability row, and it is reported rather than papered over.
+
+### A second hole, found while investigating
+
+**Site installation is not gated by material approval at all.** Nothing in `modules/site` reads a
+MAR. Even a purchase order correctly refused does not stop the material being recorded as installed,
+which is the point at which it is fixed to the building. The procurement gate is one of two doors,
+and only one of them has ever had a lock.
+
+### Legacy requests
+
+Existing MARs carry free-text `supplier` and `materialName` and nothing else. They must **not** be
+reinterpreted as material-level approvals by a new matching rule — an approval whose subject cannot
+be identified is not an approval of a particular material. They are preserved and their material-level
+authority classified honestly as **legacy / unresolved**, which is a true statement about them rather
+than a permission granted retrospectively.
+
+### Where this leaves ENG-04
+
+`UNVERIFIED`, and staying there. The row cannot be closed to the invariant *"only the approved
+material may be bought and installed"* until the system can say **which material** a purchase is
+for. What is committed (`717c0124`) is kept: the verdict, the canonical supplier identity, and the
+closure of the ungoverned second writer are all improvements that survive whatever identity is
+chosen.
+
+The decisions this now needs are the programme owner's, and they are larger than this row:
+
+1. whether a canonical **material / product identity** is introduced, and where it lives;
+2. whether the purchase order gains **lines**, without which no order can name more than one
+   material;
+3. what **declares applicability** — the authority that says this purchase requires an approved
+   material — given that no field in the system does so today;
+4. whether **site installation** is gated alongside procurement.
+
 ## Wave 3 remainder audit
 
 The section that stood here had become three paragraphs of accreted commentary. Every iteration

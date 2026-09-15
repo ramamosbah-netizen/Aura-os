@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
 import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
@@ -28,7 +28,8 @@ import { RFI_STORE, type RfiFilter, type RfiStore } from './rfi-store';
 import { type Submittal, type NewSubmittal, makeSubmittal } from './domain/submittal';
 import { SUBMITTAL_STORE, type SubmittalFilter, type SubmittalStore } from './submittal-store';
 
-import { type TechnicalQuery, type NewTechnicalQuery, makeTechnicalQuery, respondToQuery } from './domain/technical-query';
+import { type TechnicalQuery, type NewTechnicalQuery, makeTechnicalQuery, respondToQuery, closeQuery } from './domain/technical-query';
+import { TQ_RESPONSE_STORE, type TqResponseStore, type RecordedTqResponse } from './tq-response-store';
 import { TECHNICAL_QUERY_STORE, type TqFilter, type TechnicalQueryStore } from './technical-query-store';
 
 import { type BimModel, type NewBimModel, type ModelStatus, makeBimModel, bumpModelVersion, BIM_MODEL_EVENT } from './domain/bim-model';
@@ -61,6 +62,11 @@ export class EngineeringService {
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
+    // Where a SUPERSEDED design answer is kept. Optional like every seam above — and `@Inject` for
+    // the reason stated there, not decoration. Unbound, a replacement still requires its reason and
+    // still increments the revision; only the displaced text is unavailable, which such a
+    // composition then says rather than pretending nothing was replaced.
+    @Optional() @Inject(TQ_RESPONSE_STORE) private readonly tqResponses: TqResponseStore | null = null,
   ) {}
 
   // ── Shop Drawings ──────────────────────────────────────────────────────────
@@ -629,6 +635,15 @@ export class EngineeringService {
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
       this.access.assert(input.createdBy, { permission: 'engineering.tq.create', orgPath, resource: { type: 'project', id: input.projectId } });
     }
+    // A CANONICAL drawing link is resolved, never trusted off the payload. `drawingReference` is
+    // free text that can name "E-101 Rev C" and be traced to nothing; an id that turned out to
+    // belong to another project would be worse — a query that looks linked and points elsewhere.
+    if (input.drawingId) {
+      const drawing = await this.drawingStore.get(input.drawingId);
+      if (!drawing || drawing.tenantId !== input.tenantId || drawing.projectId !== input.projectId) {
+        throw new BadRequestException(`drawing ${input.drawingId} does not belong to project ${input.projectId}`);
+      }
+    }
     const tq = makeTechnicalQuery(input);
     const event = makeEvent({
       type: ENGINEERING_EVENT.tqRaised,
@@ -644,26 +659,77 @@ export class EngineeringService {
     return tq;
   }
 
-  async respondTechnicalQuery(tenantId: Id, actorId: Id | null, id: Id, response: string): Promise<TechnicalQuery> {
+  /**
+   * Record the design decision, or replace one that already stands.
+   *
+   * The displaced answer is written to the revision store IN THE SAME TRANSACTION as the new one.
+   * Anything less would let the overwrite land while the history of what it replaced did not, which
+   * is the exact failure this was built to prevent rather than a smaller version of it.
+   */
+  async respondTechnicalQuery(
+    tenantId: Id, actorId: Id | null, id: Id,
+    input: { response: string; supersededReason?: string | null },
+  ): Promise<TechnicalQuery> {
     const tq = assertSameTenant(await this.tqStore.get(id), this.tenant?.boundTenantId(), 'technical query', id);
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (tq.companyId) orgPath.push({ level: 'company', id: tq.companyId });
       this.access.assert(actorId, { permission: 'engineering.tq.respond', orgPath, resource: { type: 'project', id: tq.projectId } });
     }
-    const updated = respondToQuery(tq, response);
+    const { query: updated, superseded } = respondToQuery(tq, {
+      response: input.response, by: actorId, supersededReason: input.supersededReason ?? null,
+    });
     const event = makeEvent({
       type: ENGINEERING_EVENT.tqResponded,
       tenantId, companyId: tq.companyId, actorId,
       aggregateType: 'engineering.tq', aggregateId: tq.id,
-      payload: { code: tq.code, status: updated.status },
+      payload: { code: tq.code, status: updated.status, revision: updated.responseRevision, supersededRevision: superseded?.revision ?? null },
+    });
+    await this.tx.run(async (handle) => {
+      if (superseded && this.tqResponses) {
+        await this.tqResponses.record(handle, {
+          ...superseded, tenantId: tq.tenantId, projectId: tq.projectId, technicalQueryId: tq.id,
+        });
+      }
+      await this.tqStore.updateWithClient(handle, updated);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`TQ responded: ${tq.code} (${tq.id}) revision ${updated.responseRevision}`);
+    return updated;
+  }
+
+  /**
+   * Close the loop: the RAISING side accepts the answer as adequate to build to.
+   *
+   * A separate permission from responding, and the domain refuses a self-close even where one
+   * person holds both — declaring a design decision adequate is the judgement of whoever has to
+   * build to it, and collapsing the two turns the exchange into a note somebody wrote to themselves.
+   */
+  async closeTechnicalQuery(tenantId: Id, actorId: Id, id: Id): Promise<TechnicalQuery> {
+    const tq = assertSameTenant(await this.tqStore.get(id), this.tenant?.boundTenantId(), 'technical query', id);
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (tq.companyId) orgPath.push({ level: 'company', id: tq.companyId });
+    this.access.assert(actorId, { permission: 'engineering.tq.close', orgPath, resource: { type: 'project', id: tq.projectId } });
+
+    const updated = closeQuery(tq, { by: actorId });
+    const event = makeEvent({
+      type: ENGINEERING_EVENT.tqClosed,
+      tenantId, companyId: tq.companyId, actorId,
+      aggregateType: 'engineering.tq', aggregateId: tq.id,
+      payload: { code: tq.code, respondedBy: tq.respondedBy, revision: tq.responseRevision },
     });
     await this.tx.run(async (handle) => {
       await this.tqStore.updateWithClient(handle, updated);
       await this.events.appendWithClient(handle, [event]);
     });
-    this.logger.log(`TQ responded: ${tq.code} (${tq.id})`);
+    this.logger.log(`TQ closed: ${tq.code} (${tq.id})`);
     return updated;
+  }
+
+  /** Every answer this query has had that was later replaced, oldest first. */
+  async technicalQueryResponseHistory(tenantId: Id, id: Id): Promise<RecordedTqResponse[]> {
+    const tq = assertSameTenant(await this.tqStore.get(id), this.tenant?.boundTenantId(), 'technical query', id);
+    return this.tqResponses ? this.tqResponses.listForQuery(tenantId, tq.id) : [];
   }
 
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */

@@ -236,17 +236,19 @@
   {
     "key": "modules/engineering/src/engineering.service.ts#createTechnicalQuery",
     "classification": "PROJECT_SCOPE_REQUIRED",
-    "resolution": "Selected project validated in the tenant before persistence; existing-entity helper callers pass the persisted project.",
+    "resolution": "Canonical project required via projectScope.requireProject before the assertion. A drawingId, when given, is loaded from the canonical drawing register and refused unless it belongs to the same tenant AND project — free-text drawingReference can name anything, but an id resolving elsewhere would be worse: a query that looks linked and points at another project.",
     "organizationBranch": null,
     "baselineScope": "scoped",
-    "change": "Validated creation/ownership; retained project scope",
+    "change": "ENG-03: canonical drawing link resolved and refused when out of project",
     "evidence": "engineering.createTechnicalQuery",
     "security": {
       "target": "{ permission: 'engineering.tq.create', orgPath, resource: { type: 'project', id: input.projectId } }",
       "checks": [
         "this.projectScope?.requireProject(input.tenantId, input.projectId)"
       ],
-      "provenance": []
+      "provenance": [
+        "drawing = await this.drawingStore.get(input.drawingId)"
+      ]
     }
   },
   {
@@ -289,6 +291,20 @@
     "evidence": "engineering.respondTechnicalQuery",
     "security": {
       "target": "{ permission: 'engineering.tq.respond', orgPath, resource: { type: 'project', id: tq.projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/engineering/src/engineering.service.ts#closeTechnicalQuery",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical tq.projectId loaded from the owning store before the assertion; closing is a distinct authority from responding, and the domain additionally refuses a self-close so the rule holds even where one principal holds both permissions.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "New in ENG-03: the raising side accepts a design answer as adequate",
+    "evidence": "engineering.closeTechnicalQuery",
+    "security": {
+      "target": "{ permission: 'engineering.tq.close', orgPath, resource: { type: 'project', id: tq.projectId } }",
       "checks": [],
       "provenance": []
     }

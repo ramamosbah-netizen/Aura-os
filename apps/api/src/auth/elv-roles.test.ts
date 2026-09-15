@@ -109,6 +109,20 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-pm').permissions.some((p) => permissionMatches(p, 'projects.delay.assess'))).toBe(true);
   });
 
+  it('Design answers a technical query; accepting that answer belongs to whoever builds to it', () => {
+    // ENG-03. A TQ response is a formal design decision site then builds to. Giving it is the
+    // Technical Manager's act; declaring it adequate is the raiser's. The domain refuses a
+    // self-close even where one principal holds both, but the permissions separate them first.
+    expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'engineering.tq.respond'))).toBe(true);
+    expect(roleFor('r-technical-engineer').permissions.some((p) => permissionMatches(p, 'engineering.tq.respond'))).toBe(false);
+    expect(roleFor('r-project-engineer').permissions.some((p) => permissionMatches(p, 'engineering.tq.respond'))).toBe(false);
+    // …and the raising side closes it.
+    expect(roleFor('r-technical-engineer').permissions.some((p) => permissionMatches(p, 'engineering.tq.close'))).toBe(true);
+    expect(roleFor('r-project-engineer').permissions.some((p) => permissionMatches(p, 'engineering.tq.close'))).toBe(true);
+    // Raising one is ordinary engineering authorship, held by the engineer who needs the answer.
+    expect(roleFor('r-technical-engineer').permissions.some((p) => permissionMatches(p, 'engineering.tq.create'))).toBe(true);
+  });
+
   it('Technical management governs organization resource pools and capacity', () => {
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-pool.create'))).toBe(true);
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-capacity.create'))).toBe(true);

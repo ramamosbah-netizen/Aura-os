@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { ProjectResponsibilityService } from '@aura/projects';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -574,9 +574,14 @@ export class EngineeringController {
 
   // ── Technical Queries (TQ) ──────────────────────────────────────────────────
 
+  // EXPLICIT, and not decoration. Derivation would produce `engineering.technical-query.*` from the
+  // route while the service asserts `engineering.tq.*` — two vocabularies for one exchange, so a
+  // role holding the one it names is refused by the guard for the other. Naming the permission here
+  // makes the guard and the service agree on a single word.
+  @Permissions('engineering.tq.create')
   @Post('technical-queries')
   createTq(
-    @Body() dto: { projectId: string; projectName?: string; code: string; title: string; query: string; priority?: TqPriority; discipline?: TqDiscipline; drawingReference?: string; costImpact?: boolean; timeImpact?: boolean; assignedTo?: string },
+    @Body() dto: { projectId: string; projectName?: string; code: string; title: string; query: string; priority?: TqPriority; discipline?: TqDiscipline; drawingReference?: string; drawingId?: string; costImpact?: boolean; timeImpact?: boolean; assignedTo?: string },
   ): Promise<TechnicalQuery> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
@@ -593,6 +598,7 @@ export class EngineeringController {
       priority: dto.priority,
       discipline: dto.discipline,
       drawingReference: dto.drawingReference ?? null,
+      drawingId: dto.drawingId ?? null,
       costImpact: dto.costImpact,
       timeImpact: dto.timeImpact,
       assignedTo: dto.assignedTo ?? null,
@@ -600,6 +606,7 @@ export class EngineeringController {
     });
   }
 
+  @Permissions('engineering.tq.read')
   @Get('technical-queries')
   listTqs(
     @Query('projectId') projectId?: string,
@@ -608,6 +615,7 @@ export class EngineeringController {
     return this.engineeringService.listTechnicalQueries({ tenantId: this.tenant.get().tenantId, projectId, status, limit: 100 });
   }
 
+  @Permissions('engineering.tq.read')
   @Get('technical-queries/paged')
   pagedTqs(
     @Query('projectId') projectId?: string,
@@ -621,6 +629,7 @@ export class EngineeringController {
     );
   }
 
+  @Permissions('engineering.tq.read')
   @Get('technical-queries/:id')
   async getTq(@Param('id') id: string): Promise<TechnicalQuery> {
     const found = await this.engineeringService.getTechnicalQuery(id);
@@ -628,11 +637,44 @@ export class EngineeringController {
     return found;
   }
 
+  /**
+   * Record the design decision, or replace one that already stands.
+   *
+   * Replacing costs a reason and keeps what it displaced: site builds to a TQ answer, so one that
+   * changed silently would mean work done to an instruction that no longer exists anywhere.
+   */
+  @Permissions('engineering.tq.respond')
   @Put('technical-queries/:id/respond')
-  async respondTq(@Param('id') id: string, @Body() dto: { response: string }): Promise<TechnicalQuery> {
+  async respondTq(
+    @Param('id') id: string,
+    @Body() dto: { response: string; supersededReason?: string },
+  ): Promise<TechnicalQuery> {
     if (!dto?.response?.trim()) throw new BadRequestException('response is required');
     const ctx = this.tenant.get();
-    return await this.engineeringService.respondTechnicalQuery(ctx.tenantId, ctx.actorId, id, dto.response);
+    return await this.engineeringService.respondTechnicalQuery(ctx.tenantId, ctx.actorId, id, {
+      response: dto.response, supersededReason: dto.supersededReason ?? null,
+    });
+  }
+
+  /**
+   * Close the loop: the raising side accepts the answer as adequate to build to.
+   *
+   * A different permission from responding, and the domain refuses a self-close even where one
+   * person holds both — nobody declares their own design decision good enough.
+   */
+  @Permissions('engineering.tq.close')
+  @Put('technical-queries/:id/close')
+  async closeTq(@Param('id') id: string): Promise<TechnicalQuery> {
+    const ctx = this.tenant.get();
+    if (!ctx.actorId) throw new BadRequestException('a signed-in user is required to close a technical query');
+    return await this.engineeringService.closeTechnicalQuery(ctx.tenantId, ctx.actorId, id);
+  }
+
+  /** Every answer this query has had that was later replaced, oldest first. */
+  @Permissions('engineering.tq.read')
+  @Get('technical-queries/:id/responses')
+  async tqResponseHistory(@Param('id') id: string) {
+    return await this.engineeringService.technicalQueryResponseHistory(this.tenant.get().tenantId, id);
   }
 
   // ── BIM / model registry (viewer backbone) ──────────────────────────────────

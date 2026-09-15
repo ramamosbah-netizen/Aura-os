@@ -59,7 +59,7 @@ describe('Technical Queries (service workflow)', () => {
     expect(tq.costImpact).toBe(true);
     expect(tq.response).toBeNull();
 
-    const responded = await svc.respondTechnicalQuery(tenantId, null, tq.id, 'Reroute below duct, RFI-12 applies.');
+    const responded = await svc.respondTechnicalQuery(tenantId, null, tq.id, { response: 'Reroute below duct, RFI-12 applies.' });
     expect(responded.status).toBe('responded');
     expect(responded.response).toContain('Reroute below duct');
     expect(responded.respondedAt).not.toBeNull();
@@ -73,7 +73,7 @@ describe('Technical Queries (service workflow)', () => {
   });
 
   it('rejects responding to a missing TQ', async () => {
-    await expect(svc.respondTechnicalQuery(tenantId, null, 'nope', 'x')).rejects.toThrow(/not found/);
+    await expect(svc.respondTechnicalQuery(tenantId, null, 'nope', { response: 'x' })).rejects.toThrow(/not found/);
   });
 });
 
@@ -87,7 +87,7 @@ describe('Technical Query domain', () => {
     expect(tq.code).toBe('TQ-9');
     expect(tq.priority).toBe('high');
 
-    const done = respondToQuery(tq, '  use 300mm  ');
+    const { query: done } = respondToQuery(tq, { response: '  use 300mm  ' });
     expect(done.response).toBe('use 300mm');
     expect(done.timeImpact).toBe(true);
     expect(done.status).toBe('responded');

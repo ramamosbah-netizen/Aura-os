@@ -23,12 +23,20 @@ interface Row {
   project_name: string | null;
   assigned_to: string | null;
   responded_at: Date | string | null;
+  responded_by: string | null;
+  response_revision: number;
+  closed_at: Date | string | null;
+  closed_by: string | null;
+  drawing_id: string | null;
   created_by: string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, code, title, query, response, status, priority, discipline, drawing_reference, cost_impact, time_impact, project_id, project_name, assigned_to, responded_at, created_by, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, code, title, query, response, status, priority, discipline, drawing_reference, cost_impact, time_impact, project_id, project_name, assigned_to, responded_at, responded_by, response_revision, closed_at, closed_by, drawing_id, created_by, created_at, updated_at';
+
+const stamp = (v: Date | string | null): string | null =>
+  v === null ? null : v instanceof Date ? v.toISOString() : String(v);
 
 function rowToTq(r: Row): TechnicalQuery {
   return {
@@ -48,7 +56,12 @@ function rowToTq(r: Row): TechnicalQuery {
     projectId: r.project_id,
     projectName: r.project_name,
     assignedTo: r.assigned_to,
-    respondedAt: r.responded_at instanceof Date ? r.responded_at.toISOString() : (r.responded_at ? String(r.responded_at) : null),
+    respondedAt: stamp(r.responded_at),
+    respondedBy: r.responded_by,
+    responseRevision: Number(r.response_revision ?? 0),
+    closedAt: stamp(r.closed_at),
+    closedBy: r.closed_by,
+    drawingId: r.drawing_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
     updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : String(r.updated_at),
@@ -70,9 +83,10 @@ export class PostgresTechnicalQueryStore implements TechnicalQueryStore {
   private insert(executor: Pool | PoolClient, t: TechnicalQuery): Promise<unknown> {
     return executor.query(
       `INSERT INTO public.aura_engineering_technical_queries (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
       [t.id, t.tenantId, t.companyId, t.code, t.title, t.query, t.response, t.status, t.priority, t.discipline,
-       t.drawingReference, t.costImpact, t.timeImpact, t.projectId, t.projectName, t.assignedTo, t.respondedAt, t.createdBy, t.createdAt, t.updatedAt],
+       t.drawingReference, t.costImpact, t.timeImpact, t.projectId, t.projectName, t.assignedTo, t.respondedAt,
+       t.respondedBy, t.responseRevision, t.closedAt, t.closedBy, t.drawingId, t.createdBy, t.createdAt, t.updatedAt],
     );
   }
 
@@ -88,9 +102,11 @@ export class PostgresTechnicalQueryStore implements TechnicalQueryStore {
   private modify(executor: Pool | PoolClient, t: TechnicalQuery): Promise<unknown> {
     return executor.query(
       `UPDATE public.aura_engineering_technical_queries
-       SET title=$2, query=$3, response=$4, status=$5, priority=$6, drawing_reference=$7, cost_impact=$8, time_impact=$9, assigned_to=$10, responded_at=$11, updated_at=now()
+       SET title=$2, query=$3, response=$4, status=$5, priority=$6, drawing_reference=$7, cost_impact=$8, time_impact=$9, assigned_to=$10, responded_at=$11,
+           responded_by=$12, response_revision=$13, closed_at=$14, closed_by=$15, drawing_id=$16, updated_at=now()
        WHERE id=$1`,
-      [t.id, t.title, t.query, t.response, t.status, t.priority, t.drawingReference, t.costImpact, t.timeImpact, t.assignedTo, t.respondedAt],
+      [t.id, t.title, t.query, t.response, t.status, t.priority, t.drawingReference, t.costImpact, t.timeImpact, t.assignedTo, t.respondedAt,
+       t.respondedBy, t.responseRevision, t.closedAt, t.closedBy, t.drawingId],
     );
   }
 

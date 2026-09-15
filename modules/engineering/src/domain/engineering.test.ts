@@ -366,7 +366,7 @@ describe('Engineering Module Bounded Context', () => {
       expect(tq.discipline).toBe('structural');
       expect(tq.response).toBeNull();
 
-      const responded = await service.respondTechnicalQuery('t1', null, tq.id, 'Redirect MEP ducts 200mm to the east.');
+      const responded = await service.respondTechnicalQuery('t1', null, tq.id, { response: 'Redirect MEP ducts 200mm to the east.' });
       expect(responded.status).toBe('responded');
       expect(responded.response).toBe('Redirect MEP ducts 200mm to the east.');
       expect(responded.respondedAt).toBeDefined();

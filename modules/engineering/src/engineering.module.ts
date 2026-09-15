@@ -23,6 +23,7 @@ import { InMemorySubmittalStore } from './in-memory-submittal-store';
 import { PostgresSubmittalStore } from './postgres-submittal-store';
 
 import { TECHNICAL_QUERY_STORE } from './technical-query-store';
+import { TQ_RESPONSE_STORE, InMemoryTqResponseStore, PostgresTqResponseStore } from './tq-response-store';
 import { InMemoryTechnicalQueryStore } from './in-memory-technical-query-store';
 import { PostgresTechnicalQueryStore } from './postgres-technical-query-store';
 
@@ -82,6 +83,12 @@ import { EngineeringProjectResolvers } from './project-resolvers';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresTechnicalQueryStore(pool) : new InMemoryTechnicalQueryStore(),
+    },
+    {
+      provide: TQ_RESPONSE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresTqResponseStore(pool) : new InMemoryTqResponseStore(),
     },
     {
       provide: BIM_MODEL_STORE,

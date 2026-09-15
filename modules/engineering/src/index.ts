@@ -27,6 +27,7 @@ export * from './postgres-submittal-store';
 
 export * from './domain/technical-query';
 export * from './technical-query-store';
+export * from './tq-response-store';
 export * from './in-memory-technical-query-store';
 export * from './postgres-technical-query-store';
 

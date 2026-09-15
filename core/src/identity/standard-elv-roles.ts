@@ -99,6 +99,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       'engineering.*.read', 'engineering.*.create', 'engineering.*.update',
       'engineering.drawing.submit', 'engineering.drawing.revise', 'engineering.drawing.transmit',
+      // Raises technical queries and CLOSES them once the answer is adequate to build to — but does
+      // NOT hold `engineering.tq.respond`. The design decision is the Technical Manager's to give;
+      // judging it good enough belongs to whoever has to build to it, and one person holding both
+      // turns the whole exchange into a note they wrote to themselves.
+      'engineering.tq.close',
       readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },
@@ -135,7 +140,8 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'project',
     permissions: [
       'projects.*.read', 'projects.issue.*', 'projects.risk.*', PROJECT_RESPONSIBILITY_WORK,
-      'engineering.*.read', 'engineering.rfi.*', 'site.*.read', 'quality.*.read',
+      // Also on the raising side of a technical query: accepts an answer as adequate, never gives one.
+      'engineering.*.read', 'engineering.rfi.*', 'engineering.tq.close', 'site.*.read', 'quality.*.read',
       'procurement.*.read', 'commissioning.*.read', ...STAFF_BASE,
     ],
   },

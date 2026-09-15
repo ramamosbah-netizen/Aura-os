@@ -249,4 +249,5 @@ export const ENGINEERING_EVENT = {
   submittalStatusChanged: 'engineering.submittal.status_changed',
   tqRaised: 'engineering.tq.raised',
   tqResponded: 'engineering.tq.responded',
+  tqClosed: 'engineering.tq.closed',
 } as const;

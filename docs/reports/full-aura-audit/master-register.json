@@ -1611,7 +1611,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1619,17 +1619,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "PARTIAL",
-        "api": "PARTIAL",
-        "permissions": "PARTIAL",
-        "ui": "PARTIAL",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "PARTIAL",
-        "browser": "PARTIAL",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
       "currentBehavior": "A project NAMES the working calendar its dates are counted under (migration 0324), and one place answers which that is for the solver, the save-time checks and the productivity rates alike. The correction this closes is not a missing feature but a GUESS: the solver took the tenant’s calendars ordered by name and used the first, which is right by luck for a company with one calendar and a coin toss for one running Dubai and Riyadh crews — and no screen said which calendar produced the dates, which is what made it invisible rather than merely wrong. A project naming none is planned with every day worked AND SAYS SO on the plan header, rather than having one chosen on its behalf: a guess that reads as an answer is worse than a stated unknown. The register’s previous note that the Gantt exposes only start and end dates was stale — working-day duration has been authored there since iteration 6; what was missing was the calendar those days are counted in. Weekends, public holidays and Ramadan adjustments remain owned by the kernel and are consumed, never reimplemented; administering them stays behind `admin.calendar.manage` while CHOOSING one carries the plan’s own `projects.schedule.plan`, because it changes what every date in the programme means. Each activity now reports what its window HOLDS in working days and the float between that and the work authored into it — float being a plan and not an error, which is why the two numbers are not forced equal — and a save is refused when the authored work cannot fit the window at all, a check that was not answerable before the calendar was known.",
-      "acceptanceProof": "Auth-ON browser and HTTP proof over one identical window (Mon 2026-03-09 to Fri 2026-03-20, six working days of work authored): unassigned reads 12 working days and 6 float with two calendars sitting unchosen in the tenant; the Gulf week (Fri/Sat off) reads 9 and 3; the KSA week (Thu/Fri off) reads 8 and 2 over the very same dates — the number the old guess could get wrong with nobody able to see it had; a public holiday inside the window drops it again, proving weekends and holidays are one mechanism; 11 working days of work is refused against a window holding 8 and accepted once the calendar is cleared; a calendar from another tenant is refused; and the planning solver places a two-day activity from Thursday onto Sunday under the project’s calendar while placing it on Friday when the project names none, however many calendars the tenant has. Fixed in passing: the in-memory calendar service minted ids from `Date.now()` alone, so two calendars saved in the same millisecond silently replaced one another. STILL OPEN: one calendar governs a whole project — a per-activity or per-resource calendar is not authored, and a night shift or a subcontractor working a different week is therefore counted under the project’s. COMPLETE is PROPOSED on this evidence and left to the programme owner; the row is moved off BACKEND_ONLY because a proven UI makes that classification plainly false."
+      "acceptanceProof": "Auth-ON browser and HTTP proof over one identical window (Mon 2026-03-09 to Fri 2026-03-20, six working days of work authored): unassigned reads 12 working days and 6 float with two calendars sitting unchosen in the tenant; the Gulf week (Fri/Sat off) reads 9 and 3; the KSA week (Thu/Fri off) reads 8 and 2 over the very same dates — the number the old guess could get wrong with nobody able to see it had; a public holiday inside the window drops it again, proving weekends and holidays are one mechanism; 11 working days of work is refused against a window holding 8 and accepted once the calendar is cleared; a calendar from another tenant is refused; and the planning solver places a two-day activity from Thursday onto Sunday under the project’s calendar while placing it on Friday when the project names none, however many calendars the tenant has. Fixed in passing: the in-memory calendar service minted ids from `Date.now()` alone, so two calendars saved in the same millisecond silently replaced one another. STILL OPEN: one calendar governs a whole project — a per-activity or per-resource calendar is not authored, and a night shift or a subcontractor working a different week is therefore counted under the project’s. Promoted on 2026-09-15 by the programme owner after the reconciliation in the Wave 3 report, moving off BACKEND_ONLY in one step because a proven UI made that classification plainly false."
     },
     {
       "id": "PLN-04",
@@ -8532,8 +8532,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 5,
-      "PARTIAL": 96,
+      "COMPLETE": 6,
+      "PARTIAL": 95,
       "BACKEND_ONLY": 5,
       "UI_ONLY": 0,
       "ABSENT": 1,

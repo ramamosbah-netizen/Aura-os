@@ -309,7 +309,7 @@ Fixed in passing: the in-memory calendar service minted ids from `Date.now()` al
 calendars saved in the same millisecond silently replaced one another — which is exactly what a
 fixture creating a Gulf week and a KSA week does.
 
-**PLN-03 moves from BACKEND_ONLY to PARTIAL, and COMPLETE is proposed below.** The register's note
+**PLN-03 moves from BACKEND_ONLY to COMPLETE** — see the reconciliation below. The register's note
 that the Gantt exposed only start and end dates was stale: working-day duration has been authored
 there since iteration 6. What was missing was the calendar those days are counted in.
 
@@ -559,8 +559,8 @@ compares installed output without re-entry.
 in two steps within this wave: PARTIAL once the pace half was proven, and COMPLETE once the row
 that held it there — achieved productivity in man-hours — was closed. A day's labour now names the
 work package it was spent on, and the plan sets what the work earned against what it cost. This
-makes five COMPLETE capabilities in the register (AWD-05, AWD-06, PLN-10, PLN-11, PLN-12) out of
-180.
+made five COMPLETE capabilities out of 180 (AWD-05, AWD-06, PLN-10, PLN-11, PLN-12); PLN-03
+below makes six.
 
 Two limits are knowingly accepted with the promotion rather than rounded away. Several activities
 sharing one work package each inherit that package's whole sold quantity, because no apportionment
@@ -586,16 +586,17 @@ selects calendar and duration, saves and reloads, and the solver excludes non-wo
 | Weekends and holidays are one mechanism | a public holiday drops out of the window exactly as a weekend does | no |
 | One answer to "how long is this window" | solver, save-time check and productivity rates all count under the same calendar | no |
 
-**Proposed: `PLN-03` PARTIAL → COMPLETE.** The row is moved off BACKEND_ONLY because a proven UI
-makes that classification plainly false; the promotion itself is left to the programme owner, as
-PLN-10's, PLN-11's and PLN-12's were.
+**`PLN-03` BACKEND_ONLY → COMPLETE — applied on 2026-09-15 by the programme owner's decision**,
+in one step: BACKEND_ONLY was plainly false once a proven UI existed, and the reconciliation above
+leaves no acceptance row open. This makes six COMPLETE capabilities in the register (AWD-05, AWD-06,
+PLN-03, PLN-10, PLN-11, PLN-12) out of 180.
 
 One limit is knowingly carried with the proposal: **one calendar governs a whole project**. A night
 shift, or a subcontractor working a different week from the main contractor, is counted under the
 project's calendar because no per-activity or per-resource calendar is authored. Nothing in the
 acceptance criterion asks for one, and inventing an inheritance rule nobody stated would repeat the
-mistake this slice exists to correct. As on PLN-10/11/12, `actualOutput` would remain **PARTIAL** on
-promotion: the rendered output is proven in the browser and no exported calendar document exists.
+mistake this slice exists to correct. As on PLN-10/11/12, `actualOutput` remains **PARTIAL** on an
+otherwise complete row: the rendered output is proven in the browser and no exported calendar document exists.
 
 This also closes the limit PLN-11 recorded against itself — productivity rates no longer count a
 Friday or a shutdown as a day of production.
@@ -615,7 +616,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, PARTIAL and proposed for COMPLETE). What remains open in this line: dependencies cannot be authored in the UI, so the critical path is computed over a network nobody can see or edit (PLN-02); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: dependencies cannot be authored in the UI, so the critical path is computed over a network nobody can see or edit (PLN-02); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

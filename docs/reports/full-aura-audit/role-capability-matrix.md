@@ -208,7 +208,7 @@
 | Site Engineer | XOP-17 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-01 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-02 | BACKEND_ONLY | UNVERIFIED |
-| Planning Engineer | PLN-03 | PARTIAL | UNVERIFIED |
+| Planning Engineer | PLN-03 | COMPLETE | UNVERIFIED |
 | Planning Engineer | PLN-04 | UNVERIFIED | UNVERIFIED |
 | Planning Engineer | PLN-05 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-06 | PARTIAL | UNVERIFIED |
@@ -256,7 +256,7 @@
 | Project Engineer | ENG-06 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-01 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-02 | BACKEND_ONLY | UNVERIFIED |
-| Project Engineer | PLN-03 | PARTIAL | UNVERIFIED |
+| Project Engineer | PLN-03 | COMPLETE | UNVERIFIED |
 | Project Engineer | PLN-04 | UNVERIFIED | UNVERIFIED |
 | Project Engineer | PLN-05 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-06 | PARTIAL | UNVERIFIED |
@@ -311,7 +311,7 @@
 | Project Manager | AWD-07 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-01 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-02 | BACKEND_ONLY | UNVERIFIED |
-| Project Manager | PLN-03 | PARTIAL | UNVERIFIED |
+| Project Manager | PLN-03 | COMPLETE | UNVERIFIED |
 | Project Manager | PLN-04 | UNVERIFIED | UNVERIFIED |
 | Project Manager | PLN-05 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-06 | PARTIAL | UNVERIFIED |

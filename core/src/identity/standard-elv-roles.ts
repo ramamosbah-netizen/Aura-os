@@ -153,7 +153,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.opportunity.read', 'crm.study.read', 'crm.study.approve', 'crm.scope.approve',
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
-      'engineering.*', 'projects.resource-pool.*', 'projects.resource-capacity.*',
+      'engineering.*', 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
       readOnly('tendering'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },

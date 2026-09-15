@@ -164,6 +164,12 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | A pool loses capacity because one member is on leave | Availability never speaks about a pool: deriving crew capacity from a roster is arithmetic nobody stated, and a member's leave appears on the member's own bookings |
 | A missing or broken availability provider reads as "everything is available" | Unbound and failing both resolve to no statements, leaving §22's declared capacity governing exactly as before |
 | History is rewritten when availability changes | The commitment snapshot is untouched; `becameInfeasible` distinguishes "fitted when it was made" from "never fitted" |
+| A surfaced conflict belongs to everybody and therefore nobody | A named person takes a resource's conflicts on for a period, and the desk says plainly when nobody has |
+| Two people each assume the other is on it | One open owner per resource; a second claim returns 409 |
+| A conflict is closed by tidying it off the screen | Closing costs a written decision (400 without one), kept as `resolved` or `accepted` — a fix and a knowingly accepted exposure are different outcomes |
+| Recording a decision silences the derived verdict | It cannot: the clash is still computed from the facts, and the desk shows both — owned, decided, still conflicted |
+| A project-scoped grant resolves a conflict that spans projects | Ownership is organization-governed; the route carries no project, so only an org grant reaches it |
+| An owner is appointed over a resource the tenant does not have | The resource is checked against the canonical catalogue (400) |
 
 ## Verification completed
 
@@ -232,13 +238,18 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Availability through the booking service | 8/8 passed; a standing commitment becomes CONFLICTED and says why, the record is unchanged, and unbound or failing providers stay silent rather than favourable |
 | Availability Auth-ON browser journey | 1/1 passed in Chromium; leave requested (no effect), approved, and the planning desk turns CONFLICTED naming the leave, with the commitment byte-for-byte intact |
 | Planning desk register reads | Repaired before it shipped: the desk asked HR, Fleet and Assets once per booking; one batched read per screen now serves every row |
+| Conflict ownership domain | 11/11 passed; named owner and period required, decision required to close, decided once, and an open ownership outranks a past decision |
+| Conflict ownership service | 5/5 planning-service tests passed; one open owner per resource, a different resource is a different question, deciding frees it again, and tenants stay separate |
+| Project-scope coverage fitness | 4/4 passed; a conflict is recorded as organization-scoped with the reason it belongs to no single project |
+| Conflict ownership Auth-ON browser journey | 1/1 passed in Chromium; unowned said plainly, owner assigned, second owner 409, invented resource 400, wordless close 400, decision accepted and shown beside a still-CONFLICTED verdict, second decision 409 |
+| Database migration posture | 321/321 applied; ownership is tenant-isolated under FORCE RLS with one open row per resource, and a closed row must carry its decision and provenance |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. Named conflict-resolution ownership. A held commitment now reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); and HR, Fleet and Assets now change the feasibility of commitments already made, which closes the second half of the temporal invariant (PLN-09). What remains open here is resolution: no conflict has a named owner, no resolution is recorded against one, and a conflict does not link to the other project's activity. Project access for an allocated non-member also remains open.
+2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, which closes the second half of the temporal invariant (PLN-09); and a conflict now has a named owner and a recorded decision without ever becoming a stored verdict (PLN-10). What remains open here is the last link: a conflict does not reach the other project's activity from the clash that names it, and an allocated non-member still gets no project access from being booked.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

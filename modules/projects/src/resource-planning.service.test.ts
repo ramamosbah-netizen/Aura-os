@@ -65,6 +65,53 @@ describe('ResourcePlanningService', () => {
     expect(await service.listPoolsForEmployee('tenant-b', 'emp-maya')).toEqual([]);
   });
 
+  it('gives a conflict one named owner and keeps the decision they recorded', async () => {
+    const service = new ResourcePlanningService(new InMemoryResourcePlanningStore());
+    const crane = { resourceType: 'asset' as const, canonicalResourceId: 'CR-01' };
+    const owned = await service.takeConflictOwnership({
+      tenantId: 'tenant-a', resource: crane, from: '2026-10-01', to: '2026-10-07',
+      ownerId: 'u-technical-manager', assignedBy: 'u-planner',
+    });
+    expect(owned).toMatchObject({ ownerId: 'u-technical-manager', status: 'owned', decision: null });
+
+    // "Who is dealing with this crane?" must have exactly one answer.
+    await expect(service.takeConflictOwnership({
+      tenantId: 'tenant-a', resource: crane, from: '2026-10-03', to: '2026-10-04', ownerId: 'u-someone-else',
+    })).rejects.toThrow('already has an open conflict owner');
+
+    // …and a different resource is a different question.
+    await expect(service.takeConflictOwnership({
+      tenantId: 'tenant-a', resource: { resourceType: 'vehicle', canonicalResourceId: 'CR-01' },
+      from: '2026-10-01', to: '2026-10-07', ownerId: 'u-someone-else',
+    })).resolves.toBeTruthy();
+
+    await expect(service.decideConflict({
+      tenantId: 'tenant-a', id: owned.id, status: 'resolved', decision: '   ',
+    })).rejects.toThrow('what was decided');
+
+    const decided = await service.decideConflict({
+      tenantId: 'tenant-a', id: owned.id, status: 'accepted',
+      decision: 'second crane hired for the Tuesday', actorId: 'u-technical-manager',
+    });
+    expect(decided).toMatchObject({ status: 'accepted', decision: 'second crane hired for the Tuesday' });
+
+    // Deciding it frees the resource for a new owner, and never happens twice on one entry.
+    await expect(service.decideConflict({
+      tenantId: 'tenant-a', id: owned.id, status: 'resolved', decision: 'again',
+    })).rejects.toThrow('already been decided');
+    await expect(service.takeConflictOwnership({
+      tenantId: 'tenant-a', resource: crane, from: '2026-11-01', to: '2026-11-07', ownerId: 'u-someone-else',
+    })).resolves.toBeTruthy();
+
+    // The history stays readable, newest first, and stays inside its tenant.
+    const history = await service.listConflictResolutions('tenant-a', [crane]);
+    expect(history.map((entry) => entry.status)).toEqual(['owned', 'accepted']);
+    expect(await service.listConflictResolutions('tenant-b', [crane])).toEqual([]);
+    await expect(service.decideConflict({
+      tenantId: 'tenant-b', id: owned.id, status: 'resolved', decision: 'not mine to close',
+    })).rejects.toThrow('not found');
+  });
+
   it('refuses cross-tenant and unit-spoofed capacity for a pool', async () => {
     const service = new ResourcePlanningService(new InMemoryResourcePlanningStore());
     const pool = await service.createPool({ tenantId: 'tenant-a', name: 'Commissioning team', unit: 'persons' });

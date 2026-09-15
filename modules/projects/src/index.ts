@@ -76,6 +76,7 @@ export * from './domain/resource-ref';
 export * from './domain/resource-pool';
 export * from './domain/resource-availability';
 export * from './domain/resource-booking';
+export * from './domain/resource-conflict-resolution';
 export * from './domain/working-calendar';
 export * from './domain/resource-facts';
 export * from './resource-facts-store';

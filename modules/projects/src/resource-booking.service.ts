@@ -1,7 +1,7 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { type Id, assertSameTenant, sameTenantOrNull } from '@aura/shared';
 import { assessBooking, commitBooking, releaseBooking, respondToBooking, type BookingAssessment, type BookingResponse, type ResourceBooking } from './domain/resource-booking';
-import { type ResourceRef, resourceKey } from './domain/resource-ref';
+import { type ResourceRef, resourceKey, sameResource } from './domain/resource-ref';
 import {
   RESOURCE_AVAILABILITY_PROVIDER,
   type ResourceAvailabilityFact,
@@ -10,12 +10,22 @@ import {
 import { assessResourceAcrossProjects, dayLoadsForBooking, resolveResourceLoad, type ResourceConflictReport } from './domain/resource-facts';
 import { RESOURCE_BOOKING_STORE, type ResourceBookingStore } from './resource-booking-store';
 import { RESOURCE_FACTS_STORE, type ResourceFactsStore, type ResourceInterval } from './resource-facts-store';
+import { RESOURCE_PLANNING_STORE, type ResourcePlanningStore } from './resource-planning-store';
+import { resolutionForInterval, type ResourceConflictResolution } from './domain/resource-conflict-resolution';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
 
 export interface ResourceBookingView {
   booking: ResourceBooking;
   assessment: BookingAssessment;
   resourceConflict: ResourceConflictReport;
+  /**
+   * Who has taken this resource's conflicts on, and what they decided — `null` when nobody has.
+   *
+   * Reported BESIDE the verdict, never instead of it. A decided entry does not make a conflicted
+   * resource read as fine: if the facts still clash, both are shown, because "owned, marked
+   * resolved, still conflicted" is the state a planner most needs to see.
+   */
+  conflictOwner: ResourceConflictResolution | null;
 }
 
 /**
@@ -40,6 +50,7 @@ export class ResourceBookingService {
     @Inject(RESOURCE_BOOKING_STORE) private readonly store: ResourceBookingStore,
     @Inject(RESOURCE_FACTS_STORE) private readonly facts: ResourceFactsStore,
     @Inject(SCHEDULE_STORE) private readonly schedules: ScheduleStore,
+    @Inject(RESOURCE_PLANNING_STORE) private readonly planning: ResourcePlanningStore,
     /**
      * Optional, and unbound is a real state rather than an error (see the port's own note): a
      * composition with no HR or Fleet behaves exactly as §22 did before availability was connected.
@@ -76,10 +87,11 @@ export class ResourceBookingService {
     }
 
     const interval = { from: task.plannedStart, to: task.plannedEnd };
-    const [windows, held, stated] = await Promise.all([
+    const [windows, held, stated, owners] = await Promise.all([
       this.facts.capacityWindowsFor(input.tenantId, [requirement.resource], interval),
       this.facts.heldBookingsFor(input.tenantId, [requirement.resource], interval),
       this.availabilityFor(input.tenantId, [requirement.resource], interval),
+      this.planning.listConflictResolutions(input.tenantId, [requirement.resource]),
     ]);
     // What the registers say counts at COMMITMENT too, not only afterwards: committing somebody
     // into their own approved leave should cost the same stated reason as any other overrun,
@@ -102,7 +114,7 @@ export class ResourceBookingService {
       if (error instanceof ConflictException) throw error;
       throw new BadRequestException(error instanceof Error ? error.message : 'the resource booking is invalid');
     }
-    return this.view(booking, windows, [...held, booking], stated);
+    return this.view(booking, windows, [...held, booking], stated, owners);
   }
 
   /**
@@ -124,12 +136,13 @@ export class ResourceBookingService {
       from: rows.reduce((earliest, booking) => (booking.from < earliest ? booking.from : earliest), rows[0].from),
       to: rows.reduce((latest, booking) => (booking.to > latest ? booking.to : latest), rows[0].to),
     };
-    const [windows, held, stated] = await Promise.all([
+    const [windows, held, stated, owners] = await Promise.all([
       this.facts.capacityWindowsFor(tenantId, refs, span),
       this.facts.heldBookingsFor(tenantId, refs, span),
       this.availabilityFor(tenantId, refs, span),
+      this.planning.listConflictResolutions(tenantId, refs),
     ]);
-    return rows.map((booking) => this.view(booking, windows, held, stated));
+    return rows.map((booking) => this.view(booking, windows, held, stated, owners));
   }
 
   /**
@@ -234,12 +247,16 @@ export class ResourceBookingService {
     windows: Parameters<typeof assessResourceAcrossProjects>[1],
     held: ResourceBooking[],
     stated: readonly ResourceAvailabilityFact[] = [],
+    owners: readonly ResourceConflictResolution[] = [],
   ): ResourceBookingView {
     const interval = { from: booking.from, to: booking.to };
+    const mine = owners.filter((entry) => sameResource(entry.resource, booking.resource));
     return {
       booking,
       assessment: assessBooking(booking, dayLoadsForBooking(booking, windows, held, undefined, stated)),
       resourceConflict: assessResourceAcrossProjects(booking.resource, windows, held, interval, undefined, stated),
+      // Beside the verdict, never instead of it.
+      conflictOwner: resolutionForInterval(mine, interval),
     };
   }
 }

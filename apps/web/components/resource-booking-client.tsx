@@ -19,15 +19,22 @@ interface BookingView {
   };
   assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
   resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };
+  /** Who took this resource's conflicts on, and what they decided. Null when nobody has. */
+  conflictOwner: {
+    id: string; ownerId: string; from: string; to: string;
+    status: 'owned' | 'resolved' | 'accepted'; decision: string | null;
+  } | null;
 }
 
 export default function ResourceBookingClient({
-  projectId, tasks, catalog, bookings,
-}: { projectId: string; tasks: Task[]; catalog: CatalogItem[]; bookings: BookingView[] }) {
+  projectId, tasks, catalog, bookings, owners,
+}: { projectId: string; tasks: Task[]; catalog: CatalogItem[]; bookings: BookingView[]; owners: string[] }) {
   const router = useRouter();
   const [requirementId, setRequirementId] = useState('');
   const [reason, setReason] = useState('');
   const [releaseReasons, setReleaseReasons] = useState<Record<string, string>>({});
+  const [ownerChoice, setOwnerChoice] = useState<Record<string, string>>({});
+  const [decisions, setDecisions] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requirements = useMemo(() => tasks.flatMap((task) => task.requirements.map((requirement) => ({ task, requirement }))), [tasks]);
@@ -66,6 +73,26 @@ export default function ResourceBookingClient({
     }
   }
 
+  async function takeOwnership(view: BookingView) {
+    const ownerId = ownerChoice[view.booking.id]?.trim();
+    if (!ownerId) { setError('Choose who will deal with this conflict.'); return; }
+    await post('/api/projects/resource-conflicts', {
+      resourceType: view.booking.resource.resourceType,
+      canonicalResourceId: view.booking.resource.canonicalResourceId,
+      from: view.booking.from, to: view.booking.to, ownerId,
+    });
+  }
+
+  async function decide(view: BookingView, status: 'resolved' | 'accepted') {
+    const owner = view.conflictOwner;
+    if (!owner) return;
+    const decision = decisions[owner.id]?.trim();
+    if (!decision) { setError('Say what was decided before closing this.'); return; }
+    if (await post(`/api/projects/resource-conflicts/${owner.id}/decide`, { status, decision })) {
+      setDecisions((current) => ({ ...current, [owner.id]: '' }));
+    }
+  }
+
   return <div className={styles.stack}>
     {error && <div role="alert" className={styles.error}>{error}</div>}
     <div className={styles.summary}>
@@ -93,6 +120,40 @@ export default function ResourceBookingClient({
           <div className={styles.lineage}><Link2 size={13} />{view.booking.from} → {view.booking.to} · demand {view.booking.demandAtCommitment} / capacity {view.booking.capacityAtCommitment ?? 'unknown'} at commitment</div>
           {view.assessment.reason && <p className={styles.reason}><TriangleAlert size={14} />{view.assessment.reason}</p>}
           {view.resourceConflict.projectsInvolved.length > 1 && <p className={styles.reason}><TriangleAlert size={14} />Shared-resource conflict involves {view.resourceConflict.projectsInvolved.length} projects on {view.resourceConflict.conflictDays.length} day(s).</p>}
+          {view.booking.status === 'held' && view.assessment.feasibility === 'CONFLICTED' && (
+            view.conflictOwner
+              ? <div className={styles.owner} data-testid={`conflict-owner-${view.booking.id}`}>
+                  <span>
+                    {view.conflictOwner.status === 'owned'
+                      ? `${view.conflictOwner.ownerId} is dealing with this`
+                      : `${view.conflictOwner.ownerId} ${view.conflictOwner.status} this: ${view.conflictOwner.decision}`}
+                  </span>
+                  {view.conflictOwner.status === 'owned' && <>
+                    <input
+                      aria-label={`Decision for ${view.booking.id}`}
+                      value={decisions[view.conflictOwner.id] ?? ''}
+                      onChange={(event) => setDecisions((current) => ({ ...current, [view.conflictOwner!.id]: event.target.value }))}
+                      placeholder="What was done about it"
+                    />
+                    <button type="button" disabled={busy} onClick={() => decide(view, 'resolved')}>Resolved</button>
+                    <button type="button" disabled={busy} onClick={() => decide(view, 'accepted')}>Accept exposure</button>
+                  </>}
+                  {/* Said plainly: a recorded decision never silences the derived verdict. */}
+                  {view.conflictOwner.status !== 'owned' && <small>Decided, and the clash is still in the plan.</small>}
+                </div>
+              : <div className={styles.owner} data-testid={`conflict-unowned-${view.booking.id}`}>
+                  <span>Nobody is dealing with this conflict.</span>
+                  <select
+                    aria-label={`Conflict owner for ${view.booking.id}`}
+                    value={ownerChoice[view.booking.id] ?? ''}
+                    onChange={(event) => setOwnerChoice((current) => ({ ...current, [view.booking.id]: event.target.value }))}
+                  >
+                    <option value="">Select an owner…</option>
+                    {owners.map((owner) => <option key={owner} value={owner}>{owner}</option>)}
+                  </select>
+                  <button type="button" disabled={busy} onClick={() => takeOwnership(view)}>Assign owner</button>
+                </div>
+          )}
           {view.booking.status === 'held' && view.booking.response === 'declined' && <p className={styles.reason} data-testid={`declined-${view.booking.id}`}><TriangleAlert size={14} />{label(view.booking.resource)} declined this allocation: {view.booking.responseReason}</p>}
           {view.booking.status === 'held' && view.booking.response === 'accepted' && <small data-testid={`accepted-${view.booking.id}`}>Accepted by the allocated person.</small>}
           {view.booking.overCapacityReason && <small>Approved exception: {view.booking.overCapacityReason}</small>}

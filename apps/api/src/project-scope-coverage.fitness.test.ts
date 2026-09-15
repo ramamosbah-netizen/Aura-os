@@ -38,6 +38,12 @@ const PROJECT_SCOPED = ['projects', 'engineering', 'site', 'quality', 'hse', 'co
 const NOT_PROJECT_BEARING: Record<string, string> = {
   'projects:member': 'membership is addressed by :projectId already, so the guard needs no resolver',
   'hse:training': 'a training record is a fact about a person’s competence, not about a site',
+  'projects:resource-conflict':
+    'a conflict is precisely the thing that SPANS projects — the same crane committed on two sites ' +
+    'next Tuesday — so there is no one project to resolve it to, and a grant on either of them is ' +
+    'the wrong thing to authorise resolving it with. Ownership is organization-governed by ' +
+    '`projects.resource-conflict.*`, held by the Technical Manager who already governs the shared ' +
+    'pools and capacity the conflict is about',
   'projects:resource-pool':
     'a pool is an ORGANIZATION-scoped planning authority and deliberately carries no project ' +
     '(DG-22.9, migration 0286). Resolving one to a project would recreate the exact blindness §22 ' +

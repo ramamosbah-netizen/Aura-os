@@ -1,6 +1,7 @@
 import type { Id } from '@aura/shared';
 import type { ResourceRef } from './domain/resource-ref';
 import type { ResourceCapacity, ResourcePool, ResourcePoolMember } from './domain/resource-pool';
+import type { ResourceConflictResolution } from './domain/resource-conflict-resolution';
 
 /** Organization-owned resource pools and capacity facts. Project bookings live in a separate port. */
 export const RESOURCE_PLANNING_STORE = Symbol('RESOURCE_PLANNING_STORE');
@@ -26,4 +27,15 @@ export interface ResourcePlanningStore {
    * employee as well as by pool.
    */
   listPoolsForEmployee(tenantId: Id, employeeId: Id): Promise<ResourcePoolMember[]>;
+
+  // ── Conflict ownership (migration 0321) ──────────────────────────────────
+  // Not the conflict — the people. See domain/resource-conflict-resolution.ts.
+
+  /** Take a resource's conflicts on. Rejects a second OPEN ownership of the same resource. */
+  createConflictResolution(entry: ResourceConflictResolution): Promise<void>;
+  /** Record the decision. The only field group that changes after the entry is created. */
+  updateConflictResolution(entry: ResourceConflictResolution): Promise<void>;
+  getConflictResolution(tenantId: Id, id: Id): Promise<ResourceConflictResolution | null>;
+  /** Every ownership, open or decided, for the given resources. Newest first. */
+  listConflictResolutions(tenantId: Id, refs?: readonly ResourceRef[]): Promise<ResourceConflictResolution[]>;
 }

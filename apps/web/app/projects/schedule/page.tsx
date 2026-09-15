@@ -52,6 +52,10 @@ interface ResourceBookingView {
     overCapacityReason: string | null; releasedReason: string | null;
     response: 'pending' | 'accepted' | 'declined'; responseReason: string | null; responseBy: string | null;
   };
+  conflictOwner: {
+    id: string; ownerId: string; from: string; to: string;
+    status: 'owned' | 'resolved' | 'accepted'; decision: string | null;
+  } | null;
   assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
   resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };
 }
@@ -68,6 +72,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     getJson<ResourceCapacity[]>('/api/projects/resource-capacity'),
     getJson<Supplier[]>('/api/procurement/suppliers'),
   ]);
+  // Accounts that can be named as a conflict's owner. Null when this reader may not administer
+  // users — the desk then says nobody is on it and offers no picker it would refuse.
+  const directory = await getJson<{ users: Array<{ userId: string; active: boolean }> }>('/api/admin/users');
   // The roster of every governed pool, read after the pools themselves are known. One request per
   // pool is acceptable here because a tenant has a handful of crews, not thousands.
   const poolMembers = (await Promise.all((resourcePools ?? []).map(async (item) =>
@@ -180,7 +187,13 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
               <p>Activity demand remains part of the schedule. Commit it here when the plan is ready to consume shared capacity, then resolve any cross-project conflict explicitly.</p>
             </div>
           </div>
-          <ResourceBookingClient projectId={projectId} tasks={selectedSchedule.tasks} catalog={resourceCatalog ?? []} bookings={resourceBookings} />
+          <ResourceBookingClient
+            projectId={projectId}
+            tasks={selectedSchedule.tasks}
+            catalog={resourceCatalog ?? []}
+            bookings={resourceBookings}
+            owners={(directory?.users ?? []).filter((user) => user.active).map((user) => user.userId)}
+          />
         </section>
       )}
 

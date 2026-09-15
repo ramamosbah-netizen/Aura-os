@@ -1,6 +1,7 @@
 import type { Id } from '@aura/shared';
 import { sameResource, type ResourceRef } from './domain/resource-ref';
 import type { ResourceCapacity, ResourcePool, ResourcePoolMember } from './domain/resource-pool';
+import type { ResourceConflictResolution } from './domain/resource-conflict-resolution';
 import { bookingIsHeld, type ResourceBooking } from './domain/resource-booking';
 import type { ResourcePlanningStore } from './resource-planning-store';
 import type { ResourceBookingStore } from './resource-booking-store';
@@ -13,7 +14,33 @@ export class InMemoryResourcePlanningStore implements ResourcePlanningStore, Res
     private readonly capacity: ResourceCapacity[] = [],
     private readonly bookings: ResourceBooking[] = [],
     private readonly members: ResourcePoolMember[] = [],
+    private readonly conflicts: ResourceConflictResolution[] = [],
   ) {}
+
+  async createConflictResolution(entry: ResourceConflictResolution): Promise<void> {
+    // Mirrors the partial unique index of migration 0321: one open ownership per resource, so
+    // "who is dealing with this?" never has two answers.
+    const open = this.conflicts.some((row) =>
+      row.tenantId === entry.tenantId && row.status === 'owned' && sameResource(row.resource, entry.resource));
+    if (open) throw new Error('this resource already has an open conflict owner');
+    this.conflicts.push(entry);
+  }
+
+  async updateConflictResolution(entry: ResourceConflictResolution): Promise<void> {
+    const index = this.conflicts.findIndex((row) => row.tenantId === entry.tenantId && row.id === entry.id);
+    if (index < 0) throw new Error(`conflict resolution ${entry.id} not found`);
+    this.conflicts[index] = entry;
+  }
+
+  async getConflictResolution(tenantId: Id, id: Id): Promise<ResourceConflictResolution | null> {
+    return this.conflicts.find((row) => row.tenantId === tenantId && row.id === id) ?? null;
+  }
+
+  async listConflictResolutions(tenantId: Id, refs?: readonly ResourceRef[]): Promise<ResourceConflictResolution[]> {
+    return this.conflicts
+      .filter((row) => row.tenantId === tenantId && (!refs || refs.some((ref) => sameResource(ref, row.resource))))
+      .sort((a, b) => b.assignedAt.localeCompare(a.assignedAt));
+  }
 
   async addPoolMember(member: ResourcePoolMember): Promise<void> {
     // Mirrors the partial unique index of migration 0319, so the no-database composition refuses

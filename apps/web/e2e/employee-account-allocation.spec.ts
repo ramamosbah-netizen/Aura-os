@@ -23,7 +23,9 @@ import { apiAuthHeaders } from './api-auth';
  *
  * And the other half of the temporal invariant: an approved leave, decided in HR long after the
  * commitment was made, turns that standing commitment into a visible conflict naming its cause —
- * without altering one field of what was committed.
+ * without altering one field of what was committed. The conflict is then taken on by a NAMED
+ * person and closed with what they decided, while the clash itself stays exactly as true as the
+ * facts make it.
  *
  * The negatives matter as much as the positive: an employee with no link reaches no list, one
  * account cannot be held by two employment records, a decline with no reason is refused, nobody
@@ -480,6 +482,71 @@ test.describe('Employee account link carries an allocation into My Work', () => 
       status: 'held', quantity: 2, from: day(3), to: day(5),
       capacityAtCommitment: 3, committedAt: held.booking.committedAt,
     });
+
+    // ── The conflict gets a named owner and a recorded decision ───────────────
+    // Before anyone takes it on, the desk says so rather than leaving it ownerless in silence.
+    await expect(page.getByTestId(`conflict-unowned-${held.booking.id}`)).toBeVisible({ timeout: 30_000 });
+
+    const ownerSelect = page.getByLabel(`Conflict owner for ${held.booking.id}`);
+    await ownerSelect.selectOption(account);
+    await page.getByRole('button', { name: 'Assign owner' }).click();
+    await expect(page.getByTestId(`conflict-owner-${held.booking.id}`)).toContainText(`${account} is dealing with this`, { timeout: 30_000 });
+
+    // One resource, one open owner: "who is dealing with this?" never has two answers.
+    const secondOwner = await request.post(`${API}/projects/resource-conflicts`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: {
+        resourceType: 'employee', canonicalResourceId: mine.id,
+        from: day(3), to: day(5), ownerId: 'u-e2e-checker',
+      },
+    });
+    expect(secondOwner.status()).toBe(409);
+    expect(await secondOwner.text()).toContain('already has an open conflict owner');
+
+    // An owner appointed over an invented resource would be accountable for nothing.
+    const overNothing = await request.post(`${API}/projects/resource-conflicts`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: {
+        resourceType: 'employee', canonicalResourceId: '00000000-0000-4000-8000-000000000999',
+        from: day(3), to: day(5), ownerId: account,
+      },
+    });
+    expect(overNothing.status()).toBe(400);
+
+    // Closing costs a sentence, for the same reason releasing capacity does.
+    const conflicts = await request.get(`${API}/projects/resource-conflicts?resourceType=employee&canonicalResourceId=${mine.id}`, { headers: apiAuthHeaders() });
+    const ownership = ((await conflicts.json()) as Array<{ id: string; status: string }>).find((entry) => entry.status === 'owned')!;
+    const silentClose = await request.post(`${API}/projects/resource-conflicts/${ownership.id}/decide`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: { status: 'resolved' },
+    });
+    expect(silentClose.status()).toBe(400);
+    expect(await silentClose.text()).toContain('decision is required');
+
+    await page.getByLabel(`Decision for ${held.booking.id}`).fill('second electrician hired for the Thursday');
+    await page.getByRole('button', { name: 'Accept exposure' }).click();
+    await expect(page.getByTestId(`conflict-owner-${held.booking.id}`))
+      .toContainText(`${account} accepted this: second electrician hired for the Thursday`, { timeout: 30_000 });
+
+    // THE POINT: a recorded decision never silences the derived verdict. The leave is still
+    // approved, so the clash is still there, and the desk says both.
+    await expect(page.getByText('Decided, and the clash is still in the plan.')).toBeVisible();
+    await expect(page.getByText('CONFLICTED', { exact: true }).first()).toBeVisible();
+    const stillConflicted = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    const stillView = ((await stillConflicted.json()) as Array<{
+      booking: { id: string }; assessment: { feasibility: string };
+      conflictOwner: { ownerId: string; status: string; decision: string } | null;
+    }>).find((view) => view.booking.id === held.booking.id)!;
+    expect(stillView.assessment.feasibility).toBe('CONFLICTED');
+    expect(stillView.conflictOwner).toMatchObject({
+      ownerId: account, status: 'accepted', decision: 'second electrician hired for the Thursday',
+    });
+
+    // Decided once. A new decision needs the resource taken on again.
+    const decidedTwice = await request.post(`${API}/projects/resource-conflicts/${ownership.id}/decide`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { status: 'resolved', decision: 'changed my mind' },
+    });
+    expect(decidedTwice.status()).toBe(409);
 
     // ── Read through, not copied: releasing the booking removes the item ──────
     const released = await request.post(`${API}/projects/${project.id}/resource-bookings/${held.booking.id}/release`, {

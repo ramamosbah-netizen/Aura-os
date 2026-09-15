@@ -46,6 +46,7 @@ import {
   ResourcePlanningService,
   type ResourcePool,
   type ResourcePoolMember,
+  type ResourceConflictResolution,
   type ResourceCapacity,
   type ResourceType,
   type ResourceUnit,
@@ -1283,6 +1284,62 @@ export class ProjectsController {
   ): Promise<ResourcePoolMember> {
     const ctx = this.tenant.get();
     return this.resourcePlanning.removePoolMember({ tenantId: ctx.tenantId, poolId, memberId, removedBy: ctx.actorId });
+  }
+
+  /**
+   * Who is dealing with a resource's conflicts, and what they decided.
+   *
+   * ORGANIZATION-governed, not project-scoped, and the route carries no `projectId` on purpose: a
+   * conflict is precisely the thing that spans projects, so a grant on one of them cannot be what
+   * authorises resolving it. `projects.resource-conflict.*` sits with the Technical Manager, who
+   * already governs the shared pools and capacity these conflicts are about.
+   *
+   * Nothing here writes a conflict or clears one. Feasibility stays derived from the facts; these
+   * record the people and the decision beside it.
+   */
+  @Permissions('projects.resource-conflict.read')
+  @Get('resource-conflicts')
+  listConflictResolutions(
+    @Query('resourceType') resourceType?: ResourceType,
+    @Query('canonicalResourceId') canonicalResourceId?: string,
+  ): Promise<ResourceConflictResolution[]> {
+    const refs = resourceType && canonicalResourceId ? [{ resourceType, canonicalResourceId }] : undefined;
+    return this.resourcePlanning.listConflictResolutions(this.tenant.get().tenantId, refs);
+  }
+
+  @Permissions('projects.resource-conflict.own')
+  @Post('resource-conflicts')
+  async takeConflictOwnership(@Body() dto: {
+    resourceType?: ResourceType; canonicalResourceId?: string; from?: string; to?: string; ownerId?: string;
+  }): Promise<ResourceConflictResolution> {
+    const ctx = this.tenant.get();
+    if (!dto?.resourceType || !dto?.canonicalResourceId) throw new BadRequestException('resourceType and canonicalResourceId are required');
+    if (!dto?.from || !dto?.to) throw new BadRequestException('from and to are required');
+    if (!dto?.ownerId?.trim()) throw new BadRequestException('ownerId is required');
+    const resource = { resourceType: dto.resourceType, canonicalResourceId: dto.canonicalResourceId };
+    // The resource must be one this tenant actually has: an owner appointed over an invented id
+    // would be accountable for nothing.
+    await this.scheduleResources.assertCanonicalResource(ctx.tenantId, resource);
+    return this.resourcePlanning.takeConflictOwnership({
+      tenantId: ctx.tenantId, resource, from: dto.from, to: dto.to,
+      ownerId: dto.ownerId, assignedBy: ctx.actorId,
+    });
+  }
+
+  @Permissions('projects.resource-conflict.own')
+  @Post('resource-conflicts/:id/decide')
+  decideConflict(
+    @Param('id') id: string,
+    @Body() dto: { status?: 'resolved' | 'accepted'; decision?: string },
+  ): Promise<ResourceConflictResolution> {
+    const ctx = this.tenant.get();
+    if (dto?.status !== 'resolved' && dto?.status !== 'accepted') {
+      throw new BadRequestException("status must be 'resolved' or 'accepted'");
+    }
+    if (!dto?.decision?.trim()) throw new BadRequestException('decision is required');
+    return this.resourcePlanning.decideConflict({
+      tenantId: ctx.tenantId, id, status: dto.status, decision: dto.decision, actorId: ctx.actorId,
+    });
   }
 
   @Permissions('projects.resource-capacity.read')

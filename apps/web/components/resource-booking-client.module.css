@@ -26,3 +26,11 @@
 .reason { color: #fca5a5; }
 .release { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
 @media (max-width: 760px) { .summary { grid-template-columns: 1fr; } .release { grid-template-columns: 1fr; } }
+
+/* Conflict ownership: the people beside the verdict, never in place of it. */
+.owner { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: 9px; }
+.owner span { font-size: 12px; font-weight: 650; }
+.owner small { flex-basis: 100%; color: var(--muted); font-size: 10px; }
+.owner input, .owner select { flex: 1; min-width: 150px; padding: 5px 8px; border-radius: 7px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font-size: 12px; }
+.owner button { padding: 5px 10px; border-radius: 7px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 11px; cursor: pointer; }
+.owner button:disabled { opacity: .5; cursor: not-allowed; }

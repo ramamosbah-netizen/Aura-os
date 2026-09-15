@@ -2,8 +2,8 @@ import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
 import type { ResourceRef, ResourceType, ResourceUnit } from './domain/resource-ref';
 import type { PoolSourceType, ResourceCapacity, ResourcePool, ResourcePoolMember } from './domain/resource-pool';
+import type { ConflictResolutionStatus, ResourceConflictResolution } from './domain/resource-conflict-resolution';
 import type { ResourcePlanningStore } from './resource-planning-store';
-
 interface PoolRow {
   id: string; tenant_id: string; name: string; unit: string; source_type: string;
   source_id: string | null; org_node_id: string | null; created_at: Date | string;
@@ -45,6 +45,25 @@ const memberFrom = (row: MemberRow): ResourcePoolMember => ({
 });
 
 const MEMBER_COLUMNS = 'id, tenant_id, pool_id, employee_id, added_at, added_by, removed_at, removed_by';
+
+interface ConflictRow {
+  id: string; tenant_id: string; resource_type: string; canonical_resource_id: string;
+  valid_from: Date | string; valid_to: Date | string;
+  owner_id: string; assigned_at: Date | string; assigned_by: string | null;
+  status: string; decision: string | null; decided_at: Date | string | null; decided_by: string | null;
+}
+
+const conflictFrom = (row: ConflictRow): ResourceConflictResolution => ({
+  id: row.id, tenantId: row.tenant_id,
+  resource: { resourceType: row.resource_type as ResourceType, canonicalResourceId: row.canonical_resource_id },
+  from: day(row.valid_from), to: day(row.valid_to),
+  ownerId: row.owner_id, assignedAt: iso(row.assigned_at), assignedBy: row.assigned_by,
+  status: row.status as ConflictResolutionStatus, decision: row.decision,
+  decidedAt: row.decided_at ? iso(row.decided_at) : null, decidedBy: row.decided_by,
+});
+
+const CONFLICT_COLUMNS = `id, tenant_id, resource_type, canonical_resource_id, valid_from, valid_to,
+  owner_id, assigned_at, assigned_by, status, decision, decided_at, decided_by`;
 
 export class PostgresResourcePlanningStore implements ResourcePlanningStore {
   constructor(private readonly pool: Pool) {}
@@ -151,5 +170,56 @@ export class PostgresResourcePlanningStore implements ResourcePlanningStore {
       [tenantId, employeeId],
     );
     return result.rows.map(memberFrom);
+  }
+
+  // ── Conflict ownership (migration 0321) ──────────────────────────────────
+
+  async createConflictResolution(entry: ResourceConflictResolution): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_projects_resource_conflict_resolutions (${CONFLICT_COLUMNS})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [entry.id, entry.tenantId, entry.resource.resourceType, entry.resource.canonicalResourceId,
+        entry.from, entry.to, entry.ownerId, entry.assignedAt, entry.assignedBy,
+        entry.status, entry.decision, entry.decidedAt, entry.decidedBy],
+    );
+  }
+
+  async updateConflictResolution(entry: ResourceConflictResolution): Promise<void> {
+    // The decision is the only thing that changes after an ownership is taken. What it was taken
+    // on FOR — the resource and the period — is settled at creation, so this statement cannot
+    // reach it even by accident.
+    const result = await this.pool.query(
+      `UPDATE public.aura_projects_resource_conflict_resolutions
+          SET status = $3, decision = $4, decided_at = $5, decided_by = $6
+        WHERE tenant_id = $1 AND id = $2`,
+      [entry.tenantId, entry.id, entry.status, entry.decision, entry.decidedAt, entry.decidedBy],
+    );
+    if (result.rowCount !== 1) throw new Error(`conflict resolution ${entry.id} not found`);
+  }
+
+  async getConflictResolution(tenantId: Id, id: Id): Promise<ResourceConflictResolution | null> {
+    const result = await this.pool.query<ConflictRow>(
+      `SELECT ${CONFLICT_COLUMNS} FROM public.aura_projects_resource_conflict_resolutions
+        WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id],
+    );
+    return result.rows[0] ? conflictFrom(result.rows[0]) : null;
+  }
+
+  async listConflictResolutions(tenantId: Id, refs?: readonly ResourceRef[]): Promise<ResourceConflictResolution[]> {
+    if (refs && refs.length === 0) return [];
+    // Typed identity, as a PAIR: a vehicle and an asset sharing a uuid are two resources.
+    const filter = refs
+      ? ' AND (resource_type, canonical_resource_id) IN (SELECT t, i FROM unnest($2::text[], $3::text[]) AS u(t, i))'
+      : '';
+    const params: unknown[] = refs
+      ? [tenantId, refs.map((r) => r.resourceType), refs.map((r) => r.canonicalResourceId)]
+      : [tenantId];
+    const result = await this.pool.query<ConflictRow>(
+      `SELECT ${CONFLICT_COLUMNS} FROM public.aura_projects_resource_conflict_resolutions
+        WHERE tenant_id = $1${filter} ORDER BY assigned_at DESC`,
+      params,
+    );
+    return result.rows.map(conflictFrom);
   }
 }

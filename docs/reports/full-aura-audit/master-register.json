@@ -1849,17 +1849,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
         "actualOutput": "UNVERIFIED",
         "browser": "PARTIAL",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Domain tests cover booking and conflict rules, and the live desk shows dated cross-project conflicts with the projects involved. Over-allocation is governed rather than blocked: committing past a KNOWN capacity costs a written reason, and a silent overrun is refused. Conflicts now also arrive from OUTSIDE Projects — an HR leave approval or a Fleet/Assets service visit turns a standing commitment conflicted, with the cause named (PLN-09). What is still missing is the resolution half: no conflict has a named owner, no resolution is recorded against it, and the planner cannot reach the other project’s activity from the conflict that names it.",
-      "acceptanceProof": "Assign a conflict to a named resolver, record the resolution taken, and link each conflict to every activity involved across projects."
+      "currentBehavior": "Conflicts are detected across projects, from §22’s own facts and from the owning registers (PLN-09), and over-allocation is governed rather than blocked — committing past a KNOWN capacity costs a written reason. A conflict now also has PEOPLE attached to it: a named owner takes a resource’s conflicts on for a period (migration 0321, one open owner per resource) and closes them with what was decided, kept apart as `resolved` or `accepted` in DG-22.8’s own language. Crucially, the conflict itself is still never stored: closing an ownership does not clear a clash, and where the facts still disagree the desk shows both — owned, decided, still conflicted. Ownership is organization-governed (`projects.resource-conflict.*`, held by the Technical Manager who governs the shared pools and capacity), because a conflict is the thing that spans projects and a grant on one of them cannot authorise resolving it. Auth-ON browser proof assigns an owner, refuses a second one (409) and an owner over an invented resource (400), refuses a decision with no words (400) and a second decision on one entry (409), then shows the accepted decision beside a still-conflicted verdict. A conflict still does not link to the other project’s activity.",
+      "acceptanceProof": "Link each conflict to every project activity involved in it, so a planner can reach the other side of the clash from the conflict that names it."
     },
     {
       "id": "PLN-11",

@@ -30,7 +30,7 @@ async function setup() {
     await schedules.create(schedule);
     return schedule;
   };
-  return { schedules, bookingStore, facts, service: new ResourceBookingService(bookingStore, facts, schedules), create };
+  return { schedules, bookingStore, facts, service: new ResourceBookingService(bookingStore, facts, schedules, new InMemoryResourcePlanningStore()), create };
 }
 
 describe('ResourceBookingService', () => {
@@ -49,7 +49,7 @@ describe('ResourceBookingService', () => {
       }],
     });
     await schedules.create(schedule);
-    const service = new ResourceBookingService(resources, resources, schedules);
+    const service = new ResourceBookingService(resources, resources, schedules, resources);
 
     const committed = await service.commitRequirement({
       tenantId: 'tenant-a', projectId: schedule.projectId, requirementId: schedule.tasks[0].requirements[0].id,
@@ -106,7 +106,7 @@ describe('ResourceBookingService', () => {
     await resources.createCapacity(makeResourceCapacity({
       tenantId: 'tenant-a', resource: POOL, unit: 'crews', quantity: 1, from: '2026-10-01', to: '2026-10-03',
     }));
-    const service = new ResourceBookingService(resources, resources, schedules);
+    const service = new ResourceBookingService(resources, resources, schedules, resources);
     const plan = async (projectId: string, requirementId: string) => {
       const schedule = makeProjectSchedule({
         tenantId: 'tenant-a', projectId,
@@ -195,7 +195,7 @@ describe('ResourceBookingService', () => {
     // Nothing is said yet, so the commitment is made against declared capacity alone and fits.
     let stated: ResourceAvailabilityFact[] = [];
     const provider = { unavailability: async () => stated };
-    const service = new ResourceBookingService(resources, resources, schedules, provider);
+    const service = new ResourceBookingService(resources, resources, schedules, resources, provider);
     const committed = await service.commitRequirement({
       tenantId: 'tenant-a', projectId: schedule.projectId, requirementId: schedule.tasks[0].requirements[0].id,
     });
@@ -244,14 +244,14 @@ describe('ResourceBookingService', () => {
     await schedules.create(schedule);
 
     // Unbound: §22 governs by its own declared capacity, exactly as before this existed.
-    const unbound = new ResourceBookingService(resources, resources, schedules);
+    const unbound = new ResourceBookingService(resources, resources, schedules, resources);
     const committed = await unbound.commitRequirement({
       tenantId: 'tenant-a', projectId: schedule.projectId, requirementId: schedule.tasks[0].requirements[0].id,
     });
     expect(committed.assessment.feasibility).toBe('AVAILABLE');
 
     // A failing provider is treated as silence, never as a favourable answer.
-    const broken = new ResourceBookingService(resources, resources, schedules, {
+    const broken = new ResourceBookingService(resources, resources, schedules, resources, {
       unavailability: async () => { throw new Error('HR is down'); },
     });
     const [seen] = await broken.listProject('tenant-a', schedule.projectId);

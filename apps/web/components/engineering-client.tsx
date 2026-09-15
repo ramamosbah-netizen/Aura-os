@@ -117,6 +117,12 @@ interface TechnicalQuery {
   drawingReference: string | null;
   costImpact: boolean;
   timeImpact: boolean;
+  /** WHO gave the design decision. Site builds to this answer; an unattributed one is a rumour. */
+  respondedBy: string | null;
+  /** 0 is the original answer. Anything higher means the decision has MOVED. */
+  responseRevision: number;
+  closedAt: string | null;
+  closedBy: string | null;
   createdAt: string;
 }
 
@@ -254,6 +260,9 @@ export default function EngineeringClient({
   const [tqCostImpact, setTqCostImpact] = useState(false);
   const [tqTimeImpact, setTqTimeImpact] = useState(false);
   const [tqResponses, setTqResponses] = useState<Record<string, string>>({});
+  // Replacing an answer that already stands costs a reason — site built to the old one.
+  const [tqSupersedeReasons, setTqSupersedeReasons] = useState<Record<string, string>>({});
+  const [tqSuperseding, setTqSuperseding] = useState<Record<string, boolean>>({});
 
   // BIM model form
   const [bmCode, setBmCode] = useState('');
@@ -423,14 +432,34 @@ export default function EngineeringClient({
       const res = await fetch(`/api/engineering/technical-queries/${id}/respond`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ response }),
+        body: JSON.stringify({ response, supersededReason: tqSupersedeReasons[id] || undefined }),
       });
-      if (!res.ok) throw new Error(await res.text());
-      const updated = await res.json();
+      const updated = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(updated?.message || updated?.error || 'Failed to respond to technical query');
       setTechnicalQueries(technicalQueries.map((t) => (t.id === id ? updated : t)));
       setTqResponses({ ...tqResponses, [id]: '' });
+      setTqSupersedeReasons({ ...tqSupersedeReasons, [id]: '' });
+      setTqSuperseding({ ...tqSuperseding, [id]: false });
     } catch (err: any) {
       setError(err.message || 'Failed to respond to technical query');
+    }
+  };
+
+  /**
+   * Accept the answer as adequate to build to.
+   *
+   * A different authority from giving it, and the API refuses a self-close even where one person
+   * holds both — so a refusal here is shown as it comes back rather than pre-empted in the client.
+   */
+  const handleCloseTq = async (id: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/engineering/technical-queries/${id}/close`, { method: 'PUT' });
+      const updated = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(updated?.message || updated?.error || 'Failed to close technical query');
+      setTechnicalQueries(technicalQueries.map((t) => (t.id === id ? updated : t)));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to close technical query');
     }
   };
 
@@ -1095,7 +1124,57 @@ export default function EngineeringClient({
                     </p>
                     <p style={st.rfiQuestion}><strong>Q:</strong> {t.query}</p>
                     {t.response ? (
-                      <p style={st.rfiAnswer}><strong>A:</strong> {t.response}</p>
+                      <>
+                        {/* THE ANSWER, WITH WHO DECIDED IT. Site builds to this; an unattributed
+                            design decision is a rumour, and a revision above 0 means the decision
+                            has MOVED since somebody may already have built to the last one. */}
+                        <p style={st.rfiAnswer} data-testid={`tq-answer-${t.id}`}>
+                          <strong>A:</strong> {t.response}
+                        </p>
+                        <p style={st.rfiProject} data-testid={`tq-answer-meta-${t.id}`}>
+                          {t.respondedBy ? `Answered by ${t.respondedBy}` : 'Answered — author not recorded'}
+                          {t.responseRevision > 0 ? ` · revision ${t.responseRevision}, replaced ${t.responseRevision} time${t.responseRevision === 1 ? '' : 's'}` : ''}
+                          {t.closedAt ? ` · accepted by ${t.closedBy}` : ''}
+                        </p>
+                        {t.status !== 'closed' && (
+                          <div style={st.rfiActionRow}>
+                            {/* Accepting is the RAISING side's act. The API refuses a self-close
+                                even where one person holds both permissions, so the button is
+                                offered and the refusal shown rather than guessed at here. */}
+                            <button onClick={() => handleCloseTq(t.id)} style={st.btnSmall}
+                              data-testid={`tq-close-${t.id}`}>
+                              Accept answer
+                            </button>
+                            <button
+                              onClick={() => setTqSuperseding({ ...tqSuperseding, [t.id]: !tqSuperseding[t.id] })}
+                              style={st.btnSmall} data-testid={`tq-supersede-${t.id}`}
+                            >
+                              {tqSuperseding[t.id] ? 'Cancel' : 'Replace answer'}
+                            </button>
+                          </div>
+                        )}
+                        {tqSuperseding[t.id] && t.status !== 'closed' && (
+                          <div style={st.rfiActionRow}>
+                            <input
+                              type="text" placeholder="New design response..."
+                              value={tqResponses[t.id] || ''}
+                              onChange={(e) => setTqResponses({ ...tqResponses, [t.id]: e.target.value })}
+                              style={st.inlineInput} data-testid={`tq-new-response-${t.id}`}
+                            />
+                            {/* Required, and said here rather than discovered on a rejected submit. */}
+                            <input
+                              type="text" placeholder="Why is it being replaced? (required)"
+                              value={tqSupersedeReasons[t.id] || ''}
+                              onChange={(e) => setTqSupersedeReasons({ ...tqSupersedeReasons, [t.id]: e.target.value })}
+                              style={st.inlineInput} data-testid={`tq-supersede-reason-${t.id}`}
+                            />
+                            <button onClick={() => handleRespondTq(t.id)} style={st.btnSmall}
+                              data-testid={`tq-supersede-save-${t.id}`}>
+                              Replace
+                            </button>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div style={st.rfiActionRow}>
                         <input
@@ -1106,8 +1185,10 @@ export default function EngineeringClient({
                             setTqResponses({ ...tqResponses, [t.id]: e.target.value })
                           }
                           style={st.inlineInput}
+                          data-testid={`tq-response-${t.id}`}
                         />
-                        <button onClick={() => handleRespondTq(t.id)} style={st.btnSmall}>
+                        <button onClick={() => handleRespondTq(t.id)} style={st.btnSmall}
+                          data-testid={`tq-respond-${t.id}`}>
                           Submit Response
                         </button>
                       </div>

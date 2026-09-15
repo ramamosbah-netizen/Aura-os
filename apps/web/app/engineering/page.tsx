@@ -91,6 +91,10 @@ interface TechnicalQuery {
   drawingReference: string | null;
   costImpact: boolean;
   timeImpact: boolean;
+  respondedBy: string | null;
+  responseRevision: number;
+  closedAt: string | null;
+  closedBy: string | null;
   createdAt: string;
 }
 

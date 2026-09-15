@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query, Req } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { FormCustomValuesService, FormOverridesService, TenantContext } from '@aura/core';
+import { FormCustomValuesService, FormOverridesService, Permissions, TenantContext } from '@aura/core';
 import { applyFormOverrides, parsePageParams, assertFormValid, employeeFormSchema, pickCustomFieldValues } from '@aura/shared';
 import {
   type Employee,
@@ -131,6 +131,29 @@ export class HrController {
   restoreEmployee(@Param('id') id: string): Promise<Employee> {
     // "employee profile not found" is classified to 404 by the global error taxonomy.
     return this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
+  }
+
+  /**
+   * Bind an employment record to a platform account, or release it.
+   *
+   * Explicitly permissioned rather than route-derived: the taxonomy would read a DELETE on this
+   * sub-resource as `hr.employee.delete`, which would let anyone able to remove an employee
+   * quietly re-point who their work belongs to. `link-account` is its own authority because it
+   * decides whose name a commitment carries.
+   */
+  @Permissions('hr.employee.link-account')
+  @Post('employees/:id/account')
+  linkEmployeeAccount(@Param('id') id: string, @Body() dto: { userId?: string }): Promise<Employee> {
+    if (!dto?.userId?.trim()) throw new BadRequestException('userId is required');
+    const ctx = this.tenant.get();
+    return this.hrService.linkEmployeeAccount(ctx.tenantId, ctx.actorId, id, dto.userId);
+  }
+
+  @Permissions('hr.employee.link-account')
+  @Delete('employees/:id/account')
+  unlinkEmployeeAccount(@Param('id') id: string): Promise<Employee> {
+    const ctx = this.tenant.get();
+    return this.hrService.unlinkEmployeeAccount(ctx.tenantId, ctx.actorId, id);
   }
 
   @Get('employees')

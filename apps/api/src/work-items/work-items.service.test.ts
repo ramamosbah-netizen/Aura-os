@@ -29,11 +29,15 @@ function harness() {
   const projectRisks = { list: empty }, projectIssues = { list: empty };
   const projectResponsibilities = { list: vi.fn(empty), get: vi.fn() };
   const projects = { get: vi.fn(async (id: string) => ({ id, title: 'Project One' })) };
+  // §22 allocations. The default harness account holds NO employment record, which is the normal
+  // state for most logins and must leave every other answer here untouched.
+  const resourceBookings = { listAssignments: vi.fn(empty) };
+  const hr = { findEmployeeByAccount: vi.fn(async () => null) };
   const access = { can: vi.fn(() => ({ allowed: true })) };
   const auth = { enabled: false };
   const notifications = { record: vi.fn(async () => ({})) };
-  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, projects as never, access as never, auth as never, notifications as never);
-  return { service, activities, notifications, projectResponsibilities, access, auth };
+  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, resourceBookings as never, hr as never, projects as never, access as never, auth as never, notifications as never);
+  return { service, activities, notifications, projectResponsibilities, resourceBookings, hr, access, auth };
 }
 
 describe('WorkItemsService', () => {

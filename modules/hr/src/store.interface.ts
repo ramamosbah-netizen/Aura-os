@@ -31,6 +31,13 @@ export interface AppraisalStore {
 export interface EmployeeStore {
   save(employee: Employee, tx?: TxHandle): Promise<Employee>;
   findById(tenantId: string, id: string): Promise<Employee | null>;
+  /**
+   * The employment record that acts as a platform account (migration 0317), or null.
+   *
+   * Single-valued by construction: a partial unique index refuses a second employee holding the
+   * same account, so this never has to choose between two answers.
+   */
+  findByUserId(tenantId: string, userId: string): Promise<Employee | null>;
   findByTenant(tenantId: string): Promise<Employee[]>;
   listPaged(filter: EmployeeFilter, page: PageParams): Promise<Page<Employee>>;
   /** Soft-delete flag: true hides the employee from finds; false restores. */

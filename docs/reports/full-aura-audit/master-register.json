@@ -1726,8 +1726,8 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. HR/Fleet availability and My Work receipt remain open.",
-      "acceptanceProof": "Connect HR/Fleet availability and map named employee bookings to user identities so the commitment becomes actionable My Work without re-entry."
+      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. A held employee booking now also reaches the linked person’s My Work (PLN-07). HR/Fleet availability remains open.",
+      "acceptanceProof": "Connect HR/Fleet availability so a leave or breakdown changes the feasibility of an existing commitment without re-entry."
     },
     {
       "id": "PLN-07",
@@ -1750,17 +1750,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
+        "actualOutput": "PARTIAL",
+        "browser": "PARTIAL",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "A named employee demand from the canonical HR catalog can now become a held, dated booking through the live planning desk. The employee record still has no governed Employee-to-User identity link, so AURA cannot safely turn that booking into the named person’s My Work item or prove acceptance/completion by the employee.",
-      "acceptanceProof": "Add canonical Employee-to-User identity, then emit an actionable allocation receipt with project/activity/dates and prove it in the assignee’s My Work."
+      "currentBehavior": "An administrator binds an employment record to a platform account in HR (migration 0317): one account holds at most one employment record, unregistered, deactivated and already-claimed accounts are refused, and who declared the link and when is recorded. A held employee booking then reaches that person’s My Work as a read-through allocation carrying project, activity name, quantity and committed dates — no quick actions, because the booking is the project’s commitment and releasing it stays on the planning desk. Releasing the booking removes the item, an unlinked account is told so in coverage rather than shown an empty list, and an allocation on a project the account cannot open is withheld and counted rather than silently dropped. Auth-ON browser proof covers the chain, including a second claim on one account (409), an unregistered account (400) and an HR-read role refused the link authority (403). Acceptance or completion BY the allocated employee, team (pool) allocation reaching its members, and equipment receipts are still not represented.",
+      "acceptanceProof": "Prove an employee accepting or declining an allocation from My Work, a pool allocation reaching its named members, and a governed path that gives an allocated non-member the project access the work implies."
     },
     {
       "id": "PLN-08",
@@ -8346,13 +8346,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. HR/Fleet availability and My Work receipt remain open.",
+      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. A held employee booking now also reaches the linked person’s My Work (PLN-07). HR/Fleet availability remains open.",
       "expectedOperationalBehavior": "Resource requirements from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Connect HR/Fleet availability and map named employee bookings to user identities so the commitment becomes actionable My Work without re-entry."
+      "acceptanceProof": "Connect HR/Fleet availability so a leave or breakdown changes the feasibility of an existing commitment without re-entry."
     },
     {
       "id": "F-09",

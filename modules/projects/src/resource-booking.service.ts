@@ -1,15 +1,32 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Id } from '@aura/shared';
 import { assessBooking, commitBooking, releaseBooking, type BookingAssessment, type ResourceBooking } from './domain/resource-booking';
+import type { ResourceRef } from './domain/resource-ref';
 import { assessResourceAcrossProjects, dayLoadsForBooking, resolveResourceLoad, type ResourceConflictReport } from './domain/resource-facts';
 import { RESOURCE_BOOKING_STORE, type ResourceBookingStore } from './resource-booking-store';
-import { RESOURCE_FACTS_STORE, type ResourceFactsStore } from './resource-facts-store';
+import { RESOURCE_FACTS_STORE, type ResourceFactsStore, type ResourceInterval } from './resource-facts-store';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
 
 export interface ResourceBookingView {
   booking: ResourceBooking;
   assessment: BookingAssessment;
   resourceConflict: ResourceConflictReport;
+}
+
+/**
+ * One commitment, seen from the RESOURCE's side rather than the project's.
+ *
+ * The project's own screens read `listProject`; this answers the other question — "what has been
+ * committed against this crane / this person, by anyone?" — which is what a named allocation needs
+ * before it can reach the person it names.
+ *
+ * `activityName` is READ THROUGH at query time, never copied onto the booking (DG-22.2): renaming
+ * the activity renames it here, and a booking whose task has since been removed says so with null
+ * instead of showing a name that is no longer anybody's.
+ */
+export interface ResourceAssignmentView {
+  booking: ResourceBooking;
+  activityName: string | null;
 }
 
 @Injectable()
@@ -69,6 +86,36 @@ export class ResourceBookingService {
       ]);
       return this.view(booking, windows, held);
     }));
+  }
+
+  /**
+   * Every HELD commitment against one resource, across every project in the tenant.
+   *
+   * Cross-project by design and by store contract: a person is one person, and an allocation view
+   * that showed only the asking project's claim would be exactly the blindness §22 exists to
+   * remove. Tenant isolation is absolute regardless — RLS scopes the read below this service.
+   *
+   * No access filtering happens here. Which of these a given VIEWER may see is a question about
+   * the viewer, not about the resource, and it is answered where the viewer is known.
+   */
+  async listAssignments(tenantId: Id, resource: ResourceRef, interval: ResourceInterval): Promise<ResourceAssignmentView[]> {
+    const held = await this.facts.heldBookingsFor(tenantId, [resource], interval);
+    if (held.length === 0) return [];
+
+    // One schedule read per project, not per booking: a person committed to six activities on one
+    // project is one read, and the alternative is how a personal work list becomes slow.
+    const names = new Map<string, string>();
+    await Promise.all([...new Set(held.map((booking) => booking.projectId))].map(async (projectId) => {
+      const schedule = await this.schedules.getByProject(tenantId, projectId);
+      for (const task of schedule?.tasks ?? []) names.set(`${projectId}:${task.id}`, task.name);
+    }));
+
+    return held
+      .map((booking) => ({
+        booking,
+        activityName: booking.taskId ? names.get(`${booking.projectId}:${booking.taskId}`) ?? null : null,
+      }))
+      .sort((a, b) => a.booking.from.localeCompare(b.booking.from) || a.booking.committedAt.localeCompare(b.booking.committedAt));
   }
 
   async release(input: { tenantId: Id; projectId: Id; bookingId: Id; reason: string; actorId?: Id | null }): Promise<ResourceBooking> {

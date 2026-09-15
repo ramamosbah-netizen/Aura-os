@@ -35,8 +35,8 @@ export class PostgresEmployeeStore implements EmployeeStore {
     const conn = (tx as PoolClient) || this.pool;
     const res = await conn.query(
       `insert into public.aura_hr_employees (
-        id, tenant_id, company_id, first_name, last_name, email, phone, role, department, manager_id, status, joined_date, visa_expiry, permit_expiry, labor_camp, iban, mol_employee_id, bank_routing_code, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+        id, tenant_id, company_id, first_name, last_name, email, phone, role, department, manager_id, status, joined_date, visa_expiry, permit_expiry, labor_camp, iban, mol_employee_id, bank_routing_code, user_id, user_linked_at, user_linked_by, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
       on conflict (id) do update set
         first_name = excluded.first_name,
         last_name = excluded.last_name,
@@ -52,6 +52,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
         iban = excluded.iban,
         mol_employee_id = excluded.mol_employee_id,
         bank_routing_code = excluded.bank_routing_code,
+        user_id = excluded.user_id,
+        user_linked_at = excluded.user_linked_at,
+        user_linked_by = excluded.user_linked_by,
         updated_at = excluded.updated_at
       returning *`,
       [
@@ -75,6 +78,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
         encryptField(employee.iban),
         encryptField(employee.molEmployeeId),
         employee.bankRoutingCode,
+        employee.userId,
+        employee.userLinkedAt,
+        employee.userLinkedBy,
         employee.createdAt,
         employee.updatedAt,
       ],
@@ -86,6 +92,16 @@ export class PostgresEmployeeStore implements EmployeeStore {
     const res = await this.pool.query(
       `select * from public.aura_hr_employees where id = $1 and tenant_id = $2 and deleted_at is null`,
       [id, tenantId],
+    );
+    if (res.rowCount === 0) return null;
+    return this.mapEmployee(res.rows[0]);
+  }
+
+  async findByUserId(tenantId: string, userId: string): Promise<Employee | null> {
+    if (!userId) return null;
+    const res = await this.pool.query(
+      `select * from public.aura_hr_employees where tenant_id = $1 and user_id = $2 and deleted_at is null`,
+      [tenantId, userId],
     );
     if (res.rowCount === 0) return null;
     return this.mapEmployee(res.rows[0]);
@@ -129,6 +145,9 @@ export class PostgresEmployeeStore implements EmployeeStore {
       role: row.role,
       department: row.department,
       managerId: row.manager_id ?? null,
+      userId: row.user_id ?? null,
+      userLinkedAt: row.user_linked_at ? row.user_linked_at.toISOString() : null,
+      userLinkedBy: row.user_linked_by ?? null,
       status: row.status,
       joinedDate: dateOnly(row.joined_date) ?? '',
       visaExpiry: dateOnly(row.visa_expiry),

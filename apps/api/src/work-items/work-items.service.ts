@@ -2,6 +2,7 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { ActivityService, type Activity, type TaskRecurrence } from '@aura/crm';
 import { AccessService, AuthService, NotificationService } from '@aura/core';
 import { EngineeringService, type Drawing, type Rfi, type TechnicalQuery } from '@aura/engineering';
+import { HrService, type Employee } from '@aura/hr';
 import { HseService, type CapaAction } from '@aura/hse';
 import { PurchaseOrderService, PurchaseRequestService, RfqService, type PurchaseOrder, type PurchaseRequest, type Rfq } from '@aura/procurement';
 import { QualityService, type Ncr, type Snag } from '@aura/quality';
@@ -10,9 +11,11 @@ import {
   ProjectIssueService,
   ProjectResponsibilityService,
   ProjectService,
+  ResourceBookingService,
   type ProjectRisk,
   type ProjectIssue,
   type ProjectResponsibility,
+  type ResourceAssignmentView,
 } from '@aura/projects';
 
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
@@ -79,6 +82,20 @@ export interface WorkItemsPayload {
 
 const dateOnly = (value: string | null): string | null => value?.slice(0, 10) ?? null;
 
+/**
+ * How far ahead a personal work list looks at resource allocations.
+ *
+ * A held booking can sit two years out; a to-do list that showed it would bury this week's work
+ * under a plan nobody can act on yet. Six weeks is the look-ahead horizon planning already works
+ * in, and the full commitment record stays where it is made — the project's planning desk — so
+ * nothing is hidden, only deferred. Allocations past the horizon are REPORTED in coverage rather
+ * than silently dropped.
+ */
+const ALLOCATION_LOOK_AHEAD_DAYS = 42;
+
+const addDays = (day: string, days: number): string =>
+  new Date(new Date(`${day}T00:00:00.000Z`).getTime() + days * 86_400_000).toISOString().slice(0, 10);
+
 function derivedPriority(dueAt: string | null, source?: 'high' | 'major' | 'medium' | 'minor' | 'low'): WorkItemPriority {
   if (source === 'major' || source === 'high') return 'high';
   if (source === 'medium') return 'medium';
@@ -122,6 +139,8 @@ export class WorkItemsService {
     private readonly projectRisks: ProjectRiskService,
     private readonly projectIssues: ProjectIssueService,
     private readonly projectResponsibilities: ProjectResponsibilityService,
+    private readonly resourceBookings: ResourceBookingService,
+    private readonly hr: HrService,
     private readonly projects: ProjectService,
     private readonly access: AccessService,
     private readonly auth: AuthService,
@@ -183,6 +202,15 @@ export class WorkItemsService {
     }));
     for (const responsibility of projectResponsibilities) this.addProjectResponsibility(put, responsibility, actorId, responsibilityProjects.get(responsibility.projectId) ?? null);
 
+    const allocations = await this.resourceAllocations(tenantId, actorId);
+    for (const allocation of allocations.items) put(allocation);
+
+    // Counted BEFORE the shared access filter below, because an allocation dropped there is not
+    // absent — it is a commitment on this person that they cannot see, and saying nothing would
+    // leave them with a work list that quietly disagrees with the plan.
+    const unreachableAllocations = allocations.items
+      .filter((item) => !this.canUse(tenantId, companyId, actorId, item.projectId)).length;
+
     return {
       generatedAt: new Date().toISOString(),
       items: [...items.values()]
@@ -190,13 +218,109 @@ export class WorkItemsService {
         .filter((item) => item.status !== 'cancelled')
         .sort((a, b) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') || b.updatedAt.localeCompare(a.updatedAt)),
       coverage: {
-        connected: ['Activities', 'Engineering', 'Quality', 'HSE', 'Procurement', 'Projects'],
+        connected: ['Activities', 'Engineering', 'Quality', 'HSE', 'Procurement', 'Projects', ...(allocations.employee ? ['Planning'] : [])],
         notConnected: [
+          ...(allocations.employee ? [] : [{
+            module: 'Planning',
+            reason: 'Your account is not linked to an employee record, so resource allocations made against a person cannot be attributed to you. An administrator makes that link in HR.',
+          }]),
+          ...(unreachableAllocations > 0 ? [{
+            module: 'Planning',
+            reason: `${unreachableAllocations} resource allocation(s) are held against projects your account cannot open. Ask the project manager for access.`,
+          }] : []),
+          ...(allocations.beyondHorizon > 0 ? [{
+            module: 'Planning',
+            reason: `${allocations.beyondHorizon} resource allocation(s) start more than ${ALLOCATION_LOOK_AHEAD_DAYS} days out and are shown on the project planning desk, not here.`,
+          }] : []),
           { module: 'Site Execution', reason: 'No user-assignment contract is exposed yet.' },
           { module: 'Commissioning', reason: 'No user-assignment contract is exposed yet.' },
           { module: 'Finance', reason: 'Personal approvals remain in My Approvals until assignee data is available.' },
         ],
       },
+    };
+  }
+
+  /**
+   * The resource commitments held against the PERSON this account is, if it is anybody.
+   *
+   * The account to employee link (HR, migration 0317) is the whole hinge. Without it a planner's
+   * commitment names an employee id that no login claims, and the work reaches nobody; with it,
+   * "4 electricians on Tuesday" becomes an item on the right person's list. The link is
+   * administered, never inferred from a name or an email — see modules/hr/src/domain/
+   * employee-account-link.ts for why a probable match is worse here than no match.
+   *
+   * An allocation is NOT converted into a responsibility or a task. It stays a booking, read
+   * through at display time, so releasing it on the planning desk removes it from this list and
+   * no second copy can disagree with the first.
+   */
+  private async resourceAllocations(
+    tenantId: string,
+    actorId: string,
+  ): Promise<{ employee: Employee | null; items: WorkItem[]; beyondHorizon: number }> {
+    // Not wrapped in a catch: every other source here is free to fail loudly, and a swallowed
+    // error would report "your account is not linked" — a statement about administration — when
+    // the truth was that the read did not happen.
+    const employee = await this.hr.findEmployeeByAccount(tenantId, actorId);
+    if (!employee) return { employee: null, items: [], beyondHorizon: 0 };
+
+    const today = new Date().toISOString().slice(0, 10);
+    const horizon = addDays(today, ALLOCATION_LOOK_AHEAD_DAYS);
+    // Read wide, list narrow: what lies past the horizon is counted and reported in coverage,
+    // never silently absent.
+    const everything = await this.resourceBookings.listAssignments(
+      tenantId,
+      { resourceType: 'employee', canonicalResourceId: employee.id },
+      { from: today, to: addDays(today, 3650) },
+    );
+    const within = everything.filter((view) => view.booking.from <= horizon);
+
+    const projectNames = new Map<string, string>();
+    await Promise.all([...new Set(within.map((view) => view.booking.projectId))].map(async (projectId) => {
+      const project = await this.projects.get(projectId);
+      if (project) projectNames.set(projectId, project.title);
+    }));
+
+    return {
+      employee,
+      items: within.map((view) => this.allocationItem(view, actorId, projectNames.get(view.booking.projectId) ?? null, today)),
+      beyondHorizon: everything.length - within.length,
+    };
+  }
+
+  private allocationItem(view: ResourceAssignmentView, actorId: string, projectName: string | null, today: string): WorkItem {
+    const { booking, activityName } = view;
+    const running = booking.from <= today && booking.to >= today;
+    return {
+      id: `resource-allocation:${booking.id}`,
+      source: 'resource-allocation',
+      sourceId: booking.id,
+      module: 'Planning',
+      kind: 'resource allocation',
+      // Null rather than a remembered name: the activity is read through, so a booking whose task
+      // has been removed says so instead of showing what it used to be called.
+      title: activityName ? `Allocated to ${activityName}` : 'Allocated to project work',
+      detail: `${booking.quantity} ${booking.unit} held · ${booking.from} → ${booking.to}`,
+      href: `/projects/schedule?projectId=${booking.projectId}`,
+      projectId: booking.projectId,
+      projectName,
+      status: running ? 'in_progress' : 'todo',
+      sourceStatus: booking.status,
+      priority: derivedPriority(booking.from),
+      // The date the person is needed, which is what a personal list sorts and warns on.
+      dueAt: booking.from,
+      createdAt: booking.committedAt,
+      updatedAt: booking.committedAt,
+      scopes: ['assigned'],
+      isFollowUp: false,
+      // No quick actions, deliberately. A booking is the PROJECT's commitment to capacity, not a
+      // task the allocated person owns: completing or reopening it here would let one person's
+      // click move a number the planner is accountable for. Releasing it stays on the planning
+      // desk, where it costs a reason.
+      actions: [],
+      origin: origin(booking.committedBy, actorId),
+      editable: false,
+      deletable: false,
+      reschedulable: false,
     };
   }
 

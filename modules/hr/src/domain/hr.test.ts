@@ -13,11 +13,16 @@ import {
   InMemoryAppraisalStore,
 } from '../in-memory-hr-store';
 import { HrService } from '../hr.service';
-import { AccessService, type EventStore, type TxRunner } from '@aura/core';
+import { AccessService, UsersService, type EventStore, type TxRunner } from '@aura/core';
 
 const mockAccess = {
   assert: () => {},
 } as unknown as AccessService;
+
+const mockUsers = {
+  ensureTenant: async () => {},
+  get: (_tenantId: string, userId: string) => ({ tenantId: 't1', userId, displayName: userId, email: '', companyId: null, active: true }),
+} as unknown as UsersService;
 
 const mockEvents = {
   appendWithClient: async () => [],
@@ -49,7 +54,7 @@ describe('HR & Payroll Bounded Context', () => {
       const leaveStore = new InMemoryLeaveStore();
       const payrollRunStore = new InMemoryPayrollRunStore();
 
-      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess, mockUsers);
 
       const emp = await service.createEmployee(null, {
         tenantId: 't1',
@@ -75,7 +80,7 @@ describe('HR & Payroll Bounded Context', () => {
 
     it('paginates employees and excludes soft-deleted', async () => {
       const employeeStore = new InMemoryEmployeeStore();
-      const service = new HrService(employeeStore, new InMemoryLeaveStore(), new InMemoryPayrollRunStore(), new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, new InMemoryLeaveStore(), new InMemoryPayrollRunStore(), new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess, mockUsers);
 
       const ids: string[] = [];
       for (let i = 0; i < 3; i++) {
@@ -95,7 +100,7 @@ describe('HR & Payroll Bounded Context', () => {
     });
 
     it('paginates an employee-scoped child list (leaves) filtered by employee', async () => {
-      const service = new HrService(new InMemoryEmployeeStore(), new InMemoryLeaveStore(), new InMemoryPayrollRunStore(), new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(new InMemoryEmployeeStore(), new InMemoryLeaveStore(), new InMemoryPayrollRunStore(), new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess, mockUsers);
 
       await service.requestLeave(null, { tenantId: 't1', employeeId: 'e-1', leaveType: 'annual', startDate: '2026-03-01', endDate: '2026-03-05' });
       await service.requestLeave(null, { tenantId: 't1', employeeId: 'e-1', leaveType: 'sick', startDate: '2026-04-01', endDate: '2026-04-02' });
@@ -116,7 +121,7 @@ describe('HR & Payroll Bounded Context', () => {
       const leaveStore = new InMemoryLeaveStore();
       const payrollRunStore = new InMemoryPayrollRunStore();
 
-      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess, mockUsers);
 
       const leave = await service.requestLeave(null, {
         tenantId: 't1',
@@ -141,7 +146,7 @@ describe('HR & Payroll Bounded Context', () => {
       const leaveStore = new InMemoryLeaveStore();
       const payrollRunStore = new InMemoryPayrollRunStore();
 
-      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess);
+      const service = new HrService(employeeStore, leaveStore, payrollRunStore, new InMemoryTimesheetStore(), new InMemoryExpenseClaimStore(), new InMemoryStaffAdvanceStore(), new InMemoryAttendanceStore(), new InMemoryAppraisalStore(), mockEvents, mockTx, mockAccess, mockUsers);
 
       const run = await service.runPayroll(null, {
         tenantId: 't1',

@@ -97,6 +97,52 @@ describe('ResourceBookingService', () => {
     expect(second.resourceConflict.projectsInvolved).toEqual([a.projectId, b.projectId]);
   });
 
+  it('lists a resource’s held commitments across projects, naming the activity it reads through', async () => {
+    // One shared authority for writes and conflict reads, so a release is visible to the next
+    // read exactly as it is in the live composition.
+    const schedules = new InMemoryScheduleStore();
+    const resources = new InMemoryResourcePlanningStore();
+    await resources.createCapacity(makeResourceCapacity({
+      tenantId: 'tenant-a', resource: POOL, unit: 'crews', quantity: 1, from: '2026-10-01', to: '2026-10-03',
+    }));
+    const service = new ResourceBookingService(resources, resources, schedules);
+    const plan = async (projectId: string, requirementId: string) => {
+      const schedule = makeProjectSchedule({
+        tenantId: 'tenant-a', projectId,
+        tasks: [{
+          name: `Install CCTV ${projectId}`, wbsNodeId: `wbs-${projectId}`,
+          plannedStart: '2026-10-01', plannedEnd: '2026-10-03', durationWorkingDays: 3,
+          requirements: [{ id: requirementId, resource: POOL, unit: 'crews', quantity: 1 }],
+        }],
+      });
+      await schedules.create(schedule);
+      return schedule;
+    };
+    const a = await plan('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    const b = await plan('22222222-2222-4222-8222-222222222222', 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
+    await service.commitRequirement({ tenantId: 'tenant-a', projectId: a.projectId, requirementId: a.tasks[0].requirements[0].id });
+    const second = await service.commitRequirement({
+      tenantId: 'tenant-a', projectId: b.projectId, requirementId: b.tasks[0].requirements[0].id,
+      overCapacityReason: 'approved weekend recovery crew',
+    });
+
+    const window = { from: '2026-10-01', to: '2026-10-31' };
+    const assignments = await service.listAssignments('tenant-a', POOL, window);
+    expect(assignments.map((view) => view.booking.projectId)).toEqual([a.projectId, b.projectId]);
+    expect(assignments.map((view) => view.activityName)).toEqual([`Install CCTV ${a.projectId}`, `Install CCTV ${b.projectId}`]);
+
+    // Released capacity is not an assignment: it holds nothing, so it is nobody's work.
+    await service.release({ tenantId: 'tenant-a', projectId: b.projectId, bookingId: second.booking.id, reason: 'recovery crew reassigned' });
+    expect((await service.listAssignments('tenant-a', POOL, window)).map((view) => view.booking.projectId)).toEqual([a.projectId]);
+
+    // A different resource is a different question, even with an identical id.
+    expect(await service.listAssignments('tenant-a', { resourceType: 'employee', canonicalResourceId: 'pool-elv' }, window)).toEqual([]);
+    // And so is a window the commitment does not touch.
+    expect(await service.listAssignments('tenant-a', POOL, { from: '2027-01-01', to: '2027-01-31' })).toEqual([]);
+    // Another tenant sees none of it.
+    expect(await service.listAssignments('tenant-b', POOL, window)).toEqual([]);
+  });
+
   it('refuses another project requirement and retains released history', async () => {
     const { service, create } = await setup();
     const a = await create('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');

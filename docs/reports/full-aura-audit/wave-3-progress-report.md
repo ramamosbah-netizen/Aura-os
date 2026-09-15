@@ -135,6 +135,12 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Caller nominates another project’s requirement | Service resolves the requirement only inside the persisted schedule identified by the authorized URL project and returns 400 |
 | Shared demand silently exceeds known capacity | Domain and database both require a non-blank exception reason; Auth-ON proof denies the silent overrun |
 | Project membership replaces booking functionality | Planning Engineer create is allowed on its granted project; Site Engineer membership receives 403 for create; changing the URL project receives 403 |
+| Identity is inferred from a matching name or email | The employment record carries an administered account link with recorded provenance; no matching is performed anywhere |
+| One login is claimed by two employment records | Domain, service and a partial unique index all refuse; the second claim returns 409 |
+| An unregistered or deactivated account is linked | The identity registry is the authority and an absent or inactive row is refused with 400, never stored as a link that matches nobody |
+| Reading HR carries the authority to bind identities | The link endpoint requires `hr.employee.link-account` explicitly rather than the route-derived `hr.employee.delete`; an HR-read role receives 403 |
+| An allocation is copied into a task the planner cannot see | My Work reads the booking through; releasing it on the planning desk removes the item and no second record exists to disagree |
+| A person without the link, or without project access, is shown an empty list | Coverage names the missing link, counts allocations withheld by project access and counts those beyond the look-ahead horizon |
 
 ## Verification completed
 
@@ -174,13 +180,20 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Resource booking service | 4/4 passed; canonical derivation, shared in-memory facts, duplicate refusal, cross-project over-capacity reason and retained release history |
 | Resource booking Auth-ON browser/API journey | 1/1 passed; request spoof ignored, foreign requirement denied, silent overrun denied, two-project conflict visible, release restored availability, history retained |
 | Resource booking scope/function matrix | correct project + Planning Engineer create 201; changed project URL 403; correct project + Site Engineer create 403; organization-governed read 200 |
+| Employee ↔ account link domain | 9/9 passed; empty id, terminated and deleted records refused, re-pointing refused, re-declaring idempotent and provenance cleared on unlink |
+| Employee ↔ account link service | 7/7 passed; unregistered and deactivated accounts refused, one account per employment record, permission enforced, unlink frees the account, cross-tenant read returns null |
+| Resource assignment read | 5/5 passed in the booking service; cross-project held commitments listed with the activity read through, released commitments and other tenants excluded |
+| Allocation in My Work | 6/6 passed; linked account only, activity/dates/quantity carried, running allocation in progress, missing activity named honestly, look-ahead horizon and withheld-project counts reported in coverage |
+| Employee allocation Auth-ON browser journey | 1/1 passed in Chromium; UI link, second claim on one account 409, unregistered account 400, HR-read role refused the link authority 403, allocation visible with project/activity/dates, colleague's allocation absent, release removed the item, unlink reported in coverage |
+| Database migration posture | 317/317 applied; the employment record carries at most one platform account per tenant with linked-by/linked-at provenance |
+| Tenant-isolation fitness ratchet | 5/5 passed; the new identity read asserts the bound tenant explicitly |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. HR/Fleet availability, named conflict-resolution ownership, Employee-to-User identity and My Work handoff from the now-booked WBS demand.
+2. HR/Fleet availability and named conflict-resolution ownership. Employee-to-User identity and the My Work handoff from booked WBS demand are now proven (PLN-07); acceptance BY the allocated employee, pool allocation reaching named members, and project access for an allocated non-member remain open.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

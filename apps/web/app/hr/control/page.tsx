@@ -19,6 +19,10 @@ interface Employee {
   visaExpiry: string | null;
   permitExpiry: string | null;
   laborCamp: string | null;
+  /** The platform account this person signs in with (migration 0317); null for most of headcount. */
+  userId: string | null;
+  userLinkedAt: string | null;
+  userLinkedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -54,11 +58,21 @@ interface PayrollRun {
   updatedAt: string;
 }
 
+interface PlatformUser {
+  userId: string;
+  displayName: string;
+  email: string;
+  active: boolean;
+}
+
 export default async function HrControlPage() {
-  const [employees, leaves, payrollRuns] = await Promise.all([
+  const [employees, leaves, payrollRuns, accounts] = await Promise.all([
     getJson<Employee[]>('/api/hr/employees'),
     getJson<Leave[]>('/api/hr/leaves'),
     getJson<PayrollRun[]>('/api/hr/payroll'),
+    // Null when this reader may not administer users — the link control then explains itself
+    // rather than offering a picker that would refuse every choice.
+    getJson<{ users: PlatformUser[] }>('/api/admin/users'),
   ]);
 
   return (
@@ -72,6 +86,7 @@ export default async function HrControlPage() {
         initialEmployees={employees ?? []}
         initialLeaves={leaves ?? []}
         initialPayrollRuns={payrollRuns ?? []}
+        accounts={accounts?.users?.filter((user) => user.active) ?? null}
       />
     </div>
   );

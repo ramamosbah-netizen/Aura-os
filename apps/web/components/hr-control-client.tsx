@@ -22,6 +22,9 @@ interface Employee {
   visaExpiry: string | null;
   permitExpiry: string | null;
   laborCamp: string | null;
+  userId: string | null;
+  userLinkedAt: string | null;
+  userLinkedBy: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -57,16 +60,26 @@ interface PayrollRun {
   updatedAt: string;
 }
 
+interface PlatformUser {
+  userId: string;
+  displayName: string;
+  email: string;
+  active: boolean;
+}
+
 interface Props {
   initialEmployees: Employee[];
   initialLeaves: Leave[];
   initialPayrollRuns: PayrollRun[];
+  /** Registered accounts this reader may link. `null` = they may not administer users. */
+  accounts: PlatformUser[] | null;
 }
 
 export default function HrControlClient({
   initialEmployees,
   initialLeaves,
   initialPayrollRuns,
+  accounts,
 }: Props) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'employees' | 'leaves' | 'payroll'>('employees');
@@ -100,6 +113,41 @@ export default function HrControlClient({
       router.refresh();
     } catch (err: any) {
       setError(err.message || 'Failed to delete employee profile');
+    }
+  };
+
+  /**
+   * Bind this employment record to a login, or release it.
+   *
+   * The account is CHOSEN from the registered list, never typed: an id that exists is the whole
+   * point of the link, and a free-text field would make a typo look like a person. The API
+   * refuses an unregistered, deactivated or already-held account regardless — this only keeps the
+   * refusal from being the normal way to find that out.
+   */
+  const handleLinkAccount = async (employeeId: string, userId: string) => {
+    setError(null);
+    if (!userId) return;
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}/account`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message || (await res.text()));
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Failed to link the account');
+    }
+  };
+
+  const handleUnlinkAccount = async (employeeId: string) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/hr/employees/${employeeId}/account`, { method: 'DELETE' });
+      if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message || (await res.text()));
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Failed to unlink the account');
     }
   };
 
@@ -179,7 +227,7 @@ export default function HrControlClient({
                 <table style={st.table}>
                   <thead>
                     <tr>
-                      {['Name', 'Role', 'Department', 'Camp/Housing', 'Joined Date', 'Visa Status', 'Permit Status', 'Actions'].map((h) => (
+                      {['Name', 'Role', 'Department', 'AURA account', 'Camp/Housing', 'Joined Date', 'Visa Status', 'Permit Status', 'Actions'].map((h) => (
                         <th key={h} style={st.th}>{h}</th>
                       ))}
                     </tr>
@@ -194,6 +242,42 @@ export default function HrControlClient({
                           <td style={st.tdBold}>{emp.firstName} {emp.lastName}</td>
                           <td style={st.tdCode}>{emp.role}</td>
                           <td style={st.td}>{emp.department}</td>
+                          <td style={st.td} data-testid={`employee-account-${emp.id}`}>
+                            {emp.userId ? (
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <span style={st.tagApproved} data-testid={`employee-account-linked-${emp.id}`}>{emp.userId}</span>
+                                {accounts ? (
+                                  <button
+                                    type="button"
+                                    style={st.btnReject}
+                                    aria-label={`Unlink account from ${emp.firstName} ${emp.lastName}`}
+                                    onClick={() => handleUnlinkAccount(emp.id)}
+                                  >
+                                    Unlink
+                                  </button>
+                                ) : null}
+                              </div>
+                            ) : accounts ? (
+                              <select
+                                aria-label={`Link account for ${emp.firstName} ${emp.lastName}`}
+                                defaultValue=""
+                                style={st.select}
+                                onChange={(event) => handleLinkAccount(emp.id, event.target.value)}
+                              >
+                                <option value="">No account</option>
+                                {accounts.map((account) => (
+                                  <option key={account.userId} value={account.userId}>
+                                    {account.displayName ? `${account.displayName} (${account.userId})` : account.userId}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              // Honest about WHY there is no control, rather than showing a dead one.
+                              <span style={st.tdMuted} title="Linking an employee to a login is a user-administration action">
+                                Not linked · admin only
+                              </span>
+                            )}
+                          </td>
                           <td style={st.tdMuted}>{emp.laborCamp || '—'}</td>
                           <td style={st.tdMuted}>{emp.joinedDate}</td>
                           <td style={st.td}>
@@ -454,6 +538,15 @@ const st = {
     fontSize: 14,
   } as CSSProperties,
   tabHeader: { display: 'flex', justifyContent: 'flex-end', margin: '0 0 12px' } as CSSProperties,
+  select: {
+    padding: '6px 8px',
+    borderRadius: 8,
+    border: '1px solid var(--border)',
+    background: 'var(--panel)',
+    color: 'var(--text)',
+    fontSize: 13,
+    maxWidth: 200,
+  } as CSSProperties,
   panel: {
     background: 'var(--panel)',
     border: '1px solid var(--border)',

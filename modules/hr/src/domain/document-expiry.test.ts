@@ -8,6 +8,7 @@ function emp(over: Partial<Employee>): Employee {
     tenantId: 't1', companyId: null,
     firstName: 'Test', lastName: 'User', email: null, phone: null,
     role: 'Worker', department: 'Site', managerId: null, status: 'active',
+    userId: null, userLinkedAt: null, userLinkedBy: null,
     joinedDate: '2024-01-01', visaExpiry: null, permitExpiry: null, laborCamp: null,
     iban: null, molEmployeeId: null, bankRoutingCode: null, deletedAt: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',

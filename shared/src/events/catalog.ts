@@ -126,6 +126,8 @@ export const EVENT_CATALOG: EventTypeDef[] = [
   { type: 'quality.ir.approved', module: 'quality', description: 'Inspection Request approved', severity: 'INFO' },
   { type: 'quality.snag.closed', module: 'quality', description: 'Punch list snag closed', severity: 'INFO' },
   { type: 'hr.employee.created', module: 'hr', description: 'Employee profile created', severity: 'INFO' },
+  { type: 'hr.employee.account_linked', module: 'hr', description: 'Employee record bound to a platform account (identity for allocation and acceptance)', severity: 'INFO' },
+  { type: 'hr.employee.account_unlinked', module: 'hr', description: 'Employee record released from its platform account', severity: 'INFO' },
   { type: 'hr.leave.requested', module: 'hr', description: 'Leave requested by employee', severity: 'INFO' },
   { type: 'hr.leave.approved', module: 'hr', description: 'Leave request approved', severity: 'INFO' },
   { type: 'hr.payroll.run', module: 'hr', description: 'Payroll processed for period', severity: 'INFO' },

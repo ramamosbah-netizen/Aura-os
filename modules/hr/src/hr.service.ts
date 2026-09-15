@@ -1,8 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, UsersService } from '@aura/core';
 
 import { type Employee, makeEmployee } from './domain/employee';
+import { linkEmployeeAccount, unlinkEmployeeAccount } from './domain/employee-account-link';
 import { type Leave, makeLeave } from './domain/leave';
 import { type PayrollRun, makePayrollRun } from './domain/payroll-run';
 import { type TimesheetEntry, makeTimesheetEntry, submitTimesheet, approveTimesheet, rejectTimesheet } from './domain/timesheet';
@@ -38,6 +39,8 @@ import {
 
 export const HR_EVENT = {
   employeeCreated: 'hr.employee.created',
+  employeeAccountLinked: 'hr.employee.account_linked',
+  employeeAccountUnlinked: 'hr.employee.account_unlinked',
   leaveRequested: 'hr.leave.requested',
   leaveApproved: 'hr.leave.approved',
   payrollRun: 'hr.payroll.run',
@@ -70,6 +73,7 @@ export class HrService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
+    private readonly users: UsersService,
   ) {}
 
   // ── Employees ──────────────────────────────────────────────────────────────
@@ -150,6 +154,115 @@ export class HrService {
 
   getEmployee(tenantId: string, id: string): Promise<Employee | null> {
     return this.employeeStore.findById(tenantId, id);
+  }
+
+  // ── Employee ↔ platform account (migration 0317) ───────────────────────────
+
+  /**
+   * Declare that an employment record and a login are the same person.
+   *
+   * Three checks, and each exists because the failure it prevents is silent:
+   *
+   *   the account is REGISTERED and ACTIVE  — a typo'd or deprovisioned id would link to nobody
+   *                                           and the employee's work would simply never arrive;
+   *   the account is held by NOBODY ELSE    — two employees on one login makes "whose work is
+   *                                           this?" unanswerable for every downstream read;
+   *   the domain's own rules                — terminated/deleted records, and re-pointing a live
+   *                                           link (see domain/employee-account-link.ts).
+   *
+   * The registry read is the AUTHORITY on existence and must not be softened: `UsersService`
+   * answers `isActive` true for ids it has never seen (registration is incremental), so this
+   * asks `get` and treats a missing row as a refusal rather than as permission.
+   */
+  async linkEmployeeAccount(tenantId: string, actorId: string | null, employeeId: string, userId: string): Promise<Employee> {
+    const employee = await this.employeeStore.findById(tenantId, employeeId);
+    if (!employee) throw new Error(`Employee profile with ID ${employeeId} not found`);
+    this.assertEmployeeAccountPermission(tenantId, actorId, employee);
+
+    const candidate = userId?.trim() ?? '';
+    if (!candidate) throw new Error('a user account id is required');
+    await this.users.ensureTenant(tenantId);
+    const account = this.users.get(tenantId, candidate);
+    // The registry is keyed by tenant, so the second half of this condition should be impossible.
+    // It is asserted anyway: binding an identity across tenants is the one mistake this link must
+    // never make, and the cost of saying so is a comparison.
+    if (!account || account.tenantId !== tenantId) {
+      throw new Error(`user account ${candidate} is not registered in this tenant and must be registered before it can be linked`);
+    }
+    if (!account.active) {
+      throw new Error(`user account ${candidate} is deactivated and cannot be linked to an employee`);
+    }
+    const heldBy = await this.employeeStore.findByUserId(tenantId, candidate);
+    if (heldBy && heldBy.id !== employee.id) {
+      throw new Error(`user account ${candidate} is already linked to another employee record`);
+    }
+
+    const linked = linkEmployeeAccount(employee, { userId: candidate, actorId });
+    if (linked === employee) return employee; // already this account: nothing to write, nothing to announce
+    const event = makeEvent({
+      type: HR_EVENT.employeeAccountLinked,
+      tenantId,
+      companyId: employee.companyId,
+      actorId,
+      aggregateType: 'hr.employee',
+      aggregateId: employee.id,
+      payload: { userId: candidate, employeeName: `${employee.firstName} ${employee.lastName}`.trim() },
+    });
+    let saved: Employee = linked;
+    await this.tx.run(async (handle) => {
+      saved = await this.employeeStore.save(linked, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Employee ${employee.id} linked to account ${candidate}`);
+    return saved;
+  }
+
+  /**
+   * Release the link. Held allocations are NOT withdrawn — a booking is the project's commitment
+   * to a resource and stays the planner's to release, so unlinking stops the work reaching this
+   * account and leaves the commitment itself visible where it was made.
+   */
+  async unlinkEmployeeAccount(tenantId: string, actorId: string | null, employeeId: string): Promise<Employee> {
+    const employee = await this.employeeStore.findById(tenantId, employeeId);
+    if (!employee) throw new Error(`Employee profile with ID ${employeeId} not found`);
+    this.assertEmployeeAccountPermission(tenantId, actorId, employee);
+
+    const previous = employee.userId;
+    const cleared = unlinkEmployeeAccount(employee);
+    const event = makeEvent({
+      type: HR_EVENT.employeeAccountUnlinked,
+      tenantId,
+      companyId: employee.companyId,
+      actorId,
+      aggregateType: 'hr.employee',
+      aggregateId: employee.id,
+      payload: { userId: previous },
+    });
+    let saved: Employee = cleared;
+    await this.tx.run(async (handle) => {
+      saved = await this.employeeStore.save(cleared, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Employee ${employee.id} unlinked from account ${previous}`);
+    return saved;
+  }
+
+  /**
+   * Which employment record acts as this account, if any.
+   *
+   * The read behind every "is this work mine?" question. `null` is a real answer — an account
+   * with no employment record is normal (an administrator, a service identity) and callers must
+   * say so rather than showing an empty list as though the person had nothing to do.
+   */
+  findEmployeeByAccount(tenantId: string, userId: string): Promise<Employee | null> {
+    return this.employeeStore.findByUserId(tenantId, userId);
+  }
+
+  private assertEmployeeAccountPermission(tenantId: string, actorId: string | null, employee: Employee): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (employee.companyId) orgPath.push({ level: 'company', id: employee.companyId });
+    this.access.assert(actorId, { permission: 'hr.employee.link-account', orgPath });
   }
 
   listEmployees(tenantId: string): Promise<Employee[]> {

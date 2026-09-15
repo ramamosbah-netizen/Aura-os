@@ -56,6 +56,14 @@ export class InMemoryEmployeeStore implements EmployeeStore {
   private items = new Map<string, Employee>();
 
   async save(employee: Employee, tx?: TxHandle): Promise<Employee> {
+    const held = employee.userId
+      ? Array.from(this.items.values()).find(
+          (item) => item.tenantId === employee.tenantId && item.id !== employee.id && item.userId === employee.userId && !item.deletedAt,
+        )
+      : undefined;
+    // Mirrors the partial unique index of migration 0317, so the in-memory composition refuses
+    // exactly what the database would rather than diverging from it under test.
+    if (held) throw new Error(`account ${employee.userId} is already linked to employee ${held.id}`);
     const copy = { ...employee, updatedAt: new Date().toISOString() };
     this.items.set(copy.id, copy);
     return copy;
@@ -65,6 +73,12 @@ export class InMemoryEmployeeStore implements EmployeeStore {
     const item = this.items.get(id);
     if (!item || item.tenantId !== tenantId || item.deletedAt) return null;
     return item;
+  }
+
+  async findByUserId(tenantId: string, userId: string): Promise<Employee | null> {
+    if (!userId) return null;
+    return Array.from(this.items.values())
+      .find((item) => item.tenantId === tenantId && item.userId === userId && !item.deletedAt) ?? null;
   }
 
   async findByTenant(tenantId: string): Promise<Employee[]> {

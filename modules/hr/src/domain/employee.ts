@@ -12,6 +12,18 @@ export interface Employee {
   department: string;
   /** Reporting line — the employee's manager (self-referential); null = top of the org tree. */
   managerId: string | null;
+  /**
+   * The platform account this person signs in with, when they have one (migration 0317).
+   *
+   * `null` is the NORMAL state, not a gap to be filled in: most of a contractor's headcount is
+   * site labour with no login at all. What the field buys is the ability to hand a named person
+   * their own allocations, approvals and acceptances — see {@link linkEmployeeAccount} for why it
+   * is administered rather than matched on name or email.
+   */
+  userId: string | null;
+  /** When the link was established, and by whom. Provenance for an identity claim. */
+  userLinkedAt: string | null;
+  userLinkedBy: string | null;
   status: 'active' | 'suspended' | 'terminated';
   joinedDate: string; // YYYY-MM-DD
   visaExpiry: string | null; // YYYY-MM-DD
@@ -60,6 +72,10 @@ export function makeEmployee(input: NewEmployee): Employee {
     role: input.role.trim(),
     department: input.department.trim(),
     managerId: input.managerId ?? null,
+    // Never set at creation: the link is a separate, permissioned administrative act.
+    userId: null,
+    userLinkedAt: null,
+    userLinkedBy: null,
     status: input.status ?? 'active',
     joinedDate: input.joinedDate,
     visaExpiry: input.visaExpiry ?? null,

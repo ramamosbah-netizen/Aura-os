@@ -327,7 +327,7 @@
 | Planning | PLN-06 | PARTIAL |
 | Planning | PLN-07 | BACKEND_ONLY |
 | Planning | PLN-08 | BACKEND_ONLY |
-| Planning | PLN-09 | BACKEND_ONLY |
+| Planning | PLN-09 | PARTIAL |
 | Planning | PLN-10 | PARTIAL |
 | Planning | PLN-11 | DISCONNECTED |
 | Planning | PLN-12 | DISCONNECTED |
@@ -552,7 +552,7 @@
 | Progress | PLN-06 | PARTIAL |
 | Progress | PLN-07 | BACKEND_ONLY |
 | Progress | PLN-08 | BACKEND_ONLY |
-| Progress | PLN-09 | BACKEND_ONLY |
+| Progress | PLN-09 | PARTIAL |
 | Progress | PLN-10 | PARTIAL |
 | Progress | PLN-11 | DISCONNECTED |
 | Progress | PLN-12 | DISCONNECTED |

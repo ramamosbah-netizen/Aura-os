@@ -78,6 +78,18 @@ Auth-ON browser proof created `Install CCTV devices` with three authored working
 
 **PLN-06 moves from BACKEND_ONLY to PARTIAL.** Activity demand is connected through owning register → safe catalog → create/edit UI → API validation → task requirement persistence → solver input. Team pools, held allocation/bookings, availability integration and My Work receipts remain open.
 
+## Iteration 7 — Governed shared resource pools and capacity
+
+Planning now exposes the existing tenant-wide resource-pool and capacity authorities as a working Technical Manager desk. The manager can register an internal team or subcontract capacity source, select its fixed measurement unit, and publish dated capacity windows. Project schedules consume the same pool through their project-context resource catalog:
+
+`tenant resource pool → dated capacity → project schedule catalog → WBS activity demand`
+
+The pool remains organization-scoped because one delivery team may serve several projects. Project membership does not grant pool administration: the controller requires the explicit `projects.resource-pool.*` or `projects.resource-capacity.*` functional permission, while a project-scoped planner sees only the planning-safe pool reference through `projects.schedule.read` on the requested project.
+
+The measurement unit is canonical. Capacity and schedule demand must use the persisted pool unit, so request data cannot reinterpret a crew pool as hours or units. Tenant filters prevent another organization's resource from being resolved. Internal pools discard an injected supplier id; subcontract pools require a supplier reloaded from the same tenant's approved subcontractor register, and the UI presents that register as a selector instead of asking the manager to type an id. The Auth-ON browser registered a unique ELV installation crew, added `2 crews` of dated capacity, received HTTP 409 for a forged `hours` capacity request, selected the pool on a WBS activity, and reloaded `1 crews` against the same pool identity. It also retained the previously proved employee and asset references through activity edit.
+
+**PLN-09 moves from BACKEND_ONLY to PARTIAL.** The capacity source is now governed and visible, but activity demand still does not create held bookings. HR/Fleet availability, cross-project conflict decisions, named allocation and My Work receipts remain open.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -102,7 +114,9 @@ Auth-ON browser proof created `Install CCTV devices` with three authored working
 | Caller invents an employee/equipment id | The API reloads the authenticated tenant's HR/Fleet/Assets catalogs and returns 400 before schedule persistence |
 | Projects copies names from owning registers | The task stores only typed ids; the current label is read through the safe planning catalog on render |
 | Planner edits demand by replacing the activity or requirement | Browser/API proof changes the quantity while retaining the persisted task and requirement ids, WBS link, baseline and actual fields |
-| Caller submits an ungoverned free-text team | `pool` is refused until the canonical resource-pool register is connected |
+| Caller invents or reinterprets a shared pool | The catalog reloads the tenant-owned pool and both capacity and schedule services enforce its persisted measurement unit |
+| Caller forges a subcontract pool supplier | The controller reloads the same-tenant supplier and accepts only an approved supplier classified as subcontractor; internal pools discard request supplier ids |
+| Project member attempts tenant pool administration | Pool/capacity routes require separate organization-governed functional permissions; Technical Manager grant and Planning Engineer denial are pinned in role fitness proof |
 
 ## Verification completed
 
@@ -123,25 +137,29 @@ Auth-ON browser proof created `Install CCTV devices` with three authored working
 | Drawing transmittal reactor | 3/3 passed; create/send/link, replay repair and failure retry |
 | Project drawing browser journey | 1/1 passed in Chromium; project registration through sent transmittal and linked delivery receipt |
 | Database migration posture | 315/315 applied; schedule activities now carry a same-project WBS foreign key |
-| Full API unit/fitness suite | 497 passed / 4 skipped |
+| Full API unit/fitness suite | 498 passed / 4 skipped |
 | Project responsibility domain | 4/4 passed; canonical assignee grant, transition authority, idempotent source binding and concurrent-source refusal covered |
 | Engineering/responsibility HTTP journeys | 5/5 passed; lifecycle plus missing/wrong-project delivery owner denial and exact My Work receipt |
 | Project responsibility HTTP journey | 4/4 passed; positive handoff and release plus wrong-project/wrong-user/wrong-permission denials |
 | My Work service and self-scoped fitness | 15/15 passed, including per-item project filtering |
 | Project responsibility browser journey | 1/1 passed in Chromium; manager UI assignment → member My Work → Start/Complete → retained history |
-| Full Projects module suite | 433 passed / 12 PostgreSQL-only skips |
+| Full Projects module suite | 435 passed / 12 PostgreSQL-only skips |
 | Schedule WBS domain/service proof | 2/2 passed; required, wrong-project, persisted, edit-preserved and immutable-link cases covered |
 | Schedule WBS Auth-ON HTTP proof | missing 400; foreign-project 400; canonical create 201; GET returned the same WBS id |
 | Schedule WBS browser journey | 1/1 passed in Chromium; required selector, project filtering, create/reload and visible package identity |
-| Schedule resource catalog service | 2/2 passed; safe display projection plus canonical/invented/pool reference decisions |
-| Resourced activity Auth-ON browser journey | 1/1 passed in Chromium; fabricated id denied, HR employee + Assets equipment selected, duration/demand persisted and reloaded |
+| Schedule resource catalog service | 2/2 passed; safe display projection plus canonical/invented/cross-tenant reference and pool-unit decisions |
+| Resourced activity Auth-ON browser journey | 1/1 passed in Chromium; fabricated id denied, HR employee + Assets equipment + governed pool selected, duration/demand persisted and reloaded |
+| Resource-pool/capacity domain service | 2/2 passed; tenant filtering, canonical unit enforcement and invalid date windows covered |
+| Resource pool role fitness | 22/22 passed; Technical Manager can govern pools/capacity and Planning Engineer cannot acquire those operations from project membership |
+| Shared-pool Auth-ON browser journey | 1/1 passed in Chromium; pool/capacity authored, wrong unit denied with 409, canonical pool demand persisted and reloaded |
+| Pool supplier provenance Auth-ON API | forged subcontractor source denied with 400; injected source on an internal pool discarded |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. Governed team pools plus employee/equipment booking, availability, conflict resolution and My Work handoff from the WBS-linked demand.
+2. Employee/equipment/pool booking, HR/Fleet availability, cross-project conflict resolution and My Work handoff from the WBS-linked demand.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

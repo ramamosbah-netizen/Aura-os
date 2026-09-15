@@ -1726,8 +1726,8 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Wave 3 iteration 6 lets the planner author and later edit working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. The edit flow preserves the established task, requirement, WBS, baseline and actual identities. Governed team/resource-pool authoring remains unavailable.",
-      "acceptanceProof": "Add the governed team/resource-pool register; prove each established requirement continues into bookings, conflict resolution and My Work without re-entry."
+      "currentBehavior": "Wave 3 iterations 6-7 let the planner author and later edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity. A safe project-context catalog reads current labels from HR/Fleet/Assets and the tenant resource-pool authority; the API rejects invented or cross-tenant ids and refuses a pool unit that differs from its persisted measurement contract. PostgreSQL persists the requirements and the Auth-ON browser reloads the same demand while preserving established task, requirement, WBS, baseline and actual identities.",
+      "acceptanceProof": "Convert established demand into held employee/equipment/pool bookings; prove conflict resolution and My Work receipt without re-entry."
     },
     {
       "id": "PLN-07",
@@ -1808,7 +1808,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "BACKEND_ONLY",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1817,16 +1817,16 @@
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
         "domain": "UNVERIFIED",
-        "persistence": "PARTIAL",
+        "persistence": "UNVERIFIED",
         "api": "UNVERIFIED",
         "permissions": "UNVERIFIED",
         "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Capacity windows, calendars and held bookings are resolved across tenant projects in persistence tests; the planner UI cannot author or inspect the source windows.",
-      "acceptanceProof": "Show HR/Fleet availability source, capacity window and conflicting bookings with links to each canonical record."
+      "currentBehavior": "A Technical Manager can now govern tenant-wide internal or subcontract resource pools and dated capacity windows in the planning workspace. Pool measurement units are immutable across capacity and project demand, and project-scoped planners consume the same canonical pool through the safe schedule catalog. HR/Fleet availability sources, held bookings and cross-project conflict inspection remain disconnected.",
+      "acceptanceProof": "Connect HR/Fleet availability and create held bookings from activity demand; show dated conflicts across projects with links to each canonical source record."
     },
     {
       "id": "PLN-10",
@@ -8346,13 +8346,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Wave 3 iteration 6 lets the planner author and later edit working-day duration plus multiple employee, vehicle and asset demand lines on a WBS-linked activity. A safe catalog reads labels from HR/Fleet/Assets, the API rejects invented or cross-tenant ids, PostgreSQL persists the requirements and the Auth-ON browser reloads the same people/equipment demand. The edit flow preserves the established task, requirement, WBS, baseline and actual identities. Governed team/resource-pool authoring remains unavailable.",
+      "currentBehavior": "Wave 3 iterations 6-7 let the planner author and later edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity. A safe project-context catalog reads current labels from HR/Fleet/Assets and the tenant resource-pool authority; the API rejects invented or cross-tenant ids and refuses a pool unit that differs from its persisted measurement contract. PostgreSQL persists the requirements and the Auth-ON browser reloads the same demand while preserving established task, requirement, WBS, baseline and actual identities.",
       "expectedOperationalBehavior": "Resource requirements from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Add the governed team/resource-pool register; prove each established requirement continues into bookings, conflict resolution and My Work without re-entry."
+      "acceptanceProof": "Convert established demand into held employee/equipment/pool bookings; prove conflict resolution and My Work receipt without re-entry."
     },
     {
       "id": "F-09",
@@ -8533,8 +8533,8 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 2,
-      "PARTIAL": 93,
-      "BACKEND_ONLY": 9,
+      "PARTIAL": 94,
+      "BACKEND_ONLY": 8,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,

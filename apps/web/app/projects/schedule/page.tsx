@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
 import PlanningRunPanel from '../../../components/planning-run-panel';
+import ResourcePoolClient from '../../../components/resource-pool-client';
 import ProjectsSuiteChrome from '../../../components/projects-suite-chrome';
 import styles from './projects-schedule.module.css';
 
@@ -29,20 +30,27 @@ interface ProjectSchedule {
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
 interface ResourceCatalogItem {
-  resourceType: 'employee' | 'vehicle' | 'asset';
+  resourceType: 'employee' | 'vehicle' | 'asset' | 'pool';
   canonicalResourceId: string;
   label: string;
   secondary: string | null;
   status: string;
+  unit: 'hours' | 'persons' | 'crews' | 'units' | null;
 }
+interface ResourcePool { id: string; name: string; unit: 'hours' | 'persons' | 'crews' | 'units'; sourceType: 'internal' | 'subcontractor'; sourceId: string | null }
+interface ResourceCapacity { id: string; resource: { resourceType: string; canonicalResourceId: string }; unit: 'hours' | 'persons' | 'crews' | 'units'; quantity: number | null; from: string; to: string; note: string | null }
+interface Supplier { id: string; code: string; name: string; category: string; status: string }
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
-  const [schedules, projects, wbsNodes, resourceCatalog] = await Promise.all([
+  const [schedules, projects, wbsNodes, resourceCatalog, resourcePools, resourceCapacity, suppliers] = await Promise.all([
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<WbsNode[]>(projectId ? `/api/projects/wbs?projectId=${encodeURIComponent(projectId)}` : '/api/projects/wbs'),
-    getJson<ResourceCatalogItem[]>('/api/projects/schedules/resource-catalog'),
+    getJson<ResourceCatalogItem[]>(projectId ? `/api/projects/schedules/resource-catalog?projectId=${encodeURIComponent(projectId)}` : '/api/projects/schedules/resource-catalog'),
+    getJson<ResourcePool[]>('/api/projects/resource-pools'),
+    getJson<ResourceCapacity[]>('/api/projects/resource-capacity'),
+    getJson<Supplier[]>('/api/procurement/suppliers'),
   ]);
   const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
@@ -151,6 +159,23 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             </div>
           </div>
           <PlanningRunPanel projectId={projectId} projectName={projectName} />
+        </section>
+      )}
+
+      {resourcePools !== null && resourceCapacity !== null && (
+        <section className={styles.workspace} aria-label="Organization resource capacity">
+          <div className={styles.workspaceHead}>
+            <div>
+              <span className={styles.sectionKicker}>Resource authority</span>
+              <h2>Shared teams &amp; capacity</h2>
+              <p>Define reusable teams once, declare their availability, and let every project plan against the same source.</p>
+            </div>
+          </div>
+          <ResourcePoolClient
+            pools={resourcePools}
+            capacity={resourceCapacity}
+            suppliers={(suppliers ?? []).filter((supplier) => supplier.status === 'approved' && supplier.category === 'subcontractor')}
+          />
         </section>
       )}
     </main>

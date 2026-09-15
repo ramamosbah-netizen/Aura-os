@@ -56,6 +56,10 @@ import { ScheduleService } from './schedule.service';
 import { RESOURCE_FACTS_STORE } from './resource-facts-store';
 import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
 import { PostgresResourceFactsStore } from './postgres-resource-facts-store';
+import { RESOURCE_PLANNING_STORE } from './resource-planning-store';
+import { InMemoryResourcePlanningStore } from './in-memory-resource-planning-store';
+import { PostgresResourcePlanningStore } from './postgres-resource-planning-store';
+import { ResourcePlanningService } from './resource-planning.service';
 import { PLANNING_RUN_STORE } from './planning-run-store';
 import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
 import { PostgresPlanningRunStore } from './postgres-planning-run-store';
@@ -148,6 +152,12 @@ import { ProjectResponsibilityService } from './project-responsibility.service';
         pool ? new PostgresResourceFactsStore(pool) : new InMemoryResourceFactsStore(),
     },
     {
+      provide: RESOURCE_PLANNING_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresResourcePlanningStore(pool) : new InMemoryResourcePlanningStore(),
+    },
+    {
       provide: PLANNING_RUN_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -214,8 +224,9 @@ import { ProjectResponsibilityService } from './project-responsibility.service';
     { provide: CLOSEOUT_LIFECYCLE, useExisting: CloseoutReadinessService },
     CashflowForecastService,
     ScheduleService,
+    ResourcePlanningService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, ResourcePlanningService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

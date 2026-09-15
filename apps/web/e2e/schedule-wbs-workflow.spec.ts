@@ -45,6 +45,34 @@ test.describe('WBS-linked and resourced schedule activity', () => {
       name: `Fluke tester ${run}`, serialNumber: `FL-${run}`, category: 'Test equipment', purchaseDate: '2026-01-01', purchaseCost: 2500,
     });
 
+    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
+    const poolForm = page.getByTestId('resource-pool-form');
+    await expect(poolForm).toBeVisible({ timeout: 30_000 });
+    await poolForm.getByLabel('Pool name').fill(`ELV installation crew ${run}`);
+    await poolForm.getByLabel('Measurement').selectOption('crews');
+    await poolForm.getByRole('button', { name: 'Add pool' }).click();
+    const capacityForm = page.getByTestId('resource-capacity-form');
+    await expect(capacityForm.getByLabel('Resource pool').locator('option').filter({ hasText: `ELV installation crew ${run}` })).toBeAttached({ timeout: 30_000 });
+
+    const poolsResponse = await request.get(`${API}/projects/resource-pools`, { headers: apiAuthHeaders() });
+    expect(poolsResponse.ok(), await poolsResponse.text()).toBe(true);
+    const pool = ((await poolsResponse.json()) as Array<{ id: string; name: string }>).find((item) => item.name === `ELV installation crew ${run}`)!;
+
+    await capacityForm.getByLabel('Resource pool').selectOption(pool.id);
+    await capacityForm.getByLabel('Available quantity').fill('2');
+    const capacityDates = capacityForm.locator('input[type="date"]');
+    await capacityDates.nth(0).fill('2026-09-20');
+    await capacityDates.nth(1).fill('2026-10-20');
+    await capacityForm.getByLabel('Capacity note').fill('Day shift capacity');
+    await capacityForm.getByRole('button', { name: 'Add capacity' }).click();
+    await expect(page.getByText('2 crews')).toBeVisible({ timeout: 30_000 });
+
+    const wrongUnit = await request.post(`${API}/projects/resource-capacity`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { resourceType: 'pool', canonicalResourceId: pool.id, unit: 'hours', quantity: 2, from: '2026-09-20', to: '2026-09-21' },
+    });
+    expect(wrongUnit.status()).toBe(409);
+
     const spoofed = await request.post(`${API}/projects/schedules`, {
       headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
       data: {
@@ -57,7 +85,6 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     });
     expect(spoofed.status()).toBe(400);
 
-    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
     const form = page.getByTestId('start-schedule-form');
     await expect(form).toBeVisible({ timeout: 30_000 });
     await form.getByPlaceholder('First task').fill(`Install CCTV devices ${run}`);
@@ -75,16 +102,20 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     await selector.selectOption(workPackage.id);
     await form.getByRole('button', { name: 'Add resource' }).click();
     await form.getByRole('button', { name: 'Add resource' }).click();
+    await form.getByRole('button', { name: 'Add resource' }).click();
     await form.getByLabel('Resource 1', { exact: true }).selectOption(`employee:${employee.id}`);
     await form.getByLabel('Resource quantity 1').fill('2');
     await form.getByLabel('Resource 2', { exact: true }).selectOption(`asset:${asset.id}`);
     await form.getByLabel('Resource quantity 2').fill('1');
+    await form.getByLabel('Resource 3', { exact: true }).selectOption(`pool:${pool.id}`);
+    await form.getByLabel('Resource quantity 3').fill('1');
     await form.getByRole('button', { name: 'Create' }).click();
 
     await expect(page.getByText(`Install CCTV devices ${run}`)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('small').filter({ hasText: '1.1 · CCTV installation' })).toBeVisible();
     await expect(page.locator('small').filter({ hasText: `2 persons · Maya Planner ${run}` })).toBeVisible();
     await expect(page.locator('small').filter({ hasText: `1 units · Fluke tester ${run}` })).toBeVisible();
+    await expect(page.locator('small').filter({ hasText: `1 crews · ELV installation crew ${run}` })).toBeVisible();
 
     const initialSchedules = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
     expect(initialSchedules.ok(), await initialSchedules.text()).toBe(true);
@@ -112,6 +143,7 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     expect(saved?.tasks[0].requirements).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: employeeRequirementId, resource: { resourceType: 'employee', canonicalResourceId: employee.id }, quantity: 3, unit: 'persons' }),
       expect.objectContaining({ resource: { resourceType: 'asset', canonicalResourceId: asset.id }, quantity: 1, unit: 'units' }),
+      expect.objectContaining({ resource: { resourceType: 'pool', canonicalResourceId: pool.id }, quantity: 1, unit: 'crews' }),
     ]));
   });
 });

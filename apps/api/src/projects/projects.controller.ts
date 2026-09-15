@@ -43,6 +43,11 @@ import {
   type PlanningRun,
   type PlanningRunView,
   ScheduleService,
+  ResourcePlanningService,
+  type ResourcePool,
+  type ResourceCapacity,
+  type ResourceType,
+  type ResourceUnit,
   type DeliveryItemMap,
   DeliveryItemMapService,
   // §21 — three authorities: one per register, plus the command that spans them.
@@ -60,6 +65,7 @@ import {
   ProjectRiskMaterialisationService,
 } from '@aura/projects';
 import { AccountService } from '@aura/crm';
+import { SupplierService } from '@aura/procurement';
 import { resolveAccountSnapshot } from '../common/account-snapshot';
 import { ScheduleResourceCatalogService, type ScheduleResourceCatalogItem } from './schedule-resource-catalog.service';
 
@@ -145,6 +151,26 @@ class CreateEotDto {
   @IsOptional() @IsString() justification?: string;
   @IsOptional() @IsString() originalCompletionDate?: string;
   @IsOptional() @IsArray() delayEventIds?: string[];
+}
+
+class CreateResourcePoolDto {
+  @IsString() name!: string;
+  @IsIn(['hours', 'persons', 'crews', 'units']) unit!: ResourceUnit;
+  @IsOptional() @IsIn(['internal', 'subcontractor']) sourceType?: 'internal' | 'subcontractor';
+  @IsOptional() @IsString() sourceId?: string | null;
+  @IsOptional() @IsString() orgNodeId?: string | null;
+}
+
+class CreateResourceCapacityDto {
+  @IsIn(['employee', 'vehicle', 'asset', 'pool']) resourceType!: ResourceType;
+  @IsString() canonicalResourceId!: string;
+  @IsIn(['hours', 'persons', 'crews', 'units']) unit!: ResourceUnit;
+  @IsOptional() @IsNumber() quantity?: number | null;
+  @IsString() from!: string;
+  @IsString() to!: string;
+  @IsOptional() @IsString() calendarId?: string | null;
+  @IsOptional() @IsString() orgNodeId?: string | null;
+  @IsOptional() @IsString() note?: string | null;
 }
 
 // ── §21 Risks & Issues ─────────────────────────────────────────────────────
@@ -276,9 +302,11 @@ export class ProjectsController {
     private readonly health: ProjectHealthService,
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
+    private readonly resourcePlanning: ResourcePlanningService,
     private readonly deliveryItemMaps: DeliveryItemMapService,
     private readonly scheduleResources: ScheduleResourceCatalogService,
     private readonly accounts: AccountService,
+    private readonly suppliers: SupplierService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -1177,6 +1205,55 @@ export class ProjectsController {
   }
 
   // ── Schedule (Gantt + baseline) ──────────────────────────────────────────────
+
+  /** Organization-scoped capacity authority. Project-scoped users consume these facts through a schedule. */
+  @Permissions('projects.resource-pool.read')
+  @Get('resource-pools')
+  listResourcePools(): Promise<ResourcePool[]> {
+    return this.resourcePlanning.listPools(this.tenant.get().tenantId);
+  }
+
+  @Permissions('projects.resource-pool.create')
+  @Post('resource-pools')
+  async createResourcePool(@Body() dto: CreateResourcePoolDto): Promise<ResourcePool> {
+    const ctx = this.tenant.get();
+    let sourceId: string | null = null;
+    if (dto.sourceType === 'subcontractor') {
+      if (!dto.sourceId) throw new BadRequestException('a subcontracted pool requires an approved subcontractor supplier');
+      const supplier = await this.suppliers.get(dto.sourceId);
+      if (!supplier || supplier.status !== 'approved' || supplier.category !== 'subcontractor') {
+        throw new BadRequestException('the selected source is not an approved subcontractor supplier in this tenant');
+      }
+      sourceId = supplier.id;
+    }
+    return this.resourcePlanning.createPool({
+      tenantId: ctx.tenantId, name: dto.name, unit: dto.unit, sourceType: dto.sourceType,
+      sourceId, orgNodeId: dto.orgNodeId ?? null, createdBy: ctx.actorId,
+    });
+  }
+
+  @Permissions('projects.resource-capacity.read')
+  @Get('resource-capacity')
+  listResourceCapacity(
+    @Query('resourceType') resourceType?: ResourceType,
+    @Query('canonicalResourceId') canonicalResourceId?: string,
+  ): Promise<ResourceCapacity[]> {
+    const resource = resourceType && canonicalResourceId ? { resourceType, canonicalResourceId } : undefined;
+    return this.resourcePlanning.listCapacity(this.tenant.get().tenantId, resource);
+  }
+
+  @Permissions('projects.resource-capacity.create')
+  @Post('resource-capacity')
+  async createResourceCapacity(@Body() dto: CreateResourceCapacityDto): Promise<ResourceCapacity> {
+    const ctx = this.tenant.get();
+    const resource = { resourceType: dto.resourceType, canonicalResourceId: dto.canonicalResourceId };
+    await this.scheduleResources.assertCanonicalResource(ctx.tenantId, resource);
+    return this.resourcePlanning.createCapacity({
+      tenantId: ctx.tenantId, resource, unit: dto.unit, quantity: dto.quantity ?? null,
+      from: dto.from, to: dto.to, calendarId: dto.calendarId ?? null, orgNodeId: dto.orgNodeId ?? null,
+      note: dto.note ?? null, createdBy: ctx.actorId,
+    });
+  }
 
   @Post('schedules')
   async saveSchedule(@Body() dto: { projectId: string; projectName?: string; tasks?: NewScheduleTask[] }): Promise<ProjectSchedule> {

@@ -32,11 +32,12 @@ interface ProjectSchedule {
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
 interface ResourceCatalogItem {
-  resourceType: 'employee' | 'vehicle' | 'asset';
+  resourceType: 'employee' | 'vehicle' | 'asset' | 'pool';
   canonicalResourceId: string;
   label: string;
   secondary: string | null;
   status: string;
+  unit: RequirementDraft['unit'] | null;
 }
 
 const DAY = 86_400_000;
@@ -127,11 +128,14 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
             className={styles.input}
             aria-label={`Resource ${index + 1}`}
             value={requirement.resourceKey}
-            onChange={(event) => setTask({ ...task, requirements: task.requirements.map((item, i) => i === index ? { ...item, resourceKey: event.target.value, unit: event.target.value.startsWith('employee:') ? 'persons' : 'units' } : item) })}
+            onChange={(event) => {
+              const selected = resourceCatalog.find((item) => `${item.resourceType}:${item.canonicalResourceId}` === event.target.value);
+              setTask({ ...task, requirements: task.requirements.map((item, i) => i === index ? { ...item, resourceKey: event.target.value, unit: selected?.unit ?? (event.target.value.startsWith('employee:') ? 'persons' : 'units') } : item) });
+            }}
           >
             <option value="">Select employee or equipment…</option>
-            {(['employee', 'vehicle', 'asset'] as const).map((type) => (
-              <optgroup key={type} label={type === 'employee' ? 'Employees' : type === 'vehicle' ? 'Vehicles' : 'Equipment & assets'}>
+            {(['employee', 'pool', 'vehicle', 'asset'] as const).map((type) => (
+              <optgroup key={type} label={type === 'employee' ? 'Employees' : type === 'pool' ? 'Teams & resource pools' : type === 'vehicle' ? 'Vehicles' : 'Equipment & assets'}>
                 {resourceCatalog.filter((item) => item.resourceType === type).map((item) => (
                   <option key={`${type}:${item.canonicalResourceId}`} value={`${type}:${item.canonicalResourceId}`}>
                     {item.label}{item.secondary ? ` · ${item.secondary}` : ''}{item.status !== 'active' ? ` (${item.status})` : ''}

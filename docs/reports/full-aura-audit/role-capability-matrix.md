@@ -214,7 +214,7 @@
 | Planning Engineer | PLN-06 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-07 | BACKEND_ONLY | UNVERIFIED |
 | Planning Engineer | PLN-08 | BACKEND_ONLY | UNVERIFIED |
-| Planning Engineer | PLN-09 | BACKEND_ONLY | UNVERIFIED |
+| Planning Engineer | PLN-09 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-10 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-11 | DISCONNECTED | UNVERIFIED |
 | Planning Engineer | PLN-12 | DISCONNECTED | UNVERIFIED |
@@ -262,7 +262,7 @@
 | Project Engineer | PLN-06 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-07 | BACKEND_ONLY | UNVERIFIED |
 | Project Engineer | PLN-08 | BACKEND_ONLY | UNVERIFIED |
-| Project Engineer | PLN-09 | BACKEND_ONLY | UNVERIFIED |
+| Project Engineer | PLN-09 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-10 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-11 | DISCONNECTED | UNVERIFIED |
 | Project Engineer | PLN-12 | DISCONNECTED | UNVERIFIED |
@@ -317,7 +317,7 @@
 | Project Manager | PLN-06 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-07 | BACKEND_ONLY | UNVERIFIED |
 | Project Manager | PLN-08 | BACKEND_ONLY | UNVERIFIED |
-| Project Manager | PLN-09 | BACKEND_ONLY | UNVERIFIED |
+| Project Manager | PLN-09 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-10 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-11 | DISCONNECTED | UNVERIFIED |
 | Project Manager | PLN-12 | DISCONNECTED | UNVERIFIED |

@@ -1874,7 +1874,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1882,17 +1882,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
+        "actualOutput": "PARTIAL",
+        "browser": "PARTIAL",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Planned quantities and productivity exist in estimation/site/quantity records, but schedule tasks carry no quantity or productivity link in the live workspace.",
-      "acceptanceProof": "Schedule activity reads planned quantity/productivity from the governed work package and compares installed output without re-entry."
+      "currentBehavior": "A schedule activity now reads what its work package was SOLD and PRICED for, and nobody types either. The rate the line was priced at is frozen with the award: at handover the accepted line’s rate build-up is read once and its manpower sheet normalised to ONE unit — crew size, man-hours per unit, crew-hours per unit — so a later revision selling a different quantity cannot distort it. IT CARRIES NO MONEY: hourly rates, margin and every amount stay behind `tendering.internal-pricing.access`, because how long work takes is a physical fact about the work while what it costs is a commercial one, and freezing the second would put the cost sheet inside every project anyone can open. Delivery then reaches back into Tendering for nothing — the basis is copied by value like every other award fact. On the read, an activity resolves the sold quantity, the priced rate, the quantity installed through the Quantity Ledger and the part of its own planned window already used, and reports the pace the work is going at against the pace it was sold at, with the rate now needed to still finish inside the window. Everything is DERIVED per read and stored nowhere: a stored “behind” would be behind as of the last refresh. UNKNOWN is neither zero nor “on rate” — a package with no award line, an award captured before the basis was frozen, a supply-only or subcontracted line that priced no crew, an activity with no usable window and a window that has not opened each come back UNKNOWN carrying the reason, while every fact that IS known is still reported beside it. The plan screen shows what was sold against what is in, the pace against the priced pace, and a headline count of the activities losing ground; an activity with no award line behind it stays silent rather than printing “unknown” under every bar.",
+      "acceptanceProof": "Auth-ON browser and HTTP proof through a real governed award priced at 2 technicians × 100 hours for 200 m² (→ 16 m²/day): the frozen basis carries crew and hours and NO key matching rate/cost/price/amount/margin; the activity reads 200 m² and 16/day with nothing entered; 60 m² installed ten days into a twenty-day window reads BEHIND at 6/day against 160 expected, naming the 14/day now needed; catching up to 160 reads ON_RATE; a package with no award line reads UNKNOWN and the screen stays silent; a supply-only line reads UNKNOWN ‘no crew was priced’ while still reporting what was sold and installed; and no rate, quantity or verdict is written onto the activity. STILL OPEN, and why this is not COMPLETE: achieved productivity in MAN-HOURS cannot be derived — site labour allocations carry a project and a trade but no work-package link, so what is proven is output rate (quantity per day) and not hours per unit actually spent. Two further limits are recorded rather than rounded away: several activities on one work package each inherit that package’s whole sold quantity, because no apportionment has been authored; and rates are per calendar day, not per working day, so a window spanning a shutdown flatters the achieved pace."
     },
     {
       "id": "PLN-12",
@@ -8533,13 +8533,13 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 4,
-      "PARTIAL": 95,
+      "PARTIAL": 96,
       "BACKEND_ONLY": 6,
       "UI_ONLY": 0,
       "ABSENT": 1,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
-      "DISCONNECTED": 9,
+      "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
       "UNVERIFIED": 52,

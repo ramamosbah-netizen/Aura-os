@@ -234,6 +234,10 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
     mockPurchaseRequests,
     tenders,
     { restampFromAward: async () => 0 } as any, // EstimateSourcingService (R5)
+    // EstimateService — read ONLY to freeze how long each awarded line was priced to take
+    // (PLN-11). No build-up here, so the frozen basis is absent, which downstream reads as
+    // UNKNOWN rather than as a line priced to take no time.
+    { getForBoqItem: async () => null } as any,
     noop, // AccountService (CRM)
     opportunities, // OpportunityService (CRM) — required for the tender.awarded → close-opportunity reactor
     mockSignals, // SignalService (CRM)

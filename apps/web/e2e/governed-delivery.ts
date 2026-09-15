@@ -65,7 +65,16 @@ export const canBuildGovernedDelivery = (): boolean => Boolean(apiAuthHeaders().
 
 export async function createGovernedDelivery(
   request: APIRequestContext,
-  options: { title: string; quantity: number; unit: string; plannedValue?: number },
+  options: {
+    title: string; quantity: number; unit: string; plannedValue?: number;
+    /**
+     * Price the line through the internal resource sheet, so the award freezes how long the work
+     * was priced to take (PLN-11): `count` technicians working `hours` each, for the WHOLE line.
+     * Omitted, nothing about a crew is priced and the frozen basis is absent — which is what a
+     * supply-only or fully subcontracted line looks like.
+     */
+    labour?: { count: number; hours: number; rate?: number };
+  },
 ): Promise<GovernedDelivery> {
   const { title, quantity, unit } = options;
   // Two authorities, because they are two authorities: the Technical Manager independently
@@ -126,11 +135,22 @@ export async function createGovernedDelivery(
   await post(`/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/approve`, {}, technical.headers);
   const projection = await post<{ items: Array<{ id: string }> }>(`/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/project-to-boq`, {});
   const projectedItem = projection.items[0];
-  await post('/tendering/estimates', {
-    boqItemId: projectedItem.id,
-    components: [{ costType: 'material', description: title, quantity: 1, unitCost: 100 }],
-    applyToBoq: false,
-  });
+  if (options.labour) {
+    // The pricing-sheet route, which is where a crew and its hours are actually authored — the
+    // raw-components route cannot express them, and the award freezes what was authored here.
+    await post(`/tendering/tenders/${tender.id}/pricing/items/${projectedItem.id}`, {
+      resources: {
+        supplyUnitPrice: 100,
+        technician: { count: options.labour.count, hours: options.labour.hours, rate: options.labour.rate ?? 30 },
+      },
+    });
+  } else {
+    await post('/tendering/estimates', {
+      boqItemId: projectedItem.id,
+      components: [{ costType: 'material', description: title, quantity: 1, unitCost: 100 }],
+      applyToBoq: false,
+    });
+  }
 
   // ── The offer, its readiness evidence, and its independent approval ────────
   await patch(`/tendering/tenders/${tender.id}/status`, { status: 'priced' });

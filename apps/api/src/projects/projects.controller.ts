@@ -48,6 +48,7 @@ import {
   type ResourcePoolMember,
   type ResourceConflictResolution,
   type ActivityProgress,
+  type PlannedOutput,
   type ScheduleTask,
   type ResourceCapacity,
   type ResourceType,
@@ -1430,12 +1431,17 @@ export class ProjectsController {
   }
 
   /**
-   * Every plan, each activity carrying where its progress came from.
+   * Every plan, each activity carrying where its progress came from and what it was sold to be.
    *
    * `progress` is DERIVED on this read and stored nowhere: the measurement belongs to the work
    * package and its Quantity Ledger, and a copy on the activity would be stale the moment the next
    * installation is approved. `percentComplete` stays on the task for every existing reader, and
    * is now the DECLARED figure rather than the authority — see domain/activity-progress.ts.
+   *
+   * `output` answers what that progress is measured AGAINST: the quantity the award line sold, the
+   * rate it was priced at (frozen with the award, carrying no money), and the pace the work is
+   * actually going at over the activity's own window. Derived on the same read, and UNKNOWN —
+   * never "on rate" — wherever one of those facts was never stated. See domain/planned-output.ts.
    */
   @Get('schedules')
   async listSchedules(
@@ -1445,13 +1451,16 @@ export class ProjectsController {
      * here rather than left to each caller to filter correctly.
      */
     @Query('projectId') projectId?: string,
-  ): Promise<Array<ProjectSchedule & { progress: Record<string, ActivityProgress> }>> {
+  ): Promise<Array<ProjectSchedule & { progress: Record<string, ActivityProgress>; output: Record<string, PlannedOutput> }>> {
     const all = await this.schedule.list(this.tenant.get().tenantId);
     const schedules = projectId?.trim() ? all.filter((plan) => plan.projectId === projectId.trim()) : all;
-    return Promise.all(schedules.map(async (plan) => ({
-      ...plan,
-      progress: Object.fromEntries(await this.schedule.progressOf(plan)),
-    })));
+    // One "today" for the whole read, so two activities on the same screen are never rated against
+    // different days because the clock moved between them.
+    const today = new Date().toISOString().slice(0, 10);
+    return Promise.all(schedules.map(async (plan) => {
+      const [progress, output] = await Promise.all([this.schedule.progressOf(plan), this.schedule.outputOf(plan, today)]);
+      return { ...plan, progress: Object.fromEntries(progress), output: Object.fromEntries(output) };
+    }));
   }
 
   /**

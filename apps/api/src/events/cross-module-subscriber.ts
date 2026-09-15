@@ -11,10 +11,12 @@ import {
   hashHandoverSnapshot,
   frozenItemKey,
   type FrozenDeliverySource,
+  type FrozenProductivityBasis,
+  productivityBasisFrom,
   HANDOVER_SNAPSHOT_SCHEMA_VERSION,
 } from '@aura/projects';
 import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
-import { TenderService, EstimateSourcingService, type Tender } from '@aura/tendering';
+import { TenderService, EstimateService, EstimateSourcingService, type Tender } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
@@ -64,6 +66,12 @@ export class CrossModuleSubscriber implements OnModuleInit {
     private readonly purchaseRequests: PurchaseRequestService,
     private readonly tenders: TenderService,
     private readonly estimateSourcing: EstimateSourcingService,
+    /**
+     * Read ONLY to freeze how long each awarded line was priced to take (PLN-11). Delivery never
+     * reaches back into Tendering afterwards — the basis is copied by value into the handover
+     * envelope like every other award fact, and no money crosses with it.
+     */
+    private readonly estimates: EstimateService,
     private readonly accounts: AccountService,
     private readonly opportunities: OpportunityService,
     private readonly signals: SignalService,
@@ -707,6 +715,28 @@ export class CrossModuleSubscriber implements OnModuleInit {
           ?? baseline?.id
           ?? null;
         const sourceId = sourceTenderId ?? ((p.sourceOpportunityId as string | null) ?? null);
+        // How long each awarded line was PRICED to take, frozen beside what it sold for (PLN-11).
+        // Read once per line from the rate build-up the award was priced from, normalised to one
+        // unit, and carrying no money — the crew and the hours are a physical fact about the work,
+        // while the rates and the margin stay behind `tendering.internal-pricing.access`. A line
+        // with no BOQ identity (a direct quotation), no build-up, or no crew priced against it
+        // freezes NOTHING rather than a basis of zero: "nobody said" and "it takes no time" are
+        // different facts, and delivery has to be able to tell them apart.
+        const productivityByItem = new Map<string, FrozenProductivityBasis | null>();
+        for (const line of baseline?.lines ?? []) {
+          const boqItemId = line.sourceItemId ?? null;
+          if (!boqItemId || productivityByItem.has(boqItemId)) continue;
+          try {
+            const buildUp = await this.estimates.getForBoqItem(e.tenantId, boqItemId);
+            productivityByItem.set(boqItemId, buildUp
+              ? productivityBasisFrom(buildUp.resources, line.quantity, buildUp.id)
+              : null);
+          } catch {
+            // The award is the fact being captured here; a rate build-up that cannot be read must
+            // not stop a signed contract becoming a project. Absence reads as UNKNOWN downstream.
+            productivityByItem.set(boqItemId, null);
+          }
+        }
         const sourceItems = baseline?.lines?.map((line, index) => ({
           frozenItemKey: frozenItemKey({
             sourceKind: sourceTenderId ? 'TENDER' : 'DIRECT',
@@ -729,6 +759,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           customerUnitPrice: line.unitPrice,
           customerLineValue: line.lineNet,
           costEvidence: null,
+          productivityBasis: line.sourceItemId ? productivityByItem.get(line.sourceItemId) ?? null : null,
           sourceSnapshot: {
             description: line.description,
             quantity: line.quantity,

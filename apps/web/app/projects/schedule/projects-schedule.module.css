@@ -20,6 +20,7 @@
 .metricIcon.green { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
 .metricIcon.blue { color: #57a8ff; background: color-mix(in srgb, #57a8ff 14%, transparent); }
 .metricIcon.violet { color: #b58cff; background: color-mix(in srgb, #b58cff 14%, transparent); }
+.metricIcon.warn { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
 .metricCard > div { display: flex; min-width: 0; flex-direction: column; }
 .metricLabel { color: var(--muted); font-size: 11px; font-weight: 700; }
 .metricCard strong { margin: 5px 0 2px; color: var(--text); font-size: 25px; line-height: 1; letter-spacing: -.03em; }

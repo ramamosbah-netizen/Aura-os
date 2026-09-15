@@ -46,6 +46,13 @@ export async function createGovernedDeliveryFixture(
   unit: string,
   /** The tenant the calling spec runs under — the ledger position is read inside it, not globally. */
   tenantId: string,
+  /**
+   * Price the line through the internal resource sheet rather than as raw components, so the award
+   * freezes how long the work was priced to take (PLN-11). `count` technicians working `hours`
+   * each, for the WHOLE line — the sheet's own per-line convention. Omitted, nothing is priced and
+   * the frozen basis is absent, which is what a fully subcontracted line looks like.
+   */
+  labour?: { count: number; hours: number; rate?: number },
 ): Promise<GovernedDeliveryFixture> {
   const account = (await http.post('/api/v1/crm/accounts').send({ name: `${title} Account` }).expect(201)).body;
   const opportunity = (await http.post('/api/v1/crm/opportunities').send({
@@ -88,11 +95,19 @@ export async function createGovernedDeliveryFixture(
   await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/approve`).set('x-e2e-actor', 'qty-checker').send({}).expect(201);
   const projection = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quantity-takeoff/${takeoff.id}/project-to-boq`).send({}).expect(201)).body;
   const projectedItem = projection.items[0];
-  await http.post('/api/v1/tendering/estimates').send({
-    boqItemId: projectedItem.id,
-    components: [{ costType: 'material', description: title, quantity: 1, unitCost: 100 }],
-    applyToBoq: false,
-  }).expect(201);
+  if (labour) {
+    // The internal pricing sheet route, which is where a crew and its hours are actually authored:
+    // the raw-components route cannot express them, and the award freezes what was authored here.
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/pricing/items/${projectedItem.id}`).send({
+      resources: { supplyUnitPrice: 100, technician: { count: labour.count, hours: labour.hours, rate: labour.rate ?? 30 } },
+    }).expect(201);
+  } else {
+    await http.post('/api/v1/tendering/estimates').send({
+      boqItemId: projectedItem.id,
+      components: [{ costType: 'material', description: title, quantity: 1, unitCost: 100 }],
+      applyToBoq: false,
+    }).expect(201);
+  }
   await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'priced' }).expect(200);
   const quotation = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
   await establishGovernedQuotationReadiness(http, quotation.id, `quantity-ledger-${title}`);

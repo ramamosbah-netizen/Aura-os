@@ -6,6 +6,8 @@ import {
   clearActivityProgressOverride, overrideActivityProgress, resolveActivityProgress,
   type ActivityProgress,
 } from './domain/activity-progress';
+import { resolvePlannedOutput, type PlannedOutput } from './domain/planned-output';
+import { ActivityOutputService } from './activity-output.service';
 import {
   SCHEDULE_EVENT,
   type ProjectSchedule,
@@ -66,6 +68,9 @@ export class ScheduleService {
     // only place that rule is defined. Optional for the same reason every seam is: a composition
     // without it reports every activity's progress as DECLARED, which is what it then knows.
     @Optional() @Inject(WbsService) private readonly wbsService: WbsService | null = null,
+    // What each work package was sold and priced for (PLN-11). Optional like every other seam: a
+    // composition without it reports every activity's output as UNKNOWN, which is what it knows.
+    @Optional() @Inject(ActivityOutputService) private readonly outputs: ActivityOutputService | null = null,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
@@ -181,6 +186,31 @@ export class ScheduleService {
       task.id,
       resolveActivityProgress(task, task.wbsNodeId ? evidence.get(task.wbsNodeId) ?? null : null),
     ]));
+  }
+
+  /**
+   * Every activity's output against what its work package was SOLD and PRICED for.
+   *
+   * Derived on the read, exactly like `progressOf`, and batched for the same reason: one map,
+   * project and ledger read for the whole plan rather than a chain per activity.
+   *
+   * `today` is passed in rather than read from the clock so the rule stays testable at the edges
+   * of a planned window — the day it opens, the day it closes, and the days either side.
+   */
+  async outputOf(schedule: ProjectSchedule, today: string): Promise<Map<Id, PlannedOutput>> {
+    const packages = this.outputs
+      ? await this.outputs.packageOutputs(schedule.tenantId, schedule.projectId)
+      : new Map();
+    return new Map(schedule.tasks.map((task) => {
+      const facts = task.wbsNodeId ? packages.get(task.wbsNodeId) : undefined;
+      return [task.id, resolvePlannedOutput({
+        frozen: facts?.frozen ?? null,
+        installedQuantity: facts?.installedQuantity ?? null,
+        plannedStart: task.plannedStart,
+        plannedEnd: task.plannedEnd,
+        today,
+      })];
+    }));
   }
 
   /**

@@ -329,7 +329,7 @@
 | Planning | PLN-08 | PARTIAL |
 | Planning | PLN-09 | PARTIAL |
 | Planning | PLN-10 | COMPLETE |
-| Planning | PLN-11 | DISCONNECTED |
+| Planning | PLN-11 | PARTIAL |
 | Planning | PLN-12 | COMPLETE |
 | Planning | PLN-13 | ABSENT |
 | Planning | PLN-14 | PARTIAL |
@@ -554,7 +554,7 @@
 | Progress | PLN-08 | PARTIAL |
 | Progress | PLN-09 | PARTIAL |
 | Progress | PLN-10 | COMPLETE |
-| Progress | PLN-11 | DISCONNECTED |
+| Progress | PLN-11 | PARTIAL |
 | Progress | PLN-12 | COMPLETE |
 | Progress | PLN-13 | ABSENT |
 | Progress | PLN-14 | PARTIAL |

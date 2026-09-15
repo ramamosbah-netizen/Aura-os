@@ -7,6 +7,39 @@ export type HandoverSnapshot = Record<string, unknown>;
 export const HANDOVER_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 export type HandoverSourceKind = 'DIRECT' | 'TENDER';
 
+/**
+ * The rate this line was PRICED at, frozen with the award.
+ *
+ * The company committed to installing this scope at a productivity, and until now that commitment
+ * stopped at the tender: delivery never saw it, so a planner either guessed the rate or retyped it
+ * from a spreadsheet, and "behind" had nothing to be behind OF.
+ *
+ * CARRIES NO MONEY, deliberately. `hourlyRate`, margin and every amount stay behind
+ * `tendering.internal-pricing.access`; what a planner needs is how long the work was priced to
+ * take, which is a physical fact about the work rather than a commercial one. Freezing the rates
+ * here would put the cost sheet inside every project anyone can open.
+ *
+ * Per UNIT and therefore quantity-independent: a later revision that sells more metres does not
+ * make the crew faster, and the basis stays true if the sold quantity moves.
+ */
+export interface FrozenProductivityBasis {
+  /** Technicians priced to work in parallel — the installing crew. 0 = none priced. */
+  crewSize: number;
+  /** Man-hours priced to install ONE unit: crew hours × crew size. */
+  manHoursPerUnit: number;
+  /** Elapsed crew-hours for one unit = manHoursPerUnit / crewSize. What sets the rate. */
+  crewHoursPerUnit: number;
+  /**
+   * Supervision priced beside the crew, kept apart because it does not set the output rate.
+   * Folding an engineer's hours into the crew would make the crew look bigger and the work look
+   * faster than it was ever priced to be.
+   */
+  engineerManHoursPerUnit: number;
+  projectManagerManHoursPerUnit: number;
+  /** The rate build-up this was read from, so the figure can be traced back to what was priced. */
+  estimateId: string | null;
+}
+
 export interface FrozenDeliverySourceItem {
   frozenItemKey: string;
   sourceKind: HandoverSourceKind;
@@ -20,6 +53,13 @@ export interface FrozenDeliverySourceItem {
   customerUnitPrice: number | null;
   customerLineValue: number | null;
   costEvidence: Record<string, unknown> | null;
+  /**
+   * How long this line was priced to take, per unit. Optional: a direct quotation line carries no
+   * BOQ identity to price against, an older handover was captured before this was frozen, and a
+   * fully subcontracted line prices no crew at all. Each of those is "nobody said", which is not
+   * the same as "it takes no time" — readers must treat absence as UNKNOWN, never as zero.
+   */
+  productivityBasis?: FrozenProductivityBasis | null;
   sourceSnapshot: Record<string, unknown>;
   unavailableReason: string | null;
 }

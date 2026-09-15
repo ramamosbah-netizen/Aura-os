@@ -40,8 +40,11 @@ function harness() {
 
   // Only bus/tenant/opportunities/quotations/preAwardPackages matter for the accept reactor; the rest
   // are noops — onModuleInit only registers bus subscriptions, it never calls a service.
+  // Positional, so the count matters: the named services must land on the right parameters.
+  // 1 bus … 9 tenant … 14 estimateSourcing, 15 estimates, 16 accounts, 17 opportunities,
+  // 18 signals, 19 quotations, 20 preAwardPackages, then finance/HSE/AMC.
   const subscriber = new CrossModuleSubscriber(
-    bus, noop, noop, noop, noop, noop, noop, noop, tenant, noop, noop, noop, noop, noop, noop,
+    bus, noop, noop, noop, noop, noop, noop, noop, tenant, noop, noop, noop, noop, noop, noop, noop,
     opportunities, noop, quotations, packages, noop, noop, noop, noop, noop,
   );
   subscriber.onModuleInit();

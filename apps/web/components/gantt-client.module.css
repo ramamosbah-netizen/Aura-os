@@ -69,3 +69,7 @@
 .progressStatement input[type="number"] { width: 50px; }
 .progressStatement button { padding: 2px 8px; font-size: 10px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
 .progressStatement button:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Behind the rate the work was priced at. Coloured, because it is the one line on this row that
+   asks somebody to do something — the others are statements of fact. */
+.behind { color: var(--bad); font-weight: 600; }

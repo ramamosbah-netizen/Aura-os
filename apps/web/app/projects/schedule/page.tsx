@@ -1,6 +1,7 @@
 import { CalendarRange, CheckCircle2, Clock3, Gauge, Layers3, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import { activityProgress, measuredNote, type ResolvedActivityProgress } from '@/lib/activity-progress';
+import { behindCount, type PlannedOutput } from '@/lib/planned-output';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
 import PlanningRunPanel from '../../../components/planning-run-panel';
@@ -34,6 +35,8 @@ interface ProjectSchedule {
    * only where nothing has been measured against the activity's work package.
    */
   progress?: Record<string, ResolvedActivityProgress>;
+  /** What that progress is measured against — see lib/planned-output.ts. */
+  output?: Record<string, PlannedOutput>;
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -111,6 +114,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const averageProgress = taskCount ? Math.round(completeCount / taskCount) : null;
   // How much of that average is measured rather than asserted, said beside it.
   const progressNote = measuredNote(rows);
+  // …and how many activities are going slower than the rate the work was sold at. A completion
+  // percentage cannot carry this: a plan can be 60% complete and losing ground every day.
+  const behind = behindCount(rows);
   const baselinedCount = rows.filter((schedule) => Boolean(schedule.baselineSetAt)).length;
   const unavailable = schedules === null;
   const scheduleHealth = unavailable
@@ -150,6 +156,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         <div className={styles.metricCard}>
           <span className={`${styles.metricIcon} ${styles.blue}`}><CheckCircle2 size={17} /></span>
           <div><span className={styles.metricLabel}>Average completion</span><strong>{unavailable || averageProgress === null ? '—' : `${averageProgress}%`}</strong><small>{unavailable ? 'Data unavailable' : progressNote}</small></div>
+        </div>
+          <div className={styles.metricCard}>
+          <span className={`${styles.metricIcon} ${behind > 0 ? styles.warn : styles.green}`}><Gauge size={17} /></span>
+          <div><span className={styles.metricLabel}>Behind the priced rate</span><strong>{unavailable || taskCount === 0 ? '—' : `${behind}/${taskCount}`}</strong><small>{unavailable ? 'Data unavailable' : behind === 0 ? 'No activity is losing ground against what was priced' : 'Activities installing slower than the award was priced at'}</small></div>
         </div>
           <div className={styles.metricCard}>
           <span className={`${styles.metricIcon} ${styles.violet}`}><Clock3 size={17} /></span>

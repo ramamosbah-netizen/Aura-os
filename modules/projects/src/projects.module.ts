@@ -23,6 +23,7 @@ import { QUANTITY_LEDGER_STORE } from './quantity-ledger-store';
 import { InMemoryQuantityLedgerStore } from './in-memory-quantity-ledger-store';
 import { PostgresQuantityLedgerStore } from './postgres-quantity-ledger-store';
 import { QuantityLedgerService } from './quantity-ledger.service';
+import { ActivityOutputService } from './activity-output.service';
 
 import { DELAY_STORE, EOT_STORE } from './delay-eot-store';
 import { InMemoryDelayStore, InMemoryEotStore } from './in-memory-delay-eot-store';
@@ -219,6 +220,7 @@ const IN_MEMORY_RESOURCE_STATE = Symbol('IN_MEMORY_RESOURCE_STATE');
     CbsService,
     CostLedgerService,
     QuantityLedgerService,
+    ActivityOutputService,
     DelayEotService,
     VariationService,
     ProjectRiskService,
@@ -243,6 +245,6 @@ const IN_MEMORY_RESOURCE_STATE = Symbol('IN_MEMORY_RESOURCE_STATE');
     ResourceBookingService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, ResourcePlanningService, ResourceBookingService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, ActivityOutputService, ResourcePlanningService, ResourceBookingService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

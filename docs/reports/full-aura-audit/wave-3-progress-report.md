@@ -156,6 +156,60 @@ took it to 100%.
 DISCONNECTED**: planned quantities and productivity are a separate capability, and nothing here
 touches them.
 
+## Iteration 10 — The rate the work was priced at
+
+Iteration 9 made an activity's progress a measured fact. This answers the question that only
+becomes askable once it is: measured against WHAT? A bar at 60% is neither late nor early on its
+own — it is late against a quantity somebody sold, a rate somebody priced, and dates somebody
+planned.
+
+`estimate resource sheet → AWARD (frozen at handover) → work package → activity`, with the Quantity
+Ledger supplying what was actually installed.
+
+The company prices every line at a productivity — so many technicians, so many hours — and until
+now that commitment stopped at the tender. Delivery never saw the rate the work was sold at, so a
+planner either guessed it or retyped it from a spreadsheet, and "behind" had nothing to be behind
+OF. The handover envelope has carried an item-level evidence slot since B2 and it was never
+populated; it is now. At handover the accepted line's rate build-up is read once and its manpower
+sheet normalised to ONE unit — crew size, man-hours per unit, crew-hours per unit — so a later
+revision selling a different quantity cannot distort it.
+
+**It carries no money.** Hourly rates, margin and every amount stay behind
+`tendering.internal-pricing.access`. How long work takes is a physical fact about the work; what it
+costs is a commercial one, and freezing the second would have put the cost sheet inside every
+project anyone can open. Delivery therefore reaches back into Tendering for nothing at all — the
+basis is copied by value like every other award fact, exactly as the frozen sold quantity is.
+
+On the read, an activity resolves four facts and compares them: the sold quantity, the priced rate,
+the installed quantity, and how much of its own planned window has been used. It reports the pace
+the work is going at against the pace it was sold at, and — when it is losing ground — the rate it
+would now take to still finish inside the window. All of it is derived per read and stored nowhere;
+a stored "behind" would be behind as of the last refresh, which is the defect §22 keeps out.
+
+UNKNOWN is neither zero nor "on rate". A package with no award line behind it, an award captured
+before the basis was frozen, a supply-only or subcontracted line that priced no crew, an activity
+with no usable window, a window that has not opened yet — each comes back UNKNOWN carrying its
+reason, while every fact that IS known is still reported beside it. Reporting an unpriced package
+as on rate would be the system agreeing with a plan it cannot check.
+
+The plan screen shows what was sold against what is in, the pace against the priced pace, and a
+headline count of the activities losing ground — a plan can be 60% complete and losing ground every
+day, and a completion percentage cannot carry that. An activity with no award line behind it stays
+silent rather than printing "unknown" under every bar, which is how a reader learns to stop reading
+the ones that matter.
+
+Auth-ON browser and API proof used a governed award priced at 2 technicians × 100 hours for 200 m²
+(16 m²/day). The frozen basis carried crew and hours and no key matching rate, cost, price, amount,
+margin or profit. The activity read 200 m² and 16/day with nothing entered. Sixty square metres
+installed ten days into a twenty-day window read BEHIND at 6/day against the 160 expected, naming
+the 14/day now needed; catching up to 160 read ON_RATE and the headline cleared. A package with no
+award line read UNKNOWN and the screen stayed silent about it. A supply-only line read UNKNOWN —
+"no crew was priced" — while still reporting what was sold and installed. No rate, quantity or
+verdict appears anywhere on the stored activity.
+
+**PLN-11 moves from DISCONNECTED to PARTIAL, and deliberately not to COMPLETE**; the reconciliation
+below says what is still missing and why it is not a rounding decision.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -241,7 +295,6 @@ touches them.
 | PostgreSQL certification persistence | 1/1 passed; automatic SOLD, install and certification facts reconcile |
 | Project Scope service closure | 69/69 passed, including the 59 classified assertions |
 | Wave 2 + Wave 3 bridge browser journey | 2/2 passed in Chromium |
-| Web unit suite | 210/210 passed, including the single web-side definition of what an activity's progress is (a payload without the map falls back to the declared number, never a silent zero) |
 | Repository typecheck | 51/51 passed |
 | Repository production build | 27/27 passed, including Next.js and Nest builds |
 | Register reconciliation | 180 capabilities / 46 gap records / 999 role pairs / 938 journey pairs |
@@ -310,6 +363,10 @@ touches them.
 | Role catalogue authority | 23/23 passed; the Planning Engineer does not hold `projects.schedule.progress-override` and the Project Manager does |
 | Database migration posture | 322/322 applied; an activity's override carries its reason, timestamp and author, and a value outside 0–100 or a reasonless statement cannot be stored |
 | Screens re-proven after the change | 15/15 passed in Chromium across the operations overview, Project 360, site project context and project health |
+| Planned output domain rules | 14/14 passed; the per-line manpower sheet normalised to one unit, supervision kept out of the crew that sets the rate, no basis at all where nothing was priced, both ends of a window counted, never expecting more than was sold, and an UNKNOWN with its reason for every fact nobody stated |
+| Planned output HTTP journey | 7/7 passed; the award freezes crew and hours and no money, the activity reads the sold quantity and priced rate with nothing entered, BEHIND with the recovery rate named, ON_RATE on catching up, UNKNOWN for an unmapped package and for a line with no crew priced, and nothing written onto the activity |
+| Planned output Auth-ON browser journey | 2/2 passed in Chromium; sold against installed, pace against priced pace, the headline count agreeing with the rows, silence where there is no award line, and "no rate can be judged" for a supply-only line |
+| Web unit suite | 217/217 passed, including the single web-side phrasing of what progress is measured against |
 | Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -367,6 +424,38 @@ is visible to whoever opens the screen and reaches no one who does not. And no e
 document exists, so the `actualOutput` layer stays **PARTIAL** here for the same reason it does on
 PLN-10: the rendered output is proven, the document is not.
 
+### PLN-11 reconciliation
+
+The capability reads *Productivity and planned quantities*, and its acceptance criterion is that a
+schedule activity reads planned quantity and productivity from the governed work package and
+compares installed output without re-entry.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Planned quantity read from the governed work package | the frozen award line's sold quantity, reached through the delivery item map — never typed | no |
+| Productivity read from the same place | the accepted line's rate build-up, frozen at handover normalised to one unit | no |
+| Without re-entry | nothing on this path is authored by a planner; the browser proof enters neither figure | no |
+| Compared against installed output | pace achieved against pace priced, with the recovery rate named when behind | no |
+| The comparison is derived, not stored | no rate, quantity or verdict appears on the stored activity | no |
+| Absence is not agreement | unmapped package, unpriced line, unopened window and unusable dates each read UNKNOWN with the reason | no |
+| Commercial confidentiality holds | the frozen basis carries crew and hours and no rate, cost, price, amount, margin or profit | no |
+| **Achieved productivity in man-hours** | **not derivable — site labour carries a project and a trade, but no work-package link** | **yes** |
+
+**`PLN-11` DISCONNECTED → PARTIAL. COMPLETE is not proposed**, and the reason is the last row
+rather than a shortage of proof. The capability is named *productivity*, and productivity has two
+halves: the rate the work was priced at, and the rate it is actually costing in crew time. The
+first is now connected end to end. The second cannot be derived at all, because a labour allocation
+records a project and a trade and has no link to the work package the hours were spent on — so the
+system can say a crew installed 6 m² a day against 16 priced, and cannot say whether that took the
+priced hours or three times them. Attributing labour to a work package is its own slice with its
+own authority question, and calling this row COMPLETE would bury it.
+
+Two further limits are recorded rather than rounded away. Several activities sharing one work
+package each inherit that package's whole sold quantity, because no apportionment has been authored
+and none can be inferred. And rates are per calendar day rather than per working day, so a window
+spanning a shutdown flatters the achieved pace — the working calendar exists (PLN-03) and is not
+yet read here.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -382,7 +471,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is now proven (PLN-12, reconciled above and COMPLETE); what remains unproven in this line is PLN-11 — planned quantities and productivity, which nothing in this slice touches — and that a figure stated against the measurement reaches nobody who is not looking at the screen.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE) and so is the rate it is measured against (PLN-11, now PARTIAL). What remains open in this line: labour is not attributable to a work package, so achieved productivity in man-hours cannot be derived at all; rates are counted in calendar days rather than working days; several activities on one package each inherit its whole sold quantity; and neither a figure stated against the measurement nor an activity losing ground reaches anybody who is not looking at the screen.
 
 ## Programme state
 

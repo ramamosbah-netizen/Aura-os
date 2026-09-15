@@ -1,5 +1,6 @@
 'use client';
 
+import { outputSummary, soldAndInstalled, type PlannedOutput } from '@/lib/planned-output';
 import { Fragment, useState } from 'react';
 import { CalendarPlus, Layers3, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -40,6 +41,12 @@ interface ProjectSchedule {
     evidence: number | null;
     override: { value: number; reason: string; at: string; by: string | null } | null;
   }>;
+  /**
+   * What that progress is measured AGAINST, keyed by activity id — also derived on every read:
+   * the quantity the award line sold, the rate it was priced at, and the pace the work is going
+   * at over this activity's own window. UNKNOWN wherever one of those was never stated.
+   */
+  output?: Record<string, PlannedOutput>;
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -340,6 +347,26 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                       if (progress.source === 'evidence') return <small data-testid={`progress-source-${taskId}`}>Measured from installed quantity · {progress.evidence}%</small>;
                       if (progress.source === 'override') return <small data-testid={`progress-source-${taskId}`}>Stated {progress.override?.value}% against a measured {progress.evidence}% · {progress.override?.reason}</small>;
                       return <small data-testid={`progress-source-${taskId}`}>Declared · nothing measured against this activity</small>;
+                    })()}
+                    {(() => {
+                      const taskId = t.id;
+                      if (!taskId) return null;
+                      const output = sch.output?.[taskId] ?? null;
+                      const sold = soldAndInstalled(output);
+                      const summary = outputSummary(output);
+                      // "75%" is a fraction of something. These two lines are the something: what
+                      // was sold, and the rate the company priced itself to install it at.
+                      return (
+                        <>
+                          {sold && <small data-testid={`output-sold-${taskId}`}>{sold}</small>}
+                          {summary && (
+                            <small
+                              data-testid={`output-rate-${taskId}`}
+                              className={summary.tone === 'BEHIND' ? styles.behind : undefined}
+                            >{summary.text}</small>
+                          )}
+                        </>
+                      );
                     })()}
                   </div>
                   <div className={styles.track} aria-label={`${t.name}, ${(t.id && sch.progress?.[t.id]?.effective) ?? t.percentComplete}% complete`}>

@@ -30,6 +30,8 @@ interface ScheduleTask {
 }
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
+  baselineSetBy?: string | null;
+  baselineRevision?: number | null;
   /**
    * Where each activity's progress came from, keyed by activity id — DERIVED by the API on every
    * read and stored nowhere. `task.percentComplete` is the DECLARED number; it is the authority

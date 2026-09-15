@@ -55,7 +55,7 @@ describe('acceptProposal — promotion to the current plan', () => {
   });
 
   it('touches the current plan only — baseline and actuals are left as they were', () => {
-    const baselined = setBaseline(contendingSchedule()); // baseline captured at the authored dates
+    const baselined = setBaseline(contendingSchedule()).schedule; // baseline captured at the authored dates
     const run = runPlanning(baselined, craneCapacityOne);
 
     const { schedule: accepted } = acceptProposal(baselined, run);

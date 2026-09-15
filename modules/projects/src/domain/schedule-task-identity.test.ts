@@ -55,7 +55,7 @@ describe('identity', () => {
   });
 
   it('gives a re-created task a NEW identity — a name does not resurrect it', () => {
-    const sch = setBaseline(schedule([task('Install CCTV')]));
+    const { schedule: sch } = setBaseline(schedule([task('Install CCTV')]));
     const originalId = sch.tasks[0].id;
     expect(sch.tasks[0].baselineStart).toBe('2026-07-01');
 
@@ -72,7 +72,7 @@ describe('identity', () => {
 
 describe('baseline follows identity', () => {
   it('survives a rename', () => {
-    const sch = setBaseline(schedule([task('Install CCTV', '2026-07-01', '2026-07-05')]));
+    const { schedule: sch } = setBaseline(schedule([task('Install CCTV', '2026-07-01', '2026-07-05')]));
     expect(sch.tasks[0].baselineStart).toBe('2026-07-01');
 
     const renamed = setScheduleTasks(sch, [
@@ -86,7 +86,7 @@ describe('baseline follows identity', () => {
   });
 
   it('does not let one task steal a same-named task\'s baseline', () => {
-    const sch = setBaseline(schedule([
+    const { schedule: sch } = setBaseline(schedule([
       task('Install CCTV', '2026-07-01', '2026-07-05'),
       task('Install CCTV', '2026-08-01', '2026-08-05'),
     ]));
@@ -105,7 +105,7 @@ describe('baseline follows identity', () => {
   });
 
   it('drops the baseline only when the task itself is dropped', () => {
-    const sch = setBaseline(schedule([task('Keep'), task('Drop', '2026-09-01', '2026-09-02')]));
+    const { schedule: sch } = setBaseline(schedule([task('Keep'), task('Drop', '2026-09-01', '2026-09-02')]));
     const keep = sch.tasks.find((t) => t.name === 'Keep')!;
     const after = setScheduleTasks(sch, [asInput(sch).find((t) => t.name === 'Keep')!]);
     expect(after.tasks).toHaveLength(1);
@@ -118,7 +118,7 @@ describe('a caller that sends no ids is replacing, not editing', () => {
   it('mints fresh ids and carries no baselines across', () => {
     // Explicit rather than incidental: omitting ids is how a caller says "this is the new task
     // list". Silently matching by name to be helpful is exactly the defect being removed.
-    const sch = setBaseline(schedule([task('Install CCTV')]));
+    const { schedule: sch } = setBaseline(schedule([task('Install CCTV')]));
     const replaced = setScheduleTasks(sch, [task('Install CCTV')]);
     expect(replaced.tasks[0].id).not.toBe(sch.tasks[0].id);
     expect(replaced.tasks[0].baselineStart).toBeNull();

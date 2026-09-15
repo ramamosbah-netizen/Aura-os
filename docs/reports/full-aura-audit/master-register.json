@@ -1684,17 +1684,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
+        "actualOutput": "PARTIAL",
         "browser": "PARTIAL",
-        "handoff": "UNVERIFIED"
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "The live Gantt exposes Set baseline and reports coverage; approval/role evidence for the action was not executed.",
-      "acceptanceProof": "Authorized planner locks a dated baseline; wrong role is denied and later changes retain the original baseline."
+      "currentBehavior": "A baseline is what every variance figure on a project is measured against — a delay’s assessed impact, what a recovery recovered, an SPI — which makes it the single most consequential thing on a programme to overwrite. It WAS overwritten silently: the act copied today’s dates onto every task and stamped a timestamp, with no record of who, no reason, and the previous baseline gone. Accept a recovery, re-baseline, and every delay ever assessed against the old dates is measured against the new ones — the variance the recovery existed to answer for, erased by the act of answering for it. Taking a baseline now records WHO took it and which revision it is, and each act is kept as a row carrying the dates it froze BY VALUE (migration 0327), so superseding one ADDS a revision rather than destroying one and a variance against revision 0 stays computable after revision 1 exists. TAKING THE FIRST IS FREE; REPLACING ONE COSTS A SENTENCE — the first baseline has nothing to justify, a later one is replacing the yardstick. Committing carries `projects.schedule.baseline` explicitly: authoring a programme and committing the measure it is judged by are different acts, so a Planning Engineer writes the plan and does not lock it, while reading which revision a programme is on is privileged to nobody. A later edit retains the original baseline per activity by identity — which is the whole point of having one, and is what makes slippage visible.",
+      "acceptanceProof": "Auth-ON browser and HTTP proof: an unbaselined plan reads “Draft plan” and offers “Set baseline”; committing records the actor and revision 0 with no reason required and freezes the dates by value; moving the activity afterwards leaves the baseline exactly where it was, with the slippage now visible; replacing it is refused without a reason (400) and the programme stays on revision 0; declining the prompt on screen changes nothing; given a reason it becomes revision 1 while REVISION 0 STILL SAYS WHAT WAS ORIGINALLY COMMITTED TO; and an empty programme cannot be baselined at all. Under a LIVE VERIFIER, a Planning Engineer who authors the same programme is refused the baseline (403) with nothing locked, can still read the baseline history, and the Project Manager commits it with their name on the act. Fixed in passing: the baseline BFF route dropped the request body, so a reason typed by a planner never reached the API and every re-baseline would have failed as ‘no reason given’ while they watched themselves type one. STILL OPEN: nothing PROMPTS a re-baseline after a recovery is accepted — the programme and its baseline diverge until somebody decides to act, which is deliberate (an automatic re-baseline would erase the variance) and unprompted."
     },
     {
       "id": "PLN-06",

@@ -61,7 +61,7 @@ run('Planning run persistence + acceptance (§22 Step 9/10 pt2)', () => {
           { id: T2, name: 'Lift B', plannedStart: START, plannedEnd: START, durationWorkingDays: 1, requirements: [{ resource: CRANE, quantity: 1, unit: 'units' }] },
         ],
       }),
-    );
+    ).schedule;
     await withTenant(() => scheduleStore.create(schedule));
   });
 

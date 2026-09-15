@@ -29,6 +29,9 @@ interface ScheduleTask {
 }
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
+  /** Who committed the current baseline, and which revision it is. Null until one is taken. */
+  baselineSetBy?: string | null;
+  baselineRevision?: number | null;
   /**
    * Where each activity's progress came from, keyed by activity id — DERIVED by the server on
    * every read, never stored on the activity. `declared` is a typed number with nothing measured
@@ -202,11 +205,32 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
     } catch (e: any) { setError(e.message || 'Failed to save schedule'); } finally { setBusy(null); }
   }
 
-  async function setBaseline(projectId: string) {
-    setBusy(projectId); setError(null);
+  /**
+   * Commit today's planned dates as the baseline.
+   *
+   * Taking the first one is free. REPLACING one is asked for in words first, because every variance
+   * figure on the project is measured against it: accept a recovery, re-baseline silently, and the
+   * delay that recovery was answering is suddenly measured against the dates it produced. The
+   * replaced baseline is kept either way, so this adds a revision rather than destroying one.
+   */
+  async function setBaseline(sch: ProjectSchedule) {
+    let reason: string | undefined;
+    if (sch.baselineSetAt) {
+      const answer = window.prompt(
+        `This programme is already on baseline revision ${sch.baselineRevision ?? 0}. Every variance figure is measured against it — why is it being replaced?`,
+      );
+      if (!answer?.trim()) return;
+      reason = answer.trim();
+    }
+    setBusy(sch.projectId); setError(null);
     try {
-      const res = await fetch(`/api/projects/schedules/${projectId}/baseline`, { method: 'POST' });
-      if (!res.ok) throw new Error(await res.text());
+      const res = await fetch(`/api/projects/schedules/${sch.projectId}/baseline`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(reason ? { reason } : {}),
+      });
+      const result = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(result?.message || result?.error || 'Failed to set baseline');
       router.refresh();
     } catch (e: any) { setError(e.message || 'Failed to set baseline'); } finally { setBusy(null); }
   }
@@ -393,7 +417,10 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
             <div className={styles.head}>
               <span className={styles.projectMark}><Layers3 size={15} /></span>
               <div className={styles.headMain}><strong>{sch.projectName ?? sch.projectId}</strong><span className={styles.meta}>{sch.tasks.length} {sch.tasks.length === 1 ? 'activity' : 'activities'}</span></div>
-              <span className={`${styles.statusChip} ${sch.baselineSetAt ? styles.ready : ''}`}>{sch.baselineSetAt ? 'Baseline locked' : 'Draft plan'}</span>
+              <span
+                className={`${styles.statusChip} ${sch.baselineSetAt ? styles.ready : ''}`}
+                data-testid={`baseline-state-${sch.projectId}`}
+              >{sch.baselineSetAt ? `Baseline r${sch.baselineRevision ?? 0} locked` : 'Draft plan'}</span>
               {/* Which calendar these dates were counted under. Unnamed is shown as unnamed — the
                   solver used to pick the tenant's first calendar by name and say nothing. */}
               <label className={styles.calendarPicker} data-testid={`working-calendar-${sch.projectId}`}>
@@ -411,8 +438,8 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                 </select>
               </label>
               <div style={{ flex: 1 }} />
-              <button type="button" className={styles.btn} disabled={busy === sch.projectId || sch.tasks.length === 0} onClick={() => setBaseline(sch.projectId)}>
-                {busy === sch.projectId ? '…' : 'Set baseline'}
+              <button type="button" className={styles.btn} disabled={busy === sch.projectId || sch.tasks.length === 0} onClick={() => setBaseline(sch)} data-testid={`set-baseline-${sch.projectId}`}>
+                {busy === sch.projectId ? '…' : sch.baselineSetAt ? 'Replace baseline' : 'Set baseline'}
               </button>
             </div>
             <div className={styles.timeline} aria-hidden="true"><span /> <div className={styles.timelineScale}><span>{new Date(min).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span><span>Today</span><span>{new Date(min + total * 86_400_000).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span></div><span /><span /></div>

@@ -65,6 +65,7 @@ import { RESOURCE_BOOKING_STORE } from './resource-booking-store';
 import { PostgresResourceBookingStore } from './postgres-resource-booking-store';
 import { ResourceBookingService } from './resource-booking.service';
 import { PLANNING_RUN_STORE } from './planning-run-store';
+import { SCHEDULE_BASELINE_STORE, InMemoryScheduleBaselineStore, PostgresScheduleBaselineStore } from './baseline-store';
 import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
 import { PostgresPlanningRunStore } from './postgres-planning-run-store';
 // §21 — two registers, two ports, two services, plus the one command that spans them.
@@ -179,6 +180,12 @@ const IN_MEMORY_RESOURCE_STATE = Symbol('IN_MEMORY_RESOURCE_STATE');
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresPlanningRunStore(pool) : new InMemoryPlanningRunStore(),
+    },
+    {
+      provide: SCHEDULE_BASELINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresScheduleBaselineStore(pool) : new InMemoryScheduleBaselineStore(),
     },
     {
       provide: DELIVERY_ITEM_MAP_STORE,

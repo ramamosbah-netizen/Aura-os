@@ -52,6 +52,7 @@ import {
   type LookAhead,
   type DelayImpact,
   type RecoveryComparison,
+  type RecordedBaseline,
   ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
@@ -1686,9 +1687,38 @@ export class ProjectsController {
     return this.schedule.plan(dto);
   }
 
+  /**
+   * Freeze today's planned dates as the baseline.
+   *
+   * `projects.schedule.baseline`, explicitly: a baseline is what every variance figure on the
+   * project is measured against — a delay's assessed impact, what a recovery recovered, an SPI —
+   * which makes taking one an act of the same weight as accepting a programme, not part of
+   * authoring it. A Planning Engineer authors; this commits.
+   *
+   * Taking the first one is free. REPLACING one costs a reason, and the one it replaces is kept:
+   * accept a recovery, re-baseline without a word, and the delay that recovery was answering is
+   * suddenly measured against the dates the recovery produced.
+   */
+  @Permissions('projects.schedule.baseline')
   @Post('schedules/:projectId/baseline')
-  async setBaseline(@Param('projectId') projectId: string): Promise<ProjectSchedule> {
-    return await this.schedule.setBaseline(this.tenant.get().tenantId, projectId);
+  async setBaseline(
+    @Param('projectId') projectId: string,
+    @Body() dto: { reason?: string },
+  ): Promise<ProjectSchedule> {
+    const ctx = this.tenant.get();
+    return await this.schedule.setBaseline(ctx.tenantId, projectId, { actorId: ctx.actorId, reason: dto?.reason });
+  }
+
+  /**
+   * Every baseline this programme has had, newest first.
+   *
+   * What makes superseding a baseline an addition rather than a destruction: a variance computed
+   * against revision 0 stays computable once revision 1 exists.
+   */
+  @Permissions('projects.schedule.read')
+  @Get('schedules/:projectId/baselines')
+  async baselineHistory(@Param('projectId') projectId: string): Promise<RecordedBaseline[]> {
+    return this.schedule.baselineHistory(this.tenant.get().tenantId, projectId);
   }
 
   @Get('schedules/summary/:projectId')

@@ -503,6 +503,49 @@ Project Manager accepts, and the programme moves.
 **PLN-14 and PLN-15 both move to COMPLETE** on the joint evidence — PLN-14's open acceptance row is
 closed by the hand-off proven here. Both are reconciled together below.
 
+## Iteration 17 — The yardstick, and what it costs to replace one
+
+A baseline is what every variance figure on a project is measured against: a delay's assessed
+impact, what a recovery recovered, an SPI. That makes it the single most consequential thing on a
+programme to overwrite — and it was overwritten **silently**. The act copied today's planned dates
+onto every task and stamped a timestamp. No record of who. No reason. The previous baseline gone.
+
+Which is the open row PLN-15 was promoted with. Accept a recovery, re-baseline, and every delay ever
+assessed against the old dates is now measured against the new ones: the variance the recovery
+existed to answer for, erased by the act of answering for it, with nothing on any screen saying it
+happened.
+
+Taking a baseline now **records who took it and which revision it is**, and each act is kept as a
+row carrying the dates it froze **by value** (migration 0327). Superseding therefore *adds* a
+revision rather than destroying one, and a variance computed against revision 0 stays computable
+once revision 1 exists.
+
+**Taking the first one is free; replacing one costs a sentence.** The first baseline has nothing to
+justify — there is nothing being replaced. A later one is replacing the yardstick, and the reason is
+required by the domain, by the API and by the database CHECK alike.
+
+Committing carries `projects.schedule.baseline` explicitly. Authoring a programme and committing the
+measure it will be judged by are different acts, so a Planning Engineer writes the plan and does not
+lock it — while reading which revision a programme is on is privileged to nobody.
+
+And a later edit retains the original baseline per activity, by identity. That was already true and
+is now proven, because it is the whole point of having one: it is what makes slippage visible.
+
+Auth-ON browser and API proof: an unbaselined plan reads "Draft plan" and offers "Set baseline";
+committing records the actor and revision 0, no reason required, dates frozen by value; moving the
+activity afterwards leaves the baseline exactly where it was with the slippage now visible;
+replacing it is refused without a reason (400) and the programme stays on revision 0; declining the
+prompt on screen changes nothing; given a reason it becomes revision 1 while **revision 0 still says
+what was originally committed to**; and an empty programme cannot be baselined at all. Under a live
+verifier a Planning Engineer authoring the same programme is refused the baseline (403) with nothing
+locked, can still read the history, and the Project Manager commits it with their name on the act.
+
+**Fixed in passing:** the baseline BFF route dropped the request body. A reason typed by a planner
+never reached the API, so every re-baseline would have failed as "no reason given" while they
+watched themselves type one. It was invisible until the reason became load-bearing.
+
+**PLN-05 stays PARTIAL, and COMPLETE is proposed below.**
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -685,6 +728,12 @@ closed by the hand-off proven here. Both are reconciled together below.
 | Recovery acceptance authority (JWT ON) | 4/4 passed; the planner prepares and reads but is refused the acceptance (403), a stranger is refused the whole chain server-side, and the Project Manager accepts |
 | Recovery chain Auth-ON browser journey | 1/1 passed in Chromium; assessment → hand-off button → scenario with nothing moved → reviewed with what it recovers → accepted → programme moves |
 | Database migration posture | 326/326 applied; a proposal records the delay it recovers, the assessment that justified it, and a fingerprint of the basis it was computed against |
+| Baseline domain rules | 11/11 passed; the first baseline free and recorded against a name, replacing one refused without a reason, a revision added rather than destroyed with the old dates intact, an empty programme refused, and the baseline surviving a later edit |
+| Baseline HTTP journey | 7/7 passed; the same chain over the API, including revision 0 still holding the original dates after revision 1 exists |
+| Baseline authority (JWT ON) | 2/2 passed; a Planning Engineer authors the programme and is refused the baseline (403), reads the history freely, and the Project Manager commits it |
+| Baseline Auth-ON browser journey | 1/1 passed in Chromium; draft → r0 locked → edit retains it → replace refused, declined, then reasoned into r1 |
+| Role catalogue authority | 25/25 passed; a Planning Engineer does not hold `projects.schedule.baseline` and the Project Manager does |
+| Database migration posture | 327/327 applied; a baselining act is an append-only row under FORCE RLS, and the database itself refuses a replacement with no reason |
 | Full API unit/fitness suite | 543 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -923,6 +972,30 @@ owner. `PLN-05` (Baseline approval) is the row that would carry that work.
 As on the other planning rows, `actualOutput` remains **PARTIAL** on an otherwise complete row: the
 proposal is proven on screen and no exported recovery document exists.
 
+### PLN-05 reconciliation
+
+The capability reads *Baseline approval*, and its acceptance criterion is that an authorized planner
+locks a dated baseline, a wrong role is denied, and later changes retain the original baseline.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| An authorized planner locks a dated baseline | committed against a name and a timestamp, as revision 0 | no |
+| A wrong role is denied | a Planning Engineer authoring the same programme is refused (403) under a live verifier, with nothing locked | no |
+| Later changes retain the original baseline | the activity moves, the baseline does not, and the slippage becomes visible | no |
+| Replacing one is governed | refused without a reason by the domain, the API and the database alike | no |
+| Replacing one destroys nothing | the act is kept by value; revision 0 still holds the original dates after revision 1 exists | no |
+
+**Proposed: `PLN-05` PARTIAL → COMPLETE.** This also closes the open row PLN-15 was promoted with —
+a recovered programme and its baseline can now diverge *visibly*, and re-baselining is an act with a
+name, a reason and a history rather than a silent overwrite.
+
+One limit is carried: **nothing prompts a re-baseline** after a recovery is accepted. The programme
+and its baseline diverge until somebody decides to act. That is deliberate — an automatic
+re-baseline would erase the variance the recovery was answering for, which is the exact defect this
+iteration closed — but unprompted, and it belongs with the notification work five other rows are
+waiting on. As on every other planning row, `actualOutput` would remain **PARTIAL** on promotion:
+proven on screen, with no exported baseline document.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -938,7 +1011,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost and forecast evidence from the connected plan. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, cost and forecast evidence from the connected plan. Baseline approval is now proven (PLN-05, PARTIAL and proposed for COMPLETE), which closes the divergence PLN-15 was promoted with. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

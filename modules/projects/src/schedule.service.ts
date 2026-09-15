@@ -23,6 +23,7 @@ import {
   makeProjectSchedule,
   setScheduleTasks,
   setBaseline,
+  type BaselineRevision,
   summariseSchedule,
   assertDurationFitsWindow,
   setScheduleDependencies,
@@ -44,6 +45,7 @@ import {
 import { type AcceptanceDecision, acceptProposal, discardProposal } from './domain/planning-acceptance';
 import { RESOURCE_FACTS_STORE, type ResourceFactsStore } from './resource-facts-store';
 import { PLANNING_RUN_STORE, type PlanningRunStore } from './planning-run-store';
+import { SCHEDULE_BASELINE_STORE, type ScheduleBaselineStore, type RecordedBaseline } from './baseline-store';
 import { persistAcceptedPlan } from './postgres-planning-run-store';
 
 /** A planning run paired with what accepting it would change against the current plan. */
@@ -79,6 +81,10 @@ export class ScheduleService {
     // Which calendar this project's days are counted under — one answer, asked here by the save
     // check, the planning run and the output rates alike (PLN-03).
     @Optional() @Inject(ProjectCalendarService) private readonly projectCalendar: ProjectCalendarService | null = null,
+    // Where a baselining act is kept. Optional like every seam: unbound, the current baseline still
+    // moves and only its HISTORY is unavailable — which such a composition then says rather than
+    // pretending the previous one never existed.
+    @Optional() @Inject(SCHEDULE_BASELINE_STORE) private readonly baselines: ScheduleBaselineStore | null = null,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
@@ -387,6 +393,19 @@ export class ScheduleService {
     };
   }
 
+  /**
+   * Every baseline this programme has had, newest first.
+   *
+   * The point of keeping them: a variance computed against revision 0 stays computable after
+   * revision 1 exists, so accepting a recovery and re-baselining does not erase the delay the
+   * recovery was answering.
+   */
+  async baselineHistory(tenantId: Id, projectId: Id): Promise<RecordedBaseline[]> {
+    const schedule = await this.store.getByProject(tenantId, projectId);
+    if (!schedule) throw new NotFoundException(`no schedule for project ${projectId}`);
+    return this.baselines ? this.baselines.listForSchedule(tenantId, schedule.id) : [];
+  }
+
   /** The dates a plan spans, widened to today so a calendar covers the elapsed part too. */
   private horizonOf(schedule: ProjectSchedule, today: string): { from: string; to: string } {
     if (schedule.tasks.length === 0) return { from: today, to: today };
@@ -449,18 +468,40 @@ export class ScheduleService {
     return { task: updated, progress: resolveActivityProgress(updated, progress.evidence) };
   }
 
-  async setBaseline(tenantId: Id, projectId: Id): Promise<ProjectSchedule> {
+  /**
+   * Freeze today's planned dates as the baseline — the act every variance figure is measured from.
+   *
+   * Taking the first one is free; REPLACING one costs a reason, and the one it replaces is kept
+   * (migration 0327). Accept a recovery, re-baseline without a word, and the delay that recovery
+   * was answering is suddenly measured against the dates the recovery produced — the variance
+   * erased by the act of answering for it. Superseding therefore adds a revision rather than
+   * destroying one.
+   */
+  async setBaseline(
+    tenantId: Id, projectId: Id, input: { actorId?: Id | null; reason?: string | null } = {},
+  ): Promise<ProjectSchedule> {
     const sch = await this.store.getByProject(tenantId, projectId);
-    if (!sch) throw new Error(`no schedule for project ${projectId}`);
-    if (sch.tasks.length === 0) throw new Error('cannot baseline an empty schedule');
-    const updated = setBaseline(sch);
+    if (!sch) throw new NotFoundException(`no schedule for project ${projectId}`);
+
+    let updated: ProjectSchedule;
+    let revision: BaselineRevision;
+    try {
+      ({ schedule: updated, revision } = setBaseline(sch, input));
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'this baseline cannot be taken');
+    }
     await this.store.update(updated);
+    // The act itself, kept whatever happens to the plan afterwards. Absent in a composition with no
+    // baseline store, where the current baseline still moves and only its history is unavailable.
+    await this.baselines?.record({
+      tenantId, projectId, scheduleId: updated.id, ...revision,
+    });
     await this.events.append([
       makeEvent({
         type: SCHEDULE_EVENT.baselineSet,
-        tenantId, companyId: sch.companyId, actorId: null,
+        tenantId, companyId: sch.companyId, actorId: input.actorId ?? null,
         aggregateType: 'projects.schedule', aggregateId: sch.id,
-        payload: { projectId, baselineSetAt: updated.baselineSetAt },
+        payload: { projectId, baselineSetAt: updated.baselineSetAt, revision: revision.revision, replaced: revision.reason !== null },
       }),
     ]);
     this.logger.log(`Baseline set for project ${projectId} (${updated.tasks.length} tasks)`);

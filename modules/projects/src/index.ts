@@ -99,6 +99,7 @@ export * from './domain/delay-impact';
 export * from './domain/recovery-proposal';
 export * from './activity-output.service';
 export * from './project-calendar.service';
+export * from './baseline-store';
 export * from './domain/schedule';
 export * from './domain/schedule-network';
 export * from './domain/schedule-planning';

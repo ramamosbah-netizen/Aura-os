@@ -76,6 +76,16 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.read'))).toBe(true);
   });
 
+  it('Planning authors the programme; committing a baseline is the Manager’s act', () => {
+    // PLN-05. A baseline is what every variance figure on the project is measured against — a
+    // delay's assessed impact, what a recovery recovered, an SPI. Taking one is therefore an act of
+    // the same weight as accepting a programme, and sits with the same authority.
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.baseline'))).toBe(false);
+    expect(roleFor('r-pm').permissions.some((p) => permissionMatches(p, 'projects.schedule.baseline'))).toBe(true);
+    // Reading which baseline a programme is on is nobody's privilege to withhold from the planner.
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.read'))).toBe(true);
+  });
+
   it('Planning assesses a delay’s impact; deciding the claim it feeds is a commercial act', () => {
     // PLN-14. Working out what a delay did to the completion date is a planner's job — it is read
     // off the network they authored. Granting or refusing the EOT claim that rests on it is not:

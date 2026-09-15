@@ -76,6 +76,16 @@ export interface ProjectSchedule {
    */
   dependencies: ScheduleDependency[];
   baselineSetAt: string | null;
+  /**
+   * Who took the current baseline, and which revision it is.
+   *
+   * A baseline is what every variance figure on the project is measured against, which makes it the
+   * most consequential thing here to overwrite. Recording the act — and keeping the one it replaced
+   * (migration 0327) — is what stops a re-baseline erasing the variance it was taken in answer to.
+   */
+  baselineSetBy: Id | null;
+  /** 0 is the original. Null when no baseline has been taken. */
+  baselineRevision: number | null;
   createdBy: Id | null;
   createdAt: string;
   updatedAt: string;
@@ -266,6 +276,8 @@ export function makeProjectSchedule(input: NewProjectSchedule): ProjectSchedule 
     projectName: input.projectName ?? null,
     tasks,
     dependencies: [],
+    baselineSetBy: null,
+    baselineRevision: null,
     baselineSetAt: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
@@ -326,13 +338,59 @@ export function setScheduleDependencies(
 }
 
 /** Snapshot current planned dates into the baseline for every task. */
-export function setBaseline(sch: ProjectSchedule): ProjectSchedule {
+/** The dates one baselining act froze, by value — never a reference to tasks that will move. */
+export interface BaselineRevision {
+  revision: number;
+  setAt: string;
+  setBy: Id | null;
+  /** Required from revision 1 onwards: taking the first baseline needs no justification, replacing one does. */
+  reason: string | null;
+  tasks: Array<{ taskId: Id; name: string; start: string; end: string }>;
+}
+
+/**
+ * Freeze today's planned dates as the baseline.
+ *
+ * TAKING THE FIRST ONE IS FREE; REPLACING ONE COSTS A SENTENCE. Every variance figure on the
+ * project — a delay's assessed impact, what a recovery recovered, an SPI — is a comparison to the
+ * baseline, so overwriting it silently erases the very thing those figures answer for. Accept a
+ * recovery, re-baseline without a word, and the delay it was answering is now measured against the
+ * dates the recovery produced.
+ *
+ * The act is returned as a REVISION so the caller can keep it: superseding a baseline adds one
+ * rather than destroying one, and a variance computed against revision 0 stays computable.
+ */
+export function setBaseline(
+  sch: ProjectSchedule,
+  input: { actorId?: Id | null; reason?: string | null } = {},
+): { schedule: ProjectSchedule; revision: BaselineRevision } {
+  if (sch.tasks.length === 0) throw new Error('cannot baseline an empty schedule');
+  const replacing = sch.baselineSetAt !== null;
+  const reason = input.reason?.trim() || null;
+  if (replacing && !reason) {
+    throw new Error(
+      'this programme is already baselined; replacing a baseline requires a reason, because every variance figure on the project is measured against it',
+    );
+  }
+
   const now = new Date().toISOString();
+  const revision: BaselineRevision = {
+    revision: (sch.baselineRevision ?? -1) + 1,
+    setAt: now,
+    setBy: input.actorId ?? null,
+    reason: replacing ? reason : null,
+    tasks: sch.tasks.map((t) => ({ taskId: t.id, name: t.name, start: t.plannedStart, end: t.plannedEnd })),
+  };
   return {
-    ...sch,
-    tasks: sch.tasks.map((t) => ({ ...t, baselineStart: t.plannedStart, baselineEnd: t.plannedEnd })),
-    baselineSetAt: now,
-    updatedAt: now,
+    schedule: {
+      ...sch,
+      tasks: sch.tasks.map((t) => ({ ...t, baselineStart: t.plannedStart, baselineEnd: t.plannedEnd })),
+      baselineSetAt: now,
+      baselineSetBy: input.actorId ?? null,
+      baselineRevision: revision.revision,
+      updatedAt: now,
+    },
+    revision,
   };
 }
 

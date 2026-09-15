@@ -19,7 +19,7 @@ import type { ScheduleStore } from './schedule-store';
 
 interface Row {
   id: string; tenant_id: string; company_id: string | null; project_id: string; project_name: string | null;
-  baseline_set_at: Date | string | null; created_by: string | null; created_at: Date | string; updated_at: Date | string;
+  baseline_set_at: Date | string | null; baseline_set_by: string | null; baseline_revision: number | null; created_by: string | null; created_at: Date | string; updated_at: Date | string;
 }
 
 interface TaskRow {
@@ -44,7 +44,7 @@ interface DepRow {
   predecessor_task_id: string; successor_task_id: string;
 }
 
-const COLS = 'id, tenant_id, company_id, project_id, project_name, baseline_set_at, created_by, created_at, updated_at';
+const COLS = 'id, tenant_id, company_id, project_id, project_name, baseline_set_at, baseline_set_by, baseline_revision, created_by, created_at, updated_at';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 const day = (v: Date | string | null): string | null =>
   v === null ? null : typeof v === 'string' ? v.slice(0, 10) : v.toISOString().slice(0, 10);
@@ -85,6 +85,8 @@ function rowTo(r: Row, tasks: ScheduleTask[], dependencies: ScheduleDependency[]
   return {
     id: r.id, tenantId: r.tenant_id, companyId: r.company_id, projectId: r.project_id,
     projectName: r.project_name, tasks, dependencies,
+    baselineSetBy: r.baseline_set_by ?? null,
+    baselineRevision: r.baseline_revision === null || r.baseline_revision === undefined ? null : Number(r.baseline_revision),
     baselineSetAt: r.baseline_set_at ? iso(r.baseline_set_at) : null,
     createdBy: r.created_by, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
   };
@@ -120,9 +122,9 @@ export class PostgresScheduleStore implements ScheduleStore {
   async create(s: ProjectSchedule): Promise<void> {
     await this.tx(async (client) => {
       await client.query(
-        `INSERT INTO public.aura_projects_schedules (${COLS}, tasks) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)`,
-        [s.id, s.tenantId, s.companyId, s.projectId, s.projectName, s.baselineSetAt, s.createdBy,
-         s.createdAt, s.updatedAt, JSON.stringify(s.tasks)],
+        `INSERT INTO public.aura_projects_schedules (${COLS}, tasks) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)`,
+        [s.id, s.tenantId, s.companyId, s.projectId, s.projectName, s.baselineSetAt, s.baselineSetBy,
+         s.baselineRevision, s.createdBy, s.createdAt, s.updatedAt, JSON.stringify(s.tasks)],
       );
       await this.writeTasks(client, s);
     });
@@ -131,8 +133,8 @@ export class PostgresScheduleStore implements ScheduleStore {
   async update(s: ProjectSchedule): Promise<void> {
     await this.tx(async (client) => {
       await client.query(
-        `UPDATE public.aura_projects_schedules SET baseline_set_at=$2, updated_at=$3, tasks=$4::jsonb WHERE id=$1`,
-        [s.id, s.baselineSetAt, s.updatedAt, JSON.stringify(s.tasks)],
+        `UPDATE public.aura_projects_schedules SET baseline_set_at=$2, baseline_set_by=$3, baseline_revision=$4, updated_at=$5, tasks=$6::jsonb WHERE id=$1`,
+        [s.id, s.baselineSetAt, s.baselineSetBy, s.baselineRevision, s.updatedAt, JSON.stringify(s.tasks)],
       );
       await this.writeTasks(client, s);
     });

@@ -21,7 +21,11 @@ import {
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
 export type WorkItemPriority = 'critical' | 'high' | 'medium' | 'low' | 'normal';
 export type WorkItemScope = 'assigned' | 'created';
-export type WorkItemAction = 'start' | 'complete' | 'reopen';
+/**
+ * `accept` and `decline` are not `start`/`complete` under another name: they answer a commitment
+ * somebody else made, rather than reporting progress on work this person owns.
+ */
+export type WorkItemAction = 'start' | 'complete' | 'reopen' | 'accept' | 'decline';
 export type WorkItemOrigin = 'self' | 'system' | 'other';
 
 export interface WorkItem {
@@ -299,12 +303,17 @@ export class WorkItemsService {
       // Null rather than a remembered name: the activity is read through, so a booking whose task
       // has been removed says so instead of showing what it used to be called.
       title: activityName ? `Allocated to ${activityName}` : 'Allocated to project work',
-      detail: `${booking.quantity} ${booking.unit} held · ${booking.from} → ${booking.to}`,
+      detail: [
+        `${booking.quantity} ${booking.unit} held · ${booking.from} → ${booking.to}`,
+        booking.response === 'declined' ? `You declined this: ${booking.responseReason}` : null,
+        booking.response === 'accepted' ? 'You accepted this allocation.' : null,
+      ].filter(Boolean).join(' · '),
       href: `/projects/schedule?projectId=${booking.projectId}`,
       projectId: booking.projectId,
       projectName,
       status: running ? 'in_progress' : 'todo',
-      sourceStatus: booking.status,
+      // Two facts, two fields: the project's commitment and the person's answer to it.
+      sourceStatus: `${booking.status}/${booking.response}`,
       priority: derivedPriority(booking.from),
       // The date the person is needed, which is what a personal list sorts and warns on.
       dueAt: booking.from,
@@ -312,11 +321,16 @@ export class WorkItemsService {
       updatedAt: booking.committedAt,
       scopes: ['assigned'],
       isFollowUp: false,
-      // No quick actions, deliberately. A booking is the PROJECT's commitment to capacity, not a
-      // task the allocated person owns: completing or reopening it here would let one person's
-      // click move a number the planner is accountable for. Releasing it stays on the planning
-      // desk, where it costs a reason.
-      actions: [],
+      // No start/complete, deliberately: a booking is the PROJECT's commitment to capacity, not a
+      // task the allocated person owns, and closing it here would let one person's click move a
+      // number the planner is accountable for. Releasing it stays on the planning desk.
+      //
+      // What the person CAN do is answer it. The answer changes nothing about the commitment; it
+      // makes a disagreement visible to the planner who has to resolve it. The current answer is
+      // never offered back to itself, so the buttons always describe a change.
+      actions: booking.response === 'accepted' ? ['decline']
+        : booking.response === 'declined' ? ['accept']
+          : ['accept', 'decline'],
       origin: origin(booking.committedBy, actorId),
       editable: false,
       deletable: false,
@@ -386,7 +400,19 @@ export class WorkItemsService {
     return { deleted: true };
   }
 
-  async act(tenantId: string, actorId: string, source: string, id: string, action: WorkItemAction, companyId: string | null = null): Promise<WorkItem> {
+  async act(
+    tenantId: string,
+    actorId: string,
+    source: string,
+    id: string,
+    action: WorkItemAction,
+    companyId: string | null = null,
+    reason?: string | null,
+  ): Promise<WorkItem> {
+    if (source === 'resource-allocation') return this.answerAllocation(tenantId, actorId, id, action, companyId, reason);
+    if (action === 'accept' || action === 'decline') {
+      throw new ForbiddenException('Only a resource allocation can be accepted or declined.');
+    }
     if (source === 'project-responsibility') {
       const existing = await this.projectResponsibilities.get(id);
       if (!existing || existing.tenantId !== tenantId) throw new NotFoundException('Work item not found');
@@ -411,6 +437,54 @@ export class WorkItemsService {
     const item = payload.items.find((candidate) => candidate.source === source && candidate.sourceId === updated.id);
     if (!item) throw new NotFoundException('Updated work item not found');
     return item;
+  }
+
+  /**
+   * Answer an allocation as the person it names.
+   *
+   * The authorisation that matters is not a role — it is IDENTITY. `@SelfScoped` on the route
+   * skips the blanket permission assertion precisely so this narrower check can replace it:
+   *
+   *   1. the actor has an employment record (HR, migration 0317),
+   *   2. this booking names THAT employee — not merely an employee,
+   *   3. the actor may act on work in the booking's project at all.
+   *
+   * (2) is the whole point. Without it, anyone holding a work-item permission could accept or
+   * refuse a commitment made about somebody else, and the planner would read a stranger's answer
+   * as the allocated person's.
+   */
+  private async answerAllocation(
+    tenantId: string,
+    actorId: string,
+    bookingId: string,
+    action: WorkItemAction,
+    companyId: string | null,
+    reason?: string | null,
+  ): Promise<WorkItem> {
+    if (action !== 'accept' && action !== 'decline') {
+      throw new ForbiddenException('An allocation is accepted or declined; it is not started, completed or reopened here.');
+    }
+    const booking = await this.resourceBookings.get(tenantId, bookingId);
+    if (!booking) throw new NotFoundException('Work item not found');
+
+    const employee = await this.hr.findEmployeeByAccount(tenantId, actorId);
+    if (!employee) {
+      throw new ForbiddenException('Your account is not linked to an employee record, so it cannot answer an allocation.');
+    }
+    if (booking.resource.resourceType !== 'employee' || booking.resource.canonicalResourceId !== employee.id) {
+      throw new ForbiddenException('Only the person an allocation names can answer it.');
+    }
+    this.assertCanUse(tenantId, companyId, actorId, booking.projectId);
+
+    const answered = await this.resourceBookings.respond({
+      tenantId,
+      bookingId,
+      response: action === 'accept' ? 'accepted' : 'declined',
+      reason,
+      actorId,
+    });
+    const project = await this.projects.get(answered.booking.projectId);
+    return this.allocationItem(answered, actorId, project?.title ?? null, new Date().toISOString().slice(0, 10));
   }
 
   private activityStatus(status: Activity['status']): WorkItemStatus {

@@ -20,6 +20,7 @@ const booking = (over: Record<string, unknown> = {}) => ({
   capacityAtCommitment: 4, demandAtCommitment: 3, overCapacityReason: null,
   committedAt: '2026-09-01T00:00:00.000Z', committedBy: 'u-planner',
   releasedReason: null, releasedAt: null, releasedBy: null,
+  response: 'pending', responseReason: null, responseAt: null, responseBy: null,
   ...over,
 });
 
@@ -32,8 +33,17 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
   const projectRisks = { list: empty }, projectIssues = { list: empty };
   const projectResponsibilities = { list: empty };
   const projects = { get: vi.fn(async (id: string) => ({ id, title: `Project ${id}` })) };
+  const stored = new Map<string, Record<string, unknown>>(
+    (options.assignments ?? []).map((view) => [(view as { booking: { id: string } }).booking.id, (view as { booking: Record<string, unknown> }).booking]),
+  );
   const resourceBookings = {
     listAssignments: vi.fn(async () => options.assignments ?? []),
+    get: vi.fn(async (_tenantId: string, id: string) => stored.get(id) ?? null),
+    respond: vi.fn(async (input: { bookingId: string; response: string; reason?: string | null; actorId?: string }) => {
+      const booking = { ...stored.get(input.bookingId), response: input.response, responseReason: input.reason ?? null, responseBy: input.actorId };
+      stored.set(input.bookingId, booking);
+      return { booking, activityName: 'Install CCTV devices' };
+    }),
   };
   const hr = {
     findEmployeeByAccount: vi.fn(async () => options.employee ?? null),
@@ -52,6 +62,76 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
 }
 
 const employee = { id: 'emp-1', tenantId: 'tenant-a', firstName: 'Maya', lastName: 'Haddad', userId: 'u-maya' };
+
+describe('answering an allocation', () => {
+  it('records an acceptance against the booking the person is named on', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: booking(), activityName: 'Install CCTV devices' }],
+    });
+    const item = await service.act('tenant-a', 'u-maya', 'resource-allocation', 'b1', 'accept', null);
+    expect(resourceBookings.respond).toHaveBeenCalledWith(
+      expect.objectContaining({ tenantId: 'tenant-a', bookingId: 'b1', response: 'accepted', actorId: 'u-maya' }),
+    );
+    expect(item).toMatchObject({ sourceStatus: 'held/accepted', actions: ['decline'] });
+    expect(item.detail).toContain('You accepted this allocation.');
+  });
+
+  it('carries the reason into a decline and shows it back', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: booking(), activityName: 'Install CCTV devices' }],
+    });
+    const item = await service.act('tenant-a', 'u-maya', 'resource-allocation', 'b1', 'decline', null, 'on annual leave that week');
+    expect(resourceBookings.respond).toHaveBeenCalledWith(
+      expect.objectContaining({ response: 'declined', reason: 'on annual leave that week' }),
+    );
+    expect(item).toMatchObject({ sourceStatus: 'held/declined', actions: ['accept'] });
+    expect(item.detail).toContain('You declined this: on annual leave that week');
+  });
+
+  it('refuses an account that is not linked to any employment record', async () => {
+    const { service, resourceBookings } = harness({
+      employee: null,
+      assignments: [{ booking: booking(), activityName: 'Install CCTV devices' }],
+    });
+    await expect(service.act('tenant-a', 'u-admin', 'resource-allocation', 'b1', 'accept', null))
+      .rejects.toThrow(/not linked to an employee record/);
+    expect(resourceBookings.respond).not.toHaveBeenCalled();
+  });
+
+  it('refuses a linked person answering for somebody else', async () => {
+    // The booking names emp-1; this account is emp-99. A work-item permission is not consent.
+    const { service, resourceBookings } = harness({
+      employee: { ...employee, id: 'emp-99' },
+      assignments: [{ booking: booking(), activityName: 'Install CCTV devices' }],
+    });
+    await expect(service.act('tenant-a', 'u-other', 'resource-allocation', 'b1', 'accept', null))
+      .rejects.toThrow(/Only the person an allocation names/);
+    expect(resourceBookings.respond).not.toHaveBeenCalled();
+  });
+
+  it('refuses start, complete and reopen on an allocation', async () => {
+    const { service } = harness({
+      employee,
+      assignments: [{ booking: booking(), activityName: 'Install CCTV devices' }],
+    });
+    await expect(service.act('tenant-a', 'u-maya', 'resource-allocation', 'b1', 'complete', null))
+      .rejects.toThrow(/accepted or declined/);
+  });
+
+  it('refuses accept and decline on every other source', async () => {
+    const { service } = harness({ employee });
+    await expect(service.act('tenant-a', 'u-maya', 'crm-activity', 'a1', 'decline', null, 'no'))
+      .rejects.toThrow(/Only a resource allocation/);
+  });
+
+  it('refuses an unknown booking rather than inventing one', async () => {
+    const { service } = harness({ employee, assignments: [] });
+    await expect(service.act('tenant-a', 'u-maya', 'resource-allocation', 'ghost', 'accept', null))
+      .rejects.toThrow(/not found/);
+  });
+});
 
 describe('resource allocations in My Work', () => {
   it('asks only for the employee this account is, and names the activity and dates', async () => {
@@ -77,13 +157,13 @@ describe('resource allocations in My Work', () => {
       projectId: 'p1',
       projectName: 'Project p1',
       status: 'todo',
-      sourceStatus: 'held',
+      sourceStatus: 'held/pending',
       dueAt: day(2),
       scopes: ['assigned'],
       origin: 'other',
     });
-    // A booking is the project's commitment, not a task this person closes.
-    expect(items[0].actions).toEqual([]);
+    // Not a task this person closes — but a commitment they may answer.
+    expect(items[0].actions).toEqual(['accept', 'decline']);
     expect(items[0].editable).toBe(false);
     expect(coverage.connected).toContain('Planning');
   });

@@ -143,6 +143,39 @@ describe('ResourceBookingService', () => {
     expect(await service.listAssignments('tenant-b', POOL, window)).toEqual([]);
   });
 
+  it('records the allocated person’s answer without touching the commitment', async () => {
+    const { service, create } = await setup();
+    const schedule = await create('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');
+    const held = await service.commitRequirement({
+      tenantId: 'tenant-a', projectId: schedule.projectId, requirementId: schedule.tasks[0].requirements[0].id,
+    });
+
+    await expect(service.respond({
+      tenantId: 'tenant-a', bookingId: held.booking.id, response: 'declined',
+    })).rejects.toThrow(/requires a reason/);
+
+    const refused = await service.respond({
+      tenantId: 'tenant-a', bookingId: held.booking.id, response: 'declined',
+      reason: 'already committed to the Marina site that week', actorId: 'u-maya',
+    });
+    expect(refused.booking).toMatchObject({
+      response: 'declined', responseReason: 'already committed to the Marina site that week', responseBy: 'u-maya',
+      // Everything the project committed to is untouched: a refusal is news, not a change.
+      status: 'held', quantity: held.booking.quantity, from: held.booking.from, to: held.booking.to,
+    });
+    expect(refused.activityName).toBe(`Install CCTV ${schedule.projectId}`);
+
+    // The capacity is still committed, so the project still sees its own held commitment.
+    const stillHeld = await service.listProject('tenant-a', schedule.projectId);
+    expect(stillHeld[0].booking).toMatchObject({ status: 'held', response: 'declined' });
+
+    const accepted = await service.respond({ tenantId: 'tenant-a', bookingId: held.booking.id, response: 'accepted', actorId: 'u-maya' });
+    expect(accepted.booking).toMatchObject({ response: 'accepted', responseReason: null });
+
+    await expect(service.respond({ tenantId: 'tenant-a', bookingId: 'ffffffff-ffff-4fff-8fff-ffffffffffff', response: 'accepted' }))
+      .rejects.toThrow(/not found/);
+  });
+
   it('refuses another project requirement and retains released history', async () => {
     const { service, create } = await setup();
     const a = await create('11111111-1111-4111-8111-111111111111', 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa');

@@ -30,7 +30,10 @@ const ALLOWED: Record<string, string> = {
   'work-items.controller.ts:::source/:id/:action':
     'A My Work quick action names a source record rather than a project. The service loads that ' +
     'record, verifies the actor is its assignee, derives the persisted project, re-evaluates the ' +
-    'functional work-item permission in that project, and then delegates to the source command.',
+    'functional work-item permission in that project, and then delegates to the source command. ' +
+    'Accepting or declining a resource allocation is the same shape with a narrower identity ' +
+    'check: the service resolves the actor’s employment record (HR 0317) and refuses unless the ' +
+    'booking names THAT employee, so no permission holder can answer for somebody else.',
 };
 
 function controllerFiles(dir: string): string[] {

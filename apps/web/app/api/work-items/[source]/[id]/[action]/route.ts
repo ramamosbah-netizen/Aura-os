@@ -1,6 +1,6 @@
 import { apiFetch, apiBase, authHeader, replayHeaders } from '@/lib/api';
 
-const ACTIONS = new Set(['start', 'complete', 'reopen', 'reschedule']);
+const ACTIONS = new Set(['start', 'complete', 'reopen', 'reschedule', 'accept', 'decline']);
 
 export async function POST(req: Request, { params }: { params: Promise<{ source: string; id: string; action: string }> }): Promise<Response> {
   const { source, id, action } = await params;

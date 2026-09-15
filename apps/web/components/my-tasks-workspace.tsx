@@ -28,7 +28,7 @@ const VIEWS: Array<{ id: View; label: string }> = [
 const STATUS_LABELS: Record<WorkItemStatus, string> = {
   todo: 'To do', in_progress: 'In progress', waiting: 'Waiting', blocked: 'Blocked', done: 'Done', cancelled: 'Cancelled',
 };
-const ACTION_LABELS: Record<WorkItemAction, string> = { start: 'Start', complete: 'Complete', reopen: 'Reopen' };
+const ACTION_LABELS: Record<WorkItemAction, string> = { start: 'Start', complete: 'Complete', reopen: 'Reopen', accept: 'Accept', decline: 'Decline' };
 const dayKey = (date = new Date()): string => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const dateOnly = (value: string | null): string | null => value?.slice(0, 10) ?? null;
 const localDateTime = (value: string | null | undefined): string => {
@@ -138,12 +138,52 @@ function RescheduleDialog({ item, proposedDueAt, busy, error, onClose, onSave }:
   </section></div>;
 }
 
-function TaskRow({ item, focused, onAction, onEdit, onReschedule }: { item: WorkItem; focused?: boolean; onAction: (item: WorkItem, action: WorkItemAction) => Promise<void>; onEdit: (item: WorkItem) => void; onReschedule: (item: WorkItem) => void }) {
+function ActionIcon({ action }: { action: WorkItemAction }) {
+  if (action === 'start') return <CirclePlay aria-hidden />;
+  if (action === 'complete' || action === 'accept') return <Check aria-hidden />;
+  if (action === 'decline') return <X aria-hidden />;
+  return <RotateCcw aria-hidden />;
+}
+
+/**
+ * Declining an allocation costs a sentence, for the same reason rescheduling does: the planner who
+ * receives it has to act on it, and "no" with no reason names no remedy.
+ */
+function DeclineDialog({ item, busy, error, onClose, onConfirm }: { item: WorkItem; busy: boolean; error: string | null; onClose: () => void; onConfirm: (reason: string) => Promise<void> }) {
+  const [reason, setReason] = useState('');
+  useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose(); }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, [busy, onClose]);
+  return <div className={styles.modalBackdrop} role="presentation"><section className={`${styles.taskEditor} ${styles.rescheduleEditor}`} role="dialog" aria-modal="true" aria-labelledby="decline-title" data-testid="decline-dialog">
+    <header className={styles.editorHead}><div><span>ALLOCATION</span><h2 id="decline-title">Decline this allocation</h2></div><button type="button" onClick={onClose} disabled={busy} aria-label="Close decline dialog"><X aria-hidden /></button></header>
+    <form className={styles.editorForm} onSubmit={(event) => { event.preventDefault(); if (reason.trim().length >= 3) void onConfirm(reason.trim()); }}>
+      <div className={styles.rescheduleSummary}><strong>{item.title}</strong><span>{item.detail}</span></div>
+      <label className={styles.editorWide}><span>Why can you not take this?</span><textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} rows={4} minLength={3} required placeholder="On leave, already committed elsewhere, wrong trade…" /></label>
+      <p className={styles.auditHint}>The booking is not cancelled. The planner sees your answer against it and decides what changes.</p>
+      {error ? <p className={styles.modalError} role="alert">{error}</p> : null}
+      <footer className={styles.editorActions}><span /><div><button className={styles.subtleAction} type="button" disabled={busy} onClick={onClose}>Cancel</button><button className={styles.primaryAction} type="submit" disabled={busy || reason.trim().length < 3}>{busy ? 'Sending…' : 'Send decline'}</button></div></footer>
+    </form>
+  </section></div>;
+}
+
+function TaskRow({ item, focused, onAction, onEdit, onReschedule, onDecline }: { item: WorkItem; focused?: boolean; onAction: (item: WorkItem, action: WorkItemAction) => Promise<void>; onEdit: (item: WorkItem) => void; onReschedule: (item: WorkItem) => void; onDecline: (item: WorkItem) => void }) {
   const isFocused = focused ?? useSearchParams().get('task') === item.sourceId;
   const [busy, setBusy] = useState<WorkItemAction | null>(null);
-  const run = async (action: WorkItemAction) => { setBusy(action); try { await onAction(item, action); } finally { setBusy(null); } };
-  const primaryAction = item.actions.find((action) => action === 'complete') ?? item.actions[0];
-  const otherActions = item.actions.filter((action) => action !== primaryAction);
+  // Declining needs a reason, so it opens a dialog rather than firing on the click.
+  const run = async (action: WorkItemAction) => {
+    if (action === 'decline') { onDecline(item); return; }
+    setBusy(action);
+    try { await onAction(item, action); } finally { setBusy(null); }
+  };
+  /**
+   * Answering is not progress reporting, and the two are laid out differently on purpose.
+   *
+   * `accept` and `decline` are one question with two answers, so BOTH stay visible. Demoting the
+   * refusal into an overflow menu would make "yes" one click and "no" three, which is not a
+   * neutral way to ask somebody whether they can do the work.
+   */
+  const answerActions = item.actions.filter((action) => action === 'accept' || action === 'decline');
+  const progressActions = item.actions.filter((action) => action !== 'accept' && action !== 'decline');
+  const primaryAction = progressActions.find((action) => action === 'complete') ?? progressActions[0];
+  const otherActions = progressActions.filter((action) => action !== primaryAction);
   const originLabel = item.origin === 'self' ? 'Created by me' : item.origin === 'system' ? 'Created by AURA' : 'Created by another user';
   const OriginIcon = item.origin === 'system' ? Bot : UserRound;
   return <article className={`${styles.taskRow} ${isFocused ? styles.focusedTask : ''}`} data-testid="work-item" data-task-id={item.sourceId}>
@@ -151,9 +191,10 @@ function TaskRow({ item, focused, onAction, onEdit, onReschedule }: { item: Work
     <div className={styles.taskIdentity}><div className={styles.taskChips}><span>{item.module}</span><span>{item.kind}</span>{item.projectName && <span>{item.projectName}</span>}<span className={styles.originChip}><OriginIcon aria-hidden />{originLabel}</span>{item.editable ? <span className={styles.personalChip}>Personal task</span> : <span className={styles.sourceOwnedChip} title={`${item.module} owns this record`}><LockKeyhole aria-hidden />Source owned</span>}{item.reminderAt && <span><Bell aria-hidden />Reminder</span>}{item.recurrence && item.recurrence !== 'none' && <span><Repeat2 aria-hidden />{item.recurrence}</span>}</div>{item.editable ? <button type="button" className={styles.taskTitleButton} onClick={() => onEdit(item)}>{item.title}</button> : <AuraTabLink href={item.href} tabTitle={item.title} tabType={item.module} className={styles.taskTitle}>{item.title}</AuraTabLink>}{(item.memo || item.detail) && <p>{item.memo ?? item.detail}</p>}</div>
     <div className={styles.taskMeta}><span className={`${styles.statusPill} ${styles[`status_${item.status}`]}`}>{STATUS_LABELS[item.status]}</span><span className={styles.due}>{prettyDate(item.dueAt)}</span><span className={styles.updated}>Updated {prettyDate(item.updatedAt)}</span></div>
     <div className={styles.taskActions}>
-      {primaryAction ? <button type="button" className={styles.primaryTaskAction} disabled={busy !== null} onClick={() => void run(primaryAction)}>{primaryAction === 'start' ? <CirclePlay aria-hidden /> : primaryAction === 'complete' ? <Check aria-hidden /> : <RotateCcw aria-hidden />}{busy === primaryAction ? 'Working…' : ACTION_LABELS[primaryAction]}</button> : null}
+      {answerActions.map((action) => <button key={action} type="button" className={action === 'accept' ? styles.primaryTaskAction : styles.sourceTaskLink} disabled={busy !== null} onClick={() => void run(action)}><ActionIcon action={action} />{busy === action ? 'Working…' : ACTION_LABELS[action]}</button>)}
+      {primaryAction ? <button type="button" className={styles.primaryTaskAction} disabled={busy !== null} onClick={() => void run(primaryAction)}><ActionIcon action={primaryAction} />{busy === primaryAction ? 'Working…' : ACTION_LABELS[primaryAction]}</button> : null}
       {!item.editable ? <AuraTabLink href={item.href} tabTitle={item.title} tabType={item.module} className={styles.sourceTaskLink}>Open in {item.module}<ArrowUpRight aria-hidden /></AuraTabLink> : null}
-      {(otherActions.length || item.reschedulable || item.editable) ? <details className={styles.taskMenu}><summary aria-label={`More actions for ${item.title}`}><MoreHorizontal aria-hidden /></summary><div>{otherActions.map((action) => <button key={action} type="button" disabled={busy !== null} onClick={() => void run(action)}>{action === 'start' ? <CirclePlay aria-hidden /> : action === 'complete' ? <Check aria-hidden /> : <RotateCcw aria-hidden />}{ACTION_LABELS[action]}</button>)}{item.reschedulable ? <button type="button" onClick={() => onReschedule(item)}><CalendarDays aria-hidden />Reschedule</button> : null}{item.editable ? <button type="button" onClick={() => onEdit(item)}><Pencil aria-hidden />Edit details</button> : null}</div></details> : null}
+      {(otherActions.length || item.reschedulable || item.editable) ? <details className={styles.taskMenu}><summary aria-label={`More actions for ${item.title}`}><MoreHorizontal aria-hidden /></summary><div>{otherActions.map((action) => <button key={action} type="button" disabled={busy !== null} onClick={() => void run(action)}><ActionIcon action={action} />{ACTION_LABELS[action]}</button>)}{item.reschedulable ? <button type="button" onClick={() => onReschedule(item)}><CalendarDays aria-hidden />Reschedule</button> : null}{item.editable ? <button type="button" onClick={() => onEdit(item)}><Pencil aria-hidden />Edit details</button> : null}</div></details> : null}
     </div>
   </article>;
 }
@@ -164,7 +205,7 @@ export default function MyTasksWorkspace({ initial }: { initial: WorkItemsPayloa
   const focusedTaskId = searchParams.get('task');
   const [items, setItems] = useState(initial.items); const [view, setView] = useState<View>('all'); const [display, setDisplay] = useState<Display>('list');
   const [query, setQuery] = useState(''); const [module, setModule] = useState('all'); const [project, setProject] = useState('all'); const [priority, setPriority] = useState('all'); const [status, setStatus] = useState('all'); const [sort, setSort] = useState<'due' | 'priority' | 'updated'>('due');
-  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1)); const [focusDate, setFocusDate] = useState(() => new Date()); const [calendarMode, setCalendarMode] = useState<CalendarMode>('month'); const [dragging, setDragging] = useState<WorkItem | null>(null); const [editor, setEditor] = useState<TaskEditorState | null>(null); const [rescheduling, setRescheduling] = useState<{ item: WorkItem; dueAt?: string } | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null); const [showFilters, setShowFilters] = useState(false); const [recentlyDeleted, setRecentlyDeleted] = useState<WorkItem | null>(null);
+  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1)); const [focusDate, setFocusDate] = useState(() => new Date()); const [calendarMode, setCalendarMode] = useState<CalendarMode>('month'); const [dragging, setDragging] = useState<WorkItem | null>(null); const [editor, setEditor] = useState<TaskEditorState | null>(null); const [rescheduling, setRescheduling] = useState<{ item: WorkItem; dueAt?: string } | null>(null); const [declining, setDeclining] = useState<WorkItem | null>(null); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null); const [notice, setNotice] = useState<string | null>(null); const [showFilters, setShowFilters] = useState(false); const [recentlyDeleted, setRecentlyDeleted] = useState<WorkItem | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   // Which `?task=` we have already focused. The focus effect below depends on `items`, and every
   // lifecycle action replaces that array — so without this it re-ran on each Start/Complete and
@@ -225,6 +266,20 @@ export default function MyTasksWorkspace({ initial }: { initial: WorkItemsPayloa
     setItems((current) => [restored, ...current.filter((candidate) => candidate.id !== restored.id)]);
     setRecentlyDeleted(null); setNotice('Task restored.');
   };
+  const declineAllocation = async (reason: string) => {
+    if (!declining) return;
+    const result = await request(
+      `/api/work-items/${encodeURIComponent(declining.source)}/${encodeURIComponent(declining.sourceId)}/decline`,
+      { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reason }) },
+      'The allocation could not be declined.',
+    );
+    if (!result || 'deleted' in result) return;
+    setItems((current) => current.map((candidate) => candidate.id === declining.id ? result : candidate));
+    setDeclining(null);
+    // Says what did and did not happen: the planner has been told, the commitment still stands.
+    setNotice('Your planner has been told. The booking stays until they change it.');
+  };
+
   const rescheduleTask = async (dueAt: string, reason: string) => { if (!rescheduling) return; const result = await request(`/api/work-items/${encodeURIComponent(rescheduling.item.source)}/${encodeURIComponent(rescheduling.item.sourceId)}/reschedule`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ dueAt, reason }) }, 'The task could not be rescheduled.'); if (!result || 'deleted' in result) return; setItems((current) => current.map((candidate) => candidate.id === rescheduling.item.id ? result : candidate)); setRescheduling(null); setNotice(`Task moved to ${prettyDate(dueAt)}.`); };
   const openReschedule = (item: WorkItem, dueAt?: string) => { setError(null); setEditor(null); setRescheduling({ item, dueAt }); };
   const openEditor = (state: TaskEditorState) => { setError(null); setNotice(null); setEditor(state); };
@@ -262,7 +317,7 @@ export default function MyTasksWorkspace({ initial }: { initial: WorkItemsPayloa
     {display === 'list' ? <nav className={styles.viewTabs} aria-label="Task views">{VIEWS.map((entry) => <button key={entry.id} type="button" aria-pressed={view === entry.id} onClick={() => setView(entry.id)}>{entry.label}<span>{items.filter((item) => matchesView(item, entry.id)).length}</span></button>)}</nav> : null}
     <section className={styles.taskToolbar} aria-label="Task filters"><label className={styles.searchBox}><Search aria-hidden /><span className={styles.srOnly}>Search tasks</span><input ref={searchRef} aria-keyshortcuts="/" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search tasks, projects or records" /></label><button type="button" className={styles.filterToggle} aria-expanded={showFilters} onClick={() => setShowFilters((current) => !current)}><SlidersHorizontal aria-hidden />Filters{activeFilterCount ? <span>{activeFilterCount}</span> : null}</button>{showFilters ? <div className={styles.filterControls}><select aria-label="Filter by module" value={module} onChange={(event) => setModule(event.target.value)}><option value="all">All modules</option>{modules.map((value) => <option key={value}>{value}</option>)}</select><select aria-label="Filter by project" value={project} onChange={(event) => setProject(event.target.value)}><option value="all">All projects</option>{projects.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select><select aria-label="Filter by priority" value={priority} onChange={(event) => setPriority(event.target.value)}><option value="all">All priorities</option>{['critical', 'high', 'medium', 'normal', 'low'].map((value) => <option key={value} value={value}>{value}</option>)}</select><select aria-label="Filter by status" value={status} onChange={(event) => setStatus(event.target.value)}><option value="all">All statuses</option>{Object.entries(STATUS_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{display === 'list' ? <select aria-label="Sort tasks" value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}><option value="due">Due date</option><option value="priority">Priority</option><option value="updated">Last updated</option></select> : null}</div> : null}{activeFilterCount ? <div className={styles.activeFilters}>{module !== 'all' ? <button type="button" onClick={() => setModule('all')}>Module: {module}<X aria-hidden /></button> : null}{project !== 'all' ? <button type="button" onClick={() => setProject('all')}>Project: {projects.find(([id]) => id === project)?.[1] ?? project}<X aria-hidden /></button> : null}{priority !== 'all' ? <button type="button" onClick={() => setPriority('all')}>Priority: {priority}<X aria-hidden /></button> : null}{status !== 'all' ? <button type="button" onClick={() => setStatus('all')}>Status: {STATUS_LABELS[status as WorkItemStatus]}<X aria-hidden /></button> : null}<button type="button" className={styles.clearFilters} onClick={clearFilters}>Clear all</button></div> : null}</section>
     {error && <p className={styles.actionError} role="alert">{error}</p>}{notice && <p className={styles.actionNotice} role="status">{notice}</p>}
-    {display === 'list' ? <section className={styles.taskRegister} aria-labelledby="task-register-title"><header className={styles.registerHead}><div><h2 id="task-register-title">{VIEWS.find((entry) => entry.id === view)?.label}</h2><p>{visible.length} matching item{visible.length === 1 ? '' : 's'} connected to you</p></div><span>My Tasks owns attention · source modules own records</span></header>{visible.length ? <div className={styles.taskList}>{visible.map((item) => <TaskRow key={item.id} item={item} onAction={act} onEdit={(task) => openEditor({ mode: 'edit', item: task })} onReschedule={openReschedule} />)}</div> : <div className={styles.taskEmpty}><strong>No matching work</strong><p>Try another view or clear one of the filters.</p><button type="button" onClick={() => openEditor({ mode: 'create' })}><Plus aria-hidden />Create a personal task</button></div>}</section> : <section className={styles.calendarPanel} aria-labelledby="calendar-title">
+    {display === 'list' ? <section className={styles.taskRegister} aria-labelledby="task-register-title"><header className={styles.registerHead}><div><h2 id="task-register-title">{VIEWS.find((entry) => entry.id === view)?.label}</h2><p>{visible.length} matching item{visible.length === 1 ? '' : 's'} connected to you</p></div><span>My Tasks owns attention · source modules own records</span></header>{visible.length ? <div className={styles.taskList}>{visible.map((item) => <TaskRow key={item.id} item={item} onAction={act} onEdit={(task) => openEditor({ mode: 'edit', item: task })} onReschedule={openReschedule} onDecline={setDeclining} />)}</div> : <div className={styles.taskEmpty}><strong>No matching work</strong><p>Try another view or clear one of the filters.</p><button type="button" onClick={() => openEditor({ mode: 'create' })}><Plus aria-hidden />Create a personal task</button></div>}</section> : <section className={styles.calendarPanel} aria-labelledby="calendar-title">
       <header className={styles.calendarHead}>
         <div className={styles.calendarNav}><button type="button" onClick={goToday}>Today</button><button type="button" aria-label="Previous period" onClick={() => moveCalendar(-1)}><ChevronLeft aria-hidden /></button><button type="button" aria-label="Next period" onClick={() => moveCalendar(1)}><ChevronRight aria-hidden /></button></div>
         <div><h2 id="calendar-title">{calendarTitle}</h2><p>Drag a personal task to another date; AURA will require a reason before saving.</p></div>
@@ -273,6 +328,6 @@ export default function MyTasksWorkspace({ initial }: { initial: WorkItemsPayloa
     </section>}
     <details className={styles.coverage}><summary>Task source coverage</summary><div><p><strong>Connected:</strong> {initial.coverage.connected.join(', ')}</p>{initial.coverage.notConnected.map((gap) => <p key={`${gap.module}:${gap.reason}`}><strong>{gap.module} — not connected:</strong> {gap.reason}</p>)}</div></details>
     {recentlyDeleted ? <div className={styles.undoToast} role="status"><span>Task deleted.</span><button type="button" disabled={busy} onClick={() => void undoDelete()}><Undo2 aria-hidden />Undo</button><button type="button" aria-label="Dismiss deleted task message" onClick={() => setRecentlyDeleted(null)}><X aria-hidden /></button></div> : null}
-    {editor ? <PersonalTaskEditor state={editor} busy={busy} error={error} onClose={() => setEditor(null)} onSave={saveEditor} onDelete={deleteTask} onReschedule={openReschedule} /> : null}{rescheduling ? <RescheduleDialog item={rescheduling.item} proposedDueAt={rescheduling.dueAt} busy={busy} error={error} onClose={() => setRescheduling(null)} onSave={rescheduleTask} /> : null}
+    {editor ? <PersonalTaskEditor state={editor} busy={busy} error={error} onClose={() => setEditor(null)} onSave={saveEditor} onDelete={deleteTask} onReschedule={openReschedule} /> : null}{rescheduling ? <RescheduleDialog item={rescheduling.item} proposedDueAt={rescheduling.dueAt} busy={busy} error={error} onClose={() => setRescheduling(null)} onSave={rescheduleTask} /> : null}{declining ? <DeclineDialog item={declining} busy={busy} error={error} onClose={() => setDeclining(null)} onConfirm={declineAllocation} /> : null}
   </>;
 }

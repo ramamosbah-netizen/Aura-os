@@ -2,7 +2,7 @@ import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
 import type { ResourceRef, ResourceType, ResourceUnit } from './domain/resource-ref';
 import type { ResourceCapacity } from './domain/resource-pool';
-import type { ResourceBooking, BookingStatus } from './domain/resource-booking';
+import type { ResourceBooking, BookingResponse, BookingStatus } from './domain/resource-booking';
 import type { ResourceFactsStore, ResourceInterval } from './resource-facts-store';
 
 /**
@@ -27,6 +27,7 @@ interface BookingRow {
   capacity_at_commitment: string | number | null; demand_at_commitment: string | number;
   over_capacity_reason: string | null; committed_at: Date | string; committed_by: string | null;
   released_reason: string | null; released_at: Date | string | null; released_by: string | null;
+  response: string | null; response_reason: string | null; response_at: Date | string | null; response_by: string | null;
 }
 
 interface CapacityRow {
@@ -64,6 +65,10 @@ const rowToBooking = (r: BookingRow): ResourceBooking => ({
   releasedReason: r.released_reason,
   releasedAt: r.released_at ? iso(r.released_at) : null,
   releasedBy: r.released_by,
+  response: (r.response ?? 'pending') as BookingResponse,
+  responseReason: r.response_reason,
+  responseAt: r.response_at ? iso(r.response_at) : null,
+  responseBy: r.response_by,
 });
 
 const rowToCapacity = (r: CapacityRow): ResourceCapacity => ({
@@ -103,7 +108,8 @@ export class PostgresResourceFactsStore implements ResourceFactsStore {
       `SELECT id, tenant_id, project_id, schedule_id, task_id, requirement_id,
               resource_type, canonical_resource_id, unit, quantity,
               valid_from, valid_to, status, capacity_at_commitment, demand_at_commitment,
-              over_capacity_reason, committed_at, committed_by, released_reason, released_at, released_by
+              over_capacity_reason, committed_at, committed_by, released_reason, released_at, released_by,
+              response, response_reason, response_at, response_by
          FROM public.aura_projects_resource_bookings
         WHERE status = 'held'
           AND (resource_type, canonical_resource_id) IN (SELECT t, i FROM unnest($1::text[], $2::text[]) AS u(t, i))

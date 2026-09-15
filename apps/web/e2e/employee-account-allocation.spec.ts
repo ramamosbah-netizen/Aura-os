@@ -10,10 +10,13 @@ import { apiAuthHeaders } from './api-auth';
  *   activity  ->  the allocation appears in THAT person's My Work with the project, the activity
  *   and the dates  ->  and in nobody else's.
  *
+ * ...and the answer coming back the other way: the person accepts or declines from My Work, and
+ * the planner sees that answer against the commitment WITHOUT the commitment having changed.
+ *
  * The negatives matter as much as the positive: an employee with no link reaches no list, one
- * account cannot be held by two employment records, releasing the booking removes the item
- * (proving it is read through rather than copied), and unlinking says so instead of silently
- * emptying the list.
+ * account cannot be held by two employment records, a decline with no reason is refused, nobody
+ * can answer for somebody else, releasing the booking removes the item (proving it is read
+ * through rather than copied), and unlinking says so instead of silently emptying the list.
  */
 
 const API = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
@@ -96,17 +99,33 @@ test.describe('Employee account link carries an allocation into My Work', () => 
     // Reading HR is not administering identity. An account that may read the whole employee
     // register still cannot decide whose login an employment record belongs to — the link changes
     // whose name a commitment carries, so it is its own authority.
+    //
+    // The role is created FOR this proof and carries HR read and nothing else. A standard role
+    // would have worked and would also have carried `projects.*.read` at tenant scope, which
+    // silently widens a shared test identity for every other spec in the suite — one of them
+    // asserts that same identity is refused on a project it does not belong to. A grant is
+    // durable state, so a proof that needs one builds the narrowest thing that proves the point
+    // and takes it away afterwards.
     const password = process.env.E2E_PASSWORD ?? process.env.AUTH_DEV_PASSWORD;
     expect(password, 'the permission proof needs the seeded member password').toBeTruthy();
-    await post(request, '/admin/access/grants', { userId: 'u-e2e-viewer', roleId: 'r-hse' });
-    const readerLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
-    expect(readerLogin.ok(), await readerLogin.text()).toBe(true);
-    const readerHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${((await readerLogin.json()) as { token: string }).token}` };
-    expect((await request.get(`${API}/hr/employees`, { headers: readerHeaders })).status(), 'HR read is granted').toBe(200);
-    const readerLink = await request.post(`${API}/hr/employees/${colleague.id}/account`, {
-      headers: readerHeaders, data: { userId: 'u-e2e-checker' },
+    const hrReaderRole = `r-e2e-hr-reader-${run}`;
+    await post(request, '/admin/access/roles', {
+      id: hrReaderRole, name: `HR reader ${run}`, permissions: ['hr.employee.read'],
     });
-    expect(readerLink.status(), 'HR read does not carry the account-link authority').toBe(403);
+    await post(request, '/admin/access/grants', { userId: 'u-e2e-viewer', roleId: hrReaderRole });
+    try {
+      const readerLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
+      expect(readerLogin.ok(), await readerLogin.text()).toBe(true);
+      const readerHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${((await readerLogin.json()) as { token: string }).token}` };
+      expect((await request.get(`${API}/hr/employees`, { headers: readerHeaders })).status(), 'HR read is granted').toBe(200);
+      const readerLink = await request.post(`${API}/hr/employees/${colleague.id}/account`, {
+        headers: readerHeaders, data: { userId: 'u-e2e-checker' },
+      });
+      expect(readerLink.status(), 'HR read does not carry the account-link authority').toBe(403);
+    } finally {
+      // Whatever the assertions did, this identity leaves the proof exactly as it entered it.
+      await request.delete(`${API}/admin/access/grants?userId=u-e2e-viewer&roleId=${hrReaderRole}`, { headers: apiAuthHeaders() });
+    }
 
     // ── The plan, and the commitments made from it ────────────────────────────
     const mineActivity = `Terminate CCTV cameras ${run}`;
@@ -155,6 +174,61 @@ test.describe('Employee account link carries an allocation into My Work', () => 
 
     // The colleague's allocation is committed and is not this account's work.
     await expect(page.getByTestId('work-item').filter({ hasText: colleagueActivity })).toHaveCount(0);
+
+    // ── The answer travels back to the planner ────────────────────────────────
+    // Nobody can answer for somebody else: this account is Maya, and Sami's allocation is not hers
+    // to accept — even though she holds every work-item permission there is.
+    const colleagueBookings = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    expect(colleagueBookings.ok(), await colleagueBookings.text()).toBe(true);
+    const colleagueBooking = ((await colleagueBookings.json()) as Array<{ booking: { id: string; resource: { canonicalResourceId: string } } }>)
+      .find((view) => view.booking.resource.canonicalResourceId === colleague.id)!.booking;
+    const answerForAnother = await request.post(`${API}/work-items/resource-allocation/${colleagueBooking.id}/accept`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: {},
+    });
+    expect(answerForAnother.status(), 'only the person an allocation names can answer it').toBe(403);
+
+    // A decline with no reason is refused: the planner it lands on has to act on it.
+    const silentRefusal = await request.post(`${API}/work-items/resource-allocation/${held.booking.id}/decline`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: {},
+    });
+    expect(silentRefusal.status()).toBe(400);
+    expect(await silentRefusal.text()).toContain('requires a reason');
+
+    // Decline from My Work, in the browser, with the reason the dialog insists on.
+    await allocation.getByRole('button', { name: 'Decline' }).click();
+    const declineDialog = page.getByTestId('decline-dialog');
+    await expect(declineDialog).toBeVisible({ timeout: 30_000 });
+    await declineDialog.getByRole('textbox').fill('already committed to the Marina site that week');
+    await declineDialog.getByRole('button', { name: 'Send decline' }).click();
+    await expect(page.getByText('Your planner has been told. The booking stays until they change it.')).toBeVisible({ timeout: 30_000 });
+    await expect(allocation).toContainText('You declined this: already committed to the Marina site that week');
+
+    // THE POINT: the commitment is unchanged. Same quantity, same dates, still held.
+    const afterDecline = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    const declined = ((await afterDecline.json()) as Array<{ booking: { id: string; status: string; quantity: number; from: string; to: string; response: string; responseReason: string } }>)
+      .find((view) => view.booking.id === held.booking.id)!.booking;
+    expect(declined).toMatchObject({
+      status: 'held', quantity: 2, from: day(3), to: day(5),
+      response: 'declined', responseReason: 'already committed to the Marina site that week',
+    });
+
+    // And the planner sees it on their own desk, beside the capacity verdict rather than inside it.
+    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId(`declined-${held.booking.id}`)).toContainText('declined this allocation: already committed to the Marina site that week', { timeout: 30_000 });
+    await expect(page.getByTestId('declined-count')).toHaveText('1');
+
+    // Changing your mind is allowed, because circumstances change.
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
+    await search.fill(run);
+    await expect(allocation).toBeVisible({ timeout: 30_000 });
+    await allocation.getByRole('button', { name: 'Accept' }).click();
+    await expect(allocation).toContainText('You accepted this allocation.', { timeout: 30_000 });
+    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId(`accepted-${held.booking.id}`)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('declined-count')).toHaveText('0');
+
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
+    await search.fill(run);
 
     // ── Read through, not copied: releasing the booking removes the item ──────
     const released = await request.post(`${API}/projects/${project.id}/resource-bookings/${held.booking.id}/release`, {

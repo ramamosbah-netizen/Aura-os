@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
 import type { ResourceType, ResourceUnit } from './domain/resource-ref';
-import type { BookingStatus, ResourceBooking } from './domain/resource-booking';
+import type { BookingResponse, BookingStatus, ResourceBooking } from './domain/resource-booking';
 import type { ResourceBookingStore } from './resource-booking-store';
 
 interface Row {
@@ -11,6 +11,7 @@ interface Row {
   capacity_at_commitment: string | number | null; demand_at_commitment: string | number;
   over_capacity_reason: string | null; committed_at: Date | string; committed_by: string | null;
   released_reason: string | null; released_at: Date | string | null; released_by: string | null;
+  response: string; response_reason: string | null; response_at: Date | string | null; response_by: string | null;
 }
 
 const iso = (value: Date | string): string => value instanceof Date ? value.toISOString() : String(value);
@@ -25,11 +26,14 @@ const fromRow = (row: Row): ResourceBooking => ({
   demandAtCommitment: Number(row.demand_at_commitment), overCapacityReason: row.over_capacity_reason,
   committedAt: iso(row.committed_at), committedBy: row.committed_by, releasedReason: row.released_reason,
   releasedAt: row.released_at ? iso(row.released_at) : null, releasedBy: row.released_by,
+  response: (row.response ?? 'pending') as BookingResponse, responseReason: row.response_reason,
+  responseAt: row.response_at ? iso(row.response_at) : null, responseBy: row.response_by,
 });
 
 const columns = `id, tenant_id, project_id, schedule_id, task_id, requirement_id, resource_type,
   canonical_resource_id, unit, quantity, valid_from, valid_to, status, capacity_at_commitment,
-  demand_at_commitment, over_capacity_reason, committed_at, committed_by, released_reason, released_at, released_by`;
+  demand_at_commitment, over_capacity_reason, committed_at, committed_by, released_reason, released_at, released_by,
+  response, response_reason, response_at, response_by`;
 
 export class PostgresResourceBookingStore implements ResourceBookingStore {
   constructor(private readonly pool: Pool) {}
@@ -37,21 +41,28 @@ export class PostgresResourceBookingStore implements ResourceBookingStore {
   async create(booking: ResourceBooking): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_projects_resource_bookings (${columns})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
       [booking.id, booking.tenantId, booking.projectId, booking.scheduleId, booking.taskId, booking.requirementId,
         booking.resource.resourceType, booking.resource.canonicalResourceId, booking.unit, booking.quantity,
         booking.from, booking.to, booking.status, booking.capacityAtCommitment, booking.demandAtCommitment,
         booking.overCapacityReason, booking.committedAt, booking.committedBy, booking.releasedReason,
-        booking.releasedAt, booking.releasedBy],
+        booking.releasedAt, booking.releasedBy,
+        booking.response, booking.responseReason, booking.responseAt, booking.responseBy],
     );
   }
 
   async update(booking: ResourceBooking): Promise<void> {
+    // Release and the allocated person's answer are the only two things that change after
+    // commitment. Everything the booking committed TO — resource, quantity, unit, dates — is
+    // absent from this statement on purpose: it is settled at creation and no later write may
+    // quietly revise it.
     const result = await this.pool.query(
       `UPDATE public.aura_projects_resource_bookings
-          SET status=$3, released_reason=$4, released_at=$5, released_by=$6
+          SET status=$3, released_reason=$4, released_at=$5, released_by=$6,
+              response=$7, response_reason=$8, response_at=$9, response_by=$10
         WHERE tenant_id=$1 AND id=$2`,
-      [booking.tenantId, booking.id, booking.status, booking.releasedReason, booking.releasedAt, booking.releasedBy],
+      [booking.tenantId, booking.id, booking.status, booking.releasedReason, booking.releasedAt, booking.releasedBy,
+        booking.response, booking.responseReason, booking.responseAt, booking.responseBy],
     );
     if (result.rowCount !== 1) throw new Error(`resource booking ${booking.id} not found`);
   }

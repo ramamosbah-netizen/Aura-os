@@ -48,6 +48,7 @@ interface ResourceBookingView {
     unit: 'hours' | 'persons' | 'crews' | 'units'; quantity: number; from: string; to: string;
     status: 'held' | 'released'; capacityAtCommitment: number | null; demandAtCommitment: number;
     overCapacityReason: string | null; releasedReason: string | null;
+    response: 'pending' | 'accepted' | 'declined'; responseReason: string | null; responseBy: string | null;
   };
   assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
   resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };

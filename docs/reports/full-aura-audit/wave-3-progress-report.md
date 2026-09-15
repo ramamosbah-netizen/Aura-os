@@ -141,6 +141,12 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Reading HR carries the authority to bind identities | The link endpoint requires `hr.employee.link-account` explicitly rather than the route-derived `hr.employee.delete`; an HR-read role receives 403 |
 | An allocation is copied into a task the planner cannot see | My Work reads the booking through; releasing it on the planning desk removes the item and no second record exists to disagree |
 | A person without the link, or without project access, is shown an empty list | Coverage names the missing link, counts allocations withheld by project access and counts those beyond the look-ahead horizon |
+| A refusal quietly cancels the booking | The answer is a separate fact: a decline changes no quantity, status or capacity, and the held commitment survives it unchanged |
+| A decline arrives with no remedy attached | Domain, API and database all require a non-blank reason; a reasonless decline returns 400 |
+| Anyone holding a work-item permission answers for somebody else | The handler resolves the actor's employment record and refuses unless the booking names that employee; answering another person's allocation returns 403 |
+| A refusal is filed against work that no longer exists | Answering a released booking is refused |
+| The refusal never reaches the planner | The planning desk shows the decline and its reason beside the capacity verdict, and counts declined commitments separately from capacity conflicts |
+| The UI makes "yes" easier than "no" | Accept and Decline are both rendered inline; neither answer is demoted into an overflow menu |
 
 ## Verification completed
 
@@ -187,13 +193,20 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Employee allocation Auth-ON browser journey | 1/1 passed in Chromium; UI link, second claim on one account 409, unregistered account 400, HR-read role refused the link authority 403, allocation visible with project/activity/dates, colleague's allocation absent, release removed the item, unlink reported in coverage |
 | Database migration posture | 317/317 applied; the employment record carries at most one platform account per tenant with linked-by/linked-at provenance |
 | Tenant-isolation fitness ratchet | 5/5 passed; the new identity read asserts the bound tenant explicitly |
+| Allocation response domain | 41/41 booking domain tests passed, 8 of them new; commitment untouched by a refusal, reason required, acceptance clears a stale objection, changing your mind allowed, released bookings unanswerable |
+| Allocation response service | 6/6 passed; reason enforced, activity name read through, the project still sees its held commitment after a refusal, unknown booking refused |
+| Allocation answer in My Work | 13/13 passed; accept/decline recorded against the named person only, unlinked and wrong-person accounts refused, start/complete refused on an allocation, accept/decline refused on every other source |
+| Employee allocation Auth-ON browser journey | 1/1 passed in Chromium; extended to decline with a reason in the browser, unchanged held commitment, planner-visible refusal and count, change of answer to accept, then release and unlink |
+| Database migration posture | 318/318 applied; the response is constrained to pending/accepted/declined, a decline must carry a reason and an answered row must carry its provenance |
+| Self-scoped route fitness | 4/4 passed; the allocation answer is recorded with why the ordinary permission check cannot authorise it and what replaces it |
+| Browser regression (allocation + WBS + My Work) | 5/5 passed in Chromium |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. HR/Fleet availability and named conflict-resolution ownership. Employee-to-User identity and the My Work handoff from booked WBS demand are now proven (PLN-07); acceptance BY the allocated employee, pool allocation reaching named members, and project access for an allocated non-member remain open.
+2. HR/Fleet availability and named conflict-resolution ownership. Employee-to-User identity, the My Work handoff from booked WBS demand, and acceptance or refusal by the allocated employee are now proven (PLN-07); pool allocation reaching named members, and project access for an allocated non-member, remain open.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

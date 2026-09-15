@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { Id } from '@aura/shared';
-import { assessBooking, commitBooking, releaseBooking, type BookingAssessment, type ResourceBooking } from './domain/resource-booking';
+import { type Id, assertSameTenant, sameTenantOrNull } from '@aura/shared';
+import { assessBooking, commitBooking, releaseBooking, respondToBooking, type BookingAssessment, type BookingResponse, type ResourceBooking } from './domain/resource-booking';
 import type { ResourceRef } from './domain/resource-ref';
 import { assessResourceAcrossProjects, dayLoadsForBooking, resolveResourceLoad, type ResourceConflictReport } from './domain/resource-facts';
 import { RESOURCE_BOOKING_STORE, type ResourceBookingStore } from './resource-booking-store';
@@ -102,20 +102,74 @@ export class ResourceBookingService {
     const held = await this.facts.heldBookingsFor(tenantId, [resource], interval);
     if (held.length === 0) return [];
 
-    // One schedule read per project, not per booking: a person committed to six activities on one
-    // project is one read, and the alternative is how a personal work list becomes slow.
+    const names = await this.activityNames(tenantId, held);
+    return held
+      .map((booking) => ({ booking, activityName: this.activityName(names, booking) }))
+      .sort((a, b) => a.booking.from.localeCompare(b.booking.from) || a.booking.committedAt.localeCompare(b.booking.committedAt));
+  }
+
+  /**
+   * The activity names for a set of bookings: one schedule read per PROJECT, not per booking.
+   *
+   * A person committed to six activities on one project is one read, and the alternative is how a
+   * personal work list becomes slow enough that people stop opening it.
+   */
+  private async activityNames(tenantId: Id, bookings: readonly ResourceBooking[]): Promise<Map<string, string>> {
     const names = new Map<string, string>();
-    await Promise.all([...new Set(held.map((booking) => booking.projectId))].map(async (projectId) => {
+    await Promise.all([...new Set(bookings.map((booking) => booking.projectId))].map(async (projectId) => {
       const schedule = await this.schedules.getByProject(tenantId, projectId);
       for (const task of schedule?.tasks ?? []) names.set(`${projectId}:${task.id}`, task.name);
     }));
+    return names;
+  }
 
-    return held
-      .map((booking) => ({
-        booking,
-        activityName: booking.taskId ? names.get(`${booking.projectId}:${booking.taskId}`) ?? null : null,
-      }))
-      .sort((a, b) => a.booking.from.localeCompare(b.booking.from) || a.booking.committedAt.localeCompare(b.booking.committedAt));
+  /** Null when the booking names no task, or the task it named is gone — never a stale name. */
+  private activityName(names: Map<string, string>, booking: ResourceBooking): string | null {
+    return booking.taskId ? names.get(`${booking.projectId}:${booking.taskId}`) ?? null : null;
+  }
+
+  /**
+   * One commitment by id, for a caller that has already established the right to see it.
+   *
+   * The store filters by tenant and this checks the row it returns anyway: a getter is the shape
+   * that hands a record to a caller, and the store is an interface — an implementation that
+   * ignored its tenant argument would otherwise leak silently here rather than fail loudly.
+   */
+  async get(tenantId: Id, bookingId: Id): Promise<ResourceBooking | null> {
+    return sameTenantOrNull(await this.store.get(tenantId, bookingId), tenantId);
+  }
+
+  /**
+   * Record the answer of the person a booking names.
+   *
+   * WHO may answer is not decided here. This service knows the booking names an employee; it does
+   * not know which login that employee is — that is HR's answer (migration 0317) — so the caller
+   * that does know establishes it and this records the result. The same separation as `release`,
+   * which takes an `actorId` and trusts the boundary above it to have earned it.
+   *
+   * Nothing about the commitment changes: the domain writes only the answer, and the store's
+   * update statement cannot reach resource, quantity, unit or dates even if it tried.
+   */
+  async respond(input: {
+    tenantId: Id; bookingId: Id; response: Exclude<BookingResponse, 'pending'>;
+    reason?: string | null; actorId?: Id | null;
+  }): Promise<ResourceAssignmentView> {
+    // Fetch-before-mutate: the tenant is asserted on the write path rather than assumed, and a
+    // caller from the wrong tenant is told "not found" rather than that the record exists.
+    const booking = assertSameTenant(
+      await this.store.get(input.tenantId, input.bookingId),
+      input.tenantId, 'resource booking', input.bookingId,
+    );
+    let answered: ResourceBooking;
+    try {
+      answered = respondToBooking(booking, { response: input.response, reason: input.reason, actorId: input.actorId });
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'the allocation response is invalid');
+    }
+    // The same answer again writes nothing, and still reports the current state to the caller.
+    if (answered !== booking) await this.store.update(answered);
+    const names = await this.activityNames(input.tenantId, [answered]);
+    return { booking: answered, activityName: this.activityName(names, answered) };
   }
 
   async release(input: { tenantId: Id; projectId: Id; bookingId: Id; reason: string; actorId?: Id | null }): Promise<ResourceBooking> {

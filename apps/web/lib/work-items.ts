@@ -1,7 +1,7 @@
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
 export type WorkItemPriority = 'critical' | 'high' | 'medium' | 'low' | 'normal';
 export type WorkItemScope = 'assigned' | 'created';
-export type WorkItemAction = 'start' | 'complete' | 'reopen';
+export type WorkItemAction = 'start' | 'complete' | 'reopen' | 'accept' | 'decline';
 export type TaskRecurrence = 'none' | 'daily' | 'weekly' | 'monthly';
 export type WorkItemOrigin = 'self' | 'system' | 'other';
 

@@ -135,8 +135,8 @@ export default function HrControlClient({
       });
       if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message || (await res.text()));
       router.refresh();
-    } catch (err: any) {
-      setError(err.message || 'Failed to link the account');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to link the account');
     }
   };
 
@@ -146,8 +146,8 @@ export default function HrControlClient({
       const res = await fetch(`/api/hr/employees/${employeeId}/account`, { method: 'DELETE' });
       if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { message?: string }).message || (await res.text()));
       router.refresh();
-    } catch (err: any) {
-      setError(err.message || 'Failed to unlink the account');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to unlink the account');
     }
   };
 

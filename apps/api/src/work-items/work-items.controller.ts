@@ -3,7 +3,7 @@ import { SelfScoped, TenantContext } from '@aura/core';
 import { TASK_RECURRENCES, type TaskRecurrence } from '@aura/crm';
 import { WorkItemsService, type WorkItem, type WorkItemAction, type WorkItemsPayload } from './work-items.service';
 
-const ACTIONS = new Set<WorkItemAction>(['start', 'complete', 'reopen']);
+const ACTIONS = new Set<WorkItemAction>(['start', 'complete', 'reopen', 'accept', 'decline']);
 
 @Controller('work-items')
 export class WorkItemsController {
@@ -70,11 +70,21 @@ export class WorkItemsController {
 
   @SelfScoped()
   @Post(':source/:id/:action')
-  act(@Param('source') source: string, @Param('id') id: string, @Param('action') action: string): Promise<WorkItem> {
+  act(
+    @Param('source') source: string,
+    @Param('id') id: string,
+    @Param('action') action: string,
+    // Only `decline` reads this. The body is optional so every existing caller — which sends
+    // none — behaves exactly as it did.
+    @Body() dto: { reason?: string } | undefined,
+  ): Promise<WorkItem> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new UnauthorizedException('A signed-in user is required');
     if (!ACTIONS.has(action as WorkItemAction)) throw new BadRequestException('Unknown work-item action');
-    return this.workItems.act(ctx.tenantId, ctx.actorId, source, id, action as WorkItemAction, ctx.companyId ?? null);
+    if (action === 'decline' && !dto?.reason?.trim()) {
+      throw new BadRequestException('Declining an allocation requires a reason');
+    }
+    return this.workItems.act(ctx.tenantId, ctx.actorId, source, id, action as WorkItemAction, ctx.companyId ?? null, dto?.reason);
   }
 
   private validateSchedule(dto: { reminderAt?: string | null; recurrence?: TaskRecurrence; recurrenceEndsOn?: string | null }): void {

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   assessBooking,
   bookingDays,
+  bookingIsRefused,
   commitBooking,
   releaseBooking,
+  respondToBooking,
   wasValidAtCommitment,
   type DayAvailability,
   type DayLoad,
@@ -266,6 +268,68 @@ describe('releasing', () => {
     expect(b.demandAtCommitment).toBe(8);
     expect(b.committedAt).toBe(held.committedAt);
     expect(b.releasedBy).toBe('u1');
+  });
+});
+
+describe('the allocated person\u2019s answer', () => {
+  it('starts pending — a commitment about someone is not consent from them', () => {
+    const b = commitBooking(booking(), clear(10));
+    expect(b.response).toBe('pending');
+    expect(b.responseAt).toBeNull();
+    expect(bookingIsRefused(b)).toBe(false);
+  });
+
+  it('changes nothing the project committed to', () => {
+    // The whole point: a refusal must not move a number the planner is accountable for.
+    const held = commitBooking(booking({ quantity: 4 }), clear(10));
+    const refused = respondToBooking(held, { response: 'declined', reason: 'on annual leave that week', actorId: 'u-maya' });
+    expect(refused).toMatchObject({
+      status: 'held', quantity: 4, unit: 'persons', from: held.from, to: held.to,
+      capacityAtCommitment: 10, demandAtCommitment: 4, committedAt: held.committedAt,
+    });
+    expect(refused.response).toBe('declined');
+    expect(refused.responseReason).toBe('on annual leave that week');
+    expect(refused.responseBy).toBe('u-maya');
+    expect(bookingIsRefused(refused)).toBe(true);
+  });
+
+  it('frees no capacity, so the day is still as committed as it was', () => {
+    const refused = respondToBooking(commitBooking(booking(), clear(10)), { response: 'declined', reason: 'double-booked' });
+    // Feasibility answers a capacity question; a refusal is a different question and must not
+    // silently answer this one.
+    expect(assessBooking(refused, load(10, 4)).feasibility).toBe('AVAILABLE');
+    expect(assessBooking(refused, load(2, 4)).feasibility).toBe('CONFLICTED');
+  });
+
+  it('requires a reason to decline, because the planner has to act on it', () => {
+    const b = commitBooking(booking(), clear(10));
+    expect(() => respondToBooking(b, { response: 'declined', reason: '  ' })).toThrow(/requires a reason/);
+    expect(() => respondToBooking(b, { response: 'declined' })).toThrow(/requires a reason/);
+  });
+
+  it('accepts without one, and keeps no reason beside an acceptance', () => {
+    const refused = respondToBooking(commitBooking(booking(), clear(10)), { response: 'declined', reason: 'clash' });
+    const accepted = respondToBooking(refused, { response: 'accepted', actorId: 'u-maya' });
+    expect(accepted.response).toBe('accepted');
+    // A stale objection sitting beside an acceptance would read as an overruled complaint.
+    expect(accepted.responseReason).toBeNull();
+  });
+
+  it('lets a person change their mind, because circumstances do', () => {
+    const accepted = respondToBooking(commitBooking(booking(), clear(10)), { response: 'accepted' });
+    const later = respondToBooking(accepted, { response: 'declined', reason: 'broken wrist' });
+    expect(later.response).toBe('declined');
+    expect(later.responseReason).toBe('broken wrist');
+  });
+
+  it('does not re-stamp the same answer, so \u201cwhen did they accept\u201d keeps its meaning', () => {
+    const accepted = respondToBooking(commitBooking(booking(), clear(10)), { response: 'accepted' });
+    expect(respondToBooking(accepted, { response: 'accepted' })).toBe(accepted);
+  });
+
+  it('refuses to answer a released booking, which asks nothing of anyone', () => {
+    const gone = releaseBooking(commitBooking(booking(), clear(10)), { reason: 'task cancelled' });
+    expect(() => respondToBooking(gone, { response: 'accepted' })).toThrow(/already been released/);
   });
 });
 

@@ -38,6 +38,20 @@ import { type WorkingCalendar, ALL_DAYS_WORKING, eachDay } from './working-calen
 
 export type BookingStatus = 'held' | 'released';
 
+/**
+ * What the person a booking NAMES says about it.
+ *
+ * A fifth fact, kept apart from the other four for the reason they are kept apart from each other:
+ *
+ *     Demand  ≠  Capacity  ≠  Booking  ≠  Actual  ≠  RESPONSE
+ *
+ * `pending` is the honest default and covers two different silences — nobody has answered yet, and
+ * nobody CAN answer (a crane has no opinion; an employee with no linked account never sees the
+ * allocation). Neither is agreement, and calling either one `accepted` would put a consent on the
+ * record that no person gave.
+ */
+export type BookingResponse = 'pending' | 'accepted' | 'declined';
+
 export interface ResourceBooking {
   id: Id;
   tenantId: Id;
@@ -90,6 +104,27 @@ export interface ResourceBooking {
   releasedReason: string | null;
   releasedAt: string | null;
   releasedBy: Id | null;
+
+  // -- The allocated person's answer -----------------------------------------
+  /**
+   * Whether the named person has accepted or refused this commitment.
+   *
+   * IT CHANGES NOTHING ELSE ON THIS RECORD. A decline does not reduce `quantity`, does not set
+   * `status` to released and frees no capacity, because the booking is the PROJECT's claim and a
+   * planner is accountable for it. A refusal that silently released capacity would let one
+   * person's click move a number somebody else answers for.
+   *
+   * What it does is make the disagreement visible, with a reason, exactly as a cross-project
+   * capacity clash is: both statements are true at once — "we committed you on Tuesday" and "I
+   * cannot be there on Tuesday" — and a planner resolves it by replacing the resource, moving the
+   * task, reducing the requirement, or releasing the booking knowingly.
+   */
+  response: BookingResponse;
+  /** Why it was refused. Required to decline; null for every other answer. */
+  responseReason: string | null;
+  responseAt: string | null;
+  /** The ACCOUNT that answered. Which employment record that is belongs to HR, not to §22. */
+  responseBy: Id | null;
 }
 
 export interface NewResourceBooking {
@@ -227,6 +262,12 @@ export function commitBooking(
     releasedReason: null,
     releasedAt: null,
     releasedBy: null,
+    // Nobody has been asked yet. Not `accepted`: a commitment made about a person is not consent
+    // from them, and the whole value of the field is that it distinguishes the two.
+    response: 'pending',
+    responseReason: null,
+    responseAt: null,
+    responseBy: null,
   };
 }
 
@@ -261,7 +302,52 @@ export function releaseBooking(b: ResourceBooking, input: { reason: string; acto
   };
 }
 
+/**
+ * Record the named person's answer.
+ *
+ * Deliberately NOT a state machine with a final state. People change their minds for reasons the
+ * plan should hear — someone accepts on Monday and breaks their wrist on Tuesday — and a model
+ * that refused the second answer would simply keep the first one, which is the wrong one. The row
+ * carries the CURRENT answer; the sequence of answers belongs to the audit log, which is where
+ * "and then what happened" is asked from.
+ *
+ * Re-stating the same answer is a no-op rather than a re-stamp, so "when did they accept this"
+ * keeps meaning the first time they did.
+ */
+export function respondToBooking(
+  b: ResourceBooking,
+  input: { response: Exclude<BookingResponse, 'pending'>; reason?: string | null; actorId?: Id | null },
+): ResourceBooking {
+  if (b.status === 'released') {
+    // A released booking holds nothing and asks nothing of anybody. Answering it would file a
+    // refusal against work that no longer exists.
+    throw new Error('this booking has already been released and no longer asks anything of anyone');
+  }
+  const reason = input.reason?.trim() || null;
+  if (input.response === 'declined' && !reason) {
+    // The planner this lands on has to act on it. "No" with no reason names no remedy — a clash,
+    // leave, a wrong person, the wrong dates are four different fixes.
+    throw new Error('declining an allocation requires a reason');
+  }
+  if (b.response === input.response && (input.response === 'accepted' || b.responseReason === reason)) {
+    return b;
+  }
+  return {
+    ...b,
+    response: input.response,
+    // Only a decline carries one. A reason left beside an acceptance would read, later, as an
+    // objection that was overruled.
+    responseReason: input.response === 'declined' ? reason : null,
+    responseAt: new Date().toISOString(),
+    responseBy: input.actorId ?? null,
+  };
+}
+
 export const bookingIsHeld = (b: Pick<ResourceBooking, 'status'>): boolean => b.status === 'held';
+
+/** A held commitment the named person has refused — the planner's open question. */
+export const bookingIsRefused = (b: Pick<ResourceBooking, 'status' | 'response'>): boolean =>
+  b.status === 'held' && b.response === 'declined';
 
 export const bookingCovers = (b: Pick<ResourceBooking, 'from' | 'to'>, day: string): boolean =>
   day >= b.from && day <= b.to;

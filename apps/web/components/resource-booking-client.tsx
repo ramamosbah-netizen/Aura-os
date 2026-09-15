@@ -15,6 +15,7 @@ interface BookingView {
     id: string; taskId: string | null; requirementId: string | null; resource: ResourceRef; unit: Unit;
     quantity: number; from: string; to: string; status: 'held' | 'released'; capacityAtCommitment: number | null;
     demandAtCommitment: number; overCapacityReason: string | null; releasedReason: string | null;
+    response: 'pending' | 'accepted' | 'declined'; responseReason: string | null; responseBy: string | null;
   };
   assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
   resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };
@@ -71,6 +72,7 @@ export default function ResourceBookingClient({
       <div><span>Activity demand</span><strong>{requirements.length}</strong></div>
       <div><span>Held commitments</span><strong>{bookings.filter((item) => item.booking.status === 'held').length}</strong></div>
       <div><span>Open conflicts</span><strong>{bookings.filter((item) => item.booking.status === 'held' && item.assessment.feasibility === 'CONFLICTED').length}</strong></div>
+      <div><span>Declined by the person</span><strong data-testid="declined-count">{bookings.filter((item) => item.booking.status === 'held' && item.booking.response === 'declined').length}</strong></div>
     </div>
     <form className={styles.commit} onSubmit={commit} data-testid="resource-booking-form">
       <div><CalendarCheck2 size={17} /><span><strong>Commit activity resources</strong><small>Select an authored demand line. AURA uses its saved resource, quantity and activity dates.</small></span></div>
@@ -91,6 +93,8 @@ export default function ResourceBookingClient({
           <div className={styles.lineage}><Link2 size={13} />{view.booking.from} → {view.booking.to} · demand {view.booking.demandAtCommitment} / capacity {view.booking.capacityAtCommitment ?? 'unknown'} at commitment</div>
           {view.assessment.reason && <p className={styles.reason}><TriangleAlert size={14} />{view.assessment.reason}</p>}
           {view.resourceConflict.projectsInvolved.length > 1 && <p className={styles.reason}><TriangleAlert size={14} />Shared-resource conflict involves {view.resourceConflict.projectsInvolved.length} projects on {view.resourceConflict.conflictDays.length} day(s).</p>}
+          {view.booking.status === 'held' && view.booking.response === 'declined' && <p className={styles.reason} data-testid={`declined-${view.booking.id}`}><TriangleAlert size={14} />{label(view.booking.resource)} declined this allocation: {view.booking.responseReason}</p>}
+          {view.booking.status === 'held' && view.booking.response === 'accepted' && <small data-testid={`accepted-${view.booking.id}`}>Accepted by the allocated person.</small>}
           {view.booking.overCapacityReason && <small>Approved exception: {view.booking.overCapacityReason}</small>}
           {view.booking.releasedReason && <small>Release reason: {view.booking.releasedReason}</small>}
           {view.booking.status === 'held' && <div className={styles.release}><input aria-label={`Release reason ${view.booking.id}`} value={releaseReasons[view.booking.id] ?? ''} onChange={(event) => setReleaseReasons((current) => ({ ...current, [view.booking.id]: event.target.value }))} placeholder="Reason for releasing this capacity" /><button type="button" disabled={busy} onClick={() => release(view.booking.id)}>Release</button></div>}

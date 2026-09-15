@@ -1450,7 +1450,21 @@ be identified is not an approval of a particular material. They are preserved an
 authority classified honestly as **legacy / unresolved**, which is a true statement about them rather
 than a permission granted retrospectively.
 
-### Where this leaves ENG-04
+### Where this left ENG-04 — and where it ended
+
+`UNVERIFIED` at the time of writing. The row was closed afterwards, on the frozen acceptance
+criterion rather than on the invariant this section argued for: `stages: Engineering`, and the
+criterion asks for the submittal and its decision with save/reload, denials, actual output and a
+next-role receipt. It does not ask for purchased-material identity, purchase-order lines,
+procurement enforcement or installation gating — those were this investigation's findings, and they
+belong to Wave 4 (`BUY-01`) and to the unowned gap below. The four architectural decisions listed at
+the end of this section were NOT taken, and ENG-04 closed without them.
+
+The original assessment below is left standing rather than edited, because it was the reasoning at
+the time and the correction to it is the record worth keeping: the conclusion *"cannot be closed
+until the system can say which material a purchase is for"* was true of the **product** and not of
+**this capability row**, and applying a self-formulated invariant to a frozen criterion is the same
+error that nearly widened `PLN-16` over the phrase "portfolio forecast".
 
 `UNVERIFIED`, and staying there. The row cannot be closed to the invariant *"only the approved
 material may be bought and installed"* until the system can say **which material** a purchase is
@@ -1521,8 +1535,8 @@ waived, and nothing outside it may be added.
 
 **Five capabilities remained to close Wave 3: `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04`.**
 
-`PLN-04` is now COMPLETE (iteration 19) and `ENG-03` with it (iteration 20), so **three remain:
-`ENG-04`, `ENG-05`, `ENG-06`** — all of them engineering / document-control rows. `ENG-06` is counted
+`PLN-04` is now COMPLETE (iteration 19), `ENG-03` with it (iteration 20) and `ENG-04` (iteration 21),
+so **two remain: `ENG-05`, `ENG-06`** — both document-control rows, and they share a mechanism. `ENG-06` is counted
 once but discharges two lines, carrying a gate clause of its own as well as a pinned proof.
 
 **The planning line is finished for this wave.** Of sixteen planning capabilities eleven are

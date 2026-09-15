@@ -1450,24 +1450,27 @@
       "stages": [
         "Engineering"
       ],
-      "classification": "UNVERIFIED",
-      "authority": "Engineering / DocControl",
+      "classification": "COMPLETE",
+      "authority": "Quality (material approval decision) / Engineering (originating technical context)",
       "evidence": [
         "R-J26"
       ],
       "source": "apps/api/test/engineering-drawing-workflow.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Design / Technical Engineer, Project Engineer, Technical Manager role executes Approved material submittal in the canonical Engineering / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "authorityFrozen": "Engineering / DocControl",
+      "authorityCorrection": "Corrected from the frozen \"Engineering / DocControl\" after discovery. Quality MAR is the canonical material-approval DECISION authority: it alone models the material, the consultant decision, the recording actor and the revision chain, and it alone is consumed downstream. DocControl remains the controlled-document / register / transmittal authority for a document representation. Engineering is the originating technical context and is NOT an independent material-approval writer — its submittalType material is refused. Historical Engineering material submittals are preserved and are not rewritten into Quality MARs.",
+      "currentBehavior": "Quality’s Material Approval Request is the canonical record of an approved material submittal, and the correction that made this row closable is recorded beside it: the frozen authority read Engineering / DocControl, written from the capability’s NAME, while the governed record is in Quality — the only register that models a material (manufacturer, supplier, specification), carries the decision with who recorded it and when, keeps a revision chain, and is consumed downstream. Engineering’s register could mark a submittal “approved” with no reviewer, no comments and nothing reading it; its material writer is now REFUSED and names where the request belongs, while its technical, sample and drawing types are untouched and historical records are preserved rather than rewritten. THE DECISION IS AN ACT SOMEBODY RECORDED, NOT ONE AURA MADE: a material approval is decided by the consultant or engineer of record, who is external and for whom this system captures no identity — so reviewedBy is the AURA user who RECORDED the decision, the screen says “decision recorded by” rather than “decided by”, and no internal user is credited with an external decision. Recording it failed outright on PostgreSQL until migration 0331: reviewed_by was typed uuid while actor ids are text, so the attribution the capability rests on could not be written at all — the third appearance of a defect 0142 and 0150 each fixed before, 0150 having converted created_by on this very table and left reviewed_by beside it. An approved-as-noted decision stays OPEN work rather than filing as settled, because its comments bind whoever builds to it. Authority is split: the engineer proposes the product they intend to install and never decides it; the internal technical authority decides; QA/QC owns the register.",
+      "acceptanceProof": "Auth-ON HTTP and browser proof against PostgreSQL. LIFECYCLE: draft to submitted to decided to revised, each reloaded from the API rather than read off the response that wrote it; revising resets the decision, counts the round and clears the attribution so a superseded decision never lingers against an undecided request. DENIALS with JWT on: the proposing engineer is refused the act of DECIDING (403) and the decider is refused the act of RAISING (403); unauthenticated 401. The shipped role catalogue carries the same split — Design/Technical Engineer and Project Engineer hold create, submit and revise and NOT review; Technical Manager holds review; QA/QC holds the register through quality.*. A second permission vocabulary was closed on the way: the service asserted quality.mar.create while the route declared quality.material-approval.create, and NO role granted the abbreviation, so only the quality.* wildcard could ever raise a request. NEXT-ROLE RECEIPT: the request reaches My Work and the turn changes hands — drafted is the proposer’s move, submitted leaves them waiting, approved is done, and approved-as-noted returns to the proposer as TODO carrying the binding comments in the item itself and a link back to the register entry; somebody with no part in the exchange never sees it. ACTUAL OUTPUT, per the frozen definition “file, message, calculation or audit event where the capability produces one”: the persisted decision with recorder, time and comments, plus quality.material_approval.reviewed. No document was invented for a field that does not ask for one. ACCEPTED LIMITS, stated rather than implied: nothing here establishes that the material on a purchase order is the approved one — a purchase order carries no material identity, and the frozen roadmap gives that to Wave 4 (BUY-01, make/model and selected-line continuity); Procurement’s own rule is unchanged and supplier-level (a REJECTED request blocks issuance, no refusal allows it), after an ENG-04 change that widened it to PENDING was reverted for having no owning authority; site installation is not gated by material approval at all, recorded as an unowned discovered gap; and four actor columns elsewhere (hr_expense_claims, hr_staff_advances, hr_timesheets, subcontracts_variations approved_by) remain typed uuid and will fail the same way on their own approve paths, recorded and deliberately not fixed here."
     },
     {
       "id": "ENG-05",
@@ -8534,7 +8537,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 14,
+      "COMPLETE": 15,
       "PARTIAL": 91,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -8544,7 +8547,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 50,
+      "UNVERIFIED": 49,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

@@ -49,6 +49,7 @@ import {
   type ResourceConflictResolution,
   type ActivityProgress,
   type PlannedOutput,
+  type LookAhead,
   ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
@@ -1458,6 +1459,38 @@ export class ProjectsController {
   ): Promise<{ calendarId: string | null; calendarName: string | null }> {
     if (!this.projectCalendar) throw new ServiceUnavailableException('working calendars are not available');
     return this.projectCalendar.assign(this.tenant.get().tenantId, projectId, dto?.calendarId?.trim() || null);
+  }
+
+  /**
+   * The next few weeks of this programme — what must happen, what it needs, and what is not ready.
+   *
+   * DERIVED on the read and stored nowhere. A look-ahead kept as its own document disagrees with
+   * the programme the first time anybody extends an activity, and the site meeting is then held
+   * against a plan that no longer exists.
+   *
+   * The commitments are RESOLVED here, where both services are already known, and handed to the
+   * rule as data — the same shape a planning run takes its capacity facts in. A released booking
+   * is deliberately not one: it freed its capacity, so the activity it once covered is uncommitted
+   * again, which is exactly what a look-ahead must say out loud.
+   */
+  @Permissions('projects.schedule.read')
+  @Get('schedules/:projectId/look-ahead')
+  async lookAhead(
+    @Param('projectId') projectId: string,
+    @Query('weeks') weeks?: string,
+  ): Promise<LookAhead> {
+    const ctx = this.tenant.get();
+    const views = await this.resourceBookings.listProject(ctx.tenantId, projectId);
+    const commitments = new Map(views
+      .filter((view) => view.booking.status === 'held' && view.booking.requirementId)
+      .map((view) => [view.booking.requirementId as string, { feasibility: view.assessment.feasibility }]));
+    return this.schedule.lookAhead({
+      tenantId: ctx.tenantId,
+      projectId,
+      weeks: Number(weeks ?? 3),
+      today: new Date().toISOString().slice(0, 10),
+      commitments,
+    });
   }
 
   /**

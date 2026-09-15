@@ -1940,7 +1940,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "ABSENT",
+      "classification": "PARTIAL",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1948,17 +1948,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
         "ui": "PARTIAL",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "actualOutput": "PARTIAL",
+        "browser": "PARTIAL",
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Repository search found a general seven-day My Day list but no project look-ahead planning artifact connected to the schedule.",
-      "acceptanceProof": "Planning Engineer produces a dated, resource-aware two-to-six-week look-ahead from the accepted programme."
+      "currentBehavior": "The plan screen carries a dated, resource-aware look-ahead over the accepted programme — two to six weeks, chosen by the planner. It is a WINDOW over the plan and not a document beside it: nothing on it is authored, it is derived on every read and stored nowhere, and an edit to the programme changes the next read. That is the point. A look-ahead kept as its own artefact disagrees with the programme the first time anybody extends an activity, and the site meeting is then held against a plan that no longer exists. Each activity carries the part of ITSELF that falls inside the window in working days under the project’s calendar — four months of work is not four months of work in the next three weeks — and is marked as new work or carried in. READY IS ESTABLISHED, NEVER ASSUMED: an activity is ready only when its predecessors finish before it starts, every resource it needs is a held commitment, and every commitment is feasible. An uncommitted resource, an over-committed one and a predecessor that does not clear in time each keep it out in words a planner can act on; a resource whose capacity nobody declared reads NOT ESTABLISHED rather than ready, because “we could not find a problem” and “there is no problem” are different statements and a look-ahead that rounds the first to the second sends a crew to a site that is not open. A RELEASED booking stops being a commitment, so the activity it covered reads as uncommitted again. Scope in the window aggregates BY WORK PACKAGE and never by activity: several activities may deliver one package and each reads that package’s whole sold quantity, so a per-activity total would report the same 200 m² twice — the package contributes one row and the activities are named on it.",
+      "acceptanceProof": "Auth-ON browser and HTTP proof: a three-week window from today reporting its own working days under the project’s calendar; an activity four months out excluded and a longer window still excluding it; an uncommitted crew keeping an activity NOT READY in words; declaring capacity and committing the requirement turning the same activity READY with no reasons; releasing that booking taking the readiness with it; a predecessor that does not clear in time naming itself, and reversing the edge making the activity ready again — derived, not stored; a work package delivered by two activities contributing exactly one scope row; and an activity dragged into the window by an edit to the programme appearing on the next read with nothing authored. Seventeen domain rules cover the edges, including the trap this exists for — an undeclared capacity is never rounded up to ready. STILL OPEN: the look-ahead is read on screen and has no exported or printable form, which is what a site meeting is usually handed on paper."
     },
     {
       "id": "PLN-14",
@@ -8533,10 +8533,10 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 7,
-      "PARTIAL": 95,
+      "PARTIAL": 96,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
-      "ABSENT": 1,
+      "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 8,

@@ -353,6 +353,50 @@ edge with it.
 
 **PLN-02 moves from BACKEND_ONLY to COMPLETE** — see the reconciliation below.
 
+## Iteration 14 — The next few weeks, read off the programme
+
+A look-ahead is the meeting every site runs on: what must happen in the coming weeks, what it needs,
+and what is not ready. It is the planning artefact people most often keep in a spreadsheet — and the
+moment they do, it disagrees with the programme. Someone extends an activity, nobody retypes the
+look-ahead, and the meeting is held against a plan that no longer exists. The register had this one
+as ABSENT, which was true: repository search found a seven-day My Day list and no project look-ahead
+connected to the schedule at all.
+
+It is now a **window over the plan, not a document beside it**. Nothing on it is authored, it is
+derived on every read and stored nowhere, and an edit to the programme changes the next read. Each
+activity carries the part of ITSELF inside the window in working days under the project's calendar —
+four months of work is not four months of work in the next three weeks — and is marked as new work or
+carried in from before.
+
+**READY is established, never assumed.** An activity is ready only when its predecessors finish
+before it starts, every resource it needs is a held commitment, and every commitment is feasible. An
+uncommitted resource, an over-committed one and a predecessor that does not clear in time each keep
+it out, in words a planner can act on. And a resource whose capacity **nobody declared** reads NOT
+ESTABLISHED rather than ready: "we could not find a problem" and "there is no problem" are different
+statements, and a look-ahead that rounds the first up to the second sends a crew to a site that is
+not open. A released booking stops being a commitment, so the activity it covered reads as
+uncommitted again.
+
+**Scope aggregates by work package, never by activity.** This is the limit PLN-11 recorded against
+itself, and the look-ahead is the first place it could have done real damage: several activities may
+deliver one package, each reads that package's whole sold quantity because no apportionment has ever
+been authored, and a per-activity total would report the same 200 m² twice. The package contributes
+exactly one row and the activities are named on it. Which is also why no apportionment authority was
+invented here — aggregating correctly needs no such thing, and inventing a split nobody stated would
+be exactly the mistake the last three iterations have been correcting.
+
+Auth-ON browser and API proof: a three-week window from today reporting its own working days under
+the project's calendar; an activity four months out excluded, and still excluded at six weeks; an
+uncommitted crew keeping an activity NOT READY in words; declaring capacity and committing the
+requirement turning the same activity READY with no reasons; releasing that booking taking the
+readiness with it; a predecessor that does not clear in time naming itself, and reversing the edge
+making the activity ready again — derived, not stored; a package delivered by two activities
+contributing exactly one scope row; and an activity dragged into the window by an edit to the
+programme appearing on the next read with nothing authored.
+
+**PLN-13 moves from ABSENT to PARTIAL, and COMPLETE is proposed below.** This leaves the register
+with no ABSENT capability at all.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -522,6 +566,9 @@ edge with it.
 | Kernel calendar suite | 302 passed / 10 skipped, including the colliding in-memory calendar id fixed in passing |
 | Dependency network HTTP journey | 6/6 passed; an empty network never inferred from the dates, the network round-tripped, a cycle refused with the existing one untouched, self/duplicate/foreign edges each refused, the dates following the network over a weekend, and an activity's edges removed with it |
 | Dependency network Auth-ON browser journey | 1/1 passed in Chromium; authored in the activity editor, "Waits for …" shown on the plan, a loop refused, and the accepted dates following it |
+| Look-ahead domain rules | 17/17 passed; the window and its own working days, only the part of an activity inside it, new work against carried-in, readiness established rather than assumed, an undeclared capacity never rounded up to ready, and one scope row per work package |
+| Look-ahead HTTP journey | 8/8 passed; the window, a clamped length, uncommitted → committed → released readiness, a predecessor naming itself, one package row for two activities, and the window following an edit to the programme |
+| Look-ahead Auth-ON browser journey | 1/1 passed in Chromium; the panel on the plan screen through the same chain |
 | Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -671,6 +718,31 @@ corrects, so it is recorded rather than half-built. As on PLN-03/10/11/12, `actu
 **PARTIAL** on an otherwise complete row: the rendered plan is proven and no exported network
 document exists.
 
+### PLN-13 reconciliation
+
+The capability reads *Look-ahead plan*, and its acceptance criterion is that a Planning Engineer
+produces a dated, resource-aware two-to-six-week look-ahead from the accepted programme.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Dated | a window from today for the weeks chosen, with its own working days under the project's calendar | no |
+| Two to six weeks | selectable on the panel; a nonsensical length is clamped rather than trusted | no |
+| Resource-aware | each activity's demand, whether it is committed, and the commitment's feasibility | no |
+| From the accepted programme | derived on every read; an edit to the plan changes the next read, and nothing is authored | no |
+| Produced by a Planning Engineer | carries `projects.schedule.read`, which the role holds | no |
+| Readiness is honest | an undeclared capacity reads NOT ESTABLISHED, never ready | no |
+| Scope is not double-counted | one row per work package, activities named rather than summed | no |
+
+**Proposed: `PLN-13` PARTIAL → COMPLETE.** The row is moved off ABSENT because the artefact plainly
+exists and is proven; the promotion is left to the programme owner. With it, the register has **no
+ABSENT capability left**.
+
+One limit is carried with the proposal: the look-ahead is **read on screen and has no exported or
+printable form**, which is how a site meeting is usually handed it. That is the same
+`actualOutput` gap PLN-02, PLN-03, PLN-10, PLN-11 and PLN-12 each carry, and it is now recurring
+often enough to be a document-generation slice of its own rather than six separate ones — the same
+argument that moved notifications into a shared authority.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -686,7 +758,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost, delay/recovery and forecast evidence from the connected plan. The look-ahead is now proven (PLN-13, PARTIAL and proposed for COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

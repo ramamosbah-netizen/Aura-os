@@ -4,6 +4,7 @@ import { activityProgress, measuredNote, type ResolvedActivityProgress } from '@
 import { behindCount, overspendingCount, type PlannedOutput } from '@/lib/planned-output';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
+import LookAheadPanel from '../../../components/look-ahead-panel';
 import PlanningRunPanel from '../../../components/planning-run-panel';
 import ResourceBookingClient from '../../../components/resource-booking-client';
 import ResourcePoolClient from '../../../components/resource-pool-client';
@@ -224,7 +225,12 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             <div><strong>Schedule data is unavailable</strong><p>We could not reach the project service. Try again in a moment.</p></div>
           </div>
         ) : (
-          <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} resourceCatalog={resourceCatalog ?? []} workingCalendars={workingCalendars ?? []} selectedProjectId={projectId} />
+          <>
+            <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} resourceCatalog={resourceCatalog ?? []} workingCalendars={workingCalendars ?? []} selectedProjectId={projectId} />
+            {/* Only with a project in scope: a look-ahead across the whole portfolio is a list, not
+                a meeting agenda, and the readiness question is asked of one programme at a time. */}
+            {projectId && <LookAheadPanel projectId={projectId} wbsNodes={wbsNodes ?? []} />}
+          </>
         )}
       </section>
 

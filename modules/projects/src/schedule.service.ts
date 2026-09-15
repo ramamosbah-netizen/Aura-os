@@ -7,6 +7,7 @@ import {
   type ActivityProgress,
 } from './domain/activity-progress';
 import { resolvePlannedOutput, type PlannedOutput } from './domain/planned-output';
+import { resolveLookAhead, type LookAhead } from './domain/look-ahead';
 import { ActivityOutputService } from './activity-output.service';
 import { ProjectCalendarService } from './project-calendar.service';
 import { workingDaysInRange } from './domain/working-calendar';
@@ -224,6 +225,56 @@ export class ScheduleService {
    * `today` is passed in rather than read from the clock so the rule stays testable at the edges
    * of a planned window — the day it opens, the day it closes, and the days either side.
    */
+  /**
+   * The next few weeks of this programme, read off the plan itself.
+   *
+   * DERIVED, and stored nowhere. A look-ahead kept as its own document disagrees with the programme
+   * the first time anybody extends an activity, and the site meeting is then held against a plan
+   * that no longer exists. Every date, dependency, requirement and measurement here is the one the
+   * schedule already holds.
+   *
+   * Assembled in ONE pass per project — the plan, its calendar, its held commitments and its work
+   * packages — rather than a query per activity.
+   */
+  async lookAhead(input: {
+    tenantId: Id; projectId: Id; weeks: number; today: string;
+    /**
+     * Held commitments keyed by the requirement they satisfy, RESOLVED by the caller.
+     *
+     * Supplied rather than queried, exactly as `runPlanning` takes its capacity facts: current
+     * feasibility is the booking service's answer to compute, and reaching for it from here would
+     * put a second copy of that rule inside the schedule — or a dependency cycle, since the booking
+     * service already reads this plan to derive a commitment's lineage.
+     */
+    commitments: Map<Id, { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN' }>;
+  }): Promise<LookAhead> {
+    const { tenantId, projectId, weeks, today, commitments } = input;
+    const schedule = await this.store.getByProject(tenantId, projectId);
+    if (!schedule) throw new NotFoundException(`no schedule for project ${projectId}`);
+
+    const horizon = this.horizonOf(schedule, today);
+    const [resolved, packages] = await Promise.all([
+      this.projectCalendar?.forProject(tenantId, projectId, horizon) ?? Promise.resolve(null),
+      this.outputs?.packageOutputs(tenantId, projectId) ?? Promise.resolve(new Map()),
+    ]);
+
+    return resolveLookAhead({
+      today,
+      weeks,
+      calendar: resolved?.calendar,
+      calendarName: resolved?.calendarName ?? null,
+      everyDayWorked: resolved?.everyDayWorked ?? true,
+      tasks: schedule.tasks,
+      dependencies: schedule.dependencies,
+      commitments,
+      packages: new Map([...packages].map(([nodeId, facts]) => [nodeId, {
+        plannedQuantity: facts.frozen?.soldQuantity ?? null,
+        installedQuantity: facts.installedQuantity,
+        unit: facts.frozen?.unit ?? null,
+      }])),
+    });
+  }
+
   /**
    * Replace this project's dependency network.
    *

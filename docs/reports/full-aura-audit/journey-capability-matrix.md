@@ -331,7 +331,7 @@
 | Planning | PLN-10 | COMPLETE |
 | Planning | PLN-11 | COMPLETE |
 | Planning | PLN-12 | COMPLETE |
-| Planning | PLN-13 | ABSENT |
+| Planning | PLN-13 | PARTIAL |
 | Planning | PLN-14 | PARTIAL |
 | Planning | PLN-15 | PARTIAL |
 | Planning | PLN-16 | PARTIAL |
@@ -556,7 +556,7 @@
 | Progress | PLN-10 | COMPLETE |
 | Progress | PLN-11 | COMPLETE |
 | Progress | PLN-12 | COMPLETE |
-| Progress | PLN-13 | ABSENT |
+| Progress | PLN-13 | PARTIAL |
 | Progress | PLN-14 | PARTIAL |
 | Progress | PLN-15 | PARTIAL |
 | Progress | PLN-16 | PARTIAL |

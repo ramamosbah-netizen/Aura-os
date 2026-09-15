@@ -94,6 +94,7 @@ export * from './resource-calendar';
 export * from './domain/activity-progress';
 export * from './domain/planned-output';
 export * from './domain/labour-productivity';
+export * from './domain/look-ahead';
 export * from './activity-output.service';
 export * from './project-calendar.service';
 export * from './domain/schedule';

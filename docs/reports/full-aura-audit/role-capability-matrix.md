@@ -218,7 +218,7 @@
 | Planning Engineer | PLN-10 | COMPLETE | UNVERIFIED |
 | Planning Engineer | PLN-11 | COMPLETE | UNVERIFIED |
 | Planning Engineer | PLN-12 | COMPLETE | UNVERIFIED |
-| Planning Engineer | PLN-13 | ABSENT | UNVERIFIED |
+| Planning Engineer | PLN-13 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-14 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-15 | PARTIAL | UNVERIFIED |
 | Planning Engineer | PLN-16 | PARTIAL | UNVERIFIED |
@@ -266,7 +266,7 @@
 | Project Engineer | PLN-10 | COMPLETE | UNVERIFIED |
 | Project Engineer | PLN-11 | COMPLETE | UNVERIFIED |
 | Project Engineer | PLN-12 | COMPLETE | UNVERIFIED |
-| Project Engineer | PLN-13 | ABSENT | UNVERIFIED |
+| Project Engineer | PLN-13 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-14 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-15 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-16 | PARTIAL | UNVERIFIED |
@@ -321,7 +321,7 @@
 | Project Manager | PLN-10 | COMPLETE | UNVERIFIED |
 | Project Manager | PLN-11 | COMPLETE | UNVERIFIED |
 | Project Manager | PLN-12 | COMPLETE | UNVERIFIED |
-| Project Manager | PLN-13 | ABSENT | UNVERIFIED |
+| Project Manager | PLN-13 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-14 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-15 | PARTIAL | UNVERIFIED |
 | Project Manager | PLN-16 | PARTIAL | UNVERIFIED |

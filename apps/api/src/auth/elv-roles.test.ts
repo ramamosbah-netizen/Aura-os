@@ -64,6 +64,18 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.resource-booking.release'))).toBe(true);
   });
 
+  it('Planning authors the programme; claiming progress against the measurement is the Manager’s act', () => {
+    // PLN-12. Writing a plan and stating that the site is further along than the Quantity Ledger
+    // says are different acts by different people: the first is programme authorship, the second
+    // is a claim about physical work that the ledger has not yet confirmed. The route carries
+    // `projects.schedule.progress-override` explicitly for exactly this reason, and it is the one
+    // permission a Planning Engineer's working set does not include.
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.progress-override'))).toBe(false);
+    expect(roleFor('r-pm').permissions.some((p) => permissionMatches(p, 'projects.schedule.progress-override'))).toBe(true);
+    // Reading what was measured is nobody's privilege to withhold from the planner.
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.read'))).toBe(true);
+  });
+
   it('Technical management governs organization resource pools and capacity', () => {
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-pool.create'))).toBe(true);
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-capacity.create'))).toBe(true);

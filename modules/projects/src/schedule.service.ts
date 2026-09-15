@@ -3,10 +3,15 @@ import type { Pool } from 'pg';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore, PG_POOL, AuditService, CalendarService } from '@aura/core';
 import {
+  clearActivityProgressOverride, overrideActivityProgress, resolveActivityProgress,
+  type ActivityProgress,
+} from './domain/activity-progress';
+import {
   SCHEDULE_EVENT,
   type ProjectSchedule,
   type NewProjectSchedule,
   type NewScheduleTask,
+  type ScheduleTask,
   type ScheduleSummary,
   makeProjectSchedule,
   setScheduleTasks,
@@ -14,6 +19,7 @@ import {
   summariseSchedule,
 } from './domain/schedule';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
+import { WbsService } from './wbs.service';
 import { WBS_STORE, type WbsStore } from './wbs-store';
 import { type PlanInput, type SchedulePlan, planSchedule } from './domain/schedule-planning';
 import type { ResourceRef } from './domain/resource-ref';
@@ -56,12 +62,16 @@ export class ScheduleService {
     // working days rather than raw calendar days; absent, every day is worked (the prior behaviour).
     @Optional() @Inject(CalendarService) private readonly calendars: CalendarService | null = null,
     @Inject(WBS_STORE) private readonly wbs: WbsStore,
+    // The owning service answers ONE question here — which packages are measured — and it is the
+    // only place that rule is defined. Optional for the same reason every seam is: a composition
+    // without it reports every activity's progress as DECLARED, which is what it then knows.
+    @Optional() @Inject(WbsService) private readonly wbsService: WbsService | null = null,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
   async save(input: NewProjectSchedule): Promise<ProjectSchedule> {
     const existing = await this.store.getByProject(input.tenantId, input.projectId);
-    const tasks = await this.resolveAndValidateWbs(input, existing);
+    const tasks = await this.resolveAuthoredTasks(input, existing);
     let sch: ProjectSchedule;
     if (existing) {
       sch = setScheduleTasks(existing, tasks);
@@ -86,11 +96,22 @@ export class ScheduleService {
   }
 
   /**
-   * Resolve an activity's scope from the persisted WBS node, never from projectId alone.
-   * Existing pre-0315 activities may remain unlinked until edited, but every new activity must
-   * name a canonical node and an established link cannot be removed or moved silently.
+   * Resolve the fields a saver does not get to author, from what is already persisted.
+   *
+   * TWO of them, for the same reason: the payload is not the authority.
+   *
+   *   wbsNodeId          resolved from the persisted node, never from projectId alone. Existing
+   *                      pre-0315 activities may remain unlinked until edited, but every new
+   *                      activity must name a canonical node and an established link cannot be
+   *                      removed or moved silently.
+   *   progressOverride*  carried over from the persisted activity and IGNORED off the payload.
+   *                      Saving a plan must not drop a statement somebody made against the
+   *                      measurement — and equally must not be able to MINT one, which would put a
+   *                      reason and a signature on a number nobody checked, through a route that
+   *                      does not hold `projects.schedule.progress-override`. The write path is
+   *                      `overrideProgress`, and it is the only one.
    */
-  private async resolveAndValidateWbs(
+  private async resolveAuthoredTasks(
     input: NewProjectSchedule,
     existing: ProjectSchedule | null,
   ): Promise<NewScheduleTask[]> {
@@ -118,9 +139,79 @@ export class ScheduleService {
           throw new BadRequestException(`WBS node ${wbsNodeId} does not belong to project ${input.projectId}`);
         }
       }
-      resolved.push({ ...task, wbsNodeId: wbsNodeId ?? null });
+      resolved.push({
+        ...task,
+        wbsNodeId: wbsNodeId ?? null,
+        // Whatever the payload said about the override, the persisted activity is the answer.
+        // A new activity has no measurement behind it yet, so it has nothing to override.
+        progressOverride: persisted?.progressOverride ?? null,
+        progressOverrideReason: persisted?.progressOverrideReason ?? null,
+        progressOverrideAt: persisted?.progressOverrideAt ?? null,
+        progressOverrideBy: persisted?.progressOverrideBy ?? null,
+      });
     }
     return resolved;
+  }
+
+  /**
+   * The progress of every activity in a plan, resolved from the evidence behind it.
+   *
+   * ONE read of the project's work packages for the whole plan, not one per activity: a schedule
+   * of forty activities is one query, and the alternative is how a Gantt becomes slow enough that
+   * people stop opening it.
+   *
+   * The result is DERIVED and returned beside the plan rather than written into it. Storing it
+   * would put a second copy of the Quantity Ledger's answer on the activity, stale from the moment
+   * the next installation is approved.
+   */
+  async progressOf(schedule: ProjectSchedule): Promise<Map<Id, ActivityProgress>> {
+    const linked = [...new Set(schedule.tasks.map((task) => task.wbsNodeId).filter((id): id is Id => !!id))];
+    // Which packages are measured at all: one read for the project, not one per activity.
+    const measured = this.wbsService
+      ? await this.wbsService.measuredProgressNodes(schedule.tenantId, schedule.projectId)
+      : new Set<Id>();
+    const evidence = new Map<Id, number | null>();
+    await Promise.all(linked.map(async (nodeId) => {
+      if (!measured.has(nodeId)) return evidence.set(nodeId, null);
+      const node = await this.wbs.get(nodeId);
+      // Another tenant's node is not this plan's evidence, and a missing one is not zero progress.
+      evidence.set(nodeId, node && node.tenantId === schedule.tenantId ? node.progress : null);
+    }));
+    return new Map(schedule.tasks.map((task) => [
+      task.id,
+      resolveActivityProgress(task, task.wbsNodeId ? evidence.get(task.wbsNodeId) ?? null : null),
+    ]));
+  }
+
+  /**
+   * State a figure against the measurement, or withdraw the statement.
+   *
+   * Its own write path, and not part of saving a plan, for two reasons: it needs a reason and a
+   * name, and it needs its own permission — authoring a schedule and claiming progress the site
+   * has not measured are different acts by different people.
+   */
+  async overrideProgress(input: {
+    tenantId: Id; projectId: Id; taskId: Id;
+    value: number | null; reason?: string; actorId?: Id | null;
+  }): Promise<{ task: ScheduleTask; progress: ActivityProgress }> {
+    const schedule = await this.store.getByProject(input.tenantId, input.projectId);
+    if (!schedule) throw new NotFoundException(`no schedule for project ${input.projectId}`);
+    const task = schedule.tasks.find((candidate) => candidate.id === input.taskId);
+    if (!task) throw new NotFoundException('activity not found in this project schedule');
+
+    const progress = (await this.progressOf(schedule)).get(task.id)!;
+    let updated: ScheduleTask;
+    try {
+      updated = input.value === null
+        ? clearActivityProgressOverride(task)
+        : overrideActivityProgress(task, { value: input.value, reason: input.reason ?? '', actorId: input.actorId }, progress.evidence);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'this progress statement is invalid');
+    }
+
+    const next = setScheduleTasks(schedule, schedule.tasks.map((candidate) => candidate.id === task.id ? updated : candidate));
+    await this.store.update(next);
+    return { task: updated, progress: resolveActivityProgress(updated, progress.evidence) };
   }
 
   async setBaseline(tenantId: Id, projectId: Id): Promise<ProjectSchedule> {

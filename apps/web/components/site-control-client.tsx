@@ -1,5 +1,6 @@
 'use client';
 
+import { activityProgress, isMeasured, type ProgressBearingSchedule } from '@/lib/activity-progress';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
@@ -85,6 +86,7 @@ interface LabourAllocation {
 }
 
 interface ScheduleTask {
+  id: string;
   name: string;
   plannedStart: string;
   plannedEnd: string;
@@ -95,7 +97,7 @@ interface ScheduleTask {
   percentComplete: number;
 }
 
-interface ProjectSchedule {
+interface ProjectSchedule extends ProgressBearingSchedule {
   id: string;
   tenantId: string;
   companyId: string | null;
@@ -503,8 +505,11 @@ export default function SiteControlClient({
                   return sum + Math.max(1, daysBetweenDates(task.plannedStart, task.plannedEnd) + 1);
                 }, 0);
 
+                // The RESOLVED figure per activity. This panel is headed "Actual Progress", and on a
+                // quantity-controlled package the actual progress is what the site installed — not
+                // what somebody typed into the plan.
                 const currentDoneDur = sch.tasks.reduce((sum, task) => {
-                  return sum + Math.max(1, daysBetweenDates(task.plannedStart, task.plannedEnd) + 1) * (task.percentComplete / 100);
+                  return sum + Math.max(1, daysBetweenDates(task.plannedStart, task.plannedEnd) + 1) * (activityProgress(sch, task) / 100);
                 }, 0);
 
                 const actualProgress = Math.round((currentDoneDur / totalDur) * 100);
@@ -545,10 +550,12 @@ export default function SiteControlClient({
 
                             <div style={st.visualBarsWrap}>
                               {/* Progress bar */}
-                              <div style={st.barLabel}>Actual Progress:</div>
+                              <div style={st.barLabel}>
+                                {isMeasured(sch, task) ? 'Actual Progress (measured):' : 'Actual Progress (declared):'}
+                              </div>
                               <div style={st.progressBarOuter}>
-                                <div style={{ ...st.progressBarInner, width: `${task.percentComplete}%` }} />
-                                <span style={st.progressBarText}>{task.percentComplete}%</span>
+                                <div style={{ ...st.progressBarInner, width: `${activityProgress(sch, task)}%` }} />
+                                <span style={st.progressBarText}>{activityProgress(sch, task)}%</span>
                               </div>
 
                               {/* Planned baseline bar */}

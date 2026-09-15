@@ -61,3 +61,11 @@
 .editButton { display: grid; place-items: center; width: 21px; height: 21px; border: 0; border-radius: 6px; color: var(--accent); background: transparent; cursor: pointer; }
 .editButton:hover { background: color-mix(in srgb, var(--accent) 12%, transparent); }
 @media (max-width: 720px) { .ganttStack { padding: 15px 12px 16px; } .label, .timeline { grid-template-columns: 118px minmax(0,1fr) 44px 18px; width: 118px; min-width: 118px; } .row { gap: 7px; } .timeline { gap: 7px; } .addRow input:first-child { flex: 1 1 100% !important; } .resourceRow { grid-template-columns: 1fr 70px 76px 24px; } .editPanel { margin-left: 0; } .editGrid { grid-template-columns: 1fr 1fr; } }
+
+/* Stating a figure against the measurement. A separate control from the plain percentage box,
+   because it is a separate act: it costs a reason and it is recorded against a name. */
+.progressStatement { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; max-width: 320px; }
+.progressStatement input { padding: 2px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
+.progressStatement input[type="number"] { width: 50px; }
+.progressStatement button { padding: 2px 8px; font-size: 10px; border: 1px solid var(--border); border-radius: 6px; background: transparent; color: var(--muted); cursor: pointer; }
+.progressStatement button:disabled { opacity: .5; cursor: not-allowed; }

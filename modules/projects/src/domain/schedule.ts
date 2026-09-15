@@ -27,7 +27,19 @@ export interface ScheduleTask {
   baselineEnd: string | null;
   actualStart: string | null;
   actualEnd: string | null;
+  /**
+   * The DECLARED figure: what somebody typed where nothing has been measured.
+   *
+   * No longer the authority wherever the activity's work package is quantity-controlled — there
+   * the measurement is read through on every read and this is not consulted. See
+   * domain/activity-progress.ts for the three states and why they are kept apart.
+   */
   percentComplete: number; // 0..100
+  /** A figure stated AGAINST the measurement, with why and by whom (migration 0322). */
+  progressOverride: number | null;
+  progressOverrideReason: string | null;
+  progressOverrideAt: string | null;
+  progressOverrideBy: Id | null;
   /**
    * What this task NEEDS. Demand, never a commitment and never an assignment (DG-22.1).
    *
@@ -108,6 +120,17 @@ export interface NewScheduleTask {
   actualStart?: string | null;
   actualEnd?: string | null;
   percentComplete?: number;
+  /**
+   * Accepted so an editing caller can round-trip a whole activity without a type error, and then
+   * IGNORED: ScheduleService resolves these four from the persisted activity on every save. A save
+   * therefore cannot drop a statement somebody made against the measurement, and cannot mint one
+   * either. The write path is `overrideProgress`, which checks the permission, requires evidence
+   * to override and demands a reason.
+   */
+  progressOverride?: number | null;
+  progressOverrideReason?: string | null;
+  progressOverrideAt?: string | null;
+  progressOverrideBy?: Id | null;
   /** Working days. Omitted or null means not authored; it is not inferred from the dates. */
   durationWorkingDays?: number | null;
   /** What the task needs. Round-tripped by an editing caller, like every other authored field. */
@@ -147,6 +170,13 @@ export function buildTask(input: NewScheduleTask): ScheduleTask {
     actualStart: input.actualStart ?? null,
     actualEnd: input.actualEnd ?? null,
     percentComplete: pct,
+    // Never authored through the ordinary task payload: overriding a measurement is its own act,
+    // with its own permission and its own reason. A caller that could set it here could set it
+    // silently, which is the whole thing this is meant to prevent.
+    progressOverride: input.progressOverride ?? null,
+    progressOverrideReason: input.progressOverrideReason ?? null,
+    progressOverrideAt: input.progressOverrideAt ?? null,
+    progressOverrideBy: input.progressOverrideBy ?? null,
     requirements,
     durationWorkingDays: duration,
   };

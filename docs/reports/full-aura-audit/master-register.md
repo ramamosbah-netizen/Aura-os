@@ -5,13 +5,13 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | Classification | Capability count |
 | --- | --- |
 | COMPLETE | 3 |
-| PARTIAL | 95 |
+| PARTIAL | 96 |
 | BACKEND_ONLY | 6 |
 | UI_ONLY | 0 |
 | ABSENT | 1 |
 | DUPLICATED | 0 |
 | WRONG_AUTHORITY | 0 |
-| DISCONNECTED | 10 |
+| DISCONNECTED | 9 |
 | WRONG_BEHAVIOR | 13 |
 | UNREACHABLE | 0 |
 | UNVERIFIED | 52 |
@@ -78,7 +78,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | PLN-09 | Availability from HR and Fleet | PARTIAL | Projects schedule / resource facts | N-PLAN |
 | PLN-10 | Conflict and over-allocation | COMPLETE | Projects schedule / resource facts | N-PLAN |
 | PLN-11 | Productivity and planned quantities | DISCONNECTED | Projects schedule / resource facts | N-PLAN |
-| PLN-12 | Actual progress integration | DISCONNECTED | Projects schedule / resource facts | N-PLAN |
+| PLN-12 | Actual progress integration | PARTIAL | Projects schedule / resource facts | N-PLAN |
 | PLN-13 | Look-ahead plan | ABSENT | Projects schedule / resource facts | N-PLAN |
 | PLN-14 | Delay assessment | PARTIAL | Projects schedule / resource facts | N-PLAN |
 | PLN-15 | Recovery proposal and acceptance | PARTIAL | Projects schedule / resource facts | N-PLAN |

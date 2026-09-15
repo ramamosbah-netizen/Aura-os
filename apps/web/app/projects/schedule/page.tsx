@@ -1,5 +1,6 @@
 import { CalendarRange, CheckCircle2, Clock3, Gauge, Layers3, ListChecks } from 'lucide-react';
 import Link from 'next/link';
+import { activityProgress, measuredNote, type ResolvedActivityProgress } from '@/lib/activity-progress';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
 import PlanningRunPanel from '../../../components/planning-run-panel';
@@ -27,6 +28,12 @@ interface ScheduleTask {
 }
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
+  /**
+   * Where each activity's progress came from, keyed by activity id — DERIVED by the API on every
+   * read and stored nowhere. `task.percentComplete` is the DECLARED number; it is the authority
+   * only where nothing has been measured against the activity's work package.
+   */
+  progress?: Record<string, ResolvedActivityProgress>;
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -96,8 +103,14 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const rows = scopedSchedules ?? [];
   const selectedSchedule = projectId ? rows.find((schedule) => schedule.projectId === projectId) : undefined;
   const taskCount = rows.reduce((total, schedule) => total + schedule.tasks.length, 0);
-  const completeCount = rows.reduce((total, schedule) => total + schedule.tasks.reduce((sum, task) => sum + task.percentComplete, 0), 0);
+  // The RESOLVED figure, not the typed one: where the Quantity Ledger can answer for an activity,
+  // averaging the plan's declared number instead would put a headline on this page that disagrees
+  // with the bars underneath it.
+  const completeCount = rows.reduce((total, schedule) =>
+    total + schedule.tasks.reduce((sum, task) => sum + activityProgress(schedule, task), 0), 0);
   const averageProgress = taskCount ? Math.round(completeCount / taskCount) : null;
+  // How much of that average is measured rather than asserted, said beside it.
+  const progressNote = measuredNote(rows);
   const baselinedCount = rows.filter((schedule) => Boolean(schedule.baselineSetAt)).length;
   const unavailable = schedules === null;
   const scheduleHealth = unavailable
@@ -136,7 +149,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </div>
         <div className={styles.metricCard}>
           <span className={`${styles.metricIcon} ${styles.blue}`}><CheckCircle2 size={17} /></span>
-          <div><span className={styles.metricLabel}>Average completion</span><strong>{unavailable || averageProgress === null ? '—' : `${averageProgress}%`}</strong><small>{unavailable ? 'Data unavailable' : 'Duration-weighted progress'}</small></div>
+          <div><span className={styles.metricLabel}>Average completion</span><strong>{unavailable || averageProgress === null ? '—' : `${averageProgress}%`}</strong><small>{unavailable ? 'Data unavailable' : progressNote}</small></div>
         </div>
           <div className={styles.metricCard}>
           <span className={`${styles.metricIcon} ${styles.violet}`}><Clock3 size={17} /></span>
@@ -160,7 +173,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
         </div>
         <div className={styles.healthFacts}>
           <div><span>Activities</span><strong>{unavailable ? '—' : taskCount || '—'}</strong><small>{taskCount ? 'across the visible plan' : 'not established'}</small></div>
-          <div><span>Progress</span><strong>{unavailable || averageProgress === null ? '—' : `${averageProgress}%`}</strong><small>{averageProgress === null ? 'not established' : 'average completion'}</small></div>
+          <div><span>Progress</span><strong>{unavailable || averageProgress === null ? '—' : `${averageProgress}%`}</strong><small>{averageProgress === null ? 'not established' : progressNote}</small></div>
           <div><span>Baseline</span><strong>{unavailable || rows.length === 0 ? '—' : `${baselinedCount}/${rows.length}`}</strong><small>{rows.length && baselinedCount === rows.length ? 'locked plans' : 'coverage'}</small></div>
         </div>
       </section>

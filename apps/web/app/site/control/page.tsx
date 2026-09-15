@@ -1,3 +1,4 @@
+import { activityProgress, type ProgressBearingSchedule } from '@/lib/activity-progress';
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import SiteControlClient from '../../../components/site-control-client';
@@ -96,6 +97,7 @@ interface LabourAllocation {
 }
 
 interface ScheduleTask {
+  id: string;
   name: string;
   plannedStart: string;
   plannedEnd: string;
@@ -106,7 +108,7 @@ interface ScheduleTask {
   percentComplete: number;
 }
 
-interface ProjectSchedule {
+interface ProjectSchedule extends ProgressBearingSchedule {
   id: string;
   tenantId: string;
   companyId: string | null;
@@ -141,7 +143,14 @@ export default async function SiteControlPage({
   ]);
 
   const open = <T extends { status?: string }>(rows: T[] | null, closed: string[]) => rows === null ? null : rows.filter((row) => !closed.includes((row.status ?? '').toLowerCase())).length;
-  const activeWork = schedules === null ? null : schedules.reduce((total, schedule) => total + schedule.tasks.filter((task) => task.percentComplete > 0 && task.percentComplete < 100).length, 0);
+  // "In progress" is read from the RESOLVED figure: an activity the site has started but nobody
+  // has typed a number against is in progress, and one typed at 40% with nothing installed is not
+  // evidence that it is. The measurement decides where there is one.
+  const inProgress = (schedule: ProjectSchedule, task: ScheduleTask) => {
+    const progress = activityProgress(schedule, task);
+    return progress > 0 && progress < 100;
+  };
+  const activeWork = schedules === null ? null : schedules.reduce((total, schedule) => total + schedule.tasks.filter((task) => inProgress(schedule, task)).length, 0);
   const metrics: WorkspaceMetric[] = [
     { label: 'Active work', value: activeWork, hint: 'Schedule activities in progress', tone: 'accent' },
     { label: 'Instructions', value: open(instructions, ['closed', 'acknowledged']), hint: 'Field directions awaiting action', tone: 'warning' },

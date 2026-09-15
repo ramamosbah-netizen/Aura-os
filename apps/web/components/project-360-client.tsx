@@ -1,5 +1,6 @@
 'use client';
 
+import { activityProgress, progressSource, type ProgressBearingSchedule } from '@/lib/activity-progress';
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProjectTeam from './project-team';
@@ -107,6 +108,7 @@ interface CrossDomainHealth {
  * said which activity was late, or whether the plan had ever been baselined.
  */
 interface ScheduleTask {
+  id: string;
   name: string;
   plannedStart: string;
   plannedEnd: string;
@@ -116,7 +118,7 @@ interface ScheduleTask {
   actualEnd: string | null;
   percentComplete: number;
 }
-interface ProjectSchedule { id: string; projectId: string; tasks: ScheduleTask[]; baselineSetAt: string | null; updatedAt: string }
+interface ProjectSchedule extends ProgressBearingSchedule { id: string; projectId: string; tasks: ScheduleTask[]; baselineSetAt: string | null; updatedAt: string }
 
 /**
  * The closeout verdict, assembled by the domain that also enforces it at finalization.
@@ -1675,7 +1677,7 @@ function ProgressPanel({
               </div>
               <table className="table" style={{ marginTop: 10 }}>
                 <thead>
-                  <tr><th>Activity</th><th>Planned</th><th>Baseline</th><th>Actual</th><th style={{ textAlign: 'right' }}>Complete</th></tr>
+                  <tr><th>Activity</th><th>Planned</th><th>Baseline</th><th>Actual</th><th style={{ textAlign: 'right' }}>Complete</th><th>Source</th></tr>
                 </thead>
                 <tbody>
                   {tasks.map((t) => {
@@ -1686,7 +1688,11 @@ function ProgressPanel({
                         <td style={{ color: late ? 'var(--bad)' : undefined }}>{t.plannedStart} - {t.plannedEnd}</td>
                         <td style={{ color: 'var(--muted)' }}>{t.baselineStart ? `${t.baselineStart} - ${t.baselineEnd}` : 'Not baselined'}</td>
                         <td style={{ color: 'var(--muted)' }}>{t.actualStart ? `${t.actualStart} - ${t.actualEnd ?? 'open'}` : 'Not started'}</td>
-                        <td style={{ textAlign: 'right' }}>{t.percentComplete}%</td>
+                        {/* The resolved figure, and where it came from — a measured 75% and a typed
+                            75% are different claims about the same project, and this is the table a
+                            reader uses to decide whether to believe the programme. */}
+                        <td style={{ textAlign: 'right' }}>{activityProgress(schedule, t)}%</td>
+                        <td style={{ color: 'var(--muted)' }}>{progressSource(schedule, t)}</td>
                       </tr>
                     );
                   })}

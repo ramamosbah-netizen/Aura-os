@@ -239,10 +239,29 @@ export class WbsService {
     return updated;
   }
 
+  /**
+   * Which of a project's work packages have MEASURED progress, rather than stated?
+   *
+   * A package qualifies exactly when manual progress is REFUSED on it, and that equivalence is
+   * what makes the answer safe to build on downstream: a package whose progress a person can type
+   * is a package whose progress may have been typed, and calling that "evidence" elsewhere would
+   * be precisely the lie the distinction exists to prevent.
+   *
+   * Deliberately conservative: a node linked only by `boqItemId` is synced from the ledger but
+   * still accepts a manual figure, so it does not qualify. Under-claiming here costs a planner a
+   * label; over-claiming would put the word "measured" on a number somebody typed.
+   *
+   * Batched, because the caller that needs it most is a whole schedule: one read of the project's
+   * mappings answers for forty activities.
+   */
+  async measuredProgressNodes(tenantId: Id, projectId: Id): Promise<Set<Id>> {
+    if (!this.deliveryItemMaps) return new Set();
+    const mappings = await this.deliveryItemMaps.list({ tenantId, projectId });
+    return new Set(mappings.map((mapping) => mapping.wbsNodeId).filter((id): id is Id => !!id));
+  }
+
   private async isQuantityControlled(node: WbsNode): Promise<boolean> {
-    if (!this.deliveryItemMaps) return false;
-    const mappings = await this.deliveryItemMaps.list({ tenantId: node.tenantId, projectId: node.projectId });
-    return mappings.some((mapping) => mapping.wbsNodeId === node.id);
+    return (await this.measuredProgressNodes(node.tenantId, node.projectId)).has(node.id);
   }
 
   private progressFromSold(installed: number, sold: number | null): number | null {

@@ -91,6 +91,7 @@ export * from './in-memory-resource-booking-store';
 export * from './postgres-resource-booking-store';
 export * from './resource-booking.service';
 export * from './resource-calendar';
+export * from './domain/activity-progress';
 export * from './domain/schedule';
 export * from './domain/schedule-network';
 export * from './domain/schedule-planning';

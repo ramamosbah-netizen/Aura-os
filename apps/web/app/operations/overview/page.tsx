@@ -1,3 +1,4 @@
+import { activityProgress, type ProgressBearingSchedule } from '@/lib/activity-progress';
 import Link from 'next/link';
 import { ArrowRight, ArrowUpRight, BarChart3, CheckCircle2, CircleAlert, ClipboardCheck, FileCheck2, FilePlus2, HardHat, PencilRuler, ShieldCheck, Wrench, type LucideIcon } from 'lucide-react';
 import { getJson } from '@/lib/api';
@@ -23,7 +24,10 @@ export const dynamic = 'force-dynamic';
 
 interface Project { id: string; title: string; reference?: string | null; status?: string; atRisk?: boolean }
 interface Row { id: string; projectId?: string; status?: string; severity?: string }
-interface ProjectSchedule { projectId: string; baselineSetAt?: string | null; tasks?: Array<{ percentComplete?: number }> }
+interface ProjectSchedule extends ProgressBearingSchedule {
+  projectId: string; baselineSetAt?: string | null;
+  tasks?: Array<{ id?: string | null; percentComplete?: number }>;
+}
 interface HandoverRow { status?: string }
 type Source<T> = T[] | null;
 type Discipline = 'all' | 'engineering' | 'site' | 'quality' | 'hse' | 'commissioning';
@@ -68,8 +72,13 @@ export default async function DeliveryOperationsOverviewPage({ searchParams }: {
     return { ...project, overall: majorOpenNcr ? 'BLOCKED' : 'UNKNOWN', reason: majorOpenNcr ? 'Major open NCR is an evidenced blocker.' : 'Material, HSE or discipline evidence is not established.', plan: schedule?.baselineSetAt ? 'READY' : 'UNKNOWN' };
   }).filter(projectMatches);
   const executionProjects = visibleProjects.filter((project) => (project.status ?? '').toLowerCase() === 'active').map((project) => {
-    const tasks = scheduleByProject.get(project.id)?.tasks ?? [];
-    const progress = tasks.length > 0 ? Math.round(tasks.reduce((sum, task) => sum + (task.percentComplete ?? 0), 0) / tasks.length) : null;
+    const schedule = scheduleByProject.get(project.id);
+    const tasks = schedule?.tasks ?? [];
+    // The resolved figure per activity, not the typed one — otherwise this overview reports a
+    // different completion than the project's own plan screen for the same day's work.
+    const progress = tasks.length > 0
+      ? Math.round(tasks.reduce((sum, task) => sum + activityProgress(schedule, { ...task, percentComplete: task.percentComplete ?? 0 }), 0) / tasks.length)
+      : null;
     return { ...project, progress };
   });
 

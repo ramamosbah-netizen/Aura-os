@@ -104,6 +104,58 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 
 **PLN-07 moves from BACKEND_ONLY to PARTIAL.** Named employee demand can now be held as a booking. Employee records currently have no canonical User identity relation, so the system cannot safely deliver that booking to the employee’s My Work. **PLN-06 and PLN-09 remain PARTIAL** until HR/Fleet availability, the named conflict-owner workflow and My Work receipt are connected.
 
+## Iteration 9 — Installed quantity to the number on the plan
+
+A percentage on a programme was never one fact. It was one of three wearing the same clothes, and
+the plan screen could not tell a reader which one they were looking at:
+
+`approved installed quantity → Quantity Ledger → WBS work package progress → schedule activity progress`
+
+Three states are now kept apart by name. **Evidence** is the work package's measured progress,
+derived through the Quantity Ledger from what site actually installed against the frozen sold item.
+**Override** is somebody stating a different figure against that measurement, with a reason and a
+name — permitted, because a site can genuinely be ahead of what has been measured, but never
+silent. **Declared** is a plain number where no measurement exists at all: exactly what every
+activity has carried until now, unchanged in behaviour and now labelled rather than passing for
+measurement.
+
+`progress` is DERIVED on every read and stored nowhere. A copy on the activity would be correct as
+of the last refresh, which is the same defect as a stored feasibility verdict (§22). An override
+only exists where evidence does: without a measurement a number overrides nothing, and calling it
+an override would put a reason and a signature on what is really just a typed figure. Reading the
+plan costs one work-package query per project rather than one per activity.
+
+An override is its own write path with its own permission, `projects.schedule.progress-override`.
+Authoring a programme and claiming progress the site has not measured are different acts: a Planning
+Engineer holds `projects.schedule.plan` and not this; a Project Manager holds both. Saving a plan
+can neither mint a statement nor drop one — the four override fields are resolved from the persisted
+activity and ignored off the payload, closing a hole where `POST /projects/schedules` would have
+written a reasoned, attributed override with no permission check at all.
+
+Every surface that shows an activity's progress now reads the same resolved figure through one
+helper: the Gantt (which also says the source under each bar and replaces the plain box with a
+reason-bearing control wherever something is measured), the plan screen's own headline, the
+operations overview, the site workspace's "Actual Progress" panel and in-progress count, and the
+Project 360 activity table, which gained a Source column. While wiring that last one it emerged that
+360's schedule panel had never rendered at all — its BFF route had no `GET` — and that the
+`?projectId=` every caller was sending was ignored by the API, so a reader taking the first row was
+reading whichever plan came back first. Both are closed.
+
+Auth-ON browser and API proof walked the real chain: a governed award (independently approved study,
+take-off, offer and award by a Technical Manager and a Sales Manager) produced a project with a
+frozen sold item of 200 m², mapped to a work package, beside a second package with nothing mapped to
+it. With nothing installed, one activity read `0` as a measurement and the other `0` as a
+declaration, each labelled. Installing 150 m² moved the first bar to 75% with nobody opening the
+programme. A plan save typing 10% over it did not move the reported figure; the same edit on the
+unmeasured activity was honoured. A statement of 90% was refused without a reason and accepted with
+one, rendering as "Stated 90% against a measured 75%" — both numbers visible, the stored
+`percentComplete` still 10. Withdrawing it returned the bar to the measurement, and a further 50 m²
+took it to 100%.
+
+**PLN-12 moves from DISCONNECTED to PARTIAL, and COMPLETE is proposed below.** **PLN-11 remains
+DISCONNECTED**: planned quantities and productivity are a separate capability, and nothing here
+touches them.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -189,7 +241,7 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | PostgreSQL certification persistence | 1/1 passed; automatic SOLD, install and certification facts reconcile |
 | Project Scope service closure | 69/69 passed, including the 59 classified assertions |
 | Wave 2 + Wave 3 bridge browser journey | 2/2 passed in Chromium |
-| Web unit suite | 203/203 passed |
+| Web unit suite | 210/210 passed, including the single web-side definition of what an activity's progress is (a payload without the map falls back to the declared number, never a silent zero) |
 | Repository typecheck | 51/51 passed |
 | Repository production build | 27/27 passed, including Next.js and Nest builds |
 | Register reconciliation | 180 capabilities / 46 gap records / 999 role pairs / 938 journey pairs |
@@ -252,7 +304,13 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Database migration posture | 321/321 applied; ownership is tenant-isolated under FORCE RLS with one open row per resource, and a closed row must carry its decision and provenance |
 | Conflict lineage and redaction | 11/11 passed; the party is discovered not supplied, the whole canonical chain resolves, every party is returned, a restricted one carries no identity and is never even looked up, the check names `projects.schedule.read` on the other project, and a foreign-tenant work package is refused |
 | Conflict lineage Auth-ON browser/API journey | 1/1 passed in Chromium; A+B+C overlapping on one crane, both sides and the full lineage from each desk, three-way overlap listing every party, a conflict-only identity leaking nothing about B or C and refused on B's desk, the other activity moved away removing the relationship while the decision survives, a new clash naming the new activity, a scheduled overhaul conflicting a standing commitment, and nothing it points at altered |
-| Full API unit/fitness suite | 541 passed / 4 skipped |
+| Activity progress domain rules | 10/10 passed; measurement over a typed number, a declaration named as one, a stale override never promoted, both figures kept visible, an unreasoned or undated override ignored, and refusal where there is nothing to override or withdraw |
+| Activity progress HTTP journey | 12/12 passed; the measured chain end to end, a plan save unable to overwrite, mint or drop a statement, `?projectId=` narrowing to one plan, and under a live verifier a planner refused the statement (403) while the manager reaches the rule itself (400) |
+| Activity progress Auth-ON browser journey | 1/1 passed in Chromium; a governed award to a measured bar, each source named on screen, the plain box gone where something is measured, a reasonless statement refused, both numbers shown, withdrawal returning the bar to site, and a further installation moving it with nobody opening the plan |
+| Role catalogue authority | 23/23 passed; the Planning Engineer does not hold `projects.schedule.progress-override` and the Project Manager does |
+| Database migration posture | 322/322 applied; an activity's override carries its reason, timestamp and author, and a value outside 0–100 or a reasonless statement cannot be stored |
+| Screens re-proven after the change | 15/15 passed in Chromium across the operations overview, Project 360, site project context and project health |
+| Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
 
@@ -280,6 +338,35 @@ disagree in public rather than be reconciled by rounding one up.
 
 This makes three COMPLETE capabilities in the register (AWD-05, AWD-06, PLN-10) out of 180.
 
+### PLN-12 reconciliation
+
+The capability reads *Actual progress integration*, and its acceptance criterion is that actual
+progress derives from approved site/quantity evidence with an explicit governed override path.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Progress derives from approved site/quantity evidence | installed quantity → Quantity Ledger → work package → activity, proven over HTTP and in the browser against a governed award | no |
+| The plan cannot overwrite the measurement | a save typing 10% over a measured 75% leaves the reported figure at 75% | no |
+| A different figure is possible, but never silent | refused without a reason; accepted with one and rendered as "Stated 90% against a measured 75%", with author and timestamp | no |
+| The statement is its own authority | `projects.schedule.progress-override`, refused (403) to a planner who may author the same plan, under a live verifier | no |
+| A statement cannot be forged through the plan | the four override fields are resolved from the persisted activity and ignored off the payload | no |
+| A statement can be withdrawn | the bar returns to the measurement; withdrawing twice is refused | no |
+| Measured zero is not declared zero | both rendered, each labelled; UNKNOWN is never drawn as 0 | no |
+| Every surface agrees | Gantt, plan headline, operations overview, site "Actual Progress" panel and count, Project 360 activity table with a Source column | no |
+| Persistence | migration 0322 with range, reason and provenance constraints; the browser proof round-trips a statement through PostgreSQL | no |
+
+**Proposed: `PLN-12` PARTIAL → COMPLETE.** Not applied — the classification was moved from
+DISCONNECTED to PARTIAL, which the evidence above makes plainly true, and the promotion to COMPLETE
+is left to the programme owner as PLN-10's was.
+
+Three limits are stated rather than rounded away. A statement needs one person, not two: it carries
+a permission, a reason and a name, but no independent approval, and whether claiming progress the
+site has not measured should need a second pair of eyes is a governance decision, not a defect to
+fix quietly. Nobody is told when a stated figure disagrees with the measurement — the disagreement
+is visible to whoever opens the screen and reaches no one who does not. And no exported progress
+document exists, so the `actualOutput` layer stays **PARTIAL** here for the same reason it does on
+PLN-10: the rendered output is proven, the document is not.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -295,7 +382,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is now proven (PLN-12, reconciled above and proposed for COMPLETE); what remains unproven in this line is PLN-11 — planned quantities and productivity, which nothing in this slice touches — and that a figure stated against the measurement reaches nobody who is not looking at the screen.
 
 ## Programme state
 

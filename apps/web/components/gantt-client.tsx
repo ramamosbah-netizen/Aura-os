@@ -28,6 +28,18 @@ interface ScheduleTask {
 }
 interface ProjectSchedule {
   id: string; projectId: string; projectName: string | null; tasks: ScheduleTask[]; baselineSetAt: string | null;
+  /**
+   * Where each activity's progress came from, keyed by activity id — DERIVED by the server on
+   * every read, never stored on the activity. `declared` is a typed number with nothing measured
+   * behind it; `evidence` is the work package's measured progress; `override` is somebody stating
+   * a figure against that measurement, with a reason.
+   */
+  progress?: Record<string, {
+    effective: number | null;
+    source: 'evidence' | 'override' | 'declared';
+    evidence: number | null;
+    override: { value: number; reason: string; at: string; by: string | null } | null;
+  }>;
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -61,6 +73,7 @@ const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', 
 export default function GanttClient({ schedules, projects = [], wbsNodes = [], resourceCatalog = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; wbsNodes?: WbsNode[]; resourceCatalog?: ResourceCatalogItem[]; selectedProjectId?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
+  const [overrideDraft, setOverrideDraft] = useState<Record<string, { value: string; reason: string }>>({});
   const [error, setError] = useState<string | null>(null);
   const [addTask, setAddTask] = useState<Record<string, NewTask>>({});
   const [editTask, setEditTask] = useState<Record<string, NewTask>>({});
@@ -185,6 +198,13 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
     }
   }
 
+  /**
+   * Record a DECLARED figure — only where nothing has been measured.
+   *
+   * Where the activity's work package is measured, this path is not offered at all: the plan does
+   * not get to quietly overwrite the Quantity Ledger, and the governed statement below is the way
+   * to say something different.
+   */
   async function handleUpdateTaskPercent(sch: ProjectSchedule, taskIndex: number, newPct: number) {
     setBusy(sch.projectId); setError(null);
     try {
@@ -192,6 +212,26 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
       await saveSchedule(sch.projectId, sch.projectName, newTasks);
     } catch (e: any) {
       setError(e.message || 'Failed to update task percentage');
+    }
+  }
+
+  /** State a figure against the measurement, or withdraw the statement by passing null. */
+  async function handleOverrideProgress(sch: ProjectSchedule, taskId: string, value: number | null, reason: string) {
+    setBusy(sch.projectId); setError(null);
+    try {
+      const response = await fetch(`/api/projects/schedules/${sch.projectId}/activities/${taskId}/progress`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ value, reason }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.message || result?.error || 'Failed to state progress');
+      setOverrideDraft((current) => ({ ...current, [taskId]: { value: '', reason: '' } }));
+      router.refresh();
+    } catch (e: any) {
+      setError(e.message || 'Failed to state progress');
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -292,26 +332,78 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                     <small>{t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'WBS record unavailable'; })() : 'Legacy activity · WBS not linked'}</small>
                     <small>{t.durationWorkingDays ? `${t.durationWorkingDays} working day${t.durationWorkingDays === 1 ? '' : 's'}` : 'Working duration not authored'}</small>
                     {(t.requirements ?? []).map((requirement) => <small key={`${requirement.resource.resourceType}:${requirement.resource.canonicalResourceId}`}>{requirement.quantity} {requirement.unit} · {catalogLabel(requirement.resource.resourceType, requirement.resource.canonicalResourceId)}</small>)}
+                    {(() => {
+                      const taskId = t.id;
+                      const progress = taskId ? sch.progress?.[taskId] : undefined;
+                      if (!taskId || !progress) return null;
+                      // Said plainly, because "45%" means three different things depending on this.
+                      if (progress.source === 'evidence') return <small data-testid={`progress-source-${taskId}`}>Measured from installed quantity · {progress.evidence}%</small>;
+                      if (progress.source === 'override') return <small data-testid={`progress-source-${taskId}`}>Stated {progress.override?.value}% against a measured {progress.evidence}% · {progress.override?.reason}</small>;
+                      return <small data-testid={`progress-source-${taskId}`}>Declared · nothing measured against this activity</small>;
+                    })()}
                   </div>
-                  <div className={styles.track} aria-label={`${t.name}, ${t.percentComplete}% complete`}>
+                  <div className={styles.track} aria-label={`${t.name}, ${(t.id && sch.progress?.[t.id]?.effective) ?? t.percentComplete}% complete`}>
                     {t.baselineStart && t.baselineEnd && (
                       <div className={styles.baseline} style={{ left: `${pct(t.baselineStart)}%`, width: `${wid(t.baselineStart, t.baselineEnd)}%` }} />
                     )}
                     <div className={styles.bar} style={{ left: `${pct(t.plannedStart)}%`, width: `${wid(t.plannedStart, t.plannedEnd)}%` }}>
-                      <div className={styles.fill} style={{ width: `${t.percentComplete}%` }} />
-                      <span className={styles.barLabel}>{t.percentComplete}%</span>
+                      <div className={styles.fill} style={{ width: `${(t.id && sch.progress?.[t.id]?.effective) ?? t.percentComplete}%` }} />
+                      <span className={styles.barLabel}>{(t.id && sch.progress?.[t.id]?.effective) ?? t.percentComplete}%</span>
                     </div>
                   </div>
-                  <input
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={t.percentComplete}
-                    onChange={(e) => handleUpdateTaskPercent(sch, idx, Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
-                    className={styles.input}
-                    style={{ width: 50, padding: '2px 4px', fontSize: 11 }}
-                    title="Quick update %"
-                  />
+                  {(() => {
+                    const taskId = t.id;
+                    const progress = taskId ? sch.progress?.[taskId] : undefined;
+                    // Where nothing has been measured, the plain box stays exactly as it was: that
+                    // number is a declaration and always has been. Where something HAS been
+                    // measured, the plan does not get to overwrite it — stating something different
+                    // costs a reason and is recorded against a name.
+                    if (!taskId || !progress || progress.source === 'declared') {
+                      return (
+                        <input
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={t.percentComplete}
+                          onChange={(e) => handleUpdateTaskPercent(sch, idx, Math.min(100, Math.max(0, Number(e.target.value) || 0)))}
+                          className={styles.input}
+                          style={{ width: 50, padding: '2px 4px', fontSize: 11 }}
+                          title="Declared progress — nothing measured against this activity"
+                        />
+                      );
+                    }
+                    const draft = overrideDraft[taskId] ?? { value: '', reason: '' };
+                    return (
+                      <div className={styles.progressStatement} data-testid={`progress-statement-${taskId}`}>
+                        <input
+                          type="number" min={0} max={100}
+                          aria-label={`Stated progress for ${t.name}`}
+                          value={draft.value}
+                          placeholder={String(progress.evidence ?? '')}
+                          onChange={(e) => setOverrideDraft((current) => ({ ...current, [taskId]: { value: e.target.value, reason: current[taskId]?.reason ?? '' } }))}
+                        />
+                        <input
+                          aria-label={`Reason for stated progress for ${t.name}`}
+                          value={draft.reason}
+                          placeholder="Why this differs from the measurement"
+                          onChange={(e) => setOverrideDraft((current) => ({ ...current, [taskId]: { value: current[taskId]?.value ?? '', reason: e.target.value } }))}
+                        />
+                        <button
+                          type="button"
+                          disabled={busy === sch.projectId}
+                          onClick={() => handleOverrideProgress(sch, taskId, Number(draft.value), draft.reason)}
+                        >State</button>
+                        {progress.source === 'override' && (
+                          <button
+                            type="button"
+                            disabled={busy === sch.projectId}
+                            aria-label={`Withdraw stated progress for ${t.name}`}
+                            onClick={() => handleOverrideProgress(sch, taskId, null, '')}
+                          >Use the measurement</button>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <button
                     type="button"
                     onClick={() => t.id && setEditTask((current) => ({ ...current, [t.id!]: taskDraft(t) }))}

@@ -47,6 +47,8 @@ import {
   type ResourcePool,
   type ResourcePoolMember,
   type ResourceConflictResolution,
+  type ActivityProgress,
+  type ScheduleTask,
   type ResourceCapacity,
   type ResourceType,
   type ResourceUnit,
@@ -1427,9 +1429,53 @@ export class ProjectsController {
     return this.scheduleResources.list(this.tenant.get().tenantId);
   }
 
+  /**
+   * Every plan, each activity carrying where its progress came from.
+   *
+   * `progress` is DERIVED on this read and stored nowhere: the measurement belongs to the work
+   * package and its Quantity Ledger, and a copy on the activity would be stale the moment the next
+   * installation is approved. `percentComplete` stays on the task for every existing reader, and
+   * is now the DECLARED figure rather than the authority — see domain/activity-progress.ts.
+   */
   @Get('schedules')
-  listSchedules(): Promise<ProjectSchedule[]> {
-    return this.schedule.list(this.tenant.get().tenantId);
+  async listSchedules(
+    /**
+     * Narrow to one project. Callers have been sending this for a while and it was ignored — a
+     * reader that then took the first row was reading somebody else's plan, so it is honoured
+     * here rather than left to each caller to filter correctly.
+     */
+    @Query('projectId') projectId?: string,
+  ): Promise<Array<ProjectSchedule & { progress: Record<string, ActivityProgress> }>> {
+    const all = await this.schedule.list(this.tenant.get().tenantId);
+    const schedules = projectId?.trim() ? all.filter((plan) => plan.projectId === projectId.trim()) : all;
+    return Promise.all(schedules.map(async (plan) => ({
+      ...plan,
+      progress: Object.fromEntries(await this.schedule.progressOf(plan)),
+    })));
+  }
+
+  /**
+   * State a figure against the measurement, or withdraw the statement by sending no value.
+   *
+   * Its own permission, and deliberately not `projects.schedule.plan`: authoring a programme and
+   * claiming progress the site has not measured are different acts. A Planning Engineer holds the
+   * first and not this; a Project Manager holds both.
+   */
+  @Permissions('projects.schedule.progress-override')
+  @Post('schedules/:projectId/activities/:taskId/progress')
+  overrideActivityProgress(
+    @Param('projectId') projectId: string,
+    @Param('taskId') taskId: string,
+    @Body() dto: { value?: number | null; reason?: string },
+  ): Promise<{ task: ScheduleTask; progress: ActivityProgress }> {
+    const ctx = this.tenant.get();
+    const value = dto?.value === null || dto?.value === undefined ? null : Number(dto.value);
+    if (value !== null && !dto?.reason?.trim()) {
+      throw new BadRequestException('a reason is required to state progress against the measurement');
+    }
+    return this.schedule.overrideProgress({
+      tenantId: ctx.tenantId, projectId, taskId, value, reason: dto?.reason, actorId: ctx.actorId,
+    });
   }
 
   // Reactive planning: CPM forward-pass reschedule + resource levelling (stateless compute).

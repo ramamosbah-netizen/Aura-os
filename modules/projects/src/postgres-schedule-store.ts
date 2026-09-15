@@ -30,6 +30,8 @@ interface TaskRow {
   actual_start: Date | string | null; actual_end: Date | string | null;
   percent_complete: string | number;
   duration_working_days: number | null;
+  progress_override: string | number | null; progress_override_reason: string | null;
+  progress_override_at: Date | string | null; progress_override_by: string | null;
 }
 
 interface ReqRow {
@@ -65,6 +67,10 @@ const rowToTask = (r: TaskRow, requirements: TaskResourceRequirement[] = []): Sc
   actualStart: day(r.actual_start),
   actualEnd: day(r.actual_end),
   percentComplete: Number(r.percent_complete),
+  progressOverride: r.progress_override === null || r.progress_override === undefined ? null : Number(r.progress_override),
+  progressOverrideReason: r.progress_override_reason ?? null,
+  progressOverrideAt: r.progress_override_at ? iso(r.progress_override_at) : null,
+  progressOverrideBy: r.progress_override_by ?? null,
   // NULL stays null. A missing authored duration is a fact to report, not a gap to fill.
   durationWorkingDays: r.duration_working_days === null ? null : Number(r.duration_working_days),
   requirements,
@@ -181,8 +187,9 @@ export class PostgresScheduleStore implements ScheduleStore {
         `INSERT INTO public.aura_projects_schedule_tasks
            (id, tenant_id, project_id, schedule_id, wbs_node_id, name, planned_start, planned_end,
             baseline_start, baseline_end, actual_start, actual_end, percent_complete,
-            duration_working_days, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14, now())
+            duration_working_days, progress_override, progress_override_reason,
+            progress_override_at, progress_override_by, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18, now())
          ON CONFLICT (id) DO UPDATE SET
            wbs_node_id = EXCLUDED.wbs_node_id,
            name = EXCLUDED.name,
@@ -191,10 +198,15 @@ export class PostgresScheduleStore implements ScheduleStore {
            actual_start = EXCLUDED.actual_start, actual_end = EXCLUDED.actual_end,
            percent_complete = EXCLUDED.percent_complete,
            duration_working_days = EXCLUDED.duration_working_days,
+           progress_override = EXCLUDED.progress_override,
+           progress_override_reason = EXCLUDED.progress_override_reason,
+           progress_override_at = EXCLUDED.progress_override_at,
+           progress_override_by = EXCLUDED.progress_override_by,
            updated_at = now()`,
         [t.id, s.tenantId, s.projectId, s.id, t.wbsNodeId, t.name, t.plannedStart, t.plannedEnd,
          t.baselineStart, t.baselineEnd, t.actualStart, t.actualEnd, t.percentComplete,
-         t.durationWorkingDays],
+         t.durationWorkingDays, t.progressOverride, t.progressOverrideReason,
+         t.progressOverrideAt, t.progressOverrideBy],
       );
     }
 
@@ -291,7 +303,8 @@ export class PostgresScheduleStore implements ScheduleStore {
     // One query for every schedule in the result, not one per schedule.
     const res = await this.pool.query<TaskRow>(
       `SELECT id, schedule_id, wbs_node_id, name, planned_start, planned_end, baseline_start, baseline_end,
-              actual_start, actual_end, percent_complete, duration_working_days
+              actual_start, actual_end, percent_complete, duration_working_days, progress_override, progress_override_reason,
+              progress_override_at, progress_override_by
          FROM public.aura_projects_schedule_tasks
         WHERE schedule_id = ANY($1::uuid[])
         ORDER BY planned_start, id`,

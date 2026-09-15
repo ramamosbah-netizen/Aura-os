@@ -1,5 +1,11 @@
 import { roundDecimal } from '@aura/shared';
+import type { Id } from '@aura/shared';
 import type { FrozenProductivityBasis } from './handover';
+import {
+  resolveLabourProductivity,
+  type LabourProductivity,
+  type ProjectLabourSpent,
+} from './labour-productivity';
 
 /**
  * §22 — the rate this work was priced at, against the rate it is actually going at.
@@ -52,9 +58,20 @@ export interface PlannedOutput {
   verdict: OutputVerdict;
   /** Why no verdict can be given. Null when there is one. */
   unknownReason: string | null;
+  /**
+   * What the installed work COST in hours, against what it was priced to cost.
+   *
+   * A separate question with its own verdict and its own unknowns, kept apart deliberately: a crew
+   * can be behind the programme and perfectly efficient (too few people), or ahead of it and
+   * ruinous (far too many). Folding the two into one "performance" number would hide exactly the
+   * case a manager needs to see. See labour-productivity.ts.
+   */
+  labour: LabourProductivity;
 }
 
-const UNKNOWN = (unknownReason: string, over: Partial<PlannedOutput> = {}): PlannedOutput => ({
+type Pace = Omit<PlannedOutput, 'labour'>;
+
+const UNKNOWN = (unknownReason: string, over: Partial<Pace> = {}): Pace => ({
   plannedQuantity: null, unit: null, installedQuantity: null, basis: null,
   pricedRatePerDay: null, pricedCrewDays: null, achievedRatePerDay: null,
   requiredRatePerDay: null, expectedByNow: null,
@@ -75,6 +92,10 @@ const inclusiveDays = (from: string, to: string): number =>
   Math.floor((day(to) - day(from)) / 86_400_000) + 1;
 
 export interface PlannedOutputInput {
+  /** What the project's day sheets say about where the hours went. Null = no source is bound. */
+  spent?: ProjectLabourSpent | null;
+  /** The work package this activity names, which is what recorded hours would have to name too. */
+  wbsNodeId?: Id | null;
   /** The award line behind the work package: what was sold, in what unit, priced how. */
   frozen: { soldQuantity: number | null; unit: string | null; productivityBasis?: FrozenProductivityBasis | null } | null;
   /** Measured installed quantity for that line. `null` = the ledger cannot answer. */
@@ -94,6 +115,21 @@ export interface PlannedOutputInput {
  * that has not opened, a window already closed, a line nobody priced, a package nobody measured.
  */
 export function resolvePlannedOutput(input: PlannedOutputInput): PlannedOutput {
+  return {
+    ...resolvePace(input),
+    // The cost half, resolved from the same frozen basis and the same measurement — and answering
+    // a different question, so it carries its own verdict and its own reason for having none.
+    labour: resolveLabourProductivity({
+      basis: input.frozen?.productivityBasis ?? null,
+      installedQuantity: input.installedQuantity,
+      spent: input.spent ?? null,
+      wbsNodeId: input.wbsNodeId ?? null,
+    }),
+  };
+}
+
+/** The pace half: what was sold and priced, against what is in and how much time has gone. */
+function resolvePace(input: PlannedOutputInput): Omit<PlannedOutput, 'labour'> {
   const { frozen, installedQuantity, plannedStart, plannedEnd, today } = input;
 
   if (!frozen) {
@@ -103,7 +139,7 @@ export function resolvePlannedOutput(input: PlannedOutputInput): PlannedOutput {
     ? frozen.soldQuantity : null;
   const unit = frozen.unit ?? null;
   const basis = frozen.productivityBasis ?? null;
-  const known: Partial<PlannedOutput> = { plannedQuantity, unit, installedQuantity, basis };
+  const known: Partial<Pace> = { plannedQuantity, unit, installedQuantity, basis };
 
   if (plannedQuantity === null) {
     return UNKNOWN('the award line behind this work package carries no sold quantity', known);
@@ -113,7 +149,7 @@ export function resolvePlannedOutput(input: PlannedOutputInput): PlannedOutput {
   // which is not a rate of zero, and not a licence to call the work on time.
   const pricedRatePerDay = basis && basis.crewHoursPerUnit > 0 ? r2(HOURS_PER_DAY / basis.crewHoursPerUnit) : null;
   const pricedCrewDays = pricedRatePerDay ? r2(plannedQuantity / pricedRatePerDay) : null;
-  const priced: Partial<PlannedOutput> = { ...known, pricedRatePerDay, pricedCrewDays };
+  const priced: Partial<Pace> = { ...known, pricedRatePerDay, pricedCrewDays };
 
   if (!DATE.test(plannedStart) || !DATE.test(plannedEnd) || plannedEnd < plannedStart) {
     return UNKNOWN('this activity has no usable planned window to measure a rate over', priced);
@@ -142,7 +178,7 @@ export function resolvePlannedOutput(input: PlannedOutputInput): PlannedOutput {
   const expectedByNow = pricedRatePerDay === null
     ? r2(Math.min(plannedQuantity, (plannedQuantity / windowDays) * elapsedDays))
     : r2(Math.min(plannedQuantity, pricedRatePerDay * elapsedDays));
-  const measured: Partial<PlannedOutput> = {
+  const measured: Partial<Pace> = {
     ...priced, achievedRatePerDay, requiredRatePerDay, expectedByNow,
   };
 
@@ -155,7 +191,7 @@ export function resolvePlannedOutput(input: PlannedOutputInput): PlannedOutput {
   const ratio = achievedRatePerDay / pricedRatePerDay;
   const verdict: OutputVerdict = Math.abs(ratio - 1) <= ON_RATE_TOLERANCE
     ? 'ON_RATE' : ratio > 1 ? 'AHEAD' : 'BEHIND';
-  return { ...(measured as PlannedOutput), verdict, unknownReason: null };
+  return { ...(measured as Pace), verdict, unknownReason: null };
 }
 
 /**

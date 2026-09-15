@@ -3,6 +3,7 @@ import type { Id } from '@aura/shared';
 import { DELIVERY_ITEM_MAP_STORE, type DeliveryItemMapStore } from './delivery-item-map-store';
 import { PROJECT_STORE, type ProjectStore } from './project-store';
 import { QuantityLedgerService } from './quantity-ledger.service';
+import { LABOUR_SPENT_PROVIDER, type LabourSpentProvider, type ProjectLabourSpent } from './domain/labour-productivity';
 import type { FrozenDeliverySourceItem } from './domain/handover';
 
 /**
@@ -43,7 +44,25 @@ export class ActivityOutputService {
     // Optional for the same reason every seam in §22 is: a composition without the ledger reports
     // every package as unmeasured, which is exactly what it then knows.
     @Optional() @Inject(QuantityLedgerService) private readonly quantityLedger: QuantityLedgerService | null = null,
+    // Where the project's recorded hours went (ADR-0004: bound at the composition root). Unbound,
+    // every package's labour productivity reads UNKNOWN and the pace half is unaffected.
+    @Optional() @Inject(LABOUR_SPENT_PROVIDER) private readonly labour: LabourSpentProvider | null = null,
   ) {}
+
+  /**
+   * What the project's day sheets say, ONCE for the whole plan.
+   *
+   * Returns null when no labour source is bound at all, which the rule must report as "we do not
+   * know" — distinct from a project where every hour is recorded and none names a work package.
+   */
+  async labourSpent(tenantId: Id, projectId: Id): Promise<ProjectLabourSpent | null> {
+    if (!this.labour) return null;
+    try {
+      return await this.labour.spentOn(tenantId, projectId);
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * The sold/priced/installed facts for every mapped work package in one project.

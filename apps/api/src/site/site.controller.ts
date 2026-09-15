@@ -355,7 +355,7 @@ export class SiteController {
 
   @Post('labour')
   createLabour(
-    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; costRate?: number; cbsNodeId?: string | null; subcontractorName?: string; subcontractorId?: string | null; notes?: string },
+    @Body() dto: { projectId: string; projectName?: string; date: string; trade: string; headcount: number; hours: number; costRate?: number; cbsNodeId?: string | null; wbsNodeId?: string | null; subcontractorName?: string; subcontractorId?: string | null; notes?: string },
   ): Promise<LabourAllocation> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.trade?.trim()) throw new BadRequestException('trade is required');
@@ -372,6 +372,9 @@ export class SiteController {
       hours: Number(dto.hours) || 0,
       costRate: dto.costRate !== undefined ? Number(dto.costRate) : undefined,
       cbsNodeId: dto.cbsNodeId ?? null,
+      // Which work package the hours were spent on, when the day's work belonged to one. Refused
+      // by the service if it names a package in another project.
+      wbsNodeId: dto.wbsNodeId ?? null,
       subcontractorName: dto.subcontractorName,
       subcontractorId: dto.subcontractorId ?? null,
       notes: dto.notes,

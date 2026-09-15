@@ -558,12 +558,15 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     hours: number;
     costRate?: number;
     cbsNodeId?: string | null;
+    /** The work package these hours were spent on, when the day's work belonged to one. */
+    wbsNodeId?: string | null;
     subcontractorName?: string;
     subcontractorId?: string | null;
     notes?: string;
     createdBy?: string;
   }): Promise<LabourAllocation> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
+    await this.assertWorkPackageBelongsToProject(input.tenantId, input.projectId, input.wbsNodeId ?? null);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -581,6 +584,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
       payload: {
         projectId: allocation.projectId,
         cbsNodeId: allocation.cbsNodeId,
+        wbsNodeId: allocation.wbsNodeId,
         trade: allocation.trade,
         manHours: allocation.manHours,
         costRate: allocation.costRate,
@@ -593,6 +597,26 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     });
     this.logger.log(`Labour logged: ${allocation.headcount}× ${allocation.trade} @ ${allocation.hours}h = ${allocation.manHours}mh (cost ${allocation.labourCost}) on ${allocation.projectId}`);
     return allocation;
+  }
+
+  /**
+   * A day's hours may only be attributed to a work package in the project they were spent on.
+   *
+   * Checked here rather than by a foreign key (ADR-0004): Site does not read Projects' tables, so
+   * it asks the resolver Projects registers at boot which project a node belongs to. Refused at
+   * the point of writing, because the alternative is hours quietly attributed to another project's
+   * package and a productivity figure that is wrong in two places at once.
+   *
+   * A composition with no Projects registered cannot check the claim, and refuses rather than
+   * recording an attribution nobody can stand behind.
+   */
+  private async assertWorkPackageBelongsToProject(tenantId: Id, projectId: Id, wbsNodeId: string | null): Promise<void> {
+    if (!wbsNodeId) return;
+    if (!this.projectScope) throw new Error('work package attribution is unavailable: no project resolver is registered');
+    const owner = await this.projectScope.projectOf('projects', 'wb', wbsNodeId);
+    if (owner !== projectId) {
+      throw new Error(`work package ${wbsNodeId} does not belong to project ${projectId}`);
+    }
   }
 
   listLabourAllocations(tenantId: Id): Promise<LabourAllocation[]> {

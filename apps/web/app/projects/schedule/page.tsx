@@ -1,7 +1,7 @@
 import { CalendarRange, CheckCircle2, Clock3, Gauge, Layers3, ListChecks } from 'lucide-react';
 import Link from 'next/link';
 import { activityProgress, measuredNote, type ResolvedActivityProgress } from '@/lib/activity-progress';
-import { behindCount, type PlannedOutput } from '@/lib/planned-output';
+import { behindCount, overspendingCount, type PlannedOutput } from '@/lib/planned-output';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
 import PlanningRunPanel from '../../../components/planning-run-panel';
@@ -117,6 +117,9 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   // …and how many activities are going slower than the rate the work was sold at. A completion
   // percentage cannot carry this: a plan can be 60% complete and losing ground every day.
   const behind = behindCount(rows);
+  // …and how many are costing more hours than the award priced into them. A separate failure from
+  // lateness, and deliberately counted separately.
+  const overspending = overspendingCount(rows);
   const baselinedCount = rows.filter((schedule) => Boolean(schedule.baselineSetAt)).length;
   const unavailable = schedules === null;
   const scheduleHealth = unavailable
@@ -160,6 +163,10 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <div className={styles.metricCard}>
           <span className={`${styles.metricIcon} ${behind > 0 ? styles.warn : styles.green}`}><Gauge size={17} /></span>
           <div><span className={styles.metricLabel}>Behind the priced rate</span><strong>{unavailable || taskCount === 0 ? '—' : `${behind}/${taskCount}`}</strong><small>{unavailable ? 'Data unavailable' : behind === 0 ? 'No activity is losing ground against what was priced' : 'Activities installing slower than the award was priced at'}</small></div>
+        </div>
+        <div className={styles.metricCard}>
+          <span className={`${styles.metricIcon} ${overspending > 0 ? styles.warn : styles.green}`}><Gauge size={17} /></span>
+          <div><span className={styles.metricLabel}>Costing more hours than priced</span><strong>{unavailable || taskCount === 0 ? '—' : `${overspending}/${taskCount}`}</strong><small>{unavailable ? 'Data unavailable' : overspending === 0 ? 'No activity is spending more hours than the award priced' : 'Activities spending more crew hours than the work earned'}</small></div>
         </div>
           <div className={styles.metricCard}>
           <span className={`${styles.metricIcon} ${styles.violet}`}><Clock3 size={17} /></span>

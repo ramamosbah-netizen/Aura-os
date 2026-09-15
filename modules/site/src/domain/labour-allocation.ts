@@ -24,6 +24,21 @@ export interface LabourAllocation {
   /** CBS cost line this labour is charged to. When set (with a costRate), the Transaction
    * Engine posts the labour cost as ACTUAL against it. Nullable + additive. */
   cbsNodeId: string | null;
+  /**
+   * The WBS work package these hours were spent on, when the day's work belonged to one.
+   *
+   * NULL IS NORMAL AND PERMANENT for a great deal of labour: mobilisation, housekeeping, standing
+   * time, a crew moving between three risers. Forcing a package onto every row would manufacture
+   * attribution nobody observed, and a productivity figure built on that is worse than none.
+   *
+   * Which is why every reader must carry the unattributed remainder with the figure — a package
+   * credited with 40 of a project's 500 man-hours looks fast until you are told about the 460.
+   * See modules/projects/src/domain/labour-productivity.ts.
+   *
+   * Checked against Projects at the service boundary, never by a foreign key (ADR-0004), exactly
+   * as `cbsNodeId` is.
+   */
+  wbsNodeId: string | null;
   /** The subcontractor who supplied the labour, as free-text label + a stable reference. */
   subcontractorName: string | null;
   /**
@@ -53,6 +68,7 @@ export interface NewLabourAllocation {
   hours: number;
   costRate?: number;
   cbsNodeId?: string | null;
+  wbsNodeId?: string | null;
   subcontractorName?: string | null;
   subcontractorId?: string | null;
   notes?: string | null;
@@ -80,6 +96,7 @@ export function makeLabourAllocation(input: NewLabourAllocation): LabourAllocati
     costRate,
     labourCost: r2(manHours * costRate),
     cbsNodeId: input.cbsNodeId ?? null,
+    wbsNodeId: input.wbsNodeId ?? null,
     subcontractorName: input.subcontractorName?.trim() || null,
     subcontractorId: input.subcontractorId?.trim() || null,
     notes: input.notes?.trim() || null,

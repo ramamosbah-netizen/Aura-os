@@ -93,6 +93,7 @@ export * from './resource-booking.service';
 export * from './resource-calendar';
 export * from './domain/activity-progress';
 export * from './domain/planned-output';
+export * from './domain/labour-productivity';
 export * from './activity-output.service';
 export * from './domain/schedule';
 export * from './domain/schedule-network';

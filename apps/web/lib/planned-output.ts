@@ -15,6 +15,19 @@
 
 export type OutputVerdict = 'AHEAD' | 'ON_RATE' | 'BEHIND' | 'UNKNOWN';
 
+export type LabourVerdict = 'BETTER_THAN_PRICED' | 'AS_PRICED' | 'WORSE_THAN_PRICED' | 'UNKNOWN';
+
+/** What the installed work cost in hours, against what it was priced to cost. */
+export interface LabourProductivity {
+  spentManHours: number | null;
+  earnedManHours: number | null;
+  factor: number | null;
+  unattributedManHours: number | null;
+  unattributedShare: number | null;
+  verdict: LabourVerdict;
+  unknownReason: string | null;
+}
+
 export interface PlannedOutput {
   plannedQuantity: number | null;
   unit: string | null;
@@ -34,6 +47,8 @@ export interface PlannedOutput {
   expectedByNow: number | null;
   verdict: OutputVerdict;
   unknownReason: string | null;
+  /** The cost half — a separate question with its own verdict. Kept apart on purpose. */
+  labour: LabourProductivity;
 }
 
 /** Any schedule payload from `/api/projects/schedules`. */
@@ -76,6 +91,33 @@ export function outputSummary(output: PlannedOutput | null): { tone: OutputVerdi
   return { tone: verdict, text: `${label} · ${achieved} against ${priced} priced${needed}` };
 }
 
+/**
+ * What the work cost in hours, and how much of the project's labour the figure ignored.
+ *
+ * The remainder is never dropped: a package credited with 40 of a project's 500 man-hours shows a
+ * superb factor until somebody is told about the other 460, so it travels with the number.
+ */
+export function labourSummary(output: PlannedOutput | null): { tone: LabourVerdict; text: string } | null {
+  const labour = output?.labour;
+  if (!labour) return null;
+  const share = labour.unattributedShare !== null && labour.unattributedShare > 0
+    ? ` · ${Math.round(labour.unattributedShare * 100)}% of this project’s hours name no work package`
+    : '';
+  if (labour.verdict === 'UNKNOWN') {
+    // Said only where a comparison was genuinely attempted — an activity with no priced hours
+    // behind it has nothing to say here, and saying it under every bar teaches people not to look.
+    if (labour.earnedManHours === null) return null;
+    return { tone: 'UNKNOWN', text: `Hours not comparable · ${labour.unknownReason ?? 'not enough is recorded'}${share}` };
+  }
+  const label = labour.verdict === 'WORSE_THAN_PRICED' ? 'Costing more hours than priced'
+    : labour.verdict === 'BETTER_THAN_PRICED' ? 'Costing fewer hours than priced'
+    : 'Costing the hours it was priced at';
+  return {
+    tone: labour.verdict,
+    text: `${label} · ${labour.spentManHours}h spent against ${labour.earnedManHours}h earned (factor ${labour.factor})${share}`,
+  };
+}
+
 /** What was sold and what is in, for a screen that wants the quantities rather than the pace. */
 export function soldAndInstalled(output: PlannedOutput | null): string | null {
   if (!output || output.plannedQuantity === null) return null;
@@ -83,6 +125,14 @@ export function soldAndInstalled(output: PlannedOutput | null): string | null {
   return output.installedQuantity === null
     ? `${output.plannedQuantity}${unit} sold · nothing measured yet`
     : `${output.installedQuantity} of ${output.plannedQuantity}${unit} installed`;
+}
+
+/** How many activities are costing more hours than the award priced into them. */
+export function overspendingCount(
+  schedules: Array<OutputBearingSchedule & { tasks: Array<{ id?: string | null }> }>,
+): number {
+  return schedules.reduce((total, schedule) =>
+    total + schedule.tasks.filter((task) => outputOf(schedule, task)?.labour?.verdict === 'WORSE_THAN_PRICED').length, 0);
 }
 
 /** How many activities are behind the rate their work was priced at. */

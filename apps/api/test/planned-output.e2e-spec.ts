@@ -22,6 +22,7 @@ import { QuantityLedgerService } from '@aura/projects';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
+import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 import { createGovernedDeliveryFixture, until } from './helpers/governed-delivery-fixture';
 
 const TENANT = `output-tenant-${Date.now()}`;
@@ -29,6 +30,16 @@ const TENANT = `output-tenant-${Date.now()}`;
 /** A date `offset` days from today, so an activity's window really does contain today. */
 const day = (offset: number): string =>
   new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+interface LabourProductivity {
+  spentManHours: number | null;
+  earnedManHours: number | null;
+  factor: number | null;
+  unattributedManHours: number | null;
+  unattributedShare: number | null;
+  verdict: 'BETTER_THAN_PRICED' | 'AS_PRICED' | 'WORSE_THAN_PRICED' | 'UNKNOWN';
+  unknownReason: string | null;
+}
 
 interface PlannedOutput {
   plannedQuantity: number | null;
@@ -42,6 +53,7 @@ interface PlannedOutput {
   expectedByNow: number | null;
   verdict: 'AHEAD' | 'ON_RATE' | 'BEHIND' | 'UNKNOWN';
   unknownReason: string | null;
+  labour: LabourProductivity;
 }
 
 describe('planned output — the rate the work was priced at (HTTP)', () => {
@@ -51,11 +63,15 @@ describe('planned output — the rate the work was priced at (HTTP)', () => {
   let boqItemId: string;
   let pricedTaskId: string;
   let unmappedTaskId: string;
+  let wbsNodeId: string;
 
   beforeAll(async () => {
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
+    // The same filter main.ts installs, so a domain refusal reaches this spec as the status the
+    // running API would give it rather than as an unclassified 500.
+    app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
     const access = app.get(AccessService);
     const users = app.get(UsersService);
@@ -75,6 +91,7 @@ describe('planned output — the rate the work was priced at (HTTP)', () => {
       http, app.get(QuantityLedgerService), 'Riser', 200, 'm2', TENANT, { count: 2, hours: 100 });
     projectId = fixture.project.id;
     boqItemId = fixture.boqItemId;
+    wbsNodeId = fixture.wbs.id;
 
     // A second work package with no award line mapped to it: nothing was sold or priced for it.
     const unmapped = (await http.post('/api/v1/projects/wbs').send({
@@ -123,10 +140,14 @@ describe('planned output — the rate the work was priced at (HTTP)', () => {
     // THE AUTHORITY BOUNDARY. Cost rates and margin stay behind `tendering.internal-pricing.access`;
     // what crosses into delivery is how long the work takes, which is physical, not commercial.
     // Freezing an hourly rate here would put the cost sheet inside every project anyone can open.
-    const keys = Object.keys(basis ?? {});
-    expect(keys).toEqual(expect.arrayContaining(['crewSize', 'manHoursPerUnit', 'crewHoursPerUnit']));
-    for (const key of keys) expect(key).not.toMatch(/rate|cost|price|amount|margin|profit/i);
-    expect(JSON.stringify(basis)).not.toContain('30');
+    // An exact key set, not a spot check: a new field added upstream must fail this test rather
+    // than slip a cost into every project that anyone can open.
+    expect(Object.keys(basis ?? {}).sort()).toEqual([
+      'crewHoursPerUnit', 'crewSize', 'engineerManHoursPerUnit', 'estimateId',
+      'manHoursPerUnit', 'projectManagerManHoursPerUnit',
+    ]);
+    // The hourly rate priced into this line was 30/h. Not one number here is it, or derived from it.
+    expect(Object.entries(basis ?? {}).filter(([, value]) => typeof value === 'number' && value === 30)).toEqual([]);
   });
 
   it('reads the sold quantity and the priced rate onto the activity, with nobody entering either', async () => {
@@ -170,6 +191,57 @@ describe('planned output — the rate the work was priced at (HTTP)', () => {
     expect(output.unknownReason).toMatch(/no award line/);
   });
 
+  // ── What the installed work COST in hours ────────────────────────────────
+  // A separate question from the pace, with its own verdict: a crew can be behind the programme
+  // and perfectly efficient (too few people), or ahead of it and ruinous (far too many).
+
+  it('does not call a package with no hours written down infinitely productive', async () => {
+    // 160 m² installed at 1 priced man-hour each — 160 hours EARNED, and not one hour recorded
+    // against the package. The honest answer is that nobody wrote down where the time went.
+    const output = await outputOf(pricedTaskId);
+    expect(output.labour).toMatchObject({ verdict: 'UNKNOWN', spentManHours: 0, earnedManHours: 160, factor: null });
+    expect(output.labour.unknownReason).toMatch(/no labour has been attributed/);
+  });
+
+  it('refuses hours attributed to a work package in another project', async () => {
+    const elsewhere = (await http.post('/api/v1/projects/projects').send({ title: 'Another job' }).expect(201)).body;
+    const foreignNode = (await http.post('/api/v1/projects/wbs').send({
+      projectId: elsewhere.id, code: '9.9', title: 'Somebody else’s package', plannedValue: 1_000,
+    }).expect(201)).body;
+    // Refused at the point of writing: the alternative is hours quietly attributed to another
+    // project's package, wrong in two places at once and discovered by neither.
+    const refused = await http.post('/api/v1/site/labour').send({
+      projectId, date: day(0), trade: 'Electrician', headcount: 4, hours: 8, wbsNodeId: foreignNode.id,
+    });
+    expect(refused.status).toBe(400);
+    expect(refused.body.message).toMatch(/does not belong to project/);
+  });
+
+  it('sets the hours spent against the hours the installed work earned', async () => {
+    // 40 electricians × 8 hours = 320 man-hours on the package, against 160 earned: factor 0.5.
+    await http.post('/api/v1/site/labour').send({
+      projectId, date: day(0), trade: 'Electrician', headcount: 40, hours: 8, wbsNodeId,
+    }).expect(201);
+    const output = await outputOf(pricedTaskId);
+    expect(output.labour).toMatchObject({
+      verdict: 'WORSE_THAN_PRICED', spentManHours: 320, earnedManHours: 160, factor: 0.5,
+    });
+    // The pace verdict is untouched by any of this — two questions, two answers.
+    expect(output.verdict).toBe('ON_RATE');
+  });
+
+  it('keeps hours that name no package out of the figure, and says how many there are', async () => {
+    // Mobilisation and standing time: real hours on this project belonging to no one package.
+    await http.post('/api/v1/site/labour').send({
+      projectId, date: day(0), trade: 'General', headcount: 10, hours: 8,
+    }).expect(201);
+    const output = await outputOf(pricedTaskId);
+    // Not added to the package — that would flatter nothing and distort everything.
+    expect(output.labour.spentManHours).toBe(320);
+    // …but never hidden either: 80 of the project's 400 hours name no package.
+    expect(output.labour).toMatchObject({ unattributedManHours: 80, unattributedShare: 0.2 });
+  });
+
   it('keeps the rate out of the plan itself — it is derived on the read, never stored', async () => {
     const plan = (await http.get(`/api/v1/projects/schedules?projectId=${projectId}`).expect(200)).body as Array<{
       tasks: Array<Record<string, unknown>>;
@@ -190,6 +262,9 @@ describe('an award line nobody priced a crew for (HTTP)', () => {
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
+    // The same filter main.ts installs, so a domain refusal reaches this spec as the status the
+    // running API would give it rather than as an unclassified 500.
+    app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
     const access = app.get(AccessService);
     const users = app.get(UsersService);

@@ -210,6 +210,53 @@ verdict appears anywhere on the stored activity.
 **PLN-11 moves from DISCONNECTED to PARTIAL, and deliberately not to COMPLETE**; the reconciliation
 below says what is still missing and why it is not a rounding decision.
 
+## Iteration 11 — The hours the work actually cost
+
+Iteration 10 answered half of productivity: the pace. A crew installing 6 m² a day against 16
+priced is losing ground, and quantities and dates alone can say so. They cannot say whether those
+6 metres took the priced hours or three times them — and a crew can be behind the programme and
+perfectly efficient (too few people), or exactly on rate and ruinous (far too many). That second
+failure was invisible.
+
+It was invisible because a labour allocation recorded a PROJECT and a TRADE — four electricians,
+eight hours, on this job, on this day — which is enough to cost the hours and fill the site diary,
+and not enough to say which work package they went into. Migration 0323 adds that link. It is
+checked at the service boundary through the resolver Projects already registers, never by a foreign
+key (ADR-0004), so a package belonging to another project is refused at the point of writing rather
+than discovered later by a report that quietly drops the row. Projects reads the hours back through
+a port bound at the composition root, in the shape the availability port established — Projects
+imports Site nowhere.
+
+Three quantities of hours, kept apart: **priced** (per unit, frozen with the award), **earned**
+(priced × installed — what the work should have taken) and **spent** (what the people who were
+there wrote down). The factor is earned ÷ spent, and it carries its own verdict beside the pace
+verdict rather than being folded into one "performance" number, because folding them would hide
+exactly the case a manager needs to see.
+
+**Null attribution is normal and permanent.** A great deal of a day belongs to no single package —
+mobilisation, housekeeping, standing time, a crew moving between three risers. Forcing a package
+onto every row would manufacture attribution nobody observed, and a productivity figure built on
+that is worse than none: it is confidently wrong. So the hours stay unattributed, and **the share
+of the project's hours naming no package travels with every figure, everywhere it goes**. A package
+credited with 40 of a project's 500 man-hours shows a superb factor until somebody is told about
+the other 460; a number that hides how much of the labour it ignored is not a measurement, it is an
+advertisement.
+
+No hours attributed at all reads UNKNOWN — never infinite productivity, however convenient that
+would be — and hours spent before the first measure read UNKNOWN rather than a productivity of
+zero, which would condemn every package at its start.
+
+Auth-ON browser and API proof, in the same run as the pace half: 160 m² installed at 1 priced
+man-hour each read UNKNOWN "no labour has been attributed" while still naming the 160 hours earned;
+a work package in another project was refused (400); 40 electricians × 8 hours read
+WORSE_THAN_PRICED at 320 spent against 160 earned, factor 0.5, while the pace verdict stayed
+ON_RATE on the same row; and 80 further hours naming no package stayed out of the figure and were
+reported beside it as 20% of the project's hours. The plan screen counts lateness and overspending
+as two separate headline numbers.
+
+**PLN-11's one open acceptance row is now closed.** COMPLETE is proposed in the reconciliation
+below and not applied.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -366,7 +413,11 @@ below says what is still missing and why it is not a rounding decision.
 | Planned output domain rules | 14/14 passed; the per-line manpower sheet normalised to one unit, supervision kept out of the crew that sets the rate, no basis at all where nothing was priced, both ends of a window counted, never expecting more than was sold, and an UNKNOWN with its reason for every fact nobody stated |
 | Planned output HTTP journey | 7/7 passed; the award freezes crew and hours and no money, the activity reads the sold quantity and priced rate with nothing entered, BEHIND with the recovery rate named, ON_RATE on catching up, UNKNOWN for an unmapped package and for a line with no crew priced, and nothing written onto the activity |
 | Planned output Auth-ON browser journey | 2/2 passed in Chromium; sold against installed, pace against priced pace, the headline count agreeing with the rows, silence where there is no award line, and "no rate can be judged" for a supply-only line |
-| Web unit suite | 217/217 passed, including the single web-side phrasing of what progress is measured against |
+| Labour productivity domain rules | 12/12 passed; priced, earned and spent kept apart, the unattributed remainder reported even when no factor can be given, an unattributed package never called infinitely productive, and hours before the first measure never called a productivity of zero |
+| Labour attribution HTTP journey | 11/11 passed; a package in another project refused (400), 320 spent against 160 earned reading WORSE_THAN_PRICED while the pace stays ON_RATE, and unattributed hours kept out of the figure and reported beside it |
+| Labour attribution Auth-ON browser journey | 2/2 passed in Chromium; the same chain on the plan screen, with lateness and overspending counted as separate headlines |
+| Database migration posture | 323/323 applied; a day's labour carries the work package it was spent on, indexed for the per-project fold, and nullable because most labour genuinely belongs to no one package |
+| Web unit suite | 221/221 passed |
 | Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -439,22 +490,22 @@ compares installed output without re-entry.
 | The comparison is derived, not stored | no rate, quantity or verdict appears on the stored activity | no |
 | Absence is not agreement | unmapped package, unpriced line, unopened window and unusable dates each read UNKNOWN with the reason | no |
 | Commercial confidentiality holds | the frozen basis carries crew and hours and no rate, cost, price, amount, margin or profit | no |
-| **Achieved productivity in man-hours** | **not derivable — site labour carries a project and a trade, but no work-package link** | **yes** |
+| Achieved productivity in man-hours | closed in iteration 11: labour carries its work package (migration 0323), read through a port, with earned set against spent | no |
+| The figure never flatters by omission | the share of the project's hours naming no package travels with every figure; an unattributed package reads UNKNOWN, never infinitely productive | no |
 
-**`PLN-11` DISCONNECTED → PARTIAL. COMPLETE is not proposed**, and the reason is the last row
-rather than a shortage of proof. The capability is named *productivity*, and productivity has two
-halves: the rate the work was priced at, and the rate it is actually costing in crew time. The
-first is now connected end to end. The second cannot be derived at all, because a labour allocation
-records a project and a trade and has no link to the work package the hours were spent on — so the
-system can say a crew installed 6 m² a day against 16 priced, and cannot say whether that took the
-priced hours or three times them. Attributing labour to a work package is its own slice with its
-own authority question, and calling this row COMPLETE would bury it.
+**`PLN-11` DISCONNECTED → PARTIAL, applied. `PARTIAL → COMPLETE` is now proposed** and left to the
+programme owner, as PLN-10's and PLN-12's were. The row that kept it PARTIAL through iteration 10 —
+achieved productivity in man-hours — is closed: a day's labour now names the work package it was
+spent on, and the plan sets what the work earned against what it cost.
 
-Two further limits are recorded rather than rounded away. Several activities sharing one work
-package each inherit that package's whole sold quantity, because no apportionment has been authored
-and none can be inferred. And rates are per calendar day rather than per working day, so a window
-spanning a shutdown flatters the achieved pace — the working calendar exists (PLN-03) and is not
-yet read here.
+Two limits are knowingly accepted with the proposal rather than rounded away. Several activities
+sharing one work package each inherit that package's whole sold quantity, because no apportionment
+has been authored and none can be inferred from the plan. And rates are counted in calendar days
+rather than working days, so a window spanning a shutdown flatters the achieved pace — the working
+calendar exists (PLN-03) and is not yet read here. Neither touches an acceptance criterion; both
+are recorded so a reader knows the figure's precision. As on PLN-10 and PLN-12, `actualOutput`
+would remain **PARTIAL** on promotion: the rendered output is proven in the browser and no exported
+productivity document exists.
 
 ### Observed while proving it, not fixed
 
@@ -471,7 +522,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE) and so is the rate it is measured against (PLN-11, now PARTIAL). What remains open in this line: labour is not attributable to a work package, so achieved productivity in man-hours cannot be derived at all; rates are counted in calendar days rather than working days; several activities on one package each inherit its whole sold quantity; and neither a figure stated against the measurement nor an activity losing ground reaches anybody who is not looking at the screen.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, and so is what the work cost in hours (PLN-11, PARTIAL and proposed for COMPLETE). What remains open in this line: rates are counted in calendar days rather than working days; several activities on one package each inherit its whole sold quantity; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen.
 
 ## Programme state
 

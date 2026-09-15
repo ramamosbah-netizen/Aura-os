@@ -198,9 +198,10 @@ export class ScheduleService {
    * of a planned window — the day it opens, the day it closes, and the days either side.
    */
   async outputOf(schedule: ProjectSchedule, today: string): Promise<Map<Id, PlannedOutput>> {
-    const packages = this.outputs
-      ? await this.outputs.packageOutputs(schedule.tenantId, schedule.projectId)
-      : new Map();
+    const [packages, spent] = await Promise.all([
+      this.outputs ? this.outputs.packageOutputs(schedule.tenantId, schedule.projectId) : Promise.resolve(new Map()),
+      this.outputs ? this.outputs.labourSpent(schedule.tenantId, schedule.projectId) : Promise.resolve(null),
+    ]);
     return new Map(schedule.tasks.map((task) => {
       const facts = task.wbsNodeId ? packages.get(task.wbsNodeId) : undefined;
       return [task.id, resolvePlannedOutput({
@@ -209,6 +210,8 @@ export class ScheduleService {
         plannedStart: task.plannedStart,
         plannedEnd: task.plannedEnd,
         today,
+        spent,
+        wbsNodeId: task.wbsNodeId,
       })];
     }));
   }

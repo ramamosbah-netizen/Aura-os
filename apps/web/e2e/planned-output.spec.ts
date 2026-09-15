@@ -112,6 +112,32 @@ test.describe('The rate the work was priced at', () => {
       await expect(page.getByTestId(`output-rate-${pricedId}`))
         .toHaveText('At the priced rate · 16 m2/day against 16 m2/day priced');
       await expect(page.getByText('No activity is losing ground against what was priced').first()).toBeVisible();
+
+      // ── What those metres COST in hours ───────────────────────────────────
+      // On rate and still ruinous: the pace is exactly what was sold, and it is taking twice the
+      // hours priced into it. One line cannot carry both facts, so the screen carries two.
+      await expect(page.getByTestId(`output-labour-${pricedId}`)).toContainText('no labour has been attributed');
+
+      const labour = await request.post(`${API}/site/labour`, {
+        headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+        data: { projectId: delivery.projectId, date: day(0), trade: 'Electrician', headcount: 40, hours: 8, wbsNodeId: delivery.wbsNodeId },
+      });
+      expect(labour.ok(), await labour.text()).toBe(true);
+      // Hours that belong to no one package — mobilisation, standing time — are real and are not
+      // added to it. They are reported beside the figure so nobody reads it as complete.
+      const general = await request.post(`${API}/site/labour`, {
+        headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+        data: { projectId: delivery.projectId, date: day(0), trade: 'General', headcount: 10, hours: 8 },
+      });
+      expect(general.ok(), await general.text()).toBe(true);
+
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(page.getByTestId(`output-labour-${pricedId}`))
+        .toHaveText('Costing more hours than priced · 320h spent against 160h earned (factor 0.5) · 20% of this project’s hours name no work package');
+      // …counted separately from lateness in the headline, because they are separate failures.
+      await expect(page.getByText('Activities spending more crew hours than the work earned').first()).toBeVisible();
+      await expect(page.getByTestId(`output-rate-${pricedId}`))
+        .toHaveText('At the priced rate · 16 m2/day against 16 m2/day priced');
     } finally {
       await delivery.cleanup();
     }

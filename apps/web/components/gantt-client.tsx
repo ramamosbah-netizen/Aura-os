@@ -1,6 +1,6 @@
 'use client';
 
-import { outputSummary, soldAndInstalled, type PlannedOutput } from '@/lib/planned-output';
+import { labourSummary, outputSummary, soldAndInstalled, type PlannedOutput } from '@/lib/planned-output';
 import { Fragment, useState } from 'react';
 import { CalendarPlus, Layers3, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -354,6 +354,9 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                       const output = sch.output?.[taskId] ?? null;
                       const sold = soldAndInstalled(output);
                       const summary = outputSummary(output);
+                      // The cost half, said separately: a crew can be behind the programme and
+                      // perfectly efficient, or ahead of it and ruinous. One line cannot carry both.
+                      const labour = labourSummary(output);
                       // "75%" is a fraction of something. These two lines are the something: what
                       // was sold, and the rate the company priced itself to install it at.
                       return (
@@ -364,6 +367,12 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                               data-testid={`output-rate-${taskId}`}
                               className={summary.tone === 'BEHIND' ? styles.behind : undefined}
                             >{summary.text}</small>
+                          )}
+                          {labour && (
+                            <small
+                              data-testid={`output-labour-${taskId}`}
+                              className={labour.tone === 'WORSE_THAN_PRICED' ? styles.behind : undefined}
+                            >{labour.text}</small>
                           )}
                         </>
                       );

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { behindCount, outputOf, outputSummary, soldAndInstalled, type PlannedOutput } from './planned-output';
+import { behindCount, labourSummary, outputOf, outputSummary, overspendingCount, soldAndInstalled, type PlannedOutput } from './planned-output';
 
 /**
  * The one phrasing every screen uses. What is worth pinning is the RESTRAINT: an activity with no
@@ -11,7 +11,9 @@ const output = (over: Partial<PlannedOutput> = {}): PlannedOutput => ({
   plannedQuantity: 200, unit: 'm2', installedQuantity: 60,
   basis: { crewSize: 2, manHoursPerUnit: 1, crewHoursPerUnit: 0.5, engineerManHoursPerUnit: 0, projectManagerManHoursPerUnit: 0, estimateId: 'est-1' },
   pricedRatePerDay: 16, pricedCrewDays: 12.5, achievedRatePerDay: 6, requiredRatePerDay: 14,
-  expectedByNow: 160, verdict: 'BEHIND', unknownReason: null, ...over,
+  expectedByNow: 160, verdict: 'BEHIND', unknownReason: null,
+  labour: { spentManHours: 100, earnedManHours: 60, factor: 0.6, unattributedManHours: 0, unattributedShare: 0, verdict: 'WORSE_THAN_PRICED', unknownReason: null },
+  ...over,
 });
 
 describe('saying what the progress is measured against', () => {
@@ -52,6 +54,36 @@ describe('what was sold against what is in', () => {
   });
 });
 
+describe('what the work cost in hours', () => {
+  it('sets the hours spent against the hours the installed work earned', () => {
+    expect(labourSummary(output())?.text)
+      .toBe('Costing more hours than priced · 100h spent against 60h earned (factor 0.6)');
+    expect(labourSummary(output({ labour: { ...output().labour, factor: 1.4, verdict: 'BETTER_THAN_PRICED' } }))?.tone)
+      .toBe('BETTER_THAN_PRICED');
+  });
+
+  it('never drops the share of the project’s hours the figure ignored', () => {
+    // 40 of 500 man-hours make any package look superb. The reader is told.
+    const withRemainder = labourSummary(output({
+      labour: { ...output().labour, unattributedManHours: 460, unattributedShare: 0.92 },
+    }));
+    expect(withRemainder?.text).toContain('92% of this project’s hours name no work package');
+  });
+
+  it('says why no comparison is possible, and stays silent where none was attempted', () => {
+    const unattributed = labourSummary(output({
+      labour: { spentManHours: 0, earnedManHours: 60, factor: null, unattributedManHours: 300, unattributedShare: 0.8, verdict: 'UNKNOWN', unknownReason: 'no labour has been attributed to this work package' },
+    }));
+    expect(unattributed?.text).toContain('no labour has been attributed');
+    expect(unattributed?.text).toContain('80% of this project’s hours');
+    // Nothing priced behind it → nothing earned → nothing to say at all.
+    expect(labourSummary(output({
+      labour: { spentManHours: null, earnedManHours: null, factor: null, unattributedManHours: null, unattributedShare: null, verdict: 'UNKNOWN', unknownReason: 'no crew was priced' },
+    }))).toBeNull();
+    expect(labourSummary(null)).toBeNull();
+  });
+});
+
 describe('the headline count', () => {
   it('counts only the activities actually losing ground', () => {
     const schedules = [{
@@ -61,6 +93,14 @@ describe('the headline count', () => {
     expect(behindCount(schedules)).toBe(1);
     // An unknown is never counted as behind — the system does not get to guess in either direction.
     expect(behindCount([{ tasks: [{ id: 'a' }] }])).toBe(0);
+  });
+
+  it('counts overspending separately from lateness — they are different failures', () => {
+    const late = output({ labour: { ...output().labour, verdict: 'AS_PRICED' } });
+    const wasteful = output({ verdict: 'ON_RATE', labour: { ...output().labour, verdict: 'WORSE_THAN_PRICED' } });
+    const schedules = [{ output: { a: late, b: wasteful }, tasks: [{ id: 'a' }, { id: 'b' }] }];
+    expect(behindCount(schedules)).toBe(1);
+    expect(overspendingCount(schedules)).toBe(1);
   });
 
   it("reads one activity's output, and nothing for an activity with no id", () => {

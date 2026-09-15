@@ -5,6 +5,7 @@ import { behindCount, overspendingCount, type PlannedOutput } from '@/lib/planne
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
 import LookAheadPanel from '../../../components/look-ahead-panel';
+import MilestonesPanel from '../../../components/milestones-panel';
 import PlanningRunPanel from '../../../components/planning-run-panel';
 import ResourceBookingClient from '../../../components/resource-booking-client';
 import ResourcePoolClient from '../../../components/resource-pool-client';
@@ -232,6 +233,16 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             {/* Only with a project in scope: a look-ahead across the whole portfolio is a list, not
                 a meeting agenda, and the readiness question is asked of one programme at a time. */}
             {projectId && <LookAheadPanel projectId={projectId} wbsNodes={wbsNodes ?? []} />}
+            {/* The committed points of the same programme. Gated on a project for the same reason:
+                a milestone is a promise about ONE job, and a portfolio list of them answers nobody's
+                question. The activities are passed through so a milestone can be gated on the plan
+                that is already on this screen rather than on ids typed from somewhere else. */}
+            {projectId && selectedSchedule && (
+              <MilestonesPanel
+                projectId={projectId}
+                tasks={selectedSchedule.tasks.map((task) => ({ id: task.id, name: task.name }))}
+              />
+            )}
           </>
         )}
       </section>

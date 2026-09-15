@@ -57,3 +57,20 @@ export function workingDaysInRange(
 ): string[] {
   return eachDay(from, to).filter((d) => calendar.isWorkingDay(d));
 }
+
+/**
+ * Working days between two dates, SIGNED: positive when `to` is later than `from`.
+ *
+ * Lives here rather than beside any one caller because a variance is only comparable when every
+ * figure on the project counts days the same way. A forecast that is "four days late" and a
+ * milestone that is "four days late" must mean the same four days, and the way that stops being
+ * true is two modules each rounding their own way.
+ */
+export function signedWorkingDays(from: string, to: string, calendar: WorkingCalendar = ALL_DAYS_WORKING): number {
+  if (from === to) return 0;
+  const earlier = from < to ? from : to;
+  const later = from < to ? to : from;
+  // Inclusive of both ends, so the count of days BETWEEN them is one less.
+  const between = Math.max(0, workingDaysInRange(earlier, later, calendar).length - 1);
+  return between === 0 ? 0 : from < to ? between : -between;
+}

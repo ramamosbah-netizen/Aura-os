@@ -66,6 +66,8 @@ import { PostgresResourceBookingStore } from './postgres-resource-booking-store'
 import { ResourceBookingService } from './resource-booking.service';
 import { PLANNING_RUN_STORE } from './planning-run-store';
 import { SCHEDULE_BASELINE_STORE, InMemoryScheduleBaselineStore, PostgresScheduleBaselineStore } from './baseline-store';
+import { MILESTONE_STORE, InMemoryMilestoneStore, PostgresMilestoneStore } from './milestone-store';
+import { MilestoneService } from './milestone.service';
 import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
 import { PostgresPlanningRunStore } from './postgres-planning-run-store';
 // §21 — two registers, two ports, two services, plus the one command that spans them.
@@ -182,6 +184,12 @@ const IN_MEMORY_RESOURCE_STATE = Symbol('IN_MEMORY_RESOURCE_STATE');
         pool ? new PostgresPlanningRunStore(pool) : new InMemoryPlanningRunStore(),
     },
     {
+      provide: MILESTONE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresMilestoneStore(pool) : new InMemoryMilestoneStore(),
+    },
+    {
       provide: SCHEDULE_BASELINE_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -250,10 +258,11 @@ const IN_MEMORY_RESOURCE_STATE = Symbol('IN_MEMORY_RESOURCE_STATE');
     { provide: CLOSEOUT_LIFECYCLE, useExisting: CloseoutReadinessService },
     CashflowForecastService,
     ScheduleService,
+    MilestoneService,
     ResourcePlanningService,
     ResourceBookingService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, ActivityOutputService, ProjectCalendarService, ResourcePlanningService, ResourceBookingService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, MilestoneService, ActivityOutputService, ProjectCalendarService, ResourcePlanningService, ResourceBookingService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

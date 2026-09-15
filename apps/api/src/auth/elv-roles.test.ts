@@ -86,6 +86,20 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.read'))).toBe(true);
   });
 
+  it('Planning authors milestones; declaring one MET is the Manager’s act', () => {
+    // PLN-04. Putting a milestone on the programme and maintaining what gates it is planning work.
+    // Recording that it was ACHIEVED is a statement to the client about what has been delivered —
+    // and the person who maintains the figure must not also be the one who declares it true. Same
+    // separation as `schedule.progress-override`, for the same reason.
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.milestone.create'))).toBe(true);
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.milestone.read'))).toBe(true);
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.milestone.achieve'))).toBe(false);
+    expect(roleFor('r-pm').permissions.some((p) => permissionMatches(p, 'projects.milestone.achieve'))).toBe(true);
+    // The Project Engineer reads the programme's milestones and authors none.
+    expect(roleFor('r-project-engineer').permissions.some((p) => permissionMatches(p, 'projects.milestone.read'))).toBe(true);
+    expect(roleFor('r-project-engineer').permissions.some((p) => permissionMatches(p, 'projects.milestone.create'))).toBe(false);
+  });
+
   it('Planning assesses a delay’s impact; deciding the claim it feeds is a commercial act', () => {
     // PLN-14. Working out what a delay did to the completion date is a planner's job — it is read
     // off the network they authored. Granting or refusing the EOT claim that rests on it is not:

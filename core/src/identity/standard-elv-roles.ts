@@ -119,6 +119,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'project',
     permissions: [
       'projects.schedule.read', 'projects.schedule.plan', 'projects.resource-booking.*', 'projects.wb.*', PROJECT_RESPONSIBILITY_WORK,
+      // Authors and maintains milestones as part of the programme — but NOT `milestone.achieve`.
+      // Declaring a milestone MET is a statement to the client about what has been delivered, not a
+      // planning act, and it sits with the Project Manager for the same reason
+      // `schedule.progress-override` does: the person who maintains the figure must not also be the
+      // one who declares it true.
+      'projects.milestone.read', 'projects.milestone.create',
       'projects.delay.*', readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
     ],
   },

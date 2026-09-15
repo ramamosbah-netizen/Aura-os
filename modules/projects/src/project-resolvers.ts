@@ -10,6 +10,7 @@ import { DELAY_STORE, EOT_STORE, type DelayStore, type EotStore } from './delay-
 import { CLOSEOUT_STORE, type CloseoutStore } from './closeout-store';
 import { PLANNING_RUN_STORE, type PlanningRunStore } from './planning-run-store';
 import { DELIVERY_ITEM_MAP_STORE, type DeliveryItemMapStore } from './delivery-item-map-store';
+import { MILESTONE_STORE, type MilestoneStore } from './milestone-store';
 
 /**
  * Project Delivery tells the permission guard which project each of its records belongs to.
@@ -40,6 +41,7 @@ export class ProjectsProjectResolvers implements OnModuleInit {
     @Inject(CLOSEOUT_STORE) private readonly closeouts: CloseoutStore,
     @Inject(PLANNING_RUN_STORE) private readonly runs: PlanningRunStore,
     @Inject(DELIVERY_ITEM_MAP_STORE) private readonly maps: DeliveryItemMapStore,
+    @Inject(MILESTONE_STORE) private readonly milestones: MilestoneStore,
   ) {}
 
   onModuleInit(): void {
@@ -57,6 +59,7 @@ export class ProjectsProjectResolvers implements OnModuleInit {
     this.registry.register('projects', 'risk', async (id) => (await this.risks.get(id))?.projectId ?? null);
     this.registry.register('projects', 'issue', async (id) => (await this.issues.get(id))?.projectId ?? null);
     this.registry.register('projects', 'delay', async (id) => (await this.delays.get(id))?.projectId ?? null);
+    this.registry.register('projects', 'milestone', async (id) => (await this.milestones.get(id))?.projectId ?? null);
     this.registry.register('projects', 'eot-claim', async (id) => (await this.eots.get(id))?.projectId ?? null);
     this.registry.register('projects', 'closeout', async (id) => (await this.closeouts.get(id))?.projectId ?? null);
     this.registry.register('projects', 'planning-run', async (id) => (await this.runs.get(id))?.projectId ?? null);

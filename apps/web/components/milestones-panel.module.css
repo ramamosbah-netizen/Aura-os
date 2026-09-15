@@ -1,0 +1,55 @@
+/* The milestones panel. Reads like the look-ahead beside it: one card, a header saying what is
+   being shown, and rows that lead with the VERDICT rather than the name — somebody scanning this is
+   looking for what is late, not for an alphabetical list. */
+.panel { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); padding: 14px 16px 16px; margin-top: 14px; }
+.head { display: flex; gap: 10px; align-items: center; }
+.headMain { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.icon { display: grid; place-items: center; width: 30px; height: 30px; flex: 0 0 auto; border-radius: 9px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+.meta { color: var(--muted); font-size: 11px; }
+.error { margin-top: 10px; padding: 8px 10px; border-radius: 8px; color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); font-size: 12px; }
+.empty { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
+
+.add { margin-left: auto; padding: 4px 10px; font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--text); cursor: pointer; }
+.add:hover { border-color: var(--accent); color: var(--accent); }
+
+.form { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.formRow { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.field input, .field select { padding: 5px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--text); }
+.field input { min-width: 180px; }
+.gates { display: flex; flex-direction: column; gap: 3px; font-size: 11px; color: var(--muted); }
+.gateList { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px; }
+.gate { display: inline-flex; gap: 5px; align-items: center; color: var(--text); font-size: 12px; }
+.actions { display: flex; gap: 8px; }
+.primary { padding: 5px 12px; font-size: 12px; font-weight: 600; border: 1px solid var(--accent); border-radius: 7px; background: var(--accent); color: var(--panel); cursor: pointer; }
+.secondary { padding: 5px 12px; font-size: 12px; border: 1px solid var(--border); border-radius: 7px; background: var(--panel); color: var(--muted); cursor: pointer; }
+.primary:disabled, .secondary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.list { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.item { border-top: 1px solid var(--border); padding-top: 10px; }
+.itemHead { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.badge { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
+.achieved { color: var(--good); background: color-mix(in srgb, var(--good) 14%, transparent); }
+.onTrack { color: var(--good); background: color-mix(in srgb, var(--good) 12%, transparent); }
+.atRisk { color: var(--warn, #b7791f); background: color-mix(in srgb, var(--warn, #b7791f) 16%, transparent); }
+.missed { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent); }
+/* Deliberately not the "on track" colour: nothing is wrong, and nothing is known either. */
+.unknown { color: var(--muted); background: color-mix(in srgb, var(--muted) 16%, transparent); }
+
+.dates { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-top: 4px; }
+.late { color: var(--bad); font-weight: 600; }
+.early { color: var(--good); }
+.reason { margin-top: 4px; color: var(--muted); font-size: 11px; }
+
+/* The contradiction: an achievement standing against work that is not finished. Loud on purpose —
+   it is the one thing on this panel somebody is most likely to want hidden. */
+.contradiction { margin-top: 6px; padding: 7px 10px; border-radius: 8px; font-size: 11px; color: var(--bad); background: color-mix(in srgb, var(--bad) 10%, transparent); border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent); }
+.contradiction strong { display: block; margin-bottom: 2px; }
+
+.gatingRow { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 5px; color: var(--muted); font-size: 11px; }
+.done { color: var(--good); }
+
+@media (max-width: 720px) {
+  .formRow { flex-direction: column; align-items: stretch; }
+  .field input { min-width: 0; }
+}

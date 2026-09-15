@@ -1,6 +1,6 @@
 import type { Id } from '@aura/shared';
 import { planSchedule, type PlanTaskInput } from './schedule-planning';
-import { workingDaysInRange, ALL_DAYS_WORKING, type WorkingCalendar } from './working-calendar';
+import { signedWorkingDays, ALL_DAYS_WORKING, type WorkingCalendar } from './working-calendar';
 
 /**
  * §22 — when this project will actually finish.
@@ -66,7 +66,30 @@ export interface ForecastCompletion {
   driverCount: number;
   /** The activities that decide the date, in the order they run. */
   contributors: ForecastContributor[];
+  /**
+   * Where EVERY activity lands in this run, critical or not — not just the ones driving the date.
+   *
+   * Exists so anything that gates on a subset of the programme (a milestone, PLN-04) reads its date
+   * out of THIS run rather than starting a second one. Two CPM passes over the same plan would
+   * eventually disagree, and a project must have one answer to "when does this finish".
+   *
+   * An activity already complete is present with `forecastFinish: null` and `complete: true`: it
+   * was excluded from the run because finished work constrains nothing, and null here means "not
+   * placed in this run", never "unknown when it finishes".
+   */
+  placements: ForecastPlacement[];
   unknownReason: string | null;
+}
+
+export interface ForecastPlacement {
+  taskId: Id;
+  name: string;
+  /** Null when the activity is finished, or when the programme could not be placed. */
+  forecastFinish: string | null;
+  remainingWorkingDays: number | null;
+  percentComplete: number;
+  measured: boolean;
+  complete: boolean;
 }
 
 export interface ForecastInput {
@@ -86,18 +109,9 @@ export interface ForecastInput {
 const UNKNOWN = (unknownReason: string, over: Partial<ForecastCompletion> = {}): ForecastCompletion => ({
   baselineFinish: null, plannedFinish: null, forecastFinish: null,
   varianceWorkingDays: null, planOptimismWorkingDays: null,
-  confidence: 'UNKNOWN', measuredDrivers: 0, driverCount: 0, contributors: [],
+  confidence: 'UNKNOWN', measuredDrivers: 0, driverCount: 0, contributors: [], placements: [],
   unknownReason, ...over,
 });
-
-/** Working days between two dates, signed: positive when `to` is later. */
-function signedWorkingDays(from: string, to: string, calendar: WorkingCalendar): number {
-  if (from === to) return 0;
-  const earlier = from < to ? from : to;
-  const later = from < to ? to : from;
-  const between = Math.max(0, workingDaysInRange(earlier, later, calendar).length - 1);
-  return between === 0 ? 0 : from < to ? between : -between;
-}
 
 /**
  * What is LEFT of an activity, given what has been done to it.
@@ -143,11 +157,27 @@ export function forecastCompletion(input: ForecastInput): ForecastCompletion {
   // including completed work would make every project with anything finished unforecastable. And a
   // finished predecessor constrains nothing: its successor can start now, which is exactly what
   // dropping it and its edges expresses.
+  // Where every activity lands, whether or not it drives the date. Built from the run when there is
+  // one, and still reported when there is not: a caller gating on a subset of the programme needs to
+  // know an activity is finished, or unplaceable, as much as it needs a date.
+  const placementsOf = (placed: Map<Id, { end: string | null }>): ForecastPlacement[] => tasks.map((task) => {
+    const left = remaining.get(task.id) ?? null;
+    return {
+      taskId: task.id,
+      name: task.name,
+      forecastFinish: left === 0 ? null : placed.get(task.id)?.end ?? null,
+      remainingWorkingDays: left,
+      percentComplete: task.percentComplete,
+      measured: task.measured,
+      complete: left === 0,
+    };
+  });
+
   const outstanding = tasks.filter((task) => remaining.get(task.id) !== 0);
   if (outstanding.length === 0) {
     return UNKNOWN(
       'every activity is complete, so there is no remaining work to forecast from — what is wanted here is the actual finish, which is a different fact',
-      known,
+      { ...known, placements: placementsOf(new Map()) },
     );
   }
   const stillRunning = new Set(outstanding.map((task) => task.id));
@@ -159,13 +189,19 @@ export function forecastCompletion(input: ForecastInput): ForecastCompletion {
     nonWorkingDays,
   });
 
+  const placed = new Map(forecast.tasks.map((task) => [task.id, task]));
+
   if (!forecast.established) {
     // An activity with no authored duration cannot be placed, and the planner refuses rather than
     // inventing one. A completion date from a programme that could not be built is not a forecast.
-    return UNKNOWN('the programme cannot be placed, so no completion date can be forecast', known);
+    return UNKNOWN('the programme cannot be placed, so no completion date can be forecast', {
+      ...known,
+      // Still reported: which activities could not be placed is exactly what somebody fixing this
+      // needs, and withholding it would make the refusal unactionable.
+      placements: placementsOf(placed),
+    });
   }
 
-  const placed = new Map(forecast.tasks.map((task) => [task.id, task]));
   const onPath = new Set(forecast.criticalPath);
   const contributors: ForecastContributor[] = outstanding
     .filter((task) => onPath.has(task.id))
@@ -203,6 +239,7 @@ export function forecastCompletion(input: ForecastInput): ForecastCompletion {
     measuredDrivers,
     driverCount: drivers.length,
     contributors,
+    placements: placementsOf(placed),
     unknownReason: null,
   };
 }

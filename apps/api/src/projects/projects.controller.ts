@@ -43,6 +43,7 @@ import {
   type PlanningRun,
   type PlanningRunView,
   ScheduleService,
+  MilestoneService,
   ResourcePlanningService,
   type ResourcePool,
   type ResourcePoolMember,
@@ -54,6 +55,8 @@ import {
   type RecoveryComparison,
   type RecordedBaseline,
   type ForecastCompletion,
+  type MilestoneView,
+  type ProjectMilestone,
   ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
@@ -326,6 +329,7 @@ export class ProjectsController {
     private readonly health: ProjectHealthService,
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
+    private readonly milestones: MilestoneService,
     private readonly resourcePlanning: ResourcePlanningService,
     private readonly resourceBookings: ResourceBookingService,
     private readonly conflictLineage: ConflictLineageService,
@@ -1739,6 +1743,78 @@ export class ProjectsController {
   @Get('schedules/:projectId/baselines')
   async baselineHistory(@Param('projectId') projectId: string): Promise<RecordedBaseline[]> {
     return this.schedule.baselineHistory(this.tenant.get().tenantId, projectId);
+  }
+
+  // ── PLN-04 — milestones ─────────────────────────────────────────────────────
+  //
+  // A point in the programme where something must be TRUE, not a zero-duration activity. The TARGET
+  // is authored and does not move when the plan moves; the FORECAST is read out of the schedule's
+  // own forecast run so the project keeps one answer to "when does this finish"; the STATUS is
+  // derived on every read and stored nowhere.
+  //
+  // Authoring one is planning work. Declaring one MET is a statement to the client about what has
+  // been delivered, and holds a different permission — the same separation `progress-override` makes.
+
+  @Permissions('projects.milestone.read')
+  @Get('schedules/:projectId/milestones')
+  async listMilestones(@Param('projectId') projectId: string): Promise<MilestoneView[]> {
+    return this.milestones.viewsFor(
+      this.tenant.get().tenantId, projectId, new Date().toISOString().slice(0, 10),
+    );
+  }
+
+  @Permissions('projects.milestone.create')
+  @Post('schedules/:projectId/milestones')
+  async createMilestone(
+    @Param('projectId') projectId: string,
+    @Body() dto: { name: string; targetDate: string; ownerId?: string | null; gatingTaskIds?: string[] },
+  ): Promise<ProjectMilestone> {
+    const ctx = this.tenant.get();
+    return this.milestones.create({
+      tenantId: ctx.tenantId,
+      // From the ROUTE, never the body: the project a milestone belongs to is not a field a caller
+      // gets to disagree with the URL about.
+      projectId,
+      name: dto?.name,
+      targetDate: dto?.targetDate,
+      ownerId: dto?.ownerId ?? null,
+      gatingTaskIds: dto?.gatingTaskIds ?? [],
+      actorId: ctx.actorId,
+    });
+  }
+
+  /**
+   * Record that a milestone was met, on the day it was met.
+   *
+   * Takes the date rather than stamping the clock: signed off on site on Friday and entered on
+   * Monday was met on Friday. Recording one against unfinished gating work is permitted — real
+   * milestones are accepted with snags — and the contradiction is then stated on every read.
+   */
+  @Permissions('projects.milestone.achieve')
+  @Post('milestones/:id/achievement')
+  async achieveMilestone(
+    @Param('id') id: string,
+    @Body() dto: { on: string; note?: string | null },
+  ): Promise<MilestoneView> {
+    const ctx = this.tenant.get();
+    return this.milestones.achieve({
+      tenantId: ctx.tenantId, id, on: dto?.on, note: dto?.note ?? null,
+      actorId: ctx.actorId, today: new Date().toISOString().slice(0, 10),
+    });
+  }
+
+  /** Withdraw an achievement that should not stand. Requires a reason: it has been reported as met. */
+  @Permissions('projects.milestone.achieve')
+  @Delete('milestones/:id/achievement')
+  async withdrawMilestoneAchievement(
+    @Param('id') id: string,
+    @Body() dto: { reason: string },
+  ): Promise<MilestoneView> {
+    const ctx = this.tenant.get();
+    return this.milestones.withdraw({
+      tenantId: ctx.tenantId, id, reason: dto?.reason,
+      actorId: ctx.actorId, today: new Date().toISOString().slice(0, 10),
+    });
   }
 
   @Get('schedules/summary/:projectId')

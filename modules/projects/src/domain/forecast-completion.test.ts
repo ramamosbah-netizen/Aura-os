@@ -97,6 +97,37 @@ describe('where the project is actually heading', () => {
   });
 });
 
+describe('where every activity lands, not just the ones driving the date', () => {
+  // Exists so anything gating on a SUBSET of the programme — a milestone (PLN-04) — reads its date
+  // out of this run instead of starting a second one that would eventually disagree with it.
+  it('places every activity the caller asked about', () => {
+    const forecast = at();
+    expect(forecast.placements.map((p) => p.taskId)).toEqual(['a', 'b', 'c']);
+    expect(forecast.placements[2]).toMatchObject({ name: 'Termination', forecastFinish: '2026-03-20', complete: false });
+  });
+
+  it('marks a finished activity complete rather than giving it a date', () => {
+    // It was left out of the run because finished work constrains nothing, so a null here means
+    // "not placed in this run" — never "unknown when it finishes".
+    const forecast = at({ tasks: chain({ a: { percentComplete: 100 } }) });
+    expect(forecast.placements[0]).toMatchObject({ taskId: 'a', complete: true, forecastFinish: null, remainingWorkingDays: 0 });
+    expect(forecast.placements[1].complete).toBe(false);
+  });
+
+  it('still reports them when the programme cannot be placed at all', () => {
+    // Which activities could not be placed is exactly what somebody fixing it needs.
+    const forecast = at({ tasks: chain({ b: { durationWorkingDays: null } }) });
+    expect(forecast.confidence).toBe('UNKNOWN');
+    expect(forecast.placements).toHaveLength(3);
+    expect(forecast.placements.find((p) => p.taskId === 'b')).toMatchObject({ forecastFinish: null, remainingWorkingDays: null });
+  });
+
+  it('carries the measured/declared split onto every placement', () => {
+    const forecast = at({ tasks: chain({ b: { measured: false } }) });
+    expect(forecast.placements.map((p) => p.measured)).toEqual([true, false, true]);
+  });
+});
+
 describe('how much the date is worth', () => {
   it('is MEASURED only when every activity with work left carries measured progress', () => {
     expect(at()).toMatchObject({ confidence: 'MEASURED', measuredDrivers: 3, driverCount: 3 });

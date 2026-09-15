@@ -1816,17 +1816,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
+        "actualOutput": "PARTIAL",
+        "browser": "PARTIAL",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "A Technical Manager governs tenant-wide internal or subcontract resource pools and dated capacity windows. Project planners commit persisted activity demand into held bookings; current feasibility is recomputed from all same-tenant project commitments, and the UI shows dated cross-project conflicts, explicit capacity exceptions and reasoned release history. HR/Fleet availability, conflict-owner workflow and links to the other project records remain incomplete.",
-      "acceptanceProof": "Connect HR/Fleet availability and a named conflict-resolution responsibility; provide authorized links from each conflict to the involved project activities."
+      "currentBehavior": "The second half of the temporal invariant is connected. HR, Fleet and Assets now state availability through a port §22 reads and does not own (ADR-0004, bound at the composition root): an APPROVED leave, a scheduled service visit and a retired vehicle or disposed asset are dated ABSENCES — a known zero — while an undated “out of service” status is UNKNOWN, because nobody said until when, and unknown is never available. A standing commitment therefore becomes CONFLICTED when the owning register later says the resource is not there, the verdict names the cause in the register’s own words, and `becameInfeasible` distinguishes “this fitted when it was made” from “this never fitted”. Nothing is vetoed: the leave is still approved, the booking is neither rejected nor altered, and not one field of the commitment changes. A pending leave is a request and is ignored; a pool never inherits its members’ leave, because deriving crew capacity from a roster is arithmetic nobody stated. An unbound or failing provider reads as silence, never as availability. Auth-ON browser proof drives HR from request to approval and watches the planning desk change. A named conflict-resolution owner, and links from a conflict to the other project’s activities, remain open.",
+      "acceptanceProof": "Give each surfaced conflict a named resolution owner and an authorized link to every project activity involved in it."
     },
     {
       "id": "PLN-10",
@@ -1858,8 +1858,8 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "66 domain tests cover booking/conflict rules. Live proof created a dated task, ran a persisted proposal, displayed its date move and accepted it; that sample had zero resource requirements.",
-      "acceptanceProof": "Two-project employee/equipment booking, leave/breakdown conflict, authorized resolution and visible planner action."
+      "currentBehavior": "Domain tests cover booking and conflict rules, and the live desk shows dated cross-project conflicts with the projects involved. Over-allocation is governed rather than blocked: committing past a KNOWN capacity costs a written reason, and a silent overrun is refused. Conflicts now also arrive from OUTSIDE Projects — an HR leave approval or a Fleet/Assets service visit turns a standing commitment conflicted, with the cause named (PLN-09). What is still missing is the resolution half: no conflict has a named owner, no resolution is recorded against it, and the planner cannot reach the other project’s activity from the conflict that names it.",
+      "acceptanceProof": "Assign a conflict to a named resolver, record the resolution taken, and link each conflict to every activity involved across projects."
     },
     {
       "id": "PLN-11",

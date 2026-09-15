@@ -1,5 +1,6 @@
 import type { Id } from '@aura/shared';
 import { type ResourceRef, type ResourceUnit, sameResource } from './resource-ref';
+import { type ResourceAvailabilityFact, availabilityCovers } from './resource-availability';
 import { type ResourceCapacity, capacityOn } from './resource-pool';
 import {
   type DayLoad,
@@ -71,6 +72,14 @@ export interface ResourceLoadDay {
   contributors: BookingShare[];
   /** Present when capacity and committed could not be compared for this day. */
   unknownReason?: DayUnknownReason;
+  /**
+   * What the owning register said about this resource on this day, when it said anything.
+   *
+   * Present for both effects: an `absent` day carries the reason its capacity is a known zero, and
+   * an `unknown` day carries the reason nobody can state a capacity. Absent entirely when the
+   * registers were silent and §22's own declared capacity stands.
+   */
+  unavailable?: { reason: string; source: string };
 }
 
 /**
@@ -111,12 +120,56 @@ function loadOnDay(
   windows: readonly ResourceCapacity[],
   held: readonly ResourceBooking[],
   day: string,
+  availability: readonly ResourceAvailabilityFact[] = [],
 ): ResourceLoadDay {
   const cap = capacityOn(windows, day); // windows are pre-filtered to this resource by the caller
   const covering = held.filter((b) => bookingCovers(b, day));
+  // The owning register's statement about THIS day, if it made one. `absent` outranks `unknown`:
+  // a stated absence is knowledge, and a second statement that nobody can say does not erase it.
+  const stated = availability.filter((fact) => availabilityCovers(fact, day));
+  const said = stated.find((fact) => fact.effect === 'absent') ?? stated[0];
   const contributors: BookingShare[] = covering.map((b) => ({
     bookingId: b.id, projectId: b.projectId, quantity: b.quantity, unit: b.unit,
   }));
+
+  if (said?.effect === 'absent') {
+    /**
+     * The resource is not there. Capacity is a KNOWN ZERO — not unknown, and not the number a
+     * capacity window declared, because a window is a plan and this is a fact about the day.
+     *
+     * Deliberately settled BEFORE the unit check below. A unit disagreement normally makes a day
+     * incomparable, and rightly: four persons cannot be weighed against forty hours. But none of
+     * something is comparable with any positive demand in any unit — nothing is being converted,
+     * only counted — so an absence is never downgraded to UNKNOWN by a unit mismatch it makes
+     * irrelevant.
+     */
+    const committedWhileAbsent = sum(covering);
+    return {
+      day,
+      capacity: 0,
+      committed: committedWhileAbsent,
+      unit: cap.unit ?? (covering.length > 0 ? covering[0].unit : null),
+      overBy: committedWhileAbsent > 0 ? committedWhileAbsent : null,
+      contributors,
+      unavailable: { reason: said.reason, source: said.source },
+    };
+  }
+
+  if (said?.effect === 'unknown') {
+    // The register says it is out of service and cannot say until when. Capacity is unstatable —
+    // which is never AVAILABLE, and is not a conflict either: nobody has claimed a number to break.
+    const committedWhileUnknown = sum(covering);
+    return {
+      day,
+      capacity: null,
+      committed: committedWhileUnknown,
+      unit: cap.unit ?? (covering.length > 0 ? covering[0].unit : null),
+      overBy: null,
+      contributors,
+      ...(committedWhileUnknown > 0 ? { unknownReason: 'NONE_DECLARED' as const } : {}),
+      unavailable: { reason: said.reason, source: said.source },
+    };
+  }
 
   const bookingUnits = new Set(covering.map((b) => b.unit));
   const unitsPresent = new Set<ResourceUnit>(bookingUnits);
@@ -163,11 +216,15 @@ export function resolveResourceLoad(
   bookings: readonly ResourceBooking[],
   interval: { from: string; to: string },
   calendar: WorkingCalendar = ALL_DAYS_WORKING,
+  availability: readonly ResourceAvailabilityFact[] = [],
 ): ResourceLoadDay[] {
   const myWindows = windows.filter((w) => sameResource(w.resource, resource));
   const held = heldForResource(bookings, resource);
+  // Typed identity here too: a vehicle and an asset sharing a uuid are two resources, and one's
+  // maintenance visit says nothing about the other.
+  const mine = availability.filter((fact) => sameResource(fact.resource, resource));
   return workingDaysInRange(interval.from, interval.to, calendar)
-    .map((day) => loadOnDay(resource, myWindows, held, day));
+    .map((day) => loadOnDay(resource, myWindows, held, day, mine));
 }
 
 /**
@@ -184,8 +241,9 @@ export function assessResourceAcrossProjects(
   bookings: readonly ResourceBooking[],
   interval: { from: string; to: string },
   calendar: WorkingCalendar = ALL_DAYS_WORKING,
+  availability: readonly ResourceAvailabilityFact[] = [],
 ): ResourceConflictReport {
-  const days = resolveResourceLoad(resource, windows, bookings, interval, calendar);
+  const days = resolveResourceLoad(resource, windows, bookings, interval, calendar, availability);
   const conflictDays = days.filter((d) => d.overBy !== null).map((d) => d.day);
   const projectsInvolved = [
     ...new Set(days.flatMap((d) => d.contributors.map((c) => c.projectId))),
@@ -197,10 +255,12 @@ export function assessResourceAcrossProjects(
     const across = projectsInvolved.length > 1
       ? `, across ${projectsInvolved.length} projects`
       : '';
+    const stated = [...new Set(days.filter((d) => d.overBy !== null && d.unavailable).map((d) => d.unavailable!.reason))];
+    const because = stated.length > 0 ? ` — ${stated.join('; ')}` : '';
     return {
       ...base,
       feasibility: 'CONFLICTED',
-      reason: `committed demand exceeds capacity on ${conflictDays.length} day(s)${across}.`,
+      reason: `committed demand exceeds capacity on ${conflictDays.length} day(s)${across}${because}.`,
     };
   }
 
@@ -232,10 +292,15 @@ export function dayLoadsForBooking(
   windows: readonly ResourceCapacity[],
   bookings: readonly ResourceBooking[],
   calendar: WorkingCalendar = ALL_DAYS_WORKING,
+  availability: readonly ResourceAvailabilityFact[] = [],
 ): DayLoad[] {
   return resolveResourceLoad(
-    booking.resource, windows, bookings, { from: booking.from, to: booking.to }, calendar,
-  ).map((d) => ({ day: d.day, capacity: d.capacity, committed: d.committed, unit: d.unit }));
+    booking.resource, windows, bookings, { from: booking.from, to: booking.to }, calendar, availability,
+  ).map((d) => ({
+    day: d.day, capacity: d.capacity, committed: d.committed, unit: d.unit,
+    // Carried so the booking's own verdict can name the cause, not just the arithmetic.
+    ...(d.unavailable ? { unavailableReason: d.unavailable.reason } : {}),
+  }));
 }
 
 /**

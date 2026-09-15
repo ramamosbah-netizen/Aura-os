@@ -6,6 +6,7 @@ import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
 import { InMemoryResourcePlanningStore } from './in-memory-resource-planning-store';
 import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { ResourceBookingService } from './resource-booking.service';
+import type { ResourceAvailabilityFact } from './domain/resource-availability';
 
 const POOL = { resourceType: 'pool' as const, canonicalResourceId: 'pool-elv' };
 
@@ -174,6 +175,87 @@ describe('ResourceBookingService', () => {
 
     await expect(service.respond({ tenantId: 'tenant-a', bookingId: 'ffffffff-ffff-4fff-8fff-ffffffffffff', response: 'accepted' }))
       .rejects.toThrow(/not found/);
+  });
+
+  it('lets a later availability change make a standing commitment conflicted, without touching it', async () => {
+    const schedules = new InMemoryScheduleStore();
+    const resources = new InMemoryResourcePlanningStore();
+    await resources.createCapacity(makeResourceCapacity({
+      tenantId: 'tenant-a', resource: POOL, unit: 'crews', quantity: 1, from: '2026-10-01', to: '2026-10-03',
+    }));
+    const schedule = makeProjectSchedule({
+      tenantId: 'tenant-a', projectId: '11111111-1111-4111-8111-111111111111',
+      tasks: [{
+        name: 'Install CCTV', wbsNodeId: 'wbs-a', plannedStart: '2026-10-01', plannedEnd: '2026-10-03',
+        durationWorkingDays: 3, requirements: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', resource: POOL, unit: 'crews', quantity: 1 }],
+      }],
+    });
+    await schedules.create(schedule);
+
+    // Nothing is said yet, so the commitment is made against declared capacity alone and fits.
+    let stated: ResourceAvailabilityFact[] = [];
+    const provider = { unavailability: async () => stated };
+    const service = new ResourceBookingService(resources, resources, schedules, provider);
+    const committed = await service.commitRequirement({
+      tenantId: 'tenant-a', projectId: schedule.projectId, requirementId: schedule.tasks[0].requirements[0].id,
+    });
+    expect(committed.assessment.feasibility).toBe('AVAILABLE');
+
+    // …and then the owning register says the resource is not there on one of those days.
+    stated = [{
+      resource: POOL, from: '2026-10-02', to: '2026-10-02', effect: 'absent',
+      reason: 'approved annual leave', source: 'hr',
+    }];
+    const [seen] = await service.listProject('tenant-a', schedule.projectId);
+    expect(seen.assessment.feasibility).toBe('CONFLICTED');
+    // The case a planner most needs named: nobody did anything wrong, and it says why.
+    expect(seen.assessment.becameInfeasible).toBe(true);
+    expect(seen.assessment.reason).toContain('approved annual leave');
+    expect(seen.resourceConflict.reason).toContain('approved annual leave');
+    // The commitment record itself is untouched — the leave changed the verdict, not the history.
+    expect(seen.booking).toMatchObject({
+      status: 'held', quantity: 1, capacityAtCommitment: 1, demandAtCommitment: 1,
+      committedAt: committed.booking.committedAt,
+    });
+
+    // An undated statement is UNKNOWN, which is never AVAILABLE and is not a conflict either.
+    stated = [{
+      resource: POOL, from: '2026-10-01', to: '2026-10-03', effect: 'unknown',
+      reason: 'off the road with no stated return date', source: 'fleet',
+    }];
+    const [unknown] = await service.listProject('tenant-a', schedule.projectId);
+    expect(unknown.assessment.feasibility).toBe('UNKNOWN');
+    expect(unknown.assessment.reason).toContain('no stated return date');
+  });
+
+  it('is unchanged when no availability provider is bound, and when one fails', async () => {
+    const schedules = new InMemoryScheduleStore();
+    const resources = new InMemoryResourcePlanningStore();
+    await resources.createCapacity(makeResourceCapacity({
+      tenantId: 'tenant-a', resource: POOL, unit: 'crews', quantity: 1, from: '2026-10-01', to: '2026-10-03',
+    }));
+    const schedule = makeProjectSchedule({
+      tenantId: 'tenant-a', projectId: '11111111-1111-4111-8111-111111111111',
+      tasks: [{
+        name: 'Install CCTV', wbsNodeId: 'wbs-a', plannedStart: '2026-10-01', plannedEnd: '2026-10-03',
+        durationWorkingDays: 3, requirements: [{ id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', resource: POOL, unit: 'crews', quantity: 1 }],
+      }],
+    });
+    await schedules.create(schedule);
+
+    // Unbound: §22 governs by its own declared capacity, exactly as before this existed.
+    const unbound = new ResourceBookingService(resources, resources, schedules);
+    const committed = await unbound.commitRequirement({
+      tenantId: 'tenant-a', projectId: schedule.projectId, requirementId: schedule.tasks[0].requirements[0].id,
+    });
+    expect(committed.assessment.feasibility).toBe('AVAILABLE');
+
+    // A failing provider is treated as silence, never as a favourable answer.
+    const broken = new ResourceBookingService(resources, resources, schedules, {
+      unavailability: async () => { throw new Error('HR is down'); },
+    });
+    const [seen] = await broken.listProject('tenant-a', schedule.projectId);
+    expect(seen.assessment.feasibility).toBe('AVAILABLE');
   });
 
   it('refuses another project requirement and retains released history', async () => {

@@ -21,6 +21,10 @@ import { apiAuthHeaders } from './api-auth';
  * asset's custodian — who answers for the machine rather than for their own time, and stops
  * receiving it the moment they hand it on.
  *
+ * And the other half of the temporal invariant: an approved leave, decided in HR long after the
+ * commitment was made, turns that standing commitment into a visible conflict naming its cause —
+ * without altering one field of what was committed.
+ *
  * The negatives matter as much as the positive: an employee with no link reaches no list, one
  * account cannot be held by two employment records, a decline with no reason is refused, nobody
  * can answer for somebody else, releasing the booking removes the item (proving it is read
@@ -51,6 +55,10 @@ interface ScheduleResponse {
 }
 
 test.describe('Employee account link carries an allocation into My Work', () => {
+  // One journey, five chains: the identity link, the person's answer, the crew's roster, the
+  // machine's custodian, and a later availability change. Long on purpose — the value is that
+  // these hold TOGETHER against one plan — but the budget stays tight (it runs in about half a
+  // minute) so a hang surfaces as a failure quickly rather than after seven quiet minutes.
   test.setTimeout(180_000);
 
   test('delivers a named allocation to the linked account and to no other', async ({ page, request, baseURL }) => {
@@ -164,7 +172,14 @@ test.describe('Employee account link carries an allocation into My Work', () => 
     const requirementFor = (employeeId: string) =>
       saved.tasks.flatMap((task) => task.requirements).find((requirement) => requirement.resource.canonicalResourceId === employeeId)!.id;
 
-    const held = await post<{ booking: { id: string } }>(request, `/projects/${project.id}/resource-bookings`, {
+    // Declared BEFORE the commitment, so the booking records a known capacity it fitted inside.
+    // Without that, it would be committed against an unknown capacity and could never later be
+    // said to have "fitted when it was made" — the distinction the invariant turns on.
+    await post(request, '/projects/resource-capacity', {
+      resourceType: 'employee', canonicalResourceId: mine.id, unit: 'persons', quantity: 3,
+      from: day(3), to: day(5), note: 'declared availability',
+    });
+    const held = await post<{ booking: { id: string; committedAt: string } }>(request, `/projects/${project.id}/resource-bookings`, {
       requirementId: requirementFor(mine.id),
     });
     await post(request, `/projects/${project.id}/resource-bookings`, { requirementId: requirementFor(colleague.id) });
@@ -425,13 +440,56 @@ test.describe('Employee account link carries an allocation into My Work', () => 
     await search.fill(run);
     await expect(page.getByTestId('work-item').filter({ hasText: equipmentActivity })).toHaveCount(0, { timeout: 30_000 });
 
+    // ── A later availability change makes a standing commitment conflicted ────
+    const beforeLeave = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    const beforeView = ((await beforeLeave.json()) as Array<{ booking: { id: string }; assessment: { feasibility: string } }>)
+      .find((view) => view.booking.id === held.booking.id)!;
+    expect(beforeView.assessment.feasibility, 'declared capacity covers the commitment').toBe('AVAILABLE');
+
+    // A leave REQUEST is not a fact — planning must not pre-empt HR's decision.
+    const leave = await post<{ id: string }>(request, '/hr/leaves', {
+      employeeId: mine.id, leaveType: 'annual', startDate: day(4), endDate: day(4), reason: 'family',
+    });
+    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/approved annual leave/)).toHaveCount(0);
+
+    // HR approves it. Nothing in Projects is touched, and nothing rejects HR's decision.
+    const approved = await request.put(`${API}/hr/leaves/${leave.id}/resolve`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: { status: 'approved' },
+    });
+    expect(approved.ok(), await approved.text()).toBe(true);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText(/approved annual leave/)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('CONFLICTED', { exact: true }).first()).toBeVisible();
+
+    const afterLeave = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    const afterView = ((await afterLeave.json()) as Array<{
+      booking: { id: string; status: string; quantity: number; from: string; to: string; capacityAtCommitment: number | null; committedAt: string };
+      assessment: { feasibility: string; becameInfeasible: boolean; reason?: string; conflictDays: string[] };
+    }>).find((view) => view.booking.id === held.booking.id)!;
+
+    expect(afterView.assessment.feasibility).toBe('CONFLICTED');
+    // The sentence a planner needs: nobody did anything wrong, and here is what changed.
+    expect(afterView.assessment.becameInfeasible).toBe(true);
+    expect(afterView.assessment.reason).toContain('fitted when it was committed');
+    expect(afterView.assessment.reason).toContain('approved annual leave');
+    expect(afterView.assessment.conflictDays).toEqual([day(4)]);
+    // And the commitment itself is exactly what it was: the verdict changed, the history did not.
+    expect(afterView.booking).toMatchObject({
+      status: 'held', quantity: 2, from: day(3), to: day(5),
+      capacityAtCommitment: 3, committedAt: held.booking.committedAt,
+    });
+
     // ── Read through, not copied: releasing the booking removes the item ──────
     const released = await request.post(`${API}/projects/${project.id}/resource-bookings/${held.booking.id}/release`, {
       headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
       data: { reason: 'activity resequenced after coordination' },
     });
     expect(released.status(), await released.text()).toBe(201);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    // Navigate rather than reload: this journey visits several screens, and a block that depends
+    // on whichever page a previous block happened to leave open fails somewhere far from its cause.
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
     await search.fill(run);
     await expect(page.getByTestId('work-item').filter({ hasText: `Allocated to ${mineActivity}` })).toHaveCount(0, { timeout: 30_000 });
 

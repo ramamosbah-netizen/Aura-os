@@ -386,6 +386,14 @@ export interface DayLoad {
   committed: number;
   /** The unit these numbers are in. `null` when nothing declares a capacity for that day. */
   unit: ResourceUnit | null;
+  /**
+   * Why the OWNING register says this resource is not there — approved leave, a maintenance visit.
+   *
+   * Carried so a verdict can say what happened rather than only that something did. "Committed
+   * demand exceeds capacity" sends a planner looking for another project's booking; "Maya Haddad
+   * is on annual leave" sends them to the right conversation.
+   */
+  unavailableReason?: string;
 }
 
 /**
@@ -431,27 +439,37 @@ export function assessBooking(
 
   // A known capacity exceeded is a conflict wherever it happens, even when other days are unknown.
   // Answering UNKNOWN for a day we can see is over would hide a real clash behind a missing one.
-  const conflictDays = covered.filter((d) => d.capacity !== null && d.committed > d.capacity).map((d) => d.day);
+  const conflicted = covered.filter((d) => d.capacity !== null && d.committed > d.capacity);
+  const conflictDays = conflicted.map((d) => d.day);
   if (conflictDays.length > 0) {
     const wasFine = wasValidAtCommitment(b) === true;
+    // What the OWNING register said, when it said anything. A planner needs the cause, not only
+    // the arithmetic: "the crane is over-committed" and "the crane is in for service" are two
+    // different problems with two different remedies.
+    const stated = [...new Set(conflicted.map((d) => d.unavailableReason).filter(Boolean))];
+    const because = stated.length > 0 ? ` — ${stated.join('; ')}` : '';
     return {
       feasibility: 'CONFLICTED',
       conflictDays,
       // The sentence a planner actually needs: was this always wrong, or did it become wrong?
       reason: wasFine
-        ? `this booking fitted when it was committed and no longer does — committed demand exceeds capacity on ${conflictDays.length} day(s).`
-        : `committed demand exceeds capacity on ${conflictDays.length} day(s).`,
+        ? `this booking fitted when it was committed and no longer does — committed demand exceeds capacity on ${conflictDays.length} day(s)${because}.`
+        : `committed demand exceeds capacity on ${conflictDays.length} day(s)${because}.`,
       becameInfeasible: wasFine,
     };
   }
 
-  const unknownDays = covered.filter((d) => d.capacity === null).length + missing.length;
+  const unknown = covered.filter((d) => d.capacity === null);
+  const unknownDays = unknown.length + missing.length;
   if (unknownDays > 0) {
+    const stated = [...new Set(unknown.map((d) => d.unavailableReason).filter(Boolean))];
     return {
       feasibility: 'UNKNOWN',
       conflictDays: [],
       becameInfeasible: false,
-      reason: `capacity is unknown on ${unknownDays} of the days this booking covers.`,
+      reason: stated.length > 0
+        ? `capacity is unknown on ${unknownDays} of the days this booking covers — ${stated.join('; ')}.`
+        : `capacity is unknown on ${unknownDays} of the days this booking covers.`,
     };
   }
   return { feasibility: 'AVAILABLE', conflictDays: [], becameInfeasible: false };

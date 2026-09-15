@@ -8,6 +8,7 @@ import {
   externalCommitmentsFor,
   resolveResourceLoad,
 } from './resource-facts';
+import type { ResourceAvailabilityFact } from './resource-availability';
 import { workingCalendarOf } from './working-calendar';
 
 /**
@@ -229,5 +230,95 @@ describe('externalCommitmentsFor — the bridge to the pure planner', () => {
   it('excludes released bookings — they are not a live commitment', () => {
     const theirs = releaseBooking(booking({ projectId: PROJECT_B }), { reason: 'de-scoped' });
     expect(externalCommitmentsFor(PROJECT_A, [theirs])).toHaveLength(0);
+  });
+});
+
+/**
+ * The second half of the temporal invariant: a later availability change makes a standing
+ * commitment CONFLICTED without rewriting what was true when it was made.
+ */
+describe('what the owning registers say about availability', () => {
+  const maya = { resourceType: 'employee' as const, canonicalResourceId: 'emp-maya' };
+  const held = {
+    id: 'b1', tenantId: 't1', projectId: 'p1', scheduleId: null, taskId: null, requirementId: null,
+    resource: maya, unit: 'persons' as const, quantity: 1, from: '2026-07-06', to: '2026-07-08',
+    status: 'held' as const, capacityAtCommitment: 1, demandAtCommitment: 1, overCapacityReason: null,
+    committedAt: '2026-07-01T00:00:00.000Z', committedBy: 'u-planner',
+    releasedReason: null, releasedAt: null, releasedBy: null,
+    response: 'pending' as const, responseReason: null, responseAt: null, responseBy: null,
+  };
+  const leave = (over: Partial<ResourceAvailabilityFact> = {}): ResourceAvailabilityFact => ({
+    resource: maya, from: '2026-07-07', to: '2026-07-07', effect: 'absent',
+    reason: 'Maya Haddad is on annual leave', source: 'hr', ...over,
+  });
+
+  it('turns a stated absence into a KNOWN zero, not an unknown', () => {
+    const [before, during, after] = resolveResourceLoad(maya, [], [held], { from: '2026-07-06', to: '2026-07-08' }, undefined, [leave()]);
+    expect(before.capacity).toBeNull();          // nothing declared, nothing said
+    expect(during).toMatchObject({ capacity: 0, committed: 1, overBy: 1 });
+    expect(during.unavailable).toMatchObject({ reason: 'Maya Haddad is on annual leave', source: 'hr' });
+    expect(after.capacity).toBeNull();
+    // The absence is not a lingering state: the days either side are untouched.
+    expect(before.unavailable).toBeUndefined();
+  });
+
+  it('outranks a declared capacity window, because a window is a plan and this is the day', () => {
+    const window = {
+      id: 'c1', tenantId: 't1', resource: maya, unit: 'persons' as const, quantity: 1,
+      from: '2026-07-01', to: '2026-07-31', calendarId: null, orgNodeId: null, note: null,
+      createdAt: '2026-07-01T00:00:00.000Z', createdBy: null,
+    };
+    const days = resolveResourceLoad(maya, [window], [held], { from: '2026-07-07', to: '2026-07-07' }, undefined, [leave()]);
+    expect(days[0]).toMatchObject({ capacity: 0, overBy: 1 });
+  });
+
+  it('reports an undated out-of-service statement as UNKNOWN, never as absent or available', () => {
+    const outOfService = leave({ effect: 'unknown', reason: 'vehicle is out of service with no return date', source: 'fleet', from: '2026-07-06', to: '2026-07-08' });
+    const days = resolveResourceLoad(maya, [], [held], { from: '2026-07-06', to: '2026-07-08' }, undefined, [outOfService]);
+    expect(days.every((d) => d.capacity === null)).toBe(true);
+    expect(days.every((d) => d.overBy === null)).toBe(true);
+    expect(days[0].unknownReason).toBe('NONE_DECLARED');
+    expect(days[0].unavailable).toMatchObject({ source: 'fleet' });
+  });
+
+  it('prefers a stated absence over a statement that nobody can say', () => {
+    const days = resolveResourceLoad(maya, [], [held], { from: '2026-07-07', to: '2026-07-07' }, undefined, [
+      leave({ effect: 'unknown', reason: 'out of service' }),
+      leave(),
+    ]);
+    expect(days[0]).toMatchObject({ capacity: 0, overBy: 1 });
+    expect(days[0].unavailable?.reason).toBe('Maya Haddad is on annual leave');
+  });
+
+  it('is typed: another resource\u2019s leave says nothing about this one', () => {
+    const someoneElse = leave({ resource: { resourceType: 'asset', canonicalResourceId: 'emp-maya' } });
+    const days = resolveResourceLoad(maya, [], [held], { from: '2026-07-07', to: '2026-07-07' }, undefined, [someoneElse]);
+    expect(days[0].capacity).toBeNull();
+    expect(days[0].unavailable).toBeUndefined();
+  });
+
+  it('names the cause in the cross-project verdict', () => {
+    const report = assessResourceAcrossProjects(maya, [], [held], { from: '2026-07-06', to: '2026-07-08' }, undefined, [leave()]);
+    expect(report.feasibility).toBe('CONFLICTED');
+    expect(report.reason).toContain('Maya Haddad is on annual leave');
+    expect(report.conflictDays).toEqual(['2026-07-07']);
+  });
+
+  it('makes a booking that fitted at commitment become infeasible, saying so and saying why', () => {
+    const loads = dayLoadsForBooking(held, [], [held], undefined, [leave()]);
+    const verdict = assessBooking(held, loads);
+    expect(verdict.feasibility).toBe('CONFLICTED');
+    // Nobody did anything wrong: it fitted when it was made, and the domain distinguishes that.
+    expect(verdict.becameInfeasible).toBe(true);
+    expect(verdict.reason).toContain('fitted when it was committed');
+    expect(verdict.reason).toContain('Maya Haddad is on annual leave');
+    // And the commitment record itself is untouched by any of it.
+    expect(held).toMatchObject({ status: 'held', quantity: 1, capacityAtCommitment: 1 });
+  });
+
+  it('changes nothing at all when the registers are silent', () => {
+    const quiet = resolveResourceLoad(maya, [], [held], { from: '2026-07-06', to: '2026-07-08' });
+    const same = resolveResourceLoad(maya, [], [held], { from: '2026-07-06', to: '2026-07-08' }, undefined, []);
+    expect(same).toEqual(quiet);
   });
 });

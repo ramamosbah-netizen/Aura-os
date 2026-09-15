@@ -1,7 +1,12 @@
-import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { type Id, assertSameTenant, sameTenantOrNull } from '@aura/shared';
 import { assessBooking, commitBooking, releaseBooking, respondToBooking, type BookingAssessment, type BookingResponse, type ResourceBooking } from './domain/resource-booking';
-import type { ResourceRef } from './domain/resource-ref';
+import { type ResourceRef, resourceKey } from './domain/resource-ref';
+import {
+  RESOURCE_AVAILABILITY_PROVIDER,
+  type ResourceAvailabilityFact,
+  type ResourceAvailabilityProvider,
+} from './domain/resource-availability';
 import { assessResourceAcrossProjects, dayLoadsForBooking, resolveResourceLoad, type ResourceConflictReport } from './domain/resource-facts';
 import { RESOURCE_BOOKING_STORE, type ResourceBookingStore } from './resource-booking-store';
 import { RESOURCE_FACTS_STORE, type ResourceFactsStore, type ResourceInterval } from './resource-facts-store';
@@ -35,7 +40,26 @@ export class ResourceBookingService {
     @Inject(RESOURCE_BOOKING_STORE) private readonly store: ResourceBookingStore,
     @Inject(RESOURCE_FACTS_STORE) private readonly facts: ResourceFactsStore,
     @Inject(SCHEDULE_STORE) private readonly schedules: ScheduleStore,
+    /**
+     * Optional, and unbound is a real state rather than an error (see the port's own note): a
+     * composition with no HR or Fleet behaves exactly as §22 did before availability was connected.
+     * What it must never do is read silence as "everything is available".
+     */
+    @Optional() @Inject(RESOURCE_AVAILABILITY_PROVIDER)
+    private readonly availability: ResourceAvailabilityProvider | null = null,
   ) {}
+
+  /**
+   * What the owning registers say about these resources over this interval.
+   *
+   * Failure is not fatal and is not silently favourable: if the provider throws, the answer is no
+   * statements, which leaves §22's own declared capacity governing exactly as it did before — the
+   * same outcome as an unbound provider, and never an upgrade to AVAILABLE.
+   */
+  private async availabilityFor(tenantId: Id, refs: readonly ResourceRef[], interval: { from: string; to: string }): Promise<ResourceAvailabilityFact[]> {
+    if (!this.availability || refs.length === 0) return [];
+    return this.availability.unavailability(tenantId, refs, interval).catch(() => []);
+  }
 
   async commitRequirement(input: {
     tenantId: Id; projectId: Id; requirementId: Id; overCapacityReason?: string | null; committedBy?: Id | null;
@@ -52,13 +76,18 @@ export class ResourceBookingService {
     }
 
     const interval = { from: task.plannedStart, to: task.plannedEnd };
-    const [windows, held] = await Promise.all([
+    const [windows, held, stated] = await Promise.all([
       this.facts.capacityWindowsFor(input.tenantId, [requirement.resource], interval),
       this.facts.heldBookingsFor(input.tenantId, [requirement.resource], interval),
+      this.availabilityFor(input.tenantId, [requirement.resource], interval),
     ]);
-    const availability = resolveResourceLoad(requirement.resource, windows, held, interval).map((entry) => ({
-      day: entry.day, capacity: entry.capacity, alreadyCommitted: entry.committed, unit: entry.unit,
-    }));
+    // What the registers say counts at COMMITMENT too, not only afterwards: committing somebody
+    // into their own approved leave should cost the same stated reason as any other overrun,
+    // rather than being recorded as a comfortable fit and becoming a conflict a second later.
+    const dayAvailability = resolveResourceLoad(requirement.resource, windows, held, interval, undefined, stated)
+      .map((entry) => ({
+        day: entry.day, capacity: entry.capacity, alreadyCommitted: entry.committed, unit: entry.unit,
+      }));
     let booking: ResourceBooking;
     try {
       booking = commitBooking({
@@ -66,26 +95,41 @@ export class ResourceBookingService {
         requirementId: requirement.id, resource: requirement.resource, unit: requirement.unit,
         quantity: requirement.quantity, from: interval.from, to: interval.to,
         overCapacityReason: input.overCapacityReason, committedBy: input.committedBy,
-      }, availability);
+      }, dayAvailability);
       await this.store.create(booking);
     } catch (error) {
       if (/already has a held booking/.test(String(error))) throw new ConflictException('this activity requirement already has a held booking');
       if (error instanceof ConflictException) throw error;
       throw new BadRequestException(error instanceof Error ? error.message : 'the resource booking is invalid');
     }
-    return this.view(booking, windows, [...held, booking]);
+    return this.view(booking, windows, [...held, booking], stated);
   }
 
+  /**
+   * Every commitment this project holds, each with its current verdict.
+   *
+   * ONE read per source for the whole screen, not one per row. Each of these reads asks a register
+   * about a set of resources over a span, so a per-booking loop asked the same questions again for
+   * every line — and with availability connected, that meant re-listing HR's leave, Fleet's
+   * vehicles and the asset register once per booking. The domain functions filter by resource and
+   * by the booking's own dates themselves, so handing each verdict the superset is exactly as
+   * correct and one round trip instead of N.
+   */
   async listProject(tenantId: Id, projectId: Id): Promise<ResourceBookingView[]> {
     const rows = await this.store.listForProject(tenantId, projectId);
-    return Promise.all(rows.map(async (booking) => {
-      const interval = { from: booking.from, to: booking.to };
-      const [windows, held] = await Promise.all([
-        this.facts.capacityWindowsFor(tenantId, [booking.resource], interval),
-        this.facts.heldBookingsFor(tenantId, [booking.resource], interval),
-      ]);
-      return this.view(booking, windows, held);
-    }));
+    if (rows.length === 0) return [];
+
+    const refs = [...new Map(rows.map((booking) => [resourceKey(booking.resource), booking.resource])).values()];
+    const span = {
+      from: rows.reduce((earliest, booking) => (booking.from < earliest ? booking.from : earliest), rows[0].from),
+      to: rows.reduce((latest, booking) => (booking.to > latest ? booking.to : latest), rows[0].to),
+    };
+    const [windows, held, stated] = await Promise.all([
+      this.facts.capacityWindowsFor(tenantId, refs, span),
+      this.facts.heldBookingsFor(tenantId, refs, span),
+      this.availabilityFor(tenantId, refs, span),
+    ]);
+    return rows.map((booking) => this.view(booking, windows, held, stated));
   }
 
   /**
@@ -185,12 +229,17 @@ export class ResourceBookingService {
     return released;
   }
 
-  private view(booking: ResourceBooking, windows: Parameters<typeof assessResourceAcrossProjects>[1], held: ResourceBooking[]): ResourceBookingView {
-    const resourceConflict = assessResourceAcrossProjects(booking.resource, windows, held, { from: booking.from, to: booking.to });
+  private view(
+    booking: ResourceBooking,
+    windows: Parameters<typeof assessResourceAcrossProjects>[1],
+    held: ResourceBooking[],
+    stated: readonly ResourceAvailabilityFact[] = [],
+  ): ResourceBookingView {
+    const interval = { from: booking.from, to: booking.to };
     return {
       booking,
-      assessment: assessBooking(booking, dayLoadsForBooking(booking, windows, held)),
-      resourceConflict,
+      assessment: assessBooking(booking, dayLoadsForBooking(booking, windows, held, undefined, stated)),
+      resourceConflict: assessResourceAcrossProjects(booking.resource, windows, held, interval, undefined, stated),
     };
   }
 }

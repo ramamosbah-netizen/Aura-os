@@ -157,6 +157,13 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | An equipment commitment is read as booking the custodian's own time | The item says the machine is committed and that the person is answering FOR THE MACHINE, not for their day |
 | Anyone with a work-item permission answers for a machine | Only the person the owning register names may answer; somebody who has handed the equipment on receives 403 |
 | Custody names somebody HR does not know, or a disposed asset | The employee is checked against HR and must be active (400); the domain refuses custody of a disposed or deleted asset |
+| A leave approval silently leaves the plan saying the commitment is fine | An approved leave makes the committed days a known zero, so the standing booking reads CONFLICTED with the cause named in HR's own words |
+| Projects becomes an approval step for HR or Fleet | Nothing is vetoed or rejected: the leave is approved, the service goes ahead, and not one field of the commitment changes — only what the plan says about itself |
+| A pending leave is treated as a fact | Only an APPROVED leave counts; a request is ignored until HR decides |
+| An undated "out of service" is read as absence, or as availability | It resolves to UNKNOWN — nobody said until when — and UNKNOWN is never AVAILABLE; a retired vehicle or disposed asset is a known absence because that one is permanent |
+| A pool loses capacity because one member is on leave | Availability never speaks about a pool: deriving crew capacity from a roster is arithmetic nobody stated, and a member's leave appears on the member's own bookings |
+| A missing or broken availability provider reads as "everything is available" | Unbound and failing both resolve to no statements, leaving §22's declared capacity governing exactly as before |
+| History is rewritten when availability changes | The commitment snapshot is untouched; `becameInfeasible` distinguishes "fitted when it was made" from "never fitted" |
 
 ## Verification completed
 
@@ -219,14 +226,19 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Equipment commitments in My Work | 23/23 allocation tests passed, 5 of them new; custodian wording from the owning register, answerable for the machine, refused for equipment not held, all three kinds carried at once and actioned as themselves |
 | Full allocation browser journey | 1/1 passed in Chromium; person, crew and equipment proven in one Auth-ON run end to end |
 | Database migration posture | 320/320 applied; an asset carries its custodian in its own register, indexed for the work-list read |
-| Full API unit/fitness suite | 521 passed / 4 skipped |
+| Full API unit/fitness suite | 530 passed / 4 skipped |
+| Availability fold (domain) | 25/25 resource-facts tests passed, 8 of them new; absence is a known zero that outranks a declared window, undated is UNKNOWN, identity stays typed, and silence changes nothing |
+| Availability read from the registers | 9/9 passed; approved-only leave, scheduled-not-completed maintenance, retired vs in-maintenance, no rewriting of past days, pools never spoken about, and no register queried that was not asked about |
+| Availability through the booking service | 8/8 passed; a standing commitment becomes CONFLICTED and says why, the record is unchanged, and unbound or failing providers stay silent rather than favourable |
+| Availability Auth-ON browser journey | 1/1 passed in Chromium; leave requested (no effect), approved, and the planning desk turns CONFLICTED naming the leave, with the commitment byte-for-byte intact |
+| Planning desk register reads | Repaired before it shipped: the desk asked HR, Fleet and Assets once per booking; one batched read per screen now serves every row |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. HR/Fleet availability and named conflict-resolution ownership. A held commitment now reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07, and PLN-08 moves off BACKEND_ONLY on the strength of the governed equipment action). What remains open here is availability itself: a leave approval or a breakdown still does not change the feasibility of a commitment already made. Project access for an allocated non-member also remains open.
+2. Named conflict-resolution ownership. A held commitment now reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); and HR, Fleet and Assets now change the feasibility of commitments already made, which closes the second half of the temporal invariant (PLN-09). What remains open here is resolution: no conflict has a named owner, no resolution is recorded against one, and a conflict does not link to the other project's activity. Project access for an allocated non-member also remains open.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

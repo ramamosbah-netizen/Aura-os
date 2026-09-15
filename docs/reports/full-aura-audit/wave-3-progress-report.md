@@ -397,6 +397,59 @@ programme appearing on the next read with nothing authored.
 **PLN-13 moves from ABSENT to COMPLETE** — see the reconciliation below. This leaves the register
 with no ABSENT capability at all.
 
+## Iteration 15 — What a delay actually did to the completion date
+
+An EOT claim is a contractual instrument, and the number in it is the most disputed figure on a
+construction project. Two facts are routinely mistaken for each other, and the whole value of this
+iteration is refusing to:
+
+- **Claimed** — how long the event lasted. A fact about the world: the storm blew for ten days.
+- **Impact** — how many working days completion actually moved. A fact about the plan: a ten-day
+  storm on an activity with six days of float moves completion by four, not ten.
+
+A contractor claims the first. An employer grants the second. A system reporting only one of them
+has taken a side, and one reporting the first as if it were the second is simply wrong.
+
+A delay event now names the **activities** it hit, canonically (migration 0325). It has carried a
+WBS code as free text since it was introduced — a label that drifts the first time somebody
+renumbers a package, and a link no query can follow. That column stays as the note it always was and
+is deliberately **not** migrated: nobody can map free text onto an activity id after the fact, and
+guessing would manufacture the very lineage this exists to make real.
+
+The impact is derived by running **the same CPM twice** — once as planned, once with the delay
+inserted — and diffing the finishes. Writing a bespoke delay calculator would give the project two
+answers to "when does this finish", and the one nobody looks at would be the one in the claim. It is
+counted in working days under the project's calendar (PLN-03), because a figure in calendar days is
+indefensible the moment the contract is not, and a storm across a weekend nobody was going to work
+delayed nothing. **"Absorbed by float" is a real verdict**, not a failure to reach one.
+
+**Concurrency is named and never apportioned.** An overlapping delay is reported with its cause and
+left there. Whether a contractor-caused delay running alongside an employer-caused one reduces
+liability is a question of the contract and the law, decided by people; halving a figure on that
+basis would be inventing a legal position and hiding it inside arithmetic.
+
+And the **assessment is a separate, recorded act** — a figure, a name and a moment — stored beside
+the derived impact and never instead of it. The derived figure moves as the programme moves, which
+is correct. The submitted one does not: it was made against the plan as it then stood, and rewriting
+it whenever somebody edited an activity would quietly rewrite history. Both are shown, exactly as
+PLN-12 keeps a measurement beside the figure stated against it. Zero is accepted, because
+"absorbed by float" is the commonest honest answer to a claim.
+
+Auth-ON browser and API proof on a critical chain under a Gulf calendar: a delay naming no activity
+the programme holds reports UNKNOWN rather than a confident figure; named on the critical path,
+three claimed days read as three working days lost, 16 March → 19 March, stepping over the weekend;
+the same event moved onto an activity with slack reads ABSORBED_BY_FLOAT with completion unmoved; a
+concurrent contractor-caused delay is named with its cause and changes the figure by nothing; an
+assessment records a figure, a name and a moment and moves the event to `analysed`; a negative
+figure and a missing one are refused; and stretching the critical activity afterwards changes the
+derived impact while the submitted figure stands.
+
+Worth noting for the record: PLN-03's rule caught this iteration's own test. Stretching an activity
+to six working days inside a two-day window was refused until the window was widened with it —
+exactly as it would refuse a planner.
+
+**PLN-14 stays PARTIAL, and COMPLETE is proposed below.**
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -569,6 +622,11 @@ with no ABSENT capability at all.
 | Look-ahead domain rules | 17/17 passed; the window and its own working days, only the part of an activity inside it, new work against carried-in, readiness established rather than assumed, an undeclared capacity never rounded up to ready, and one scope row per work package |
 | Look-ahead HTTP journey | 8/8 passed; the window, a clamped length, uncommitted → committed → released readiness, a predecessor naming itself, one package row for two activities, and the window following an edit to the programme |
 | Look-ahead Auth-ON browser journey | 1/1 passed in Chromium; the panel on the plan screen through the same chain |
+| Delay impact domain rules | 12/12 passed; claimed against lost, float absorbing a delay, working-day counting, concurrency named and not apportioned, an activity the plan no longer holds, and a programme that cannot be placed |
+| Delay impact HTTP journey | 8/8 passed; canonical activity naming, three days on the critical path, the same event absorbed by float, concurrency named, an assessment recorded against a name, a negative figure refused, and the submitted figure surviving a plan edit |
+| Delay impact Auth-ON browser journey | 1/1 passed in Chromium; the ledger carrying claimed beside assessed, and the derived verdict changing with the activity it names |
+| Role catalogue authority | 24/24 passed; a Planning Engineer assesses a delay's impact and does not decide the EOT claim that rests on it |
+| Database migration posture | 325/325 applied; a delay names its activities under FORCE RLS, and an assessment is a whole fact or none of it |
 | Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -744,6 +802,35 @@ printable form**, which is how a site meeting is usually handed it. That is the 
 often enough to be a document-generation slice of its own rather than six separate ones — the same
 argument that moved notifications into a shared authority.
 
+### PLN-14 reconciliation
+
+The capability reads *Delay assessment*, and its acceptance criterion is that a delay event
+identifies affected activities and the critical path, and produces a reviewed impact and recovery
+proposal.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Identifies affected activities | named canonically, many per event, refused if the plan no longer holds them | no |
+| Identifies the critical path | reported from the same CPM that produces the programme | no |
+| Produces an impact | claimed and lost kept apart, counted in working days under the project's calendar | no |
+| The impact is reviewed | a recorded act — figure, name and moment — that survives the plan moving | no |
+| Concurrency is not fudged | overlapping events named with their cause and never apportioned | no |
+| Produces a recovery proposal | a planning run is the recovery mechanism, and a planner starts one by hand | **yes** |
+
+**Proposed: `PLN-14` PARTIAL → COMPLETE.** The row is left to the programme owner as the others
+were, and the open row above is the reason to read the proposal carefully rather than wave it
+through: the criterion says "and recovery proposal", and what exists is a recovery mechanism
+(PLN-15's planning runs, already PARTIAL) that an assessment does not hand off to automatically.
+
+That hand-off is deliberately not built here. A delay assessment that silently launched a
+re-plan would produce a proposal nobody asked for against a programme nobody agreed to move, and
+the acceptance of a recovery plan is PLN-15's governed act with its own reviewer. Whether the
+criterion is met by "the mechanism exists and is one click away" or requires the automatic hand-off
+is a judgement for the owner, not one to settle by promoting the row.
+
+One further limit is carried: a delay reaches nobody who is not looking at the screen — the same
+notification gap five other rows carry.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -759,7 +846,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, delay/recovery and forecast evidence from the connected plan. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost, recovery and forecast evidence from the connected plan. Delay assessment is now proven (PLN-14, PARTIAL and proposed for COMPLETE, with the recovery hand-off deliberately unbuilt). The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

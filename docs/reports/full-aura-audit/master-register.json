@@ -1981,17 +1981,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
+        "actualOutput": "PARTIAL",
+        "browser": "PARTIAL",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Delay/EOT records exist and the planning solver can move dates, but live proof did not connect a delay event to a schedule analysis.",
-      "acceptanceProof": "Delay event identifies affected activities/critical path and produces a reviewed impact and recovery proposal."
+      "currentBehavior": "A delay event names the ACTIVITIES it hit, canonically (migration 0325). It has carried a WBS code as free text since it was introduced — a label that drifts the first time somebody renumbers a package, and a link no query can follow, which is not a basis for a contractual instrument. That column stays as the note it always was and is deliberately not migrated: nobody can map free text onto an activity id after the fact, and guessing would manufacture the lineage this exists to make real. TWO FACTS ARE KEPT APART because an EOT dispute is precisely the confusion of them: CLAIMED is how long the event lasted, a fact about the world; IMPACT is how many working days completion actually moved, a fact about the plan. A ten-day storm on an activity with float moves completion by less, or by nothing. A contractor claims the first, an employer grants the second, and a system reporting only one has taken a side. The impact is derived by running the SAME CPM twice — as planned, and with the delay inserted — and diffing the finishes, so the project has one answer to “when does this finish” rather than a bespoke delay calculator beside the planner. Counted in WORKING days under the project’s calendar (PLN-03): a figure in calendar days is indefensible the moment the contract is not, and a storm over a weekend nobody was going to work delayed nothing. ‘Absorbed by float’ is a real verdict rather than a failure to reach one. CONCURRENCY IS NAMED AND NEVER APPORTIONED — an overlapping delay is reported with its cause and left there, because whether it reduces liability is a question of contract and law decided by people, and halving a figure on that basis would be inventing a legal position inside arithmetic. The ASSESSMENT is a separate, recorded act: a figure, a name and a moment, stored beside the derived impact and never instead of it, so a number submitted against the plan as it then stood survives the plan moving. Zero is accepted — it is the commonest honest answer. Assessing carries `projects.delay.assess`, which a Planning Engineer holds and which does not carry the commercial decision on the claim.",
+      "acceptanceProof": "Auth-ON browser and HTTP proof on a critical chain under a Gulf calendar: a delay naming no activity the programme holds reports UNKNOWN rather than a confident figure; named on the critical path, three claimed days read as three working days of completion lost, 2026-03-16 → 2026-03-19, stepping over the weekend; the same three-day event moved onto an activity with slack reads ABSORBED_BY_FLOAT with completion unmoved; a concurrent contractor-caused delay is named with its cause and changes the figure by nothing; an assessment records a figure, a name and a moment and moves the event to `analysed`; a negative figure and a missing one are refused; and stretching the critical activity afterwards changes the DERIVED impact while the submitted figure stands. Twelve domain rules cover the edges, including a programme that cannot be placed at all. STILL OPEN: the assessment feeds no recovery proposal automatically — a planning run is the recovery mechanism (PLN-15) and a planner starts one by hand; and the delay reaches nobody who is not looking at the screen, which is the same notification gap five other rows carry."
     },
     {
       "id": "PLN-15",

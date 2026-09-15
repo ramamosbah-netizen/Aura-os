@@ -76,6 +76,15 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.read'))).toBe(true);
   });
 
+  it('Planning assesses a delay’s impact; deciding the claim it feeds is a commercial act', () => {
+    // PLN-14. Working out what a delay did to the completion date is a planner's job — it is read
+    // off the network they authored. Granting or refusing the EOT claim that rests on it is not:
+    // that decision sits with the commercial side, and the two must not collapse into one role.
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.delay.assess'))).toBe(true);
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.eot-claim.decide'))).toBe(false);
+    expect(roleFor('r-pm').permissions.some((p) => permissionMatches(p, 'projects.delay.assess'))).toBe(true);
+  });
+
   it('Technical management governs organization resource pools and capacity', () => {
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-pool.create'))).toBe(true);
     expect(roleFor('r-technical-manager').permissions.some((p) => permissionMatches(p, 'projects.resource-capacity.create'))).toBe(true);

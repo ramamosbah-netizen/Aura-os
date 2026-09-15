@@ -18,9 +18,36 @@ export interface DelayEvent {
   endDate: string | null;
   delayDays: number;
   isConcurrent: boolean;
-  linkedActivityCode: string | null;  // WBS code cross-reference
+  /**
+   * A WBS code as TEXT, kept exactly as it was and no longer the link that matters.
+   *
+   * It drifts the first time somebody renumbers a package and no query can follow it, which is not
+   * a basis for a contractual instrument. `affectedTaskIds` below is the canonical one; this reads
+   * as what it always was — a note (migration 0325).
+   */
+  linkedActivityCode: string | null;
+  /**
+   * The activities this delay actually hit, canonically. Many, because a storm stops three
+   * activities rather than a code.
+   */
+  affectedTaskIds: Id[];
   description: string | null;
   status: DelayStatus;
+  /**
+   * What a named person concluded, on a date, against the plan as it then stood.
+   *
+   * KEPT BESIDE THE DERIVED IMPACT, never instead of it. The impact of a delay is computed from the
+   * network on every read and changes as the programme changes — which is correct, and is why it is
+   * not stored. But a figure submitted to an employer was made at a moment, and must survive the
+   * plan moving underneath it. Storing only the derived number would rewrite history on every plan
+   * edit; storing only this one would hide that the plan has moved. Both, exactly as PLN-12 keeps a
+   * measurement beside the figure stated against it.
+   */
+  assessedAt: string | null;
+  assessedBy: Id | null;
+  /** Working days of completion lost, as assessed. Zero is a real answer — absorbed by float. */
+  assessedImpactWorkingDays: number | null;
+  assessmentNote: string | null;
   createdAt: string;
 }
 
@@ -34,6 +61,7 @@ export interface NewDelayEvent {
   delayDays?: number;
   isConcurrent?: boolean;
   linkedActivityCode?: string | null;
+  affectedTaskIds?: Id[];
   description?: string | null;
 }
 
@@ -49,9 +77,44 @@ export function makeDelayEvent(input: NewDelayEvent): DelayEvent {
     delayDays: Number.isFinite(input.delayDays) ? Number(input.delayDays) : 0,
     isConcurrent: input.isConcurrent ?? false,
     linkedActivityCode: input.linkedActivityCode ?? null,
+    affectedTaskIds: [...new Set(input.affectedTaskIds ?? [])],
     description: input.description ?? null,
     status: 'identified',
+    assessedAt: null,
+    assessedBy: null,
+    assessedImpactWorkingDays: null,
+    assessmentNote: null,
     createdAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Record what a named person concluded about a delay's impact.
+ *
+ * REFUSES rather than repairs. An assessment is a whole fact — a figure, a name and a moment — and
+ * a figure with nobody behind it is not one. Zero is accepted and is the commonest honest answer
+ * to an EOT claim: the delay happened and the completion date did not move.
+ *
+ * The derived impact is deliberately NOT what is stored. This is the number that was submitted,
+ * against the plan as it stood; the plan will move, and the two are then shown side by side.
+ */
+export function assessDelay(
+  delay: DelayEvent,
+  input: { impactWorkingDays: number; note?: string | null; actorId?: Id | null },
+): DelayEvent {
+  if (!input.actorId) throw new Error('an assessment must be recorded against a named assessor');
+  const days = Number(input.impactWorkingDays);
+  if (!Number.isFinite(days) || days < 0) {
+    throw new Error('assessed impact must be a number of working days, and cannot be negative');
+  }
+  return {
+    ...delay,
+    assessedAt: new Date().toISOString(),
+    assessedBy: input.actorId,
+    assessedImpactWorkingDays: days,
+    assessmentNote: input.note?.trim() || null,
+    // `analysed` is the state this field has always implied and nothing ever set.
+    status: delay.status === 'identified' ? 'analysed' : delay.status,
   };
 }
 

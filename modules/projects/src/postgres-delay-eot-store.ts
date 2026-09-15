@@ -18,6 +18,12 @@ interface DelayRow {
   linked_activity_code: string | null;
   description: string | null;
   status: string;
+  assessed_at: Date | string | null;
+  assessed_by: string | null;
+  assessed_impact_working_days: string | number | null;
+  assessment_note: string | null;
+  /** Aggregated from the join table by the read; absent on a row read without it. */
+  affected_task_ids?: string[] | null;
   created_at: Date | string;
 }
 
@@ -35,6 +41,13 @@ function rowToDelay(r: DelayRow): DelayEvent {
     linkedActivityCode: r.linked_activity_code,
     description: r.description,
     status: r.status as DelayStatus,
+    affectedTaskIds: r.affected_task_ids ?? [],
+    assessedAt: r.assessed_at === null || r.assessed_at === undefined
+      ? null : r.assessed_at instanceof Date ? r.assessed_at.toISOString() : String(r.assessed_at),
+    assessedBy: r.assessed_by ?? null,
+    assessedImpactWorkingDays: r.assessed_impact_working_days === null || r.assessed_impact_working_days === undefined
+      ? null : Number(r.assessed_impact_working_days),
+    assessmentNote: r.assessment_note ?? null,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
 }
@@ -52,22 +65,44 @@ export class PostgresDelayStore implements DelayStore {
        e.endDate, e.delayDays, e.isConcurrent, e.linkedActivityCode,
        e.description, e.status, e.createdAt],
     );
+    await this.writeActivities(e);
+  }
+
+  /**
+   * Replace the canonical activity links.
+   *
+   * Wholesale, like the schedule's dependency network and for the same reason: which activities a
+   * delay hit is one fact about the event, and half-written it is a different claim.
+   */
+  private async writeActivities(e: DelayEvent): Promise<void> {
+    await this.pool.query('DELETE FROM public.aura_projects_delay_activities WHERE delay_id = $1', [e.id]);
+    for (const taskId of e.affectedTaskIds) {
+      await this.pool.query(
+        `INSERT INTO public.aura_projects_delay_activities (id, tenant_id, project_id, delay_id, task_id)
+         VALUES (gen_random_uuid(), $1, $2, $3, $4) ON CONFLICT DO NOTHING`,
+        [e.tenantId, e.projectId, e.id, taskId],
+      );
+    }
   }
 
   async update(e: DelayEvent): Promise<void> {
     await this.pool.query(
       `UPDATE public.aura_projects_delay_events
        SET title=$2, cause_category=$3, start_date=$4, end_date=$5, delay_days=$6,
-           is_concurrent=$7, linked_activity_code=$8, description=$9, status=$10
+           is_concurrent=$7, linked_activity_code=$8, description=$9, status=$10,
+           assessed_at=$11, assessed_by=$12, assessed_impact_working_days=$13, assessment_note=$14
        WHERE id=$1`,
       [e.id, e.title, e.causeCategory, e.startDate, e.endDate, e.delayDays,
-       e.isConcurrent, e.linkedActivityCode, e.description, e.status],
+       e.isConcurrent, e.linkedActivityCode, e.description, e.status,
+       e.assessedAt, e.assessedBy, e.assessedImpactWorkingDays, e.assessmentNote],
     );
+    await this.writeActivities(e);
   }
 
   async get(id: Id): Promise<DelayEvent | null> {
     const res = await this.pool.query<DelayRow>(
-      'SELECT * FROM public.aura_projects_delay_events WHERE id = $1', [id],
+      `SELECT d.*, (SELECT coalesce(array_agg(a.task_id::text), '{}') FROM public.aura_projects_delay_activities a WHERE a.delay_id = d.id) AS affected_task_ids
+         FROM public.aura_projects_delay_events d WHERE d.id = $1`, [id],
     );
     return res.rows.length ? rowToDelay(res.rows[0]) : null;
   }
@@ -75,12 +110,13 @@ export class PostgresDelayStore implements DelayStore {
   async list(filter: DelayFilter = {}): Promise<DelayEvent[]> {
     const where: string[] = [];
     const params: unknown[] = [];
-    if (filter.projectId) { params.push(filter.projectId); where.push(`project_id = $${params.length}`); }
-    if (filter.causeCategory) { params.push(filter.causeCategory); where.push(`cause_category = $${params.length}`); }
-    if (filter.status) { params.push(filter.status); where.push(`status = $${params.length}`); }
+    if (filter.projectId) { params.push(filter.projectId); where.push(`d.project_id = $${params.length}`); }
+    if (filter.causeCategory) { params.push(filter.causeCategory); where.push(`d.cause_category = $${params.length}`); }
+    if (filter.status) { params.push(filter.status); where.push(`d.status = $${params.length}`); }
     const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
     const res = await this.pool.query<DelayRow>(
-      `SELECT * FROM public.aura_projects_delay_events ${w} ORDER BY start_date DESC`, params,
+      `SELECT d.*, (SELECT coalesce(array_agg(a.task_id::text), '{}') FROM public.aura_projects_delay_activities a WHERE a.delay_id = d.id) AS affected_task_ids
+         FROM public.aura_projects_delay_events d ${w} ORDER BY d.start_date DESC`, params,
     );
     return res.rows.map(rowToDelay);
   }

@@ -62,7 +62,31 @@ interface FrozenDeliveryItem {
 }
 interface Variation { id: string; reference: string | null; title: string; kind: string; value: number; status: string; createdAt: string; }
 interface VariationImpact { originalValue: number; approvedAdditions: number; approvedOmissions: number; revisedValue: number; pendingValue: number; }
-interface DelayEvent { id: string; title: string; causeCategory: string; startDate: string; endDate: string | null; delayDays: number; isConcurrent: boolean; linkedActivityCode: string | null; status: string; createdAt: string; }
+interface DelayEvent {
+  id: string; title: string; causeCategory: string; startDate: string; endDate: string | null;
+  delayDays: number; isConcurrent: boolean;
+  /** A WBS code as free text — a note, kept as it was, and no longer the link that matters. */
+  linkedActivityCode: string | null;
+  /** The activities this delay hit, canonically (migration 0325). */
+  affectedTaskIds?: string[];
+  /** What a named person concluded, against the plan as it then stood. */
+  assessedAt?: string | null;
+  assessedBy?: string | null;
+  assessedImpactWorkingDays?: number | null;
+  assessmentNote?: string | null;
+  status: string; createdAt: string;
+}
+interface DelayImpact {
+  claimedDays: number;
+  completionAsPlanned: string | null;
+  completionWithDelay: string | null;
+  impactWorkingDays: number | null;
+  onCriticalPath: boolean;
+  affected: Array<{ taskId: string; name: string; finishesAsPlanned: string | null; finishesWithDelay: string | null }>;
+  concurrent: Array<{ id: string; title: string; causeCategory: string }>;
+  verdict: 'IMPACT' | 'ABSORBED_BY_FLOAT' | 'UNKNOWN';
+  unknownReason: string | null;
+}
 interface EotClaim { id: string; title: string; submittedDays: number; approvedDays: number; status: string; createdAt: string; justification?: string | null; delayEventIds?: string[]; }
 interface CloseoutItem { label: string; done: boolean; }
 interface Closeout { id: string; status: string; items: CloseoutItem[]; handoverDate: string | null; dlpEndDate: string | null; }
@@ -634,7 +658,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
           />
         )}
 
-        {tab === 'eot' && <DelayEotPanel projectId={project.id} delays={delays} eots={eots} busy={busy} call={call} />}
+        {tab === 'eot' && <DelayEotPanel projectId={project.id} delays={delays} eots={eots} schedule={schedule} busy={busy} call={call} />}
 
         {tab === 'risks' && <RiskIssuePanel projectId={project.id} register={register} read={registerRead} busy={busy} call={call} />}
 
@@ -1032,7 +1056,97 @@ function DeliveryPanel({ project, wbs, cbs, maps, busy, call }: { project: Proje
   );
 }
 
-function DelayEotPanel({ projectId, delays, eots, busy, call }: { projectId: string; delays: DelayEvent[]; eots: EotClaim[]; busy: boolean; call: Action }) {
+/**
+ * One delay, and what it did to the completion date.
+ *
+ * Three figures, kept apart because they are three facts. CLAIMED is how long the event lasted —
+ * a fact about the world. IMPACT is how many working days completion actually moved, derived from
+ * the network on every read and changing as the programme changes. ASSESSED is what a named person
+ * concluded and submitted, against the plan as it then stood, and it does NOT move when the plan
+ * does. Showing only one of them takes a side; showing the assessed one silently rewritten would
+ * be worse.
+ */
+function DelayAssessment({ delay, schedule, busy, call }: {
+  delay: DelayEvent; schedule: ProjectSchedule | null; busy: boolean; call: Action;
+}) {
+  const [impact, setImpact] = useState<DelayImpact | null>(null);
+  const [days, setDays] = useState('');
+  const [note, setNote] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/projects/delays/${delay.id}/impact`, { cache: 'no-store' });
+      setImpact(response.ok ? ((await response.json()) as DelayImpact) : null);
+    } catch { setImpact(null); }
+  }, [delay.id]);
+  useEffect(() => { void load(); }, [load]);
+
+  const tasks = schedule?.tasks ?? [];
+  const named = delay.affectedTaskIds ?? [];
+
+  return (
+    <div style={{ ...authoringCard, marginTop: 10 }} data-testid={`delay-assessment-${delay.id}`}>
+      <h3 style={formTitle}>{delay.title}</h3>
+      <label style={{ display: 'grid', gap: 4, fontSize: 12 }}>
+        <span style={st.muted}>Activities this delay hit</span>
+        <select
+          multiple
+          aria-label={`Activities affected by ${delay.title}`}
+          value={named}
+          disabled={busy || tasks.length === 0}
+          onChange={(event) => void call(
+            `/api/projects/delays/${delay.id}/activities`, 'POST',
+            { taskIds: Array.from(event.target.selectedOptions, (option) => option.value) },
+            'Affected activities recorded.',
+          ).then(load)}
+          style={{ minHeight: 56 }}
+        >
+          {tasks.map((task) => <option key={task.id} value={task.id}>{task.name}</option>)}
+        </select>
+      </label>
+
+      <div data-testid={`delay-impact-${delay.id}`} style={{ fontSize: 12 }}>
+        {impact === null ? <span style={st.muted}>Reading the programme…</span>
+          : impact.verdict === 'UNKNOWN' ? <span style={st.muted}>No impact can be derived · {impact.unknownReason}</span>
+          : impact.verdict === 'ABSORBED_BY_FLOAT'
+            ? <span>Claimed {impact.claimedDays} days · <strong>absorbed by float</strong> — completion holds at {impact.completionAsPlanned}</span>
+            : <span>Claimed {impact.claimedDays} days · <strong>{impact.impactWorkingDays} working day{impact.impactWorkingDays === 1 ? '' : 's'}</strong> of completion lost — {impact.completionAsPlanned} → {impact.completionWithDelay}{impact.onCriticalPath ? ' · on the critical path' : ''}</span>}
+      </div>
+      {impact && impact.concurrent.length > 0 && (
+        // Named, and deliberately not apportioned: whether a concurrent delay reduces liability is
+        // a question of contract and law, decided by people rather than inside arithmetic.
+        <small style={st.muted} data-testid={`delay-concurrent-${delay.id}`}>
+          Runs alongside {impact.concurrent.map((other) => `${other.title} (${other.causeCategory})`).join(', ')} — concurrency is not apportioned here
+        </small>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input
+          aria-label={`Assessed impact for ${delay.title}`} type="number" min="0" step="0.5"
+          placeholder={impact?.impactWorkingDays !== null && impact?.impactWorkingDays !== undefined ? String(impact.impactWorkingDays) : 'Working days'}
+          value={days} onChange={(event) => setDays(event.target.value)}
+        />
+        <input aria-label={`Assessment note for ${delay.title}`} placeholder="Note (optional)" value={note} onChange={(event) => setNote(event.target.value)} />
+        <button
+          className="btn" type="button" disabled={busy || days.trim() === ''}
+          onClick={() => void call(
+            `/api/projects/delays/${delay.id}/assessment`, 'POST',
+            { impactWorkingDays: Number(days), note: note.trim() || undefined },
+            'Assessment recorded.',
+          ).then(() => { setDays(''); setNote(''); })}
+        >Record assessment</button>
+      </div>
+      {delay.assessedAt && (
+        <small style={st.muted}>
+          Assessed at {delay.assessedImpactWorkingDays} working day{delay.assessedImpactWorkingDays === 1 ? '' : 's'} by {delay.assessedBy}
+          {delay.assessmentNote ? ` · ${delay.assessmentNote}` : ''}
+        </small>
+      )}
+    </div>
+  );
+}
+
+function DelayEotPanel({ projectId, delays, eots, schedule, busy, call }: { projectId: string; delays: DelayEvent[]; eots: EotClaim[]; schedule: ProjectSchedule | null; busy: boolean; call: Action }) {
   const [delayTitle, setDelayTitle] = useState('');
   const [delayStart, setDelayStart] = useState('');
   const [delayDays, setDelayDays] = useState('');
@@ -1075,9 +1189,21 @@ function DelayEotPanel({ projectId, delays, eots, busy, call }: { projectId: str
         <small style={st.muted}>{delays.length} delay event{delays.length === 1 ? '' : 's'} will be linked as supporting evidence.</small>
       </form>
     </div>
-    <div><h3 style={panelTitle}>Delay event ledger</h3>{delays.length === 0 ? <p style={st.muted}>No delay events.</p> : <SimpleTable ariaLabel="Project delay events" headers={['Title', 'Cause', 'Start', 'Days', 'Status']}>
-      {delays.map((d) => <tr key={d.id}><td>{d.title}</td><td>{d.causeCategory}</td><td>{d.startDate}</td><td>{d.delayDays}</td><td><Status value={d.status} /></td></tr>)}
-    </SimpleTable>}</div>
+    <div><h3 style={panelTitle}>Delay event ledger</h3>{delays.length === 0 ? <p style={st.muted}>No delay events.</p> : <>
+      {/* CLAIMED and ASSESSED are different columns because they are different facts: a contractor
+          claims the days the event lasted, an employer grants the days completion actually moved,
+          and float is usually what separates them. */}
+      <SimpleTable ariaLabel="Project delay events" headers={['Title', 'Cause', 'Start', 'Claimed days', 'Assessed impact', 'Status']}>
+        {delays.map((d) => <tr key={d.id}>
+          <td>{d.title}</td><td>{d.causeCategory}</td><td>{d.startDate}</td><td>{d.delayDays}</td>
+          <td data-testid={`delay-assessed-${d.id}`}>{d.assessedImpactWorkingDays === null || d.assessedImpactWorkingDays === undefined
+            ? <span style={st.muted}>Not assessed</span>
+            : `${d.assessedImpactWorkingDays} working day${d.assessedImpactWorkingDays === 1 ? '' : 's'}`}</td>
+          <td><Status value={d.status} /></td>
+        </tr>)}
+      </SimpleTable>
+      {delays.map((d) => <DelayAssessment key={d.id} delay={d} schedule={schedule} busy={busy} call={call} />)}
+    </>}</div>
     <div><h3 style={panelTitle}>EOT claim ledger</h3>{eots.length === 0 ? <p style={st.muted}>No EOT claims.</p> : <SimpleTable ariaLabel="Project EOT claims" headers={['Claim', 'Requested', 'Approved', 'Status', 'Actions']}>
       {eots.map((claim) => <tr key={claim.id}><td>{claim.title}</td><td>{claim.submittedDays}</td><td>{claim.approvedDays || '—'}</td><td><Status value={claim.status} /></td><td>{claim.status === 'draft' && <button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/submit`, 'POST', undefined, 'EOT claim submitted.')}>Submit</button>}{(claim.status === 'submitted' || claim.status === 'under_review') && <><button className="btn btn-primary" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'approved', approvedDays: claim.submittedDays }, 'EOT claim approved.')}>Approve</button><button className="btn btn-ghost" disabled={busy} onClick={() => void call(`/api/projects/eot-claims/${claim.id}/decide`, 'POST', { status: 'rejected', approvedDays: 0 }, 'EOT claim rejected.')}>Reject</button></>}</td></tr>)}
     </SimpleTable>}</div>

@@ -8,6 +8,7 @@ import {
 } from './domain/activity-progress';
 import { resolvePlannedOutput, type PlannedOutput } from './domain/planned-output';
 import { resolveLookAhead, type LookAhead } from './domain/look-ahead';
+import { assessDelayImpact, type DelayImpact, type ConcurrentDelay } from './domain/delay-impact';
 import { ActivityOutputService } from './activity-output.service';
 import { ProjectCalendarService } from './project-calendar.service';
 import { workingDaysInRange } from './domain/working-calendar';
@@ -225,6 +226,44 @@ export class ScheduleService {
    * `today` is passed in rather than read from the clock so the rule stays testable at the edges
    * of a planned window — the day it opens, the day it closes, and the days either side.
    */
+  /**
+   * What a delay did to this programme's completion date.
+   *
+   * DERIVED on every read, from the network and the calendar, by running the same CPM twice — once
+   * as planned, once with the delay inserted. It changes as the programme changes, which is correct
+   * and is why it is not stored: what a delay is doing to the plan TODAY is a different fact from
+   * what somebody assessed and submitted last month, and both are shown.
+   */
+  async delayImpact(input: {
+    tenantId: Id; projectId: Id; today: string;
+    delay: { id: Id; claimedDays: number; startDate: string; endDate: string | null; affectedTaskIds: Id[] };
+    otherDelays: ConcurrentDelay[];
+  }): Promise<DelayImpact> {
+    const schedule = await this.store.getByProject(input.tenantId, input.projectId);
+    if (!schedule) throw new NotFoundException(`no schedule for project ${input.projectId}`);
+
+    const horizon = this.horizonOf(schedule, input.today);
+    const resolved = this.projectCalendar
+      ? await this.projectCalendar.forProject(input.tenantId, input.projectId, horizon)
+      : null;
+    // The programme starts where its earliest activity does, exactly as a planning run reads it.
+    const projectStart = schedule.tasks.reduce(
+      (earliest, task) => (task.plannedStart < earliest ? task.plannedStart : earliest),
+      schedule.tasks[0]?.plannedStart ?? input.today,
+    );
+
+    return assessDelayImpact({
+      delay: input.delay,
+      tasks: schedule.tasks.map((task) => ({
+        id: task.id, name: task.name, durationWorkingDays: task.durationWorkingDays,
+      })),
+      dependencies: schedule.dependencies,
+      projectStart,
+      nonWorkingDays: resolved?.everyDayWorked ? undefined : resolved?.nonWorkingDays,
+      otherDelays: input.otherDelays,
+    });
+  }
+
   /**
    * The next few weeks of this programme, read off the plan itself.
    *

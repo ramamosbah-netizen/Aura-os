@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { assertSameTenant, type Id, makeEvent, sameTenantOrNull, type AccessTarget, type OrgLevel } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
-  type DelayEvent, type NewDelayEvent, makeDelayEvent, type DelayStatus,
+  type DelayEvent, type NewDelayEvent, makeDelayEvent, assessDelay, type DelayStatus,
   type EotClaim, type NewEotClaim, makeEotClaim, type EotStatus,
   calculateDelayAnalysis, type DelayAnalysisSummary,
 } from './domain/delay-eot';
@@ -53,6 +53,52 @@ export class DelayEotService {
     const updated: DelayEvent = { ...existing, status };
     await this.delays.update(updated);
     this.logger.log(`Delay event ${id} status → ${status}`);
+    return updated;
+  }
+
+  /**
+   * Record what a named person concluded about a delay's impact.
+   *
+   * The figure is the ASSESSOR'S, not the system's. The derived impact is offered beside it on
+   * every read and the two are allowed to disagree — a claim was submitted against the plan as it
+   * then stood, and the plan moves. Rewriting the submitted figure whenever somebody edited an
+   * activity would quietly rewrite history; hiding that the plan had moved would be worse.
+   */
+  async assessDelay(input: {
+    tenantId: Id; delayId: Id; impactWorkingDays: number; note?: string | null; actorId?: Id | null;
+  }): Promise<DelayEvent> {
+    const delay = await this.delays.get(input.delayId);
+    if (!delay || delay.tenantId !== input.tenantId) throw new Error(`delay ${input.delayId} not found`);
+    await this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId);
+
+    const assessed = assessDelay(delay, {
+      impactWorkingDays: input.impactWorkingDays, note: input.note, actorId: input.actorId,
+    });
+    await this.delays.update(assessed);
+    await this.events.append([
+      makeEvent({
+        type: 'projects.delay.assessed',
+        tenantId: assessed.tenantId, companyId: null, actorId: input.actorId ?? null,
+        aggregateType: 'projects.delay', aggregateId: assessed.id,
+        payload: { projectId: assessed.projectId, impactWorkingDays: assessed.assessedImpactWorkingDays },
+      }),
+    ]);
+    this.logger.log(`Delay ${assessed.id} assessed at ${assessed.assessedImpactWorkingDays} working day(s) of impact`);
+    return assessed;
+  }
+
+  /**
+   * Name the activities a delay hit — canonically, replacing whatever was named before.
+   *
+   * Wholesale, because which activities an event hit is one fact about it: half-written it is a
+   * different claim. An activity from another project is refused rather than recorded.
+   */
+  async setDelayActivities(input: { tenantId: Id; delayId: Id; taskIds: Id[]; actorId?: Id | null }): Promise<DelayEvent> {
+    const delay = await this.delays.get(input.delayId);
+    if (!delay || delay.tenantId !== input.tenantId) throw new Error(`delay ${input.delayId} not found`);
+    await this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId);
+    const updated = { ...delay, affectedTaskIds: [...new Set(input.taskIds)] };
+    await this.delays.update(updated);
     return updated;
   }
 

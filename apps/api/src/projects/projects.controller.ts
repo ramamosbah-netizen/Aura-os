@@ -50,6 +50,7 @@ import {
   type ActivityProgress,
   type PlannedOutput,
   type LookAhead,
+  type DelayImpact,
   ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
@@ -823,6 +824,85 @@ export class ProjectsController {
   ): Promise<DelayEvent> {
     if (!dto?.status) throw new BadRequestException('status is required');
     return this.delayEot.updateDelayStatus(id, dto.status as any);
+  }
+
+  /**
+   * What this delay is doing to the programme's completion date, right now.
+   *
+   * DERIVED on the read by running the same CPM twice — as planned, and with the delay inserted —
+   * so the project has one answer to "when does this finish" rather than a bespoke delay
+   * calculator beside the planner. Counted in WORKING days under the project's calendar, because a
+   * contractual figure counted in calendar days is indefensible the moment the contract is not.
+   *
+   * The CLAIMED days and the IMPACT are reported side by side and are usually different numbers: a
+   * ten-day event on an activity with six days of float moves completion by four. A contractor
+   * claims the first and an employer grants the second, and a system reporting only one has taken
+   * a side.
+   */
+  @Permissions('projects.delay.read')
+  @Get('delays/:id/impact')
+  async delayImpact(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DelayImpact> {
+    const ctx = this.tenant.get();
+    const delay = await this.delayEot.getDelay(id);
+    if (!delay || delay.tenantId !== ctx.tenantId) throw new NotFoundException(`delay ${id} not found`);
+    const siblings = await this.delayEot.listDelays({ projectId: delay.projectId });
+    return this.schedule.delayImpact({
+      tenantId: ctx.tenantId,
+      projectId: delay.projectId,
+      today: new Date().toISOString().slice(0, 10),
+      delay: {
+        id: delay.id, claimedDays: delay.delayDays, startDate: delay.startDate,
+        endDate: delay.endDate, affectedTaskIds: delay.affectedTaskIds,
+      },
+      otherDelays: siblings.map((other: DelayEvent) => ({
+        id: other.id, title: other.title, causeCategory: other.causeCategory,
+        startDate: other.startDate, endDate: other.endDate,
+      })),
+    });
+  }
+
+  /**
+   * Name the activities this delay hit — canonically, replacing whatever was named before.
+   *
+   * The event has carried a WBS code as free text since it was introduced; that stays as the note
+   * it always was. This is the link a claim can actually rest on (migration 0325).
+   */
+  @Permissions('projects.delay.update')
+  @Post('delays/:id/activities')
+  async setDelayActivities(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { taskIds?: string[] },
+  ): Promise<DelayEvent> {
+    const ctx = this.tenant.get();
+    return this.delayEot.setDelayActivities({
+      tenantId: ctx.tenantId, delayId: id, taskIds: dto?.taskIds ?? [], actorId: ctx.actorId,
+    });
+  }
+
+  /**
+   * Record what a named person concluded about this delay's impact.
+   *
+   * The figure is the ASSESSOR'S. It is kept beside the derived impact and the two are allowed to
+   * disagree: a claim was submitted against the plan as it then stood, and the plan moves.
+   * Rewriting the submitted figure on every plan edit would quietly rewrite history.
+   *
+   * `projects.delay.assess`, explicitly: recording a delay and putting a contractual figure on it
+   * are different acts.
+   */
+  @Permissions('projects.delay.assess')
+  @Post('delays/:id/assessment')
+  async assessDelay(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { impactWorkingDays?: number; note?: string },
+  ): Promise<DelayEvent> {
+    if (dto?.impactWorkingDays === undefined || dto.impactWorkingDays === null) {
+      throw new BadRequestException('an assessment must state the working days of impact');
+    }
+    const ctx = this.tenant.get();
+    return this.delayEot.assessDelay({
+      tenantId: ctx.tenantId, delayId: id, impactWorkingDays: Number(dto.impactWorkingDays),
+      note: dto?.note, actorId: ctx.actorId,
+    });
   }
 
   @Get('delays/analysis/:projectId')

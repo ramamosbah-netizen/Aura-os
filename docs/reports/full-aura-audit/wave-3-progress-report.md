@@ -1238,6 +1238,103 @@ its `project_id` is `uuid` rather than `text`. Both settled in the migration.
   ordinary replanning; the milestone then reads `UNKNOWN` with its reason printed rather than
   silently staying "on track", so losing a gate is loud on the screen — but nothing tells the owner.
 
+## Iteration 20 — a technical query response is a design decision
+
+Second of the four remaining rows, and **investigation first** under programme rule 8. `ENG-03` was
+UNVERIFIED, which is not the same as absent: domain, stores, routes, a UI and a My Work surface all
+existed, and raise-then-respond worked end to end. Building a second path on top of that would have
+been the worst available outcome.
+
+What did not hold was everything that makes an *answer* trustworthy — and site builds to the answer.
+
+### The three defects, all in one place
+
+| | Before | Why it matters |
+| --- | --- | --- |
+| **Attribution** | `responded_at` existed; `responded_by` did not | A TQ you are about to build to could not say who decided it. The actor sat in the event log, and nowhere a reader would look. |
+| **Supersession** | `respondToQuery` assigned the new text and returned | An answer given in March and changed in June left no trace of March — and March is what was built. The same defect migration 0327 closed for the baseline, in a place where the consequence is poured concrete rather than a variance figure. |
+| **Closure** | `closed` was in the status union and **nothing in the codebase could reach it** | Every TQ ever raised sat at `responded` for ever, and nothing recorded whether the answer was adequate. |
+
+### What it is now
+
+Answers are **revisions** (migration 0329, append-only by grant). Giving the first is free; replacing
+one costs a reason and keeps what it displaced, written **in the same transaction** as the overwrite
+— anything less would let the new answer land while the history of what it replaced did not, which
+is the failure itself in miniature. The revision count is on the record, so a decision that has moved
+twice is visibly a different thing from one that has stood since March.
+
+**Closing is the raiser's act.** The person who answered cannot declare their own answer adequate,
+and that rule lives in the domain rather than only in a permission — a principal holding *both*
+permissions is still refused. A closed decision cannot be rewritten underneath the people who acted
+on it. A TQ cannot be born answered.
+
+`drawing_id` links the query to the canonical drawing register and is refused when it resolves to
+another project. Free-text `drawingReference` can name "E-101 Rev C" and be traced to nothing; an id
+pointing elsewhere would be worse — a query that *looks* linked. The same fix `PLN-14` needed for its
+free-text WBS code.
+
+### ENG-03 reconciliation
+
+The acceptance criterion asks that a representative Design / Technical Engineer, Project Engineer and
+Technical Manager execute a technical query response in the canonical Engineering / DocControl
+context, with save/reload, applicable permission denials, actual output and next-role receipt proved.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Representative roles execute it | Technical Engineer raises and closes; Technical Manager answers; Project Engineer holds read and close. Proven JWT ON, and the split asserted over the shipped role catalogue | no |
+| Canonical Engineering context | the workspace's technical-queries section; every gate on the canonical drawing register, cross-project refused by the service and the query reloaded from the API | no |
+| Save and reload | answered in the browser, reloaded and re-derived from the record rather than re-rendered from the form | no |
+| Permission denials | the raiser refused the act of ANSWERING (403); the answerer refused the act of CLOSING (403); a principal holding BOTH still refused a self-close (409); unauthenticated 401; a drawing from another project 400; a reasonless replacement 409; closing an unanswered query 409; closing twice 409 | no |
+| Next-role receipt | the query reaches both the raiser and the named responder in My Work; answering moves the turn to the raiser and leaves the responder waiting; accepting clears both; somebody with no part in it never sees it | no |
+| Actual output | proven on screen and over the API; no transmitted or printable TQ document exists | **yes** |
+
+**Proposed: `ENG-03` UNVERIFIED → COMPLETE**, with `actualOutput` **PARTIAL** on promotion — the same
+basis on which the planning rows were promoted. Issuing a TQ response as a controlled document to a
+named recipient is `ENG-05`'s question, which is still open and still in this wave.
+
+### Found while proving it, and fixed rather than worked around
+
+1. **Two permission vocabularies for one exchange.** The guard derives
+   `engineering.technical-query.*` from the route while the service asserts `engineering.tq.*`. Any
+   role not holding a broad `engineering.*` was gated on one name and checked against another — the
+   explicit assert was effectively dead for wildcard holders while the guard did the real gating. The
+   routes now name the permission, so both agree on one word.
+2. **No role could close a technical query at all.** Only the Technical Manager held `engineering.*`,
+   and the domain rightly refuses a self-close — so the loop was unclosable by construction, not just
+   unbuilt. `engineering.tq.close` now sits with the raising side (Technical Engineer, Project
+   Engineer) while answering stays with the design authority.
+3. **The answer reached the raiser as something they were WAITING on.** `responded` mapped to
+   `waiting` for everyone, so the moment the design decision arrived, the person who now had to judge
+   it and build to it was told by their own work list that there was nothing to do. Whose turn it is
+   depends on who is looking; it now reads as work for the raiser and waiting for the responder.
+   This is the next-role receipt, and it was wrong until it was proved rather than assumed.
+4. **A refusal promising a capability that does not exist.** The closed-query message said the answer
+   "can only be changed by reopening it first", and no reopen exists anywhere — a sentence offering a
+   button that is not there, which is the defect `PLN-04` was raised against in the first place. It
+   now says what this system actually does: a closed decision is superseded by raising a new query.
+5. The service-scope fitness gate caught both the new assertion and the new drawing provenance, and
+   the error-taxonomy gate caught a refusal that would have escaped as a 500. Both declared.
+
+### Observed while proving it, not fixed
+
+**A TQ declaring cost or time impact tells nobody who assesses either.** `costImpact` and `timeImpact`
+are authored on the query, are visible on the screen, and reach neither variation nor delay
+assessment. A design decision that admits it will cost time is exactly the evidence a delay
+assessment is built from (`PLN-14`), and it is currently two booleans read only by whoever opens the
+query. That is adjacent to this row rather than part of it — no clause of this acceptance criterion
+depends on it — and it is recorded rather than quietly wired, because connecting engineering's
+self-declared impact to a commercial assessment needs deciding on its own merits.
+
+### Accepted limits, recorded rather than buried
+
+- **No transmitted or printable TQ document** (`actualOutput`). Issuing one to a named recipient is
+  `ENG-05`.
+- **A closed query cannot be reopened.** Deliberate — a decision that has been accepted and built to
+  should be superseded by a new query rather than edited — but it means a mistaken acceptance is
+  corrected by raising, not by undoing.
+- **Nothing notifies anybody who is not looking at a screen.** My Work carries the turn, which is
+  more than the planning signals have, but no message leaves the system.
+
 ## Wave 3 remainder audit
 
 The section that stood here had become three paragraphs of accreted commentary. Every iteration

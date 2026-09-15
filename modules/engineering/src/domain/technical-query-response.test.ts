@@ -127,6 +127,6 @@ describe('what a closed query refuses', () => {
   it('will not have its answer changed underneath the people who acted on it', () => {
     const closed = closeQuery(respondToQuery(raise(), { response: 'Reroute east.', by: 'u-tm' }).query, { by: 'u-engineer' });
     expect(() => respondToQuery(closed, { response: 'Actually west.', by: 'u-tm', supersededReason: 'changed my mind' }))
-      .toThrow(/closed; its answer can only be changed by reopening it first/);
+      .toThrow(/closed and its answer can only be superseded by raising a new query/);
   });
 });

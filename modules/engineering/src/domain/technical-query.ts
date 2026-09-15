@@ -157,8 +157,12 @@ export function respondToQuery(
   const response = input.response?.trim();
   if (!response) throw new Error('a technical query response cannot be empty');
   if (tq.status === 'closed') {
+    // Worded for what this system actually offers. It said "reopen it first", and no reopen exists
+    // anywhere — a sentence promising a capability that is not there, which is the same defect as a
+    // screen offering a button that does nothing. Raising a new query against the superseding
+    // decision is what a contract administrator does here, and it keeps the accepted one intact.
     throw new Error(
-      `technical query ${tq.code} is closed; its answer can only be changed by reopening it first`,
+      `technical query ${tq.code} is closed and its answer can only be superseded by raising a new query, because it has been accepted and built to`,
     );
   }
   const replacing = tq.response !== null;

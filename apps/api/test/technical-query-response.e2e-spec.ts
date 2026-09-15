@@ -223,7 +223,7 @@ describe('a technical query response is a design decision (JWT ON)', () => {
   it('refuses to rewrite a decision the raiser has already acted on', async () => {
     const refused = await manager.put(`/api/v1/engineering/technical-queries/${tqId}/respond`)
       .send({ response: 'Changed my mind again.', supersededReason: 'because' }).expect(409);
-    expect(refused.body.message).toMatch(/closed; its answer can only be changed by reopening it first/);
+    expect(refused.body.message).toMatch(/closed and its answer can only be superseded by raising a new query/);
   });
 
   it('refuses to close one twice', async () => {

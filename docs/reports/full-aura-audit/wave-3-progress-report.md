@@ -544,7 +544,7 @@ locked, can still read the history, and the Project Manager commits it with thei
 never reached the API, so every re-baseline would have failed as "no reason given" while they
 watched themselves type one. It was invisible until the reason became load-bearing.
 
-**PLN-05 stays PARTIAL, and COMPLETE is proposed below.**
+**PLN-05 moves to COMPLETE** — see the reconciliation below.
 
 ## Security and authority proof
 
@@ -985,7 +985,8 @@ locks a dated baseline, a wrong role is denied, and later changes retain the ori
 | Replacing one is governed | refused without a reason by the domain, the API and the database alike | no |
 | Replacing one destroys nothing | the act is kept by value; revision 0 still holds the original dates after revision 1 exists | no |
 
-**Proposed: `PLN-05` PARTIAL → COMPLETE.** This also closes the open row PLN-15 was promoted with —
+**`PLN-05` PARTIAL → COMPLETE — applied on 2026-09-15 by the programme owner's decision.** That
+makes eleven COMPLETE capabilities out of 180. It also closes the open row PLN-15 was promoted with —
 a recovered programme and its baseline can now diverge *visibly*, and re-baselining is an act with a
 name, a reason and a history rather than a silent overwrite.
 
@@ -993,8 +994,8 @@ One limit is carried: **nothing prompts a re-baseline** after a recovery is acce
 and its baseline diverge until somebody decides to act. That is deliberate — an automatic
 re-baseline would erase the variance the recovery was answering for, which is the exact defect this
 iteration closed — but unprompted, and it belongs with the notification work five other rows are
-waiting on. As on every other planning row, `actualOutput` would remain **PARTIAL** on promotion:
-proven on screen, with no exported baseline document.
+waiting on. As on every other planning row, `actualOutput` remains **PARTIAL** on an
+otherwise complete row: proven on screen, with no exported baseline document.
 
 ### Observed while proving it, not fixed
 
@@ -1011,7 +1012,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, cost and forecast evidence from the connected plan. Baseline approval is now proven (PLN-05, PARTIAL and proposed for COMPLETE), which closes the divergence PLN-15 was promoted with. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, cost and forecast evidence from the connected plan. Baseline approval is now proven (PLN-05, COMPLETE), which closes the divergence PLN-15 was promoted with. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

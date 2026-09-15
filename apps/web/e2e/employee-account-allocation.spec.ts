@@ -13,6 +13,10 @@ import { apiAuthHeaders } from './api-auth';
  * ...and the answer coming back the other way: the person accepts or declines from My Work, and
  * the planner sees that answer against the commitment WITHOUT the commitment having changed.
  *
+ * A crew commitment travels the same road and says something different at the end of it: a booking
+ * of one crew reaches every named member of that pool as news about THEIR CREW, carries no
+ * accept/decline (one member cannot answer for a crew), and stops reaching anyone taken off it.
+ *
  * The negatives matter as much as the positive: an employee with no link reaches no list, one
  * account cannot be held by two employment records, a decline with no reason is refused, nobody
  * can answer for somebody else, releasing the booking removes the item (proving it is read
@@ -35,7 +39,11 @@ async function post<T>(request: APIRequestContext, path: string, data: unknown):
 
 interface ScheduleResponse {
   projectId: string;
-  tasks: Array<{ id: string; name: string; requirements: Array<{ id: string; resource: { canonicalResourceId: string } }> }>;
+  tasks: Array<{
+    id: string; name: string; wbsNodeId: string | null;
+    plannedStart: string; plannedEnd: string; durationWorkingDays: number | null;
+    requirements: Array<{ id: string; resource: { resourceType: string; canonicalResourceId: string }; quantity: number; unit: string }>;
+  }>;
 }
 
 test.describe('Employee account link carries an allocation into My Work', () => {
@@ -229,6 +237,103 @@ test.describe('Employee account link carries an allocation into My Work', () => 
 
     await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
     await search.fill(run);
+
+    // ── A crew commitment reaches the crew's named members ────────────────────
+    const poolName = `ELV installation crew ${run}`;
+    const pool = await post<{ id: string }>(request, '/projects/resource-pools', { name: poolName, unit: 'crews' });
+    await post(request, '/projects/resource-capacity', {
+      resourceType: 'pool', canonicalResourceId: pool.id, unit: 'crews', quantity: 2, from: day(3), to: day(5),
+    });
+
+    // The roster is built in the browser, from the canonical HR catalogue.
+    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
+    const rosterForm = page.getByTestId('pool-member-form');
+    await expect(rosterForm).toBeVisible({ timeout: 30_000 });
+    await rosterForm.getByLabel('Resource pool').selectOption(pool.id);
+    await rosterForm.getByLabel('Employee').selectOption(mine.id);
+    await rosterForm.getByRole('button', { name: 'Add member' }).click();
+    await expect(page.getByLabel('Pool members').getByText(`Maya Linked ${run}`)).toBeVisible({ timeout: 30_000 });
+
+    // A person is on a crew once. And an id HR does not know is not a person.
+    const twice = await request.post(`${API}/projects/resource-pools/${pool.id}/members`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: { employeeId: mine.id },
+    });
+    expect(twice.status()).toBe(409);
+    const invented = await request.post(`${API}/projects/resource-pools/${pool.id}/members`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { employeeId: '00000000-0000-4000-8000-000000000999' },
+    });
+    expect(invented.status()).toBe(400);
+    expect(await invented.text()).toContain('canonical tenant resource');
+
+    const crewActivity = `Pull crew containment ${run}`;
+    const crewTask = {
+      wbsNodeId: otherPackage.id, name: crewActivity,
+      plannedStart: day(3), plannedEnd: day(5), durationWorkingDays: 3,
+      requirements: [{ resource: { resourceType: 'pool', canonicalResourceId: pool.id }, quantity: 1, unit: 'crews' }],
+    };
+
+    // Saving a schedule REPLACES its activity list, and both existing activities back held
+    // bookings. Dropping them is refused rather than silently breaking a commitment's lineage.
+    const wouldOrphan = await request.post(`${API}/projects/schedules`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { projectId: project.id, tasks: [crewTask] },
+    });
+    expect(wouldOrphan.status(), 'an activity backing a held booking cannot be dropped').toBe(409);
+    expect(await wouldOrphan.text()).toContain('already has a held');
+
+    // Added to the plan, not posted in place of it.
+    await post<ScheduleResponse>(request, '/projects/schedules', {
+      projectId: project.id,
+      tasks: [
+        ...saved.tasks.map((task) => ({
+          id: task.id, wbsNodeId: task.wbsNodeId, name: task.name,
+          plannedStart: task.plannedStart, plannedEnd: task.plannedEnd,
+          durationWorkingDays: task.durationWorkingDays,
+          requirements: task.requirements.map((requirement) => ({
+            id: requirement.id, resource: requirement.resource, quantity: requirement.quantity, unit: requirement.unit,
+          })),
+        })),
+        crewTask,
+      ],
+    });
+    const withCrew = await request.get(`${API}/projects/schedules`, { headers: apiAuthHeaders() });
+    const crewRequirementId = ((await withCrew.json()) as ScheduleResponse[])
+      .find((schedule) => schedule.projectId === project.id)!
+      .tasks.flatMap((task) => task.requirements)
+      .find((requirement) => requirement.resource.canonicalResourceId === pool.id)!.id;
+    const crewHeld = await post<{ booking: { id: string } }>(request, `/projects/${project.id}/resource-bookings`, {
+      requirementId: crewRequirementId,
+    });
+
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
+    await search.fill(run);
+    const crewItem = page.getByTestId('work-item').filter({ hasText: `${poolName} committed to ${crewActivity}` });
+    await expect(crewItem).toBeVisible({ timeout: 30_000 });
+    await expect(crewItem).toContainText('crew commitment');
+    await expect(crewItem).toContainText('Your crew · 1 crews held');
+    await expect(crewItem).toContainText('who goes is allocated by your supervisor');
+    // A crew booking is not a claim on one member's time, so there is no answer to give here.
+    await expect(crewItem.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+    await expect(crewItem.getByRole('button', { name: 'Decline' })).toHaveCount(0);
+    const memberAnswer = await request.post(`${API}/work-items/resource-allocation/${crewHeld.booking.id}/accept`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: {},
+    });
+    expect(memberAnswer.status(), 'a member cannot answer for the crew').toBe(403);
+    expect(await memberAnswer.text()).toContain('speak for the crew');
+
+    // Off the crew, the commitment stops being their news — while the crew still holds it.
+    await page.goto(`${baseURL}/projects/schedule?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
+    const removeFromCrew = page.getByRole('button', { name: `Remove Maya Linked ${run} from ${poolName}` });
+    await removeFromCrew.click();
+    // Scoped to THIS run's roster row: the tenant-wide counter beside it carries every other crew.
+    await expect(removeFromCrew).toHaveCount(0, { timeout: 30_000 });
+    await page.goto(`${baseURL}/my-work/tasks`, { waitUntil: 'domcontentloaded' });
+    await search.fill(run);
+    await expect(page.getByTestId('work-item').filter({ hasText: crewActivity })).toHaveCount(0, { timeout: 30_000 });
+    const crewBookings = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    expect(((await crewBookings.json()) as Array<{ booking: { id: string; status: string } }>)
+      .find((view) => view.booking.id === crewHeld.booking.id)!.booking.status, 'the crew still holds it').toBe('held');
 
     // ── Read through, not copied: releasing the booking removes the item ──────
     const released = await request.post(`${API}/projects/${project.id}/resource-bookings/${held.booking.id}/release`, {

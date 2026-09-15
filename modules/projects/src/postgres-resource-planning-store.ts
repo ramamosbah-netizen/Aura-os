@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id } from '@aura/shared';
 import type { ResourceRef, ResourceType, ResourceUnit } from './domain/resource-ref';
-import type { PoolSourceType, ResourceCapacity, ResourcePool } from './domain/resource-pool';
+import type { PoolSourceType, ResourceCapacity, ResourcePool, ResourcePoolMember } from './domain/resource-pool';
 import type { ResourcePlanningStore } from './resource-planning-store';
 
 interface PoolRow {
@@ -15,6 +15,12 @@ interface CapacityRow {
   unit: string; quantity: string | number | null; valid_from: Date | string; valid_to: Date | string;
   calendar_id: string | null; org_node_id: string | null; note: string | null;
   created_at: Date | string; created_by: string | null;
+}
+
+interface MemberRow {
+  id: string; tenant_id: string; pool_id: string; employee_id: string;
+  added_at: Date | string; added_by: string | null;
+  removed_at: Date | string | null; removed_by: string | null;
 }
 
 const iso = (value: Date | string): string => value instanceof Date ? value.toISOString() : String(value);
@@ -31,6 +37,14 @@ const capacityFrom = (row: CapacityRow): ResourceCapacity => ({
   from: day(row.valid_from), to: day(row.valid_to), calendarId: row.calendar_id,
   orgNodeId: row.org_node_id, note: row.note, createdAt: iso(row.created_at), createdBy: row.created_by,
 });
+
+const memberFrom = (row: MemberRow): ResourcePoolMember => ({
+  id: row.id, tenantId: row.tenant_id, poolId: row.pool_id, employeeId: row.employee_id,
+  addedAt: iso(row.added_at), addedBy: row.added_by,
+  removedAt: row.removed_at ? iso(row.removed_at) : null, removedBy: row.removed_by,
+});
+
+const MEMBER_COLUMNS = 'id, tenant_id, pool_id, employee_id, added_at, added_by, removed_at, removed_by';
 
 export class PostgresResourcePlanningStore implements ResourcePlanningStore {
   constructor(private readonly pool: Pool) {}
@@ -90,5 +104,52 @@ export class PostgresResourcePlanningStore implements ResourcePlanningStore {
       params,
     );
     return result.rows.map(capacityFrom);
+  }
+
+  async addPoolMember(member: ResourcePoolMember): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_projects_resource_pool_members (${MEMBER_COLUMNS})
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+      [member.id, member.tenantId, member.poolId, member.employeeId,
+        member.addedAt, member.addedBy, member.removedAt, member.removedBy],
+    );
+  }
+
+  async updatePoolMember(member: ResourcePoolMember): Promise<void> {
+    // Only the removal half is writable. Which pool a membership belongs to, and whose it is, are
+    // settled when it is created — re-pointing either would move one person's history onto another.
+    const result = await this.pool.query(
+      `UPDATE public.aura_projects_resource_pool_members
+          SET removed_at = $3, removed_by = $4
+        WHERE tenant_id = $1 AND id = $2`,
+      [member.tenantId, member.id, member.removedAt, member.removedBy],
+    );
+    if (result.rowCount !== 1) throw new Error(`pool member ${member.id} not found`);
+  }
+
+  async getPoolMember(tenantId: Id, id: Id): Promise<ResourcePoolMember | null> {
+    const result = await this.pool.query<MemberRow>(
+      `SELECT ${MEMBER_COLUMNS} FROM public.aura_projects_resource_pool_members WHERE tenant_id = $1 AND id = $2`,
+      [tenantId, id],
+    );
+    return result.rows[0] ? memberFrom(result.rows[0]) : null;
+  }
+
+  async listPoolMembers(tenantId: Id, poolId: Id): Promise<ResourcePoolMember[]> {
+    const result = await this.pool.query<MemberRow>(
+      `SELECT ${MEMBER_COLUMNS} FROM public.aura_projects_resource_pool_members
+        WHERE tenant_id = $1 AND pool_id = $2 AND removed_at IS NULL ORDER BY added_at`,
+      [tenantId, poolId],
+    );
+    return result.rows.map(memberFrom);
+  }
+
+  async listPoolsForEmployee(tenantId: Id, employeeId: Id): Promise<ResourcePoolMember[]> {
+    const result = await this.pool.query<MemberRow>(
+      `SELECT ${MEMBER_COLUMNS} FROM public.aura_projects_resource_pool_members
+        WHERE tenant_id = $1 AND employee_id = $2 AND removed_at IS NULL ORDER BY added_at`,
+      [tenantId, employeeId],
+    );
+    return result.rows.map(memberFrom);
   }
 }

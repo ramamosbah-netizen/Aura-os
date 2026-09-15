@@ -40,6 +40,8 @@ interface ResourceCatalogItem {
 }
 interface ResourcePool { id: string; name: string; unit: 'hours' | 'persons' | 'crews' | 'units'; sourceType: 'internal' | 'subcontractor'; sourceId: string | null }
 interface ResourceCapacity { id: string; resource: { resourceType: string; canonicalResourceId: string }; unit: 'hours' | 'persons' | 'crews' | 'units'; quantity: number | null; from: string; to: string; note: string | null }
+interface PoolMember { id: string; poolId: string; employeeId: string }
+
 interface Supplier { id: string; code: string; name: string; category: string; status: string }
 interface ResourceBookingView {
   booking: {
@@ -66,6 +68,11 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
     getJson<ResourceCapacity[]>('/api/projects/resource-capacity'),
     getJson<Supplier[]>('/api/procurement/suppliers'),
   ]);
+  // The roster of every governed pool, read after the pools themselves are known. One request per
+  // pool is acceptable here because a tenant has a handful of crews, not thousands.
+  const poolMembers = (await Promise.all((resourcePools ?? []).map(async (item) =>
+    (await getJson<PoolMember[]>(`/api/projects/resource-pools/${encodeURIComponent(item.id)}/members`)) ?? [],
+  ))).flat();
   const scopedSchedules = projectId ? (schedules ?? []).filter((schedule) => schedule.projectId === projectId) : schedules;
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
   const projectName = scopedProjects?.[0]?.title ?? scopedSchedules?.[0]?.projectName;
@@ -203,6 +210,8 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             pools={resourcePools}
             capacity={resourceCapacity}
             suppliers={(suppliers ?? []).filter((supplier) => supplier.status === 'approved' && supplier.category === 'subcontractor')}
+            members={poolMembers}
+            employees={(resourceCatalog ?? []).filter((item) => item.resourceType === 'employee')}
           />
         </section>
       )}

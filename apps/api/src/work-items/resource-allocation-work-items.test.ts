@@ -24,7 +24,13 @@ const booking = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-function harness(options: { employee?: unknown; assignments?: unknown[]; allowed?: boolean } = {}) {
+const crewBooking = (over: Record<string, unknown> = {}) => booking({
+  id: 'c1', resource: { resourceType: 'pool', canonicalResourceId: 'pool-elv' }, unit: 'crews', quantity: 1, ...over,
+});
+const elvCrew = { id: 'pool-elv', tenantId: 'tenant-a', name: 'ELV installation crew', unit: 'crews' };
+const membership = { id: 'm1', tenantId: 'tenant-a', poolId: 'pool-elv', employeeId: 'emp-1', removedAt: null };
+
+function harness(options: { employee?: unknown; assignments?: unknown[]; allowed?: boolean; memberships?: unknown[]; pools?: unknown[] } = {}) {
   const activities = { list: vi.fn(empty), get: vi.fn(), create: vi.fn(), updateDetails: vi.fn(), archive: vi.fn() };
   const engineering = { listDrawings: empty, listRfis: empty, listTechnicalQueries: empty };
   const quality = { listNcrs: empty, listSnags: empty };
@@ -37,13 +43,23 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
     (options.assignments ?? []).map((view) => [(view as { booking: { id: string } }).booking.id, (view as { booking: Record<string, unknown> }).booking]),
   );
   const resourceBookings = {
-    listAssignments: vi.fn(async () => options.assignments ?? []),
+    // Answers per RESOURCE, like the real service: a personal read must not return the crew's
+    // bookings, and a crew read must not return the person's.
+    listAssignments: vi.fn(async (_tenantId: string, resource: { resourceType: string; canonicalResourceId: string }) =>
+      (options.assignments ?? []).filter((view) => {
+        const ref = (view as { booking: { resource: { resourceType: string; canonicalResourceId: string } } }).booking.resource;
+        return ref.resourceType === resource.resourceType && ref.canonicalResourceId === resource.canonicalResourceId;
+      })),
     get: vi.fn(async (_tenantId: string, id: string) => stored.get(id) ?? null),
     respond: vi.fn(async (input: { bookingId: string; response: string; reason?: string | null; actorId?: string }) => {
       const booking = { ...stored.get(input.bookingId), response: input.response, responseReason: input.reason ?? null, responseBy: input.actorId };
       stored.set(input.bookingId, booking);
       return { booking, activityName: 'Install CCTV devices' };
     }),
+  };
+  const resourcePlanning = {
+    listPoolsForEmployee: vi.fn(async () => options.memberships ?? []),
+    listPools: vi.fn(async () => options.pools ?? []),
   };
   const hr = {
     findEmployeeByAccount: vi.fn(async () => options.employee ?? null),
@@ -55,13 +71,95 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
     activities as never, engineering as never, quality as never, hse as never,
     prs as never, rfqs as never, pos as never,
     projectRisks as never, projectIssues as never, projectResponsibilities as never,
-    resourceBookings as never, hr as never,
+    resourceBookings as never, resourcePlanning as never, hr as never,
     projects as never, access as never, auth as never, notifications as never,
   );
-  return { service, resourceBookings, hr };
+  return { service, resourceBookings, resourcePlanning, hr };
 }
 
 const employee = { id: 'emp-1', tenantId: 'tenant-a', firstName: 'Maya', lastName: 'Haddad', userId: 'u-maya' };
+
+describe('crew commitments reaching a pool\u2019s named members', () => {
+  it('tells a member their crew is committed, without claiming their own time', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: crewBooking(), activityName: 'Install CCTV devices' }],
+      memberships: [membership],
+      pools: [elvCrew],
+    });
+
+    const { items } = await service.list('tenant-a', 'u-maya');
+    // The pool is asked about by its own reference, not by the person's.
+    expect(resourceBookings.listAssignments).toHaveBeenCalledWith(
+      'tenant-a', { resourceType: 'pool', canonicalResourceId: 'pool-elv' }, expect.anything(),
+    );
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({
+      kind: 'crew commitment',
+      title: 'ELV installation crew committed to Install CCTV devices',
+      projectId: 'p1',
+    });
+    expect(items[0].detail).toContain('Your crew');
+    expect(items[0].detail).toContain('1 crews held');
+    expect(items[0].detail).toContain('who goes is allocated by your supervisor');
+  });
+
+  it('offers a member no answer, because one member cannot speak for a crew', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: crewBooking(), activityName: 'Install CCTV devices' }],
+      memberships: [membership],
+      pools: [elvCrew],
+    });
+    const { items } = await service.list('tenant-a', 'u-maya');
+    expect(items[0].actions).toEqual([]);
+    await expect(service.act('tenant-a', 'u-maya', 'resource-allocation', 'c1', 'decline', null, 'I am on leave'))
+      .rejects.toThrow(/whoever can speak for the crew/);
+    expect(resourceBookings.respond).not.toHaveBeenCalled();
+  });
+
+  it('reaches nobody once the person is off the crew', async () => {
+    const { service, resourceBookings } = harness({
+      employee,
+      assignments: [{ booking: crewBooking(), activityName: 'Install CCTV devices' }],
+      memberships: [],
+      pools: [elvCrew],
+    });
+    const { items } = await service.list('tenant-a', 'u-maya');
+    expect(items).toHaveLength(0);
+    expect(resourceBookings.listAssignments).toHaveBeenCalledTimes(1); // the personal read only
+  });
+
+  it('carries a personal allocation and a crew commitment side by side, each worded as itself', async () => {
+    const { service } = harness({
+      employee,
+      assignments: [
+        { booking: booking(), activityName: 'Terminate cameras' },
+        { booking: crewBooking(), activityName: 'Install CCTV devices' },
+      ],
+      memberships: [membership],
+      pools: [elvCrew],
+    });
+    const { items } = await service.list('tenant-a', 'u-maya');
+    expect(items.map((item) => item.kind).sort()).toEqual(['crew commitment', 'resource allocation']);
+    // Only the personal one is answerable.
+    expect(items.find((item) => item.kind === 'resource allocation')!.actions).toEqual(['accept', 'decline']);
+    expect(items.find((item) => item.kind === 'crew commitment')!.actions).toEqual([]);
+  });
+
+  it('says the pool has no name rather than inventing one', async () => {
+    const { service } = harness({
+      employee,
+      assignments: [{ booking: crewBooking(), activityName: 'Install CCTV devices' }],
+      memberships: [membership],
+      pools: [],
+    });
+    // The pool could not be resolved, so this is not presented as a crew commitment at all —
+    // it falls back to the honest allocation wording rather than a blank crew name.
+    const { items } = await service.list('tenant-a', 'u-maya');
+    expect(items[0].kind).toBe('resource allocation');
+  });
+});
 
 describe('answering an allocation', () => {
   it('records an acceptance against the booking the person is named on', async () => {

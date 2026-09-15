@@ -12,10 +12,12 @@ import {
   ProjectResponsibilityService,
   ProjectService,
   ResourceBookingService,
+  ResourcePlanningService,
   type ProjectRisk,
   type ProjectIssue,
   type ProjectResponsibility,
   type ResourceAssignmentView,
+  type ResourcePool,
 } from '@aura/projects';
 
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
@@ -144,6 +146,7 @@ export class WorkItemsService {
     private readonly projectIssues: ProjectIssueService,
     private readonly projectResponsibilities: ProjectResponsibilityService,
     private readonly resourceBookings: ResourceBookingService,
+    private readonly resourcePlanning: ResourcePlanningService,
     private readonly hr: HrService,
     private readonly projects: ProjectService,
     private readonly access: AccessService,
@@ -269,25 +272,86 @@ export class WorkItemsService {
 
     const today = new Date().toISOString().slice(0, 10);
     const horizon = addDays(today, ALLOCATION_LOOK_AHEAD_DAYS);
-    // Read wide, list narrow: what lies past the horizon is counted and reported in coverage,
-    // never silently absent.
-    const everything = await this.resourceBookings.listAssignments(
-      tenantId,
-      { resourceType: 'employee', canonicalResourceId: employee.id },
-      { from: today, to: addDays(today, 3650) },
+    const window = { from: today, to: addDays(today, 3650) };
+
+    // Two kinds of commitment reach one person, and they are gathered separately because they mean
+    // different things (see `crewItem`): the bookings that name THEM, and the bookings that name a
+    // CREW they belong to.
+    const memberships = await this.resourcePlanning.listPoolsForEmployee(tenantId, employee.id);
+    const pools = new Map<string, ResourcePool>(
+      (await this.resourcePlanning.listPools(tenantId)).map((pool) => [pool.id, pool]),
     );
-    const within = everything.filter((view) => view.booking.from <= horizon);
+    const [personal, ...crews] = await Promise.all([
+      // Read wide, list narrow: what lies past the horizon is counted and reported in coverage,
+      // never silently absent.
+      this.resourceBookings.listAssignments(tenantId, { resourceType: 'employee', canonicalResourceId: employee.id }, window),
+      ...memberships.map((membership) =>
+        this.resourceBookings.listAssignments(tenantId, { resourceType: 'pool', canonicalResourceId: membership.poolId }, window)),
+    ]);
+    const everything = [
+      ...personal.map((view) => ({ view, pool: null as ResourcePool | null })),
+      ...crews.flat().map((view) => ({ view, pool: pools.get(view.booking.resource.canonicalResourceId) ?? null })),
+    ];
+    const within = everything.filter((entry) => entry.view.booking.from <= horizon);
 
     const projectNames = new Map<string, string>();
-    await Promise.all([...new Set(within.map((view) => view.booking.projectId))].map(async (projectId) => {
+    await Promise.all([...new Set(within.map((entry) => entry.view.booking.projectId))].map(async (projectId) => {
       const project = await this.projects.get(projectId);
       if (project) projectNames.set(projectId, project.title);
     }));
 
     return {
       employee,
-      items: within.map((view) => this.allocationItem(view, actorId, projectNames.get(view.booking.projectId) ?? null, today)),
+      items: within.map((entry) => {
+        const projectName = projectNames.get(entry.view.booking.projectId) ?? null;
+        return entry.pool
+          ? this.crewItem(entry.view, entry.pool, actorId, projectName, today)
+          : this.allocationItem(entry.view, actorId, projectName, today);
+      }),
       beyondHorizon: everything.length - within.length,
+    };
+  }
+
+  /**
+   * A commitment made against a CREW this person belongs to.
+   *
+   * Distinct from a personal allocation in the two ways that matter, and the wording carries both:
+   *
+   *   it is not a claim on THIS person's time — "1 crew" from a twelve-person pool books a crew,
+   *   not twelve people, so the item says the crew is committed and leaves who goes to whoever
+   *   allocates the crew;
+   *
+   *   it carries NO accept or decline — one member's refusal is not the crew's answer, and filing
+   *   it as one would put a refusal on a planner's desk that nobody can act on. The answer belongs
+   *   with whoever can speak for the pool.
+   */
+  private crewItem(view: ResourceAssignmentView, pool: ResourcePool, actorId: string, projectName: string | null, today: string): WorkItem {
+    const { booking, activityName } = view;
+    const running = booking.from <= today && booking.to >= today;
+    return {
+      id: `resource-allocation:${booking.id}`,
+      source: 'resource-allocation',
+      sourceId: booking.id,
+      module: 'Planning',
+      kind: 'crew commitment',
+      title: activityName ? `${pool.name} committed to ${activityName}` : `${pool.name} committed to project work`,
+      detail: `Your crew · ${booking.quantity} ${booking.unit} held · ${booking.from} → ${booking.to} · who goes is allocated by your supervisor`,
+      href: `/projects/schedule?projectId=${booking.projectId}`,
+      projectId: booking.projectId,
+      projectName,
+      status: running ? 'in_progress' : 'todo',
+      sourceStatus: `${booking.status}/${booking.response}`,
+      priority: derivedPriority(booking.from),
+      dueAt: booking.from,
+      createdAt: booking.committedAt,
+      updatedAt: booking.committedAt,
+      scopes: ['assigned'],
+      isFollowUp: false,
+      actions: [],
+      origin: origin(booking.committedBy, actorId),
+      editable: false,
+      deletable: false,
+      reschedulable: false,
     };
   }
 
@@ -470,6 +534,11 @@ export class WorkItemsService {
     const employee = await this.hr.findEmployeeByAccount(tenantId, actorId);
     if (!employee) {
       throw new ForbiddenException('Your account is not linked to an employee record, so it cannot answer an allocation.');
+    }
+    if (booking.resource.resourceType === 'pool') {
+      // Expected, not exceptional: members see their crew's commitments and cannot answer them.
+      // One member's "I cannot" is not the crew's answer — see `crewItem`.
+      throw new ForbiddenException('A crew commitment is answered by whoever can speak for the crew, not by one of its members.');
     }
     if (booking.resource.resourceType !== 'employee' || booking.resource.canonicalResourceId !== employee.id) {
       throw new ForbiddenException('Only the person an allocation names can answer it.');

@@ -45,6 +45,7 @@ import {
   ScheduleService,
   ResourcePlanningService,
   type ResourcePool,
+  type ResourcePoolMember,
   type ResourceCapacity,
   type ResourceType,
   type ResourceUnit,
@@ -1243,6 +1244,45 @@ export class ProjectsController {
       tenantId: ctx.tenantId, name: dto.name, unit: dto.unit, sourceType: dto.sourceType,
       sourceId, orgNodeId: dto.orgNodeId ?? null, createdBy: ctx.actorId,
     });
+  }
+
+  /**
+   * The roster of a pool, and who may change it.
+   *
+   * Explicitly permissioned rather than route-derived, for the same reason as HR's account link:
+   * the taxonomy reads a DELETE on this sub-resource as `projects.resource-pool.delete`, which
+   * would let anyone able to remove a POOL quietly remove PEOPLE from one. Membership is its own
+   * authority because it decides whose work list a crew commitment reaches.
+   */
+  @Permissions('projects.resource-pool.read')
+  @Get('resource-pools/:poolId/members')
+  listResourcePoolMembers(@Param('poolId') poolId: string): Promise<ResourcePoolMember[]> {
+    return this.resourcePlanning.listPoolMembers(this.tenant.get().tenantId, poolId);
+  }
+
+  @Permissions('projects.resource-pool.members')
+  @Post('resource-pools/:poolId/members')
+  async addResourcePoolMember(
+    @Param('poolId') poolId: string,
+    @Body() dto: { employeeId?: string },
+  ): Promise<ResourcePoolMember> {
+    const ctx = this.tenant.get();
+    const employeeId = dto?.employeeId?.trim();
+    if (!employeeId) throw new BadRequestException('employeeId is required');
+    // HR owns who is an employee. An id that is not in this tenant's active catalogue is refused
+    // here rather than stored as a member nobody can resolve.
+    await this.scheduleResources.assertCanonicalResource(ctx.tenantId, { resourceType: 'employee', canonicalResourceId: employeeId });
+    return this.resourcePlanning.addPoolMember({ tenantId: ctx.tenantId, poolId, employeeId, addedBy: ctx.actorId });
+  }
+
+  @Permissions('projects.resource-pool.members')
+  @Delete('resource-pools/:poolId/members/:memberId')
+  removeResourcePoolMember(
+    @Param('poolId') poolId: string,
+    @Param('memberId') memberId: string,
+  ): Promise<ResourcePoolMember> {
+    const ctx = this.tenant.get();
+    return this.resourcePlanning.removePoolMember({ tenantId: ctx.tenantId, poolId, memberId, removedBy: ctx.actorId });
   }
 
   @Permissions('projects.resource-capacity.read')

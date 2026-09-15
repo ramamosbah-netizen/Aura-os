@@ -46,6 +46,7 @@ function harness(risks: unknown[] = [], issues: unknown[] = []) {
   const projectResponsibilities = { list: empty };
   const projects = { get: vi.fn() };
   const resourceBookings = { listAssignments: vi.fn(empty) };
+  const resourcePlanning = { listPoolsForEmployee: vi.fn(empty), listPools: vi.fn(empty) };
   const hr = { findEmployeeByAccount: vi.fn(async () => null) };
   const access = { can: vi.fn(() => ({ allowed: true })) };
   const auth = { enabled: false };
@@ -54,7 +55,7 @@ function harness(risks: unknown[] = [], issues: unknown[] = []) {
     activities as never, engineering as never, quality as never, hse as never,
     prs as never, rfqs as never, pos as never,
     projectRisks as never, projectIssues as never, projectResponsibilities as never,
-    resourceBookings as never, hr as never,
+    resourceBookings as never, resourcePlanning as never, hr as never,
     projects as never, access as never, auth as never, notifications as never,
   );
   return { service, projectRisks, projectIssues };

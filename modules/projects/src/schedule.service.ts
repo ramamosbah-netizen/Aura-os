@@ -65,6 +65,10 @@ export class ScheduleService {
     let sch: ProjectSchedule;
     if (existing) {
       sch = setScheduleTasks(existing, tasks);
+      // Saving REPLACES the activity list, so an activity or requirement left out of the payload is
+      // deleted. The store translates the database's refusal (ON DELETE RESTRICT, migrations 0290
+      // and 0316) into the domain message naming which of the two it was — one explanation, given
+      // where the constraint actually fires.
       await this.store.update(sch);
     } else {
       sch = makeProjectSchedule({ ...input, tasks });

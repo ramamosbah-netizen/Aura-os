@@ -38,6 +38,12 @@ const PROJECT_SCOPED = ['projects', 'engineering', 'site', 'quality', 'hse', 'co
 const NOT_PROJECT_BEARING: Record<string, string> = {
   'projects:member': 'membership is addressed by :projectId already, so the guard needs no resolver',
   'hse:training': 'a training record is a fact about a person’s competence, not about a site',
+  'projects:resource-pool':
+    'a pool is an ORGANIZATION-scoped planning authority and deliberately carries no project ' +
+    '(DG-22.9, migration 0286). Resolving one to a project would recreate the exact blindness §22 ' +
+    'exists to remove — the same crew committed on two sites — because each project would then own ' +
+    'a private copy of the same twelve electricians. Its routes, the roster included, are governed ' +
+    'org-wide by `projects.resource-pool.*`, which is how the Technical Manager holds them',
   'projects:quantity-ledger':
     'its only id-bearing route is `quantity-ledger/position/:boqItemId`, where the id is a BOQ ' +
     'item’s, not a ledger entry’s — there is nothing here to look up by that id',

@@ -97,6 +97,72 @@ export function makeResourcePool(input: NewResourcePool): ResourcePool {
 export const poolRef = (pool: Pick<ResourcePool, 'id'>): ResourceRef =>
   ({ resourceType: 'pool', canonicalResourceId: pool.id });
 
+// ── Membership ────────────────────────────────────────────────────────────
+
+/**
+ * A named person who belongs to a pool.
+ *
+ * MEMBERSHIP IS NOT CAPACITY. The two answer different questions and are deliberately unrelated:
+ *
+ *     capacity     how MUCH of this pool is available   ("2 crews on Tuesday")
+ *     membership   WHO belongs to it                    ("these twelve electricians")
+ *
+ * Twelve people who can field two crews at once is an ordinary arrangement, so nothing here
+ * derives one number from the other. A model that did would rewrite a contractor's stated capacity
+ * the moment they recorded their roster.
+ *
+ * WHAT MEMBERSHIP DOES NOT MEAN. A booking of "1 crew" is not a claim on any single member's time.
+ * Knowing the roster lets AURA tell each member that THEIR CREW is committed somewhere; it does
+ * not book them personally, and it cannot be turned into a personal allocation without somebody
+ * naming who actually goes. This is why a pool commitment carries no accept/decline for an
+ * individual: one member's "I cannot" is not the crew's answer, and filing it as one would put a
+ * refusal on the planner's desk that nobody can act on.
+ */
+export interface ResourcePoolMember {
+  id: Id;
+  tenantId: Id;
+  poolId: Id;
+  /** The person's id in HR's register. A reference, never a copy of their name (DG-22.2). */
+  employeeId: Id;
+  addedAt: string;
+  addedBy: Id | null;
+  /** Set when they leave the crew. The row survives so past membership stays answerable. */
+  removedAt: string | null;
+  removedBy: Id | null;
+}
+
+export interface NewResourcePoolMember {
+  tenantId: Id;
+  poolId: Id;
+  employeeId: Id;
+  addedBy?: Id | null;
+}
+
+export function makeResourcePoolMember(input: NewResourcePoolMember): ResourcePoolMember {
+  if (!input.poolId) throw new Error('a pool member must belong to a pool');
+  if (!input.employeeId?.trim()) throw new Error('a pool member must name an employee');
+  const now = new Date().toISOString();
+  return {
+    id: newId(),
+    tenantId: input.tenantId,
+    poolId: input.poolId,
+    employeeId: input.employeeId.trim(),
+    addedAt: now,
+    addedBy: input.addedBy ?? null,
+    removedAt: null,
+    removedBy: null,
+  };
+}
+
+/** Take a person off the crew. The record stays; only their current membership ends. */
+export function removeResourcePoolMember(member: ResourcePoolMember, actorId: Id | null = null): ResourcePoolMember {
+  if (member.removedAt) throw new Error('this pool member has already been removed');
+  return { ...member, removedAt: new Date().toISOString(), removedBy: actorId };
+}
+
+export const poolMemberIsActive = (member: Pick<ResourcePoolMember, 'removedAt'>): boolean =>
+  member.removedAt === null;
+
 // ── Capacity ──────────────────────────────────────────────────────────────
 
 /**

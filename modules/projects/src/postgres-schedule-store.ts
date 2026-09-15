@@ -141,15 +141,40 @@ export class PostgresScheduleStore implements ScheduleStore {
    * row's lifetime did not, so no external reference to a task could ever be enforced. That is what
    * this ends.
    *
-   * Requirements and dependencies carry no external foreign key, so they are still fully re-derived
-   * from the aggregate each save — cleared first (which frees a removed task of its child rows), then
-   * re-inserted. Only TASKS need stable rows, and only tasks get the diff.
+   * REQUIREMENTS ARE DIFFED TOO, since migration 0316 gave a booking a foreign key onto the exact
+   * requirement it satisfies. They used to be cleared and re-inserted on every save, which was
+   * harmless while nothing referenced them and became a hard stop the moment something did: one
+   * held booking anywhere in a plan made the WHOLE plan unsaveable, because the first statement of
+   * every save tried to delete the row its booking pointed at. A surviving requirement now keeps
+   * its row, and only a requirement the caller actually dropped is deleted — where the foreign key
+   * correctly refuses if a commitment still depends on it.
+   *
+   * Dependencies carry no external foreign key and are still fully re-derived.
    */
   private async writeTasks(executor: Pool | PoolClient, s: ProjectSchedule): Promise<void> {
-    // Clear the child rows first: they are re-derived below, and clearing them frees any task the
-    // caller dropped of references, so the diff-delete's only remaining barrier is a real booking.
-    await executor.query('DELETE FROM public.aura_projects_task_requirements WHERE schedule_id = $1', [s.id]);
+    // Dependencies are re-derived wholesale; nothing outside the aggregate references them.
     await executor.query('DELETE FROM public.aura_projects_schedule_dependencies WHERE schedule_id = $1', [s.id]);
+
+    // Requirements the caller dropped go now, BEFORE the tasks are diffed, so that removing a task
+    // and its demand together works in one save. A requirement a booking still satisfies is refused
+    // here by the foreign key (0316) rather than silently taking the commitment's lineage with it.
+    const survivingRequirementIds = s.tasks.flatMap((t) => t.requirements.map((req) => req.id));
+    try {
+      await executor.query(
+        'DELETE FROM public.aura_projects_task_requirements WHERE schedule_id = $1 AND id <> ALL($2::uuid[])',
+        [s.id, survivingRequirementIds],
+      );
+    } catch (err) {
+      if ((err as { code?: string }).code === '23503') {
+        // "already" rather than "cannot": the error taxonomy reads this as the state conflict it is
+        // (409), not as malformed input (400). The plan is fine; a commitment depends on it.
+        throw new Error(
+          'this resource requirement already has a held booking; release the booking before removing the demand from the plan',
+          { cause: err },
+        );
+      }
+      throw err;
+    }
 
     for (const t of s.tasks) {
       await executor.query(
@@ -186,7 +211,8 @@ export class PostgresScheduleStore implements ScheduleStore {
     } catch (err) {
       if ((err as { code?: string }).code === '23503') {
         throw new Error(
-          'a task in this plan cannot be removed while it has an active resource booking — release the booking first',
+          'this activity already has a held resource booking; release the booking before removing the activity from the plan',
+          { cause: err },
         );
       }
       throw err;
@@ -199,7 +225,13 @@ export class PostgresScheduleStore implements ScheduleStore {
         await executor.query(
           `INSERT INTO public.aura_projects_task_requirements
              (id, tenant_id, project_id, schedule_id, task_id, resource_type, canonical_resource_id, unit, quantity)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+           ON CONFLICT (id) DO UPDATE SET
+             task_id = EXCLUDED.task_id,
+             resource_type = EXCLUDED.resource_type,
+             canonical_resource_id = EXCLUDED.canonical_resource_id,
+             unit = EXCLUDED.unit,
+             quantity = EXCLUDED.quantity`,
           [req.id, s.tenantId, s.projectId, s.id, t.id,
            req.resource.resourceType, req.resource.canonicalResourceId, req.unit, req.quantity],
         );

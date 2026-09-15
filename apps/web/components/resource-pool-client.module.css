@@ -19,4 +19,10 @@
 .windows > div { display: grid; grid-template-columns: minmax(160px, 1fr) auto; gap: 3px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; }
 .windows span { color: var(--accent); font-size: 12px; font-weight: 750; }
 .windows small { grid-column: 1 / -1; }
-@media (max-width: 760px) { .grid, .summary { grid-template-columns: 1fr; } .row { flex-direction: column; } }
+/* The roster is a three-column relative of .windows: crew, person, and the way off the crew. */
+.roster { display: grid; gap: 7px; }
+.roster > div { display: grid; grid-template-columns: minmax(140px, 1fr) minmax(120px, 1fr) auto; align-items: center; gap: 3px 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; }
+.roster span { color: var(--accent); font-size: 12px; font-weight: 750; }
+.roster button { border: 1px solid var(--border); background: transparent; color: var(--muted); border-radius: 7px; padding: 4px 10px; font-size: 11px; cursor: pointer; }
+.roster button:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 760px) { .grid, .summary { grid-template-columns: 1fr; } .row { flex-direction: column; } .roster > div { grid-template-columns: 1fr auto; } }

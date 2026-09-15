@@ -147,6 +147,12 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | A refusal is filed against work that no longer exists | Answering a released booking is refused |
 | The refusal never reaches the planner | The planning desk shows the decline and its reason beside the capacity verdict, and counts declined commitments separately from capacity conflicts |
 | The UI makes "yes" easier than "no" | Accept and Decline are both rendered inline; neither answer is demoted into an overflow menu |
+| A crew's roster is read as its capacity | Membership and capacity are separate records with no arithmetic between them: twelve named members and a stated two crews coexist, and neither derives the other |
+| A crew booking is presented as booking every member personally | The member's item says their CREW is committed, states the crew quantity, and names the supervisor as the one who allocates who goes |
+| One member's refusal is filed as the crew's answer | A crew commitment carries no accept/decline; a member answering it receives 403 |
+| Someone taken off a crew keeps receiving its commitments | The roster read is current-membership only; the removed member's item disappears while the crew still holds the booking |
+| A roster entry names somebody HR does not know | The employee id is checked against HR's canonical catalogue before the membership is stored; an invented id returns 400 |
+| One person appears twice on a crew | A partial unique index and the service both refuse a second active membership (409) |
 
 ## Verification completed
 
@@ -200,13 +206,18 @@ Auth-ON browser and API proof used one shared ELV crew with capacity `2 crews`. 
 | Database migration posture | 318/318 applied; the response is constrained to pending/accepted/declined, a decline must carry a reason and an answered row must carry its provenance |
 | Self-scoped route fitness | 4/4 passed; the allocation answer is recorded with why the ordinary permission check cannot authorise it and what replaces it |
 | Browser regression (allocation + WBS + My Work) | 5/5 passed in Chromium |
+| Pool roster service | 4/4 planning-service tests passed; roster and capacity independent, one active membership per person, rejoining allowed, cross-tenant and wrong-pool removal refused |
+| Crew commitments in My Work | 18/18 allocation tests passed, 5 of them new; crew wording, no answer offered, nothing after removal, personal and crew items side by side |
+| Project-scope coverage fitness | 4/4 passed; a pool is recorded as organization-scoped with the reason it carries no project |
+| Database migration posture | 319/319 applied; membership is tenant-isolated under FORCE RLS with one active row per person per pool |
+| Plan save with a held booking | Repaired: requirements are now diffed like tasks, so a plan with a held booking stays editable, and dropping the activity or demand a booking depends on is refused as a conflict instead of failing as an opaque server error |
 
 ## Remaining Wave 3 gate
 
 Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. HR/Fleet availability and named conflict-resolution ownership. Employee-to-User identity, the My Work handoff from booked WBS demand, and acceptance or refusal by the allocated employee are now proven (PLN-07); pool allocation reaching named members, and project access for an allocated non-member, remain open.
+2. HR/Fleet availability and named conflict-resolution ownership. Employee-to-User identity, the My Work handoff from booked WBS demand, acceptance or refusal by the allocated employee, and crew commitments reaching a pool's named members are now proven (PLN-07); project access for an allocated non-member, and equipment allocation reaching a custodian, remain open.
 3. Milestone, baseline, quantity-driven progress, cost, look-ahead, delay/recovery and forecast evidence from the connected plan.
 
 ## Programme state

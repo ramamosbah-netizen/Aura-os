@@ -1418,7 +1418,7 @@
       "stages": [
         "Engineering"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Engineering / DocControl",
       "evidence": [
         "R-J26"
@@ -1426,16 +1426,17 @@
       "source": "apps/api/test/engineering-drawing-workflow.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "PARTIAL",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Design / Technical Engineer, Project Engineer, Technical Manager role executes Technical query response in the canonical Engineering / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "The RESPONSE is the capability, and it is now an act rather than a text field. A TQ is raised by the contractor to the consultant seeking a design clarification and SITE BUILDS TO THE ANSWER, which is what every rule here follows from. IT IS ATTRIBUTABLE: responded_by is part of the record, not only of the event log — a query you are about to build to could not previously say who decided it. SUPERSEDING ONE COSTS A REASON AND KEEPS THE OLD ONE: answers are revisions (migration 0329, append-only by grant), written in the SAME transaction as the overwrite, because an answer given in March and changed in June left no trace of March and March is what was built; the revision count is on the record, so a decision that has moved twice is visibly different from one that has stood. THE LOOP CLOSES:  was in the status union and nothing in the codebase could reach it, so every TQ ever raised sat at responded for ever with nothing recording whether the answer was adequate. Closing is the RAISER’s act — the person who answered cannot declare their own answer adequate, and that rule lives in the domain rather than only in a permission, so a principal holding BOTH permissions is still refused. A closed decision cannot be rewritten underneath the people who acted on it, and is superseded by raising a new query rather than by a reopen the system does not have. A TQ cannot be born answered. drawing_id links the query to the canonical drawing register and is refused when it resolves to another project — free-text drawingReference can name anything and be traced to nothing, but an id pointing elsewhere is worse: a query that LOOKS linked.",
+      "acceptanceProof": "Auth-ON HTTP proof with JWT on throughout, because the authority split IS the capability: the raising engineer is refused the act of ANSWERING (403); the answering manager is refused the act of CLOSING (403); a principal holding BOTH permissions is still refused a self-close (409) while somebody else closing the same answer succeeds; replacing an answer without a reason is refused (409) and the old answer still stands; with a reason it lands, the revision counts up and the superseded text stays readable with why it was replaced; closing an unanswered query (409) and closing twice (409) are refused; a drawing from another project is refused (400); unauthenticated 401. NEXT-ROLE RECEIPT: the query reaches BOTH the raiser and the named responder in My Work; answering moves the turn to the raiser — who owes the judgement — and leaves the responder waiting; accepting clears both; somebody with no part in the exchange never sees it. Auth-ON browser proof against PostgreSQL renders the answer with its author, refuses a reasonless replacement while the old answer stands, shows the revision after one, reads the superseded text back, and surfaces the self-acceptance refusal to the person who clicked. Thirteen domain rules cover the edges. ACCEPTED LIMITS: no transmitted or printable TQ document (actualOutput) — issuing one to a named recipient is ENG-05; a closed query is superseded by raising a new one rather than reopened; and a TQ declaring cost or time impact reaches neither variation nor delay assessment, which is recorded rather than quietly wired."
     },
     {
       "id": "ENG-04",
@@ -8533,7 +8534,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 13,
+      "COMPLETE": 14,
       "PARTIAL": 91,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -8543,7 +8544,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 13,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 51,
+      "UNVERIFIED": 50,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

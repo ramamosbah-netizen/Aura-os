@@ -1288,8 +1288,9 @@ context, with save/reload, applicable permission denials, actual output and next
 | Next-role receipt | the query reaches both the raiser and the named responder in My Work; answering moves the turn to the raiser and leaves the responder waiting; accepting clears both; somebody with no part in it never sees it | no |
 | Actual output | proven on screen and over the API; no transmitted or printable TQ document exists | **yes** |
 
-**Proposed: `ENG-03` UNVERIFIED → COMPLETE**, with `actualOutput` **PARTIAL** on promotion — the same
-basis on which the planning rows were promoted. Issuing a TQ response as a controlled document to a
+**`ENG-03` UNVERIFIED → COMPLETE — applied on 2026-09-15 by the programme owner's decision**, with
+`actualOutput` **PARTIAL** — the same basis on which the planning rows were promoted. That makes
+fourteen COMPLETE capabilities of 180, and takes the Wave 3 remainder to **three**. Issuing a TQ response as a controlled document to a
 named recipient is `ENG-05`'s question, which is still open and still in this wave.
 
 ### Found while proving it, and fixed rather than worked around
@@ -1389,9 +1390,9 @@ waived, and nothing outside it may be added.
 
 **Five capabilities remained to close Wave 3: `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04`.**
 
-`PLN-04` is now COMPLETE (iteration 19 above), so **four remain: `ENG-03`, `ENG-04`, `ENG-05`,
-`ENG-06`** — all of them engineering / document-control rows. `ENG-06` is counted once but discharges
-two lines, carrying a gate clause of its own as well as a pinned proof.
+`PLN-04` is now COMPLETE (iteration 19) and `ENG-03` with it (iteration 20), so **three remain:
+`ENG-04`, `ENG-05`, `ENG-06`** — all of them engineering / document-control rows. `ENG-06` is counted
+once but discharges two lines, carrying a gate clause of its own as well as a pinned proof.
 
 **The planning line is finished for this wave.** Of sixteen planning capabilities eleven are
 COMPLETE, and the five that are not (`PLN-01`, `PLN-06`, `PLN-07`, `PLN-08`, `PLN-09`) carry gaps the

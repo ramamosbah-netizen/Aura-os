@@ -254,8 +254,8 @@ ON_RATE on the same row; and 80 further hours naming no package stayed out of th
 reported beside it as 20% of the project's hours. The plan screen counts lateness and overspending
 as two separate headline numbers.
 
-**PLN-11's one open acceptance row is now closed.** COMPLETE is proposed in the reconciliation
-below and not applied.
+**PLN-11's one open acceptance row is now closed, and the capability moves to COMPLETE** — see the
+reconciliation below.
 
 ## Security and authority proof
 
@@ -464,8 +464,8 @@ progress derives from approved site/quantity evidence with an explicit governed 
 | Persistence | migration 0322 with range, reason and provenance constraints; the browser proof round-trips a statement through PostgreSQL | no |
 
 **`PLN-12` DISCONNECTED → COMPLETE — applied on 2026-09-15 by the programme owner's decision**,
-after the reconciliation above. This makes four COMPLETE capabilities in the register (AWD-05,
-AWD-06, PLN-10, PLN-12) out of 180.
+after the reconciliation above. That was four COMPLETE capabilities out of 180 (AWD-05, AWD-06, PLN-10, PLN-12);
+PLN-11 below makes five.
 
 Three limits are stated rather than rounded away. A statement needs one person, not two: it carries
 a permission, a reason and a name, but no independent approval, and whether claiming progress the
@@ -493,19 +493,21 @@ compares installed output without re-entry.
 | Achieved productivity in man-hours | closed in iteration 11: labour carries its work package (migration 0323), read through a port, with earned set against spent | no |
 | The figure never flatters by omission | the share of the project's hours naming no package travels with every figure; an unattributed package reads UNKNOWN, never infinitely productive | no |
 
-**`PLN-11` DISCONNECTED → PARTIAL, applied. `PARTIAL → COMPLETE` is now proposed** and left to the
-programme owner, as PLN-10's and PLN-12's were. The row that kept it PARTIAL through iteration 10 —
-achieved productivity in man-hours — is closed: a day's labour now names the work package it was
-spent on, and the plan sets what the work earned against what it cost.
+**`PLN-11` DISCONNECTED → COMPLETE — applied on 2026-09-15 by the programme owner's decision**,
+in two steps within this wave: PARTIAL once the pace half was proven, and COMPLETE once the row
+that held it there — achieved productivity in man-hours — was closed. A day's labour now names the
+work package it was spent on, and the plan sets what the work earned against what it cost. This
+makes five COMPLETE capabilities in the register (AWD-05, AWD-06, PLN-10, PLN-11, PLN-12) out of
+180.
 
-Two limits are knowingly accepted with the proposal rather than rounded away. Several activities
+Two limits are knowingly accepted with the promotion rather than rounded away. Several activities
 sharing one work package each inherit that package's whole sold quantity, because no apportionment
 has been authored and none can be inferred from the plan. And rates are counted in calendar days
 rather than working days, so a window spanning a shutdown flatters the achieved pace — the working
 calendar exists (PLN-03) and is not yet read here. Neither touches an acceptance criterion; both
 are recorded so a reader knows the figure's precision. As on PLN-10 and PLN-12, `actualOutput`
-would remain **PARTIAL** on promotion: the rendered output is proven in the browser and no exported
-productivity document exists.
+remains **PARTIAL** on an otherwise complete row: the rendered output is proven in the browser and
+no exported productivity document exists.
 
 ### Observed while proving it, not fixed
 
@@ -522,7 +524,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, and so is what the work cost in hours (PLN-11, PARTIAL and proposed for COMPLETE). What remains open in this line: rates are counted in calendar days rather than working days; several activities on one package each inherit its whole sold quantity; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, and so is what the work cost in hours (PLN-11, COMPLETE). What remains open in this line: rates are counted in calendar days rather than working days; several activities on one package each inherit its whole sold quantity; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen.
 
 ## Programme state
 

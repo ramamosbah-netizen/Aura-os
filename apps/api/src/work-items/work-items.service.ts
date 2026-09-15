@@ -796,7 +796,14 @@ export class WorkItemsService {
   private addTq(put: (item: WorkItem) => void, t: TechnicalQuery, actor: string): void {
     const assigned = t.assignedTo === actor, created = t.createdBy === actor;
     if (!assigned && !created) return;
-    const status: WorkItemStatus = t.status === 'closed' ? 'done' : t.status === 'responded' ? 'waiting' : 'todo';
+    // WHOSE TURN IT IS depends on who is looking, and an answered query is the clearest case.
+    // `responded` used to read as `waiting` for everyone, which told the RAISER — the person who
+    // now has to judge the design decision and build to it — that there was nothing for them to do.
+    // The answer had arrived and their own work list said otherwise. For the person who answered it
+    // (the assignee) `waiting` is right: the ball is with the raiser.
+    const status: WorkItemStatus = t.status === 'closed' ? 'done'
+      : t.status === 'responded' ? (created ? 'todo' : 'waiting')
+      : 'todo';
     put({ id: `engineering-tq:${t.id}`, source: 'engineering-tq', sourceId: t.id, module: 'Engineering', kind: 'Technical query', title: `${t.code} — ${t.title}`, detail: t.query, href: `/engineering/technical-queries?projectId=${t.projectId}&record=${t.id}`, projectId: t.projectId, projectName: t.projectName, status, sourceStatus: t.status, priority: t.priority, dueAt: null, createdAt: t.createdAt, updatedAt: t.updatedAt, scopes: scopes(assigned, created), isFollowUp: false, actions: [], origin: origin(t.createdBy, actor) });
   }
 

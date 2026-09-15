@@ -32,6 +32,7 @@ interface Tq {
 interface Revision {
   revision: number; response: string; respondedBy: string | null; supersededReason: string;
 }
+interface WorkItem { id: string; title: string; status: string; sourceStatus: string; projectId: string | null }
 
 describe('a technical query response is a design decision (JWT ON)', () => {
   let app: INestApplication;
@@ -61,19 +62,19 @@ describe('a technical query response is a design decision (JWT ON)', () => {
     access.registerRole({
       id: 'r-e2e-tq-engineer', name: 'Design Engineer (e2e)',
       // Raises and CLOSES; cannot answer.
-      permissions: ['engineering.tq.create', 'engineering.tq.read', 'engineering.tq.close', 'engineering.drawing.*', 'projects.project.read'],
+      permissions: ['engineering.tq.create', 'engineering.tq.read', 'engineering.tq.close', 'engineering.drawing.*', 'projects.project.read', 'work-items.*'],
     });
     access.registerRole({
       id: 'r-e2e-tq-manager', name: 'Technical Manager (e2e)',
       // Answers; cannot close its own answer — and holds no close permission at all.
-      permissions: ['engineering.tq.read', 'engineering.tq.respond', 'projects.project.read'],
+      permissions: ['engineering.tq.read', 'engineering.tq.respond', 'projects.project.read', 'work-items.*'],
     });
     access.grant({ userId: 'tq-engineer', roleId: 'r-e2e-tq-engineer', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     access.grant({ userId: 'tq-manager', roleId: 'r-e2e-tq-manager', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     access.registerRole({
       id: 'r-e2e-tq-both', name: 'Holds both (e2e)',
       // Deliberately over-privileged: the point is that PERMISSION is not the only guard here.
-      permissions: ['engineering.tq.read', 'engineering.tq.respond', 'engineering.tq.close', 'engineering.tq.create', 'projects.project.read'],
+      permissions: ['engineering.tq.read', 'engineering.tq.respond', 'engineering.tq.close', 'engineering.tq.create', 'projects.project.read', 'work-items.*'],
     });
     access.grant({ userId: 'tq-both', roleId: 'r-e2e-tq-both', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     access.grant({ userId: 'tq-admin', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 1_000_000 });
@@ -110,6 +111,8 @@ describe('a technical query response is a design decision (JWT ON)', () => {
     const raised = (await engineer.post('/api/v1/engineering/technical-queries').send({
       projectId, code: 'TQ-001', title: 'Riser clashes with duct',
       query: 'Which service takes precedence at level 3?', timeImpact: true,
+      // Directed at the design authority, so BOTH sides of the exchange have a receipt to check.
+      assignedTo: 'tq-manager',
     }).expect(201)).body as Tq;
     tqId = raised.id;
     expect(raised).toMatchObject({
@@ -235,6 +238,55 @@ describe('a technical query response is a design decision (JWT ON)', () => {
     }).expect(201)).body as Tq;
     const refused = await engineer.put(`/api/v1/engineering/technical-queries/${fresh.id}/close`).expect(409);
     expect(refused.body.message).toMatch(/nothing to accept/);
+  });
+
+  // ── The next-role receipt ───────────────────────────────────────────────────
+  //
+  // A design decision that reaches nobody is a row in a table. These prove it arrives, and — the
+  // part that was wrong until this slice — that it arrives as WORK for the person who now has to
+  // act on it rather than as something they are waiting on.
+
+  const inbox = async (agent: ReturnType<typeof request.agent>): Promise<WorkItem[]> =>
+    ((await agent.get('/api/v1/work-items').expect(200)).body as { items: WorkItem[] }).items;
+
+  it('puts the raised query in BOTH the raiser’s and the named responder’s work lists', async () => {
+    const fresh = (await engineer.post('/api/v1/engineering/technical-queries').send({
+      projectId, code: 'TQ-RECEIPT', title: 'Cable tray penetration',
+      query: 'Is a fire collar required at grid D?', assignedTo: 'tq-manager',
+    }).expect(201)).body as Tq;
+
+    const raiser = (await inbox(engineer)).find((item) => item.id === `engineering-tq:${fresh.id}`);
+    const responder = (await inbox(manager)).find((item) => item.id === `engineering-tq:${fresh.id}`);
+    expect(raiser, 'the raiser did not receive their own query').toBeDefined();
+    expect(responder, 'the named responder did not receive the query').toBeDefined();
+    // Unanswered, it is work for both: one is chasing it, the other owes an answer.
+    expect(raiser).toMatchObject({ status: 'todo', sourceStatus: 'open', projectId });
+    expect(responder).toMatchObject({ status: 'todo', sourceStatus: 'open' });
+
+    // ── Answer it, and the turn changes hands ────────────────────────────────
+    await manager.put(`/api/v1/engineering/technical-queries/${fresh.id}/respond`)
+      .send({ response: 'Yes — 2hr collar, detail SK-12.' }).expect(200);
+
+    const raiserAfter = (await inbox(engineer)).find((item) => item.id === `engineering-tq:${fresh.id}`);
+    const responderAfter = (await inbox(manager)).find((item) => item.id === `engineering-tq:${fresh.id}`);
+    // THE RECEIPT: the answer reaches the raiser as something to DO — they have to judge it and
+    // build to it. Before this slice it reached them as `waiting`, which said the opposite.
+    expect(raiserAfter).toMatchObject({ status: 'todo', sourceStatus: 'responded' });
+    // And the person who answered is now the one waiting, on the raiser to accept.
+    expect(responderAfter).toMatchObject({ status: 'waiting', sourceStatus: 'responded' });
+
+    // ── Accepted, and it leaves both lists as done ───────────────────────────
+    await engineer.put(`/api/v1/engineering/technical-queries/${fresh.id}/close`).expect(200);
+    expect((await inbox(engineer)).find((item) => item.id === `engineering-tq:${fresh.id}`))
+      .toMatchObject({ status: 'done', sourceStatus: 'closed' });
+    expect((await inbox(manager)).find((item) => item.id === `engineering-tq:${fresh.id}`))
+      .toMatchObject({ status: 'done', sourceStatus: 'closed' });
+  });
+
+  it('does not put a query in the work list of somebody with no part in it', async () => {
+    // `both` neither raised TQ-RECEIPT nor was named on it.
+    const uninvolved = (await inbox(both)).filter((item) => item.title.includes('TQ-RECEIPT'));
+    expect(uninvolved).toEqual([]);
   });
 
   it('refuses an unauthenticated caller outright', async () => {

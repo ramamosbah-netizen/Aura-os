@@ -6,7 +6,7 @@
 
 The bounded Direct/Tender study-to-offer gate is verified in [the Wave 2 closure report](./wave-2-progress-report.md). Its maker/checker, revision, final output and frozen award-basis proof does not remove the supplier comparison leaves sequenced with Wave 4.
 
-Wave 3 iterations 1–5 are verified in [the Wave 3 progress report](./wave-3-progress-report.md). AWD-05, AWD-06 and historical findings J2-02/J2-03 are closed after canonical sold-item mapping, automatic SOLD projection and persisted manager-to-assignee responsibility handoff through My Work passed. ENG-06 remains PARTIAL for representative release receipt. PLN-01 is now PARTIAL: each new activity resolves a persisted same-project WBS node and reloads it in the Gantt, while resource, quantity-progress and cost continuity remain open.
+Wave 3 is verified iteration by iteration in [the Wave 3 progress report](./wave-3-progress-report.md), whose remainder audit counts the gate rather than describing it. Of the six proofs the roadmap pinned to this wave — AWD-06, ENG-03, ENG-04, ENG-05, ENG-06, PLN-04 — AWD-06 is closed, and **five remain: ENG-03, ENG-04, ENG-05, ENG-06 and PLN-04**. Historical findings J2-02 and J2-03 are closed with AWD-05; gap records F-07 and F-08 are discharged at record level while PLN-01 and PLN-06 stay PARTIAL for cost continuity and the Fleet/Assets availability bridge, neither of which is a Wave 3 gate clause. ENG-03 and ENG-04 are investigation-first under programme rule 8: both already have stores and routes, and two independent submittal registers exist, so the canonical authority must be decided before anything is built.
 
 | ID | Capability | Roles | Stages | Authority | Current evidence boundary | Acceptance proof |
 | --- | --- | --- | --- | --- | --- | --- |

@@ -1061,16 +1061,19 @@ drives forecast completion and management variance, with drilldown to contributi
 | The figure says what it is worth | measured against declared drivers, reported and never rounded up | no |
 | **Portfolio forecast** | **not built: this is one project's forecast, and no roll-up across projects exists** | **yes** |
 
-**Proposed: `PLN-16` PARTIAL → COMPLETE**, with the open row stated rather than buried. The
-acceptance criterion as written asks for forecast completion, management variance and drilldown, and
-all three are proven. The register's *current behaviour* note also mentioned "portfolio forecast",
-which is a different question — one project's forecast is a fact about that project; rolling several
-into a portfolio number needs a decision about what such a number even means when the projects carry
-different confidences, and summing dates of differing evidential worth is exactly the kind of
-average this programme has spent eighteen iterations refusing to invent. `MGT-13` (Forecast
-completion, management view) is the row that carries it, and it remains UNVERIFIED.
+**`PLN-16` PARTIAL → COMPLETE — applied on 2026-09-15 by the programme owner's decision.** That
+makes twelve COMPLETE capabilities out of 180, and ten of the sixteen planning rows. The acceptance
+criterion as written asks for forecast completion, management variance and drilldown to contributing
+tasks, and all four are proven above.
 
-As on every other planning row, `actualOutput` would remain **PARTIAL** on promotion: proven on
+The phrase *portfolio forecast* in the table came from the register’s **currentBehavior** field — a
+description of the gap as found — and not from the **acceptanceProof**, which is where a promotion is
+judged. Reading it as a criterion would have made a cross-project roll-up a condition of forecasting
+one project, which it is not: a portfolio number needs a decision about what a rolled-up date means
+across projects carrying different confidences, and the roadmap already allocates that question to
+Wave 9 (`MGT-13`). The distinction is recorded because mistaking a *currentBehavior* note for a
+criterion is the specific way a promotion gets mis-scoped, and it nearly widened this one.
+As on every other planning row, `actualOutput` remains **PARTIAL**: proven on
 screen, with no exported forecast document — now the seventh row carrying that same gap.
 
 ### Observed while proving it, not fixed
@@ -1082,13 +1085,162 @@ dropped. That is adjacent to PLN-10 rather than part of it — no acceptance cri
 on it — and it is recorded rather than quietly changed, because narrowing the constraint to HELD
 bookings would drop the lineage of released commitments and needs deciding on its own merits.
 
-## Remaining Wave 3 gate
+## Wave 3 remainder audit
 
-Wave 3 remains open. The next bounded slices must still prove:
+The section that stood here had become three paragraphs of accreted commentary. Every iteration
+added a clause and none ever removed one, so by the eighteenth it recorded a great deal and answered
+nothing — in particular it could not answer *how many capabilities are left*, which is the one
+question a wave gate exists to answer. A gate nobody can count is how a programme walks from one
+capability to the next without ever arriving. This replaces it with the arithmetic.
 
-1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
-2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone and cost evidence from the connected plan. Forecast completion is now proven for a project (PLN-16, PARTIAL and proposed for COMPLETE); what remains is the PORTFOLIO view of it (MGT-13), which needs a decision about what a rolled-up date means across projects of differing confidence. Baseline approval is now proven (PLN-05, COMPLETE), which closes the divergence PLN-15 was promoted with. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+The count below is measured against the closure condition the roadmap wrote for this wave **before
+any of it was built** — not against a standard assembled afterwards to fit what has been done.
+
+### The scope this wave was actually given
+
+[`remediation-roadmap.md`](./remediation-roadmap.md) defines Wave 3 as *Award → mobilisation →
+engineering → connected plan*, owning gap records **J2-02, J2-03, F-07, F-08**, with six pinned
+UNVERIFIED proofs — **AWD-06, ENG-03, ENG-04, ENG-05, ENG-06, PLN-04** — and this exit gate:
+
+> frozen scope reconciles to WBS and Sold projection; an approved engineering release reaches
+> Site/Buyer; the planner allocates real resources, detects a conflict, accepts a recovery proposal
+> and sends the resulting work to the responsible people; six pinned proofs are resolved.
+
+Waves 0, 1 and 2 were each closed against their own equivalent gate and against nothing else. Wave 2
+closed on the record with `EST-07`, `EST-11`, `EST-12` and `EST-13` still UNVERIFIED, because those
+rows were not in its gate; they were sequenced to Wave 4 and named in the closure report rather than
+quietly carried. The same standard applies here in both directions: nothing in the gate may be
+waived, and nothing outside it may be added.
+
+### The exit gate, clause by clause
+
+| Clause | Carried by | State |
+| --- | --- | --- |
+| Frozen scope reconciles to WBS and Sold projection | `AWD-05` COMPLETE; gap records J2-02 and J2-03 CLOSED / VERIFIED at iteration 1 | **MET** |
+| An approved engineering release reaches Site/Buyer | `ENG-06` — the release is governed and transmitted against a named responsibility, but not yet with a separate Design issuer and assigned Site Engineer / Project Engineer / Procurement recipients accepting their exact revision | **OPEN** |
+| The planner allocates real resources | `PLN-06`/`PLN-07`/`PLN-08` — employee, crew, vehicle, asset and governed shared-pool demand authored on a WBS-linked activity and committed into a held booking, proven Auth-ON | **MET** |
+| …detects a conflict | `PLN-10` COMPLETE; `PLN-09` drives an HR leave request through approval and the planning desk changes with it | **MET** |
+| …accepts a recovery proposal | `PLN-15` COMPLETE — delay → impact → assessment → explicit hand-off → proposal → acceptance → governed programme | **MET** |
+| …and sends the resulting work to the responsible people | `AWD-06` puts a named responsibility into the assignee's My Work; a held employee booking reaches the named person and a crew's roster; an equipment commitment reaches that machine's custodian, accepted or refused with a reason | **MET** |
+| Six pinned proofs are resolved | one of six | **OPEN** |
+
+### The six pinned proofs
+
+| Pinned | Capability | State | What is missing, concretely |
+| --- | --- | --- | --- |
+| `AWD-06` | Team and responsibility assignment | **COMPLETE** | — |
+| `ENG-03` | Technical query response | UNVERIFIED | Domain, stores and `POST/GET /engineering/technical-queries` exist; nothing is proven about reachability, permissions, actual output or next-role receipt. Rule 8 work: investigate, then build only what investigation shows is absent. |
+| `ENG-04` | Approved material submittal | UNVERIFIED | The same shape — plus the finding below, which decides what this row even means. |
+| `ENG-05` | Document transmittal | PARTIAL | Attaching the exact controlled register revision(s) as a multi-document package, and the recipient's acknowledgement returning to the sender with revision and purpose lineage retained. |
+| `ENG-06` | Release notification to site | PARTIAL | A separate Design issuer and named Site / Project Engineer / Procurement recipients; only authorized recipients seeing and accepting their exact drawing or material revision; retained receipt history. |
+| `PLN-04` | Milestones | UNVERIFIED | **Nothing exists.** No milestone concept in `modules/projects`, no route, no table. Project 360 nonetheless offers a link labelled *"Add task or milestone"* that opens a screen which can only add a task — the same class of false affordance that iteration 2 removed from DocControl's "Dispatch & Send". |
+
+### The answer
+
+**Five capabilities remain to close Wave 3: `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04`.**
+
+Four are engineering / document-control rows and one is planning. `ENG-06` is counted once but
+discharges two lines — it carries a gate clause of its own as well as a pinned proof — so the wave
+closes on five rows rather than six.
+
+The planning line is otherwise done. Of sixteen planning capabilities, ten are COMPLETE, and of the
+six that are not, five (`PLN-01`, `PLN-06`, `PLN-07`, `PLN-08`, `PLN-09`) carry gaps the roadmap
+assigns to later waves rather than to this gate. `PLN-04` is the only planning row this wave owes.
+
+### What the number would be under two other readings
+
+Stating the definition matters more than the number, because three defensible readings give three
+very different answers and only one of them is the programme's own.
+
+| Reading | Count | Rows |
+| --- | :---: | --- |
+| **A — the roadmap's exit gate as written** *(recommended)* | **5** | `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04` |
+| B — A, plus the one asymmetry "detects a conflict" arguably reaches | 6 | + `PLN-08` |
+| C — every AWD / ENG / PLN row COMPLETE | 17 | + `AWD-01`–`04`, `AWD-07`, `ENG-01`, `ENG-02`, `PLN-01`, `PLN-06`, `PLN-07`, `PLN-08`, `PLN-09` |
+
+**A is recommended** because it is the standard Waves 0, 1 and 2 were closed under, and changing the
+closure rule at the wave that happens to be current is how a programme loses the ability to compare
+its own waves.
+
+**B** exists because of a real asymmetry worth stating plainly: a *person's* leave now changes the
+feasibility of a commitment already made (`PLN-09`), while a *machine's* breakdown does not
+(`PLN-08`). A planner is told about one and never about the other. Whether the gate's "detects a
+conflict" reaches that is a judgement — the conflicts the gate names, cross-project double-booking
+and over-capacity, are detected — so it is offered rather than assumed.
+
+**C** is Wave 10's job, not this one's. No wave in this programme has been held to it, and applying
+it here would also mean re-opening Waves 1 and 2.
+
+### The two recurring limits do not block this wave
+
+Two gaps have been recorded on nearly every promoted row and re-argued from scratch each time. Both
+are now placed, so that stops.
+
+- **No exported document.** `actualOutput` is PARTIAL on seven planning rows: the figures are proven
+  on screen and over the API, and no printable forecast, baseline, look-ahead or delay document
+  exists. The roadmap assigns external communication, documents and governed files to **Wave 8**
+  (`F-05`, `F-09`, `OUT-03`, `OUT-09`, `MAIL-02`, `MAIL-10`, `XOP-10`). It is not in Wave 3's gate
+  and does not belong in this count.
+- **Nothing notifies anybody who is not looking at the screen.** Six signals now: a conflict, a
+  delay, an assessment, a recovery proposal, an activity losing ground, and one overspending its
+  priced hours. Wave 3's scope says *"notify resource owners and Site of accepted assignments"* — an
+  **assignment receipt**, which is proven (My Work, for responsibility, employee bookings, crew
+  rosters and equipment custody), with the Site half sitting inside `ENG-06` and already counted.
+  These six are **standing alerts**, a different thing, and none is named in the gate. They remain
+  what the earlier reports called for: one shared notification/subscription authority built once,
+  not six bespoke ones — and the time for it is when the sixth becomes the twelfth, not row by row.
+
+Neither adds to the five. Both stay recorded, and neither should be re-litigated on the next
+promotion.
+
+### One finding that changes the shape of the remaining work
+
+`ENG-04` is not a build. **Two independent submittal registers already exist:**
+
+| | Route | Table | Identity |
+| --- | --- | --- | --- |
+| DocControl | `POST /doccontrol/submittals` | `aura_doccontrol_submittals` | reference · title · discipline · revision |
+| Engineering | `POST /engineering/submittals` | `aura_engineering_submittals` | code · title · submittalType · discipline · status |
+
+Two tables, two services, two controllers, one business object. The register currently scores
+`DUPLICATED` and `WRONG_AUTHORITY` at zero, so this is invisible in every count above — which is
+precisely what programme rule 3 (*preserve canonical authorities; do not copy business truth into
+convenient duplicate fields*) exists to prevent, and what rule 8 (*investigate an UNVERIFIED leaf
+before building*) exists to catch.
+
+So the `ENG-04` slice begins by deciding which register is canonical for an approved **material**
+submittal, and subordinating or retiring the other. Building a third path on top of two that already
+disagree would be the worst available outcome, and it is the one that "just implement ENG-04" leads
+to. `ENG-03` needs the same investigation first, though nothing yet suggests it is duplicated.
+
+### The two gap records this wave owns beyond the pinned list
+
+`F-07` (carried by `PLN-01`) and `F-08` (carried by `PLN-06`) describe one defect: *the planner
+reaches a working solver but cannot build the WBS/resource inputs it needs on that screen.* Their
+stated resolution is *"WBS-linked task, dependencies, named resources, availability conflict and
+recipient handoff"*, and all five are now proven Auth-ON. The gap records are discharged.
+
+Their carrying capability rows stay PARTIAL for gaps beyond those records: `PLN-01` for cost
+continuity through the same activity identity, and `PLN-06` for the Fleet/Assets half of the
+availability bridge. Both are named, both sit in reading B or C rather than A, and neither is a
+Wave 3 gate clause.
+
+### Sequence to closure
+
+1. `PLN-04` — milestones. Nothing exists and a screen already offers one. The smallest of the five,
+   and the only one that is purely a build.
+2. `ENG-04` — decide the canonical submittal authority first, then prove the approved material
+   submittal end to end.
+3. `ENG-03` — technical query response; investigation first.
+4. `ENG-05` + `ENG-06` — one slice: the multi-document controlled package, its named recipients,
+   their acceptance and the retained receipt history. They share a mechanism, and closing them apart
+   would build the recipient path twice.
+
+Four slices. After them the gate is met and Wave 3 can be **proposed** for closure — a decision that
+remains the programme owner's, as every promotion in this report has been.
+
+**`MGT-13` is not among them.** The roadmap allocates it to Wave 9 (*Manager and CEO decision
+acceptance*), and nothing in Wave 3's gate depends on a cross-project roll-up.
 
 ## Programme state
 

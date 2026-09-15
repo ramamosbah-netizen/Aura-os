@@ -9,6 +9,7 @@ import {
 import { resolvePlannedOutput, type PlannedOutput } from './domain/planned-output';
 import { resolveLookAhead, type LookAhead } from './domain/look-ahead';
 import { compareRecovery, type RecoveryComparison } from './domain/recovery-proposal';
+import { forecastCompletion, type ForecastCompletion } from './domain/forecast-completion';
 import { assessDelayImpact, type DelayImpact, type ConcurrentDelay } from './domain/delay-impact';
 import { ActivityOutputService } from './activity-output.service';
 import { ProjectCalendarService } from './project-calendar.service';
@@ -626,6 +627,56 @@ export class ScheduleService {
       { projectId, scheduleId: schedule.id, source: 'projects.schedule.planning_ran' },
     );
     return { run, comparison: compareProposalToCurrent(schedule, run.proposal) };
+  }
+
+  /**
+   * When this project will actually finish, and how far that is from what was committed to.
+   *
+   * DERIVED on the read from what has been BUILT, not from what the plan hopes: each activity
+   * carries only what is left of it, and the same CPM places the remainder over the same calendar
+   * and network. A forecast that repeats the planned finish is the plan with a new label.
+   *
+   * The confidence travels with it. PLN-12 already separates a measured percentage from a declared
+   * one, and a forecast resting on declarations is a guess wearing a projection's clothes — so how
+   * many of the driving activities carry measured progress is part of the answer, never a footnote.
+   */
+  async forecast(tenantId: Id, projectId: Id, today: string): Promise<ForecastCompletion> {
+    const schedule = await this.store.getByProject(tenantId, projectId);
+    if (!schedule) throw new NotFoundException(`no schedule for project ${projectId}`);
+
+    const horizon = this.horizonOf(schedule, today);
+    const [resolved, progress] = await Promise.all([
+      this.projectCalendar?.forProject(tenantId, projectId, horizon) ?? Promise.resolve(null),
+      this.progressOf(schedule),
+    ]);
+    // The committed date, from the baseline the activities carry — not from today's plan.
+    const baselineFinish = schedule.baselineSetAt === null ? null : schedule.tasks.reduce<string | null>(
+      (latest, task) => (task.baselineEnd && (latest === null || task.baselineEnd > latest) ? task.baselineEnd : latest),
+      null,
+    );
+
+    return forecastCompletion({
+      tasks: schedule.tasks.map((task) => {
+        const resolvedProgress = progress.get(task.id);
+        return {
+          id: task.id, name: task.name,
+          plannedStart: task.plannedStart, plannedEnd: task.plannedEnd,
+          durationWorkingDays: task.durationWorkingDays,
+          // The RESOLVED figure, so a measured activity forecasts from what site installed rather
+          // than from the number somebody typed over it.
+          percentComplete: resolvedProgress?.effective ?? task.percentComplete,
+          measured: resolvedProgress ? resolvedProgress.source !== 'declared' : false,
+        };
+      }),
+      dependencies: schedule.dependencies,
+      projectStart: schedule.tasks.reduce(
+        (earliest, task) => (task.plannedStart < earliest ? task.plannedStart : earliest),
+        schedule.tasks[0]?.plannedStart ?? today,
+      ),
+      baselineFinish,
+      nonWorkingDays: resolved?.everyDayWorked ? undefined : resolved?.nonWorkingDays,
+      calendar: resolved?.calendar,
+    });
   }
 
   /**

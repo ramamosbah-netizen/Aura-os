@@ -2047,17 +2047,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
         "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
+        "actualOutput": "PARTIAL",
+        "browser": "PARTIAL",
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "The planning proposal calculates a proposed project finish, while portfolio forecast and source-backed variance remain unproven.",
-      "acceptanceProof": "Accepted plan drives forecast completion and management variance with drilldown to contributing tasks."
+      "currentBehavior": "Three dates are kept apart, because a management report that confuses any two of them is worse than no report: the BASELINE (what was committed to — PLN-05, and the only one that does not move), the PLANNED finish (what the programme says today, which moves whenever anybody edits it), and the FORECAST (where the work is heading, derived from what has actually been INSTALLED). A ‘forecast’ that repeats the planned finish is the plan with a new label, and it is the commonest lie a project system tells. This one differs from the plan exactly when the evidence says it should: each activity carries only what is LEFT of it — remaining duration from the resolved progress, rounded UP because half a working day of work is a day somebody turns up for, and a forecast must never be wrong optimistically — and the SAME CPM places the remainder over the same calendar and the same dependency network, so the project keeps one answer to “when does this finish”. Finished work is left OUT of the run rather than passed in as a zero-day activity: the planner rightly refuses a duration below a day, and a finished predecessor constrains nothing. THE CONFIDENCE TRAVELS WITH THE DATE. PLN-12 separates a measured percentage from a declared one, and a forecast resting on declarations is a guess wearing a projection’s clothes — so how many of the driving activities carry measured progress is part of the answer and is never rounded up; an activity already finished stops being a driver, because its evidence no longer moves a date it has no say in. The variance is against the BASELINE, never against a plan somebody edited this morning, and a separate figure says how much the plan is flattering itself. The activities that decide the date are named in the order they run, so the figure is drilled into rather than taken on trust.",
+      "acceptanceProof": "Auth-ON browser and HTTP proof: a project with no baseline reports NO variance rather than ‘on time’; once committed, forecast, planned and baseline agree and the variance is zero; the drivers are named with what is left of each and whether that figure is measured; a governed award makes one activity’s zero a MEASUREMENT and the other’s a declaration, and the confidence reads 1 of 2 rather than rounding either way; installing 100 of 200 m² pulls the date in two working days with nobody editing the plan; stretching an activity pushes the forecast out and reports it LATE against the committed date while the baseline stays where it was; completing the first activity brings it back in; and a programme with an unauthored duration is refused a forecast entirely while still reporting the two dates it does know. Seventeen domain rules cover the edges, including every activity finished — which asks for an actual finish, a different fact. STILL OPEN: this is one project’s forecast, and a PORTFOLIO roll-up across projects is not built — the register’s own wording named portfolio forecast, and MGT-13 is the row that carries it."
     },
     {
       "id": "SUP-01",

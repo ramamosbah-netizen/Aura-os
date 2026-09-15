@@ -34,3 +34,10 @@
   .packageRow { flex-direction: column; gap: 2px; }
   .packageRow small { text-align: left; }
 }
+
+/* Where the whole programme lands, above the next few weeks of it. The three dates sit on one row
+   because their relationship is the point: a forecast read without its baseline says nothing. */
+.forecast { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 6px; }
+.forecastRow { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; }
+.late { color: var(--bad); font-weight: 600; }
+.contributors { display: flex; gap: 10px; flex-wrap: wrap; color: var(--muted); font-size: 11px; }

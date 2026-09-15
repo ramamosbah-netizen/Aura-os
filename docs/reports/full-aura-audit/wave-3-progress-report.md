@@ -546,6 +546,52 @@ watched themselves type one. It was invisible until the reason became load-beari
 
 **PLN-05 moves to COMPLETE** — see the reconciliation below.
 
+## Iteration 18 — Where this programme actually lands
+
+Three dates, and a management report that confuses any two of them is worse than no report:
+
+- **Baseline** — what was committed to (PLN-05). The yardstick, and the only one that does not move.
+- **Planned** — what the programme says today. Moves whenever anybody edits it, and says nothing
+  about whether the work is keeping up.
+- **Forecast** — where the work is heading, derived from what has actually been installed.
+
+A "forecast" that repeats the planned finish is not a forecast; it is the plan with a new label, and
+it is the most common lie a project system tells. This one differs from the plan exactly when the
+evidence says it should: each activity carries only what is **left** of it, and the **same CPM**
+places the remainder over the same calendar and the same dependency network — so the project keeps
+one answer to "when does this finish" rather than a forecast engine quietly disagreeing with the
+planner.
+
+Remaining duration is rounded **up**. Half a working day of work left is a working day somebody has
+to turn up for, and a forecast that rounds remaining work down is optimistic by construction — which
+is the one direction a forecast must never be wrong in.
+
+**The confidence travels with the date.** PLN-12 already separates a measured percentage from a
+declared one, and a forecast resting on declarations is a guess wearing a projection's clothes. How
+many of the driving activities carry measured progress is therefore part of the answer, never a
+footnote, and it is never rounded up. An activity already finished stops being a driver — its
+evidence no longer moves a date it has no say in.
+
+The variance is against the **baseline**, never against a plan somebody edited this morning, and a
+separate figure says how much the plan is flattering itself. The activities that decide the date are
+named in the order they run, so the figure is drilled into rather than taken on trust.
+
+**Found while building it:** a finished activity has zero remaining duration, and the planner rightly
+refuses to place a task that takes no time. Passed in as-is, every project with anything completed
+would have forecast UNKNOWN. Finished work is left out of the run instead — which is also correct on
+the merits: a finished predecessor constrains nothing, and its successor can start now.
+
+Auth-ON browser and API proof: a project with no baseline reports **no** variance rather than "on
+time"; once committed, all three dates agree and the variance is zero; the drivers are named with
+what is left of each and whether that figure is measured; a governed award makes one activity's zero
+a **measurement** and the other's a declaration, and the confidence reads 1 of 2 rather than rounding
+either way; installing 100 of 200 m² pulls the date in two working days with nobody editing the plan;
+stretching an activity pushes the forecast out and reports it late **against the committed date**
+while the baseline stays put; completing the first activity brings it back in; and a programme with
+an unauthored duration is refused a forecast entirely while still reporting the two dates it knows.
+
+**PLN-16 stays PARTIAL, and COMPLETE is proposed below.**
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -734,7 +780,10 @@ watched themselves type one. It was invisible until the reason became load-beari
 | Baseline Auth-ON browser journey | 1/1 passed in Chromium; draft → r0 locked → edit retains it → replace refused, declined, then reasoned into r1 |
 | Role catalogue authority | 25/25 passed; a Planning Engineer does not hold `projects.schedule.baseline` and the Project Manager does |
 | Database migration posture | 327/327 applied; a baselining act is an append-only row under FORCE RLS, and the database itself refuses a replacement with no reason |
-| Full API unit/fitness suite | 543 passed / 4 skipped |
+| Forecast domain rules | 17/17 passed; remaining duration rounded up, the date moving with evidence rather than with the plan, variance against the baseline, confidence never rounded up, a finished activity ceasing to be a driver, and a programme that cannot be placed |
+| Forecast HTTP journey | 7/7 passed; no baseline → no variance, all three dates agreeing when nothing has moved, a measured zero and a declared zero counted differently, installation pulling the date in, a stretched plan reading late against the committed date, and an unauthored duration refused |
+| Forecast Auth-ON browser journey | 1/1 passed in Chromium; the three dates apart on screen, the confidence beside them, and the drivers named |
+| Full API unit/fitness suite | 544 passed / 4 skipped |
 
 ### PLN-10 reconciliation
 
@@ -997,6 +1046,33 @@ iteration closed — but unprompted, and it belongs with the notification work f
 waiting on. As on every other planning row, `actualOutput` remains **PARTIAL** on an
 otherwise complete row: proven on screen, with no exported baseline document.
 
+### PLN-16 reconciliation
+
+The capability reads *Forecast completion*, and its acceptance criterion is that the accepted plan
+drives forecast completion and management variance, with drilldown to contributing tasks.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| The accepted plan drives it | the forecast runs on the stored programme — the one acceptance made current — not on a proposal | no |
+| Forecast completion | derived from remaining work through the same CPM, over the project's calendar and network | no |
+| Management variance | against the BASELINE, with a separate figure for how far the plan itself has drifted | no |
+| Drilldown to contributing tasks | the critical activities named in order, each with what is left of it and where that came from | no |
+| It is a forecast, not the plan relabelled | it moves when installation moves and stays put when only the plan is edited | no |
+| The figure says what it is worth | measured against declared drivers, reported and never rounded up | no |
+| **Portfolio forecast** | **not built: this is one project's forecast, and no roll-up across projects exists** | **yes** |
+
+**Proposed: `PLN-16` PARTIAL → COMPLETE**, with the open row stated rather than buried. The
+acceptance criterion as written asks for forecast completion, management variance and drilldown, and
+all three are proven. The register's *current behaviour* note also mentioned "portfolio forecast",
+which is a different question — one project's forecast is a fact about that project; rolling several
+into a portfolio number needs a decision about what such a number even means when the projects carry
+different confidences, and summing dates of differing evidential worth is exactly the kind of
+average this programme has spent eighteen iterations refusing to invent. `MGT-13` (Forecast
+completion, management view) is the row that carries it, and it remains UNVERIFIED.
+
+As on every other planning row, `actualOutput` would remain **PARTIAL** on promotion: proven on
+screen, with no exported forecast document — now the seventh row carrying that same gap.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -1012,7 +1088,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, cost and forecast evidence from the connected plan. Baseline approval is now proven (PLN-05, COMPLETE), which closes the divergence PLN-15 was promoted with. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone and cost evidence from the connected plan. Forecast completion is now proven for a project (PLN-16, PARTIAL and proposed for COMPLETE); what remains is the PORTFOLIO view of it (MGT-13), which needs a decision about what a rolled-up date means across projects of differing confidence. Baseline approval is now proven (PLN-05, COMPLETE), which closes the divergence PLN-15 was promoted with. Delay assessment and recovery planning are now proven as one chain — delay → impact → assessment → explicit hand-off → proposal → acceptance → programme (PLN-14 and PLN-15, both COMPLETE). What remains open in this line: accepting a recovery does not re-baseline, so a recovered programme and the baseline it is measured against diverge until somebody re-baselines deliberately (PLN-05); and no proposal, delay or assessment reaches anybody who is not looking at the screen. The look-ahead is now proven (PLN-13, COMPLETE). Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02, COMPLETE with that limit recorded); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

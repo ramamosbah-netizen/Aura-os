@@ -53,6 +53,7 @@ import {
   type DelayImpact,
   type RecoveryComparison,
   type RecordedBaseline,
+  type ForecastCompletion,
   ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
@@ -1715,6 +1716,25 @@ export class ProjectsController {
    * What makes superseding a baseline an addition rather than a destruction: a variance computed
    * against revision 0 stays computable once revision 1 exists.
    */
+  /**
+   * When this project will actually finish, against what was committed to.
+   *
+   * Three dates that a management report must never confuse: the BASELINE (what was committed),
+   * the PLANNED finish (what the programme says today), and the FORECAST (where the work is
+   * heading, derived from what has been installed). Derived on the read, with the activities that
+   * decide the date named so the figure can be drilled into rather than taken on trust.
+   *
+   * The confidence is part of the answer: a forecast resting on declared percentages rather than
+   * measured ones is a guess wearing a projection's clothes, and it says so.
+   */
+  @Permissions('projects.schedule.read')
+  @Get('schedules/:projectId/forecast')
+  async forecast(@Param('projectId') projectId: string): Promise<ForecastCompletion> {
+    return this.schedule.forecast(
+      this.tenant.get().tenantId, projectId, new Date().toISOString().slice(0, 10),
+    );
+  }
+
   @Permissions('projects.schedule.read')
   @Get('schedules/:projectId/baselines')
   async baselineHistory(@Param('projectId') projectId: string): Promise<RecordedBaseline[]> {

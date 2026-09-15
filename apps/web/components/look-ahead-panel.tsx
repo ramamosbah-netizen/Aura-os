@@ -40,6 +40,22 @@ interface LookAheadActivity {
   reasons: string[];
 }
 
+interface Forecast {
+  baselineFinish: string | null;
+  plannedFinish: string | null;
+  forecastFinish: string | null;
+  varianceWorkingDays: number | null;
+  planOptimismWorkingDays: number | null;
+  confidence: 'MEASURED' | 'PARTLY_MEASURED' | 'DECLARED' | 'UNKNOWN';
+  measuredDrivers: number;
+  driverCount: number;
+  contributors: Array<{
+    taskId: string; name: string; remainingWorkingDays: number | null;
+    percentComplete: number; measured: boolean; forecastFinish: string | null;
+  }>;
+  unknownReason: string | null;
+}
+
 interface LookAhead {
   from: string;
   to: string;
@@ -69,6 +85,7 @@ export default function LookAheadPanel({ projectId, wbsNodes = [] }: {
 }) {
   const [weeks, setWeeks] = useState(3);
   const [lookAhead, setLookAhead] = useState<LookAhead | null>(null);
+  const [forecast, setForecast] = useState<Forecast | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -90,6 +107,19 @@ export default function LookAheadPanel({ projectId, wbsNodes = [] }: {
   }, [projectId]);
 
   useEffect(() => { void load(weeks); }, [load, weeks]);
+
+  // Where the whole programme lands, beside the next few weeks of it: the same question over a
+  // different horizon, and a planner reading one wants the other.
+  useEffect(() => {
+    let live = true;
+    void (async () => {
+      try {
+        const response = await fetch(`/api/projects/schedules/${projectId}/forecast`, { cache: 'no-store' });
+        if (live) setForecast(response.ok ? ((await response.json()) as Forecast) : null);
+      } catch { if (live) setForecast(null); }
+    })();
+    return () => { live = false; };
+  }, [projectId]);
 
   const packageLabel = (nodeId: string) => {
     const node = wbsNodes.find((candidate) => candidate.id === nodeId);
@@ -115,6 +145,46 @@ export default function LookAheadPanel({ projectId, wbsNodes = [] }: {
           </select>
         </label>
       </header>
+
+      {forecast && (
+        <div className={styles.forecast} data-testid="forecast-panel">
+          {/* THREE DATES, never conflated: committed, planned, and where the work is heading. */}
+          <div className={styles.forecastRow}>
+            <span>Baseline <strong>{forecast.baselineFinish ?? 'not committed'}</strong></span>
+            <span>Planned <strong>{forecast.plannedFinish ?? '—'}</strong></span>
+            <span data-testid="forecast-finish">
+              Forecast <strong>{forecast.forecastFinish ?? '—'}</strong>
+            </span>
+            <span
+              data-testid="forecast-variance"
+              className={(forecast.varianceWorkingDays ?? 0) > 0 ? styles.late : undefined}
+            >
+              {forecast.varianceWorkingDays === null ? 'Nothing committed to measure against'
+                : forecast.varianceWorkingDays === 0 ? 'On the committed date'
+                : forecast.varianceWorkingDays > 0 ? `${forecast.varianceWorkingDays} working days late`
+                : `${Math.abs(forecast.varianceWorkingDays)} working days early`}
+            </span>
+          </div>
+          {/* The confidence is part of the answer, not a footnote: a date resting on declared
+              progress is a guess wearing a projection's clothes. */}
+          <small className={styles.meta} data-testid="forecast-confidence">
+            {forecast.confidence === 'UNKNOWN'
+              ? `No forecast can be made · ${forecast.unknownReason ?? 'not enough is known'}`
+              : `${forecast.measuredDrivers} of ${forecast.driverCount} activities driving this date carry measured progress`}
+          </small>
+          {forecast.contributors.length > 0 && (
+            <div className={styles.contributors}>
+              {forecast.contributors.map((contributor) => (
+                <span key={contributor.taskId} data-testid={`forecast-driver-${contributor.taskId}`}>
+                  {contributor.name} · {contributor.remainingWorkingDays ?? '—'} day
+                  {contributor.remainingWorkingDays === 1 ? '' : 's'} left
+                  {contributor.measured ? ' · measured' : ' · declared'}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <div className={styles.error} role="alert">{error}</div>}
       {!error && !loading && lookAhead?.activities.length === 0 && (

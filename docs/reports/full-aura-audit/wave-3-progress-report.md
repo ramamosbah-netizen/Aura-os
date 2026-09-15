@@ -270,10 +270,15 @@ Every acceptance criterion this capability has carried across Wave 3, and where 
 | Resolution recorded | `resolved` and `accepted` kept apart, decision text required | no |
 | Link to every activity involved across projects | canonical chain from stored rows, all parties, server-side redaction | no |
 
-**Proposed: `PLN-10` PARTIAL → COMPLETE.** Not applied — the register still reads PARTIAL, and the
-promotion is the owner's call. Two judgement calls sit behind it: a conflict raises no notification
-to its owner (they learn by opening the desk), and no conflict register is exported as a document,
-which is why the `actualOutput` layer stays UNVERIFIED.
+**`PLN-10` PARTIAL → COMPLETE — applied on 2026-09-15 by the programme owner's decision**, after the
+reconciliation above. Two judgement calls were knowingly accepted with it and remain open: a conflict
+raises no notification to its owner (they learn by opening the desk), and no conflict register is
+exported as a document. The `actualOutput` layer therefore stays **PARTIAL** on an otherwise complete
+row — the desk's rendered output is proven in the browser, and no exported document exists. The
+headline is the owner's decision; the layer remains the evidence, and the two are allowed to
+disagree in public rather than be reconciled by rounding one up.
+
+This makes three COMPLETE capabilities in the register (AWD-05, AWD-06, PLN-10) out of 180.
 
 ### Observed while proving it, not fixed
 

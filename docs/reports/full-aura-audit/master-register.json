@@ -1841,7 +1841,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1849,17 +1849,17 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "PARTIAL",
-        "api": "PARTIAL",
-        "permissions": "PARTIAL",
-        "ui": "PARTIAL",
-        "actualOutput": "UNVERIFIED",
-        "browser": "PARTIAL",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "PARTIAL",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Conflicts are detected across projects from §22’s own facts and from the owning registers, and over-allocation is governed rather than blocked — committing past a KNOWN capacity costs a written reason. A conflict carries PEOPLE: a named owner takes a resource’s conflicts on for a period (migration 0321, one open owner per resource) and closes them with what was decided, kept apart as `resolved` or `accepted`. It also reaches the OTHER SIDE: each commitment now carries the competing commitments resolved along the canonical chain — resource, booking, requirement, schedule activity, WBS node, project — every link read from a stored row and never from anything the caller supplies, with every overlapping party returned rather than the first. Authorization is applied server-side and separately from conflict ownership: `projects.resource-conflict.*` opens no project’s plan, so a party in a project the reader may not open arrives as a `restricted` commitment carrying its size and overlap and no project, activity or work package at all — and the cross-project report’s own contributors and project list are redacted by the same rule, with the involved count kept honest. The relationship is wholly derived: it disappears when the other commitment moves or is released and reappears naming a different activity, while the ownership and decision recorded about it survive untouched; nothing on the conflict path writes to a booking, schedule, project or availability. ALL STATED ACCEPTANCE CRITERIA ARE NOW PROVEN AUTH-ON — see the PLN-10 reconciliation in the Wave 3 report.",
-      "acceptanceProof": "RECONCILED: every acceptance criterion this capability has carried is proven Auth-ON (two-project employee and equipment bookings, leave and breakdown conflicts, authorized resolution, visible planner action, named resolver, recorded resolution, and the canonical link to every activity involved). Promotion to COMPLETE is PROPOSED and deliberately not applied: the remaining judgement calls are that a conflict raises no notification to its owner, and that no conflict register is exported as a document (`actualOutput`)."
+      "currentBehavior": "Conflicts are detected across projects from §22’s own facts and from the owning registers, and over-allocation is governed rather than blocked — committing past a KNOWN capacity costs a written reason. A conflict carries PEOPLE: a named owner takes a resource’s conflicts on for a period (migration 0321, one open owner per resource) and closes them with what was decided, kept apart as `resolved` or `accepted`. It reaches the OTHER SIDE: each commitment carries the competing commitments resolved along the canonical chain — resource, booking, requirement, schedule activity, WBS node, project — every link read from a stored row and never from anything the caller supplies, with every overlapping party returned rather than the first. Authorization is applied server-side and separately from conflict ownership: `projects.resource-conflict.*` opens no project’s plan, so a party in a project the reader may not open arrives as a `restricted` commitment carrying its size and overlap and no project, activity or work package at all — and the cross-project report’s own contributors and project list are redacted by the same rule, with the involved count kept honest. The relationship is wholly derived: it disappears when the other commitment moves or is released and reappears naming a different activity, while the ownership and decision recorded about it survive untouched; nothing on the conflict path writes to a booking, schedule, project or availability.",
+      "acceptanceProof": "Promoted on 2026-09-15 by the programme owner after reconciliation against every acceptance criterion this capability has carried (two-project employee and equipment bookings, leave and breakdown conflicts, authorized resolution, visible planner action, named resolver, recorded resolution, and the canonical authorized link to every activity involved) — the table is in the Wave 3 report. Regression keeps the lineage/redaction unit proof, the conflict-ownership service proof and the Auth-ON browser journey green. KNOWINGLY ACCEPTED AND STILL OPEN: a conflict raises no notification to its owner, and no conflict register is exported as a document — which is why `actualOutput` remains PARTIAL rather than COMPLETE on an otherwise complete row."
     },
     {
       "id": "PLN-11",
@@ -8532,8 +8532,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 2,
-      "PARTIAL": 96,
+      "COMPLETE": 3,
+      "PARTIAL": 95,
       "BACKEND_ONLY": 6,
       "UI_ONLY": 0,
       "ABSENT": 1,

@@ -321,7 +321,7 @@
 | Engineering | MGT-15 | WRONG_BEHAVIOR |
 | Planning | PLN-01 | PARTIAL |
 | Planning | PLN-02 | BACKEND_ONLY |
-| Planning | PLN-03 | BACKEND_ONLY |
+| Planning | PLN-03 | PARTIAL |
 | Planning | PLN-04 | UNVERIFIED |
 | Planning | PLN-05 | PARTIAL |
 | Planning | PLN-06 | PARTIAL |
@@ -546,7 +546,7 @@
 | QA/QC & HSE | XOP-17 | PARTIAL |
 | Progress | PLN-01 | PARTIAL |
 | Progress | PLN-02 | BACKEND_ONLY |
-| Progress | PLN-03 | BACKEND_ONLY |
+| Progress | PLN-03 | PARTIAL |
 | Progress | PLN-04 | UNVERIFIED |
 | Progress | PLN-05 | PARTIAL |
 | Progress | PLN-06 | PARTIAL |

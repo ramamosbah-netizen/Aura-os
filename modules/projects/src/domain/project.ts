@@ -94,12 +94,24 @@ export interface Project {
   wbsBaselineApprovedBy: Id | null;
   wbsBaselineSnapshot: WbsOpeningBaseline | null;
   ownerId: Id | null;
+  /**
+   * The working calendar this project's dates are counted under — weekends, public holidays and
+   * shutdowns, owned by the kernel and consumed here (Design Gate §5.2 #5).
+   *
+   * NULL MEANS NOBODY HAS SAID, and it is read as "every day is worked". It is never a licence to
+   * pick a calendar on the planner's behalf: a company running Dubai and Riyadh crews has two
+   * right answers and no default, and guessing one silently plans a Saudi job through a UAE Friday.
+   * A guess that reads as an answer is worse than a stated unknown, because nobody goes looking
+   * for it (migration 0324).
+   */
+  workingCalendarId: Id | null;
   createdAt: string;
   createdBy: Id | null;
 }
 
 export interface NewProject {
   tenantId: Id;
+  workingCalendarId?: Id | null;
   companyId?: Id | null;
   title: string;
   reference?: string | null;
@@ -169,6 +181,7 @@ export function makeProject(input: NewProject): Project {
     wbsBaselineApprovedBy: input.wbsBaselineApprovedBy ?? null,
     wbsBaselineSnapshot: input.wbsBaselineSnapshot ?? null,
     ownerId: input.ownerId ?? null,
+    workingCalendarId: input.workingCalendarId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
   };

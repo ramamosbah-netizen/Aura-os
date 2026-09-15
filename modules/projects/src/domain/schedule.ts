@@ -148,6 +148,36 @@ export interface NewProjectSchedule {
 
 const D = /^\d{4}-\d{2}-\d{2}$/;
 
+/**
+ * Can this activity's authored work fit inside the window it was given?
+ *
+ * The two numbers are NOT redundant and must not be forced equal: `durationWorkingDays` is how
+ * much WORK is in the activity, the dates are the window it may be done in, and the difference
+ * between them is float — genuine, useful, and the thing a look-ahead is built on. An activity with
+ * ten working days of work in a window holding fourteen has four days of slack, and that is a plan,
+ * not an error.
+ *
+ * What is impossible is the other direction: fifteen working days of work in a window holding
+ * twelve. Before the project named a calendar this could not be checked at all — "twelve" was not
+ * knowable — so it was never checked, and a plan could carry an activity that could not be done in
+ * the time it was given, with nothing saying so until somebody counted by hand.
+ *
+ * Returns the float in working days, or throws naming both figures.
+ */
+export function assertDurationFitsWindow(
+  task: { name: string; plannedStart: string; plannedEnd: string; durationWorkingDays: number | null },
+  windowWorkingDays: number,
+): number | null {
+  if (task.durationWorkingDays === null) return null;
+  if (task.durationWorkingDays > windowWorkingDays) {
+    throw new Error(
+      `activity "${task.name}": ${task.durationWorkingDays} working days of work cannot fit a window that ` +
+      `holds ${windowWorkingDays} working days — extend the dates or reduce the duration`,
+    );
+  }
+  return windowWorkingDays - task.durationWorkingDays;
+}
+
 export function buildTask(input: NewScheduleTask): ScheduleTask {
   if (!input.name?.trim()) throw new Error('task name is required');
   if (!D.test(input.plannedStart) || !D.test(input.plannedEnd)) throw new Error('planned dates must be YYYY-MM-DD');

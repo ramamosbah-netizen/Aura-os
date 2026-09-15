@@ -47,6 +47,17 @@ interface ProjectSchedule {
    * at over this activity's own window. UNKNOWN wherever one of those was never stated.
    */
   output?: Record<string, PlannedOutput>;
+  /**
+   * The calendar this plan's days are counted under, and what each activity's window holds.
+   * `everyDayWorked` means nobody has named one — said on the screen rather than defaulted around,
+   * because a plan built through Fridays should admit it.
+   */
+  calendar?: {
+    calendarId: string | null;
+    calendarName: string | null;
+    everyDayWorked: boolean;
+    activities: Record<string, { windowWorkingDays: number; floatWorkingDays: number | null }>;
+  };
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -77,7 +88,7 @@ interface NewTask { name: string; plannedStart: string; plannedEnd: string; perc
 const emptyRequirement = (): RequirementDraft => ({ resourceKey: '', quantity: '1', unit: 'persons' });
 const emptyTask = (): NewTask => ({ name: '', plannedStart: '', plannedEnd: '', percentComplete: '0', durationWorkingDays: '', wbsNodeId: '', requirements: [] });
 
-export default function GanttClient({ schedules, projects = [], wbsNodes = [], resourceCatalog = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; wbsNodes?: WbsNode[]; resourceCatalog?: ResourceCatalogItem[]; selectedProjectId?: string }) {
+export default function GanttClient({ schedules, projects = [], wbsNodes = [], resourceCatalog = [], workingCalendars = [], selectedProjectId }: { schedules: ProjectSchedule[]; projects?: Project[]; wbsNodes?: WbsNode[]; resourceCatalog?: ResourceCatalogItem[]; workingCalendars?: Array<{ id: string; name: string }>; selectedProjectId?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState<string | null>(null);
   const [overrideDraft, setOverrideDraft] = useState<Record<string, { value: string; reason: string }>>({});
@@ -222,6 +233,30 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
     }
   }
 
+  /**
+   * Name the calendar this project's dates are counted under, or clear it.
+   *
+   * Changes what every date in the plan MEANS — how long a window is, whether an authored duration
+   * fits it, what rate the work is going at — so the whole screen is refreshed rather than patched.
+   */
+  async function handleAssignCalendar(sch: ProjectSchedule, calendarId: string | null) {
+    setBusy(sch.projectId); setError(null);
+    try {
+      const response = await fetch(`/api/projects/schedules/${sch.projectId}/working-calendar`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ calendarId }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.message || result?.error || 'Failed to set the working calendar');
+      router.refresh();
+    } catch (e: any) {
+      setError(e.message || 'Failed to set the working calendar');
+    } finally {
+      setBusy(null);
+    }
+  }
+
   /** State a figure against the measurement, or withdraw the statement by passing null. */
   async function handleOverrideProgress(sch: ProjectSchedule, taskId: string, value: number | null, reason: string) {
     setBusy(sch.projectId); setError(null);
@@ -324,6 +359,22 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
               <span className={styles.projectMark}><Layers3 size={15} /></span>
               <div className={styles.headMain}><strong>{sch.projectName ?? sch.projectId}</strong><span className={styles.meta}>{sch.tasks.length} {sch.tasks.length === 1 ? 'activity' : 'activities'}</span></div>
               <span className={`${styles.statusChip} ${sch.baselineSetAt ? styles.ready : ''}`}>{sch.baselineSetAt ? 'Baseline locked' : 'Draft plan'}</span>
+              {/* Which calendar these dates were counted under. Unnamed is shown as unnamed — the
+                  solver used to pick the tenant's first calendar by name and say nothing. */}
+              <label className={styles.calendarPicker} data-testid={`working-calendar-${sch.projectId}`}>
+                <span>Calendar</span>
+                <select
+                  aria-label={`Working calendar for ${sch.projectName ?? sch.projectId}`}
+                  value={sch.calendar?.calendarId ?? ''}
+                  disabled={busy === sch.projectId}
+                  onChange={(e) => handleAssignCalendar(sch, e.target.value || null)}
+                >
+                  <option value="">No calendar · every day counted</option>
+                  {workingCalendars.map((calendar) => (
+                    <option key={calendar.id} value={calendar.id}>{calendar.name}</option>
+                  ))}
+                </select>
+              </label>
               <div style={{ flex: 1 }} />
               <button type="button" className={styles.btn} disabled={busy === sch.projectId || sch.tasks.length === 0} onClick={() => setBaseline(sch.projectId)}>
                 {busy === sch.projectId ? '…' : 'Set baseline'}
@@ -338,6 +389,19 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                     {t.name}
                     <small>{t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'WBS record unavailable'; })() : 'Legacy activity · WBS not linked'}</small>
                     <small>{t.durationWorkingDays ? `${t.durationWorkingDays} working day${t.durationWorkingDays === 1 ? '' : 's'}` : 'Working duration not authored'}</small>
+                    {(() => {
+                      const window = t.id ? sch.calendar?.activities?.[t.id] : undefined;
+                      if (!window) return null;
+                      // What the dates MEAN under the calendar, and the slack between the window
+                      // and the work authored into it. Float is a plan, not an error.
+                      const float = window.floatWorkingDays;
+                      return (
+                        <small data-testid={`window-${t.id}`}>
+                          {`Window holds ${window.windowWorkingDays} working day${window.windowWorkingDays === 1 ? '' : 's'}`}
+                          {float === null ? '' : float === 0 ? ' · no float' : ` · ${float} day${float === 1 ? '' : 's'} float`}
+                        </small>
+                      );
+                    })()}
                     {(t.requirements ?? []).map((requirement) => <small key={`${requirement.resource.resourceType}:${requirement.resource.canonicalResourceId}`}>{requirement.quantity} {requirement.unit} · {catalogLabel(requirement.resource.resourceType, requirement.resource.canonicalResourceId)}</small>)}
                     {(() => {
                       const taskId = t.id;

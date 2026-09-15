@@ -176,9 +176,14 @@ export class CalendarService {
   }
 
   /** Create (id omitted) or update a calendar. Returns the persisted definition. */
+  private inMemorySequence = 0;
+
   async saveCalendar(cal: Omit<CalendarDefinition, 'id'> & { id?: string }): Promise<CalendarDefinition> {
     if (!this.pool) {
-      const id = cal.id ?? `cal-${Date.now().toString(36)}`;
+      // A millisecond is not unique: two calendars saved in the same tick used to collide and the
+      // second silently replaced the first, which is exactly what a fixture creating a Gulf week
+      // and a KSA week does.
+      const id = cal.id ?? `cal-${Date.now().toString(36)}-${(this.inMemorySequence += 1).toString(36)}`;
       const def: CalendarDefinition = { ...cal, id };
       this.inMemoryCalendars.set(id, def);
       if (!this.inMemoryHolidays.has(id)) this.inMemoryHolidays.set(id, new Map());

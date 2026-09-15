@@ -39,12 +39,13 @@ interface Row {
   wbs_baseline_approved_by: string | null;
   wbs_baseline_snapshot: Record<string, unknown> | null;
   owner_id: string | null;
+  working_calendar_id: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, company_id, title, reference, contract_id, contract_title, account_id, account_name, status, value, origin, handover_id, handover_snapshot_hash, handover_snapshot, handover_locked_at, source_opportunity_id, source_tender_id, commercial_scope_revision_id, boq_revision_id, estimate_revision_id, accepted_quotation_id, accepted_quotation_revision_id, commercial_baseline_id, original_contract_value, currency, award_acceptance_type, award_acceptance_evidence, wbs_baseline_id, wbs_baseline_approved_at, wbs_baseline_approved_by, wbs_baseline_snapshot, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, title, reference, contract_id, contract_title, account_id, account_name, status, value, origin, handover_id, handover_snapshot_hash, handover_snapshot, handover_locked_at, source_opportunity_id, source_tender_id, commercial_scope_revision_id, boq_revision_id, estimate_revision_id, accepted_quotation_id, accepted_quotation_revision_id, commercial_baseline_id, original_contract_value, currency, award_acceptance_type, award_acceptance_evidence, wbs_baseline_id, wbs_baseline_approved_at, wbs_baseline_approved_by, wbs_baseline_snapshot, owner_id, working_calendar_id, created_by, created_at';
 
 function rowToProject(r: Row): Project {
   return {
@@ -81,6 +82,7 @@ function rowToProject(r: Row): Project {
     wbsBaselineApprovedBy: r.wbs_baseline_approved_by,
     wbsBaselineSnapshot: r.wbs_baseline_snapshot as Project['wbsBaselineSnapshot'],
     ownerId: r.owner_id,
+    workingCalendarId: r.working_calendar_id ?? null,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
@@ -101,8 +103,8 @@ export class PostgresProjectStore implements ProjectStore {
 
   private insert(executor: Pool | PoolClient, p: Project): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_projects_projects (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35)`,
-      [p.id, p.tenantId, p.companyId, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.origin, p.handoverId, p.handoverSnapshotHash, p.handoverSnapshot ? JSON.stringify(p.handoverSnapshot) : null, p.handoverLockedAt, p.sourceOpportunityId, p.sourceTenderId, p.commercialScopeRevisionId, p.boqRevisionId, p.estimateRevisionId, p.acceptedQuotationId, p.acceptedQuotationRevisionId, p.commercialBaselineId, p.originalContractValue, p.currency, p.awardAcceptanceType, p.awardAcceptanceEvidence ? JSON.stringify(p.awardAcceptanceEvidence) : null, p.wbsBaselineId, p.wbsBaselineApprovedAt, p.wbsBaselineApprovedBy, p.wbsBaselineSnapshot ? JSON.stringify(p.wbsBaselineSnapshot) : null, p.ownerId, p.createdBy, p.createdAt],
+      `INSERT INTO public.aura_projects_projects (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36)`,
+      [p.id, p.tenantId, p.companyId, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.origin, p.handoverId, p.handoverSnapshotHash, p.handoverSnapshot ? JSON.stringify(p.handoverSnapshot) : null, p.handoverLockedAt, p.sourceOpportunityId, p.sourceTenderId, p.commercialScopeRevisionId, p.boqRevisionId, p.estimateRevisionId, p.acceptedQuotationId, p.acceptedQuotationRevisionId, p.commercialBaselineId, p.originalContractValue, p.currency, p.awardAcceptanceType, p.awardAcceptanceEvidence ? JSON.stringify(p.awardAcceptanceEvidence) : null, p.wbsBaselineId, p.wbsBaselineApprovedAt, p.wbsBaselineApprovedBy, p.wbsBaselineSnapshot ? JSON.stringify(p.wbsBaselineSnapshot) : null, p.ownerId, p.workingCalendarId, p.createdBy, p.createdAt],
     );
   }
 
@@ -117,8 +119,8 @@ export class PostgresProjectStore implements ProjectStore {
 
   private upd(executor: Pool | PoolClient, p: Project): Promise<unknown> {
     return executor.query(
-      `UPDATE public.aura_projects_projects SET title=$2, reference=$3, contract_id=$4, contract_title=$5, account_id=$6, account_name=$7, status=$8, value=$9, owner_id=$10, wbs_baseline_id=$11, wbs_baseline_approved_at=$12, wbs_baseline_approved_by=$13, wbs_baseline_snapshot=$14 WHERE id=$1`,
-      [p.id, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.ownerId, p.wbsBaselineId, p.wbsBaselineApprovedAt, p.wbsBaselineApprovedBy, p.wbsBaselineSnapshot ? JSON.stringify(p.wbsBaselineSnapshot) : null],
+      `UPDATE public.aura_projects_projects SET title=$2, reference=$3, contract_id=$4, contract_title=$5, account_id=$6, account_name=$7, status=$8, value=$9, owner_id=$10, wbs_baseline_id=$11, wbs_baseline_approved_at=$12, wbs_baseline_approved_by=$13, wbs_baseline_snapshot=$14, working_calendar_id=$15 WHERE id=$1`,
+      [p.id, p.title, p.reference, p.contractId, p.contractTitle, p.accountId, p.accountName, p.status, p.value, p.ownerId, p.wbsBaselineId, p.wbsBaselineApprovedAt, p.wbsBaselineApprovedBy, p.wbsBaselineSnapshot ? JSON.stringify(p.wbsBaselineSnapshot) : null, p.workingCalendarId],
     );
   }
 

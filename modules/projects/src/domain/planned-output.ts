@@ -6,6 +6,7 @@ import {
   type LabourProductivity,
   type ProjectLabourSpent,
 } from './labour-productivity';
+import { ALL_DAYS_WORKING, workingDaysInRange, type WorkingCalendar } from './working-calendar';
 
 /**
  * §22 — the rate this work was priced at, against the rate it is actually going at.
@@ -49,7 +50,7 @@ export interface PlannedOutput {
   pricedRatePerDay: number | null;
   /** Crew-days the whole sold quantity was priced to take. */
   pricedCrewDays: number | null;
-  /** Units per day actually achieved over the part of the window already used. */
+  /** Units per WORKING day achieved over the part of the window already used. */
   achievedRatePerDay: number | null;
   /** Units per day needed over what is left of the window to still finish it. */
   requiredRatePerDay: number | null;
@@ -86,10 +87,20 @@ const ON_RATE_TOLERANCE = 0.05;
 const r2 = (value: number): number => roundDecimal(value, 2);
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
-const day = (iso: string): number => Date.parse(`${iso}T00:00:00.000Z`);
-/** Whole days from `from` to `to`, both ends counted — a one-day activity is one day, not zero. */
-const inclusiveDays = (from: string, to: string): number =>
-  Math.floor((day(to) - day(from)) / 86_400_000) + 1;
+
+/**
+ * WORKING days from `from` to `to`, both ends counted.
+ *
+ * Counted under the project's calendar, not in raw calendar days. A rate divided by calendar days
+ * charges a crew for the Friday they were never asked to work and for the week of Eid the company
+ * closed — and it disagreed with the planning solver, which has counted working days since Step 8.
+ * Two answers to "how long is this window" in one product is the defect; this is the single one.
+ *
+ * With no calendar the predicate says every day is worked, which is the caller's assertion and
+ * gives exactly the old behaviour.
+ */
+const workingDays = (from: string, to: string, calendar: WorkingCalendar): number =>
+  workingDaysInRange(from, to, calendar).length;
 
 export interface PlannedOutputInput {
   /** What the project's day sheets say about where the hours went. Null = no source is bound. */
@@ -105,6 +116,11 @@ export interface PlannedOutputInput {
   plannedEnd: string;
   /** Today, as a date. Passed in rather than read, so the rule is testable at every edge. */
   today: string;
+  /**
+   * The project's working calendar. Omitted, every day counts as worked — the same assertion the
+   * planner makes when no calendar is named, and the same behaviour as before calendars existed.
+   */
+  calendar?: WorkingCalendar;
 }
 
 /**
@@ -158,14 +174,20 @@ function resolvePace(input: PlannedOutputInput): Omit<PlannedOutput, 'labour'> {
     return UNKNOWN('nothing is measured against this activity’s work package, so no output rate can be derived', priced);
   }
 
-  const windowDays = inclusiveDays(plannedStart, plannedEnd);
-  const elapsedDays = Math.min(windowDays, Math.max(0, inclusiveDays(plannedStart, today)));
+  const calendar = input.calendar ?? ALL_DAYS_WORKING;
+  const windowDays = workingDays(plannedStart, plannedEnd, calendar);
+  const elapsedDays = Math.min(windowDays, today < plannedStart ? 0 : workingDays(plannedStart, today, calendar));
   const remainingDays = Math.max(0, windowDays - elapsedDays);
   const remainingQuantity = Math.max(0, plannedQuantity - installedQuantity);
 
   // Needed over what is left. Nothing left to install is not a demand of zero — it is finished.
   const requiredRatePerDay = remainingQuantity === 0 ? 0 : remainingDays > 0 ? r2(remainingQuantity / remainingDays) : null;
 
+  if (windowDays === 0) {
+    // Every day of the window is a non-working day — a shutdown, or an activity parked across a
+    // holiday. No work was ever asked for, so no rate can be owed.
+    return UNKNOWN('every day of this activity’s window is a non-working day under the project calendar', priced);
+  }
   if (elapsedDays === 0) {
     return UNKNOWN('this activity’s planned window has not opened yet, so there is no elapsed time to rate it over', {
       ...priced, requiredRatePerDay,

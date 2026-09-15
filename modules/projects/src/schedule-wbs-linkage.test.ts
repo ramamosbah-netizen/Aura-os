@@ -23,7 +23,6 @@ function fixture() {
     new InMemoryPlanningRunStore(),
     null,
     audit,
-    null,
     wbs,
   );
   return { schedules, wbs, service };

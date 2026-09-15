@@ -1,13 +1,15 @@
 import { Inject, Injectable, Logger, Optional, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { Pool } from 'pg';
 import { type Id, makeEvent } from '@aura/shared';
-import { EVENT_STORE, type EventStore, PG_POOL, AuditService, CalendarService } from '@aura/core';
+import { EVENT_STORE, type EventStore, PG_POOL, AuditService } from '@aura/core';
 import {
   clearActivityProgressOverride, overrideActivityProgress, resolveActivityProgress,
   type ActivityProgress,
 } from './domain/activity-progress';
 import { resolvePlannedOutput, type PlannedOutput } from './domain/planned-output';
 import { ActivityOutputService } from './activity-output.service';
+import { ProjectCalendarService } from './project-calendar.service';
+import { workingDaysInRange } from './domain/working-calendar';
 import {
   SCHEDULE_EVENT,
   type ProjectSchedule,
@@ -19,6 +21,7 @@ import {
   setScheduleTasks,
   setBaseline,
   summariseSchedule,
+  assertDurationFitsWindow,
 } from './domain/schedule';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
 import { WbsService } from './wbs.service';
@@ -36,7 +39,6 @@ import { type AcceptanceDecision, acceptProposal, discardProposal } from './doma
 import { RESOURCE_FACTS_STORE, type ResourceFactsStore } from './resource-facts-store';
 import { PLANNING_RUN_STORE, type PlanningRunStore } from './planning-run-store';
 import { persistAcceptedPlan } from './postgres-planning-run-store';
-import { resolveNonWorkingDays } from './resource-calendar';
 
 /** A planning run paired with what accepting it would change against the current plan. */
 export interface PlanningRunView {
@@ -60,9 +62,6 @@ export class ScheduleService {
     // The immutable audit trail for the governed acts — run, accept, discard (Step 13). Optional for
     // the same reason every other seam is: it is a no-op (logs to memory) until Postgres is bound.
     @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
-    // The working calendar (Step 8). When bound and the tenant has a calendar, a planning run counts
-    // working days rather than raw calendar days; absent, every day is worked (the prior behaviour).
-    @Optional() @Inject(CalendarService) private readonly calendars: CalendarService | null = null,
     @Inject(WBS_STORE) private readonly wbs: WbsStore,
     // The owning service answers ONE question here — which packages are measured — and it is the
     // only place that rule is defined. Optional for the same reason every seam is: a composition
@@ -71,12 +70,16 @@ export class ScheduleService {
     // What each work package was sold and priced for (PLN-11). Optional like every other seam: a
     // composition without it reports every activity's output as UNKNOWN, which is what it knows.
     @Optional() @Inject(ActivityOutputService) private readonly outputs: ActivityOutputService | null = null,
+    // Which calendar this project's days are counted under — one answer, asked here by the save
+    // check, the planning run and the output rates alike (PLN-03).
+    @Optional() @Inject(ProjectCalendarService) private readonly projectCalendar: ProjectCalendarService | null = null,
   ) {}
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
   async save(input: NewProjectSchedule): Promise<ProjectSchedule> {
     const existing = await this.store.getByProject(input.tenantId, input.projectId);
     const tasks = await this.resolveAuthoredTasks(input, existing);
+    await this.assertDurationsFitTheirWindows(input.tenantId, input.projectId, tasks);
     let sch: ProjectSchedule;
     if (existing) {
       sch = setScheduleTasks(existing, tasks);
@@ -189,6 +192,28 @@ export class ScheduleService {
   }
 
   /**
+   * Refuse an activity whose authored work cannot fit the window it was given.
+   *
+   * Only answerable once the project names a calendar: "twelve working days" is not a fact about a
+   * date range until somebody says which days are worked. Float in the other direction is fine and
+   * expected — see assertDurationFitsWindow.
+   */
+  private async assertDurationsFitTheirWindows(tenantId: Id, projectId: Id, tasks: NewScheduleTask[]): Promise<void> {
+    const dated = tasks.filter((task) => task.durationWorkingDays && task.plannedStart && task.plannedEnd);
+    if (dated.length === 0 || !this.projectCalendar) return;
+    const from = dated.reduce((min, task) => (task.plannedStart < min ? task.plannedStart : min), dated[0].plannedStart);
+    const to = dated.reduce((max, task) => (task.plannedEnd > max ? task.plannedEnd : max), dated[0].plannedEnd);
+    // One calendar resolution for the whole plan, not one per activity.
+    const { calendar } = await this.projectCalendar.forProject(tenantId, projectId, { from, to });
+    for (const task of dated) {
+      assertDurationFitsWindow(
+        { name: task.name, plannedStart: task.plannedStart, plannedEnd: task.plannedEnd, durationWorkingDays: task.durationWorkingDays ?? null },
+        workingDaysInRange(task.plannedStart, task.plannedEnd, calendar).length,
+      );
+    }
+  }
+
+  /**
    * Every activity's output against what its work package was SOLD and PRICED for.
    *
    * Derived on the read, exactly like `progressOf`, and batched for the same reason: one map,
@@ -197,10 +222,56 @@ export class ScheduleService {
    * `today` is passed in rather than read from the clock so the rule stays testable at the edges
    * of a planned window — the day it opens, the day it closes, and the days either side.
    */
+  /**
+   * The calendar this plan's days are counted under, and the working window each activity has.
+   *
+   * Derived on the read like everything else: `windowWorkingDays` is what the dates mean under the
+   * calendar, and `floatWorkingDays` is the difference between that and the work authored into the
+   * activity. Float is a plan, not an error — an activity with ten days of work in a window holding
+   * fourteen has four days of slack, and a look-ahead is built on exactly that.
+   */
+  async calendarOf(schedule: ProjectSchedule, today: string): Promise<{
+    calendarId: Id | null;
+    calendarName: string | null;
+    everyDayWorked: boolean;
+    activities: Record<Id, { windowWorkingDays: number; floatWorkingDays: number | null }>;
+  }> {
+    const horizon = this.horizonOf(schedule, today);
+    const resolved = this.projectCalendar
+      ? await this.projectCalendar.forProject(schedule.tenantId, schedule.projectId, horizon)
+      : null;
+    const calendar = resolved?.calendar;
+    const activities: Record<Id, { windowWorkingDays: number; floatWorkingDays: number | null }> = {};
+    for (const task of schedule.tasks) {
+      const windowWorkingDays = workingDaysInRange(task.plannedStart, task.plannedEnd, calendar).length;
+      activities[task.id] = {
+        windowWorkingDays,
+        floatWorkingDays: task.durationWorkingDays === null ? null : windowWorkingDays - task.durationWorkingDays,
+      };
+    }
+    return {
+      calendarId: resolved?.calendarId ?? null,
+      calendarName: resolved?.calendarName ?? null,
+      everyDayWorked: resolved?.everyDayWorked ?? true,
+      activities,
+    };
+  }
+
+  /** The dates a plan spans, widened to today so a calendar covers the elapsed part too. */
+  private horizonOf(schedule: ProjectSchedule, today: string): { from: string; to: string } {
+    if (schedule.tasks.length === 0) return { from: today, to: today };
+    return {
+      from: schedule.tasks.reduce((min, task) => (task.plannedStart < min ? task.plannedStart : min), schedule.tasks[0].plannedStart),
+      to: schedule.tasks.reduce((max, task) => (task.plannedEnd > max ? task.plannedEnd : max), today),
+    };
+  }
+
   async outputOf(schedule: ProjectSchedule, today: string): Promise<Map<Id, PlannedOutput>> {
-    const [packages, spent] = await Promise.all([
+    const horizon = this.horizonOf(schedule, today);
+    const [packages, spent, resolved] = await Promise.all([
       this.outputs ? this.outputs.packageOutputs(schedule.tenantId, schedule.projectId) : Promise.resolve(new Map()),
       this.outputs ? this.outputs.labourSpent(schedule.tenantId, schedule.projectId) : Promise.resolve(null),
+      this.projectCalendar?.forProject(schedule.tenantId, schedule.projectId, horizon) ?? Promise.resolve(null),
     ]);
     return new Map(schedule.tasks.map((task) => {
       const facts = task.wbsNodeId ? packages.get(task.wbsNodeId) : undefined;
@@ -212,6 +283,7 @@ export class ScheduleService {
         today,
         spent,
         wbsNodeId: task.wbsNodeId,
+        calendar: resolved?.calendar,
       })];
     }));
   }
@@ -303,18 +375,23 @@ export class ScheduleService {
   }
 
   /**
-   * The non-working days over the horizon, from the tenant's working calendar (Step 8).
+   * The non-working days over the horizon, from the calendar THIS PROJECT names (PLN-03).
    *
-   * The tenant's calendar is used (its first, by name) until a per-project calendar ASSIGNMENT
-   * exists — a deliberate, documented interim: one calendar is the common ELV case, and it is far
-   * better than planning through Fridays and Eid. With no calendar service or no calendar, the result
-   * is `undefined` and the planner treats every day as worked, exactly as before.
+   * Until migration 0324 this took the tenant's calendars ordered by name and used the first —
+   * right by luck for a company with one, and a coin toss for a company running Dubai and Riyadh
+   * crews, with nothing on any screen saying which calendar produced the dates. A project now names
+   * its own, and a project that names none is planned with every day worked and told so, rather
+   * than having one chosen on its behalf.
    */
-  private async resolveCalendar(tenantId: Id, interval: { from: string; to: string }): Promise<string[] | undefined> {
-    if (!this.calendars) return undefined;
-    const calendars = await this.calendars.listCalendars(tenantId);
-    if (calendars.length === 0) return undefined;
-    return resolveNonWorkingDays(this.calendars, calendars[0].id, interval);
+  private async resolveCalendar(tenantId: Id, projectId: Id, interval: { from: string; to: string }): Promise<string[] | undefined> {
+    if (this.projectCalendar) {
+      const resolved = await this.projectCalendar.forProject(tenantId, projectId, interval);
+      return resolved.everyDayWorked ? undefined : resolved.nonWorkingDays;
+    }
+    // No project-calendar service in this composition: every day is worked, exactly as before
+    // Step 8. Never the old guess — the tenant's first calendar by name was a coin toss for any
+    // company running more than one.
+    return undefined;
   }
 
   /**
@@ -343,7 +420,7 @@ export class ScheduleService {
       this.facts.heldBookingsFor(tenantId, refs, interval),
     ]);
     const resolved = resolvePlanFacts(projectId, refs, windows, bookings, interval);
-    const nonWorkingDays = await this.resolveCalendar(tenantId, interval);
+    const nonWorkingDays = await this.resolveCalendar(tenantId, projectId, interval);
 
     const run = runPlanning(schedule, { projectStart, ...resolved, nonWorkingDays }, { ranBy: opts.ranBy ?? null });
     await this.runs.create(run);

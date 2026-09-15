@@ -257,6 +257,62 @@ as two separate headline numbers.
 **PLN-11's one open acceptance row is now closed, and the capability moves to COMPLETE** — see the
 reconciliation below.
 
+## Iteration 12 — Which calendar these dates were counted under
+
+The planning solver has counted working days since Step 8. It chose the calendar by GUESSING: the
+tenant's calendars ordered by name, take the first. For a company with one calendar that is right by
+luck. For one running Dubai and Riyadh crews — different weekends, different public holidays — it
+plans a Saudi job through a UAE Friday, and no screen said which calendar produced the dates. That
+silence is what made it invisible rather than merely wrong, and the code called it "a deliberate,
+documented interim".
+
+A project now names its calendar (migration 0324), and one place answers which that is for the
+solver, the save-time checks and the productivity rates alike. **A project that names none is
+planned with every day worked and says so on the plan header**, rather than having one chosen on its
+behalf however many the tenant happens to have. That is the §22 rule applied to time: a guess that
+reads as an answer is worse than a stated unknown, because nobody goes looking for it.
+
+The backfill is deliberately narrow. Where a tenant has exactly one calendar the old guess had
+nothing to be wrong about, so every project inherits it and behaves as it did yesterday. Where a
+tenant has two or more, the guess was never safe and is not preserved: those projects come out
+unassigned and visibly so. Some will have been planned against the wrong weekend all along, and the
+first honest step is to stop rather than keep going with a number that reads as authoritative.
+
+**Three answers to "how long is this window" became one.** The solver counted working days; the
+PLN-11 productivity rates counted calendar days; and the activity carried an authored
+`durationWorkingDays` reconciled with neither. A rate divided by calendar days charges a crew for
+the Friday they were never asked to work and for the week of Eid the company closed. All three now
+count under the project's calendar, and the limit PLN-11 recorded against itself is closed.
+
+Two things follow that were not previously answerable. An activity reports what its window HOLDS in
+working days and the **float** between that and the work authored into it — the two numbers are not
+forced equal, because float is a plan and not an error, and a look-ahead is built on exactly that
+slack. And a save is refused when the authored work cannot fit the window at all: fifteen working
+days of work in a window holding twelve is impossible, and until the calendar was known "twelve" was
+not a fact anybody could check.
+
+Administering weekends, holidays and Ramadan hours stays behind `admin.calendar.manage` where it
+belongs; CHOOSING which calendar governs a plan carries the plan's own `projects.schedule.plan`,
+because it changes what every date in the programme means.
+
+Auth-ON browser and API proof over one identical window — Monday 2026-03-09 to Friday 2026-03-20,
+six working days of work authored. Unassigned: 12 working days, 6 float, two calendars sitting
+unchosen. Gulf week (Fri/Sat off): 9 and 3. KSA week (Thu/Fri off): 8 and 2 over the very same
+dates — the number the old guess could get wrong with nobody able to see that it had. A public
+holiday inside the window drops it again, proving weekends and holidays are one mechanism. Eleven
+working days of work is refused against a window holding eight and accepted once the calendar is
+cleared. A calendar from another tenant is refused. And the solver places a two-day activity from
+Thursday onto Sunday under the project's calendar, while placing it on Friday when the project names
+none.
+
+Fixed in passing: the in-memory calendar service minted ids from `Date.now()` alone, so two
+calendars saved in the same millisecond silently replaced one another — which is exactly what a
+fixture creating a Gulf week and a KSA week does.
+
+**PLN-03 moves from BACKEND_ONLY to PARTIAL, and COMPLETE is proposed below.** The register's note
+that the Gantt exposed only start and end dates was stale: working-day duration has been authored
+there since iteration 6. What was missing was the calendar those days are counted in.
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -418,6 +474,12 @@ reconciliation below.
 | Labour attribution Auth-ON browser journey | 2/2 passed in Chromium; the same chain on the plan screen, with lateness and overspending counted as separate headlines |
 | Database migration posture | 323/323 applied; a day's labour carries the work package it was spent on, indexed for the per-project fold, and nullable because most labour genuinely belongs to no one package |
 | Web unit suite | 221/221 passed |
+| Working calendar HTTP journey | 8/8 passed; the same window read under two calendars and under none, a holiday dropped like a weekend, work that cannot fit refused, and a foreign-tenant calendar refused |
+| Working calendar Auth-ON browser journey | 1/1 passed in Chromium; the calendar named on the plan, chosen there, and the window and float changing with it |
+| Planning solver under the project's calendar | 11/11 passed; a two-day activity from Thursday lands on Sunday under the named calendar and on Friday under none — a tenant calendar no project points at governs nothing |
+| Duration-fits-window rule | 6/6 passed; float returned rather than forced to zero, the impossible direction refused naming both figures, and an unauthored duration left alone |
+| Database migration posture | 324/324 applied; a project names its working calendar, backfilled only where the tenant had exactly one and nothing to guess |
+| Kernel calendar suite | 302 passed / 10 skipped, including the colliding in-memory calendar id fixed in passing |
 | Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -509,6 +571,35 @@ are recorded so a reader knows the figure's precision. As on PLN-10 and PLN-12, 
 remains **PARTIAL** on an otherwise complete row: the rendered output is proven in the browser and
 no exported productivity document exists.
 
+### PLN-03 reconciliation
+
+The capability reads *Durations and calendars*, and its acceptance criterion is that a planner
+selects calendar and duration, saves and reloads, and the solver excludes non-working days.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| Planner selects a calendar | named in the plan header and chosen there, proven in the browser | no |
+| Planner selects a duration | authored on the Gantt since iteration 6, now checked against the window it was given | no |
+| Saves and reloads | the choice survives the round trip; the same window reads differently under each calendar | no |
+| The solver excludes non-working days | a two-day activity from Thursday lands on Sunday under the project's calendar | no |
+| The calendar is the PROJECT's, not a guess | a tenant calendar no project points at governs nothing; unassigned is said out loud | no |
+| Weekends and holidays are one mechanism | a public holiday drops out of the window exactly as a weekend does | no |
+| One answer to "how long is this window" | solver, save-time check and productivity rates all count under the same calendar | no |
+
+**Proposed: `PLN-03` PARTIAL → COMPLETE.** The row is moved off BACKEND_ONLY because a proven UI
+makes that classification plainly false; the promotion itself is left to the programme owner, as
+PLN-10's, PLN-11's and PLN-12's were.
+
+One limit is knowingly carried with the proposal: **one calendar governs a whole project**. A night
+shift, or a subcontractor working a different week from the main contractor, is counted under the
+project's calendar because no per-activity or per-resource calendar is authored. Nothing in the
+acceptance criterion asks for one, and inventing an inheritance rule nobody stated would repeat the
+mistake this slice exists to correct. As on PLN-10/11/12, `actualOutput` would remain **PARTIAL** on
+promotion: the rendered output is proven in the browser and no exported calendar document exists.
+
+This also closes the limit PLN-11 recorded against itself — productivity rates no longer count a
+Friday or a shutdown as a day of production.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -524,7 +615,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, and so is what the work cost in hours (PLN-11, COMPLETE). What remains open in this line: rates are counted in calendar days rather than working days; several activities on one package each inherit its whole sold quantity; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, PARTIAL and proposed for COMPLETE). What remains open in this line: dependencies cannot be authored in the UI, so the critical path is computed over a network nobody can see or edit (PLN-02); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

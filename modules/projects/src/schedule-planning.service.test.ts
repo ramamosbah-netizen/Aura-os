@@ -6,6 +6,8 @@ import { InMemoryScheduleStore } from './in-memory-schedule-store';
 import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
 import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
 import { InMemoryWbsStore } from './in-memory-wbs-store';
+import { ProjectCalendarService } from './project-calendar.service';
+import type { ProjectStore } from './project-store';
 import { makeProjectSchedule, type ProjectSchedule } from './domain/schedule';
 import { makeResourceCapacity } from './domain/resource-pool';
 import { commitBooking } from './domain/resource-booking';
@@ -56,7 +58,7 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
     runs = new InMemoryPlanningRunStore();
     events = { append: vi.fn(async () => undefined), appendWithClient: vi.fn(async () => undefined) } as unknown as EventStore;
     audit = { log: vi.fn(async () => undefined) } as unknown as AuditService;
-    svc = new ScheduleService(store, events, facts, runs, null, audit, null, new InMemoryWbsStore());
+    svc = new ScheduleService(store, events, facts, runs, null, audit, new InMemoryWbsStore());
   });
 
   it('runs the solver against resolved capacity, persists a proposal, and moves no stored date', async () => {
@@ -133,22 +135,48 @@ describe('ScheduleService — §22 planning runs and acceptance', () => {
     await expect(svc.getRun('someone-else', run.id)).rejects.toThrow(/not found/);
   });
 
-  it('counts working days when a tenant calendar is bound (Step 8 wired into the run)', async () => {
-    // A Gulf calendar: Fri/Sat are the weekend. A 2-working-day task from Thursday must skip them.
+  // The calendar a project's days are counted under is the one the PROJECT names (PLN-03). A tenant
+  // calendar that no project points at governs nothing — which is the correction: choosing the
+  // tenant's first calendar by name was a coin toss for anybody running two.
+  const gulfWeek = () => {
     const calendar = new CalendarService(null);
     calendar.registerInMemoryCalendar(
       { id: 'gulf', tenantId: TENANT, companyId: null, name: 'Gulf week', weekends: [5, 6], standardHoursPerDay: 8 },
     );
-    const withCal = new ScheduleService(store, events, facts, runs, null, audit, calendar, new InMemoryWbsStore());
+    return calendar;
+  };
+  const withProjectCalendar = (workingCalendarId: string | null) => {
+    const projects = {
+      get: async (id: string) => ({ id, tenantId: TENANT, workingCalendarId }),
+    } as unknown as ProjectStore;
+    return new ScheduleService(
+      store, events, facts, runs, null, audit, new InMemoryWbsStore(), null, null,
+      new ProjectCalendarService(projects, gulfWeek()),
+    );
+  };
+
+  it('counts working days under the calendar the PROJECT names', async () => {
     // Thursday 2026-03-12, two working days, wide authored end so the horizon covers the weekend.
     await store.create(makeProjectSchedule({
       tenantId: TENANT, projectId: PROJECT,
       tasks: [{ id: T1, name: 'Lift', plannedStart: '2026-03-12', plannedEnd: '2026-03-18', durationWorkingDays: 2 }],
     }));
 
-    const { run } = await withCal.runPlanning(TENANT, PROJECT);
+    const { run } = await withProjectCalendar('gulf').runPlanning(TENANT, PROJECT);
     // Thu 12 + skip Fri 13/Sat 14 + Sun 15 → ends Sunday the 15th, not Friday the 13th.
     expect(run.proposal.placements.find((p) => p.taskId === T1)!.end).toBe('2026-03-15');
+  });
+
+  it('plans every day as worked when the project names no calendar — and never picks one for it', async () => {
+    await store.create(makeProjectSchedule({
+      tenantId: TENANT, projectId: PROJECT,
+      tasks: [{ id: T1, name: 'Lift', plannedStart: '2026-03-12', plannedEnd: '2026-03-18', durationWorkingDays: 2 }],
+    }));
+
+    // The Gulf calendar exists in the tenant and is not named by this project. It governs nothing:
+    // a guess that reads as an answer is worse than a stated unknown.
+    const { run } = await withProjectCalendar(null).runPlanning(TENANT, PROJECT);
+    expect(run.proposal.placements.find((p) => p.taskId === T1)!.end).toBe('2026-03-13');
   });
 
   it('rejects planning an empty or missing schedule', async () => {

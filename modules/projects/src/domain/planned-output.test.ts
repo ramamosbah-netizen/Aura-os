@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { productivityBasisFrom, resolvePlannedOutput } from './planned-output';
+import { workingCalendarOf } from './working-calendar';
 
 /**
  * Measured against WHAT. Every unknown below is a fact nobody stated, and the point of each test
@@ -77,6 +78,35 @@ describe('the rate the work is going at', () => {
       frozen: line(), installedQuantity: 16, plannedStart: '2026-09-01', plannedEnd: '2026-09-01', today: '2026-09-01',
     });
     expect(output.achievedRatePerDay).toBe(16);
+  });
+});
+
+describe('counting the days the crew was actually asked to work', () => {
+  // Two weekends inside the window, and the same two inside the elapsed part.
+  const weekends = workingCalendarOf(['2026-09-05', '2026-09-06', '2026-09-12', '2026-09-13', '2026-09-19', '2026-09-20']);
+
+  it('does not charge a crew for the Fridays nobody asked them to work', () => {
+    // Ten calendar days gone, two of them a weekend: eight working days, not ten.
+    const output = at({ installedQuantity: 60, calendar: weekends });
+    expect(output).toMatchObject({ achievedRatePerDay: 7.5, expectedByNow: 128, verdict: 'BEHIND' });
+    // Without a calendar the same crew reads slower, on days it was never asked to be there.
+    expect(at({ installedQuantity: 60 })).toMatchObject({ achievedRatePerDay: 6, expectedByNow: 160 });
+  });
+
+  it('counts what is LEFT of the window in working days too', () => {
+    // 14 working days in the window, 8 used, 6 left; 140 left to install → 23.33/day.
+    expect(at({ installedQuantity: 60, calendar: weekends }).requiredRatePerDay).toBe(23.33);
+  });
+
+  it('says nothing about a window that is entirely shut down', () => {
+    const shutdown = workingCalendarOf(['2026-09-01', '2026-09-02', '2026-09-03']);
+    const output = resolvePlannedOutput({
+      frozen: line(), installedQuantity: 0, plannedStart: '2026-09-01', plannedEnd: '2026-09-03',
+      today: '2026-09-03', calendar: shutdown,
+    });
+    // No work was ever asked for across it, so no rate can be owed — and it is not "behind".
+    expect(output).toMatchObject({ verdict: 'UNKNOWN', achievedRatePerDay: null });
+    expect(output.unknownReason).toMatch(/every day of this activity/);
   });
 });
 

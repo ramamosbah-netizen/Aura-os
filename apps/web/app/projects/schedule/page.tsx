@@ -37,6 +37,13 @@ interface ProjectSchedule {
   progress?: Record<string, ResolvedActivityProgress>;
   /** What that progress is measured against — see lib/planned-output.ts. */
   output?: Record<string, PlannedOutput>;
+  /** The calendar these dates are counted under, and what each activity's window holds. */
+  calendar?: {
+    calendarId: string | null;
+    calendarName: string | null;
+    everyDayWorked: boolean;
+    activities: Record<string, { windowWorkingDays: number; floatWorkingDays: number | null }>;
+  };
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -82,11 +89,12 @@ interface ResourceBookingView {
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
-  const [schedules, projects, wbsNodes, resourceCatalog, resourceBookings, resourcePools, resourceCapacity, suppliers] = await Promise.all([
+  const [schedules, projects, wbsNodes, resourceCatalog, workingCalendars, resourceBookings, resourcePools, resourceCapacity, suppliers] = await Promise.all([
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<WbsNode[]>(projectId ? `/api/projects/wbs?projectId=${encodeURIComponent(projectId)}` : '/api/projects/wbs'),
     getJson<ResourceCatalogItem[]>(projectId ? `/api/projects/schedules/resource-catalog?projectId=${encodeURIComponent(projectId)}` : '/api/projects/schedules/resource-catalog'),
+    getJson<Array<{ id: string; name: string }>>('/api/projects/schedules/working-calendars'),
     projectId ? getJson<ResourceBookingView[]>(`/api/projects/${encodeURIComponent(projectId)}/resource-bookings`) : Promise.resolve(null),
     getJson<ResourcePool[]>('/api/projects/resource-pools'),
     getJson<ResourceCapacity[]>('/api/projects/resource-capacity'),
@@ -214,7 +222,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
             <div><strong>Schedule data is unavailable</strong><p>We could not reach the project service. Try again in a moment.</p></div>
           </div>
         ) : (
-          <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} resourceCatalog={resourceCatalog ?? []} selectedProjectId={projectId} />
+          <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} resourceCatalog={resourceCatalog ?? []} workingCalendars={workingCalendars ?? []} selectedProjectId={projectId} />
         )}
       </section>
 

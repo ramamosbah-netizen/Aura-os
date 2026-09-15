@@ -73,3 +73,8 @@
 /* Behind the rate the work was priced at. Coloured, because it is the one line on this row that
    asks somebody to do something — the others are statements of fact. */
 .behind { color: var(--bad); font-weight: 600; }
+
+/* Which calendar these dates were counted under. Sits in the plan header because it changes what
+   every date on the card means, not just one activity's. */
+.calendarPicker { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 11px; }
+.calendarPicker select { padding: 2px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }

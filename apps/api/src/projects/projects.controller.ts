@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { AccessService, TenantContext, ParseUuidOr404Pipe, Permissions, SelfScoped } from '@aura/core';
+import { AccessService, TenantContext, ParseUuidOr404Pipe, Permissions, SelfScoped, CalendarService } from '@aura/core';
 import { parsePageParams, type OrgLevel, type Page, type ProjectHealth, type RiskImpact, type RiskLikelihood } from '@aura/shared';
 import {
   type Project,
@@ -49,6 +49,7 @@ import {
   type ResourceConflictResolution,
   type ActivityProgress,
   type PlannedOutput,
+  ProjectCalendarService,
   type ScheduleTask,
   type ResourceCapacity,
   type ResourceType,
@@ -328,6 +329,10 @@ export class ProjectsController {
     private readonly accounts: AccountService,
     private readonly suppliers: SupplierService,
     private readonly tenant: TenantContext,
+    // Which calendar a project's days are counted under (PLN-03). Optional for the same reason
+    // every seam is: without it every day is worked, and nothing is chosen on a planner's behalf.
+    @Optional() @Inject(ProjectCalendarService) private readonly projectCalendar: ProjectCalendarService | null = null,
+    @Optional() @Inject(CalendarService) private readonly calendars: CalendarService | null = null,
   ) {}
 
   // ── PROJECTS ─────────────────────────────────────────────────────────────
@@ -1423,6 +1428,38 @@ export class ProjectsController {
     return await this.schedule.save({ tenantId: ctx.tenantId, companyId: ctx.companyId, projectId: dto.projectId, projectName: dto.projectName, tasks: dto.tasks, createdBy: ctx.actorId });
   }
 
+  /**
+   * The working calendars a project may be counted under — id and name only.
+   *
+   * A planner needs to CHOOSE one; administering weekends, holidays and Ramadan hours stays behind
+   * `admin.calendar.manage` where it belongs. Reading the list is part of reading a plan, so it
+   * carries the plan's own permission rather than inventing one nobody holds.
+   */
+  @Permissions('projects.schedule.read')
+  @Get('schedules/working-calendars')
+  async listWorkingCalendars(): Promise<Array<{ id: string; name: string }>> {
+    if (!this.calendars) return [];
+    const calendars = await this.calendars.listCalendars(this.tenant.get().tenantId);
+    return calendars.map((calendar) => ({ id: calendar.id, name: calendar.name }));
+  }
+
+  /**
+   * Name the calendar this project's dates are counted under, or clear it by sending no id.
+   *
+   * `projects.schedule.plan`, explicitly: this changes what every date in the programme MEANS —
+   * how long a window is, whether an authored duration fits it, and what rate the work is going at.
+   * That is programme authorship, not administration, and not a derived permission nobody holds.
+   */
+  @Permissions('projects.schedule.plan')
+  @Post('schedules/:projectId/working-calendar')
+  async assignWorkingCalendar(
+    @Param('projectId') projectId: string,
+    @Body() dto: { calendarId?: string | null },
+  ): Promise<{ calendarId: string | null; calendarName: string | null }> {
+    if (!this.projectCalendar) throw new ServiceUnavailableException('working calendars are not available');
+    return this.projectCalendar.assign(this.tenant.get().tenantId, projectId, dto?.calendarId?.trim() || null);
+  }
+
   /** Safe planning directory: ids and display labels from each owning register, no copied master. */
   @Permissions('projects.schedule.read')
   @Get('schedules/resource-catalog')
@@ -1451,15 +1488,21 @@ export class ProjectsController {
      * here rather than left to each caller to filter correctly.
      */
     @Query('projectId') projectId?: string,
-  ): Promise<Array<ProjectSchedule & { progress: Record<string, ActivityProgress>; output: Record<string, PlannedOutput> }>> {
+  ): Promise<Array<ProjectSchedule & {
+    progress: Record<string, ActivityProgress>;
+    output: Record<string, PlannedOutput>;
+    calendar: Awaited<ReturnType<ScheduleService['calendarOf']>>;
+  }>> {
     const all = await this.schedule.list(this.tenant.get().tenantId);
     const schedules = projectId?.trim() ? all.filter((plan) => plan.projectId === projectId.trim()) : all;
     // One "today" for the whole read, so two activities on the same screen are never rated against
     // different days because the clock moved between them.
     const today = new Date().toISOString().slice(0, 10);
     return Promise.all(schedules.map(async (plan) => {
-      const [progress, output] = await Promise.all([this.schedule.progressOf(plan), this.schedule.outputOf(plan, today)]);
-      return { ...plan, progress: Object.fromEntries(progress), output: Object.fromEntries(output) };
+      const [progress, output, calendar] = await Promise.all([
+        this.schedule.progressOf(plan), this.schedule.outputOf(plan, today), this.schedule.calendarOf(plan, today),
+      ]);
+      return { ...plan, progress: Object.fromEntries(progress), output: Object.fromEntries(output), calendar };
     }));
   }
 

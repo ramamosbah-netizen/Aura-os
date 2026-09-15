@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { makeProjectSchedule, setBaseline, setScheduleTasks, summariseSchedule } from './schedule';
+import { assertDurationFitsWindow, makeProjectSchedule, setBaseline, setScheduleTasks, summariseSchedule } from './schedule';
 
 const base = { tenantId: 't1', projectId: 'p1', projectName: 'Marina' };
 const tasks = [
@@ -34,5 +34,28 @@ describe('project schedule domain', () => {
     // `t.name`, so renaming a task silently lost its baseline and two same-named tasks collided.)
     s = setScheduleTasks(s, s.tasks.map((t) => (t.name === 'Commission' ? { ...t, plannedEnd: '2026-02-15' } : t)));
     expect(summariseSchedule(s).scheduleVarianceDays).toBe(5);
+  });
+});
+
+describe('work that cannot fit the window it was given', () => {
+  const activity = (durationWorkingDays: number | null) => ({
+    name: 'Riser containment', plannedStart: '2026-09-01', plannedEnd: '2026-09-20', durationWorkingDays,
+  });
+
+  it('returns the float, because float is a plan and not an error', () => {
+    // Ten working days of work in a window holding fourteen: four days of slack, which is what a
+    // look-ahead is built on. Forcing the two numbers equal would delete the concept.
+    expect(assertDurationFitsWindow(activity(10), 14)).toBe(4);
+    expect(assertDurationFitsWindow(activity(14), 14)).toBe(0);
+  });
+
+  it('refuses the impossible direction, naming both figures', () => {
+    expect(() => assertDurationFitsWindow(activity(15), 12))
+      .toThrow(/15 working days of work cannot fit a window that holds 12/);
+  });
+
+  it('says nothing about an activity whose duration was never authored', () => {
+    // Not a duration of zero — nobody stated one, so there is nothing to fit.
+    expect(assertDurationFitsWindow(activity(null), 14)).toBeNull();
   });
 });

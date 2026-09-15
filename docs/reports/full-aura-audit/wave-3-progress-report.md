@@ -313,6 +313,46 @@ fixture creating a Gulf week and a KSA week does.
 that the Gantt exposed only start and end dates was stale: working-day duration has been authored
 there since iteration 6. What was missing was the calendar those days are counted in.
 
+## Iteration 13 — Which activity waits for which
+
+The dependency network, its cycle refusal and the CPM forward pass have lived in the planning domain
+and in PostgreSQL since Step 8. **Nothing could reach them.** `setScheduleDependencies` had no caller
+anywhere in the product — not a service method, not a route, not a screen — so every plan carried an
+empty network and the critical path was computed over a graph nobody could author. The engine was
+right and unreachable, which is its own kind of absent, and harder to see than a missing one because
+the tests were green the whole time.
+
+A planner now authors the network on the plan screen: which activity waits for which, finish to
+start, within this plan only. An edge to another project's activity is not a dependency — it is two
+programmes pretending to be one.
+
+**The whole network is sent and judged at once.** A cycle is a property of the graph and never of an
+edge, so an endpoint taking edges one at a time could be walked into a loop one individually-legal
+step at a time, each step fine on its own. Everything is refused rather than repaired: a self-edge, a
+duplicate, an edge naming an activity outside the plan, and a cycle whose loop is named back to the
+author. Breaking a loop by dropping an edge nobody chose would be the system deciding which of two
+activities waits for the other, and that is a decision, not arithmetic. A refused save is never a
+partial save.
+
+Authoring the network carries `projects.schedule.plan` — it decides what the solver may move and what
+the critical path runs through. Deleting an activity takes its edges with it rather than leaving the
+network pointing at a task that no longer exists.
+
+And the two halves of the planning line meet here: **the accepted dates follow the network across the
+days the project's own calendar says are not worked** (PLN-03). A successor never starts on a Friday
+the crew was never asked to work.
+
+Auth-ON browser and API proof: two activities parked on the same Monday, separated only by a
+dependency the planner authors in the activity editor, with the plan then reading "Waits for …"
+beneath the successor. A loop is refused (400) naming the cycle, and the network already authored is
+left untouched. A self-edge, a duplicate and an edge naming a task outside the plan are each refused
+in their own words. A planning run places a four-day predecessor Monday to Thursday and starts the
+successor on the **Sunday** rather than the Friday under the project's Gulf calendar; accepting the
+run is what moves the stored dates, and the run alone moves nothing. Removing an activity removes its
+edge with it.
+
+**PLN-02 moves from BACKEND_ONLY to PARTIAL, and COMPLETE is proposed below.**
+
 ## Security and authority proof
 
 | Risk | Proof |
@@ -480,6 +520,8 @@ there since iteration 6. What was missing was the calendar those days are counte
 | Duration-fits-window rule | 6/6 passed; float returned rather than forced to zero, the impossible direction refused naming both figures, and an unauthored duration left alone |
 | Database migration posture | 324/324 applied; a project names its working calendar, backfilled only where the tenant had exactly one and nothing to guess |
 | Kernel calendar suite | 302 passed / 10 skipped, including the colliding in-memory calendar id fixed in passing |
+| Dependency network HTTP journey | 6/6 passed; an empty network never inferred from the dates, the network round-tripped, a cycle refused with the existing one untouched, self/duplicate/foreign edges each refused, the dates following the network over a weekend, and an activity's edges removed with it |
+| Dependency network Auth-ON browser journey | 1/1 passed in Chromium; authored in the activity editor, "Waits for …" shown on the plan, a loop refused, and the accepted dates following it |
 | Full API unit/fitness suite | 542 passed / 4 skipped |
 
 ### PLN-10 reconciliation
@@ -601,6 +643,32 @@ otherwise complete row: the rendered output is proven in the browser and no expo
 This also closes the limit PLN-11 recorded against itself — productivity rates no longer count a
 Friday or a shutdown as a day of production.
 
+### PLN-02 reconciliation
+
+The capability reads *Dependencies and critical path*, and its acceptance criterion is that a planner
+authors two dependent tasks in the UI, a cycle is refused, and the accepted dates follow the
+dependency.
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| A planner authors two dependent tasks in the UI | the activity editor's predecessor picker, proven in the browser | no |
+| A cycle is refused | refused with the loop named, and the existing network left untouched | no |
+| The accepted dates follow the dependency | the successor starts the first working day after its predecessor finishes | no |
+| …counted under the project's calendar | the successor steps over the weekend rather than starting on a Friday | no |
+| The network is judged as a whole | the whole set is sent and validated together, so no sequence of legal edits reaches a loop | no |
+| An edge cannot leave the plan | a predecessor outside this schedule is refused, not created | no |
+| The network survives editing the plan | an activity's edges are removed with the activity | no |
+
+**Proposed: `PLN-02` PARTIAL → COMPLETE.** The row is moved off BACKEND_ONLY because a proven UI
+makes that classification plainly false; the promotion itself is left to the programme owner.
+
+One limit is carried with the proposal: **only finish-to-start is authored.** Start-to-start,
+finish-to-finish and lag are understood by the solver — `lagDays` is a field on its input — and have
+no way in, so a plan needing them still expresses them by moving dates by hand. Exposing a
+relationship type the engine reads but no screen can set would repeat the very defect this slice
+corrects, so it is recorded rather than half-built. As on PLN-03/10/11/12, `actualOutput` would
+remain **PARTIAL** on promotion: the rendered plan is proven and no exported network document exists.
+
 ### Observed while proving it, not fixed
 
 A requirement that has ever carried a booking can never be removed from a plan: the lineage foreign
@@ -616,7 +684,7 @@ Wave 3 remains open. The next bounded slices must still prove:
 
 1. Governed engineering file storage, material-submittal/register-item lineage and representative receipt by assigned Site/Project/Procurement roles.
 2. A held commitment reaches the person answerable for it in all three forms — the named employee, a crew's roster, and the custodian of a machine — and is accepted or refused by them (PLN-07/PLN-08); HR, Fleet and Assets change the feasibility of commitments already made, closing the second half of the temporal invariant (PLN-09); and a conflict has a named owner, a recorded decision and a canonical, authorized link to every activity involved in it, without ever becoming a stored verdict (PLN-10, reconciled above and proposed for COMPLETE). What remains open in this line is PLN-09's own gap — a conflict raises no notification and reaches no one who is not looking — and that an allocated non-member still gets no project access from being booked.
-3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: dependencies cannot be authored in the UI, so the critical path is computed over a network nobody can see or edit (PLN-02); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
+3. Milestone, baseline, cost, look-ahead, delay/recovery and forecast evidence from the connected plan. Quantity-driven progress is proven (PLN-12, COMPLETE), the rate it is measured against is proven, what the work cost in hours is proven (PLN-11, COMPLETE), and every day is now counted under the calendar the project names (PLN-03, COMPLETE). What remains open in this line: only finish-to-start dependencies can be authored, so a plan needing start-to-start, finish-to-finish or lag still expresses it by moving dates by hand (PLN-02); one calendar governs a whole project, so a night shift is counted under the day shift's week; several activities on one package each inherit its whole sold quantity, which must not be summed by any rollup until an apportionment authority exists; and neither a figure stated against the measurement, nor an activity losing ground, nor one overspending its priced hours reaches anybody who is not looking at the screen — four such signals now, which is a shared notification authority rather than four bespoke ones.
 
 ## Programme state
 

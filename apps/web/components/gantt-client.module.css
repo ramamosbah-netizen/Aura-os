@@ -78,3 +78,8 @@
    every date on the card means, not just one activity's. */
 .calendarPicker { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); font-size: 11px; }
 .calendarPicker select { padding: 2px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
+
+/* Which activities this one waits for. A multi-select rather than a drag-a-line canvas: the
+   network is authored as a fact about this activity, and the whole set is what the server judges. */
+.predecessors { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; color: var(--muted); font-size: 11px; }
+.predecessors select { min-width: 200px; min-height: 58px; padding: 4px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }

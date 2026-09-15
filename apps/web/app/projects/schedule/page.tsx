@@ -37,6 +37,8 @@ interface ProjectSchedule {
   progress?: Record<string, ResolvedActivityProgress>;
   /** What that progress is measured against — see lib/planned-output.ts. */
   output?: Record<string, PlannedOutput>;
+  /** Which activity waits for which, finish to start. */
+  dependencies?: Array<{ id: string; predecessorTaskId: string; successorTaskId: string }>;
   /** The calendar these dates are counted under, and what each activity's window holds. */
   calendar?: {
     calendarId: string | null;

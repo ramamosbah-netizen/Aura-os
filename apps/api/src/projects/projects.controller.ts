@@ -1460,6 +1460,32 @@ export class ProjectsController {
     return this.projectCalendar.assign(this.tenant.get().tenantId, projectId, dto?.calendarId?.trim() || null);
   }
 
+  /**
+   * Replace this project's dependency network — which activity waits for which.
+   *
+   * The WHOLE network in one call, because a cycle is a property of the graph and not of an edge:
+   * an endpoint that added edges one at a time could be walked into a loop one legal-looking step
+   * at a time, and each step would have been individually fine.
+   *
+   * `projects.schedule.plan`: authoring the network IS authoring the programme — it decides what
+   * the solver may move and what the critical path runs through.
+   */
+  @Permissions('projects.schedule.plan')
+  @Post('schedules/:projectId/dependencies')
+  async setScheduleDependencies(
+    @Param('projectId') projectId: string,
+    @Body() dto: { edges?: Array<{ predecessorTaskId?: string; successorTaskId?: string }> },
+  ): Promise<ProjectSchedule> {
+    const edges = (dto?.edges ?? []).map((edge) => {
+      if (!edge?.predecessorTaskId?.trim() || !edge?.successorTaskId?.trim()) {
+        throw new BadRequestException('every dependency needs a predecessor and a successor activity');
+      }
+      return { predecessorTaskId: edge.predecessorTaskId.trim(), successorTaskId: edge.successorTaskId.trim() };
+    });
+    const ctx = this.tenant.get();
+    return this.schedule.setDependencies({ tenantId: ctx.tenantId, projectId, edges, actorId: ctx.actorId });
+  }
+
   /** Safe planning directory: ids and display labels from each owning register, no copied master. */
   @Permissions('projects.schedule.read')
   @Get('schedules/resource-catalog')

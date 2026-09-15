@@ -48,6 +48,11 @@ interface ProjectSchedule {
    */
   output?: Record<string, PlannedOutput>;
   /**
+   * The authored network — which activity waits for which, finish to start. Held on the plan
+   * rather than on a task because a cycle is a property of the whole graph, never of one edge.
+   */
+  dependencies?: Array<{ id: string; predecessorTaskId: string; successorTaskId: string }>;
+  /**
    * The calendar this plan's days are counted under, and what each activity's window holds.
    * `everyDayWorked` means nobody has named one — said on the screen rather than defaulted around,
    * because a plan built through Fridays should admit it.
@@ -234,6 +239,36 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
   }
 
   /**
+   * Make one activity wait for another, or stop it waiting.
+   *
+   * Sends the WHOLE network, because that is what the server validates: a cycle cannot be judged
+   * one edge at a time, and an endpoint that took them singly could be walked into a loop one
+   * legal-looking step at a time. A refusal names the loop and nothing is written.
+   */
+  async function handleSetPredecessors(sch: ProjectSchedule, successorTaskId: string, predecessorTaskIds: string[]) {
+    setBusy(sch.projectId); setError(null);
+    try {
+      const others = (sch.dependencies ?? []).filter((edge) => edge.successorTaskId !== successorTaskId);
+      const edges = [
+        ...others.map((edge) => ({ predecessorTaskId: edge.predecessorTaskId, successorTaskId: edge.successorTaskId })),
+        ...predecessorTaskIds.map((predecessorTaskId) => ({ predecessorTaskId, successorTaskId })),
+      ];
+      const response = await fetch(`/api/projects/schedules/${sch.projectId}/dependencies`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ edges }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result?.message || result?.error || 'Failed to save the dependencies');
+      router.refresh();
+    } catch (e: any) {
+      setError(e.message || 'Failed to save the dependencies');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  /**
    * Name the calendar this project's dates are counted under, or clear it.
    *
    * Changes what every date in the plan MEANS — how long a window is, whether an authored duration
@@ -390,6 +425,14 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                     <small>{t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'WBS record unavailable'; })() : 'Legacy activity · WBS not linked'}</small>
                     <small>{t.durationWorkingDays ? `${t.durationWorkingDays} working day${t.durationWorkingDays === 1 ? '' : 's'}` : 'Working duration not authored'}</small>
                     {(() => {
+                      const waitsFor = (sch.dependencies ?? [])
+                        .filter((edge) => edge.successorTaskId === t.id)
+                        .map((edge) => sch.tasks.find((other) => other.id === edge.predecessorTaskId)?.name)
+                        .filter((name): name is string => !!name);
+                      if (waitsFor.length === 0) return null;
+                      return <small data-testid={`waits-for-${t.id}`}>{`Waits for ${waitsFor.join(', ')}`}</small>;
+                    })()}
+                    {(() => {
                       const window = t.id ? sch.calendar?.activities?.[t.id] : undefined;
                       if (!window) return null;
                       // What the dates MEAN under the calendar, and the slack between the window
@@ -533,6 +576,23 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                         <label>Planned finish<input className={styles.input} type="date" value={draft.plannedEnd} onChange={(event) => setDraft({ ...draft, plannedEnd: event.target.value })} /></label>
                         <label>Working days<input className={styles.input} aria-label={`Edit working days for ${t.name}`} type="number" min={1} step={1} value={draft.durationWorkingDays} onChange={(event) => setDraft({ ...draft, durationWorkingDays: event.target.value })} /></label>
                       </div>
+                      {/* Which activities this one waits for. Finish-to-start, and only within
+                          this plan — an edge to another project's activity is not a dependency,
+                          it is two programmes pretending to be one. */}
+                      <label className={styles.predecessors} data-testid={`predecessors-${t.id}`}>
+                        <span>Waits for</span>
+                        <select
+                          multiple
+                          aria-label={`Predecessors for ${t.name}`}
+                          value={(sch.dependencies ?? []).filter((edge) => edge.successorTaskId === t.id).map((edge) => edge.predecessorTaskId)}
+                          disabled={busy === sch.projectId}
+                          onChange={(event) => handleSetPredecessors(sch, t.id!, Array.from(event.target.selectedOptions, (option) => option.value))}
+                        >
+                          {sch.tasks.filter((other) => other.id && other.id !== t.id).map((other) => (
+                            <option key={other.id} value={other.id!}>{other.name}</option>
+                          ))}
+                        </select>
+                      </label>
                       <div className={styles.lockedPackage}>WBS package remains fixed: {t.wbsNodeId ? (() => { const node = wbsNodes.find((item) => item.id === t.wbsNodeId); return node ? `${node.code} · ${node.title}` : 'record unavailable'; })() : 'legacy activity is not linked'}</div>
                       {requirementsEditor(draft, setDraft, `Edit resource needs for ${t.name}`)}
                       <div className={styles.editActions}>

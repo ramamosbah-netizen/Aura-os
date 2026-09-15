@@ -22,7 +22,9 @@ import {
   setBaseline,
   summariseSchedule,
   assertDurationFitsWindow,
+  setScheduleDependencies,
 } from './domain/schedule';
+import type { NewScheduleDependency } from './domain/schedule-network';
 import { SCHEDULE_STORE, type ScheduleStore } from './schedule-store';
 import { WbsService } from './wbs.service';
 import { WBS_STORE, type WbsStore } from './wbs-store';
@@ -222,6 +224,42 @@ export class ScheduleService {
    * `today` is passed in rather than read from the clock so the rule stays testable at the edges
    * of a planned window — the day it opens, the day it closes, and the days either side.
    */
+  /**
+   * Replace this project's dependency network.
+   *
+   * REPLACE, not append, and validated as a WHOLE: a cycle cannot be judged one edge at a time, so
+   * an editor that added edges singly could walk a plan into a loop one legal-looking step at a
+   * time. The caller sends the network it wants and is refused with the loop named.
+   *
+   * Refuses rather than repairs. An edge naming a task that is not in this schedule is not an
+   * instruction to create one, and a cycle is not something to break by dropping an edge the author
+   * did not choose — which of two activities waits for the other is a decision, not arithmetic.
+   */
+  async setDependencies(input: {
+    tenantId: Id; projectId: Id; edges: NewScheduleDependency[]; actorId?: Id | null;
+  }): Promise<ProjectSchedule> {
+    const schedule = await this.store.getByProject(input.tenantId, input.projectId);
+    if (!schedule) throw new NotFoundException(`no schedule for project ${input.projectId}`);
+
+    let next: ProjectSchedule;
+    try {
+      next = setScheduleDependencies(schedule, input.edges);
+    } catch (error) {
+      throw new BadRequestException(error instanceof Error ? error.message : 'this dependency network is invalid');
+    }
+    await this.store.update(next);
+    await this.events.append([
+      makeEvent({
+        type: SCHEDULE_EVENT.saved,
+        tenantId: next.tenantId, companyId: next.companyId, actorId: input.actorId ?? null,
+        aggregateType: 'projects.schedule', aggregateId: next.id,
+        payload: { projectId: next.projectId, dependencies: next.dependencies.length },
+      }),
+    ]);
+    this.logger.log(`Dependency network for project ${input.projectId}: ${next.dependencies.length} edge(s)`);
+    return next;
+  }
+
   /**
    * The calendar this plan's days are counted under, and the working window each activity has.
    *

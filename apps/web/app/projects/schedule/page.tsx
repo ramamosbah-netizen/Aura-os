@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { getJson } from '@/lib/api';
 import GanttClient from '../../../components/gantt-client';
 import PlanningRunPanel from '../../../components/planning-run-panel';
+import ResourceBookingClient from '../../../components/resource-booking-client';
 import ResourcePoolClient from '../../../components/resource-pool-client';
 import ProjectsSuiteChrome from '../../../components/projects-suite-chrome';
 import styles from './projects-schedule.module.css';
@@ -40,14 +41,26 @@ interface ResourceCatalogItem {
 interface ResourcePool { id: string; name: string; unit: 'hours' | 'persons' | 'crews' | 'units'; sourceType: 'internal' | 'subcontractor'; sourceId: string | null }
 interface ResourceCapacity { id: string; resource: { resourceType: string; canonicalResourceId: string }; unit: 'hours' | 'persons' | 'crews' | 'units'; quantity: number | null; from: string; to: string; note: string | null }
 interface Supplier { id: string; code: string; name: string; category: string; status: string }
+interface ResourceBookingView {
+  booking: {
+    id: string; taskId: string | null; requirementId: string | null;
+    resource: { resourceType: 'employee' | 'vehicle' | 'asset' | 'pool'; canonicalResourceId: string };
+    unit: 'hours' | 'persons' | 'crews' | 'units'; quantity: number; from: string; to: string;
+    status: 'held' | 'released'; capacityAtCommitment: number | null; demandAtCommitment: number;
+    overCapacityReason: string | null; releasedReason: string | null;
+  };
+  assessment: { feasibility: 'AVAILABLE' | 'CONFLICTED' | 'UNKNOWN'; reason?: string; conflictDays: string[] };
+  resourceConflict: { projectsInvolved: string[]; conflictDays: string[] };
+}
 
 export default async function SchedulePage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
-  const [schedules, projects, wbsNodes, resourceCatalog, resourcePools, resourceCapacity, suppliers] = await Promise.all([
+  const [schedules, projects, wbsNodes, resourceCatalog, resourceBookings, resourcePools, resourceCapacity, suppliers] = await Promise.all([
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<WbsNode[]>(projectId ? `/api/projects/wbs?projectId=${encodeURIComponent(projectId)}` : '/api/projects/wbs'),
     getJson<ResourceCatalogItem[]>(projectId ? `/api/projects/schedules/resource-catalog?projectId=${encodeURIComponent(projectId)}` : '/api/projects/schedules/resource-catalog'),
+    projectId ? getJson<ResourceBookingView[]>(`/api/projects/${encodeURIComponent(projectId)}/resource-bookings`) : Promise.resolve(null),
     getJson<ResourcePool[]>('/api/projects/resource-pools'),
     getJson<ResourceCapacity[]>('/api/projects/resource-capacity'),
     getJson<Supplier[]>('/api/procurement/suppliers'),
@@ -56,6 +69,7 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
   const scopedProjects = projectId ? (projects ?? []).filter((project) => project.id === projectId) : projects;
   const projectName = scopedProjects?.[0]?.title ?? scopedSchedules?.[0]?.projectName;
   const rows = scopedSchedules ?? [];
+  const selectedSchedule = projectId ? rows.find((schedule) => schedule.projectId === projectId) : undefined;
   const taskCount = rows.reduce((total, schedule) => total + schedule.tasks.length, 0);
   const completeCount = rows.reduce((total, schedule) => total + schedule.tasks.reduce((sum, task) => sum + task.percentComplete, 0), 0);
   const averageProgress = taskCount ? Math.round(completeCount / taskCount) : null;
@@ -148,6 +162,19 @@ export default async function SchedulePage({ searchParams }: { searchParams: Pro
           <GanttClient schedules={rows} projects={scopedProjects ?? []} wbsNodes={wbsNodes ?? []} resourceCatalog={resourceCatalog ?? []} selectedProjectId={projectId} />
         )}
       </section>
+
+      {projectId && selectedSchedule && resourceBookings !== null && (
+        <section className={styles.workspace} aria-label="Resource commitments">
+          <div className={styles.workspaceHead}>
+            <div>
+              <span className={styles.sectionKicker}>Activity commitments</span>
+              <h2>Hold capacity for planned work</h2>
+              <p>Activity demand remains part of the schedule. Commit it here when the plan is ready to consume shared capacity, then resolve any cross-project conflict explicitly.</p>
+            </div>
+          </div>
+          <ResourceBookingClient projectId={projectId} tasks={selectedSchedule.tasks} catalog={resourceCatalog ?? []} bookings={resourceBookings} />
+        </section>
+      )}
 
       {projectId && !unavailable && (
         <section className={styles.workspace} aria-label="Resource planning">

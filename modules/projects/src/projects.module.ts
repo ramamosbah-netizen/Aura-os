@@ -54,12 +54,14 @@ import { PostgresScheduleStore } from './postgres-schedule-store';
 import { ScheduleService } from './schedule.service';
 // §22 Step 7/9 — the cross-project capacity resolver's store, and planning-run persistence.
 import { RESOURCE_FACTS_STORE } from './resource-facts-store';
-import { InMemoryResourceFactsStore } from './in-memory-resource-facts-store';
 import { PostgresResourceFactsStore } from './postgres-resource-facts-store';
 import { RESOURCE_PLANNING_STORE } from './resource-planning-store';
 import { InMemoryResourcePlanningStore } from './in-memory-resource-planning-store';
 import { PostgresResourcePlanningStore } from './postgres-resource-planning-store';
 import { ResourcePlanningService } from './resource-planning.service';
+import { RESOURCE_BOOKING_STORE } from './resource-booking-store';
+import { PostgresResourceBookingStore } from './postgres-resource-booking-store';
+import { ResourceBookingService } from './resource-booking.service';
 import { PLANNING_RUN_STORE } from './planning-run-store';
 import { InMemoryPlanningRunStore } from './in-memory-planning-run-store';
 import { PostgresPlanningRunStore } from './postgres-planning-run-store';
@@ -83,6 +85,8 @@ import { PROJECT_RESPONSIBILITY_STORE } from './project-responsibility-store';
 import { InMemoryProjectResponsibilityStore } from './in-memory-project-responsibility-store';
 import { PostgresProjectResponsibilityStore } from './postgres-project-responsibility-store';
 import { ProjectResponsibilityService } from './project-responsibility.service';
+
+const IN_MEMORY_RESOURCE_STATE = Symbol('IN_MEMORY_RESOURCE_STATE');
 
 /** The Projects business module — same shape as the rest of the deal chain (the template). */
 @Module({
@@ -146,16 +150,27 @@ import { ProjectResponsibilityService } from './project-responsibility.service';
         pool ? new PostgresScheduleStore(pool) : new InMemoryScheduleStore(),
     },
     {
-      provide: RESOURCE_FACTS_STORE,
+      provide: IN_MEMORY_RESOURCE_STATE,
       inject: [PG_POOL],
-      useFactory: (pool: Pool | null) =>
-        pool ? new PostgresResourceFactsStore(pool) : new InMemoryResourceFactsStore(),
+      useFactory: (pool: Pool | null) => pool ? null : new InMemoryResourcePlanningStore(),
+    },
+    {
+      provide: RESOURCE_FACTS_STORE,
+      inject: [PG_POOL, IN_MEMORY_RESOURCE_STATE],
+      useFactory: (pool: Pool | null, state: InMemoryResourcePlanningStore | null) =>
+        pool ? new PostgresResourceFactsStore(pool) : state!,
     },
     {
       provide: RESOURCE_PLANNING_STORE,
-      inject: [PG_POOL],
-      useFactory: (pool: Pool | null) =>
-        pool ? new PostgresResourcePlanningStore(pool) : new InMemoryResourcePlanningStore(),
+      inject: [PG_POOL, IN_MEMORY_RESOURCE_STATE],
+      useFactory: (pool: Pool | null, state: InMemoryResourcePlanningStore | null) =>
+        pool ? new PostgresResourcePlanningStore(pool) : state!,
+    },
+    {
+      provide: RESOURCE_BOOKING_STORE,
+      inject: [PG_POOL, IN_MEMORY_RESOURCE_STATE],
+      useFactory: (pool: Pool | null, state: InMemoryResourcePlanningStore | null) =>
+        pool ? new PostgresResourceBookingStore(pool) : state!,
     },
     {
       provide: PLANNING_RUN_STORE,
@@ -225,8 +240,9 @@ import { ProjectResponsibilityService } from './project-responsibility.service';
     CashflowForecastService,
     ScheduleService,
     ResourcePlanningService,
+    ResourceBookingService,
     DeliveryItemMapService,
   ],
-  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, ResourcePlanningService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
+  exports: [ProjectService, WbsService, CbsService, CostLedgerService, QuantityLedgerService, DelayEotService, VariationService, ProjectRiskService, ProjectIssueService, ProjectResponsibilityService, ProjectRiskMaterialisationService, CloseoutService, CashflowForecastService, ScheduleService, ResourcePlanningService, ResourceBookingService, DeliveryItemMapService, CloseoutReadinessService, ProjectHealthService],
 })
 export class ProjectsModule {}

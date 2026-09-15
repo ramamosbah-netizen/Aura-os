@@ -118,7 +118,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Builds WBS and schedules, runs planning scenarios and maintains baselines and forecasts.',
     assignmentScope: 'project',
     permissions: [
-      'projects.schedule.read', 'projects.schedule.plan', 'projects.wb.*', PROJECT_RESPONSIBILITY_WORK,
+      'projects.schedule.read', 'projects.schedule.plan', 'projects.resource-booking.*', 'projects.wb.*', PROJECT_RESPONSIBILITY_WORK,
       'projects.delay.*', readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
     ],
   },

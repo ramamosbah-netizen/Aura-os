@@ -60,6 +60,8 @@ describe('ELV role matrix — segregation of duties', () => {
     expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.plan'))).toBe(true);
     expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.schedule.accept'))).toBe(false);
     expect(roleFor('r-pm').permissions.some((p) => permissionMatches(p, 'projects.schedule.accept'))).toBe(true);
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.resource-booking.create'))).toBe(true);
+    expect(roleFor('r-planning-engineer').permissions.some((p) => permissionMatches(p, 'projects.resource-booking.release'))).toBe(true);
   });
 
   it('Technical management governs organization resource pools and capacity', () => {

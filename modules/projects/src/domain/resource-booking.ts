@@ -43,6 +43,9 @@ export interface ResourceBooking {
   tenantId: Id;
   /** The project making the commitment. Bookings ARE project-scoped; pools and capacity are not. */
   projectId: Id;
+  /** Canonical schedule/task lineage when the booking satisfies authored activity demand. */
+  scheduleId: Id | null;
+  taskId: Id | null;
   /** The requirement this satisfies, when it came from one. Null for a directly made booking. */
   requirementId: Id | null;
   resource: ResourceRef;
@@ -92,6 +95,8 @@ export interface ResourceBooking {
 export interface NewResourceBooking {
   tenantId: Id;
   projectId: Id;
+  scheduleId?: Id | null;
+  taskId?: Id | null;
   requirementId?: Id | null;
   resource: ResourceRef;
   unit: ResourceUnit;
@@ -203,6 +208,8 @@ export function commitBooking(
     id: newId(),
     tenantId: input.tenantId,
     projectId: input.projectId,
+    scheduleId: input.scheduleId ?? null,
+    taskId: input.taskId ?? null,
     requirementId: input.requirementId ?? null,
     resource,
     unit: input.unit,

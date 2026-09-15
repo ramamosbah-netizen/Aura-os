@@ -48,6 +48,9 @@ import {
   type ResourceCapacity,
   type ResourceType,
   type ResourceUnit,
+  ResourceBookingService,
+  type ResourceBookingView,
+  type ResourceBooking,
   type DeliveryItemMap,
   DeliveryItemMapService,
   // §21 — three authorities: one per register, plus the command that spans them.
@@ -171,6 +174,15 @@ class CreateResourceCapacityDto {
   @IsOptional() @IsString() calendarId?: string | null;
   @IsOptional() @IsString() orgNodeId?: string | null;
   @IsOptional() @IsString() note?: string | null;
+}
+
+class CommitResourceRequirementDto {
+  @IsString() requirementId!: string;
+  @IsOptional() @IsString() overCapacityReason?: string | null;
+}
+
+class ReleaseResourceBookingDto {
+  @IsString() reason!: string;
 }
 
 // ── §21 Risks & Issues ─────────────────────────────────────────────────────
@@ -303,6 +315,7 @@ export class ProjectsController {
     private readonly cashflow: CashflowForecastService,
     private readonly schedule: ScheduleService,
     private readonly resourcePlanning: ResourcePlanningService,
+    private readonly resourceBookings: ResourceBookingService,
     private readonly deliveryItemMaps: DeliveryItemMapService,
     private readonly scheduleResources: ScheduleResourceCatalogService,
     private readonly accounts: AccountService,
@@ -1252,6 +1265,39 @@ export class ProjectsController {
       tenantId: ctx.tenantId, resource, unit: dto.unit, quantity: dto.quantity ?? null,
       from: dto.from, to: dto.to, calendarId: dto.calendarId ?? null, orgNodeId: dto.orgNodeId ?? null,
       note: dto.note ?? null, createdBy: ctx.actorId,
+    });
+  }
+
+  /** Project-owned commitments derive resource, quantity and dates from persisted activity demand. */
+  @Permissions('projects.resource-booking.read')
+  @Get(':projectId/resource-bookings')
+  listResourceBookings(@Param('projectId') projectId: string): Promise<ResourceBookingView[]> {
+    return this.resourceBookings.listProject(this.tenant.get().tenantId, projectId);
+  }
+
+  @Permissions('projects.resource-booking.create')
+  @Post(':projectId/resource-bookings')
+  commitResourceRequirement(
+    @Param('projectId') projectId: string,
+    @Body() dto: CommitResourceRequirementDto,
+  ): Promise<ResourceBookingView> {
+    const ctx = this.tenant.get();
+    return this.resourceBookings.commitRequirement({
+      tenantId: ctx.tenantId, projectId, requirementId: dto.requirementId,
+      overCapacityReason: dto.overCapacityReason ?? null, committedBy: ctx.actorId,
+    });
+  }
+
+  @Permissions('projects.resource-booking.release')
+  @Post(':projectId/resource-bookings/:bookingId/release')
+  releaseResourceBooking(
+    @Param('projectId') projectId: string,
+    @Param('bookingId') bookingId: string,
+    @Body() dto: ReleaseResourceBookingDto,
+  ): Promise<ResourceBooking> {
+    const ctx = this.tenant.get();
+    return this.resourceBookings.release({
+      tenantId: ctx.tenantId, projectId, bookingId, reason: dto.reason, actorId: ctx.actorId,
     });
   }
 

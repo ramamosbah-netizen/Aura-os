@@ -20,7 +20,8 @@ import type { ResourceFactsStore, ResourceInterval } from './resource-facts-stor
  */
 
 interface BookingRow {
-  id: string; tenant_id: string; project_id: string;
+  id: string; tenant_id: string; project_id: string; schedule_id: string | null; task_id: string | null;
+  requirement_id: string | null;
   resource_type: string; canonical_resource_id: string; unit: string; quantity: string | number;
   valid_from: Date | string; valid_to: Date | string; status: string;
   capacity_at_commitment: string | number | null; demand_at_commitment: string | number;
@@ -46,8 +47,9 @@ const rowToBooking = (r: BookingRow): ResourceBooking => ({
   id: r.id,
   tenantId: r.tenant_id,
   projectId: r.project_id,
-  // No requirement_id column in migration 0288; the resolver does not read it. Kept honest as null.
-  requirementId: null,
+  scheduleId: r.schedule_id,
+  taskId: r.task_id,
+  requirementId: r.requirement_id,
   resource: ref(r.resource_type, r.canonical_resource_id),
   unit: r.unit as ResourceUnit,
   quantity: Number(r.quantity),
@@ -98,7 +100,8 @@ export class PostgresResourceFactsStore implements ResourceFactsStore {
     // caller cannot read another tenant's rows by passing a different id.
     const { types, ids } = refArrays(refs);
     const res = await this.pool.query<BookingRow>(
-      `SELECT id, tenant_id, project_id, resource_type, canonical_resource_id, unit, quantity,
+      `SELECT id, tenant_id, project_id, schedule_id, task_id, requirement_id,
+              resource_type, canonical_resource_id, unit, quantity,
               valid_from, valid_to, status, capacity_at_commitment, demand_at_commitment,
               over_capacity_reason, committed_at, committed_by, released_reason, released_at, released_by
          FROM public.aura_projects_resource_bookings

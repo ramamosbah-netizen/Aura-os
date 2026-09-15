@@ -32,7 +32,7 @@ test.describe('WBS-linked and resourced schedule activity', () => {
       title: 'CCTV installation',
       plannedValue: 10_000,
     });
-    await post(request, '/projects/wbs', {
+    const otherWorkPackage = await post<{ id: string }>(request, '/projects/wbs', {
       projectId: other.id,
       code: '9.1',
       title: 'Other-project package',
@@ -65,7 +65,8 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     await capacityDates.nth(1).fill('2026-10-20');
     await capacityForm.getByLabel('Capacity note').fill('Day shift capacity');
     await capacityForm.getByRole('button', { name: 'Add capacity' }).click();
-    await expect(page.getByText('2 crews')).toBeVisible({ timeout: 30_000 });
+    const capacityWindows = page.getByLabel('Resource capacity windows');
+    await expect(capacityWindows.getByText(`ELV installation crew ${run}`, { exact: true })).toBeVisible({ timeout: 30_000 });
 
     const wrongUnit = await request.post(`${API}/projects/resource-capacity`, {
       headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
@@ -111,7 +112,7 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     await form.getByLabel('Resource quantity 3').fill('1');
     await form.getByRole('button', { name: 'Create' }).click();
 
-    await expect(page.getByText(`Install CCTV devices ${run}`)).toBeVisible({ timeout: 30_000 });
+    await expect(page.locator(`[title="Install CCTV devices ${run}"]`)).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('small').filter({ hasText: '1.1 · CCTV installation' })).toBeVisible();
     await expect(page.locator('small').filter({ hasText: `2 persons · Maya Planner ${run}` })).toBeVisible();
     await expect(page.locator('small').filter({ hasText: `1 units · Fluke tester ${run}` })).toBeVisible();
@@ -145,5 +146,107 @@ test.describe('WBS-linked and resourced schedule activity', () => {
       expect.objectContaining({ resource: { resourceType: 'asset', canonicalResourceId: asset.id }, quantity: 1, unit: 'units' }),
       expect.objectContaining({ resource: { resourceType: 'pool', canonicalResourceId: pool.id }, quantity: 1, unit: 'crews' }),
     ]));
+
+    const poolRequirementId = saved?.tasks[0].requirements.find((item) => item.resource.canonicalResourceId === pool.id)?.id;
+    expect(employeeRequirementId).toBeTruthy();
+    expect(poolRequirementId).toBeTruthy();
+
+    // Unknown body fields are stripped by the API validation boundary. The persisted activity
+    // requirement remains the only authority for resource identity, quantity, unit and dates.
+    const canonicalCommit = await request.post(`${API}/projects/${project.id}/resource-bookings`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: {
+        requirementId: employeeRequirementId,
+        resource: { resourceType: 'pool', canonicalResourceId: pool.id },
+        quantity: 999,
+        unit: 'crews',
+        from: '2099-01-01',
+        to: '2099-12-31',
+        projectId: other.id,
+      },
+    });
+    expect(canonicalCommit.status(), await canonicalCommit.text()).toBe(201);
+    const canonicalBooking = (await canonicalCommit.json()) as { booking: { resource: { resourceType: string; canonicalResourceId: string }; quantity: number; unit: string; from: string; to: string } };
+    expect(canonicalBooking.booking).toMatchObject({
+      resource: { resourceType: 'employee', canonicalResourceId: employee.id }, quantity: 3, unit: 'persons',
+      from: '2026-09-20', to: '2026-09-22',
+    });
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const bookingForm = page.getByTestId('resource-booking-form');
+    await expect(bookingForm).toBeVisible({ timeout: 30_000 });
+    await bookingForm.getByLabel('Uncommitted demand').selectOption(poolRequirementId!);
+    await bookingForm.getByRole('button', { name: 'Hold selected capacity' }).click();
+    await expect(page.getByText('demand 1 / capacity 2 at commitment')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('AVAILABLE', { exact: true })).toBeVisible();
+
+    const otherSchedule = await post<{ tasks: Array<{ requirements: Array<{ id: string }> }> }>(request, '/projects/schedules', {
+      projectId: other.id,
+      tasks: [{
+        wbsNodeId: otherWorkPackage.id, name: `Install competing CCTV package ${run}`,
+        plannedStart: '2026-09-20', plannedEnd: '2026-09-22', durationWorkingDays: 3,
+        requirements: [{ resource: { resourceType: 'pool', canonicalResourceId: pool.id }, quantity: 2, unit: 'crews' }],
+      }],
+    });
+    const otherRequirementId = otherSchedule.tasks[0].requirements[0].id;
+
+    const crossProjectSpoof = await request.post(`${API}/projects/${project.id}/resource-bookings`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: { requirementId: otherRequirementId },
+    });
+    expect(crossProjectSpoof.status()).toBe(400);
+
+    const silentOverrun = await request.post(`${API}/projects/${other.id}/resource-bookings`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: { requirementId: otherRequirementId },
+    });
+    expect(silentOverrun.status()).toBe(400);
+    expect(await silentOverrun.text()).toContain('requires a reason');
+
+    const governedOverrun = await request.post(`${API}/projects/${other.id}/resource-bookings`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { requirementId: otherRequirementId, overCapacityReason: 'approved recovery subcontract crew' },
+    });
+    expect(governedOverrun.status(), await governedOverrun.text()).toBe(201);
+    const competingBooking = (await governedOverrun.json()) as { booking: { id: string }; assessment: { feasibility: string }; resourceConflict: { projectsInvolved: string[] } };
+    expect(competingBooking.assessment.feasibility).toBe('CONFLICTED');
+    expect(competingBooking.resourceConflict.projectsInvolved).toEqual(expect.arrayContaining([project.id, other.id]));
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('Shared-resource conflict involves 2 projects on 3 day(s).')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('CONFLICTED', { exact: true })).toBeVisible();
+
+    const releaseCompeting = await request.post(`${API}/projects/${other.id}/resource-bookings/${competingBooking.booking.id}/release`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data: { reason: 'recovery crew reassigned' },
+    });
+    expect(releaseCompeting.status(), await releaseCompeting.text()).toBe(201);
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByText('AVAILABLE', { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    const projectBookings = await request.get(`${API}/projects/${project.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    expect(projectBookings.ok(), await projectBookings.text()).toBe(true);
+    const heldPoolBooking = ((await projectBookings.json()) as Array<{ booking: { id: string; requirementId: string; status: string } }>).find((view) => view.booking.requirementId === poolRequirementId)?.booking;
+    expect(heldPoolBooking?.status).toBe('held');
+    const poolRelease = page.getByLabel(`Release reason ${heldPoolBooking!.id}`);
+    await poolRelease.fill('activity resequenced after coordination');
+    await poolRelease.locator('..').getByRole('button', { name: 'Release', exact: true }).click();
+    await expect(page.getByText('RELEASED', { exact: true })).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Release reason: activity resequenced after coordination')).toBeVisible();
+
+    // Auth-ON proof: scope and function are both required. A project planning grant works only on
+    // its project; a Site Engineer membership does not inherit booking functionality; the governed
+    // organisation grant remains able to inspect all projects.
+    const siteOnly = await post<{ id: string }>(request, '/projects/projects', { title: `Site-only plan ${run}`, reference: `SITE-${run}` });
+    await post(request, `/projects/${project.id}/members`, { userId: 'u-e2e-viewer', roleId: 'r-planning-engineer' });
+    await post(request, `/projects/${siteOnly.id}/members`, { userId: 'u-e2e-viewer', roleId: 'r-site-engineer' });
+    const password = process.env.E2E_PASSWORD ?? process.env.AUTH_DEV_PASSWORD;
+    expect(password, 'project-scope proof requires the seeded member password').toBeTruthy();
+    const memberLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
+    expect(memberLogin.ok(), await memberLogin.text()).toBe(true);
+    const memberToken = ((await memberLogin.json()) as { token: string }).token;
+    const memberStatus = async (id: string) => (await request.get(`${API}/projects/${id}/resource-bookings`, { headers: { Authorization: `Bearer ${memberToken}` } })).status();
+    expect(await memberStatus(project.id), 'correct project + planning permission').toBe(200);
+    expect(await memberStatus(other.id), 'wrong project').toBe(403);
+    expect(await memberStatus(siteOnly.id), 'correct project + wrong functional permission').toBe(403);
+    const orgStatus = await request.get(`${API}/projects/${other.id}/resource-bookings`, { headers: apiAuthHeaders() });
+    expect(orgStatus.status(), 'organisation-governed projects permission remains allowed').toBe(200);
   });
 });

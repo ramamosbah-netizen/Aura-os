@@ -2647,7 +2647,7 @@
       "stages": [
         "Procurement"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "authority": "Procurement / Inventory",
       "evidence": [
         "R-J26"
@@ -2655,17 +2655,17 @@
       "source": "apps/api/test/depth-audit-probe.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Reused J3-03: partial receipt marks full order received.",
-      "acceptanceProof": "Receive 1 of 100, retain 99 outstanding and correct management exposure."
+      "currentBehavior": "AN ORDER IS A SET OF POSITIONS, NOT A PERCENTAGE. The recorded defect — receiving one item of an order for a hundred marked the whole order received — had a cause the containment could not reach: the order carried ONE scalar quantity and no items, so “99 still outstanding” had nothing to be outstanding ON. Wave 4 iteration 2 stopped the false completion by refusing to conclude anything from an unknown quantity; this produces the true answer instead. Migration 0336 gave the order its lines and 0338 gave the delivery note its own, each receipt line answering ONE order line — `po_line_id` is required, because a receipt against nothing settles nothing. Each line is settled or still owed, and the order reaches `received` only when EVERY line is settled; a single figure across the order would say “most of it” and leave nobody able to tell which material to chase. ACCEPTED IS NOT DELIVERED: a rejected quantity arrived, was inspected and went back — real, recorded against the supplier, and NOT progress, because the material is still owed. Accepted and rejected are separate columns and only the accepted reduces what is outstanding; a rejection costs a reason, because one nobody explained cannot be acted on. The status is derived and returns NOTHING in two different situations that must not conclude — an order with no lines has no positions to measure, and an order where nothing has been accepted has not changed. Reconciliation runs on the receipt LINE rather than the note’s creation, because a note is created before anybody has written what is on it. The module seam is unchanged: Inventory says what arrived, Procurement decides what it means for the order.",
+      "acceptanceProof": "Auth-ON HTTP and browser proof against PostgreSQL, JWT on. THE RECORDED CASE: receive 1 of 100 and the order is `partially_received`, never `received`; the remaining 99 on a SECOND note settles it, so receipts are cumulative across notes rather than per note. A SET OF POSITIONS: every camera received while the cable is still wholly owed leaves the order partial, and only the cable’s arrival completes it. ACCEPTED IS NOT DELIVERED: a wholly rejected delivery leaves the order untouched at `issued`, and a part-rejected one counts only its accepted part. REFUSALS: a rejection with no reason, a receipt line recording nothing arriving, and a receipt line naming no order line are each refused; an order with NO lines is left exactly where it is, because its position cannot be measured. EXPOSURE: outstanding quantity and outstanding value per line, at the price ordered, on the API and in the event payload. BROWSER, one Auth-ON run end to end: a requisition approved so its estimate is carried; the order showing 12 nr in the material’s own unit with the carried price marked “estimate — not agreed with a supplier” and provenance “Bought direct”; a buyer adding 250 m at an agreed price with no provisional marker; the order issued; a storekeeper recording 1 nr against the camera line from the goods-receipt register; the order page then reading “1 of 12 nr received, 11 outstanding” with the cable wholly outstanding, AED 1,600.00 still committed and the status settling at partially received; then 50 m rejected with a reason, shown as “50 m rejected — not received” beside the accepted figure with the cable still owed and the exposure unchanged. DEFECTS FOUND AND FIXED ON THE WAY, all introduced by this work: a constructor parameter inserted mid-list rebound every later one in the cross-module reactor; the same parameter then injected NOTHING because a union-typed parameter emits `Object` in design:paramtypes — the defect PLN-04 already paid for on a milestone receipt — caught by the Auth-ON e2e rather than by review, since in-memory construction passes it positionally; and a hydration mismatch from formatting dates with the runtime’s own locale on a server-rendered client component, surfaced by the browser console. PERSISTENCE: `aura_inventory_goods_receipt_lines` RLS ENABLED and FORCED with a policy, verified live on a database rebuilt from zero (269 tenant-scoped tables, all enabled, forced and policied). ACCEPTED LIMITS: `BUY-05` has no next-role receipt clause of its own — its acceptance proof asks for the position and the exposure, both proved; the handoff it participates in is `BUY-07` (material delivery to work package), which remains open. Issue and return netting is `BUY-06` and is untouched here."
     },
     {
       "id": "BUY-06",
@@ -7570,13 +7570,13 @@
     },
     {
       "id": "J3-03",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "WRONG BEHAVIOR",
-      "currentBehavior": "استلام 1 من 100 يحوّل PO إلى received، دون تعبير دقيق عن المتبقي.",
-      "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J3-03",
+      "currentBehavior": "Receiving part of an order now leaves the rest outstanding, per line. A purchase order carries lines (migration 0336) and a delivery note carries its own (0338), each receipt line answering one order line; the order reaches received only when every line is settled, and the remainder is expressed exactly — quantity outstanding per line, in that material’s own unit, with the money still committed at the price it was ordered at. A rejected quantity is recorded beside the accepted one and never counts as progress.",
+      "evidence": "FRESH Wave 4 slice 2 and the BUY-05 slice: modules/procurement/src/domain/order-receipt.test.ts; modules/procurement/src/domain/purchase-order-line.test.ts; modules/procurement/src/purchase-order-line.service.test.ts; apps/api/test/partial-receipt.e2e-spec.ts; apps/api/test/order-lines.e2e-spec.ts; apps/web/e2e/procurement-order-receipt.spec.ts",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "BUY-05"
       ],
@@ -7591,7 +7591,7 @@
       "expectedOperationalBehavior": "Partial receipt works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Receive 1 of 100, retain 99 outstanding and correct management exposure."
+      "acceptanceProof": "PASSED: receive 1 of 100 and the order is partially_received with 99 outstanding, never received; the balance on a second note completes it; one line received while another is owed leaves the order partial; a wholly rejected delivery moves nothing and a part-rejected one counts only its accepted part; a rejection with no reason is refused; an order with no lines is left where it is because its position cannot be measured; and the browser shows the position, the outstanding quantity per line and the money still committed."
     },
     {
       "id": "J3-04",
@@ -8538,7 +8538,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 18,
+      "COMPLETE": 19,
       "PARTIAL": 89,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -8546,7 +8546,7 @@
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 8,
-      "WRONG_BEHAVIOR": 13,
+      "WRONG_BEHAVIOR": 12,
       "UNREACHABLE": 0,
       "UNVERIFIED": 48,
       "NOT_AUDITED": 0

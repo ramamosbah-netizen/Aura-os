@@ -1117,3 +1117,16 @@ remains open.
 
 Nothing else is proposed. `BUY-06` (stock issue and return) is untouched — its recorded defect is
 about issue/return netting, which this slice does not address.
+
+### Applied
+
+The programme owner accepted both. **`BUY-05` is COMPLETE** and **gap record `J3-03` is
+CLOSED / VERIFIED.** The register moves to **19 of 180 COMPLETE**, WRONG_BEHAVIOR falls from 13 to
+12, and four of the forty-six gap records are now closed.
+
+The UI was also brought onto the application’s own design system in the same pass — the panels had
+been built with bespoke inline styles while the rest of the app uses `panel`, `data-table`,
+`badge`, `btn` and `input`, so the new screens read as a different application. Behaviour
+unchanged, both browser specs re-run green on the restyled panels.
+
+`BUY-05` is one of the sixteen pinned supplier/buyer proofs, so **fourteen remain**.

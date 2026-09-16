@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { currentUser, getJson } from '@/lib/api';
+import TransmittalReceiptCell from '@/components/transmittal-receipt-cell';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,6 +35,9 @@ export default async function TransmittalRegisterPage({ searchParams }: { search
   const { projectId } = await searchParams;
   const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
   const list = (await getJson<Transmittal[]>(`/api/doccontrol/transmittals${scope}`)) ?? [];
+  // Who is looking, so the accept action is offered only to somebody on the distribution. The
+  // server refuses anybody else regardless; this just stops offering a button that will be refused.
+  const viewer = await currentUser();
   const rows = [...list].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (
@@ -45,8 +49,9 @@ export default async function TransmittalRegisterPage({ searchParams }: { search
       </div>
       <h1 style={st.h1}>Transmittal Register</h1>
       <p style={st.sub}>
-        Every conveyance of documents to a recipient, at exact revisions. Each transmittal walks
-        Draft → Sent → Received → Acknowledged, and the acknowledgement is recorded.
+        Every conveyance of documents to named recipients, at exact revisions. Each transmittal
+        walks Draft → Sent → Received → Acknowledged, and only the people it was addressed to can
+        acknowledge it — one of them answering is not all of them.
       </p>
 
       {rows.length === 0 ? (
@@ -55,7 +60,7 @@ export default async function TransmittalRegisterPage({ searchParams }: { search
         <div style={st.tableWrap}>
           <table style={st.table} data-testid="transmittal-register">
             <thead>
-              <tr>{['Transmittal', 'Title', 'Sender', 'Recipient', 'Status', 'Sent'].map((h) => <th key={h} style={st.th}>{h}</th>)}</tr>
+              <tr>{['Transmittal', 'Title', 'Sender', 'Recipient', 'Receipt', 'Status', 'Sent'].map((h) => <th key={h} style={st.th}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {rows.map((t) => (
@@ -64,6 +69,11 @@ export default async function TransmittalRegisterPage({ searchParams }: { search
                   <td style={st.td}>{t.title}</td>
                   <td style={st.tdMuted}>{t.sender ?? '—'}</td>
                   <td style={st.tdMuted}>{t.recipient ?? '—'}</td>
+                  {/* WHO actually has it. The status beside this says where the conveyance is;
+                      this says who has answered — and one person answering is not three. */}
+                  <td style={st.td}>
+                    <TransmittalReceiptCell transmittalId={t.id} viewerId={viewer?.sub ?? null} />
+                  </td>
                   <td style={st.td}><span style={statusStyle(t.status)}>{STATUS_LABEL[t.status] ?? t.status}</span></td>
                   <td style={st.tdMuted}>{fmt(t.sentAt)}</td>
                 </tr>

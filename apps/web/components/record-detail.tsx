@@ -49,7 +49,7 @@ export default function RecordDetail({
           <div style={s.kind}>{type}</div>
           <h1 style={s.h1}>{title}</h1>
         </div>
-        {status ? <span style={s.status}>{status}</span> : null}
+        {status ? <span style={s.status} data-testid="record-status">{status}</span> : null}
       </div>
 
       <section style={s.panel}>

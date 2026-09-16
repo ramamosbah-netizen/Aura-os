@@ -1001,3 +1001,119 @@ browser layer is not built.
 `BUY-05` is proposed **WRONG_BEHAVIOR → PARTIAL**: the recorded wrong behaviour is gone and proven
 gone, with one named DoD layer outstanding. `BUY-06` (stock issue and return) and `BUY-07` (material
 delivery to work package) are untouched.
+
+## Iteration 7 — Procurement UI: what an order buys, and where it stands
+
+Slices 2 and 1b both ended with the same sentence: *governed and proven to the API layer, with no
+screen*. The debt had accumulated across two capabilities, so it is closed in one pass rather than
+left to grow while `BUY-06` and `BUY-07` add more.
+
+Three things had to become visible, and each one exists because leaving it invisible lets a reader
+believe something untrue.
+
+### Materials in their own units
+
+An order showed a title and one number. It now shows its lines, each naming a canonical material
+with its make and model, and **every quantity travels with the unit the material is counted in** —
+`12 nr` and `250 m`, never a bare `12`. The unit is shown beside the quantity field the moment a
+material is chosen and is never typed, because a requisition or an order cannot invent a unit the
+catalogue does not use.
+
+### A provisional price that LOOKS provisional
+
+The sharpest thing on the screen, and it is the UI half of the constraint pinned before `BUY-05`.
+
+A price carried from a requisition is the requisitioner's budget guess, binding on nobody. Shown
+identically to a negotiated price it becomes a commitment the moment somebody issues the order — the
+same amount, a completely different commercial standing. So a carried line reads **"estimate — not
+agreed with a supplier"** under its price, and a line a buyer priced reads nothing, because placing
+an order at a price is agreeing it. A line written before the distinction existed says **"basis not
+recorded"** rather than being drawn as agreed.
+
+### Where the order stands on delivery
+
+The `BUY-05` defect was visible on exactly this screen: receiving one item of an order for a hundred
+showed RECEIVED, and there was nowhere for the remainder to appear.
+
+The delivery panel now says it in a sentence a person chasing it can act on —
+*"line 1 (CAM-…): 1 of 12 nr received, 11 outstanding"* — with a row per position showing ordered,
+received, outstanding and the money still committed, and the exposure totalled beneath. Three
+refusals to round are visible rather than implied:
+
+- **a rejected quantity is shown BESIDE the accepted figure**, labelled *"50 m rejected — not
+  received"*, never added to it: the material is still owed;
+- **an over-delivery is flagged** rather than hidden, and never produces a negative debt;
+- **an order with no lines says its position cannot be measured**, rather than drawing an empty table
+  that reads as "nothing has arrived".
+
+The panel reads the API's composed position rather than adding up its own figures. A screen that
+computed its own outstanding balance would be a second implementation of the rule, free to disagree
+with the one that decides the order's status.
+
+### Receiving, on the register
+
+A goods receipt note could be created and then never say what was on it. Opening a note on the
+register now records what arrived **against the ordered line it answers**, with accepted and rejected
+entered separately and the rejection reason asked for only when something is being rejected — and
+then insisted on by the server.
+
+### Found while building it
+
+- **A hydration mismatch I introduced.** Moving the register into a client component made its dates
+  format twice — once in the server's locale and time zone, once in the browser's — so React
+  discarded the markup, and the date a reader saw could differ from the one the server sent. Fixed
+  with the shared `DISPLAY_LOCALE` / `DISPLAY_TIME_ZONE` the rest of the app already uses. **Surfaced
+  by the browser run's console, not by any assertion.**
+- **A server-rendered expander is inert until hydration.** The first click on "What arrived" can land
+  before React takes over and do nothing. The spec now retries until the panel is actually open,
+  which asserts the outcome instead of guessing a delay.
+- **A bare fragment inside a `.map()`** cannot carry a key; replaced with a keyed `Fragment` so React
+  reconciles rows by identity rather than position.
+- **The order status in the header is server-rendered while the reactor that moves it runs off the
+  outbox**, so first paint can legitimately still show `issued`. The spec reloads until it settles
+  rather than asserting against a race — what matters is where it lands, and that it is never
+  `received` on the way there.
+
+### What was proven — Auth-ON, in the browser
+
+One run, end to end: a requisition approved so its estimate is carried; the drafted order showing
+`12 nr`, the carried price marked **estimate — not agreed with a supplier**, provenance **Bought
+direct** and a total of `AED 1,200.00`; a buyer adding `250 m` of cable at an agreed price with **no**
+provisional marker and the total moving to `AED 1,700.00`; the order issued; a storekeeper recording
+**1 nr** against the camera line; the order page then reading **"1 of 12 nr received, 11
+outstanding"**, the cable still wholly outstanding at `250 m`, exposure `AED 1,600.00`, and the order
+settling at **partially received** — never `received`; then **50 m rejected with a reason**, shown as
+*"50 m rejected — not received"* with the cable still owed at `250 m` and the exposure unchanged.
+
+### Regression at this checkpoint
+
+The verification database was lost and rebuilt from zero again — **338 migrations from nothing**, and
+**RLS fitness 269 tenant-scoped tables, all ENABLED, FORCED and policied**, up from 267, with the
+order-line and receipt-line tables verified live rather than asserted by their own migrations.
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks** |
+| `pnpm build` | **27/27 tasks** |
+| `pnpm test` | **51/51 tasks** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| API e2e | **62 files passed, 12 failed (74)** — the identical pre-existing set |
+| Browser, Auth-ON | **20 passed**, 1 skipped — this spec plus the requisition spec, the five Wave 3 specs and the three touching these screens |
+| `pnpm lint` | **0 errors**, 686 warnings (683 before; three of the same pre-existing class in the new files) |
+| Migration policy | **338 files**, sequential, `@DOWN` present |
+
+### Reconciliation
+
+`BUY-05`'s frozen acceptance proof — *"Receive 1 of 100, retain 99 outstanding and correct management
+exposure"* — is met at every layer the DoD asks for: domain, persistence, API, permissions, UI, actual
+output and browser. The gap record `J3-03` behind it is false in both halves.
+
+**Proposed: `BUY-05` WRONG_BEHAVIOR → COMPLETE, and gap record `J3-03` OPEN → CLOSED / VERIFIED.**
+
+One clause deserves naming rather than assuming: `BUY-05` has no *next-role receipt* clause of its
+own — its acceptance proof asks for the position and the exposure, both of which are proved. The
+handoff it participates in is `BUY-07` (material delivery to work package), which is untouched and
+remains open.
+
+Nothing else is proposed. `BUY-06` (stock issue and return) is untouched — its recorded defect is
+about issue/return netting, which this slice does not address.

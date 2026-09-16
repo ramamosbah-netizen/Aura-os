@@ -1,7 +1,9 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { Permissions } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
+import { GoodsReceiptService } from '@aura/inventory';
 import {
+  describeOutstanding,
   type OrderProvenance,
   type OrderTotal,
   type PurchaseOrderLine,
@@ -43,7 +45,11 @@ class EditOrderLineDto {
  */
 @Controller('procurement/purchase-orders/:poId/lines')
 export class PurchaseOrderLinesController {
-  constructor(private readonly lines: PurchaseOrderLineService) {}
+  constructor(
+    private readonly lines: PurchaseOrderLineService,
+    private readonly receipts: GoodsReceiptService,
+    private readonly tenant: TenantContext,
+  ) {}
 
   @Get()
   @Permissions('procurement.po.view')
@@ -56,6 +62,24 @@ export class PurchaseOrderLinesController {
   @Permissions('procurement.po.view')
   summary(@Param('poId') poId: string): Promise<{ total: OrderTotal; provenance: OrderProvenance; derived: boolean }> {
     return this.lines.summary(poId);
+  }
+
+  /**
+   * Where this order stands on delivery, line by line (`BUY-05`).
+   *
+   * Composed HERE because it is a cross-module reading and the app layer is where those are made:
+   * Inventory says how much of each line arrived and how much was sent back, Procurement decides
+   * what that means for the order. Neither module reaches into the other.
+   */
+  @Get('receipt')
+  @Permissions('procurement.po.view')
+  async receipt(@Param('poId') poId: string) {
+    const lines = await this.lines.listLines(poId);
+    const { accepted, rejected } = await this.receipts.receiptPositions(
+      this.tenant.get().tenantId, lines.map((l) => l.id),
+    );
+    const position = await this.lines.receipt(poId, accepted, rejected);
+    return { ...position, description: describeOutstanding(position) };
   }
 
   @Post()

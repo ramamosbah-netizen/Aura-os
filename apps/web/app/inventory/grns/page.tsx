@@ -1,12 +1,15 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import GrnCreate from '../../../components/grn-create';
+import GrnList from '../../../components/grn-list';
 
 export const dynamic = 'force-dynamic';
 
 interface GoodsReceipt {
   id: string;
   title: string;
+  /** The order this note is against — what its lines are received AGAINST. */
+  poId: string | null;
   poTitle: string | null;
   supplierName: string | null;
   projectName: string | null;
@@ -63,48 +66,8 @@ export default async function GoodsReceiptsPage() {
       <section style={st.panel}>
         {grns === null ? (
           <p style={st.muted}>API offline.</p>
-        ) : grns.length === 0 ? (
-          <p style={st.muted}>No goods receipts yet — record one against an issued PO above.</p>
         ) : (
-          <table style={st.table}>
-            <thead>
-              <tr>
-                {['Goods', 'Against PO', 'Supplier', 'Project', 'Status', 'Value', 'Created', ''].map((h) => (
-                  <th key={h} style={st.th}>
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {grns.map((g) => (
-                <tr key={g.id}>
-                  <td style={st.td}>{g.title}</td>
-                  <td style={st.tdMuted}>{g.poTitle ?? '—'}</td>
-                  <td style={st.tdMuted}>{g.supplierName ?? '—'}</td>
-                  <td style={st.tdMuted}>{g.projectName ?? '—'}</td>
-                  <td style={st.td}>
-                    <span style={st.tag}>{g.status}</span>
-                  </td>
-                  <td style={st.td}>{money(g.value)}</td>
-                  <td style={st.tdMuted}>{fmt(g.createdAt)}</td>
-                  {/* The receipt note print view was routable but unreachable — a GRN could be
-                      recorded and never produced as the document a supplier is paid against. */}
-                  <td style={st.td}>
-                    <a
-                      href={`/inventory/grns/${g.id}/print`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      title="Print goods receipt note (PDF)"
-                      style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
-                    >
-                      🖨
-                    </a>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <GrnList grns={grns} />
         )}
       </section>
     </div>

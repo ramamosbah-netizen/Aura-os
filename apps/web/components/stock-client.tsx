@@ -4,6 +4,7 @@ import { type CSSProperties, Fragment, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import ProjectIssueBar from './project-issue-bar';
 
 interface StockItem {
   id: string;
@@ -211,6 +212,22 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                         <button type="button" style={s.inBtn} onClick={() => move(it.id, 'in')}>Receive (in)</button>
                         <button type="button" style={s.outBtn} onClick={() => move(it.id, 'out')}>Issue (out)</button>
                       </div>
+                      {/*
+                        The bar above moves stock in and out of the WAREHOUSE and carries no project.
+                        Issuing to a job is a different act with a different consequence — it moves
+                        the BOQ item's issued position, which progress and wastage read from — so it
+                        has its own controls and shows what is currently out there before anybody
+                        types a return.
+                      */}
+                      <ProjectIssueBar
+                        stockItemId={it.id}
+                        unit={it.unit}
+                        onMoved={async () => {
+                          const d = await fetch(`/api/inventory/stock/${it.id}`);
+                          if (d.ok) setDetail(await d.json());
+                          await refresh();
+                        }}
+                      />
                       <div style={s.moveBar}>
                         <span style={s.roLabel}>Reorder policy:</span>
                         <input style={s.inputXs} placeholder="Level" type="number" value={roLevel} onChange={(e) => setRoLevel(e.target.value)} />

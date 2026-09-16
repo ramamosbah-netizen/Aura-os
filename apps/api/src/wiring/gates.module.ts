@@ -2,12 +2,12 @@ import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
 import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY } from '@aura/commissioning';
-import { InventoryModule, StockService, MaterialService } from '@aura/inventory';
+import { InventoryModule, StockService, MaterialService, ISSUED_POSITION } from '@aura/inventory';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
 import { QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ProcurementModule, RfqService } from '@aura/procurement';
-import { ProjectsModule, WbsService, CbsService } from '@aura/projects';
+import { ProjectsModule, WbsService, CbsService, QuantityLedgerService } from '@aura/projects';
 import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH } from '@aura/projects';
 
 /**
@@ -47,6 +47,22 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // Procurement declares the `MATERIAL_CATALOGUE` port and never imports Inventory; the shapes
     // match structurally and the wire is made here.
     { provide: MATERIAL_CATALOGUE, useExisting: MaterialService },
+
+    // ── You cannot return more than you took (BUY-06) ────────────────────────────────────────
+    // Inventory owns what is in the warehouse; the QUANTITY POSITION of a BOQ item belongs to
+    // Projects. Inventory declares the fact it needs — how much is currently issued — and the wire
+    // is made here, so neither module reaches into the other. Unbound, a project-coded RETURN is
+    // refused rather than waved through: optional dependency, never optional evidence.
+    {
+      provide: ISSUED_POSITION,
+      inject: [QuantityLedgerService],
+      useFactory: (ledger: QuantityLedgerService) => ({
+        async netIssued(tenantId: string, _projectId: string, boqItemId: string) {
+          const position = await ledger.position(tenantId, boqItemId);
+          return typeof position?.issued === 'number' ? position.issued : null;
+        },
+      }),
+    },
 
     // Canonical work-package and cost coding on a requisition line, each checked against the
     // requisition's OWN project — AWD-05's rule, asked by a new caller. Composed from both node
@@ -125,6 +141,6 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // projection of code, name and unit. Nothing here moves stock.
     { provide: INVENTORY, useExisting: StockService },
   ],
-  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
+  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
 })
 export class GatesModule {}

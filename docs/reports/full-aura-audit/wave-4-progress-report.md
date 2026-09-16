@@ -1130,3 +1130,128 @@ been built with bespoke inline styles while the rest of the app uses `panel`, `d
 unchanged, both browser specs re-run green on the restyled panels.
 
 `BUY-05` is one of the sixteen pinned supplier/buyer proofs, so **fourteen remain**.
+
+## Iteration 8 — BUY-06: material issued to a job, and what comes back
+
+The frozen acceptance proof is one sentence — *"Issue 20, return 5, retry both; net issued remains
+15"* — and the investigation found that the part already covered was the easy half.
+
+### What was already true
+
+`quantity-ledger.e2e-spec.ts` has proved **20 − 5 = 15** since Wave 3, and it passes. The ledger post
+is keyed on the persisted movement id, so the original `J3-02` dedupe collision — issue and return
+sharing a key and cancelling each other — is genuinely gone.
+
+### What was not
+
+**The screen could not issue to a job at all.** The stock page's movement form posts
+`{ direction, quantity, reason, unitCost }` and nothing else — no project, no BOQ item. The
+quantity-ledger reactor starts with `if (!boqItemId || !projectId) return`, so every movement a
+storekeeper could actually make posted **nothing**. That is the second half of `J3-02`'s record —
+*"fresh proofs returned no ISSUED position"* — and it is not a ledger defect at all: the capability
+was unreachable from the screen it belongs on.
+
+**And a return was unbounded.** Measured against the running system before anything was written:
+issue 20, return 50, and the BOQ item's position read
+
+| | |
+| --- | --- |
+| `issued` | **−30** |
+| `onSite` | **30** |
+| `wastage` | **−30** |
+
+Nothing refused it. *"We have sent minus thirty metres to site"* is not a fact, and progress, wastage
+and remaining-to-order all read from that position. That is more consequential than the retry clause,
+because it corrupts the position silently and the retry clause was already satisfied.
+
+### You cannot return more than you took
+
+A physical fact, not a policy: material issued to a project can come back, but only material that
+actually went. The rule is measured against the **net** — 20 issued and 5 returned leaves 15 that can
+come back, even though 20 went out in total.
+
+`netIssued` NULL is **not** a pass. A return whose legitimacy nobody could check would be recorded
+against an unverified balance, and this is the one direction where being wrong corrupts the position
+without anybody noticing — optional dependency, never optional evidence.
+
+The boundary is respected: Inventory owns the warehouse, the BOQ item's quantity position belongs to
+Projects, and Inventory does not import it. It declares `ISSUED_POSITION` and the composition root
+binds the quantity ledger — the same shape as the material catalogue.
+
+An **uncoded** warehouse receipt is untouched by the rule: it is not a return from a project and has
+no issued balance to be measured against.
+
+### On screen
+
+The stock item now carries its own issue/return controls: a project, a BOQ item (only those with a
+baseline — issuing against an unmeasured item would post a quantity to nothing), a quantity in the
+item's own unit, and both acts.
+
+**What is actually out there is shown before anything is typed**, because it is the balance the
+server will measure a return against — a storekeeper who cannot see it meets the refusal as a
+surprise. With nothing issued, returning is not even offered.
+
+### Found while building it
+
+- **The panel read the position once, immediately** — and the position is posted by a reactor off the
+  outbox, so for a moment after the response the ledger still says what it said before. Reading once
+  showed a storekeeper a balance their own movement had already changed. It now polls briefly until
+  it moves and stops either way. Caught by the browser run.
+- **A deliberate 409, not an accidental 400.** The refusal is a conflict with the current issued
+  balance rather than a malformed request, so it is worded with *"insufficient"* — which the HTTP
+  taxonomy maps to 409 — instead of relying on whatever `cannot` happened to produce.
+- **`onSite` is `received − issued`**, so warehouse-issued material legitimately makes it negative.
+  My first assertion treated it as "what is on site" and was wrong; the code is right for its own
+  definition. Corrected the test rather than the position, and said so in the spec.
+
+### What was proven
+
+**7 domain tests** — part, all, more-than-issued, nothing-issued, an already-negative position not
+deepened, an unreadable balance refused, and the net-versus-gross distinction.
+
+**7 Auth-ON API tests, JWT on** — issue 20 / return 5 / net 15; **retry both**, replaying the issue
+AND the return onto the spine exactly as the relay would after a failure, with the net unmoved; a
+return of 50 against 20 refused 409 naming how much is out, and the position untouched with no
+negative wastage; the refusal measured against the net (16 refused, 15 accepted, net 0); a return
+against a project never issued the material refused; an uncoded warehouse receipt unaffected;
+unauthenticated 401.
+
+**Browser, Auth-ON** — nothing issued so returning is not offered; issue 20 and the panel reads
+*"20 m currently issued … the most that can come back"*; return 5 and it reads 15; a return of 16
+refused in the domain's own words with the position unchanged; then the whole 15 comes back.
+
+### Regression at this checkpoint
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks** |
+| `pnpm build` | **27/27 tasks** |
+| `pnpm test` | **51/51 tasks** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| API e2e | **63 files passed, 12 failed (75)** — the identical pre-existing set; passing tests rose 450 → 457 |
+| Browser, Auth-ON | **21 passed**, 1 skipped |
+| `pnpm lint` | **0 errors**, 686 warnings |
+| Migration policy | **338 files**, sequential — no migration was needed for this slice |
+
+### Reconciliation
+
+`BUY-06`'s frozen acceptance proof: *"Issue 20, return 5, retry both; net issued remains 15."*
+
+| Clause | State |
+| --- | :---: |
+| Issue 20 | **proved**, API and browser |
+| Return 5 | **proved** |
+| Retry both | **proved** — both movements replayed onto the spine, net unmoved |
+| Net issued remains 15 | **proved** |
+
+Every clause is met, at the API and on screen, and `J3-02`'s two recorded symptoms are both false:
+the dedupe collision is gone, and the ISSUED position moves because the screen can finally code a
+movement to a project.
+
+**Proposed: `BUY-06` WRONG_BEHAVIOR → COMPLETE, and gap record `J3-02` OPEN → CLOSED / VERIFIED.**
+
+Recorded rather than absorbed: the unbounded return was found by probing the running system, not by
+the acceptance proof, which does not mention it. It is fixed and proved, and it is worth saying that
+the frozen sentence would have passed without it.
+
+`BUY-07` (material delivery to work package) is untouched and remains the open handoff.

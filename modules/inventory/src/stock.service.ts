@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, makeEvent, mulMoney } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import {
@@ -22,6 +22,8 @@ import {
 } from './domain/stock';
 import { computeFifo, fifoIssueCost, fifoReceiptState, type FifoMove } from './domain/fifo';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
+import { ISSUED_POSITION, type IssuedPosition } from './issued-position.port';
+import { mayReturnFromProject } from './domain/material-return';
 
 /**
  * Stock service — the on-hand side of Inventory. Owns `aura_inventory_stock_items` and its
@@ -35,6 +37,15 @@ export class StockService {
     @Inject(STOCK_STORE) private readonly store: StockStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    /**
+     * How much of a material is currently issued to a project's BOQ item.
+     *
+     * OPTIONAL and LAST — this service is built positionally elsewhere. Explicit @Inject because a
+     * union-typed parameter emits `Object` in design:paramtypes and Nest would silently bind
+     * nothing, which is the defect PLN-04 paid for and BUY-05 repeated. Unbound, a project-coded
+     * RETURN is refused rather than waved through: optional dependency, never optional evidence.
+     */
+    @Optional() @Inject(ISSUED_POSITION) private readonly issuedPosition: IssuedPosition | null = null,
   ) {}
 
   async createItem(input: NewStockItem): Promise<StockItem> {
@@ -86,6 +97,21 @@ export class StockService {
   ): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
+
+    /**
+     * YOU CANNOT RETURN MORE THAN YOU TOOK (`BUY-06`).
+     *
+     * Only for a return CODED TO A PROJECT's BOQ item — an uncoded receipt is a warehouse movement
+     * with no issued balance to be measured against. Checked before anything is written, because a
+     * movement that should not exist must not exist even briefly.
+     */
+    if (direction === 'in' && coding?.projectId && coding?.boqItemId) {
+      const netIssued = this.issuedPosition
+        ? await this.issuedPosition.netIssued(item.tenantId, coding.projectId, coding.boqItemId)
+        : null;
+      const verdict = mayReturnFromProject(netIssued, Number(toBaseQty(item, quantity, unit)));
+      if (!verdict.allowed) throw new Error(verdict.reason);
+    }
 
     const factor = uomFactor(item, unit);
     const baseQty = toBaseQty(item, quantity, unit);

@@ -25,6 +25,8 @@ export * from './storage-location-store';
 export * from './in-memory-storage-location-store';
 export * from './postgres-storage-location-store';
 export * from './storage-location.service';
+export * from './domain/material-return';
+export * from './issued-position.port';
 export * from './domain/goods-receipt-line';
 export * from './goods-receipt-line-store';
 export * from './in-memory-goods-receipt-line-store';

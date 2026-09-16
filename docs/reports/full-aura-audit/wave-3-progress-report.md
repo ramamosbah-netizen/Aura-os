@@ -1724,14 +1724,19 @@ to. `ENG-03` needs the same investigation first, though nothing yet suggests it 
 ### The two gap records this wave owns beyond the pinned list
 
 `F-07` (carried by `PLN-01`) and `F-08` (carried by `PLN-06`) describe one defect: *the planner
-reaches a working solver but cannot build the WBS/resource inputs it needs on that screen.* Their
-stated resolution is *"WBS-linked task, dependencies, named resources, availability conflict and
-recipient handoff"*, and all five are now proven Auth-ON. The gap records are discharged.
+reaches a working solver but cannot build the WBS/resource inputs it needs on that screen.* A
+WBS-linked task, dependencies, named resources, an availability conflict and a recipient handoff are
+all now proven Auth-ON.
 
-Their carrying capability rows stay PARTIAL for gaps beyond those records: `PLN-01` for cost
-continuity through the same activity identity, and `PLN-06` for the Fleet/Assets half of the
-availability bridge. Both are named, both sit in reading B or C rather than A, and neither is a
-Wave 3 gate clause.
+**This paragraph originally concluded that the gap records are therefore discharged. That was
+wrong**, and §3 of the closure proof below corrects it. Those five items are the wave's scope
+bullets, not either record's acceptance proof. `F-07` asks for cost continuity through the same
+activity identity and `F-08` for the HR/Fleet availability bridge, and both are still open — so
+both records remain **OPEN**. A record is discharged by its own acceptance proof or not at all.
+
+Those same open items are what keep the carrying rows PARTIAL: `PLN-01` for cost continuity through
+the same activity identity, and `PLN-06` for the Fleet/Assets half of the availability bridge.
+Neither is a Wave 3 gate clause, and neither is netted against the gate.
 
 ### Sequence to closure
 
@@ -1859,17 +1864,22 @@ Cost continuity through the same activity identity and the Fleet/Assets availabi
 open — this report says so itself, in the same paragraph that declared the records discharged. Two
 records cannot be discharged by criteria they do not contain. **Both remain OPEN**, and the register
 was never told otherwise: `master-register.json` carries them as `OPEN` at this checkpoint, so no
-generated artifact asserts the closure. The overstatement is in prose only, here and in the
-generated `verification-queue.md` paragraph that repeats it.
+generated artifact ever asserted the closure. The overstatement was in prose only — in this
+report's own remainder audit, and in the generated `verification-queue.md` paragraph that repeated
+it. **Both are corrected in this checkpoint.**
 
 **Correction 2 — this does not change the gate.** The frozen exit gate has seven clauses and none of
 them is *"the wave's gap records are closed"*. `F-07` and `F-08` are severity CRITICAL and HIGH
 against `PLN-01` and `PLN-06`, both of which the roadmap keeps open past this wave. They are carried
 forward as open records, counted honestly, and not netted against the gate.
 
-The correcting edit to `verification-queue.md` is **not applied in this checkpoint**, because this
-section was asked for as evidence and nothing else was to change before closure. It is owed, and it
-is a one-paragraph correction to the generator.
+**Correction 3 — both texts are now repaired, at the generator.** `verification-queue.md` is
+generated, so the edit was made in `build-register.mjs` and the register rebuilt; editing the
+markdown alone would have been reverted by the next rebuild. The rebuild changed that one paragraph
+and nothing else — 180 capabilities, 46 gaps, and every classification identical — so the
+correction carries no reclassification hidden inside it. The remainder audit above is corrected in
+place, and says plainly that it was wrong rather than quietly reading as though it never claimed
+otherwise.
 
 ### 4. Connected journey — what it shows, and what it does not
 
@@ -2002,8 +2012,8 @@ None of these is an exit-gate clause. All are recorded so that closure does not 
   summed by any rollup** until an apportionment authority exists.
 - Accepting a recovery does not prompt a re-baseline.
 - A requirement that has ever carried a booking cannot be removed from a plan (`ON DELETE RESTRICT`).
-- The `verification-queue.md` paragraph asserting `F-07` / `F-08` discharge needs the correction in
-  §3.
+- ~~The `verification-queue.md` paragraph asserting `F-07` / `F-08` discharge needs the correction
+  in §3.~~ Corrected at the generator; see §3, correction 3.
 
 **Defects found and deliberately not fixed here**
 

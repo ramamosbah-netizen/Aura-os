@@ -115,6 +115,12 @@ test.describe('A requisition says what is needed, how much, and by when', () => 
 
     // ── Survives a reload: derived from the record, not from the clicks ────────
     await page.reload({ waitUntil: 'domcontentloaded' });
+
+    // ONE REQUISITION, ONE TOTAL. The row's own Value column is the sum of the lines, not the
+    // header figure authored before they existed — there must not be two totals on one screen
+    // that disagree with each other.
+    await expect(page.getByTestId(`pr-value-${pr.id}`)).toHaveText('AED 6,400');
+
     await page.getByTestId(`pr-materials-toggle-${pr.id}`).click();
     await expect(page.getByTestId('req-line-qty-1')).toHaveText('12 nr');
     await expect(page.getByTestId('req-line-qty-2')).toHaveText('250 m');

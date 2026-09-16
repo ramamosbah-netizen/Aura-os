@@ -140,7 +140,8 @@ export default function PrList({
                     <td style={s.td}><strong>{pr.title}</strong></td>
                     <td style={s.tdMuted}>{pr.reference ?? '—'}</td>
                     <td style={s.tdMuted}>{pr.projectName ?? '—'}</td>
-                    <td style={s.td}>{money(pr.value, currency)}</td>
+                    {/* Once a requisition has lines this figure IS their sum — one requisition, one total. */}
+                    <td style={s.td} data-testid={`pr-value-${pr.id}`}>{money(pr.value, currency)}</td>
                     <td style={s.td}>
                       <span style={s.tag(pr.status)}>{pr.status}</span>
                     </td>

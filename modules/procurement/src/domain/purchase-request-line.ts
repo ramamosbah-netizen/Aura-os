@@ -217,8 +217,12 @@ export function readyToSubmit(lines: PurchaseRequestLine[]): { ready: boolean; r
     const unpriced = lines.filter((l) => l.estimatedUnitCost === null).map((l) => `${l.lineNo} (${l.materialCode})`);
     return {
       ready: false,
+      // "requires" deliberately: this string is THROWN by the submit and approve paths, and the
+      // HTTP taxonomy classifies a refusal by its wording. "needs an" matches nothing in it and
+      // escaped as a 500. The error-taxonomy fitness gate did not catch it either, because the gate
+      // reads throw-statement literals — and this reason is composed here and thrown somewhere else.
       reason:
-        `every line needs an estimated cost before approval, because the requisition's value decides who may ` +
+        `every line requires an estimated cost before approval, because the requisition's value decides who may ` +
         `approve it — unpriced: line ${unpriced.join(', line ')}`,
     };
   }

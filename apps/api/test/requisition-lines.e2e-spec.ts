@@ -314,6 +314,64 @@ describe('a material requisition names materials, in units, by a date (JWT ON)',
     expect(still[0].quantity).toBe(4);
   });
 
+  // ── The requisition reaches somebody who can act on it ─────────────────────
+
+  it('lets the BUYER submit their own requisition, and refuses them the decision', async () => {
+    const prId = await newPr();
+    await buyer.post(`/api/v1/procurement/purchase-requests/${prId}/lines`)
+      .send({ material: camera.code, quantity: 10, estimatedUnitCost: 450 }).expect(201);
+
+    // Sending a requisition for a decision is part of authoring it. It used to require the APPROVAL
+    // permission, which collapsed the maker and the checker into one person.
+    const submitted = await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`)
+      .send({ status: 'submitted' }).expect(200);
+    expect(submitted.body.status).toBe('submitted');
+    // …and the same person still cannot decide on it.
+    await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`)
+      .send({ status: 'approved' }).expect(403);
+  });
+
+  it('refuses to submit an incomplete requisition, rather than only reporting that it is incomplete', async () => {
+    const prId = await newPr();
+    await buyer.post(`/api/v1/procurement/purchase-requests/${prId}/lines`)
+      .send({ material: camera.code, quantity: 10, estimatedUnitCost: 450 }).expect(201);
+    await buyer.post(`/api/v1/procurement/purchase-requests/${prId}/lines`)
+      .send({ material: cable.code, quantity: 250 }).expect(201);
+
+    const refused = await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`)
+      .send({ status: 'submitted' }).expect(400);
+    expect(refused.body.message).toMatch(/decides who may approve it/);
+    // Still a draft, so its lines are still editable and the author can finish it.
+    expect((await buyer.get(`/api/v1/procurement/purchase-requests/${prId}`).expect(200)).body.status).toBe('draft');
+  });
+
+  it('NEXT-ROLE RECEIPT: a submitted requisition reaches an approver, carrying the value its lines establish', async () => {
+    const prId = await newPr();
+    await buyer.post(`/api/v1/procurement/purchase-requests/${prId}/lines`)
+      .send({ material: camera.code, quantity: 12, estimatedUnitCost: 450 }).expect(201);
+    await buyer.post(`/api/v1/procurement/purchase-requests/${prId}/lines`)
+      .send({ material: cable.code, quantity: 250, estimatedUnitCost: 4 }).expect(201);
+
+    // Before submission it is nobody's decision to make.
+    const before = (await admin.get('/api/v1/inbox').expect(200)).body as Array<{ id: string }>;
+    expect(before.some((i) => i.id === prId)).toBe(false);
+
+    await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`).send({ status: 'submitted' }).expect(200);
+
+    const after = (await admin.get('/api/v1/inbox').expect(200)).body as Array<{ id: string; kind: string; value: number; action: string }>;
+    const waiting = after.find((i) => i.id === prId);
+    expect(waiting, 'the submitted requisition should be waiting on an approver').toBeDefined();
+    expect(waiting).toMatchObject({ kind: 'Purchase Request', action: 'Approve' });
+    // The figure the approver decides on is the one the LINES add up to — 12×450 + 250×4.
+    expect(waiting?.value).toBe(6400);
+
+    // …and approving it drafts the purchase order at that same value, not at the header's zero.
+    await admin.patch(`/api/v1/procurement/purchase-requests/${prId}/status`).send({ status: 'approved' }).expect(200);
+    const pos = (await admin.get('/api/v1/procurement/purchase-orders').expect(200)).body as Array<{ title: string; value: number }>;
+    const drafted = pos.find((p) => p.title.includes(prId.slice(0, 8)) || p.value === 6400);
+    expect(drafted?.value).toBe(6400);
+  });
+
   it('refuses an unauthenticated caller outright', async () => {
     const server = app.getHttpServer();
     await request(server).get('/api/v1/inventory/materials').expect(401);

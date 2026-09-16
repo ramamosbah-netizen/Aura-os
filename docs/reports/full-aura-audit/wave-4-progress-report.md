@@ -588,3 +588,140 @@ through a path the owning role cannot walk would be proving something else.
 acceptance proof is the same sentence. Both are proposed to move `UNVERIFIED → PARTIAL`, which is
 what the evidence supports: substantial governed behaviour, proven Auth-ON and in the browser, with
 one named clause outstanding. The decision is the programme owner's.
+
+## Iteration 4 — Slice 1b: the derived value is the one that governs
+
+Slice 1 derived the requisition's value and proved it read correctly. **It did not make anything obey
+it**, and that is a defect this slice introduced rather than inherited: before lines existed the
+header was the only figure and was at least self-consistent; afterwards there were two, and every
+governing path still read the stale one. Programme rule 3 — two totals that can disagree — broken by
+the change that was supposed to honour it.
+
+Three places read the header, and each one mattered differently.
+
+| Where | What it did | Why it mattered |
+| --- | --- | --- |
+| Submission | `changeStatus` never consulted the lines | The completeness rule was **reported** by the summary endpoint and enforced nowhere, so an unpriced requisition could still be sent for a decision |
+| The approval matrix | resolved on `existing.value` | A line-based requisition keeps a header of 0 while its lines say 6,400, so **no threshold rule matched and no approver was required at all** |
+| The auto-drafted PO | inherited `updated.value` | An approved requisition drafted a PO at the wrong amount, which then commits that amount to the cost ledger |
+
+The middle one is the sharpest: it is the same defect as the unpriced-line rule arriving through a
+different door — a smaller number buying a weaker approval. Closing one while leaving the other open
+would have been closing the door and leaving the window.
+
+### What changed
+
+- **`readyToSubmit` is enforced** on `submitted` *and* on `approved`, because a draft can be
+  approved directly and that is precisely the path where a missing estimate would decide who the
+  approver is.
+- **The approval matrix resolves on the governing value.**
+- **The persisted header follows the lines**, so no downstream reader — the event log, the cost
+  ledger, My Work, spend analytics — is handed a figure the lines contradict. While any line is
+  unpriced the header goes to 0, which is what a NOT NULL column can say for *"nothing established
+  yet"*; that is safe only because such a requisition cannot be submitted or approved, and the panel
+  says in words why there is no value.
+- **The PO is drafted from the governing value.**
+
+### Two authority findings, both corrections rather than new policy
+
+**A Buyer could not submit their own requisition.** Two layers, and both had to move:
+
+- the route derives `procurement.purchase-request.status`, an action word no shipped procurement
+  role grants — now explicit `@Permissions('procurement.pr.update')`;
+- and `changeStatus` asserted `procurement.pr.approve` for **every** status change, so a requisition
+  could only be SENT for approval by somebody who could already approve it. The maker and the
+  checker were the same person by construction. The permission now depends on which decision is
+  being made: `approve` for `approved` and `rejected`, `update` for the rest.
+
+This widens submission from approval-holders to update-holders, which is stated plainly rather than
+buried: it is not a policy somebody chose, it is a bug that made maker/checker unreachable, and the
+Buyer role already holds `procurement.*.update`.
+
+**A submitted requisition disappeared from the approvals inbox.** The inbox listed purchase requests
+on `status === 'draft'` — the one state that means *still being written* — so an approver was shown
+requisitions nobody had finished, and a requisition that actually asked for a decision vanished at
+the moment it asked. Both of its neighbours in that same list already use the asking state: a
+quotation appears on `internal_review`, a purchase order on `pending_approval`. It now appears on
+`submitted`.
+
+**The transition consequence, stated:** requisitions sitting in `draft` today will no longer show as
+approvals until somebody submits them — which is now possible, and is the correct workflow. Before
+this slice submission was effectively unreachable, which is why listing drafts was the only route
+that worked.
+
+### Found while building it
+
+- **The readiness refusal escaped as a 500.** *"every line needs an estimated cost…"* matched nothing
+  in the HTTP taxonomy (`needs a\b` does not match `needs an`), so the first real enforcement of the
+  rule answered with an internal error. Reworded to *"requires"*.
+- **And the error-taxonomy fitness gate did not catch it**, because the gate reads throw-statement
+  literals — this reason is composed in a domain function and thrown somewhere else entirely. A
+  refusal built in one file and raised in another is invisible to it. Recorded as a gap in the gate,
+  not repaired here.
+- **The gate then flagged a comment.** The note explaining the above contained a literal
+  `throw new Error(…)` form, which the scanner read as a real throw. Reworded — and it confirms
+  exactly how the gate decides what to look at.
+
+### What was proven
+
+**15 new service tests**, on top of slice 1's 62:
+
+- an unpriced requisition is refused submission AND approval, naming the line;
+- a legacy requisition with no lines is untouched by either rule;
+- the matrix resolves on **6,400**, not on the header's 0, and the authorised approver passes on that
+  same figure, while a requisition with no lines still resolves on its authored header;
+- the persisted header tracks the lines up, down and through a removal, and drops a stale authored
+  figure to 0 rather than leaving it;
+- the PO is drafted at 4,500 rather than 0;
+- somebody holding only `update` can submit and is refused both the approval and the rejection.
+
+**Three new Auth-ON API tests** — the Buyer submits their own requisition and is still refused the
+decision; an incomplete requisition is **refused** rather than merely reported incomplete, and stays
+a draft so its author can finish it; and the **next-role receipt**: the requisition is absent from
+the approvals inbox before submission, present after it as `Purchase Request / Approve` carrying
+**6,400 — the figure its lines establish** — and approving it drafts the PO at that same value.
+
+**Browser, Auth-ON.** The requisition row's own Value column reads `AED 6,400` after a reload:
+one requisition, one total, with the panel beneath it showing the lines that add up to it.
+
+### Regression at this checkpoint
+
+The verification database was lost mid-slice (the container came back with an empty volume) and was
+rebuilt from zero: **335 migrations applied from nothing**, marker re-set, `aura_app` re-activated.
+That carried an independent proof worth keeping — **RLS fitness reports 267 tenant-scoped tables,
+every one ENABLED, FORCED and policied**, up from 265, the two new tables included and verified on a
+from-zero database rather than asserted by the migrations that wrote them.
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks** |
+| `pnpm test` | **51/51 tasks** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| API e2e | **60 files passed, 12 failed (72)** — the identical pre-existing set; passing tests rose 429 → 432 |
+| Browser, Auth-ON | **19 passed**, 1 skipped — this spec plus the five Wave 3 specs and the three touching this screen |
+| `pnpm lint` | **0 errors**, 683 warnings — unchanged |
+| Migration policy | **335 files**, sequential, `@DOWN` present |
+| RLS, live, from zero | **267 tenant-scoped tables · enabled 267 · forced 267 · with-policy 267**; isolation verified under a non-bypass role, 15 assertions |
+
+### Reconciliation — `BUY-01` and `J3-05`
+
+`BUY-01`'s frozen acceptance proof: *representative Buyer / Storekeeper execution in the canonical
+Procurement / Inventory context; save/reload; applicable permission denials; actual output; and
+next-role receipt.*
+
+| Clause | State |
+| --- | :---: |
+| Representative Buyer and Storekeeper, canonical context | **proved** |
+| Save / reload | **proved** |
+| Applicable permission denials | **proved** |
+| Actual output — the derived requisition total, a *calculation* under the frozen definition | **proved** |
+| Next-role receipt — reaches an approver's inbox carrying the value its lines establish | **proved** |
+
+All five clauses are now met, Auth-ON and in the browser.
+
+**Proposed: `BUY-01` UNVERIFIED → COMPLETE, and gap record `J3-05` OPEN → CLOSED / VERIFIED**, whose
+recorded defect — *material lines, quantity, unit, spec, date, CBS, and the `$` label* — is closed
+item by item. The decision is the programme owner's.
+
+Nothing else is proposed. `BUY-02`, `BUY-03`, `BUY-07` and the twelve `SUP` rows remain untouched,
+and the wave's exit gate is unchanged.

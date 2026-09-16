@@ -234,8 +234,20 @@ export class InboxService {
           action: 'Approve', href: `/crm/quotations/${q.id}`, value: q.total, createdAt: q.issueDate,
         });
 
+    /**
+     * A requisition reaches this list when it is SUBMITTED, not while it is a draft.
+     *
+     * It read `draft`, which is the one state that means "still being written" — so an approver was
+     * shown requisitions nobody had finished, and a requisition that was actually sent for a
+     * decision DISAPPEARED from the list at the moment it asked for one. Both of its neighbours in
+     * this same loop already use the asking-for-a-decision state: a quotation appears on
+     * `internal_review`, a purchase order on `pending_approval`.
+     *
+     * The value shown is the requisition's governing value, which for a line-based requisition is
+     * derived from its lines — so the figure an approver decides on is the one the lines add up to.
+     */
     for (const pr of prs)
-      if (pr.status === 'draft')
+      if (pr.status === 'submitted')
         items.push({
           id: pr.id, module: 'Procurement', kind: 'Purchase Request', title: pr.title,
           detail: pr.projectName ? `Project: ${pr.projectName}` : (pr.reference ?? ''),

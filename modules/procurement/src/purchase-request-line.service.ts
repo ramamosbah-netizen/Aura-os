@@ -135,6 +135,29 @@ export class PurchaseRequestLineService {
     if (!ok) throw new Error(`${label} node ${nodeId} does not belong to this requisition's project`);
   }
 
+  /**
+   * Keep the persisted header in step with the lines.
+   *
+   * Once a requisition has lines, the header is no longer an independent figure — programme rule 3,
+   * no business truth copied into a convenient duplicate field. Without this the list would show
+   * the authored header (usually 0, sometimes a stale guess) beside a panel showing what the lines
+   * actually add up to: two totals that disagree, in front of the same person.
+   *
+   * While any line is unpriced the governing value is NULL, and 0 is what a NOT NULL column can say
+   * for "nothing established yet". That is safe precisely because such a requisition cannot be
+   * submitted or approved — the readiness rule refuses it — so nothing acts on the zero, and the
+   * panel says in words why there is no value.
+   */
+  private async syncHeader(prId: Id): Promise<void> {
+    const pr = await this.requisition(prId);
+    const lines = await this.lines.listForRequest(pr.id, pr.tenantId);
+    if (lines.length === 0) return;
+    const { value } = governingValue(pr.value, lines);
+    const next = value ?? 0;
+    if (pr.value === next) return;
+    await this.requests.update({ ...pr, value: next });
+  }
+
   async addLine(input: NewLineInput): Promise<PurchaseRequestLine> {
     const pr = await this.requisition(input.prId);
     this.assertDraft(pr.status);
@@ -169,6 +192,7 @@ export class PurchaseRequestLineService {
       createdBy: this.tenant?.get().actorId ?? null,
     });
     await this.lines.save(line);
+    await this.syncHeader(pr.id);
     this.logger.log(`PR ${pr.id} line ${line.lineNo}: ${line.quantity} ${line.uom} of ${line.materialCode}`);
     return line;
   }
@@ -207,6 +231,7 @@ export class PurchaseRequestLineService {
     });
     const saved: PurchaseRequestLine = { ...next, id: line.id, createdAt: line.createdAt };
     await this.lines.save(saved);
+    await this.syncHeader(pr.id);
     return saved;
   }
 
@@ -223,6 +248,7 @@ export class PurchaseRequestLineService {
         await this.lines.save(renumbered);
       }
     }
+    await this.syncHeader(pr.id);
   }
 
   listLines(prId: Id): Promise<PurchaseRequestLine[]> {

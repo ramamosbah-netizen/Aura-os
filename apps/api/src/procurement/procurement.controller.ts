@@ -244,7 +244,17 @@ export class ProcurementController {
     return found;
   }
 
+  /**
+   * EXPLICIT, because route derivation reads the trailing segment and would require
+   * `procurement.purchase-request.status` — an action word no shipped procurement role grants, so
+   * a Buyer could not move their own requisition at all.
+   *
+   * `update` is the floor: sending a requisition for a decision is part of authoring it. Making the
+   * decision is stronger, and the service asserts `procurement.pr.approve` for `approved` and
+   * `rejected` on top of this.
+   */
   @Patch('purchase-requests/:id/status')
+  @Permissions('procurement.pr.update')
   async changePrStatus(
     @Param('id') id: string,
     @Body() dto: { status: PurchaseRequestStatus },

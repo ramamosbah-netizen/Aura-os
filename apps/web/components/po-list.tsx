@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { PoEdit } from './po-create';
 import AuraAuditDiffViewer from './ui/aura-audit-diff-viewer';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { RegisterKpis, RegisterToolbar } from './ui/register-view';
 
 interface PurchaseOrder {
   id: string;
@@ -17,19 +18,50 @@ interface PurchaseOrder {
   createdAt: string;
 }
 
-function money(n: number): string {
-  return typeof n === 'number' ? '$' + n.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }) : '—';
+/** The company's own base currency — the same `$` J3-05 names, on the orders register. */
+function money(n: number, currency: string): string {
+  return typeof n === 'number'
+    ? `${currency} ${n.toLocaleString(DISPLAY_LOCALE, { maximumFractionDigits: 0 })}`
+    : '—';
 }
 
 function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
-export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) {
+export default function PoList({ initialPos, currency, create }: {
+  initialPos: PurchaseOrder[];
+  currency: string;
+  /** The register's own create control, placed where every Sales register puts it. */
+  create?: React.ReactNode;
+}) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [diffPo, setDiffPo] = useState<PurchaseOrder | null>(null);
+  const [view, setView] = useState<'all' | 'draft' | 'awaiting' | 'issued' | 'outstanding' | 'received'>('all');
+  const [q, setQ] = useState('');
+
+  /**
+   * `outstanding` is the view a buyer lives in: issued or part-delivered, so somebody is still owed
+   * something. It is the set a chase is made of, and before this wave a partly delivered order read
+   * as fully received and disappeared from it.
+   */
+  const inView = (po: PurchaseOrder, key: typeof view) =>
+    key === 'all' ? true
+    : key === 'awaiting' ? po.status === 'pending_approval'
+    : key === 'outstanding' ? po.status === 'issued' || po.status === 'partially_received'
+    : po.status === key;
+  const matches = (po: PurchaseOrder) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return [po.title, po.supplierName, po.projectName].some((f) => (f ?? '').toLowerCase().includes(needle));
+  };
+  const visible = initialPos.filter((po) => inView(po, view) && matches(po));
+  const count = (key: typeof view) => initialPos.filter((po) => inView(po, key)).length;
+  const outstandingValue = initialPos
+    .filter((po) => inView(po, 'outstanding'))
+    .reduce((sum, po) => sum + (po.value || 0), 0);
 
   async function updateStatus(id: string, status: string) {
     setBusyId(id);
@@ -80,9 +112,41 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
     <div style={s.container}>
       {err && <div style={s.errorBar}>{err}</div>}
 
+      <RegisterKpis
+        items={[
+          { label: 'Orders', value: String(initialPos.length) },
+          { label: 'Drafts', value: String(count('draft')) },
+          { label: 'Awaiting approval', value: String(count('awaiting')), tone: count('awaiting') > 0 ? 'warn' : undefined },
+          { label: 'Still owed', value: String(count('outstanding')), tone: count('outstanding') > 0 ? 'warn' : undefined },
+          { label: 'Received', value: String(count('received')), tone: 'good' },
+          { label: 'Committed on open orders', value: money(outstandingValue, currency), tone: 'accent' },
+        ]}
+      />
+
+      {create}
+
+      <RegisterToolbar
+        views={[
+          { key: 'all' as const, label: 'All', count: count('all') },
+          { key: 'draft' as const, label: 'Drafts', count: count('draft') },
+          { key: 'awaiting' as const, label: 'Awaiting approval', count: count('awaiting') },
+          { key: 'outstanding' as const, label: 'Still owed', count: count('outstanding') },
+          { key: 'received' as const, label: 'Received', count: count('received') },
+        ]}
+        active={view}
+        onView={setView}
+        search={q}
+        onSearch={setQ}
+        placeholder="Search orders, suppliers, projects…"
+      />
+
       <section style={s.panel}>
-        {initialPos.length === 0 ? (
-          <EmptyState compact title="No purchase orders yet" description="Raise a purchase order to commit spend against an approved supplier." />
+        {visible.length === 0 ? (
+          initialPos.length === 0 ? (
+            <EmptyState compact title="No purchase orders yet" description="Raise a purchase order to commit spend against an approved supplier." />
+          ) : (
+            <EmptyState compact title="No order matches this view" description="Clear the search or choose another view." />
+          )
         ) : (
           <table style={s.table}>
             <thead>
@@ -95,7 +159,7 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
               </tr>
             </thead>
             <tbody>
-              {initialPos.map((po) => {
+              {visible.map((po) => {
                 const isBusy = busyId === po.id;
                 return (
                   <tr key={po.id} style={s.row}>
@@ -112,7 +176,7 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
                     <td style={s.td}>
                       <span style={s.tag(po.status)}>{po.status}</span>
                     </td>
-                    <td style={s.td}>{money(po.value)}</td>
+                    <td style={s.td}>{money(po.value, currency)}</td>
                     <td style={s.tdMuted}>{fmt(po.createdAt)}</td>
                     <td style={s.td}>
                       {po.status === 'draft' && (
@@ -178,7 +242,7 @@ export default function PoList({ initialPos }: { initialPos: PurchaseOrder[] }) 
           diffs={[
             { fieldName: 'title', label: 'PO Title', oldValue: 'Draft Equipment Order', newValue: diffPo.title },
             { fieldName: 'supplierName', label: 'Supplier', oldValue: 'Standard Supplier', newValue: diffPo.supplierName ?? 'Unassigned' },
-            { fieldName: 'value', label: 'Total Value', oldValue: '$' + Math.round(diffPo.value * 0.85).toLocaleString(), newValue: money(diffPo.value) },
+            { fieldName: 'value', label: 'Total Value', oldValue: money(Math.round(diffPo.value * 0.85), currency), newValue: money(diffPo.value, currency) },
             { fieldName: 'status', label: 'Approval Status', oldValue: 'draft', newValue: diffPo.status },
           ]}
         />

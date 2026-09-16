@@ -4,6 +4,7 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import RequisitionLinesPanel from './requisition-lines-panel';
+import { RegisterKpis, RegisterToolbar } from './ui/register-view';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface PurchaseRequest {
@@ -12,7 +13,12 @@ interface PurchaseRequest {
   reference: string | null;
   projectId: string | null;
   projectName: string | null;
-  status: 'draft' | 'approved' | 'rejected';
+  /**
+   * `submitted` was missing from this union while the API has always had it — and since BUY-01 a
+   * Buyer can actually reach it, so a requisition awaiting a decision was a state this screen could
+   * not name.
+   */
+  status: 'draft' | 'submitted' | 'approved' | 'rejected';
   value: number;
   createdAt: string;
 }
@@ -56,6 +62,26 @@ export default function PrList({
   const [err, setErr] = useState<string | null>(null);
   /** Which requisition has its materials open. One at a time: the table stays readable. */
   const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<'all' | 'draft' | 'submitted' | 'approved' | 'rejected'>('all');
+  const [q, setQ] = useState('');
+
+  const inView = (pr: PurchaseRequest, key: typeof view) => key === 'all' || pr.status === key;
+  const matches = (pr: PurchaseRequest) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return [pr.title, pr.reference, pr.projectName].some((f) => (f ?? '').toLowerCase().includes(needle));
+  };
+  const visible = initialPrs.filter((pr) => inView(pr, view) && matches(pr));
+  const count = (key: typeof view) => initialPrs.filter((pr) => inView(pr, key)).length;
+
+  /**
+   * The headline figures a procurement manager reads before the table.
+   *
+   * `Value awaiting a decision` is the one that matters: it is money somebody is being asked to
+   * commit, and until this wave a requisition's value was a header figure nobody could check. It is
+   * now the sum of the lines.
+   */
+  const awaiting = initialPrs.filter((pr) => pr.status === 'submitted');
 
   useEffect(() => {
     if (!focusedId) return;
@@ -88,29 +114,52 @@ export default function PrList({
     <div style={s.container}>
       {err && <div style={s.errorBar}>{err}</div>}
 
-      <div style={s.header}>
-        <h2 style={s.subTitle}>Active Requests</h2>
-        <CreateDrawer
-          entity="Purchase Request"
-          subtitle="A procurement request. Approving it drafts the purchase order automatically."
-          endpoint="/api/procurement/purchase-requests"
-          initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}
-          fields={[
-            { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
-            { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },
-            { name: 'value', label: `Estimated cost (${currency})`, kind: 'number', placeholder: '0' },
-            {
-              name: 'projectId',
-              label: 'Link to project',
-              kind: 'select',
-              labelField: 'projectName',
-              placeholder: '— None —',
-              span: 2,
-              options: projects.map((p) => ({ value: p.id, label: p.title })),
-            },
-          ]}
-        />
-      </div>
+      <RegisterKpis
+        items={[
+          { label: 'Requests', value: String(initialPrs.length) },
+          { label: 'Drafts', value: String(count('draft')) },
+          { label: 'Awaiting a decision', value: String(awaiting.length), tone: awaiting.length > 0 ? 'warn' : undefined },
+          { label: 'Approved', value: String(count('approved')), tone: 'good' },
+          { label: 'Value awaiting a decision', value: `${currency} ${awaiting.reduce((sum, pr) => sum + pr.value, 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`, tone: 'accent' },
+        ]}
+      />
+
+      <CreateDrawer
+        entity="Purchase Request"
+        subtitle="A procurement request. Approving it drafts the purchase order automatically."
+        endpoint="/api/procurement/purchase-requests"
+        initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}
+        fields={[
+          { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
+          { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },
+          { name: 'value', label: `Estimated cost (${currency})`, kind: 'number', placeholder: '0' },
+          {
+            name: 'projectId',
+            label: 'Link to project',
+            kind: 'select',
+            labelField: 'projectName',
+            placeholder: '— None —',
+            span: 2,
+            options: projects.map((p) => ({ value: p.id, label: p.title })),
+          },
+        ]}
+      />
+
+      <RegisterToolbar
+        views={[
+          { key: 'all' as const, label: 'All', count: count('all') },
+          { key: 'draft' as const, label: 'Drafts', count: count('draft') },
+          { key: 'submitted' as const, label: 'Awaiting a decision', count: count('submitted') },
+          { key: 'approved' as const, label: 'Approved', count: count('approved') },
+          { key: 'rejected' as const, label: 'Rejected', count: count('rejected') },
+        ]}
+        active={view}
+        onView={setView}
+        search={q}
+        onSearch={setQ}
+        placeholder="Search requests, references, projects…"
+      />
+
 
       <div style={s.panel}>
         <table style={s.table}>
@@ -126,14 +175,16 @@ export default function PrList({
             </tr>
           </thead>
           <tbody>
-            {initialPrs.length === 0 ? (
+            {visible.length === 0 ? (
               <tr>
                 <td colSpan={7} style={s.emptyCell}>
-                  No purchase requests submitted yet.
+                  {initialPrs.length === 0
+                    ? 'No purchase requests yet — raise one above.'
+                    : 'No request matches this view.'}
                 </td>
               </tr>
             ) : (
-              initialPrs.map((pr) => {
+              visible.map((pr) => {
                 const isBusy = busyId === pr.id;
                 return (
                   <tr key={pr.id} data-pr-id={pr.id} style={{ ...s.row, ...(pr.id === focusedId ? s.focusedRow : {}) }}>
@@ -193,13 +244,13 @@ export default function PrList({
               value in the row above is DERIVED from them, and a total shown away from the lines it
               came from is a number nobody can check.
             */}
-            {openId && initialPrs.some((pr) => pr.id === openId) && (
+            {openId && visible.some((pr) => pr.id === openId) && (
               <tr>
                 <td colSpan={7} style={s.linesCell}>
                   <RequisitionLinesPanel
                     prId={openId}
                     currency={currency}
-                    editable={initialPrs.find((pr) => pr.id === openId)?.status === 'draft'}
+                    editable={visible.find((pr) => pr.id === openId)?.status === 'draft'}
                   />
                 </td>
               </tr>

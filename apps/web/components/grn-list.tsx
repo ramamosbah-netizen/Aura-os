@@ -3,6 +3,7 @@
 import { type CSSProperties, Fragment, useState } from 'react';
 import ReceiptLinesPanel from './receipt-lines-panel';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { RegisterKpis, RegisterToolbar } from './ui/register-view';
 
 /**
  * The goods receipt register, with the receiving itself on it.
@@ -44,15 +45,59 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
-export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
+export default function GrnList({ grns, currency }: { grns: GoodsReceipt[]; currency: string }) {
   /** One open at a time: the register stays readable. */
   const [openId, setOpenId] = useState<string | null>(null);
+  const [view, setView] = useState<'all' | 'against_po' | 'unlinked'>('all');
+  const [q, setQ] = useState('');
 
-  if (grns.length === 0) {
-    return <p style={s.empty}>No goods receipts yet — record one against an issued PO above.</p>;
-  }
+  /**
+   * A note NOT against a purchase order is the one worth surfacing: nothing it records can settle
+   * an ordered line, so it is goods arriving that no order is expecting.
+   */
+  const inView = (g: GoodsReceipt, key: typeof view) =>
+    key === 'all' || (key === 'against_po' ? Boolean(g.poId) : !g.poId);
+  const matches = (g: GoodsReceipt) => {
+    const needle = q.trim().toLowerCase();
+    if (!needle) return true;
+    return [g.title, g.poTitle, g.supplierName, g.projectName].some((f) => (f ?? '').toLowerCase().includes(needle));
+  };
+  const visible = grns.filter((g) => inView(g, view) && matches(g));
+  const count = (key: typeof view) => grns.filter((g) => inView(g, key)).length;
+  const unlinked = count('unlinked');
 
   return (
+    <>
+      <RegisterKpis
+        items={[
+          { label: 'Receipt notes', value: String(grns.length) },
+          { label: 'Against an order', value: String(count('against_po')) },
+          { label: 'Not against an order', value: String(unlinked), tone: unlinked > 0 ? 'warn' : undefined },
+          { label: 'Value received', value: `${currency} ${grns.reduce((sum, g) => sum + (g.value || 0), 0).toLocaleString(DISPLAY_LOCALE, { maximumFractionDigits: 0 })}`, tone: 'accent' },
+        ]}
+      />
+
+      <RegisterToolbar
+        views={[
+          { key: 'all' as const, label: 'All', count: count('all') },
+          { key: 'against_po' as const, label: 'Against an order', count: count('against_po') },
+          { key: 'unlinked' as const, label: 'Not against an order', count: unlinked },
+        ]}
+        active={view}
+        onView={setView}
+        search={q}
+        onSearch={setQ}
+        placeholder="Search notes, orders, suppliers, projects…"
+      />
+
+      <section className="panel">
+        {visible.length === 0 ? (
+          <p style={s.empty}>
+            {grns.length === 0
+              ? 'No goods receipts yet — record one against an issued PO above.'
+              : 'No receipt note matches this view.'}
+          </p>
+        ) : (
     <table className="data-table">
       <thead>
         <tr>
@@ -62,7 +107,7 @@ export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
         </tr>
       </thead>
       <tbody>
-        {grns.map((g) => (
+        {visible.map((g) => (
           <Fragment key={g.id}>
             <tr>
               <td>{g.title}</td>
@@ -108,6 +153,9 @@ export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
         ))}
       </tbody>
     </table>
+        )}
+      </section>
+    </>
   );
 }
 

@@ -15,6 +15,8 @@ interface PurchaseOrder {
   createdAt: string;
 }
 
+interface Company { id: string; baseCurrency: string }
+
 interface ProjectLite {
   id: string;
   title: string;
@@ -23,10 +25,13 @@ interface ProjectLite {
 export default async function PurchaseOrdersPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
   const { projectId } = await searchParams;
   const scopedProjectId = projectId?.trim() || '';
-  const [pos, projects] = await Promise.all([
+  const [pos, projects, companies] = await Promise.all([
     getJson<PurchaseOrder[]>(scopedProjectId ? `/api/procurement/purchase-orders?projectId=${encodeURIComponent(scopedProjectId)}` : '/api/procurement/purchase-orders'),
     getJson<ProjectLite[]>('/api/projects/projects'),
+    getJson<Company[]>('/api/admin/companies'),
   ]);
+  // The company's own base currency, never a hardcoded symbol (gap record J3-05).
+  const currency = companies?.[0]?.baseCurrency?.trim() || 'AED';
   const project = scopedProjectId ? projects?.find((item) => item.id === scopedProjectId) : null;
 
   return (
@@ -48,12 +53,16 @@ export default async function PurchaseOrdersPage({ searchParams }: { searchParam
         </div>
       )}
 
-      <PoCreate projects={(projects ?? []).map((p) => ({ id: p.id, title: p.title }))} initialProjectId={project ? scopedProjectId : ''} />
+
 
       {pos === null ? (
         <section style={st.panel}><p style={st.muted}>API offline.</p></section>
       ) : (
-        <PoList initialPos={pos} />
+        <PoList
+            initialPos={pos}
+            currency={currency}
+            create={<PoCreate projects={(projects ?? []).map((p) => ({ id: p.id, title: p.title }))} initialProjectId={project ? scopedProjectId : ''} />}
+          />
       )}
     </div>
   );

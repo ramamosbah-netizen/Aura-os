@@ -18,6 +18,8 @@ interface GoodsReceipt {
   createdAt: string;
 }
 
+interface Company { id: string; baseCurrency: string }
+
 interface PoLite {
   id: string;
   title: string;
@@ -39,10 +41,13 @@ export default async function GoodsReceiptsPage() {
   // Operate axis composing: GRNs from our own API, and the "against PO" options from the
   // Procurement API (status=issued) — each PO carries its supplier + project snapshot, so
   // a GRN inherits both (PO ← Project, no joins).
-  const [grns, pos] = await Promise.all([
+  const [grns, pos, companies] = await Promise.all([
     getJson<GoodsReceipt[]>('/api/inventory/grns'),
     getJson<PoLite[]>('/api/procurement/purchase-orders?status=issued'),
+    getJson<Company[]>('/api/admin/companies'),
   ]);
+  // The company's own base currency — never a bare number and never a hardcoded symbol.
+  const currency = companies?.[0]?.baseCurrency?.trim() || 'AED';
 
   return (
     <div style={st.page}>
@@ -63,13 +68,11 @@ export default async function GoodsReceiptsPage() {
         }))}
       />
 
-      <section style={st.panel}>
-        {grns === null ? (
-          <p style={st.muted}>API offline.</p>
-        ) : (
-          <GrnList grns={grns} />
-        )}
-      </section>
+      {grns === null ? (
+        <section style={st.panel}><p style={st.muted}>API offline.</p></section>
+      ) : (
+        <GrnList grns={grns} currency={currency} />
+      )}
     </div>
   );
 }

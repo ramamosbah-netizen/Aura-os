@@ -26,6 +26,10 @@ import { InMemoryStorageLocationStore } from './in-memory-storage-location-store
 import { PostgresStorageLocationStore } from './postgres-storage-location-store';
 import { StorageLocationService } from './storage-location.service';
 
+import { GRN_LINE_STORE } from './goods-receipt-line-store';
+import { InMemoryGoodsReceiptLineStore } from './in-memory-goods-receipt-line-store';
+import { PostgresGoodsReceiptLineStore } from './postgres-goods-receipt-line-store';
+
 import { MATERIAL_STORE } from './material-store';
 import { InMemoryMaterialStore } from './in-memory-material-store';
 import { PostgresMaterialStore } from './postgres-material-store';
@@ -64,6 +68,12 @@ import { MaterialService } from './material.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresStorageLocationStore(pool) : new InMemoryStorageLocationStore(),
+    },
+    {
+      provide: GRN_LINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresGoodsReceiptLineStore(pool) : new InMemoryGoodsReceiptLineStore(),
     },
     {
       provide: MATERIAL_STORE,

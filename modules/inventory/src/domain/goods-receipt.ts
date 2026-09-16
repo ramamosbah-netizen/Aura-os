@@ -81,6 +81,14 @@ export function makeGoodsReceipt(input: NewGoodsReceipt): GoodsReceipt {
 export const INVENTORY_EVENT = {
   grnCreated: 'inventory.grn.created',
   grnUpdated: 'inventory.grn.updated',
+  /**
+   * A receipt LINE landed — which ordered material arrived, and how much of it was kept.
+   *
+   * Separate from `grn.created` on purpose: a note is created before anybody has written what is on
+   * it, so an order's delivery position cannot be concluded from the note's creation. It can be
+   * concluded from a line, which is why the order reconciles on this.
+   */
+  grnLineRecorded: 'inventory.grn_line.recorded',
   grnInspected: 'inventory.grn.inspected',
   grnAccepted: 'inventory.grn.accepted',
   stockLow: 'inventory.stock.low',

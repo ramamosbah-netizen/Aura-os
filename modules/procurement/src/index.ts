@@ -31,6 +31,7 @@ export * from './in-memory-purchase-request-line-store';
 export * from './postgres-purchase-request-line-store';
 export * from './purchase-request-line.service';
 export * from './domain/purchase-order-line';
+export * from './domain/order-receipt';
 export * from './purchase-order-line-store';
 export * from './in-memory-purchase-order-line-store';
 export * from './postgres-purchase-order-line-store';

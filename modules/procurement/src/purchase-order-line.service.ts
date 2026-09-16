@@ -21,6 +21,13 @@ import {
   MATERIAL_CATALOGUE, type MaterialCatalogue,
   PROJECT_CODING, type ProjectCoding,
 } from './purchase-request-line.service';
+import {
+  type AcceptedByLine,
+  describeOutstanding,
+  type OrderReceipt,
+  receiptOf,
+  type RejectedByLine,
+} from './domain/order-receipt';
 
 export interface NewOrderLineInput {
   poId: Id;
@@ -148,6 +155,9 @@ export class PurchaseOrderLineService {
       },
       quantity: input.quantity,
       unitPrice: input.unitPrice,
+      // A buyer typing a price ONTO AN ORDER is agreeing it — that is what placing an order means.
+      // The provisional case is the carried one, and it says so for itself.
+      unitPriceBasis: 'agreed',
       // Direct is the DEFAULT because it is the honest one: a line nobody has sourced has not been
       // sourced. `sourced` is never inferred — it has to be claimed, and claiming it costs a chain.
       sourceType: input.sourceType ?? 'direct',
@@ -185,6 +195,12 @@ export class PurchaseOrderLineService {
       },
       quantity: edit.quantity ?? line.quantity,
       unitPrice: edit.unitPrice ?? line.unitPrice,
+      // Editing the price settles it: a buyer who has typed a figure onto the order has agreed it.
+      // Leaving it alone leaves the basis alone, so a carried estimate stays an estimate until
+      // somebody with the authority to set a price actually does.
+      unitPriceBasis: edit.unitPrice === undefined ? (line.unitPriceBasis ?? 'agreed') : 'agreed',
+      // The lineage is NOT editable and is carried through verbatim — see LINEAGE_IS_FIXED. A
+      // direct line does not become sourced because it was edited.
       sourceType: line.sourceType,
       sourcePrLineId: line.sourcePrLineId,
       sourceQuoteLineId: line.sourceQuoteLineId,
@@ -273,6 +289,10 @@ export class PurchaseOrderLineService {
         },
         quantity: d.quantity,
         unitPrice: d.estimatedUnitCost ?? 0,
+        // PROVISIONAL, and marked as such. This is the requisitioner's budget figure, not a price
+        // any supplier has agreed — and when the sourced route delivers a selected quotation, that
+        // authority replaces this rather than being typed over it.
+        unitPriceBasis: 'estimate',
         sourceType: 'direct',
         sourcePrLineId: d.id,
         wbsNodeId: d.wbsNodeId,
@@ -288,5 +308,24 @@ export class PurchaseOrderLineService {
       this.logger.log(`PO ${po.id} carried ${created.length} line(s) from requisition ${prId}`);
     }
     return created;
+  }
+
+  /**
+   * Where this order stands on delivery, line by line.
+   *
+   * The accepted and rejected figures come from Inventory, which owns receipts; this turns them
+   * into the order's own position because "is this order finished" is a question about the ORDER.
+   * The module boundary is the existing one — Inventory answers how much arrived, Procurement
+   * decides what that means for the order.
+   */
+  async receipt(poId: Id, accepted: AcceptedByLine, rejected: RejectedByLine = {}): Promise<OrderReceipt> {
+    const po = await this.order(poId);
+    const lines = await this.lines.listForOrder(po.id, po.tenantId);
+    return receiptOf(lines, accepted, rejected);
+  }
+
+  /** The same position, as a sentence somebody chasing a delivery can act on. */
+  async outstandingDescription(poId: Id, accepted: AcceptedByLine, rejected: RejectedByLine = {}): Promise<string> {
+    return describeOutstanding(await this.receipt(poId, accepted, rejected));
   }
 }

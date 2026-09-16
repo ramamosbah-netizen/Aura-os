@@ -243,3 +243,54 @@ describe('the requisition’s lines travel onto the order it drafts', () => {
     expect(await poLineStore.listForRequestLines(['prl-never'], 't1')).toHaveLength(0);
   });
 });
+
+describe('the two constraints pinned before receipt semantics', () => {
+  it('marks a CARRIED price as a provisional estimate, and a buyer-typed one as agreed', async () => {
+    const h = await harness();
+    const pr = await h.prs.create({ tenantId: 't1', title: 'Mixed', value: 0, projectId: 'proj-1', createdBy: 'u-buyer' });
+    await h.requestLines.addLine({ prId: pr.id, material: 'CAM-1', quantity: 12, estimatedUnitCost: 450 });
+    await h.prs.changeStatus(pr.id, 'approved', 'u-manager');
+    const drafted = (await h.poStore.list({ tenantId: 't1' })).find((o) => o.title.includes('Mixed'))!;
+
+    const [carried] = await h.orderLines.listLines(drafted.id);
+    expect(carried.unitPriceBasis).toBe('estimate');
+
+    // A buyer adding a line to an order is placing an order at that price — that is agreeing it.
+    const typed = await h.orderLines.addLine({ poId: drafted.id, material: 'CBL-CAT6', quantity: 1, unitPrice: 4 });
+    expect(typed.unitPriceBasis).toBe('agreed');
+  });
+
+  it('settles a carried estimate only when somebody actually states a price', async () => {
+    const h = await harness();
+    const pr = await h.prs.create({ tenantId: 't1', title: 'Settle', value: 0, projectId: 'proj-1', createdBy: 'u-buyer' });
+    await h.requestLines.addLine({ prId: pr.id, material: 'CAM-1', quantity: 10, estimatedUnitCost: 450 });
+    await h.prs.changeStatus(pr.id, 'approved', 'u-manager');
+    const drafted = (await h.poStore.list({ tenantId: 't1' })).find((o) => o.title.includes('Settle'))!;
+    const [carried] = await h.orderLines.listLines(drafted.id);
+
+    // Editing something else leaves the estimate provisional — it is still nobody's agreed price.
+    const requantified = await h.orderLines.editLine(carried.id, { quantity: 12 });
+    expect(requantified.unitPriceBasis).toBe('estimate');
+
+    // Editing the PRICE settles it.
+    const priced = await h.orderLines.editLine(carried.id, { unitPrice: 460 });
+    expect(priced.unitPriceBasis).toBe('agreed');
+  });
+
+  it('never turns a DIRECT line into a sourced one, however it is edited', async () => {
+    const h = await harness();
+    const pr = await h.prs.create({ tenantId: 't1', title: 'Fixed', value: 0, projectId: 'proj-1', createdBy: 'u-buyer' });
+    await h.requestLines.addLine({ prId: pr.id, material: 'CAM-1', quantity: 10, estimatedUnitCost: 450 });
+    await h.prs.changeStatus(pr.id, 'approved', 'u-manager');
+    const drafted = (await h.poStore.list({ tenantId: 't1' })).find((o) => o.title.includes('Fixed'))!;
+    const [carried] = await h.orderLines.listLines(drafted.id);
+
+    // The line answers a requisition line AND is direct. Editing it — including passing a lineage
+    // the edit shape does not accept — leaves it direct, because a requisition is not sourcing.
+    const edited = await h.orderLines.editLine(carried.id, { quantity: 11, sourceType: 'sourced' } as never);
+    expect(edited.sourceType).toBe('direct');
+    expect(edited.sourcePrLineId).toBe(carried.sourcePrLineId);
+    expect(edited.sourceQuoteLineId).toBeNull();
+    expect((await h.orderLines.summary(drafted.id)).provenance).toBe('direct');
+  });
+});

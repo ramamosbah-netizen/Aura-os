@@ -15,7 +15,7 @@ import {
   productivityBasisFrom,
   HANDOVER_SNAPSHOT_SCHEMA_VERSION,
 } from '@aura/projects';
-import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
+import { PurchaseOrderLineService, PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateService, EstimateSourcingService, type Tender } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
@@ -89,6 +89,20 @@ export class CrossModuleSubscriber implements OnModuleInit {
      * this event is skipped, so one sibling's failure stops re-running the work that succeeded.
      */
     @Optional() @Inject(EVENT_DELIVERY_STORE) private readonly deliveries: EventDeliveryStore | null = null,
+    /**
+     * An order's LINES, for per-line receipt reconciliation (`BUY-05`).
+     *
+     * Explicit @Inject: the type is a UNION, which emits `Object` in design:paramtypes, so Nest
+     * silently injects nothing and the reconciliation never runs — the defect PLN-04 already paid
+     * for once on a milestone receipt, walked into again here and caught by the e2e rather than by
+     * review.
+     *
+     * OPTIONAL and LAST. This reactor is built positionally by its own suite, and inserting a
+     * parameter anywhere else silently rebinds every later one — which is exactly what happened
+     * when this was first added in the middle. Unbound, an order with lines simply is not
+     * reconciled per line, and the scalar path keeps its own guard.
+     */
+    @Optional() @Inject(PurchaseOrderLineService) private readonly poLines: PurchaseOrderLineService | null = null,
   ) {}
 
   /**
@@ -1346,6 +1360,23 @@ export class CrossModuleSubscriber implements OnModuleInit {
       // this PO so one unit against an order of one hundred is explicitly partial, while later
       // batches converge to received even when events are delivered out of order.
       return this.retryable('reconcile PO receipt status on grn.created', e, async () => {
+        /**
+         * PER-LINE FIRST (`BUY-05`).
+         *
+         * Where the order has lines, its delivery state is the state of its positions: each one
+         * settled or still owed, and the order received only when every one of them is. Inventory
+         * says how much of each line arrived and how much was sent back; Procurement decides what
+         * that means for the order. A rejected quantity never counts as progress.
+         *
+         * The scalar path below is what an order with NO lines still uses — a legacy order has no
+         * positions to measure, and its own guard refuses to conclude completion from an unknown
+         * quantity rather than falling through to "received".
+         */
+        // A note's CREATION says nothing about delivery — it is created before anybody has written
+        // what is on it. Where the order has lines, its position is reconciled from
+        // `inventory.grn_line.recorded` below, when a line actually lands.
+        if (this.poLines && (await this.poLines.listLines(po.id)).length > 0) return;
+
         const receivedQuantity = await this.goodsReceipts.receivedQuantityForPo(e.tenantId, po.id);
         const updated = await this.pos.reconcileReceipt(po.id, receivedQuantity);
         // The service refuses to conclude completion from an unknown quantity and returns the order
@@ -1356,6 +1387,33 @@ export class CrossModuleSubscriber implements OnModuleInit {
             ? `⚡ grn.created → PO ${po.id} left at '${updated.status}': received quantity unknown, completion not concluded`
             : `⚡ grn.created → reconciled PO ${po.id} to '${updated.status}' (${receivedQuantity} received)`,
         );
+      });
+    });
+
+    /**
+     * Operate: a receipt LINE landed → reconcile the order's delivery position (`BUY-05`).
+     *
+     * Per line by necessity. An order for twelve cameras and 250 metres of cable is not
+     * fractionally received; it is a set of positions, each settled or still owed, and the order is
+     * finished only when every one of them is. Inventory says how much of each line arrived and how
+     * much was sent back; Procurement decides what that means. A rejected quantity is never
+     * progress — the material is still owed.
+     */
+    this.bus.subscribe('inventory.grn_line.recorded', (e: DomainEvent) => {
+      const p = e.payload as Record<string, unknown>;
+      const poId = p.poId as string | null;
+      if (!poId) return Promise.resolve();
+      if (!this.poLines) return Promise.resolve();
+      const poLines = this.poLines;
+      return this.retryable('reconcile PO receipt position on grn line', e, async () => {
+        const orderLines = await poLines.listLines(poId);
+        if (orderLines.length === 0) return;
+        const { accepted, rejected } = await this.goodsReceipts.receiptPositions(
+          e.tenantId, orderLines.map((l) => l.id),
+        );
+        const updated = await this.pos.reconcileReceiptFromLines(poId, accepted, rejected);
+        const position = await poLines.outstandingDescription(poId, accepted, rejected);
+        this.logger.log(`⚡ grn line → PO ${poId} is '${updated.status}' — ${position}`);
       });
     });
 

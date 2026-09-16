@@ -869,3 +869,135 @@ Two things are carried forward from here rather than silently absorbed:
   anybody has stated at that point. A buyer edits it to the agreed price while the order is a draft.
   Where that agreed price should come from — a supplier quotation — is exactly what the comparison
   slice delivers.
+
+## Iteration 6 — Two constraints pinned, then BUY-05 as per-line receiving authority
+
+### The two constraints, encoded rather than remembered
+
+**PR lineage is not sourcing lineage.** Carrying a requisition line onto an order produces a DIRECT
+line, and it must never later become `sourced` because a requisition exists. `sourced` becomes true
+only where a governed quotation selection made it true — and that selection will CREATE the line
+rather than relabel one. There is deliberately no mutator: `LINEAGE_IS_FIXED` states the rule, a test
+asserts that no exported function can set a lineage (so adding one fails and sends whoever wrote it
+to the rule), and editing a line rebuilds it from its own lineage verbatim.
+
+**An estimate and an agreed price are not the same number.** Slice 2 put the requisition's estimated
+unit cost into the order line's `unitPrice` — correct, and a trap: two kinds of figure in one column
+with nothing saying which. Migration 0337 adds `unit_price_basis`:
+
+| Basis | What it is | Who set it |
+| --- | --- | --- |
+| `estimate` | a provisional commercial snapshot, binding on nobody | the requisitioner, before any supplier was asked |
+| `agreed` | what the supplier will actually be paid | a buyer placing the order — or, on the sourced route, the selected quotation's own lineage |
+
+Carried lines are `estimate`. A buyer adding a line to an order is placing an order at that price, so
+it is `agreed`. Editing the **price** settles it; editing anything else leaves a carried estimate
+provisional, because changing a quantity is not agreeing a rate. Existing rows are **not backfilled**
+— a line written before the column existed was never told which kind it holds, and `NULL` means
+unknown rather than agreed. `linesCarryingAnEstimate` deliberately does not count unknown as
+provisional.
+
+### BUY-05 — per-line receiving authority, not patched status logic
+
+The register records the defect in a sentence: *"partial receipt marks full order received."*
+Iteration 2 contained it — an unknown quantity stopped declaring completion — but could not produce
+the true answer, because the order had one scalar quantity and no items, so *"99 still outstanding"*
+had nothing to be outstanding **on**.
+
+**An order is a set of positions, not a percentage.** An order for twelve cameras and 250 metres of
+cable is not fractionally received: each line is settled or still owed, and the order is finished
+only when every one of them is settled. An order-level figure would say "most of it" and leave nobody
+able to tell which material to chase.
+
+Migration 0338 gives the delivery note its lines. `po_line_id` is **required** — a receipt against
+nothing settles nothing, and landing on a position somebody can close is the entire point.
+
+**Accepted and rejected are separate columns, and only one of them is progress.** A rejected quantity
+arrived, was inspected and was sent back: real, worth recording against the supplier, and *not*
+progress, because the material is still owed. Counting it would close an order that still owes goods
+— the same false completion in a politer form. A rejection costs a reason, because one nobody
+explained cannot be acted on.
+
+`receiptStatus` returns **null** — leave the order alone — in two different situations, and both are
+absences that must not conclude anything: an order with no lines has no positions to measure, and an
+order where nothing has been accepted has not changed.
+
+**The reconciliation moved off the note's creation.** A goods receipt note is created before anybody
+has written what is on it, so nothing about delivery can be concluded at that moment; the first
+attempt reconciled there and correctly found nothing. The order now reconciles on
+`inventory.grn_line.recorded`, when a line actually lands. Orders with no lines keep the scalar path
+and its iteration-2 guard.
+
+The module seam is the existing one: **Inventory says what arrived, Procurement decides what it
+means for the order.**
+
+### Found while building it
+
+- **A constructor parameter inserted in the MIDDLE rebound every later one.** Added after
+  `goodsReceipts` in the cross-module reactor, which its own suite builds positionally — 25 tests
+  failed at once. Moved to the end, which is the rule this report has recorded twice before and which
+  I broke anyway.
+- **Then the same parameter silently injected nothing.** `@Optional() private readonly x: X | null`
+  emits `Object` in `design:paramtypes`, so Nest bound nothing and the reconciliation never ran —
+  **the exact defect `PLN-04` paid for once on a milestone receipt.** Fixed with an explicit
+  `@Inject(PurchaseOrderLineService)`. Caught by the Auth-ON e2e, not by review; the unit suite was
+  green throughout, because in-memory construction passes the dependency positionally.
+- **A build-time stale `dist`.** The API compiled against Inventory's previously emitted types and
+  could not see a method that existed in source.
+
+### What was proven
+
+**14 receipt-domain tests** — BUY-05's exact case (`receive 1 of 100 → 99 outstanding, not
+received`), completion only on the last arrival, a second line still owed blocking the order, a
+wholly rejected delivery counting as nothing, a part-rejected one counting only its accepted part,
+`null` for a lineless order and for nothing-accepted, an unknown line id treated as nothing rather
+than everything, over-delivery recorded rather than refused and never producing a negative debt, and
+exposure as the money still owed at the price it was ordered at.
+
+**5 new domain + 3 new service tests** for the two constraints above.
+
+**9 Auth-ON API tests, JWT on.** Receive 1 of 100 → `partially_received`, never `received`; the
+remaining 99 on a second note → `received`, cumulative across notes; every camera received while the
+cable is still owed → still `partially_received`, and `received` only once the cable arrives; a
+wholly rejected delivery leaves the order at `issued`; a part-rejected one counts only the accepted
+part; a rejection with no reason refused; a receipt line recording nothing arriving refused; a
+receipt line naming no order line refused; a legacy order with no lines left exactly where it is;
+unauthenticated 401.
+
+**Persistence.** `aura_inventory_goods_receipt_lines` RLS **ENABLED and FORCED with a policy**, and
+`unit_price_basis` present — both verified against the live database.
+
+### Regression at this checkpoint
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks** |
+| `pnpm build` | **27/27 tasks** |
+| `pnpm test` | **51/51 tasks** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| API e2e | **62 files passed, 12 failed (74)** — the identical pre-existing set; passing tests rose 441 → 450 |
+| Migration policy | **338 files**, sequential, `@DOWN` present |
+
+### Reconciliation — `BUY-05`
+
+Its frozen acceptance proof: *"Receive 1 of 100, retain 99 outstanding and correct management
+exposure."*
+
+| Clause | State |
+| --- | :---: |
+| Receive 1 of 100 | **proved**, Auth-ON |
+| Retain 99 outstanding | **proved** — per line, cumulative across notes, and reported in words |
+| Correct management exposure | **proved at the API and in the event payload** — outstanding quantity and outstanding value per line, at the price ordered |
+
+The gap record behind it, `J3-03`, reads *"receiving 1 of 100 turns the PO to received, with no
+accurate expression of the remainder"*. Both halves are now false.
+
+**Not proposed for COMPLETE, and the reason is specific.** The frozen DoD wants UI and browser proof,
+and there is still **no screen for order lines or receipt lines** — a storekeeper cannot do any of
+this outside the API. That is the same shape slice 2 left behind and it is stated rather than
+discovered at reconciliation: the capability is governed and proven to the API layer, and its
+browser layer is not built.
+
+`BUY-05` is proposed **WRONG_BEHAVIOR → PARTIAL**: the recorded wrong behaviour is gone and proven
+gone, with one named DoD layer outstanding. `BUY-06` (stock issue and return) and `BUY-07` (material
+delivery to work package) are untouched.

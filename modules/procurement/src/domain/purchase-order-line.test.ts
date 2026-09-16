@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import * as domain from './purchase-order-line';
 import {
+  LINEAGE_IS_FIXED,
+  linesCarryingAnEstimate,
   orderGoverningValue,
   makePurchaseOrderLine,
   mayEditOrderLines,
@@ -29,6 +32,7 @@ const line = (over: Partial<Parameters<typeof makePurchaseOrderLine>[0]> = {}) =
     snapshot,
     quantity: 10,
     unitPrice: 450,
+    unitPriceBasis: 'agreed',
     sourceType: 'direct',
     ...over,
   });
@@ -172,5 +176,52 @@ describe('line numbering', () => {
 
   it('closes the gap left by a removal', () => {
     expect(renumberOrderLines([l(1), l(3), l(7)]).map((x) => x.lineNo)).toEqual([1, 2, 3]);
+  });
+});
+
+describe('an estimate and an agreed price are not the same number', () => {
+  it('requires a line to say which kind of figure it carries', () => {
+    expect(() => line({ unitPriceBasis: undefined as never }))
+      .toThrow(/must say what kind of price it carries/);
+    expect(() => line({ unitPriceBasis: 'guessed' as never }))
+      .toThrow(/must say what kind of price it carries/);
+  });
+
+  it('keeps a carried ESTIMATE distinguishable from an AGREED price at the same amount', () => {
+    // Identical numbers, different commercial standing. Blending them is what lets a provisional
+    // figure become a commitment the moment an order is issued.
+    const provisional = line({ unitPrice: 450, unitPriceBasis: 'estimate' });
+    const settled = line({ unitPrice: 450, unitPriceBasis: 'agreed' });
+    expect(provisional.unitPrice).toBe(settled.unitPrice);
+    expect(provisional.unitPriceBasis).not.toBe(settled.unitPriceBasis);
+  });
+
+  it('reports which lines still carry a placeholder, and does NOT count an unknown basis as one', () => {
+    const estimate = line({ unitPriceBasis: 'estimate' });
+    const agreed = line({ lineNo: 2, unitPriceBasis: 'agreed' });
+    // A line written before the distinction existed is unknown, not provisional. Guessing would be
+    // the inference this rule exists to prevent.
+    const legacy: typeof agreed = { ...agreed, lineNo: 3, unitPriceBasis: null };
+    expect(linesCarryingAnEstimate([estimate, agreed, legacy])).toEqual([estimate]);
+  });
+});
+
+describe('a line’s lineage is fixed when it is created', () => {
+  it('exposes no way to change it — the absence of a mutator IS the rule', () => {
+    // A direct line must never become `sourced` because a requisition exists: a requisition is
+    // demand, not sourcing. `sourced` becomes true only where a governed quotation selection made
+    // it true, and that selection CREATES the line rather than relabelling one. If somebody ever
+    // adds a setter for it, this fails and they have to come and read LINEAGE_IS_FIXED.
+    const mutators = Object.keys(domain).filter(
+      (k) => /^(set|change|mark|promote|convert)/.test(k) && /source|lineage/i.test(k),
+    );
+    expect(mutators).toEqual([]);
+    expect(LINEAGE_IS_FIXED).toMatch(/only because a governed quotation selection made it so/);
+  });
+
+  it('carries the lineage through unchanged when a line is rebuilt from itself', () => {
+    const direct = line({ sourceType: 'direct', sourcePrLineId: 'prl-1' });
+    expect(direct.sourceType).toBe('direct');
+    expect(direct.sourceQuoteLineId).toBeNull();
   });
 });

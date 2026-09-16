@@ -6,6 +6,8 @@ import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
 import { isApproved } from './domain/supplier';
+import { PO_LINE_STORE, type PurchaseOrderLineStore } from './purchase-order-line-store';
+import { type AcceptedByLine, receiptOf, receiptStatus, type RejectedByLine } from './domain/order-receipt';
 
 /** Optional quality gate — injected when the Quality module is loaded. */
 export const QUALITY_GATE = Symbol('QUALITY_GATE');
@@ -48,6 +50,12 @@ export class PurchaseOrderService implements OnModuleInit {
     // Explicit @Inject: a union-typed ctor param emits `Object` in design:paramtypes, which
     // silently injects null (see auth.service). Optional so in-memory tests need no context.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    /**
+     * This order's LINES. Optional and last — several suites build this service positionally, and
+     * inserting a parameter anywhere else silently rebinds every later one. A null store means "no
+     * lines", which is exactly right for an order raised before lines existed.
+     */
+    @Optional() @Inject(PO_LINE_STORE) private readonly lines: PurchaseOrderLineStore | null = null,
   ) {}
 
   /** The real acting user from the request context (ALS), falling back to the record's creator. */
@@ -264,6 +272,45 @@ export class PurchaseOrderService implements OnModuleInit {
     });
     this.logger.log(`PO ${updated.title} (${updated.id}) status changed to ${status}`);
     return updated;
+  }
+
+  /**
+   * Reconcile this order's delivery state from its LINES — `BUY-05`.
+   *
+   * The scalar path below could only ever answer a whole-order question with a single number that
+   * belonged to no particular material. This answers the real one: each line is settled or still
+   * owed, and the order is received only when every one of them is settled.
+   *
+   * Returns the order UNTOUCHED when the position implies nothing — an order with no lines has no
+   * positions to measure, and an order where nothing has been accepted has not changed. Moving it
+   * in either case would be concluding from an absence, which is the defect this replaces.
+   */
+  async reconcileReceiptFromLines(
+    id: Id, accepted: AcceptedByLine, rejected: RejectedByLine = {},
+  ): Promise<PurchaseOrder> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
+    const orderLines = this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : [];
+    const receipt = receiptOf(orderLines, accepted, rejected);
+    const status = receiptStatus(receipt);
+
+    if (status === null) {
+      this.logger.log(
+        `PO ${existing.title} (${existing.id}) left at '${existing.status}': ` +
+        (receipt.determinable ? 'nothing accepted yet' : 'no lines, so its delivery position cannot be measured'),
+      );
+      return existing;
+    }
+    if (existing.status === status) return existing;
+
+    return this.transition(existing, status, PROCUREMENT_EVENT.poUpdated, {
+      // The exposure a manager reads: what is still owed, and on which lines.
+      outstandingValue: receipt.outstandingValue,
+      outstandingLines: receipt.outstanding.map((l) => ({
+        lineNo: l.lineNo, materialCode: l.materialCode,
+        ordered: l.ordered, accepted: l.accepted, outstanding: l.outstanding, uom: l.uom,
+      })),
+      overReceivedLines: receipt.lines.filter((l) => l.overReceived).map((l) => l.lineNo),
+    });
   }
 
   /** Reconcile the PO receipt state from the complete canonical GRN quantity for this order. */

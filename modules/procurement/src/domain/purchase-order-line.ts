@@ -30,6 +30,13 @@ export interface PurchaseOrderLine {
   quantity: number;
   /** In the ORDER's currency, which lives on the header: one order, one supplier, one currency. */
   unitPrice: number;
+  /**
+   * WHICH KIND of figure `unitPrice` is. An estimate and an agreed price are not the same number:
+   * one is what the requisitioner thought it would cost, binding on nobody; the other is what the
+   * supplier will be paid. Null on a line written before the distinction existed — unknown, and
+   * never to be read as agreed.
+   */
+  unitPriceBasis: UnitPriceBasis | null;
 
   /** How this line came to be bought. See `LINE_SOURCES`. */
   sourceType: PurchaseOrderLineSource;
@@ -57,6 +64,35 @@ export interface PurchaseOrderLine {
 export const LINE_SOURCES = ['direct', 'sourced'] as const;
 export type PurchaseOrderLineSource = (typeof LINE_SOURCES)[number];
 
+/**
+ * Where this line's unit price came from.
+ *
+ * `estimate` — carried from a requisition. A provisional commercial snapshot: the requisitioner's
+ * own budget figure, stated before any supplier was asked, and binding on nobody.
+ *
+ * `agreed` — what the supplier will actually be paid. A buyer typing a price onto an order is
+ * agreeing it; on the SOURCED route it must instead come from the selected quotation's own lineage,
+ * because a competitively sourced price is a fact the selection establishes, not one a buyer
+ * retypes over an estimate.
+ *
+ * They are never blended. A carried estimate stays an estimate until something with the authority
+ * to set a price replaces it.
+ */
+export const UNIT_PRICE_BASES = ['estimate', 'agreed'] as const;
+export type UnitPriceBasis = (typeof UNIT_PRICE_BASES)[number];
+
+/**
+ * A line's LINEAGE is fixed when it is created, and there is deliberately no way to change it.
+ *
+ * Carrying a requisition line onto an order makes a DIRECT line, and it must never later become
+ * `sourced` because a requisition exists — a requisition is demand, not sourcing. `sourced` becomes
+ * true only where a governed quotation selection made it true, and that selection creates the line
+ * rather than relabelling one. There is no mutator here on purpose: the absence is the rule.
+ */
+export const LINEAGE_IS_FIXED =
+  'a purchase order line’s lineage is fixed when the line is created: a direct line does not become ' +
+  'sourced because a requisition exists, only because a governed quotation selection made it so';
+
 export interface OrderMaterialSnapshot {
   materialCode: string;
   materialName: string;
@@ -76,6 +112,7 @@ export interface NewPurchaseOrderLine {
   quantity: number;
   unitPrice: number;
   sourceType: PurchaseOrderLineSource;
+  unitPriceBasis: UnitPriceBasis;
   sourcePrLineId?: Id | null;
   sourceQuoteLineId?: Id | null;
   wbsNodeId?: Id | null;
@@ -123,6 +160,12 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     );
   }
 
+  if (!(UNIT_PRICE_BASES as readonly string[]).includes(input.unitPriceBasis)) {
+    throw new Error(
+      `a purchase order line must say what kind of price it carries — ${UNIT_PRICE_BASES.join(' or ')}`,
+    );
+  }
+
   const sourcePrLineId = input.sourcePrLineId ?? null;
   const sourceQuoteLineId = input.sourceQuoteLineId ?? null;
 
@@ -154,6 +197,7 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     uom: uom.trim(),
     quantity,
     unitPrice: moneyNumber(unitPrice),
+    unitPriceBasis: input.unitPriceBasis,
     sourceType: input.sourceType,
     sourcePrLineId,
     sourceQuoteLineId,
@@ -247,4 +291,16 @@ export function renumberOrderLines(lines: PurchaseOrderLine[]): PurchaseOrderLin
 
 export function nextOrderLineNo(lines: PurchaseOrderLine[]): number {
   return lines.reduce((max, l) => Math.max(max, l.lineNo), 0) + 1;
+}
+
+/**
+ * Lines still carrying a provisional figure.
+ *
+ * The buyer's own question before issuing an order, and the one supplier selection will answer.
+ * A line whose basis is UNKNOWN (written before the distinction existed) is not reported as an
+ * estimate — unknown is not the same as provisional, and guessing would be the inference this
+ * rule exists to prevent.
+ */
+export function linesCarryingAnEstimate(lines: PurchaseOrderLine[]): PurchaseOrderLine[] {
+  return lines.filter((l) => l.unitPriceBasis === 'estimate');
 }

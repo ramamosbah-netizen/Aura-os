@@ -1,10 +1,10 @@
 # Wave 3 Progress Report — Award to Connected Delivery
 
-**State:** IN PROGRESS
+**State:** CLOSED / VERIFIED for the bounded Wave 3 journey
 
-**Evidence date:** 15 September 2026
+**Evidence date:** 15 September 2026 · **Closed:** 16 September 2026 on the closure proof below
 
-**Starting point:** `a87657ad` on `main`
+**Starting point:** `a87657ad` on `main` · **Closed at:** `a9c19c05`
 
 **Frozen discovery baseline:** 180 capability leaves and 46 reconciled gap records
 
@@ -2049,10 +2049,69 @@ proofs resolved and no capability remaining in the wave.
 **A capability remainder of zero is an input to closure, not closure itself.** The gate is what
 closes the wave, and the gate is what §1 addresses.
 
+### 9. Closure decision
+
+**Wave 3 is CLOSED / VERIFIED for its bounded journey.** Decided by the programme owner on
+16 September 2026, on the evidence in §§0–8 of this proof, at checkpoint `a9c19c05`.
+
+The decision was the programme owner's alone, as every promotion in this report has been. This
+section records it; it does not make it.
+
+#### What was closed
+
+The bounded *award → mobilisation → engineering → connected planning* journey, against the exit gate
+the roadmap froze before any of this work began: **seven of seven clauses met, six of six pinned
+proofs resolved, no capability remaining in the wave.** Seventeen of the 180 leaves are COMPLETE.
+
+Twenty-two iterations, each promoted only after domain rules, API, permissions, UI, actual output,
+browser usability and cross-role handoff were proven — and several of them only after a promotion was
+refused and the slice sent back.
+
+#### What closing this wave does NOT close
+
+Stated here so that the closure cannot later be read as more than it is:
+
+- **AURA is not functionally complete and not Production Ready.** 163 of 180 leaves are not COMPLETE.
+  Waves 4 to 10 are untouched: procurement, site execution, stores, subcontracts, HR, finance,
+  commercial and closeout are unproven as journeys.
+- **`F-07` and `F-08` remain OPEN — and Wave 3 owns them.** The roadmap's scope table names them as
+  this wave's primary gap ownership alongside `J2-02` and `J2-03`. The other two closed; these two did
+  not. They stay open on `PLN-01` and `PLN-06` for cost continuity through the same activity identity
+  and the HR/Fleet availability bridge, at severity CRITICAL and HIGH. This is the one place where the
+  wave closes without finishing something it was given, and it is stated rather than folded away:
+  neither record is an exit-gate clause, the gate is what closes a wave, and neither was netted
+  against it to reach this decision (§3). They do not transfer to Wave 4 by being left behind — they
+  remain Wave 3's, owed.
+- **The PARTIAL rows inside this wave's own groups stay open:** `PLN-01`, `PLN-06`–`PLN-09`,
+  `AWD-01`–`AWD-04`, `AWD-07`, `ENG-01` and `ENG-02`.
+- **Twelve e2e files still fail.** They are pre-existing, none carries a Wave 3 row, and the set did
+  not grow during the wave — but they are owed, not forgiven.
+- **No arc-spanning specification exists.** The three gate arcs are proven individually, not in one
+  run on one project (§4).
+- **The debt inventory in §7 travels with the closure**, not behind it: seven notification signals
+  owed to one shared authority; four `uuid` actor columns that will fail on their own approve paths;
+  activities that must not be summed by any rollup until an apportionment authority exists; free-text
+  `sender`; no exported document; and the unowned gap where Site can record an installation without
+  proving the material was the approved one.
+
+#### The standard this closure was held to
+
+- A zero capability remainder was treated as an **input** to closure, never as closure itself. The
+  gate closed the wave.
+- The live RLS verification — 265 tenant-scoped tables, enabled, forced and policied — was counted as
+  an additional layer and **not** as a substitute for project-scope, functional or browser proof.
+- Every figure was bound to a running API that postdates every built workspace package, because this
+  programme was bitten three times by proofs run against a stale `dist`.
+- Two claims in this report did not survive being checked against the frozen records and were
+  corrected before the decision, not after it (§3).
+
+**Next:** Wave 4 — supplier decision and material delivery. It is NOT STARTED. Closing Wave 3 does not
+start it, and nothing in Wave 4's scope may be assumed from this closure.
+
 ## Programme state
 
 - **Wave 0 — CLOSED / VERIFIED**
 - **Wave 1 — CLOSED / VERIFIED**
 - **Wave 2 — CLOSED / VERIFIED**
-- **Wave 3 — IN PROGRESS**
+- **Wave 3 — CLOSED / VERIFIED** for its bounded award-to-connected-planning journey
 - **AURA overall — still OPEN / NOT Functionally Complete / NOT Production Ready**

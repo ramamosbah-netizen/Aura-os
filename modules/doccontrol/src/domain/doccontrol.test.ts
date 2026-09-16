@@ -3,6 +3,7 @@ import { makeTransmittal } from './transmittal';
 import { makeCorrespondence } from './correspondence';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
 import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from '../in-memory-document-revision-store';
+import { InMemoryTransmittalRecipientStore } from '../transmittal-recipient-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryDrawingRegisterStore } from '../in-memory-drawing-register-store';
@@ -42,7 +43,7 @@ describe('Document Control Module Bounded Context', () => {
       
       const service = new DocControlService(
         transmittalStore,
-        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
+        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryTransmittalRecipientStore(), new InMemoryDocumentRevisionStore(),
         correspondenceStore,
         new InMemorySubmittalStore(),
         new InMemoryDrawingRegisterStore(),
@@ -69,7 +70,7 @@ describe('Document Control Module Bounded Context', () => {
     it('paginates transmittals and filters by project', async () => {
       const service = new DocControlService(
         new InMemoryTransmittalStore(),
-        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
+        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryTransmittalRecipientStore(), new InMemoryDocumentRevisionStore(),
         new InMemoryCorrespondenceStore(),
         new InMemorySubmittalStore(),
         new InMemoryDrawingRegisterStore(),
@@ -101,7 +102,7 @@ describe('Document Control Module Bounded Context', () => {
 
       const service = new DocControlService(
         transmittalStore,
-        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
+        new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryTransmittalRecipientStore(), new InMemoryDocumentRevisionStore(),
         correspondenceStore,
         new InMemorySubmittalStore(),
         new InMemoryDrawingRegisterStore(),

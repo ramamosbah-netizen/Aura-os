@@ -17,3 +17,5 @@ export * from './store.interface';
 export * from './doccontrol.service';
 export * from './doccontrol.module';
 export * from './project-resolvers';
+export * from './domain/transmittal-recipient';
+export * from './transmittal-recipient-store';

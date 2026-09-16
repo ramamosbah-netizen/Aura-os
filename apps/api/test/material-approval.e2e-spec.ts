@@ -33,7 +33,7 @@ interface Mar {
   reviewComments: string; revision: number;
 }
 interface Po { id: string; reference: string | null; status: string }
-interface WorkItem { id: string; title: string; status: string; sourceStatus: string; projectId: string | null }
+interface WorkItem { id: string; title: string; detail: string | null; href: string; status: string; sourceStatus: string; projectId: string | null }
 
 describe('the canonical material approval, and the rule Procurement owns (HTTP)', () => {
   let app: INestApplication;
@@ -183,6 +183,12 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
     const back = (await inbox('mar-engineer')).find((i) => i.id === id);
     expect(back).toMatchObject({ status: 'todo', sourceStatus: 'approved_as_noted' });
     expect(back!.title).toContain('MAR-RECEIPT');
+    // The CONDITIONS travel with the receipt. An as-noted approval whose comments the proposer has
+    // to open a second screen to discover is a receipt that hides the part that binds them.
+    expect(back!.detail).toContain('LSZH variant only');
+    // …and it points back at the canonical register entry, where the revision and full decision are.
+    expect(back!.href).toContain('/quality/material-approvals');
+    expect(back!.href).toContain(mar.id);
 
     // The decider holds it too, as their own decision.
     expect((await inbox('mar-consultant')).find((i) => i.id === id)).toBeDefined();

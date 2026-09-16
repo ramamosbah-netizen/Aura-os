@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { InMemoryTransmittalStore } from '../in-memory-transmittal-store';
 import { InMemoryDocumentRevisionStore, InMemoryTransmittalAcknowledgementStore } from '../in-memory-document-revision-store';
+import { InMemoryTransmittalRecipientStore } from '../transmittal-recipient-store';
 import { InMemoryCorrespondenceStore } from '../in-memory-correspondence-store';
 import { InMemorySubmittalStore } from '../in-memory-submittal-store';
 import { InMemoryDrawingRegisterStore } from '../in-memory-drawing-register-store';
@@ -24,7 +25,7 @@ function build(): { svc: DocControlService; emitted: Array<{ type: string; paylo
   } as unknown as EventStore;
   const svc = new DocControlService(
     new InMemoryTransmittalStore(),
-    new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryDocumentRevisionStore(),
+    new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryTransmittalRecipientStore(), new InMemoryDocumentRevisionStore(),
     new InMemoryCorrespondenceStore(),
     new InMemorySubmittalStore(),
     new InMemoryDrawingRegisterStore(),

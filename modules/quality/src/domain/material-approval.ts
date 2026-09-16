@@ -33,7 +33,21 @@ export interface MaterialApproval {
   status: MarStatus;
   revision: number;
   reviewComments: string;
+  /**
+   * The AURA user who RECORDED the decision — not the person who made it.
+   *
+   * A material approval is decided by the consultant or engineer of record, who is external to this
+   * system: the header above says the contractor submits the material TO them. AURA captures no
+   * consultant identity on this record, and it is not going to be invented here. Commissioning shows
+   * what capturing one looks like when a module means it — a named field for "the consultant/client
+   * representative who witnessed sign-off" — and this record has no such field.
+   *
+   * So the honest reading everywhere this surfaces is RECORDED BY, and the status is the consultant's
+   * decision as reported. Calling this actor the approver would put an AURA user's name against a
+   * decision they did not make, on a document a project is built to.
+   */
   reviewedBy: string | null;
+  /** When the decision was recorded in AURA. Not necessarily when the consultant made it. */
   reviewedAt: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -91,7 +105,12 @@ export function submitMaterialApproval(mar: MaterialApproval): MaterialApproval 
   return { ...mar, status: 'submitted', updatedAt: new Date().toISOString() };
 }
 
-/** Consultant decision on a submitted MAR: approved / approved_as_noted / rejected, with comments. */
+/**
+ * RECORD the consultant's decision on a submitted MAR: approved / approved_as_noted / rejected.
+ *
+ * `reviewedBy` is the AURA user entering it, not the consultant who decided it — see the field's
+ * own note. The decision is theirs; the record of it is ours.
+ */
 export function reviewMaterialApproval(mar: MaterialApproval, decision: MarDecision, reviewedBy: string | null, comments?: string): MaterialApproval {
   if (mar.status !== 'submitted') throw new Error('can only review a submitted MAR');
   if (!DECISIONS.includes(decision)) throw new Error(`decision must be one of: ${DECISIONS.join(', ')}`);

@@ -38,6 +38,7 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
           recipient?: string | null;
           purpose?: string | null;
           responsibilityId?: string | null;
+          recipients?: Array<{ userId?: string; party?: string }> | null;
       };
       const revision = p.revision ?? '0';
       // Keep the full aggregate id: the database uniqueness key is tenant+project+code, so
@@ -65,7 +66,25 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
         });
       }
 
+      // ADDRESS IT BEFORE SENDING (ENG-06). The distribution is fixed at `sent`, so the named
+      // Site Engineer, Project Engineer and Buyer go on while it is still a draft — and only they
+      // can accept it afterwards. Idempotent on a replay: a recipient already on the conveyance is
+      // skipped rather than duplicated, and a failure part-way resumes here on the next delivery.
       if (transmittal.status === 'draft') {
+        for (const r of p.recipients ?? []) {
+          const userId = r?.userId?.trim();
+          if (!userId) continue;
+          try {
+            await this.doccontrol.addTransmittalRecipient({
+              tenantId: e.tenantId, actorId: null, transmittalId: transmittal.id,
+              userId, party: r.party ?? null,
+            });
+          } catch (error) {
+            // Already addressed on a previous delivery of this same event. Anything else is a real
+            // failure and escapes to the durable handler for retry rather than being swallowed.
+            if (!/already a recipient/i.test((error as Error).message)) throw error;
+          }
+        }
         transmittal = await this.doccontrol.sendTransmittal(e.tenantId, null, transmittal.id);
       }
 

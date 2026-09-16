@@ -103,6 +103,36 @@ export class DocControlController {
     return this.docControlService.acknowledgeTransmittal(ctx.tenantId, ctx.actorId, id, dto?.note);
   }
 
+  /**
+   * Address a draft conveyance to a named person, in the capacity they receive in.
+   *
+   * The distribution is fixed at `sent`: after that it is what was conveyed, and adding somebody
+   * later would leave a receipt list that no longer matches the act it records.
+   */
+  @Post('transmittals/:id/recipients')
+  addTransmittalRecipient(
+    @Param('id') id: string,
+    @Body() dto: { userId: string; party?: string },
+  ) {
+    const ctx = this.tenant.get();
+    if (!dto?.userId?.trim()) throw new BadRequestException('userId is required');
+    return this.docControlService.addTransmittalRecipient({
+      tenantId: ctx.tenantId, actorId: ctx.actorId, transmittalId: id,
+      userId: dto.userId.trim(), party: dto.party ?? null,
+    });
+  }
+
+  /**
+   * Where the distribution stands — who was addressed, who has answered, who has not.
+   *
+   * Reported per person rather than as one status, because "the Buyer has it, Site has not" is the
+   * fact a chase starts from, and a single flag destroys it.
+   */
+  @Get('transmittals/:id/receipt')
+  transmittalReceipt(@Param('id') id: string) {
+    return this.docControlService.transmittalReceipt(this.tenant.get().tenantId, id);
+  }
+
   @Get('transmittals/:id/acknowledgements')
   listTransmittalAcknowledgements(@Param('id') id: string): Promise<TransmittalAcknowledgement[]> {
     const ctx = this.tenant.get();

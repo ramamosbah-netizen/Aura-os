@@ -15,7 +15,11 @@ interface MaterialApproval {
   status: string;
   revision: number;
   reviewComments: string;
-  /** WHO decided it. A material approval nobody is named on is a rumour the site builds to. */
+  /**
+   * The AURA user who RECORDED the consultant's decision — not the consultant who made it. This
+   * system captures no consultant identity on a material approval, so naming this actor as the
+   * approver would credit an internal user with an external decision.
+   */
   reviewedBy: string | null;
   reviewedAt: string | null;
 }
@@ -122,12 +126,13 @@ export default function MarClient({ initialMars }: { initialMars: MaterialApprov
                 <td style={s.td}>
                   {m.materialName}
                   {m.reviewComments && <div style={s.note} data-testid={`mar-comments-${m.id}`}>“{m.reviewComments}”</div>}
-                  {/* WHO DECIDED IT, beside the decision. Site builds to an approved material, and
-                      an approval with nobody's name on it is a rumour — the same gap ENG-03 closed
-                      on a technical query answer. */}
+                  {/* WHO PUT IT ON THE RECORD, beside the decision. Site builds to an approved
+                      material, and a decision nobody is accountable for entering is a rumour. It
+                      says "recorded by" and not "decided by" deliberately: the consultant makes the
+                      decision and is external to this system, which captures no identity for them. */}
                   {m.reviewedBy && (
-                    <div style={s.note} data-testid={`mar-decided-by-${m.id}`}>
-                      Decided by {m.reviewedBy}{m.reviewedAt ? ` on ${m.reviewedAt.slice(0, 10)}` : ''}
+                    <div style={s.note} data-testid={`mar-recorded-by-${m.id}`}>
+                      Decision recorded by {m.reviewedBy}{m.reviewedAt ? ` on ${m.reviewedAt.slice(0, 10)}` : ''}
                     </div>
                   )}
                 </td>

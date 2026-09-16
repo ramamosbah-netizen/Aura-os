@@ -268,7 +268,17 @@ export class EngineeringService {
     tenantId: Id,
     actorId: Id | null,
     id: Id,
-    input: { recipient?: string; purpose?: string; transmittalRef?: string; responsibilityId?: string } = {},
+    input: {
+      recipient?: string; purpose?: string; transmittalRef?: string; responsibilityId?: string;
+      /**
+       * The people this release is addressed to, by platform account and the capacity they
+       * receive in (ENG-06). `recipient` above is the free-text addressee a conveyance has
+       * always carried and resolves to nobody; this is what makes "only the named recipients
+       * may accept" enforceable, and what lets a Site Engineer, a Project Engineer and a Buyer
+       * each answer for themselves.
+       */
+      recipients?: Array<{ userId: string; party?: string }>;
+    } = {},
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
     this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.transmit', drawing.projectId);
@@ -295,6 +305,12 @@ export class EngineeringService {
         recipient: input.recipient.trim(),
         purpose: input.purpose.trim(),
         responsibilityId: input.responsibilityId?.trim() || null,
+        // Carried on the event so the conveyance is addressed BEFORE it is sent: a distribution
+        // is fixed at `sent`, and adding somebody afterwards would leave a receipt list that no
+        // longer matches the act it records.
+        recipients: (input.recipients ?? [])
+          .map((r) => ({ userId: r.userId?.trim() ?? '', party: r.party?.trim() || 'other' }))
+          .filter((r) => r.userId.length > 0),
       },
     });
     await this.tx.run(async (handle) => {

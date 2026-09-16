@@ -1,17 +1,35 @@
 [
   {
+    "key": "modules/doccontrol/src/doccontrol.service.ts#addTransmittalRecipient",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical transmittal loaded from the owning store before the assertion, and its own projectId is the authorization resource — never a project supplied by the caller. The existing distribution is read from the same conveyance so a person cannot be addressed twice, and the act is refused entirely once the conveyance has left draft.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "New in ENG-05/ENG-06: a conveyance is addressed to named platform users, so only they can acknowledge it",
+    "evidence": "doccontrol.addTransmittalRecipient",
+    "security": {
+      "target": "{ permission: 'doccontrol.transmittal.update', orgPath, resource: { type: 'project', id: transmittal.projectId } }",
+      "checks": [],
+      "provenance": [
+        "transmittal = await this.transmittalStore.findById(input.transmittalId, input.tenantId)",
+        "existing = await this.transmittalRecipientStore.listByTransmittal(transmittal.id, input.tenantId)"
+      ]
+    }
+  },
+  {
     "key": "modules/doccontrol/src/doccontrol.service.ts#acknowledgeTransmittal",
     "classification": "PROJECT_SCOPE_REQUIRED",
-    "resolution": "Canonical transmittal.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "resolution": "Canonical transmittal loaded from the owning store; its own projectId is the authorization resource. The named distribution is then loaded from the conveyance itself and the actor must appear on it: holding doccontrol.transmittal.acknowledge says you are the kind of person who acknowledges conveyances, being on the distribution says this one was sent to you, and both are required. A conveyance with no named recipients keeps the prior permission-only behaviour, because historical records carry no distribution to check against.",
     "organizationBranch": null,
     "baselineScope": "unscoped",
-    "change": "Added canonical project scope",
+    "change": "ENG-05/ENG-06: the named distribution is loaded and the actor must be ON it — the permission alone no longer decides",
     "evidence": "doccontrol.acknowledgeTransmittal",
     "security": {
       "target": "{ permission: 'doccontrol.transmittal.acknowledge', orgPath, resource: { type: 'project', id: transmittal.projectId } }",
       "checks": [],
       "provenance": [
-        "transmittal = await this.transmittalStore.findById(id, tenantId)"
+        "transmittal = await this.transmittalStore.findById(id, tenantId)",
+        "named = await this.transmittalRecipientStore.listByTransmittal(transmittal.id, tenantId)"
       ]
     }
   },

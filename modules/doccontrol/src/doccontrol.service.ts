@@ -10,6 +10,16 @@ import {
   acknowledgeTransmittal as ackTransmittalDomain,
 } from './domain/transmittal';
 import { makeTransmittalAcknowledgement, type TransmittalAcknowledgement } from './domain/transmittal-acknowledgement';
+import {
+  acknowledgeAsRecipient,
+  makeTransmittalRecipient,
+  receiptOf,
+  recipientFor,
+  type TransmittalParty,
+  type TransmittalReceipt,
+  type TransmittalRecipient,
+} from './domain/transmittal-recipient';
+import { TRANSMITTAL_RECIPIENT_STORE, type TransmittalRecipientStore } from './transmittal-recipient-store';
 import { TRANSMITTAL_STORE, TRANSMITTAL_ACK_STORE, type TransmittalStore, type TransmittalAcknowledgementStore, type DocListFilter } from './store.interface';
 
 import {
@@ -62,6 +72,11 @@ export class DocControlService {
     @Inject(TRANSMITTAL_STORE) private readonly transmittalStore: TransmittalStore,
     @Inject(TRANSMITTAL_ITEM_STORE) private readonly transmittalItemStore: TransmittalItemStore,
     @Inject(TRANSMITTAL_ACK_STORE) private readonly transmittalAckStore: TransmittalAcknowledgementStore,
+    // POSITION MATTERS: several suites construct this service positionally, so inserting a
+    // dependency anywhere but the end silently rebinds every later one. Added here rather than
+    // appended because it belongs beside the other transmittal stores, and the call sites were
+    // updated with it.
+    @Inject(TRANSMITTAL_RECIPIENT_STORE) private readonly transmittalRecipientStore: TransmittalRecipientStore,
     @Inject(DOCUMENT_REVISION_STORE) private readonly revisionStore: DocumentRevisionStore,
     @Inject(CORRESPONDENCE_STORE) private readonly correspondenceStore: CorrespondenceStore,
     @Inject(SUBMITTAL_STORE) private readonly submittalStore: SubmittalStore,
@@ -156,6 +171,60 @@ export class DocControlService {
   }
 
   /** sent|received → acknowledged. Writes an immutable acknowledgement record (who/when/note). */
+  /**
+   * Address a conveyance to a named person, in the capacity they receive in.
+   *
+   * Recipients are added while it is still a DRAFT. After `sent` the distribution is what was
+   * conveyed, and quietly adding somebody afterwards would leave a receipt list that no longer
+   * matches the act it records.
+   */
+  async addTransmittalRecipient(input: {
+    tenantId: Id; actorId: Id | null; transmittalId: Id; userId: Id; party?: TransmittalParty | string | null;
+  }): Promise<TransmittalRecipient> {
+    const transmittal = await this.transmittalStore.findById(input.transmittalId, input.tenantId);
+    if (!transmittal) throw new Error(`Transmittal with ID ${input.transmittalId} not found`);
+    if (transmittal.status !== 'draft') {
+      // "can only" classifies as a 409 state conflict in the API error taxonomy.
+      throw new Error(`recipients can only be added to a draft transmittal; ${transmittal.code} is already ${transmittal.status}`);
+    }
+    if (input.actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (transmittal.companyId) orgPath.push({ level: 'company', id: transmittal.companyId });
+      this.access.assert(input.actorId, { permission: 'doccontrol.transmittal.update', orgPath, resource: { type: 'project', id: transmittal.projectId } });
+    }
+    const existing = await this.transmittalRecipientStore.listByTransmittal(transmittal.id, input.tenantId);
+    if (existing.some((r) => r.userId === input.userId)) {
+      throw new Error(`${input.userId} is already a recipient of ${transmittal.code}`);
+    }
+    const recipient = makeTransmittalRecipient({
+      tenantId: input.tenantId, companyId: transmittal.companyId, projectId: transmittal.projectId,
+      transmittalId: transmittal.id, userId: input.userId, party: input.party ?? null,
+    });
+    await this.transmittalRecipientStore.save(recipient);
+    return recipient;
+  }
+
+  /** Where the distribution stands: who was addressed, who has answered, who has not. */
+  async transmittalReceipt(tenantId: Id, transmittalId: Id): Promise<TransmittalReceipt> {
+    return receiptOf(await this.transmittalRecipientStore.listByTransmittal(transmittalId, tenantId));
+  }
+
+  /**
+   * Acknowledge receipt — as YOURSELF, for a conveyance that was sent to you.
+   *
+   * TWO conditions, and only one of them used to exist. The permission says you are the kind of
+   * person who acknowledges conveyances; being ON the distribution says this one was sent to you.
+   * Without the second, any holder could sign for a document addressed to somebody else and the
+   * register would read as delivered.
+   *
+   * PARTIAL RECEIPT IS NOT RECEIPT. The transmittal advances to `acknowledged` only once EVERY
+   * named recipient has answered; until then it stays where it is, and the per-person receipts are
+   * the truth. One person confirming must never report that three people have it.
+   *
+   * A conveyance with NO named recipients keeps the previous behaviour, where the permission alone
+   * decides: historical records carry no distribution to check against, and refusing them all would
+   * rewrite the past rather than govern the present.
+   */
   async acknowledgeTransmittal(tenantId: Id, actorId: Id | null, id: Id, note?: string): Promise<Transmittal> {
     const transmittal = await this.transmittalStore.findById(id, tenantId);
     if (!transmittal) throw new Error(`Transmittal with ID ${id} not found`);
@@ -164,22 +233,49 @@ export class DocControlService {
       if (transmittal.companyId) orgPath.push({ level: 'company', id: transmittal.companyId });
       this.access.assert(actorId, { permission: 'doccontrol.transmittal.acknowledge', orgPath, resource: { type: 'project', id: transmittal.projectId } });
     }
-    const updated = ackTransmittalDomain(transmittal); // enforces sent|received → acknowledged
+
+    const named = await this.transmittalRecipientStore.listByTransmittal(transmittal.id, tenantId);
+    let mine: TransmittalRecipient | null = null;
+    if (named.length > 0) {
+      const found = recipientFor(named, actorId);
+      if (!found) {
+        throw new Error(
+          `this transmittal was not sent to ${actorId ?? 'an unidentified caller'}; only a named recipient can acknowledge it`,
+        );
+      }
+      mine = acknowledgeAsRecipient(found, { note });
+    }
+
+    const after = named.map((r) => (mine && r.id === mine.id ? mine : r));
+    const receipt = receiptOf(after);
+    const advance = named.length === 0 || receipt.fullyAcknowledged;
+    const updated = advance ? ackTransmittalDomain(transmittal) : transmittal;
+
     const ack = makeTransmittalAcknowledgement({
-      tenantId, companyId: transmittal.companyId, transmittalId: transmittal.id, transmittalCode: transmittal.code, acknowledgedBy: actorId, note,
+      tenantId, companyId: transmittal.companyId, transmittalId: transmittal.id,
+      transmittalCode: transmittal.code, acknowledgedBy: actorId, note,
     });
     const event = makeEvent({
       type: DOCCONTROL_EVENT.transmittalAcknowledged,
       tenantId, companyId: transmittal.companyId, actorId,
       aggregateType: 'doccontrol.transmittal', aggregateId: transmittal.id,
-      payload: { code: transmittal.code, status: updated.status, projectId: transmittal.projectId },
+      payload: {
+        code: transmittal.code, status: updated.status, projectId: transmittal.projectId,
+        // Where the distribution stands after this answer, so a reader of the log is never left to
+        // infer whether the document has actually landed everywhere it was sent.
+        acknowledgedCount: receipt.acknowledgedCount, recipientCount: receipt.recipients.length,
+        outstanding: receipt.outstanding.map((r) => r.userId),
+      },
     });
     await this.tx.run(async (handle) => {
-      await this.transmittalStore.save(updated, handle);
+      if (mine) await this.transmittalRecipientStore.save(mine, handle);
+      if (advance) await this.transmittalStore.save(updated, handle);
       await this.transmittalAckStore.save(ack, handle);
       await this.events.appendWithClient(handle, [event]);
     });
-    this.logger.log(`Transmittal acknowledged: ${transmittal.code} (${transmittal.id})`);
+    this.logger.log(
+      `Transmittal acknowledged by ${actorId ?? 'unknown'}: ${transmittal.code} (${receipt.acknowledgedCount}/${receipt.recipients.length})`,
+    );
     return updated;
   }
 

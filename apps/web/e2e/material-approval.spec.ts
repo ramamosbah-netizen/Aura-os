@@ -5,10 +5,14 @@ import { apiAuthHeaders } from './api-auth';
  * ENG-04 — the canonical material approval, on the Quality screen, with auth on.
  *
  * The contractor proposes a product and the consultant decides it. Two things have to be true on
- * the screen for that to mean anything: the decision has to carry WHOSE it was — site builds to an
- * approved material, and an approval with nobody's name on it is a rumour — and a decision short of
- * outright approval has to stay visibly unfinished, because "approved as noted" carries binding
- * conditions somebody must read and apply.
+ * the screen for that to mean anything: the decision has to say WHO PUT IT ON THE RECORD — site
+ * builds to an approved material, and a decision nobody is accountable for entering is a rumour —
+ * and a decision short of outright approval has to stay visibly unfinished, because "approved as
+ * noted" carries binding conditions somebody must read and apply.
+ *
+ * The screen says "recorded by", not "decided by". The consultant is external to this system and
+ * AURA captures no identity for them, so crediting an internal user with the decision would be a
+ * claim the record cannot support.
  *
  * Deliberately NOT proven here: that the material on a purchase order is the approved one. A
  * purchase order carries no material identity in this system; the frozen roadmap gives that to
@@ -59,14 +63,14 @@ test.describe('A material approval is a decision somebody made', () => {
     const row = page.getByTestId(`mar-${mar.id}`);
     await expect(row).toBeVisible();
     await expect(page.getByTestId(`mar-status-${mar.id}`)).toContainText('draft');
-    await expect(page.getByTestId(`mar-decided-by-${mar.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`mar-recorded-by-${mar.id}`)).toHaveCount(0);
     await expect(page.getByTestId(`mar-revision-${mar.id}`)).toHaveText('0');
 
     // ── Sent to the decider ───────────────────────────────────────────────────
     await page.getByTestId(`mar-submit-${mar.id}`).click();
     await expect(page.getByTestId(`mar-status-${mar.id}`)).toContainText('submitted');
     // Still nobody named: submitting is not deciding.
-    await expect(page.getByTestId(`mar-decided-by-${mar.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`mar-recorded-by-${mar.id}`)).toHaveCount(0);
 
     // ── Decided, with conditions ──────────────────────────────────────────────
     // "Approved as noted" is an approval with binding conditions attached, and the screen keeps it
@@ -76,15 +80,17 @@ test.describe('A material approval is a decision somebody made', () => {
     await row.getByRole('button', { name: 'As noted' }).click();
 
     await expect(page.getByTestId(`mar-status-${mar.id}`)).toContainText('approved as noted');
-    // WHOSE decision it was, on the screen — not only in an event log.
-    await expect(page.getByTestId(`mar-decided-by-${mar.id}`)).toContainText('Decided by');
+    // WHO PUT IT ON THE RECORD, on the screen — and worded as recording rather than deciding,
+    // because the consultant who decided it is external and this system captures no identity for
+    // them. Naming an AURA user as the approver would be a claim the record cannot support.
+    await expect(page.getByTestId(`mar-recorded-by-${mar.id}`)).toContainText('Decision recorded by');
     await expect(page.getByTestId(`mar-comments-${mar.id}`)).toContainText('LSZH variant only');
     // And it is still open work: a revision is offered, because the conditions have to be answered.
     await expect(page.getByTestId(`mar-revise-${mar.id}`)).toBeVisible();
 
     // ── Reloaded from the record, not from the click that made it ─────────────
     await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId(`mar-decided-by-${mar.id}`)).toContainText('Decided by');
+    await expect(page.getByTestId(`mar-recorded-by-${mar.id}`)).toContainText('Decision recorded by');
     const persisted = await marOf(request, project.id, reference);
     expect(persisted.status).toBe('approved_as_noted');
     expect(persisted.reviewedBy).not.toBeNull();
@@ -94,6 +100,6 @@ test.describe('A material approval is a decision somebody made', () => {
     await expect(page.getByTestId(`mar-status-${mar.id}`)).toContainText('draft');
     await expect(page.getByTestId(`mar-revision-${mar.id}`)).toHaveText('1');
     // The previous decision does not linger against a request nobody has decided yet.
-    await expect(page.getByTestId(`mar-decided-by-${mar.id}`)).toHaveCount(0);
+    await expect(page.getByTestId(`mar-recorded-by-${mar.id}`)).toHaveCount(0);
   });
 });

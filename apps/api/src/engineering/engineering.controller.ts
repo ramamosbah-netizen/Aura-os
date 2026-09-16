@@ -73,6 +73,12 @@ class TransmitDrawingDto {
   @IsOptional() @IsString() purpose?: string;
   @IsOptional() @IsString() transmittalRef?: string;
   @IsOptional() @IsString() responsibilityId?: string;
+  /**
+   * The people this release is addressed to, by platform account and receiving capacity (ENG-06).
+   * `recipient` above is the free-text addressee and resolves to nobody; these are what make "only
+   * the named recipients may accept" enforceable.
+   */
+  @IsOptional() recipients?: Array<{ userId: string; party?: string }>;
 }
 
 // RFIs DTOs
@@ -238,8 +244,7 @@ export class EngineeringController {
       recipient: dto?.recipient,
       purpose: dto?.purpose,
       transmittalRef: dto?.transmittalRef,
-      responsibilityId: dto?.responsibilityId,
-    });
+      responsibilityId: dto?.responsibilityId, recipients: dto?.recipients ?? []});
   }
 
   @Post('drawings/:id/close')

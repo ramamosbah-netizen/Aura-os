@@ -23,7 +23,11 @@ import {
 import { computeFifo, fifoIssueCost, fifoReceiptState, type FifoMove } from './domain/fifo';
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 import { ISSUED_POSITION, type IssuedPosition } from './issued-position.port';
+import { WORK_PACKAGE, type WorkPackage } from './work-package.port';
 import { mayReturnFromProject } from './domain/material-return';
+import {
+  deliveredToWorkPackage, issuedWithoutWorkPackage, type MovementFacts,
+} from './domain/work-package-delivery';
 
 /**
  * Stock service — the on-hand side of Inventory. Owns `aura_inventory_stock_items` and its
@@ -46,6 +50,7 @@ export class StockService {
      * RETURN is refused rather than waved through: optional dependency, never optional evidence.
      */
     @Optional() @Inject(ISSUED_POSITION) private readonly issuedPosition: IssuedPosition | null = null,
+    @Optional() @Inject(WORK_PACKAGE) private readonly workPackage: WorkPackage | null = null,
   ) {}
 
   async createItem(input: NewStockItem): Promise<StockItem> {
@@ -93,7 +98,7 @@ export class StockService {
     unit?: string,
     // Project coding: when an issue/return is coded to a CBS cost line, the Transaction Engine
     // reacts to the emitted event and posts the material cost + quantity to that line.
-    coding?: { projectId?: Id | null; cbsNodeId?: Id | null; boqItemId?: Id | null },
+    coding?: { projectId?: Id | null; cbsNodeId?: Id | null; boqItemId?: Id | null; wbsNodeId?: Id | null },
   ): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
@@ -105,6 +110,42 @@ export class StockService {
      * with no issued balance to be measured against. Checked before anything is written, because a
      * movement that should not exist must not exist even briefly.
      */
+    /**
+     * A DECLARED WORK-PACKAGE DESTINATION IS VALIDATED BEFORE ANYTHING IS WRITTEN (`BUY-07`).
+     *
+     * The rule is narrow on purpose. A project issue does not have to name a work package —
+     * `BUY-06` established that authority and it is extended here, not redefined — but an issue that
+     * DOES name one is claiming a destination, and a claim nobody checked is worse than no claim at
+     * all. So the declaration is refused unless the node exists, is a work package, and belongs to
+     * this movement's own project.
+     *
+     * An UNBOUND port refuses it too. The dependency is optional by construction (Inventory does not
+     * import Projects); the evidence never is. Silently accepting an unverifiable destination would
+     * write provenance nobody checked into the column the whole capability reads from.
+     *
+     * A destination without a project is refused outright: a work package belongs to a project, so
+     * naming one on an uncoded warehouse movement is not a delivery, it is a mistake.
+     */
+    if (coding?.wbsNodeId) {
+      if (!coding.projectId) {
+        throw new Error('a work package cannot be named on a movement that is not coded to a project');
+      }
+      if (!this.workPackage) {
+        throw new Error(
+          'cannot verify the work package this material is being delivered to — the project ' +
+          'structure is unavailable, and a destination cannot be recorded against a work package ' +
+          'nobody could check',
+        );
+      }
+      const ok = await this.workPackage.belongsToProject(item.tenantId, coding.projectId, coding.wbsNodeId);
+      if (!ok) {
+        throw new Error(
+          `work package ${coding.wbsNodeId} does not belong to this movement’s project, so it ` +
+          'cannot be the destination of this material',
+        );
+      }
+    }
+
     const isProjectReturn = direction === 'in' && Boolean(coding?.projectId && coding?.boqItemId);
     if (isProjectReturn) {
       const netIssued = this.issuedPosition
@@ -159,7 +200,7 @@ export class StockService {
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
     let newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
     const movement = makeStockMovement(
-      { stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost, projectId: coding?.projectId ?? null, cbsNodeId: coding?.cbsNodeId ?? null, boqItemId: coding?.boqItemId ?? null },
+      { stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost, projectId: coding?.projectId ?? null, cbsNodeId: coding?.cbsNodeId ?? null, boqItemId: coding?.boqItemId ?? null, wbsNodeId: coding?.wbsNodeId ?? null },
       balanceAfter,
       newAvgCost,
     );
@@ -305,6 +346,37 @@ export class StockService {
 
   listItemsPaged(filter: StockFilter, page: import('@aura/shared').PageParams) {
     return this.store.listItemsPaged(filter, page);
+  }
+
+  /**
+   * WHAT MATERIAL REACHED A PROJECT'S WORK PACKAGES (`BUY-07`).
+   *
+   * The read the next role consumes, and it is built to keep one promise: a work package is credited
+   * with material ONLY where a movement named it. Nothing is resolved from `boqItemId`, so a package
+   * that shares a measured item with another is never handed the other's material.
+   *
+   * `unspecified` is the counterpart, and it is reported ONCE for the project rather than against
+   * every package. Material left the store for this project and nobody recorded where it went — a
+   * real gap, and one that would be hidden by reading it as zero or spread falsely by attaching it
+   * to each package as UNKNOWN.
+   */
+  async workPackageDeliveries(tenantId: Id, projectId: Id, wbsNodeIds: Id[]): Promise<{
+    deliveries: Array<{ wbsNodeId: string; quantity: number; value: number; movements: number }>;
+    unspecified: { quantity: number; value: number; movements: number };
+  }> {
+    const moves = await this.store.listMovementsByProject(tenantId, projectId);
+    const facts: MovementFacts[] = moves.map((m) => ({
+      direction: m.direction === 'in' ? 'in' : 'out',
+      quantity: Number(m.quantity),
+      unitCost: Number(m.unitCost),
+      projectId: m.projectId,
+      boqItemId: m.boqItemId,
+      wbsNodeId: m.wbsNodeId,
+    }));
+    return {
+      deliveries: wbsNodeIds.map((id) => deliveredToWorkPackage(id, facts)),
+      unspecified: issuedWithoutWorkPackage(projectId, facts),
+    };
   }
 
   /** FIFO valuation for one item, replayed from its movement history (WAC stays the GL method). */

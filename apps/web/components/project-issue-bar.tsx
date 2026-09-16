@@ -21,8 +21,13 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
  */
 
 interface ProjectLite { id: string; title: string }
+interface WbsLite { id: string; code: string; title: string; boqItemId: string | null }
 interface LedgerRow { boqItemId: string | null; type: string; unit: string | null }
 interface Position { boqItemId: string; issued: number; unit: string | null }
+interface DeliveryReport {
+  deliveries: Array<{ wbsNodeId: string; quantity: number; value: number; movements: number }>;
+  unspecified: { quantity: number; value: number; movements: number };
+}
 
 export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
   stockItemId: string;
@@ -32,10 +37,13 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
 }) {
   const [projects, setProjects] = useState<ProjectLite[]>([]);
   const [boqItems, setBoqItems] = useState<string[]>([]);
+  const [packages, setPackages] = useState<WbsLite[]>([]);
+  const [delivered, setDelivered] = useState<DeliveryReport | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
 
   const [projectId, setProjectId] = useState('');
   const [boqItemId, setBoqItemId] = useState('');
+  const [wbsNodeId, setWbsNodeId] = useState('');
   const [qty, setQty] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -50,8 +58,14 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
   // Only BOQ items with a baseline can be issued against: issuing to an unmeasured item would post
   // a quantity to nothing, which is how a position ends up silently empty.
   useEffect(() => {
-    setBoqItemId(''); setBoqItems([]); setPosition(null);
+    setBoqItemId(''); setBoqItems([]); setPosition(null); setWbsNodeId(''); setPackages([]);
     if (!projectId) return;
+    // The work packages this project's material can be delivered TO (BUY-07). A destination is
+    // chosen from the project's own structure; it is never derived from the BOQ item below.
+    void (async () => {
+      const res = await fetch(`/api/projects/wbs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+      if (res.ok) setPackages(((await res.json().catch(() => [])) as WbsLite[]) ?? []);
+    })();
     void (async () => {
       const res = await fetch(`/api/projects/quantity-ledger?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
       if (!res.ok) return;
@@ -72,6 +86,21 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
 
   useEffect(() => { void readPosition(); }, [readPosition]);
 
+  /**
+   * What has actually reached the chosen work package (`BUY-07`), read from the server.
+   *
+   * Deliberately asked with the package NAMED. The screen never works out a destination from the
+   * BOQ item — a package is credited only where a movement said so.
+   */
+  const readDelivered = useCallback(async (): Promise<void> => {
+    if (!projectId) { setDelivered(null); return; }
+    const query = `projectId=${encodeURIComponent(projectId)}&wbs=${encodeURIComponent(wbsNodeId)}`;
+    const res = await fetch(`/api/inventory/stock/work-package-deliveries?${query}`, { cache: 'no-store' });
+    setDelivered(res.ok ? ((await res.json().catch(() => null)) as DeliveryReport) : null);
+  }, [projectId, wbsNodeId]);
+
+  useEffect(() => { void readDelivered(); }, [readDelivered]);
+
   const netIssued = position?.issued ?? null;
 
   const move = async (direction: 'in' | 'out'): Promise<void> => {
@@ -85,6 +114,9 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
           quantity: Number(qty),
           projectId,
           boqItemId,
+          // Sent ONLY when a destination was actually chosen. An empty selection must stay NULL:
+          // that is "no work-package destination declared", which is a fact, not a blank to fill.
+          wbsNodeId: wbsNodeId || undefined,
           reason: direction === 'out' ? 'issued to project' : 'returned from project',
           /**
            * NO UNIT COST IS SENT, AND THE SERVER SUPPLIES IT.
@@ -120,6 +152,7 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
         if (settled?.issued !== before) break;
         await new Promise((r) => setTimeout(r, 300));
       }
+      await readDelivered();
       await onMoved();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'The movement was refused');
@@ -147,6 +180,12 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
           {boqItems.map((b) => <option key={b} value={b}>{b}</option>)}
         </select>
 
+        <select className="select" style={st.field} value={wbsNodeId} onChange={(e) => setWbsNodeId(e.target.value)}
+          disabled={!projectId} data-testid="issue-work-package" aria-label="Work package">
+          <option value="">{projectId ? 'Work package (optional)…' : 'Choose a project first'}</option>
+          {packages.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.title}</option>)}
+        </select>
+
         <div style={st.qty}>
           <input className="input" style={st.narrow} value={qty} onChange={(e) => setQty(e.target.value)}
             inputMode="decimal" placeholder="Quantity" data-testid="issue-quantity" aria-label="Quantity" />
@@ -170,6 +209,26 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
             : netIssued > 0
               ? `${netIssued}${position?.unit ? ` ${position.unit}` : ''} currently issued to this BOQ item — that is the most that can come back.`
               : 'Nothing is currently issued to this BOQ item, so there is nothing to return.'}
+        </p>
+      )}
+
+      {projectId && delivered && (
+        <p style={st.position} data-testid="issue-delivered">
+          {wbsNodeId
+            ? (() => {
+                const d = delivered.deliveries.find((x) => x.wbsNodeId === wbsNodeId);
+                const qty = d?.quantity ?? 0;
+                return qty > 0
+                  ? `${qty}${unit ? ` ${unit}` : ''} delivered to this work package.`
+                  : 'Nothing has been delivered to this work package yet.';
+              })()
+            : 'No work package chosen — this issue will be recorded against the project with no destination.'}
+          {delivered.unspecified.quantity !== 0 && (
+            <span data-testid="issue-unspecified">
+              {' '}Issued to project — work package not specified: {delivered.unspecified.quantity}
+              {unit ? ` ${unit}` : ''}.
+            </span>
+          )}
         </p>
       )}
 

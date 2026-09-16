@@ -134,6 +134,13 @@ export interface StockMovement {
   projectId: Id | null;
   cbsNodeId: Id | null;
   boqItemId: Id | null;
+  /**
+   * The WORK PACKAGE this movement was delivered to (`BUY-07`).
+   *
+   * NULL means no work-package destination was declared — UNKNOWN, never zero, and never to be
+   * inferred from `boqItemId`. See `domain/work-package-delivery.ts` for the invariant.
+   */
+  wbsNodeId: Id | null;
   createdAt: string;
 }
 
@@ -147,6 +154,7 @@ export interface NewStockMovement {
   projectId?: Id | null;
   cbsNodeId?: Id | null;
   boqItemId?: Id | null;
+  wbsNodeId?: Id | null;
 }
 
 /** Compute the new on-hand after applying a movement; throws if an issue would go negative. */
@@ -185,6 +193,7 @@ export function makeStockMovement(input: NewStockMovement, balanceAfter: number,
     projectId: input.projectId ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
     boqItemId: input.boqItemId ?? null,
+    wbsNodeId: input.wbsNodeId ?? null,
     createdAt: new Date().toISOString(),
   };
 }

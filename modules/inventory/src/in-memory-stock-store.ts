@@ -48,6 +48,12 @@ export class InMemoryStockStore implements StockStore {
     this.movements.set(movement.id, { ...movement });
   }
 
+  async listMovementsByProject(tenantId: Id, projectId: Id): Promise<StockMovement[]> {
+    return [...this.movements.values()]
+      .filter((m) => m.tenantId === tenantId && m.projectId === projectId)
+      .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
   async listMovements(stockItemId: Id): Promise<StockMovement[]> {
     return [...this.movements.values()]
       .filter((m) => m.stockItemId === stockItemId)

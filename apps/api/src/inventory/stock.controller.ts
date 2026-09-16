@@ -27,6 +27,15 @@ interface MovementDto {
   projectId?: string | null;
   cbsNodeId?: string | null;
   boqItemId?: string | null;
+  /**
+   * The WORK PACKAGE this material is delivered to (`BUY-07`).
+   *
+   * Optional, because a project issue does not have to claim a work-package destination — but when
+   * it is sent it is validated against the movement's own project and refused if it does not belong.
+   * Declared here so the service can refuse it: the global whitelist pipe strips an undeclared
+   * field, which would answer 201 while quietly discarding the destination.
+   */
+  wbsNodeId?: string | null;
 }
 
 class UomDto {
@@ -99,6 +108,30 @@ export class StockController {
     return this.stock.reorderReport({ tenantId: ctx.tenantId, warehouse, limit: 200 });
   }
 
+  /**
+   * WHAT MATERIAL REACHED A PROJECT'S WORK PACKAGES (`BUY-07`) — the next role's read.
+   *
+   * Placed BEFORE `@Get(':id')` so the literal path is not captured as a stock-item id.
+   *
+   * `wbs` names the packages being asked about, because the caller knows which packages it is
+   * showing. A package with no movements reads a MEASURED zero — nothing was delivered — which is a
+   * different statement from the `unspecified` figure beside it: material that left the store for
+   * this project with no destination recorded. That one is reported ONCE, for the project, and is
+   * never attributed to an individual package.
+   */
+  @Get('work-package-deliveries')
+  workPackageDeliveries(
+    @Query('projectId') projectId?: string,
+    @Query('wbs') wbs?: string,
+  ): Promise<{
+    deliveries: Array<{ wbsNodeId: string; quantity: number; value: number; movements: number }>;
+    unspecified: { quantity: number; value: number; movements: number };
+  }> {
+    if (!projectId?.trim()) throw new BadRequestException('projectId is required');
+    const ids = (wbs ?? '').split(',').map((v) => v.trim()).filter(Boolean);
+    return this.stock.workPackageDeliveries(this.tenant.get().tenantId, projectId, ids);
+  }
+
   /** Scanner flow: barcode → item. */
   @Get('by-barcode/:barcode')
   async byBarcode(@Param('barcode') barcode: string): Promise<StockItem> {
@@ -133,6 +166,7 @@ export class StockController {
       projectId: dto.projectId ?? null,
       cbsNodeId: dto.cbsNodeId ?? null,
       boqItemId: dto.boqItemId ?? null,
+      wbsNodeId: dto.wbsNodeId ?? null,
     });
   }
 

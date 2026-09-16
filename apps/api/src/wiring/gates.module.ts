@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
 import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY } from '@aura/commissioning';
-import { InventoryModule, StockService, MaterialService, ISSUED_POSITION } from '@aura/inventory';
+import { InventoryModule, StockService, MaterialService, ISSUED_POSITION, WORK_PACKAGE } from '@aura/inventory';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
@@ -60,6 +60,25 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
         async netIssued(tenantId: string, _projectId: string, boqItemId: string) {
           const position = await ledger.position(tenantId, boqItemId);
           return typeof position?.issued === 'number' ? position.issued : null;
+        },
+      }),
+    },
+
+    // A stock movement can name the WORK PACKAGE it was delivered to (`BUY-07`). The work-package
+    // structure is Projects'; Inventory stores a validated destination reference, exactly as it
+    // already stores project_id, and asks this wire whether the reference is real.
+    //
+    // Deliberately only a VALIDATOR. There is no "find the work package for this BOQ item" method
+    // here and there must never be one: resolving a destination by matching boq_item_id would turn a
+    // missing destination into a manufactured one, and would report the same material as delivered
+    // to every package measuring against that item. Unbound, a declared destination is REFUSED.
+    {
+      provide: WORK_PACKAGE,
+      inject: [WbsService],
+      useFactory: (wbs: WbsService) => ({
+        async belongsToProject(tenantId: string, projectId: string, wbsNodeId: string) {
+          const node = await wbs.get(wbsNodeId);
+          return !!node && node.tenantId === tenantId && node.projectId === projectId;
         },
       }),
     },
@@ -141,6 +160,6 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // projection of code, name and unit. Nothing here moves stock.
     { provide: INVENTORY, useExisting: StockService },
   ],
-  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
+  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, WORK_PACKAGE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
 })
 export class GatesModule {}

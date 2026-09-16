@@ -273,14 +273,35 @@ export class PurchaseOrderService implements OnModuleInit {
     const received = receivedQuantity !== null && Number.isFinite(receivedQuantity)
       ? Math.max(0, Number(receivedQuantity))
       : null;
-    const status: PurchaseOrderStatus = ordered !== null && ordered > 0 && received !== null && received < ordered
-      ? 'partially_received'
-      : 'received';
+    // CONTAINMENT — completion is a CONCLUSION, and it needs both sides of the comparison.
+    //
+    // This expression used to fall through to 'received' whenever it could not conclude anything.
+    // So a GRN against an order whose quantity nobody recorded closed the whole order: the absence
+    // of a fact became the strongest possible statement about it, and the one that stops a buyer
+    // chasing the rest of a delivery. An unknown is not a completion. Where the quantities cannot
+    // answer "is this order finished?", the status stays exactly where it is and says so.
+    //
+    // `ordered <= 0` is held here too: an order recorded as zero quantity with goods received
+    // against it contradicts itself, and a conclusion drawn from contradictory numbers is not
+    // better than one drawn from missing ones.
+    //
+    // Deliberately NOT the partial-receipt model. This removes a false completion and nothing more;
+    // receipt semantics are rebuilt once, on PO lines, where an order has items to receive against.
+    if (ordered === null || ordered <= 0 || received === null) {
+      this.logger.warn(
+        `PO ${existing.title} (${existing.id}) left at '${existing.status}': ordered=${ordered ?? 'unknown'} ` +
+        `received=${received ?? 'unknown'} — completion cannot be concluded from these quantities`,
+      );
+      return existing;
+    }
+
+    const status: PurchaseOrderStatus = received < ordered ? 'partially_received' : 'received';
     if (existing.status === status) return existing;
     return this.transition(existing, status, PROCUREMENT_EVENT.poUpdated, {
       orderedQuantity: ordered,
       receivedQuantity: received,
-      outstandingQuantity: ordered !== null && received !== null ? Math.max(0, ordered - received) : null,
+      // Both are known by here — the guard above returned on anything else.
+      outstandingQuantity: Math.max(0, ordered - received),
     });
   }
 

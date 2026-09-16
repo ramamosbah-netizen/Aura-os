@@ -14,7 +14,7 @@ const audit = { log: async () => {} } as unknown as AuditService;
 
 // The PO under test is seeded straight into the store: `create()` dispatches through the
 // CommandBus, which is not what G-12 is about, and stubbing that machinery would test the stub.
-async function harness(actorId: string | null = null) {
+async function harness(actorId: string | null = null, orderedQuantity: number | null = 100) {
   const appended: Array<{ type: string; actorId: string | null; payload: Record<string, unknown> }> = [];
   const events = {
     append: vi.fn().mockResolvedValue(undefined),
@@ -41,8 +41,8 @@ async function harness(actorId: string | null = null) {
     value: 120_000,
     supplierId: 'sup-1',
     supplierName: 'Hikvision MEA',
-    orderedQuantity: 100,
-    unit: 'nr',
+    orderedQuantity,
+    unit: orderedQuantity === null ? null : 'nr',
     createdBy: 'u-buyer',
   });
   await store.create(po);
@@ -136,5 +136,58 @@ describe('PurchaseOrderService — governed supplier and status boundaries', () 
     expect(partial.status).toBe('partially_received');
     const complete = await svc.reconcileReceipt(po.id, 100);
     expect(complete.status).toBe('received');
+  });
+});
+
+/**
+ * An unknown quantity is not a completion.
+ *
+ * Receiving against an order whose quantity nobody recorded used to mark the WHOLE order received —
+ * the absence of a fact producing the strongest possible statement about it, and the one that stops
+ * anyone chasing the rest of the delivery. The order's real state is "still cannot say", and that is
+ * what it must keep saying.
+ *
+ * This is containment, not the partial-receipt model: it removes a false completion and adds no new
+ * receipt semantics. Those are rebuilt on PO lines, where an order has items to receive against.
+ */
+describe('PurchaseOrderService.reconcileReceipt — an unknown does not become a completion', () => {
+  it('leaves the order alone when the ORDERED quantity is unknown', async () => {
+    const { svc, appended, po } = await harness(null, null);
+    const before = po.status;
+
+    const after = await svc.reconcileReceipt(po.id, 1);
+
+    expect(after.status).toBe(before);
+    expect(after.status).not.toBe('received');
+    // No event either: an indeterminate reconciliation must not write a receipt into the log that
+    // the cost and exposure readers would then treat as settled.
+    expect(appended).toHaveLength(0);
+  });
+
+  it('leaves the order alone when the RECEIVED quantity is unknown', async () => {
+    const { svc, appended, po } = await harness(null, 100);
+
+    const after = await svc.reconcileReceipt(po.id, null);
+
+    expect(after.status).toBe(po.status);
+    expect(after.status).not.toBe('received');
+    expect(appended).toHaveLength(0);
+  });
+
+  it('leaves the order alone when the ordered quantity contradicts the receipt', async () => {
+    // Zero ordered with goods received against it is self-contradictory, and a conclusion drawn
+    // from contradictory numbers is no better than one drawn from missing ones.
+    const { svc, appended, po } = await harness(null, 0);
+
+    const after = await svc.reconcileReceipt(po.id, 1);
+
+    expect(after.status).not.toBe('received');
+    expect(appended).toHaveLength(0);
+  });
+
+  it('still concludes normally once both quantities are known', async () => {
+    const { svc, po } = await harness(null, 100);
+    expect((await svc.reconcileReceipt(po.id, 1)).status).toBe('partially_received');
+    expect((await svc.reconcileReceipt(po.id, 100)).status).toBe('received');
   });
 });

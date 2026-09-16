@@ -1348,7 +1348,14 @@ export class CrossModuleSubscriber implements OnModuleInit {
       return this.retryable('reconcile PO receipt status on grn.created', e, async () => {
         const receivedQuantity = await this.goodsReceipts.receivedQuantityForPo(e.tenantId, po.id);
         const updated = await this.pos.reconcileReceipt(po.id, receivedQuantity);
-        this.logger.log(`⚡ grn.created → reconciled PO ${po.id} to '${updated.status}' (${receivedQuantity ?? 'quantity unknown'} received)`);
+        // The service refuses to conclude completion from an unknown quantity and returns the order
+        // untouched. Saying "reconciled" there would put the claim back in the log that the guard
+        // just took out of the data.
+        this.logger.log(
+          receivedQuantity === null
+            ? `⚡ grn.created → PO ${po.id} left at '${updated.status}': received quantity unknown, completion not concluded`
+            : `⚡ grn.created → reconciled PO ${po.id} to '${updated.status}' (${receivedQuantity} received)`,
+        );
       });
     });
 

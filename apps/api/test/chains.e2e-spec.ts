@@ -221,18 +221,22 @@ describe('business-chain e2e (HTTP)', () => {
 
   it('P2P chain: PO issued → GRN receipt → PO auto-transitions to received', async () => {
     // Small-value PO auto-approves (below the approval-matrix threshold) → issue it.
+    // The ORDERED quantity is part of the order, not decoration: completion is the conclusion
+    // "everything ordered has arrived", and that sentence needs both numbers. This test used to
+    // send neither and still expect `received` — which is how it passed while the service was
+    // concluding completion from an absence.
     const po = (
       await http
         .post('/api/v1/procurement/purchase-orders')
-        .send({ title: 'Cat6 cable drums', supplierName: 'Gulf Cables', value: 900 })
+        .send({ title: 'Cat6 cable drums', supplierName: 'Gulf Cables', value: 900, orderedQuantity: 10, unit: 'drum' })
         .expect(201)
     ).body;
     await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'issued' }).expect(200);
 
-    // Goods arrive: GRN against the PO → reactor flips the PO to received.
+    // Goods arrive in full: GRN against the PO → reactor flips the PO to received.
     await http
       .post('/api/v1/inventory/grns')
-      .send({ title: 'GRN — Cat6 cable drums', poId: po.id, poTitle: po.title, supplierName: 'Gulf Cables', value: 900 })
+      .send({ title: 'GRN — Cat6 cable drums', poId: po.id, poTitle: po.title, supplierName: 'Gulf Cables', value: 900, receivedQuantity: 10 })
       .expect(201);
 
     const received = await eventually(async () => {
@@ -240,6 +244,35 @@ describe('business-chain e2e (HTTP)', () => {
       return current.status === 'received' ? [current] : [];
     });
     expect(received).toHaveLength(1);
+  });
+
+  it('P2P chain: a receipt against an unquantified order does NOT complete it', async () => {
+    // The containment this pins. With no ordered quantity recorded, nothing about a delivery can
+    // say the order is finished — and "received" is the answer that stops a buyer chasing the rest.
+    // The order stays where it is and keeps reading as outstanding, which is the true statement.
+    const po = (
+      await http
+        .post('/api/v1/procurement/purchase-orders')
+        .send({ title: 'Trunking — quantity not recorded', supplierName: 'Gulf Cables', value: 900 })
+        .expect(201)
+    ).body;
+    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'issued' }).expect(200);
+
+    await http
+      .post('/api/v1/inventory/grns')
+      .send({ title: 'GRN — one bundle', poId: po.id, poTitle: po.title, supplierName: 'Gulf Cables', value: 90 })
+      .expect(201);
+
+    // Give the reactor the same room the passing case gets (`eventually` exhausts its tries and
+    // returns empty rather than throwing), then assert it did NOT complete.
+    const completed = await eventually(async () => {
+      const current = (await http.get(`/api/v1/procurement/purchase-orders/${po.id}`).expect(200)).body;
+      return current.status === 'received' ? [current] : [];
+    });
+    expect(completed).toHaveLength(0);
+
+    const current = (await http.get(`/api/v1/procurement/purchase-orders/${po.id}`).expect(200)).body;
+    expect(current.status).toBe('issued');
   });
 
   it('validated DTOs reject bad create payloads with 400', async () => {

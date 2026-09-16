@@ -237,3 +237,200 @@ procurement rows describe the same comparison from two ends, and Wave 3 already 
 when two registers own one fact.
 
 **Nothing is promoted by this iteration, and no schema decision has been taken.**
+
+## Iteration 2 — an unknown quantity is not a completion (containment only)
+
+The four architectural decisions are settled by the programme owner and recorded below,
+after this iteration. This iteration implements one of them and nothing else: the narrow guard that stops a
+missing quantity from declaring a purchase order complete while the line foundation is built.
+
+**No new receipt model. `BUY-05` is not promoted and remains WRONG_BEHAVIOR.**
+
+### What changed
+
+One expression in `reconcileReceipt`
+([purchase-order.service.ts](../../../modules/procurement/src/purchase-order.service.ts)). It used to
+fall through to `received` whenever it could not conclude anything:
+
+```ts
+const status = ordered !== null && ordered > 0 && received !== null && received < ordered
+  ? 'partially_received'
+  : 'received';
+```
+
+Completion is a **conclusion**, and it needs both sides of the comparison. Where either side is
+unknown, the order now stays exactly where it is, says so in the log, and writes **no event** — an
+indeterminate reconciliation must not put a receipt into the log that the cost and exposure readers
+would then treat as settled.
+
+One judgment call is flagged rather than buried: the guard also holds `ordered <= 0`, which is
+slightly wider than the literal instruction. An order recorded as zero quantity with goods received
+against it contradicts itself, and a conclusion drawn from contradictory numbers is not better than
+one drawn from missing ones. If that is wider than intended, it is one clause to remove.
+
+### The operational consequence, stated plainly
+
+The current purchase-order screen captures no ordered quantity — that is the same absence `J3-05`
+records for requisitions. So for orders raised through the UI today, **the automatic transition to
+`received` stops happening.** They stay at `issued` until the line work gives them quantities.
+
+That is the trade, and it is the right way round: an order that reads outstanding overstates exposure
+and keeps somebody chasing it; an order that falsely reads received understates exposure and stops
+them. `closed` remains reachable as a governed status; `received` deliberately is not.
+
+### A passing test was asserting the defect
+
+This must be visible rather than folded into a green run. `chains.e2e-spec.ts` contained:
+
+> *"P2P chain: PO issued → GRN receipt → PO auto-transitions to received"*
+
+It created a PO with **no ordered quantity**, posted a GRN with **no received quantity**, and
+asserted the order became `received`. It passed — verified at baseline by stashing this change and
+re-running: 5 passed, 1 failed, and the P2P test was among the passing.
+
+So the guard broke it, correctly. The test was not proving the chain in its own title; it was proving
+that an unquantified receipt completes an order, which is the defect. It is now two tests:
+
+- the original name, made true — the PO carries `orderedQuantity: 10`, the GRN carries
+  `receivedQuantity: 10`, and the order reaches `received` through the real reactor;
+- a new one — a receipt against an unquantified order does **not** complete it, and the order still
+  reads `issued` after the reactor has had the same time the passing case gets.
+
+`chains.e2e-spec.ts` remains in the pre-existing failing set for its unrelated deal-chain failure,
+unchanged. It went from 6 tests (1 failing) to 7 tests (the same 1 failing).
+
+### Regression evidence at this checkpoint
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks successful** |
+| `pnpm build` | **27/27 tasks successful** |
+| `pnpm test` | **51/51 tasks successful** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| `purchase-order.service.test.ts` | **13 passed** — 9 existing, 4 new |
+| API e2e | **59 files passed, 12 failed (71)** — the identical pre-existing set, not grown |
+
+The four new unit tests pin: an unknown ordered quantity leaves the order alone; an unknown received
+quantity leaves it alone; a contradictory zero order leaves it alone; **no event is appended in any
+of those cases**; and both quantities known still concludes normally.
+
+### Carried
+
+The subscriber's log line claimed a reconciliation had happened even when none had. Saying
+"reconciled" there would put the claim back into the log that the guard just took out of the data, so
+it now reports the order was left where it is and why.
+
+## Settled decisions — the Wave 4 spine
+
+Taken by the programme owner after iteration 1, and binding on every slice in this wave.
+
+### 1. Material identity is a canonical record, separated from its commercial snapshot
+
+A stable `material_id` points at a material/product authority. PR, RFQ and PO lines keep the
+description, spec, make/model and UOM **by value** at the stage where commercial history needs them —
+so editing the catalogue tomorrow cannot rewrite what an old purchase order meant.
+
+The same rule ENG-05 already proved for conveyances, one noun over: `TransmittalItem` snapshots
+number, title and revision at conveyance time precisely so the register moving on does not rewrite
+what was sent.
+
+The identity must remain valid across the whole chain:
+
+> Material → MAR applicability → PR line → RFQ quote line → selected line → PO line → GRN line →
+> stock → site issue → installation
+
+**The spine rule:** material identity does not depend on storage location, supplier, MAR or project.
+Each of those points *at* the material and adds its own facts. That is what makes Wave 5's hardest
+question answerable — *is the material installed actually the material and model that was approved,
+purchased and received?*
+
+A new UUID called "material" with no real authority behind it is not acceptable. Iteration 1 found
+four existing item identities that this must reconcile rather than join:
+`aura_inventory_stock_items` (whose `code` is unique per tenant, and which migration 0304 already
+declares the authority for a part), the handover spares reference into it, the untyped
+`aura_site_material_consumption.item_id`, and `ElvDevice`'s make/model on an installed instance.
+
+### 2. Lines originate at the requisition — with a legitimate direct path
+
+Two lawful routes, and the direct one is not a loophole:
+
+| Route | Chain |
+| --- | --- |
+| **Sourced** | PR Line → RFQ → Quote Line → Selection → PO Line |
+| **Direct** | Material Master → Direct PO Line |
+
+A direct PO line still carries canonical `material_id`, quantity and UOM, its commercial snapshot and
+project context, and records its provenance as **DIRECT**. Existing governance for direct purchase —
+approval or justification, if any — is preserved; this wave invents no new policy.
+
+**The epistemic rule, which is the exact inverse of the `BUY-05` defect:**
+
+> `source_pr_line_id = NULL` does not mean unknown lineage. Where `source_type = DIRECT`, it is
+> *explicit* lineage. A PO line claiming SOURCED without a source chain is refused.
+
+`BUY-05` read an absent quantity as a positive conclusion. Here absence is only meaningful because a
+discriminator declares what it means, and the combination that would be an unfounded claim is
+refused. Same data shape, opposite epistemics.
+
+**A consequence to settle before the schema:** legacy PR and PO rows carry neither lines nor a
+`source_type`, so they are neither DIRECT nor SOURCED. By the same rule they must not be silently
+labelled DIRECT — that would be inferring a declaration from missing data, which is what this rule
+exists to prevent. ENG-05's precedent applies: a conveyance with no named recipients kept the
+previous behaviour, because refusing them all would rewrite the past.
+
+### 3. Procurement owns transaction currency; normalization belongs to Finance/organization
+
+Not Tendering — its commercial authority is for estimate, offer and award, and must not be turned
+into a general FX service.
+
+A procurement quote carries its **transaction currency and original monetary values**. Comparison
+uses **normalized amount, base currency, FX rate, rate date/as-of and rate provenance**. The
+supplier's original quotation is never replaced by its normalized form.
+
+The discovery this required is done, and **nothing needs inventing**:
+
+| Need | Already exists |
+| --- | --- |
+| FX rate authority | `aura_exchange_rates` — kernel migration 0031, unique `(tenant_id, from_currency, to_currency, effective_date)` |
+| Conversion | `convertMoney` in `@aura/shared` |
+| Precedent consumers | Finance customer invoice currency (0089), AP invoice currency (0096), FX revaluation on booked-vs-current rate |
+| Provenance column shape | **migration 0274** — `source_amount, source_currency, exchange_rate, rate_date, rate_source, base_amount, base_currency` |
+
+Migration 0274 is a 1:1 template for what this decision asks, and it already carries the matching
+invariant in its own comment: *"NULL provenance denotes legacy/unknown evidence and is never
+backfilled from a mutable source."*
+
+### 4. The flat `value` becomes a derived compatibility projection
+
+Not an independent business truth, and not deleted. After lines exist, a header value is the derived
+aggregate of its authoritative lines, and the line-based path does not permit writing it
+independently. Rule 3 — no copying business truth into a convenient duplicate field — and no two
+totals that can disagree.
+
+A consumer inventory comes first: cost ledger, exposure, analytics, UI, events, tests. Then a safe
+compatibility migration. No big-bang deletion.
+
+**One constraint the decision does not name, and which binds it:** the event log is append-only and
+already carries header `value` in `po.created` and `po.issued` payloads, which feed the cost ledger.
+Past events cannot be rewritten, so "derived" can only mean derived going forward, with historical
+events untouched and legacy rows that carry a value and no lines still valid.
+
+### Sequence
+
+1. **Material & Line Authority Foundation** — the spine. Not merged with `BUY-01` as one block.
+2. **`BUY-05` receipt semantics**, rebuilt once on PO lines in their final shape. The containment in
+   iteration 2 holds the defect closed in the meantime.
+3. Quote lines and normalized comparison — `SUP-01`–`SUP-12`, closing `F-04`.
+4. Approve the comparison and carry the selection into a PO — `SUP-13`, `SUP-14`.
+5. Receive, issue and return against the line — `BUY-06`, `BUY-07`.
+
+**Award remains quotation-level in this wave.** `SUP-14` is frozen as *"buyer selects full
+quotation"*, so one RFQ collects multiple supplier quotations, the buyer selects one complete
+governed quotation/version, and its selected lines become PO lines. Comparison is still per item —
+every line is compared — but the award decision is not split across suppliers. A split award is a
+separate capability if the business wants it, and it will not be introduced quietly inside `SUP-14`.
+
+**Promotion is not tied to slice order.** `BUY-01` is judged against its own frozen acceptance proof:
+if slice 1 delivers line-based requisition UI, browser proof, permissions and save/reload and every
+clause is met, it is promoted in slice 1. If a receipt or handoff clause genuinely remains open, it
+stays PARTIAL. No row is held back to fit a presumed sequence.

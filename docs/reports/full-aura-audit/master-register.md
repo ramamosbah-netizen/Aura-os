@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 15 |
-| PARTIAL | 91 |
+| COMPLETE | 17 |
+| PARTIAL | 89 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -65,8 +65,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | ENG-02 | Design review and release | PARTIAL | Engineering / DocControl | R-J26 |
 | ENG-03 | Technical query response | COMPLETE | Engineering / DocControl | R-J26 |
 | ENG-04 | Approved material submittal | COMPLETE | Quality (material approval decision) / Engineering (originating technical context) | R-J26 |
-| ENG-05 | Document transmittal | PARTIAL | Engineering / DocControl | R-J26 |
-| ENG-06 | Release notification to site | PARTIAL | Engineering / DocControl | R-J26 |
+| ENG-05 | Document transmittal | COMPLETE | Engineering / DocControl | R-J26 |
+| ENG-06 | Release notification to site | COMPLETE | Engineering / DocControl | R-J26 |
 | PLN-01 | WBS and activity linkage | PARTIAL | Projects schedule / resource facts | N-PLAN |
 | PLN-02 | Dependencies and critical path | COMPLETE | Projects schedule / resource facts | N-PLAN |
 | PLN-03 | Durations and calendars | COMPLETE | Projects schedule / resource facts | N-PLAN |

@@ -128,8 +128,8 @@
 | Design / Technical Engineer | ENG-02 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | ENG-03 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | ENG-04 | COMPLETE | UNVERIFIED |
-| Design / Technical Engineer | ENG-05 | PARTIAL | UNVERIFIED |
-| Design / Technical Engineer | ENG-06 | PARTIAL | UNVERIFIED |
+| Design / Technical Engineer | ENG-05 | COMPLETE | UNVERIFIED |
+| Design / Technical Engineer | ENG-06 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | TC-01 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | TC-02 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | TC-03 | PARTIAL | UNVERIFIED |
@@ -252,8 +252,8 @@
 | Project Engineer | ENG-02 | PARTIAL | UNVERIFIED |
 | Project Engineer | ENG-03 | COMPLETE | UNVERIFIED |
 | Project Engineer | ENG-04 | COMPLETE | UNVERIFIED |
-| Project Engineer | ENG-05 | PARTIAL | UNVERIFIED |
-| Project Engineer | ENG-06 | PARTIAL | UNVERIFIED |
+| Project Engineer | ENG-05 | COMPLETE | UNVERIFIED |
+| Project Engineer | ENG-06 | COMPLETE | UNVERIFIED |
 | Project Engineer | PLN-01 | PARTIAL | UNVERIFIED |
 | Project Engineer | PLN-02 | COMPLETE | UNVERIFIED |
 | Project Engineer | PLN-03 | COMPLETE | UNVERIFIED |
@@ -428,8 +428,8 @@
 | Technical Manager | ENG-02 | PARTIAL | UNVERIFIED |
 | Technical Manager | ENG-03 | COMPLETE | UNVERIFIED |
 | Technical Manager | ENG-04 | COMPLETE | UNVERIFIED |
-| Technical Manager | ENG-05 | PARTIAL | UNVERIFIED |
-| Technical Manager | ENG-06 | PARTIAL | UNVERIFIED |
+| Technical Manager | ENG-05 | COMPLETE | UNVERIFIED |
+| Technical Manager | ENG-06 | COMPLETE | UNVERIFIED |
 | Technical Manager | SUP-01 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | SUP-02 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | SUP-03 | UNVERIFIED | UNVERIFIED |

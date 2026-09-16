@@ -1537,7 +1537,7 @@ and retain revision/purpose lineage under representative project and functional 
 | Revision / purpose lineage retained | the items still read back at their conveyed revision and purpose after the conveyance has closed | no |
 | Representative project and functional permissions | JWT ON throughout; document-controller and recipient roles kept apart; the assertion resources on the conveyance's own project; unauthenticated 401 | no |
 
-**Proposed: `ENG-05` PARTIAL → COMPLETE.**
+**`ENG-05` PARTIAL → COMPLETE — applied on 2026-09-16 by the programme owner's decision.**
 
 ### ENG-06 reconciliation
 
@@ -1554,7 +1554,8 @@ material revision and retain receipt history.*
 | Their exact drawing revision | the conveyance code is derived from the immutable drawing-revision identity, so what was released cannot drift from what the register later becomes | no |
 | Retained receipt history | the acknowledgement history names each role that accepted, and each person's own receipt carries their own note rather than a shared one | no |
 
-**Proposed: `ENG-06` PARTIAL → COMPLETE.**
+**`ENG-06` PARTIAL → COMPLETE — applied on 2026-09-16 by the programme owner's decision.** That makes
+seventeen COMPLETE capabilities of 180, and closes the last of Wave 3's six pinned proofs.
 
 ### Found while proving it
 
@@ -1583,7 +1584,8 @@ it — their isolation is verified live rather than asserted by the migration th
   the system; no message leaves it. The same shared notification authority still wanted elsewhere.
 - **`sender` remains free text.** ENG-06 asks for a *separate* Design issuer and that is proven by
   the issuer not being on the distribution; making the sender a canonical user was not required and
-  is not claimed.
+  is not claimed. Recorded as **technical debt** on the programme owner's decision, not carried as an
+  open clause.
 
 ## Wave 3 remainder audit
 
@@ -1639,8 +1641,14 @@ waived, and nothing outside it may be added.
 
 **Five capabilities remained to close Wave 3: `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06`, `PLN-04`.**
 
-`PLN-04` is now COMPLETE (iteration 19), `ENG-03` with it (iteration 20) and `ENG-04` (iteration 21),
-so **two remain: `ENG-05`, `ENG-06`** — both document-control rows, and they share a mechanism. `ENG-06` is counted
+All six are now COMPLETE — `AWD-06`, `PLN-04`, `ENG-03`, `ENG-04`, `ENG-05`, `ENG-06` — so **no
+capability remains** for this wave.
+
+**That arithmetic does not close Wave 3.** The capability count is one input to a wave-level closure
+proof, not a substitute for it, and the wave is still IN PROGRESS until that proof is produced and
+accepted. The live RLS verification recorded above is the same kind of thing: an excellent additional
+layer, and not a shortcut past project-scope, functional or browser proof for anything it did not
+itself exercise. `ENG-06` is counted
 once but discharges two lines, carrying a gate clause of its own as well as a pinned proof.
 
 **The planning line is finished for this wave.** Of sixteen planning capabilities eleven are

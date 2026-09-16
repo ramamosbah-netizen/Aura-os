@@ -1484,7 +1484,7 @@
       "stages": [
         "Engineering"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Engineering / DocControl",
       "evidence": [
         "R-J26"
@@ -1492,17 +1492,17 @@
       "source": "apps/api/test/engineering-drawing-workflow.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Wave 3 API and browser proof require a named recipient and purpose, create one deterministic DocControl transmittal for the exact drawing revision, advance it to sent, preserve recipient/purpose, repair the drawing link on event replay and retry failures. Multi-document register-item packaging and recipient acknowledgement are not yet proved.",
-      "acceptanceProof": "Attach the exact controlled register revision(s), send once, show recipient receipt/acknowledgement and retain revision/purpose lineage under representative project and functional permissions."
+      "currentBehavior": "A conveyance goes to PEOPLE, and only they can say it arrived. The lifecycle was already enforced (draft to sent to received to acknowledged, no skipping and no re-send) and TransmittalItem already snapshotted the exact register revision BY VALUE — document number, title and revision captured at conveyance time, so what was sent stays readable after the register moves on. What was missing was the addressee: `recipient` was ONE free-text field and acknowledging checked a permission and nothing else, so any holder of doccontrol.transmittal.acknowledge could sign for a document addressed to somebody else and the register read as delivered. Recipients are now rows (migration 0332): a platform user, the capacity they receive in, and their OWN acknowledgement. Acknowledging requires two things where it required one — the permission says you are the kind of person who acknowledges conveyances, being ON the distribution says THIS one was sent to you. PARTIAL RECEIPT IS NOT RECEIPT: the conveyance reaches acknowledged only when the LAST named recipient answers, and until then the per-person receipts are the truth, so “the Buyer has it, Site has not” stays readable — the fact a chase starts from and the fact a single status destroys. The event payload carries the same split. The distribution is fixed at `sent`: recipients are added while it is a draft and adding somebody afterwards is refused, because what was conveyed is what was conveyed. A conveyance with NO named recipients keeps the previous permission-only behaviour, because historical records carry no distribution to check against and refusing them all would rewrite the past.",
+      "acceptanceProof": "Auth-ON HTTP and browser proof against PostgreSQL. PACKAGE: each item snapshots number, title and revision FROM the register so a package cannot claim a revision the controlled record never had; two documents travel in one conveyance, each keeping its OWN revision, because a package is not one revision applied to several drawings; and the items still read back at their conveyed revision and purpose after the conveyance has closed. SEND ONCE: draft to sent only, a second send refused 409. RECEIPT: each named recipient answers for themselves; a holder of the IDENTICAL acknowledge permission who is not on the distribution is refused and the count stays at zero; a second answer from the same person is refused; one person answering leaves the conveyance where it is and names who is still outstanding. Representative project and functional permissions throughout with JWT on — document-controller and recipient roles kept apart, the assertion resourced on the conveyance’s own project, unauthenticated 401. The browser register shows the distribution per person, refuses to round one answer up to receipt, offers the act only to somebody actually addressed, withdraws it once they have answered, and survives a reload because it is derived from the record. The acknowledge BFF had sent a PUT declaring a JSON content-type with NO body — rejected by the parser before the recipient rule was ever reached — and that fix is in the same commit the passing browser run exercised. ACCEPTED LIMITS: no printable transmittal note (the criterion asks for the package, the send, the receipt and the lineage, and none of them is a document); nothing notifies a recipient who is not looking at the register."
     },
     {
       "id": "ENG-06",
@@ -1516,7 +1516,7 @@
       "stages": [
         "Engineering"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Engineering / DocControl",
       "evidence": [
         "R-J26"
@@ -1524,17 +1524,17 @@
       "source": "apps/api/test/engineering-drawing-workflow.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh Wave 3 proof requires an open named engineering-release responsibility before an approved For Construction drawing can be transmitted. The controller derives both persisted records, rejects a responsibility from another project or source, and the outbox links the exact drawing code/revision and sent DocControl transmittal to the assignee My Work item. Auth-ON browser proof waits for both conveyance and receipt. Representative Site/Project/Procurement recipient roles and material-submittal release remain unproved.",
-      "acceptanceProof": "Repeat the governed release with separate Design issuer and assigned Site Engineer, Project Engineer and Procurement recipients; prove only authorized recipients see/accept their exact drawing or material revision and retain receipt history."
+      "currentBehavior": "The governed release now reaches NAMED operational roles who each answer for themselves. It shares the distribution mechanism ENG-05 describes — recipients as rows, each with their own acknowledgement — and the release path addresses the conveyance BEFORE sending it, idempotently on replay: a recipient already present is skipped rather than duplicated, and anything else escapes to the durable handler for retry. The issuer is Design and is deliberately NOT on the distribution, because a release nobody outside Design has to accept is an announcement rather than a handover. What the release conveys is pinned to the immutable drawing-revision identity, so what was released cannot drift from what the register later becomes.",
+      "acceptanceProof": "Auth-ON HTTP proof with JWT on, kept deliberately apart from ENG-05 because sharing a mechanism is not sharing a criterion. The drawing walks draft to submitted to under_review to approved to transmitted, each step its own governed act, and the release produces the conveyance. SEPARATE ISSUER: the issuer is Design and is not among the recipients. THREE NAMED RECIPIENTS: Site Engineer, Project Engineer and Procurement, each in the capacity they receive in. ONLY AUTHORIZED RECIPIENTS ACCEPT: a bystander holding the IDENTICAL acknowledge permission is refused and the count stays at zero; Site accepting does not accept on behalf of the Project Engineer or the Buyer, and the outstanding two are named; the conveyance reaches acknowledged only when the Buyer answers too. EXACT REVISION: the conveyance code is derived from the immutable drawing-revision identity. RECEIPT HISTORY: the acknowledgement history names each role that accepted and each person’s own receipt carries their own note rather than a shared one. ACCEPTED LIMITS: `sender` remains free text — a SEPARATE issuer is what the criterion asks and it is proven by the issuer not being on the distribution, so a canonical sender is recorded as technical debt rather than claimed; and nothing notifies a recipient who is not looking at the register."
     },
     {
       "id": "PLN-01",
@@ -8537,8 +8537,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 15,
-      "PARTIAL": 91,
+      "COMPLETE": 17,
+      "PARTIAL": 89,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

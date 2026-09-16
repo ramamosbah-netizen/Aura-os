@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
 /**
  * The materials on a requisition (`BUY-01`, gap record `J3-05`).
@@ -131,61 +131,78 @@ export default function RequisitionLinesPanel({ prId, currency, editable }: {
       return res;
     });
 
-  const removeLine = (lineId: string) =>
-    act(() => fetch(`/api/procurement/purchase-requests/${prId}/lines/${lineId}`, { method: 'DELETE' }));
-
   if (error && lines === null) {
-    return <p style={s.error} data-testid="req-lines-error">{error}</p>;
+    return (
+      <section className="panel" style={st.section}>
+        <div style={st.head}>Materials requested</div>
+        <p style={st.bad} data-testid="req-lines-error">{error}</p>
+      </section>
+    );
   }
-  if (lines === null) return <p style={s.muted}>Loading the materials…</p>;
+  if (lines === null) {
+    return (
+      <section className="panel" style={st.section}>
+        <div style={st.head}>Materials requested</div>
+        <p style={st.muted}>Loading…</p>
+      </section>
+    );
+  }
 
   return (
-    <div style={s.wrap} data-testid={`req-lines-${prId}`}>
-      <h3 style={s.h3}>Materials requested</h3>
+    <section className="panel" style={st.section} data-testid={`req-lines-${prId}`}>
+      <div style={st.head}>
+        Materials requested
+        {summary && summary.total.lineCount > 0 && (
+          <span className={summary.submission.ready ? 'badge badge-good' : 'badge badge-warn'}>
+            {summary.submission.ready ? 'ready to submit' : 'incomplete'}
+          </span>
+        )}
+      </div>
 
       {lines.length === 0 ? (
-        <p style={s.muted} data-testid="req-lines-empty">
+        <p style={st.muted} data-testid="req-lines-empty">
           No materials yet. A requisition needs at least one line before it can be submitted.
         </p>
       ) : (
-        <table style={s.table}>
+        <table className="data-table">
           <thead>
             <tr>
-              <th style={s.th}>#</th>
-              <th style={s.th}>Material</th>
-              <th style={s.thNum}>Quantity</th>
-              <th style={s.thNum}>Est. unit cost</th>
-              <th style={s.thNum}>Line total</th>
-              <th style={s.th}>Needed by</th>
-              {editable && <th style={s.th} />}
+              <th style={st.wNum}>#</th>
+              <th>Material</th>
+              <th style={st.right}>Quantity</th>
+              <th style={st.right}>Est. unit cost</th>
+              <th style={st.right}>Line total</th>
+              <th>Needed by</th>
+              {editable && <th />}
             </tr>
           </thead>
           <tbody>
             {lines.map((l) => (
               <tr key={l.id} data-testid={`req-line-${l.lineNo}`}>
-                <td style={s.td}>{l.lineNo}</td>
-                <td style={s.td}>
-                  <strong>{l.materialCode}</strong>
-                  <div style={s.sub}>{l.materialName}</div>
+                <td style={st.wNum}>{l.lineNo}</td>
+                <td>
+                  <div style={st.strong}>{l.materialCode}</div>
+                  <div style={st.sub}>{l.materialName}</div>
                   {(l.manufacturer || l.model) && (
-                    <div style={s.sub}>{[l.manufacturer, l.model].filter(Boolean).join(' · ')}</div>
+                    <div style={st.sub}>{[l.manufacturer, l.model].filter(Boolean).join(' · ')}</div>
                   )}
                 </td>
                 {/* The unit travels with the number, because a quantity without one is not a quantity. */}
-                <td style={s.tdNum} data-testid={`req-line-qty-${l.lineNo}`}>{l.quantity} {l.uom}</td>
-                <td style={s.tdNum} data-testid={`req-line-cost-${l.lineNo}`}>
+                <td style={st.right} data-testid={`req-line-qty-${l.lineNo}`}>{l.quantity} {l.uom}</td>
+                <td style={st.right} data-testid={`req-line-cost-${l.lineNo}`}>
                   {l.estimatedUnitCost === null
-                    ? <span style={s.unpriced}>not priced</span>
+                    ? <span style={st.warnText}>not priced</span>
                     : money(l.estimatedUnitCost)}
                 </td>
-                <td style={s.tdNum}>
-                  {l.estimatedUnitCost === null ? <span style={s.unpriced}>—</span> : money(l.quantity * l.estimatedUnitCost)}
+                <td style={st.right}>
+                  {l.estimatedUnitCost === null ? <span style={st.warnText}>—</span> : money(l.quantity * l.estimatedUnitCost)}
                 </td>
-                <td style={s.td}>{l.needByDate ?? <span style={s.muted}>—</span>}</td>
+                <td>{l.needByDate ?? <span style={st.mutedCell}>—</span>}</td>
                 {editable && (
-                  <td style={s.td}>
-                    <button type="button" style={s.link} disabled={busy}
-                      onClick={() => void removeLine(l.id)} data-testid={`req-line-remove-${l.lineNo}`}>
+                  <td style={st.nowrap}>
+                    <button type="button" className="btn btn-ghost" style={st.sm} disabled={busy}
+                      onClick={() => void act(() => fetch(`/api/procurement/purchase-requests/${prId}/lines/${l.id}`, { method: 'DELETE' }))}
+                      data-testid={`req-line-remove-${l.lineNo}`}>
                       Remove
                     </button>
                   </td>
@@ -197,79 +214,77 @@ export default function RequisitionLinesPanel({ prId, currency, editable }: {
       )}
 
       {summary && summary.total.lineCount > 0 && (
-        <div style={s.totals} data-testid="req-lines-total">
+        <div style={st.foot} data-testid="req-lines-total">
           {summary.governing.value !== null ? (
             <strong data-testid="req-lines-value">{money(summary.governing.value)}</strong>
           ) : (
             <>
               {/* NOT presented as the requisition's value: it is the part that has been priced. */}
-              <strong style={s.provisional} data-testid="req-lines-value">
+              <strong style={st.warnText} data-testid="req-lines-value">
                 {money(summary.total.pricedSubtotal)} so far
               </strong>
-              <span style={s.warn} data-testid="req-lines-incomplete">
+              <span style={st.warnLine} data-testid="req-lines-incomplete">
                 {summary.total.unpricedCount} of {summary.total.lineCount} lines are not priced — this
                 requisition has no value yet
               </span>
             </>
           )}
           {!summary.submission.ready && summary.submission.reason && (
-            <span style={s.warn} data-testid="req-lines-blocked">{summary.submission.reason}</span>
+            <span style={st.warnLine} data-testid="req-lines-blocked">{summary.submission.reason}</span>
           )}
         </div>
       )}
 
       {editable && (
-        <div style={s.form}>
-          <select style={s.input} value={material} onChange={(e) => setMaterial(e.target.value)}
+        <div style={st.form}>
+          <select className="select" value={material} onChange={(e) => setMaterial(e.target.value)}
             data-testid="req-line-material" aria-label="Material">
             <option value="">Choose a material…</option>
             {materials.map((m) => (
               <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
             ))}
           </select>
-          <div style={s.qtyWrap}>
-            <input style={s.input} value={quantity} onChange={(e) => setQuantity(e.target.value)}
+          <div style={st.qty}>
+            <input className="input" style={st.narrow} value={quantity} onChange={(e) => setQuantity(e.target.value)}
               inputMode="decimal" placeholder="Quantity" data-testid="req-line-quantity" aria-label="Quantity" />
             {/* The unit is shown, never entered — it belongs to the material. */}
-            <span style={s.uom} data-testid="req-line-uom">{chosen?.uom ?? '—'}</span>
+            <span style={st.uom} data-testid="req-line-uom">{chosen?.uom ?? '—'}</span>
           </div>
-          <input style={s.input} value={unitCost} onChange={(e) => setUnitCost(e.target.value)}
+          <input className="input" style={st.narrow} value={unitCost} onChange={(e) => setUnitCost(e.target.value)}
             inputMode="decimal" placeholder={`Est. unit cost (${currency})`}
             data-testid="req-line-cost" aria-label={`Estimated unit cost in ${currency}`} />
-          <input style={s.input} type="date" value={needBy} onChange={(e) => setNeedBy(e.target.value)}
+          <input className="input" style={st.narrow} type="date" value={needBy} onChange={(e) => setNeedBy(e.target.value)}
             data-testid="req-line-needby" aria-label="Needed by" />
-          <button type="button" style={s.btn} disabled={busy || !material || !quantity}
+          <button type="button" className="btn btn-primary" disabled={busy || !material || !quantity}
             onClick={() => void addLine()} data-testid="req-line-add">
             Add material
           </button>
         </div>
       )}
 
-      {error && <p style={s.error} data-testid="req-lines-refusal">{error}</p>}
-    </div>
+      {error && <p style={st.bad} data-testid="req-lines-refusal">{error}</p>}
+    </section>
   );
 }
 
-const s = {
-  wrap: { marginTop: 14, border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', background: 'var(--panel)' },
-  h3: { fontSize: 14, margin: '0 0 8px', letterSpacing: -0.2 },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 },
-  th: { textAlign: 'left', padding: '6px 8px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  thNum: { textAlign: 'right', padding: '6px 8px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  td: { padding: '7px 8px', borderBottom: '1px solid var(--border)', verticalAlign: 'top' },
-  tdNum: { padding: '7px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', verticalAlign: 'top', whiteSpace: 'nowrap' },
-  sub: { color: 'var(--muted)', fontSize: 11, marginTop: 2 },
-  unpriced: { color: 'var(--warn, #b7791f)', fontSize: 12 },
-  totals: { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', marginTop: 10 },
-  // Deliberately not the settled colour: a partial sum is not a total.
-  provisional: { color: 'var(--warn, #b7791f)' },
-  warn: { color: 'var(--warn, #b7791f)', fontSize: 12, textAlign: 'right', maxWidth: 520 },
-  form: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, alignItems: 'center' },
-  qtyWrap: { display: 'flex', alignItems: 'center', gap: 6 },
-  uom: { color: 'var(--muted)', fontSize: 12, minWidth: 28 },
-  input: { padding: '6px 9px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)' },
-  btn: { padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg)', color: 'var(--text)' },
-  link: { background: 'none', border: 'none', color: 'var(--bad)', fontSize: 12, cursor: 'pointer', padding: 0 },
-  muted: { color: 'var(--muted)', fontSize: 12, margin: '4px 0' },
-  error: { color: 'var(--bad)', fontSize: 12, margin: '8px 0 0' },
-} as const satisfies Record<string, React.CSSProperties>;
+const st = {
+  section: { marginTop: 14, padding: '12px 14px' } as CSSProperties,
+  head: { display: 'flex', alignItems: 'center', gap: 10, fontWeight: 600, fontSize: 14, marginBottom: 8 } as CSSProperties,
+  strong: { fontWeight: 600 } as CSSProperties,
+  sub: { color: 'var(--muted)', fontSize: 11.5, marginTop: 2 } as CSSProperties,
+  right: { textAlign: 'right', whiteSpace: 'nowrap' } as CSSProperties,
+  nowrap: { whiteSpace: 'nowrap' } as CSSProperties,
+  wNum: { width: 44 } as CSSProperties,
+  // Deliberately not the settled colour: some is not all.
+  warnText: { color: 'var(--warn, #b7791f)', fontWeight: 600 } as CSSProperties,
+  warnLine: { color: 'var(--warn, #b7791f)', fontSize: 12, textAlign: 'right', maxWidth: 520 } as CSSProperties,
+  mutedCell: { color: 'var(--muted)' } as CSSProperties,
+  muted: { color: 'var(--muted)', fontSize: 13, margin: '6px 0' } as CSSProperties,
+  bad: { color: 'var(--bad)', fontSize: 12.5, margin: '10px 0 0' } as CSSProperties,
+  foot: { display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end', marginTop: 12 } as CSSProperties,
+  form: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 14, alignItems: 'center' } as CSSProperties,
+  qty: { display: 'flex', alignItems: 'center', gap: 6 } as CSSProperties,
+  narrow: { maxWidth: 175 } as CSSProperties,
+  uom: { color: 'var(--muted)', fontSize: 12.5, minWidth: 26 } as CSSProperties,
+  sm: { padding: '4px 10px', fontSize: 12 } as CSSProperties,
+};

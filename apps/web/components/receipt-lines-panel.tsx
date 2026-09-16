@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
 /**
  * Recording what actually arrived, against the order line it answers (`BUY-05`).
@@ -99,24 +99,25 @@ export default function ReceiptLinesPanel({ grnId, poId }: { grnId: string; poId
 
   if (!poId) {
     return (
-      <p style={s.muted} data-testid={`receipt-lines-no-po-${grnId}`}>
-        This note is not against a purchase order, so there are no ordered lines to receive against.
-      </p>
+      <div style={st.wrap}>
+        <p style={st.muted} data-testid={`receipt-lines-no-po-${grnId}`}>
+          This note is not against a purchase order, so there are no ordered lines to receive against.
+        </p>
+      </div>
     );
   }
-  if (recorded === null && error) return <p style={s.error} data-testid="receipt-lines-error">{error}</p>;
 
   return (
-    <div style={s.wrap} data-testid={`receipt-lines-${grnId}`}>
+    <div style={st.wrap} data-testid={`receipt-lines-${grnId}`}>
       {recorded && recorded.length > 0 && (
-        <table style={s.table}>
+        <table className="data-table">
           <thead>
             <tr>
-              <th style={s.th}>#</th>
-              <th style={s.th}>Against</th>
-              <th style={s.thNum}>Accepted</th>
-              <th style={s.thNum}>Rejected</th>
-              <th style={s.th}>Reason</th>
+              <th style={st.wNum}>#</th>
+              <th>Against</th>
+              <th style={st.right}>Accepted</th>
+              <th style={st.right}>Rejected</th>
+              <th>Reason</th>
             </tr>
           </thead>
           <tbody>
@@ -124,13 +125,13 @@ export default function ReceiptLinesPanel({ grnId, poId }: { grnId: string; poId
               const l = lineOf(r.poLineId);
               return (
                 <tr key={r.id} data-testid={`receipt-entry-${r.lineNo}`}>
-                  <td style={s.td}>{r.lineNo}</td>
-                  <td style={s.td}>{l ? `${l.materialCode} — ${l.materialName}` : r.poLineId}</td>
-                  <td style={s.tdNum}>{r.quantityAccepted}{l ? ` ${l.uom}` : ''}</td>
-                  <td style={r.quantityRejected > 0 ? s.tdNumBad : s.tdNum}>
+                  <td style={st.wNum}>{r.lineNo}</td>
+                  <td>{l ? `${l.materialCode} — ${l.materialName}` : r.poLineId}</td>
+                  <td style={st.right}>{r.quantityAccepted}{l ? ` ${l.uom}` : ''}</td>
+                  <td style={r.quantityRejected > 0 ? st.rightBad : st.right}>
                     {r.quantityRejected}{l ? ` ${l.uom}` : ''}
                   </td>
-                  <td style={s.tdMuted}>{r.rejectionReason ?? '—'}</td>
+                  <td style={st.mutedCell}>{r.rejectionReason ?? '—'}</td>
                 </tr>
               );
             })}
@@ -138,8 +139,8 @@ export default function ReceiptLinesPanel({ grnId, poId }: { grnId: string; poId
         </table>
       )}
 
-      <div style={s.form}>
-        <select style={s.input} value={poLineId} onChange={(e) => setPoLineId(e.target.value)}
+      <div style={st.form}>
+        <select className="select" value={poLineId} onChange={(e) => setPoLineId(e.target.value)}
           data-testid="receipt-line-order-line" aria-label="Which ordered line arrived">
           <option value="">Which ordered line arrived…</option>
           {orderLines.map((l) => (
@@ -148,44 +149,40 @@ export default function ReceiptLinesPanel({ grnId, poId }: { grnId: string; poId
             </option>
           ))}
         </select>
-        <div style={s.qtyWrap}>
-          <input style={s.input} value={accepted} onChange={(e) => setAccepted(e.target.value)}
+        <div style={st.qty}>
+          <input className="input" style={st.narrow} value={accepted} onChange={(e) => setAccepted(e.target.value)}
             inputMode="decimal" placeholder="Accepted" data-testid="receipt-line-accepted" aria-label="Quantity accepted" />
-          <span style={s.uom} data-testid="receipt-line-uom">{chosen?.uom ?? '—'}</span>
+          <span style={st.uom} data-testid="receipt-line-uom">{chosen?.uom ?? '—'}</span>
         </div>
-        <input style={s.input} value={rejected} onChange={(e) => setRejected(e.target.value)}
+        <input className="input" style={st.narrow} value={rejected} onChange={(e) => setRejected(e.target.value)}
           inputMode="decimal" placeholder="Rejected" data-testid="receipt-line-rejected" aria-label="Quantity rejected" />
         {/* Only asked for when something is being rejected — and then the server insists on it. */}
         {Number(rejected) > 0 && (
-          <input style={s.inputWide} value={reason} onChange={(e) => setReason(e.target.value)}
+          <input className="input" style={st.wide} value={reason} onChange={(e) => setReason(e.target.value)}
             placeholder="Why was it rejected?" data-testid="receipt-line-reason" aria-label="Rejection reason" />
         )}
-        <button type="button" style={s.btn} disabled={busy || !poLineId}
+        <button type="button" className="btn btn-primary" disabled={busy || !poLineId}
           onClick={() => void record()} data-testid="receipt-line-record">
           Record
         </button>
       </div>
 
-      {error && <p style={s.error} data-testid="receipt-lines-refusal">{error}</p>}
+      {error && <p style={st.bad} data-testid="receipt-lines-refusal">{error}</p>}
     </div>
   );
 }
 
-const s = {
-  wrap: { padding: '10px 12px', background: 'var(--bg)', borderTop: '1px solid var(--border)' },
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 12.5 },
-  th: { textAlign: 'left', padding: '5px 8px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  thNum: { textAlign: 'right', padding: '5px 8px', borderBottom: '1px solid var(--border)', fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 },
-  td: { padding: '6px 8px', borderBottom: '1px solid var(--border)' },
-  tdMuted: { padding: '6px 8px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' },
-  tdNum: { padding: '6px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap' },
-  tdNumBad: { padding: '6px 8px', borderBottom: '1px solid var(--border)', textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--bad)' },
-  form: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10, alignItems: 'center' },
-  qtyWrap: { display: 'flex', alignItems: 'center', gap: 6 },
-  uom: { color: 'var(--muted)', fontSize: 12, minWidth: 24 },
-  input: { padding: '6px 9px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' },
-  inputWide: { padding: '6px 9px', fontSize: 13, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)', minWidth: 220 },
-  btn: { padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1px solid var(--border)', borderRadius: 8, background: 'var(--panel)', color: 'var(--text)' },
-  muted: { color: 'var(--muted)', fontSize: 12, padding: '10px 12px', margin: 0 },
-  error: { color: 'var(--bad)', fontSize: 12, margin: '8px 0 0' },
-} as const satisfies Record<string, React.CSSProperties>;
+const st = {
+  wrap: { padding: '12px 14px', background: 'var(--panel-2)', borderTop: '1px solid var(--border)' } as CSSProperties,
+  form: { display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12, alignItems: 'center' } as CSSProperties,
+  qty: { display: 'flex', alignItems: 'center', gap: 6 } as CSSProperties,
+  narrow: { maxWidth: 150 } as CSSProperties,
+  wide: { minWidth: 240 } as CSSProperties,
+  uom: { color: 'var(--muted)', fontSize: 12.5, minWidth: 24 } as CSSProperties,
+  right: { textAlign: 'right', whiteSpace: 'nowrap' } as CSSProperties,
+  rightBad: { textAlign: 'right', whiteSpace: 'nowrap', color: 'var(--bad)' } as CSSProperties,
+  mutedCell: { color: 'var(--muted)' } as CSSProperties,
+  wNum: { width: 44 } as CSSProperties,
+  muted: { color: 'var(--muted)', fontSize: 13, margin: 0 } as CSSProperties,
+  bad: { color: 'var(--bad)', fontSize: 12.5, margin: '10px 0 0' } as CSSProperties,
+};

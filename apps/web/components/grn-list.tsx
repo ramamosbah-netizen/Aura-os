@@ -49,15 +49,15 @@ export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   if (grns.length === 0) {
-    return <p style={s.muted}>No goods receipts yet — record one against an issued PO above.</p>;
+    return <p style={s.empty}>No goods receipts yet — record one against an issued PO above.</p>;
   }
 
   return (
-    <table style={s.table}>
+    <table className="data-table">
       <thead>
         <tr>
           {['Goods', 'Against PO', 'Supplier', 'Project', 'Status', 'Value', 'Created', ''].map((h) => (
-            <th key={h} style={s.th}>{h}</th>
+            <th key={h}>{h}</th>
           ))}
         </tr>
       </thead>
@@ -65,18 +65,19 @@ export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
         {grns.map((g) => (
           <Fragment key={g.id}>
             <tr>
-              <td style={s.td}>{g.title}</td>
-              <td style={s.tdMuted}>{g.poTitle ?? '—'}</td>
-              <td style={s.tdMuted}>{g.supplierName ?? '—'}</td>
-              <td style={s.tdMuted}>{g.projectName ?? '—'}</td>
-              <td style={s.td}><span style={s.tag}>{g.status}</span></td>
-              <td style={s.td}>{money(g.value)}</td>
-              <td style={s.tdMuted}>{fmt(g.createdAt)}</td>
-              <td style={s.td}>
+              <td>{g.title}</td>
+              <td style={s.muted}>{g.poTitle ?? '—'}</td>
+              <td style={s.muted}>{g.supplierName ?? '—'}</td>
+              <td style={s.muted}>{g.projectName ?? '—'}</td>
+              <td><span className="badge">{g.status}</span></td>
+              <td style={s.right}>{money(g.value)}</td>
+              <td style={s.muted}>{fmt(g.createdAt)}</td>
+              <td style={s.nowrap}>
                 <div style={s.actions}>
                   <button
                     type="button"
-                    style={s.btn}
+                    className="btn btn-ghost"
+                    style={s.sm}
                     onClick={() => setOpenId(openId === g.id ? null : g.id)}
                     data-testid={`grn-receive-toggle-${g.id}`}
                   >
@@ -89,7 +90,7 @@ export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Print goods receipt note (PDF)"
-                    style={s.print}
+                    style={s.link}
                   >
                     Print
                   </a>
@@ -111,24 +112,12 @@ export default function GrnList({ grns }: { grns: GoodsReceipt[] }) {
 }
 
 const s = {
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
-  th: {
-    textAlign: 'left', color: 'var(--muted)', fontWeight: 500, fontSize: 12,
-    textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 12px',
-    borderBottom: '1px solid var(--border)',
-  } as CSSProperties,
-  td: { padding: '11px 12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
-  tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)' } as CSSProperties,
-  linesCell: { padding: 0, background: 'var(--bg)' } as CSSProperties,
-  actions: { display: 'flex', gap: 10, alignItems: 'center' } as CSSProperties,
-  btn: {
-    background: 'var(--panel-2)', border: '1px solid var(--border)', color: 'var(--text)',
-    borderRadius: 8, padding: '5px 10px', fontSize: 12.5, cursor: 'pointer',
-  } as CSSProperties,
-  print: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, fontSize: 12.5 } as CSSProperties,
-  tag: {
-    fontSize: 12, background: 'var(--panel-2)', border: '1px solid var(--border)',
-    borderRadius: 6, padding: '2px 8px', textTransform: 'capitalize',
-  } as CSSProperties,
-  muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
+  linesCell: { padding: 0 } as CSSProperties,
+  actions: { display: 'flex', gap: 12, alignItems: 'center' } as CSSProperties,
+  sm: { padding: '4px 10px', fontSize: 12 } as CSSProperties,
+  link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600, fontSize: 12.5 } as CSSProperties,
+  muted: { color: 'var(--muted)' } as CSSProperties,
+  right: { textAlign: 'right', whiteSpace: 'nowrap' } as CSSProperties,
+  nowrap: { whiteSpace: 'nowrap' } as CSSProperties,
+  empty: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
 };

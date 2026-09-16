@@ -1750,6 +1750,295 @@ remains the programme owner's, as every promotion in this report has been.
 **`MGT-13` is not among them.** The roadmap allocates it to Wave 9 (*Manager and CEO decision
 acceptance*), and nothing in Wave 3's gate depends on a cross-project roll-up.
 
+## Wave 3 Closure Proof
+
+**Evidence only. Wave 3 is NOT declared closed by this section.** Closure is proposed on what
+follows; the decision remains the programme owner's, as every promotion in this report has been.
+
+**Checkpoint:** `0990bc8d` on `main` · **Proof date:** 16 September 2026
+
+Every figure below was measured at this checkpoint. Nothing is carried forward from an earlier
+iteration, and no capability was re-opened, re-proved or modified to produce it. Two claims made
+earlier in this report did not survive being checked against the frozen records; both are corrected
+in §3 rather than repeated.
+
+### 0. Runtime binding — what this evidence was produced against
+
+A proof against a stale build proves nothing, and this programme has hit exactly that three times.
+So the binding is stated before the findings:
+
+| | |
+| --- | --- |
+| HEAD | `0990bc8d` |
+| Full workspace build | `pnpm build` — **27/27 tasks successful** |
+| Newest built workspace package | 2026-09-16 **04:49:40Z** |
+| API process start | 2026-09-16 **09:04:52Z** |
+| API postdates every built package | **yes** |
+| Database | local PostgreSQL, `e2e-disposable`, **332/332 migrations applied** |
+| `aura_app` role | LOGIN=true, **SUPERUSER=false, BYPASSRLS=false** |
+
+The verification database was rebuilt empty twice during this work and re-provisioned from nothing
+both times, so the 332-migration chain is proven to land on an empty database rather than to have
+accumulated through the wave.
+
+### 1. The seven exit-gate clauses
+
+The frozen gate, verbatim from [the roadmap](./remediation-roadmap.md):
+
+> frozen scope reconciles to WBS and Sold projection; an approved engineering release reaches
+> Site/Buyer; the planner allocates real resources, detects a conflict, accepts a recovery proposal
+> and sends the resulting work to the responsible people; six pinned proofs are resolved.
+
+| # | Clause | Carrier | Evidence at this checkpoint | State |
+| --- | --- | --- | --- | :---: |
+| 1 | Frozen scope reconciles to WBS and Sold projection | `AWD-05` COMPLETE | Project 360 maps the frozen item to a WBS node; the outbox reactor posts canonical SOLD quantity to the append-only ledger idempotently; a forged source/revision is ignored; an unknown item and a cross-project node are refused | MET |
+| 2 | An approved engineering release reaches Site/**Buyer** | `ENG-06` COMPLETE | Design issues and is NOT on the distribution; Site Engineer, Project Engineer and **Procurement** each named in their own capacity; a bystander holding the identical permission refused; each accepts only for themselves; the conveyance closes only when the Buyer answers too | MET |
+| 3 | The planner allocates real resources | `PLN-06` / `PLN-07` / `PLN-08`, all PARTIAL | employee, crew, vehicle, asset and governed shared-pool demand authored on a WBS-linked activity and committed into a held booking, Auth-ON | MET |
+| 4 | …detects a conflict | `PLN-10` COMPLETE, `PLN-09` PARTIAL | cross-project double-booking and over-capacity surfaced as a derived verdict and never a stored one; an HR leave request drives through approval and the planning desk changes with it | MET |
+| 5 | …accepts a recovery proposal | `PLN-15` COMPLETE | delay → impact → assessment → explicit hand-off → proposal → acceptance → governed programme; a stale basis is detected before acceptance; a rejected proposal changes nothing | MET |
+| 6 | …and sends the resulting work to the responsible people | `AWD-06` COMPLETE, `PLN-07` / `PLN-08` | a named responsibility reaches that assignee's My Work; a held employee booking reaches the named person and their crew's roster; an equipment commitment reaches that machine's custodian, accepted or refused with a reason | MET |
+| 7 | Six pinned proofs are resolved | §2 | all six COMPLETE | MET |
+
+**Seven of seven met.**
+
+Two honest qualifications, stated rather than smoothed over:
+
+- **Clauses 3 and 4 are carried by rows that are still PARTIAL.** `PLN-06`, `PLN-07`, `PLN-08` and
+  `PLN-09` remain PARTIAL for things this gate does not ask for — the Fleet/Assets availability
+  bridge, and project access for an allocated non-member. The gate asks the planner to allocate real
+  resources and to detect a conflict; both are proven Auth-ON. No clause here is being read as
+  satisfied by a row's overall classification, and no row is being promoted by this section.
+- **The scope bullet says "notify"; what is proven is in-system delivery.** The wave's scope list
+  includes *notify resource owners and Site of accepted assignments*, and the work reaches the named
+  person's My Work — it does not leave the system. The **exit gate's** own words are *sends the
+  resulting work to the responsible people*, which the proven receipts satisfy. The gap between the
+  scope bullet's verb and the gate's verb is real, and it is recorded as debt in §7 rather than
+  claimed as met.
+
+### 2. The six pinned proofs
+
+| Pinned proof | Capability | Classification | Closed at |
+| --- | --- | :---: | --- |
+| `AWD-06` | Team and responsibility assignment | **COMPLETE** | iteration 3 |
+| `PLN-04` | Milestones | **COMPLETE** | iteration 19 |
+| `ENG-03` | Technical query response | **COMPLETE** | iteration 20 |
+| `ENG-04` | Approved material submittal | **COMPLETE** | iteration 21 |
+| `ENG-05` | Document transmittal | **COMPLETE** | iteration 22 |
+| `ENG-06` | Release notification to site | **COMPLETE** | iteration 22 |
+
+**Six of six resolved. No capability remains for this wave.**
+
+Register classification at this checkpoint, recounted from the 180 leaves rather than read off the
+stored totals: **COMPLETE 17** · PARTIAL 89 · UNVERIFIED 49 · WRONG_BEHAVIOR 13 · DISCONNECTED 8 ·
+BACKEND_ONLY 4. The recount agrees with the stored totals block exactly.
+
+The seventeen: `AWD-05` `AWD-06` `ENG-03` `ENG-04` `ENG-05` `ENG-06` `PLN-02` `PLN-03` `PLN-04`
+`PLN-05` `PLN-10` `PLN-11` `PLN-12` `PLN-13` `PLN-14` `PLN-15` `PLN-16`.
+
+### 3. Gap-record reconciliation — including two corrections
+
+| Record | Carrier | Register status | Verdict |
+| --- | --- | :---: | --- |
+| `J2-02` — mapping UI unavailable | `AWD-05` | **CLOSED_VERIFIED** | closed; the Auth-ON browser maps the final Tender item to a WBS node |
+| `J2-03` — SOLD projection missing | `AWD-05` | **CLOSED_VERIFIED** | closed; API journey and browser poll the ledger to SOLD = frozen quantity |
+| `F-07` — WBS-linked activities still need connected resources, progress and cost | `PLN-01` PARTIAL | **OPEN** | **still open against its own acceptance proof** |
+| `F-08` — planner cannot author task resource requirements | `PLN-06` PARTIAL | **OPEN** | **still open against its own acceptance proof** |
+
+**Correction 1 — `F-07` and `F-08` are not discharged.** Iteration 21's remainder audit stated that
+their resolution is *"WBS-linked task, dependencies, named resources, availability conflict and
+recipient handoff"* and that both records are therefore discharged. Checked against the frozen
+records, that is wrong on both counts. The quoted phrase is not from either record; it paraphrases
+the wave's scope bullets. Their actual frozen `acceptanceProof` fields read:
+
+- `F-07`: *"Continue the established WBS identity into employee/equipment demand, quantity-driven
+  progress and **cost**; prove the planning and delivery views reconcile without re-entry."*
+- `F-08`: *"Connect **HR/Fleet availability** so a leave or breakdown changes the feasibility of an
+  existing commitment without re-entry."*
+
+Cost continuity through the same activity identity and the Fleet/Assets availability bridge are both
+open — this report says so itself, in the same paragraph that declared the records discharged. Two
+records cannot be discharged by criteria they do not contain. **Both remain OPEN**, and the register
+was never told otherwise: `master-register.json` carries them as `OPEN` at this checkpoint, so no
+generated artifact asserts the closure. The overstatement is in prose only, here and in the
+generated `verification-queue.md` paragraph that repeats it.
+
+**Correction 2 — this does not change the gate.** The frozen exit gate has seven clauses and none of
+them is *"the wave's gap records are closed"*. `F-07` and `F-08` are severity CRITICAL and HIGH
+against `PLN-01` and `PLN-06`, both of which the roadmap keeps open past this wave. They are carried
+forward as open records, counted honestly, and not netted against the gate.
+
+The correcting edit to `verification-queue.md` is **not applied in this checkpoint**, because this
+section was asked for as evidence and nothing else was to change before closure. It is owed, and it
+is a one-paragraph correction to the generator.
+
+### 4. Connected journey — what it shows, and what it does not
+
+Programme rule 1 requires the same awarded job to be carried through rather than a collection of
+independently conjured projects. That is enforced in the fixtures themselves, not left to
+convention.
+
+`apps/api/test/helpers/governed-delivery-fixture.ts` builds the governed commercial prerequisite —
+**a tender that was priced, quoted, approved and awarded, the contract it produced, and the project
+that contract created, with the frozen award items intact** — and states its own rule in its header:
+
+> Nothing downstream — a quantity, a work package's progress, an activity's progress — may be proven
+> against a project conjured without it, because the frozen item is what makes "installed against
+> WHAT" answerable.
+
+**Four specs consume that fixture rather than inventing a project:** `quantity-ledger`,
+`planned-output` (`PLN-11`), `activity-progress` (`PLN-12`) and `forecast-completion` (`PLN-16`).
+
+These chains are each proven end to end on a single project within a single spec:
+
+| Chain | Proven in |
+| --- | --- |
+| awarded tender → contract → project → frozen item → WBS → SOLD ledger → installed quantity | `quantity-ledger` |
+| …→ priced productivity → planned output | `planned-output` |
+| …→ measured versus declared activity progress | `activity-progress` |
+| …→ baseline → progress → forecast finish with confidence | `forecast-completion` |
+| project → WBS → schedule → dependencies → milestone → achievement → the owner's My Work | `project-milestones` |
+| drawing → submit → review → approve → transmit → named recipients → per-person receipts | `transmittal-receipt` |
+| MAR raise → submit → decision recorded against the consultant → the proposer's My Work | `material-approval` |
+
+**What this does not show, said plainly: no single specification walks all three gate arcs — frozen
+scope, engineering release, and the planning chain — on one project in one run.** The arcs are proven
+individually, and the commercial arc is genuinely shared by the four specs above through the frozen
+fixture rather than re-created in each. A single end-to-end spec spanning all three does not exist at
+this checkpoint, and this proof does not claim one. `j2-j6-delivery-audit.e2e-spec.ts` is a J2–J6
+characterization, not that spec, and it is one of the twelve failing files in §6.
+
+### 5. Wave 2 frozen authority — consumed, not re-derived
+
+Wave 2 closed on a frozen award basis. Wave 3's obligation is to **consume** it rather than
+re-compute it. That is what the fixture above enforces at the test boundary; inside the product, it
+shows up in the mechanisms:
+
+- `AWD-05` derives immutable source lineage **from the persisted handover snapshot**, and a forged
+  source or revision supplied in the request is ignored rather than trusted.
+- `PLN-11`'s frozen productivity basis is populated **per awarded line at handover** and carries no
+  money — rates stay behind `tendering.internal-pricing.access`.
+- The SOLD projection is posted by a reactor from the frozen snapshot, idempotently, into an
+  append-only ledger with a deterministic source key.
+- `ENG-05`'s package items snapshot number, title and revision **by value** at conveyance time, so a
+  conveyance cannot later claim a revision the controlled record never carried.
+
+**Nothing in Wave 3 re-derives a commercial figure that Wave 2 froze.**
+
+### 6. Regression and runtime evidence
+
+All measured at `0990bc8d`, against the runtime bound in §0.
+
+| Gate | Result |
+| --- | --- |
+| `pnpm build` | **27/27 tasks successful** |
+| `pnpm typecheck` | **51/51 tasks successful** |
+| `pnpm test` (every workspace package) | **51/51 tasks successful** |
+| API unit + all fitness gates (`vitest run src/`) | **541 passed**, 4 skipped · 69 files passed, 1 skipped |
+| API e2e (`vitest.config.e2e.ts`) | **59 files passed, 12 failed** (71) |
+| Auth-ON browser, the five Wave 3 specs | **5 passed** in one run, 58.8s |
+| `pnpm lint` | **0 errors**, 683 warnings — unchanged from the pre-wave baseline |
+| Migration policy | **332 files, sequential, `@DOWN` present from 137 on** |
+| RLS fitness | **265 tenant-scoped tables · enabled 265 · forced 265 · with-policy 265** |
+| Cross-tenant isolation under a non-bypass role | **15 assertions passed** |
+
+#### The twelve failing e2e files
+
+`account-snapshot` · `c4-certification` · `c5-cost-ledger.pg` · `c6-change-control.pg` · `chains` ·
+`crm-qualification-at-award` · `sales-mutation-release-proof` · `service-scope-closure` ·
+`site-daily-report-uniqueness` · `tender-lifecycle` · `tender-pricing-governance` ·
+`tender-submission`
+
+**All twelve are pre-existing, and none carries a Wave 3 row.** This is measured rather than
+assumed: the identical twelve were captured before this wave's engineering work, three of them were
+re-confirmed failing against a `git stash` of the work in progress, and the set did not grow. The
+passing count rose from 58 to 59 as the transmittal suite was added.
+
+`service-scope-closure` was checked individually, because this wave edited one line of its permission
+vocabulary. It fails inside its own `beforeAll` on `expect(auth.enabled).toBe(true)` — its harness
+never sets the JWT secret — which is neither the edit nor anything to do with material approvals.
+
+#### The browser runs, in one invocation
+
+| Row | Spec | What it proves on screen |
+| --- | --- | --- |
+| `PLN-16` | `forecast-completion` | baseline, planned and forecast kept visibly apart |
+| `PLN-04` | `project-milestones` | the committed date holds while the plan slips; sign-off against open work shows both facts |
+| `ENG-03` | `technical-query-response` | the answer's author is named; a silent replacement refused; a self-acceptance refused |
+| `ENG-04` | `material-approval` | "decision recorded by"; an as-noted approval kept unfinished |
+| `ENG-05` / `ENG-06` | `transmittal-receipt` | per-person distribution; one answer is not receipt; the act offered only to somebody addressed |
+
+Both BFF empty-body defects found during this wave are fixed **in the delivered code and exercised by
+these passing runs**, not merely recorded: transmittal `acknowledge` in `243b4dcc`, which the
+transmittal run clicks through, and technical-query `close` in `427debf3`, which the ENG-03 run
+clicks through. A browser path found broken during a proof is not left broken and counted as proven.
+
+#### What the RLS proof is and is not
+
+The live RLS verification is a strong **additional** layer: 265 tenant-scoped tables, every one
+ENABLE'd and FORCE'd with a policy, isolation verified under a role that cannot bypass it, covering
+the tables this wave added rather than asserting them from the migrations that wrote them.
+
+**It is not a substitute for project-scope, functional or browser proof.** Tenant isolation says
+nothing about whether a given role may perform a given act, whether the right recipient was reached,
+whether a receipt is somebody's own, or whether a screen tells the truth. Those are proven
+separately, above, and the RLS figures are not permitted to stand in for any of them.
+
+### 7. Debt and findings carried out of this wave
+
+None of these is an exit-gate clause. All are recorded so that closure does not bury them.
+
+**Technical debt**
+
+- `sender` on a transmittal remains free text. `ENG-06` asks for a *separate* issuer, proven by the
+  issuer not being on the distribution; a canonical sender identity is debt, not a claim.
+- No exported or printable document on the planning rows or the transmittal — `actualOutput` is
+  proven on screen and over the API.
+- **Nothing notifies anybody who is not looking at a screen.** Seven such signals are now owed:
+  conflict, delay, assessment, recovery proposal, an activity losing ground, one overspending its
+  priced hours, and a milestone crossing its committed date. One shared notification authority, built
+  once — not seven.
+- Finish-to-start dependencies only; one working calendar per project.
+- Several activities on one work package each inherit its whole sold quantity — **these must not be
+  summed by any rollup** until an apportionment authority exists.
+- Accepting a recovery does not prompt a re-baseline.
+- A requirement that has ever carried a booking cannot be removed from a plan (`ON DELETE RESTRICT`).
+- The `verification-queue.md` paragraph asserting `F-07` / `F-08` discharge needs the correction in
+  §3.
+
+**Defects found and deliberately not fixed here**
+
+- Four actor columns are still typed `uuid` and will fail on their own approve paths:
+  `hr_expense_claims`, `hr_staff_advances`, `hr_timesheets` and `subcontracts_variations`, all
+  `approved_by`. The same defect class as migrations 0142, 0150 and 0331 — the third, fourth and
+  fifth recurrence of one mistake.
+- **Site can record an installation without proving the installed material is the approved one.** A
+  discovered gap that no wave currently owns. It is not assigned to Wave 5 merely because Site
+  appears in it.
+
+**Carried to Wave 4**, whose frozen scope already names them: canonical procurement material/product
+identity; PR/PO lines; `BUY-01` material requisition lines; make/model identity; selected-line
+continuity through RFQ → PO → GRN → stock → site issue; and exact MAR-to-purchased-material
+applicability.
+
+### 8. What closing Wave 3 would and would not mean
+
+**It would mean** that the bounded *award → mobilisation → engineering → connected planning* journey
+meets the exit gate the roadmap wrote for it before any of this work began, with all six pinned
+proofs resolved and no capability remaining in the wave.
+
+**It would not mean:**
+
+- that AURA is functionally complete or production ready — **163 of 180 leaves are not COMPLETE**;
+- that the PARTIAL rows inside Wave 3's own groups are finished — `PLN-01`, `PLN-06`–`PLN-09`,
+  `AWD-01`–`AWD-04`, `AWD-07`, `ENG-01` and `ENG-02` all remain open against later waves;
+- that `F-07` and `F-08` are discharged — §3 shows they are not;
+- that procurement, site execution or commercial delivery are proven — Waves 4 to 10 are untouched;
+- that the twelve failing e2e files are acceptable — they are pre-existing and out of this wave's
+  scope, and they are still owed.
+
+**A capability remainder of zero is an input to closure, not closure itself.** The gate is what
+closes the wave, and the gate is what §1 addresses.
+
 ## Programme state
 
 - **Wave 0 — CLOSED / VERIFIED**

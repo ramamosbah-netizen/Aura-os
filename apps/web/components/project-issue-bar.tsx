@@ -86,7 +86,19 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
           projectId,
           boqItemId,
           reason: direction === 'out' ? 'issued to project' : 'returned from project',
-          // A return re-enters stock at the item's own running cost; the FIFO/WAC engine values it.
+          /**
+           * NO UNIT COST IS SENT, AND THE SERVER SUPPLIES IT.
+           *
+           * An earlier version of this comment claimed the engine already re-valued a return at the
+           * item's own cost. It did not: `computeWac` reads a missing cost as 0, so 15 m that cost
+           * 6.00 came back worth nothing — the average dropped 6.00 -> 4.80 and inventory value fell
+           * by 90 while on-hand stayed correct, which is why nobody noticed.
+           *
+           * FIXED ON THE SERVER, deliberately not from here: a return is valued from the item's
+           * persisted current valuation state (`avgCost`), which that item's configured costing
+           * engine maintains. It belongs where the item's cost actually lives, and a price supplied
+           * by a browser is not authoritative about what a company's stock is worth.
+           */
           unitCost: undefined,
         }),
       });
@@ -123,13 +135,13 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
   return (
     <div style={st.wrap} data-testid={`project-issue-${stockItemId}`}>
       <div style={st.bar}>
-        <select className="select" value={projectId} onChange={(e) => setProjectId(e.target.value)}
+        <select className="select" style={st.field} value={projectId} onChange={(e) => setProjectId(e.target.value)}
           data-testid="issue-project" aria-label="Project">
           <option value="">Issue to project…</option>
           {projects.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
         </select>
 
-        <select className="select" value={boqItemId} onChange={(e) => setBoqItemId(e.target.value)}
+        <select className="select" style={st.field} value={boqItemId} onChange={(e) => setBoqItemId(e.target.value)}
           disabled={!projectId} data-testid="issue-boq-item" aria-label="BOQ item">
           <option value="">{projectId ? 'Against which BOQ item…' : 'Choose a project first'}</option>
           {boqItems.map((b) => <option key={b} value={b}>{b}</option>)}
@@ -169,6 +181,12 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
 const st = {
   wrap: { marginTop: 8 } as CSSProperties,
   bar: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
+  /**
+   * `.select` is `width: 100%`, which in a flex row means "take everything" — on the full workspace
+   * canvas the two dropdowns each stretched to 1599px and their open list covered the page. A field
+   * is a field at any screen size: it grows to a readable width, then stops and lets the row wrap.
+   */
+  field: { flex: '1 1 200px', maxWidth: 260 } as CSSProperties,
   qty: { display: 'flex', alignItems: 'center', gap: 6 } as CSSProperties,
   narrow: { maxWidth: 120 } as CSSProperties,
   unit: { color: 'var(--muted)', fontSize: 12.5, minWidth: 22 } as CSSProperties,

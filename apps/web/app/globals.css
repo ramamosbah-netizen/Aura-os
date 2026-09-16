@@ -887,6 +887,23 @@ a {
   border-radius: 14px;
   box-shadow: var(--shadow-sm);
 }
+/* A wide table scrolls INSIDE its panel instead of pushing the page open.
+
+   A table is the one element in this app that cannot be made narrow: an order row
+   carries seven columns and none of them is optional. Left uncontained it sets the
+   width of the whole document — measured on /procurement/purchase-orders at 375px,
+   a 616px table in a 341px panel gave the page 266px of sideways travel, so the
+   header, the KPIs and the sidebar all slid off together. The Sales registers never
+   did this because each one wraps its table in an overflow container by hand.
+
+   This is that container, named once. `max-width: 100%` is the load-bearing half:
+   `overflow-x` alone does nothing to a flex or grid child, which is happy to grow
+   past its parent rather than scroll. */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
 .data-table {
   width: 100%;
   border-collapse: collapse;

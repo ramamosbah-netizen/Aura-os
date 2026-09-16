@@ -110,6 +110,7 @@ export default function OrderReceiptPanel({ poId, currency }: { poId: string; cu
         {receipt.description}
       </p>
 
+      <div className="table-scroll">
       <table className="data-table">
         <thead>
           <tr>
@@ -151,6 +152,7 @@ export default function OrderReceiptPanel({ poId, currency }: { poId: string; cu
           ))}
         </tbody>
       </table>
+      </div>
 
       <div style={st.foot}>
         <strong style={receipt.outstandingValue > 0 ? st.chasing : st.good} data-testid="order-receipt-exposure">

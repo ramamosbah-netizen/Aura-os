@@ -201,6 +201,126 @@ describe('stock issued to a project, and what comes back (JWT ON)', () => {
     expect(item.quantityOnHand).toBe(600);
   });
 
+  /**
+   * WHAT A RETURNED QUANTITY IS WORTH.
+   *
+   * Found by running the operational sequence receipt -> issue -> return on screen, which this
+   * capability's frozen acceptance sentence never asked for. A return carries no price and
+   * `computeWac` read a missing cost as 0, so material came back valued at NOTHING — the running
+   * average fell and inventory value disappeared while on-hand stayed correct, which is why it was
+   * silent. A return now re-enters at the item's own running average, resolved on the server.
+   */
+  it('returns material at the item’s persisted valuation state, so a round trip destroys no value', async () => {
+    const { projectId, boqItemId, itemId } = await scene(500, 0);
+    const read = async () => (await store.get(`/api/v1/inventory/stock/${itemId}`).expect(200)).body.item as { quantityOnHand: number; avgCost: number };
+
+    // 100 m in at 6.00.
+    await move(itemId, { direction: 'in', quantity: 100, unitCost: 6 }).expect(201);
+    expect(await read()).toMatchObject({ quantityOnHand: 100, avgCost: 6 });
+
+    // 40 m out to the job — an issue never moves the average.
+    await move(itemId, { direction: 'out', quantity: 40, projectId, boqItemId, reason: 'issued to project' }).expect(201);
+    expect(await read()).toMatchObject({ quantityOnHand: 60, avgCost: 6 });
+
+    // 15 m back, with NO price sent — the value that used to vanish.
+    await move(itemId, { direction: 'in', quantity: 15, projectId, boqItemId, reason: 'returned from project' }).expect(201);
+    const after = await read();
+    expect(after.quantityOnHand).toBe(75);
+    expect(after.avgCost).toBe(6);              // was 4.8
+    expect(after.quantityOnHand * after.avgCost).toBe(450);  // was 360 — AED 90 destroyed
+  });
+
+  it('still lets an explicit price govern, and leaves an UNCODED receipt priced as sent', async () => {
+    const { itemId } = await scene(500, 0);
+    const read = async () => (await store.get(`/api/v1/inventory/stock/${itemId}`).expect(200)).body.item as { quantityOnHand: number; avgCost: number };
+    await move(itemId, { direction: 'in', quantity: 100, unitCost: 6 }).expect(201);
+    // A warehouse receipt is not a return: what it cost is what was paid for it.
+    await move(itemId, { direction: 'in', quantity: 100, unitCost: 8 }).expect(201);
+    expect(await read()).toMatchObject({ quantityOnHand: 200, avgCost: 7 });
+  });
+
+  /**
+   * A RETURN CONSUMES THE ITEM'S PERSISTED CURRENT VALUATION STATE — it does not choose a method.
+   *
+   * Three levels, kept separate: `costingMethod` selects the ENGINE ('wac' | 'fifo'); `avgCost` is
+   * the PERSISTED CURRENT VALUATION STATE that engine produced; the return VALUATION consumes that
+   * state. "Value a return at the running average" would be inventing policy if it meant WAC for
+   * everybody — it does not, because the line reads state rather than method.
+   *
+   * This item is FIFO, and the case is built so the three answers a cheap implementation might reach
+   * are all DIFFERENT — the only way to tell a governed read from a coincidence.
+   *
+   * NOT asserted here, because it is not modelled: original-layer provenance. The return creates
+   * inventory at the current persisted state; it does not reverse the FIFO layer the material was
+   * issued from.
+   */
+  it('values a return on a FIFO item from its persisted valuation state — not the last purchase, not the issue COGS rate', async () => {
+    const run = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const project = (await admin.post('/api/v1/projects/projects').send({ title: `FIFO job ${run}` }).expect(201)).body;
+    const boqItemId = `boq-fifo-${run}`;
+    await admin.post('/api/v1/projects/quantity-ledger/baseline')
+      .send({ projectId: project.id, boqItemId, quantity: 500, unit: 'm' }).expect(201);
+    const item = (await store.post('/api/v1/inventory/stock')
+      .send({ code: `FIF-${run}`, name: 'FIFO cable', unit: 'm', openingQty: 0, openingCost: 0, costingMethod: 'fifo' })
+      .expect(201)).body;
+    const read = async () => (await store.get(`/api/v1/inventory/stock/${item.id}`).expect(200)).body.item as { quantityOnHand: number; avgCost: number; costingMethod: string };
+
+    expect((await read()).costingMethod).toBe('fifo');
+
+    // Two layers at different prices, then an issue that consumes only part of the OLDEST one.
+    await move(item.id, { direction: 'in', quantity: 100, unitCost: 6 }).expect(201);
+    await move(item.id, { direction: 'in', quantity: 100, unitCost: 12 }).expect(201);
+    await move(item.id, { direction: 'out', quantity: 50, projectId: project.id, boqItemId, reason: 'issued to project' }).expect(201);
+
+    // Remaining layers are 50 @ 6.00 and 100 @ 12.00 -> 1,500 over 150 = 10.00 persisted state.
+    const issued = await read();
+    expect(issued.quantityOnHand).toBe(150);
+    expect(issued.avgCost).toBe(10);
+
+    // 20 m back, no price sent. The three candidates are 10.00 (persisted current valuation state),
+    // 12.00 (last purchase price) and 6.00 (historical issue COGS rate).
+    await move(item.id, { direction: 'in', quantity: 20, projectId: project.id, boqItemId, reason: 'returned from project' }).expect(201);
+    const returned = await read();
+    expect(returned.quantityOnHand).toBe(170);
+    expect(returned.avgCost).toBe(10);
+    expect(returned.avgCost).not.toBe(12);  // not the last purchase price
+    expect(returned.avgCost).not.toBe(6);   // not the historical issue COGS rate
+    // 1,500 + 20 × 10.00 = 1,700.
+    expect(returned.quantityOnHand * returned.avgCost).toBe(1700);
+  });
+
+  /**
+   * QUANTITY RECONCILIATION AND VALUATION RECONCILIATION ARE DIFFERENT AUTHORITIES THAT MUST AGREE
+   * ON THE SAME MOVEMENT.
+   *
+   * This is the rule the WAC defect earned. The quantity side was right the whole time — 75 m on
+   * hand, 25 m issued, 100 accounted for — and it is exactly that correctness that hid the money
+   * being wrong. A green quantity proof is not evidence about value.
+   */
+  it('makes the quantity position and the value position agree on the same movements', async () => {
+    const { projectId, boqItemId, itemId } = await scene(500, 0);
+    const read = async () => (await store.get(`/api/v1/inventory/stock/${itemId}`).expect(200)).body.item as { quantityOnHand: number; avgCost: number };
+
+    await move(itemId, { direction: 'in', quantity: 100, unitCost: 6 }).expect(201);
+    await move(itemId, { direction: 'out', quantity: 40, projectId, boqItemId, reason: 'issued to project' }).expect(201);
+    await move(itemId, { direction: 'in', quantity: 15, projectId, boqItemId, reason: 'returned from project' }).expect(201);
+
+    const item = await read();
+    const net = (await position(boqItemId)).issued;
+
+    // QUANTITY: 75 in the warehouse + 25 out on the job = the 100 that arrived. Nothing lost.
+    expect(item.quantityOnHand).toBe(75);
+    expect(net).toBe(25);
+    expect(item.quantityOnHand + net).toBe(100);
+
+    // VALUE: the same 100 units, still at the 6.00 they cost. The warehouse holds 450 and the job
+    // is carrying 150 — 600 in total, which is what was received. Before the fix the warehouse said
+    // 360 and this identity failed by exactly the 90 that had been destroyed.
+    expect(item.quantityOnHand * item.avgCost).toBe(450);
+    expect(net * item.avgCost).toBe(150);
+    expect(item.quantityOnHand * item.avgCost + net * item.avgCost).toBe(600);
+  });
+
   it('refuses an unauthenticated caller outright', async () => {
     await request(app.getHttpServer()).post('/api/v1/inventory/stock/whatever/movements').send({ direction: 'in', quantity: 1 }).expect(401);
   });

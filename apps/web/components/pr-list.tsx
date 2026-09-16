@@ -4,7 +4,7 @@ import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import RequisitionLinesPanel from './requisition-lines-panel';
-import { RegisterKpis, RegisterToolbar } from './ui/register-view';
+import { RegisterKpis, RegisterPanel, RegisterToolbar, registerTable } from './ui/register-view';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface PurchaseRequest {
@@ -37,6 +37,12 @@ interface Project {
  */
 function money(n: number, currency: string): string {
   return typeof n === 'number' ? `${currency} ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—';
+}
+
+/** `pending_approval` is a column value, not something to put in front of a buyer. */
+function statusLabel(status: string): string {
+  const text = status.replace(/_/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function fmt(iso: string): string {
@@ -124,26 +130,6 @@ export default function PrList({
         ]}
       />
 
-      <CreateDrawer
-        entity="Purchase Request"
-        subtitle="A procurement request. Approving it drafts the purchase order automatically."
-        endpoint="/api/procurement/purchase-requests"
-        initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}
-        fields={[
-          { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
-          { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },
-          { name: 'value', label: `Estimated cost (${currency})`, kind: 'number', placeholder: '0' },
-          {
-            name: 'projectId',
-            label: 'Link to project',
-            kind: 'select',
-            labelField: 'projectName',
-            placeholder: '— None —',
-            span: 2,
-            options: projects.map((p) => ({ value: p.id, label: p.title })),
-          },
-        ]}
-      />
 
       <RegisterToolbar
         views={[
@@ -158,20 +144,41 @@ export default function PrList({
         search={q}
         onSearch={setQ}
         placeholder="Search requests, references, projects…"
-      />
+      >
+        <CreateDrawer
+          entity="Purchase Request"
+          subtitle="A procurement request. Approving it drafts the purchase order automatically."
+          endpoint="/api/procurement/purchase-requests"
+          initialValues={initialProjectId ? { projectId: initialProjectId } : undefined}
+          fields={[
+            { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
+            { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },
+            { name: 'value', label: `Estimated cost (${currency})`, kind: 'number', placeholder: '0' },
+            {
+              name: 'projectId',
+              label: 'Link to project',
+              kind: 'select',
+              labelField: 'projectName',
+              placeholder: '— None —',
+              span: 2,
+              options: projects.map((p) => ({ value: p.id, label: p.title })),
+            },
+          ]}
+        />
+      </RegisterToolbar>
 
 
-      <div style={s.panel}>
-        <table style={s.table}>
+      <RegisterPanel testId="purchase-requests">
+        <table style={registerTable.table}>
           <thead>
             <tr>
-              <th style={s.th}>Title</th>
-              <th style={s.th}>Reference</th>
-              <th style={s.th}>Project</th>
-              <th style={s.th}>Value</th>
-              <th style={s.th}>Status</th>
-              <th style={s.th}>Created</th>
-              <th style={s.th}>Actions</th>
+              <th style={registerTable.th}>Title</th>
+              <th style={registerTable.th}>Reference</th>
+              <th style={registerTable.th}>Project</th>
+              <th style={registerTable.th}>Value</th>
+              <th style={registerTable.th}>Status</th>
+              <th style={registerTable.th}>Created</th>
+              <th style={registerTable.th}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -188,16 +195,16 @@ export default function PrList({
                 const isBusy = busyId === pr.id;
                 return (
                   <tr key={pr.id} data-pr-id={pr.id} style={{ ...s.row, ...(pr.id === focusedId ? s.focusedRow : {}) }}>
-                    <td style={s.td}><strong>{pr.title}</strong></td>
-                    <td style={s.tdMuted}>{pr.reference ?? '—'}</td>
-                    <td style={s.tdMuted}>{pr.projectName ?? '—'}</td>
+                    <td style={registerTable.td}><strong>{pr.title}</strong></td>
+                    <td style={registerTable.tdMuted}>{pr.reference ?? '—'}</td>
+                    <td style={registerTable.tdMuted}>{pr.projectName ?? '—'}</td>
                     {/* Once a requisition has lines this figure IS their sum — one requisition, one total. */}
-                    <td style={s.td} data-testid={`pr-value-${pr.id}`}>{money(pr.value, currency)}</td>
-                    <td style={s.td}>
-                      <span style={s.tag(pr.status)}>{pr.status}</span>
+                    <td style={registerTable.td} data-testid={`pr-value-${pr.id}`}>{money(pr.value, currency)}</td>
+                    <td style={registerTable.td}>
+                      <span style={s.tag(pr.status)}>{statusLabel(pr.status)}</span>
                     </td>
-                    <td style={s.tdMuted}>{fmt(pr.createdAt)}</td>
-                    <td style={s.td}>
+                    <td style={registerTable.tdMuted}>{fmt(pr.createdAt)}</td>
+                    <td style={registerTable.td}>
                       <div style={s.actions}>
                         {pr.status === 'draft' && (
                           <>
@@ -257,7 +264,7 @@ export default function PrList({
             )}
           </tbody>
         </table>
-      </div>
+      </RegisterPanel>
     </div>
   );
 }
@@ -323,8 +330,6 @@ const s = {
     fontSize: 13,
     outline: 'none',
   } as CSSProperties,
-  panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '8px 8px' } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
   th: {
     textAlign: 'left',
     color: 'var(--muted)',
@@ -335,8 +340,6 @@ const s = {
     padding: '10px 12px',
     borderBottom: '1px solid var(--border)',
   } as CSSProperties,
-  td: { padding: '11px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
-  tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', verticalAlign: 'middle' } as CSSProperties,
   row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
   focusedRow: { outline: '2px solid var(--accent)', outlineOffset: '-2px', background: 'var(--accent-soft)' } as CSSProperties,
   emptyCell: { padding: '20px 12px', color: 'var(--muted)', textAlign: 'center' } as CSSProperties,
@@ -353,17 +356,7 @@ const s = {
       border = '1px solid var(--bad-soft)';
       background = 'var(--bad-soft)';
     }
-    return {
-      fontSize: 11.5,
-      fontWeight: 500,
-      background,
-      border,
-      color,
-      borderRadius: 6,
-      padding: '2px 6px',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    };
+    return { ...registerTable.chip, background, border, color };
   },
   actions: { display: 'flex', gap: 8, alignItems: 'center' } as CSSProperties,
   errorBar: {

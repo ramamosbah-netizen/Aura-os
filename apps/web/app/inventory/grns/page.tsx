@@ -57,28 +57,32 @@ export default async function GoodsReceiptsPage() {
         its supplier and project automatically.
       </p>
 
-      <GrnCreate
-        pos={(pos ?? []).map((p) => ({
-          id: p.id,
-          title: p.title,
-          supplierName: p.supplierName,
-          projectId: p.projectId,
-          projectName: p.projectName,
-          value: p.value,
-        }))}
-      />
-
       {grns === null ? (
         <section style={st.panel}><p style={st.muted}>API offline.</p></section>
       ) : (
-        <GrnList grns={grns} currency={currency} />
+        <GrnList
+          grns={grns}
+          currency={currency}
+          create={
+            <GrnCreate
+              pos={(pos ?? []).map((p) => ({
+                id: p.id,
+                title: p.title,
+                supplierName: p.supplierName,
+                projectId: p.projectId,
+                projectName: p.projectName,
+                value: p.value,
+              }))}
+            />
+          }
+        />
       )}
     </div>
   );
 }
 
 const st = {
-  page: { maxWidth: 980, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
+  page: { width: '100%', maxWidth: 1680, margin: '0 auto', padding: '28px 28px 64px' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 22px', maxWidth: 680, lineHeight: 1.5 } as CSSProperties,
   code: {

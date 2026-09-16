@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mayReturnFromProject } from './material-return';
+import { computeWac } from './stock';
 
 /**
  * `BUY-06` — you cannot return more than you took.
@@ -51,5 +52,52 @@ describe('a return is bounded by what is actually out there', () => {
     // no longer there.
     expect(mayReturnFromProject(15, 15)).toEqual({ allowed: true });
     expect(mayReturnFromProject(15, 16).allowed).toBe(false);
+  });
+});
+
+/**
+ * WHAT A RETURNED QUANTITY IS WORTH.
+ *
+ * Found by running the operational sequence on screen — receipt, issue, return — which `BUY-06`'s
+ * frozen acceptance sentence never asked for. A return carries no price, and `computeWac` reads a
+ * missing cost as 0, so material came back valued at nothing: the running average fell and inventory
+ * value disappeared while ON-HAND STAYED CORRECT, which is why it was silent.
+ *
+ * The decision recorded here is that a return re-enters at the item's own running average, making a
+ * straight issue-and-return value-neutral. These assert the arithmetic that decision implies.
+ */
+describe('material returned from a project keeps its value', () => {
+  it('leaves the average untouched, so nothing is created or destroyed by a round trip', () => {
+    // 100 m received at 6.00.
+    let qty = 0;
+    let avg = computeWac(qty, 0, 'in', 100, 6);
+    qty += 100;
+    expect(avg).toBe(6);
+
+    // 40 m issued to the job — an issue never changes the average.
+    avg = computeWac(qty, avg, 'out', 40, 0);
+    qty -= 40;
+    expect(qty).toBe(60);
+    expect(avg).toBe(6);
+
+    // 15 m returned, priced at the item's own running average by the service.
+    avg = computeWac(qty, avg, 'in', 15, avg);
+    qty += 15;
+    expect(qty).toBe(75);
+    expect(avg).toBe(6);
+    // 75 × 6.00 — the 450 the defect turned into 360.
+    expect(qty * avg).toBe(450);
+  });
+
+  it('would have caught the defect: a return valued at zero drags the average down', () => {
+    // The behaviour before the fix, asserted so it cannot come back unnoticed.
+    const dragged = computeWac(60, 6, 'in', 15, 0);
+    expect(dragged).toBe(4.8);
+    expect(60 * 6).toBe(360);
+    expect(75 * dragged).toBe(360); // value destroyed: 90 gone, on-hand still right
+  });
+
+  it('returns at zero when the item genuinely has no cost, which is not a loss', () => {
+    expect(computeWac(60, 0, 'in', 15, 0)).toBe(0);
   });
 });

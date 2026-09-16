@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
 
 /**
@@ -23,6 +23,24 @@ import { apiAuthHeaders } from './api-auth';
 const API = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
 
 interface Material { id: string; code: string }
+
+
+/**
+ * Open a requisition's materials, retrying until the panel is actually there.
+ *
+ * The row is SERVER-RENDERED and the expander is client state, so the button exists in the DOM
+ * before React has attached its handler. A single click can land in that window and do nothing —
+ * the click is not queued, it is simply lost. It passes when the machine is idle and fails under the
+ * load of the full suite, which is the worst kind of test: one that reports the machine's speed
+ * rather than the application's behaviour. The sibling specs in this suite already retry for the
+ * same reason.
+ */
+async function openMaterials(page: Page, prId: string): Promise<void> {
+  await expect(async () => {
+    await page.getByTestId(`pr-materials-toggle-${prId}`).click();
+    await expect(page.getByTestId(`req-lines-${prId}`)).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 30_000 });
+}
 
 test.describe('A requisition says what is needed, how much, and by when', () => {
   test.setTimeout(240_000);
@@ -55,7 +73,7 @@ test.describe('A requisition says what is needed, how much, and by when', () => 
     await page.goto(`/procurement/purchase-requests?projectId=${project.id}`, { waitUntil: 'domcontentloaded' });
 
     // ── The requisition has no materials yet, and says so ──────────────────────
-    await page.getByTestId(`pr-materials-toggle-${pr.id}`).click();
+    await openMaterials(page, pr.id);
     const panel = page.getByTestId(`req-lines-${pr.id}`);
     await expect(panel).toBeVisible();
     await expect(page.getByTestId('req-lines-empty')).toContainText('at least one line before it can be submitted');
@@ -121,7 +139,7 @@ test.describe('A requisition says what is needed, how much, and by when', () => 
     // that disagree with each other.
     await expect(page.getByTestId(`pr-value-${pr.id}`)).toHaveText('AED 6,400');
 
-    await page.getByTestId(`pr-materials-toggle-${pr.id}`).click();
+    await openMaterials(page, pr.id);
     await expect(page.getByTestId('req-line-qty-1')).toHaveText('12 nr');
     await expect(page.getByTestId('req-line-qty-2')).toHaveText('250 m');
     await expect(page.getByTestId('req-lines-value')).toHaveText('AED 6,400.00');

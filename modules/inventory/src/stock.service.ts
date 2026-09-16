@@ -105,9 +105,10 @@ export class StockService {
      * with no issued balance to be measured against. Checked before anything is written, because a
      * movement that should not exist must not exist even briefly.
      */
-    if (direction === 'in' && coding?.projectId && coding?.boqItemId) {
+    const isProjectReturn = direction === 'in' && Boolean(coding?.projectId && coding?.boqItemId);
+    if (isProjectReturn) {
       const netIssued = this.issuedPosition
-        ? await this.issuedPosition.netIssued(item.tenantId, coding.projectId, coding.boqItemId)
+        ? await this.issuedPosition.netIssued(item.tenantId, coding!.projectId!, coding!.boqItemId!)
         : null;
       const verdict = mayReturnFromProject(netIssued, Number(toBaseQty(item, quantity, unit)));
       if (!verdict.allowed) throw new Error(verdict.reason);
@@ -118,6 +119,42 @@ export class StockService {
     const baseUnitCost = unitCost !== undefined ? Number(unitCost) / factor : undefined;
     quantity = baseQty;
     unitCost = baseUnitCost;
+
+    /**
+     * A RETURN IS VALUED FROM THE ITEM'S PERSISTED CURRENT VALUATION STATE.
+     *
+     * A return carries no price, and `computeWac` reads a missing cost as 0, so a return re-entered
+     * stock valued at NOTHING: 100 m received at 6.00, 40 issued, 15 returned left the item at 4.80
+     * and 360 in value instead of 450. AED 90 destroyed, the running cost dragged down for
+     * everything still on hand, and ON-HAND CORRECT THROUGHOUT — which is why it was silent.
+     *
+     * THIS IS NOT A NEW COSTING POLICY, and the three levels must not be conflated:
+     *
+     *   `costingMethod`   chooses the ENGINE for this item — `'wac'` or `'fifo'`.
+     *   `avgCost`         is the PERSISTED CURRENT VALUATION STATE that engine produced.
+     *   return valuation  CONSUMES that current state. It does not reinvent costing policy, and it
+     *                     does not reconstruct how the state was arrived at.
+     *
+     * So the line below reads state, not method. It is correct under both engines for that reason
+     * alone, and the distinction is measurable rather than asserted: on a FIFO item that received
+     * 100 @ 6.00 then 100 @ 12.00 and issued 50, the answers a cheap implementation might reach are
+     * all different —
+     *
+     *     persisted current valuation state   10.00   <- what this uses
+     *     last purchase price                 12.00
+     *     historical issue COGS rate           6.00
+     *
+     * Resolved HERE, from the persisted item, rather than sent by the screen: a price supplied by a
+     * browser is not authoritative about what a company's stock is worth. An item whose state is
+     * genuinely 0 returns at 0 — there is no value to restore.
+     *
+     * LIMIT, stated rather than implied: a return CREATES/RESTORES inventory using the current
+     * persisted valuation state. Original FIFO layer provenance and reversal are NOT modelled and
+     * NOT proven — this is not strict original-layer reversal, and nothing here should be read as
+     * the FIFO engine rebuilding the layer the material was issued from. Carried forward; no
+     * remediation is opened unless a later acceptance proof requires strict layer reversal.
+     */
+    if (isProjectReturn && unitCost === undefined) unitCost = item.avgCost;
 
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
     let newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));

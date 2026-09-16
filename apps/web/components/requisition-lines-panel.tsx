@@ -164,6 +164,7 @@ export default function RequisitionLinesPanel({ prId, currency, editable }: {
           No materials yet. A requisition needs at least one line before it can be submitted.
         </p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -211,6 +212,7 @@ export default function RequisitionLinesPanel({ prId, currency, editable }: {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {summary && summary.total.lineCount > 0 && (

@@ -70,6 +70,10 @@ export function RegisterToolbar<K extends string>({
 }) {
   return (
     <div style={st.toolbar} data-testid="register-toolbar">
+      {/* The register's create control leads the toolbar, where every Sales register puts it. Given
+          its own row it stretched to the full width of the canvas — a flex column stretches its
+          children — and read as a banner rather than a button. */}
+      {children}
       <div style={st.viewsRow}>
         {views.map((v) => {
           const isActive = v.key === active;
@@ -97,10 +101,57 @@ export function RegisterToolbar<K extends string>({
         data-testid="register-search"
         aria-label={placeholder}
       />
-      {children}
     </div>
   );
 }
+
+/**
+ * The panel a register's table sits in — and, more importantly, the container that keeps the table
+ * inside it.
+ *
+ * A register table cannot be made narrow: an order row carries seven columns and none of them is
+ * optional. Uncontained, it sets the width of the whole document — measured on the purchase orders
+ * register at 375px, a 616px table in a 341px panel gave the page 266px of sideways travel, so the
+ * header, the KPI row and the navigation all slid off the screen together. The Sales registers never
+ * did this because each one wraps its table in an overflow container by hand; this is the same
+ * container, named once instead of copied a fourth time.
+ */
+export function RegisterPanel({ children, scroll = true, testId }: {
+  children: ReactNode;
+  /** Off only when the panel holds prose rather than a table — an empty state has nothing to scroll. */
+  scroll?: boolean;
+  testId?: string;
+}) {
+  return (
+    <section style={st.panel} data-testid={testId}>
+      {scroll ? <div className="table-scroll">{children}</div> : children}
+    </section>
+  );
+}
+
+/**
+ * The register table's measurements, lifted verbatim from the accounts portfolio.
+ *
+ * Three registers had each hand-rolled this and arrived at three different answers — cell padding of
+ * 10/12, 11/12 and 8/10px, header type at 12, 12.5 and 11.5px, and the status chip in two shapes.
+ * Nobody chose that; it is what copying produces. One definition, so the suites are identical rather
+ * than merely similar.
+ *
+ * `whiteSpace: 'nowrap'` on the header and the chip is load-bearing, not cosmetic: it is what makes a
+ * narrow table SCROLL inside `RegisterPanel` rather than crush its own columns into unreadable stacks.
+ */
+export const registerTable = {
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
+  th: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
+  thRight: { textAlign: 'right', color: 'var(--muted)', fontWeight: 500, fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, padding: '10px 10px', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' } as CSSProperties,
+  td: { padding: '10px 10px', borderBottom: '1px solid var(--border)', verticalAlign: 'top' } as CSSProperties,
+  tdMuted: { padding: '10px 10px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', verticalAlign: 'top' } as CSSProperties,
+  tdRight: { padding: '10px 10px', borderBottom: '1px solid var(--border)', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'top' } as CSSProperties,
+  link: { color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
+  sub: { color: 'var(--muted)', fontSize: 11.5, marginTop: 2 } as CSSProperties,
+  muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
+  chip: { display: 'inline-block', fontSize: 12, background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 6, padding: '2px 8px', fontWeight: 600, whiteSpace: 'nowrap' } as CSSProperties,
+};
 
 /** The page header every register shares: title and explanation left, actions right. */
 export function RegisterHeader({ title, children, actions }: {
@@ -120,18 +171,27 @@ export function RegisterHeader({ title, children, actions }: {
 }
 
 const st = {
+  panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '4px 8px' } as CSSProperties,
   headRow: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } as CSSProperties,
   h1: { fontSize: 28, margin: '0 0 6px', letterSpacing: -0.5 } as CSSProperties,
   sub: { color: 'var(--muted)', margin: '0 0 6px', maxWidth: 680, lineHeight: 1.5 } as CSSProperties,
   actions: { display: 'flex', gap: 8 } as CSSProperties,
   kpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(128px, 1fr))', gap: 10, margin: '4px 0 18px' } as CSSProperties,
-  kpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px' } as CSSProperties,
-  kpiLabel: { color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4, whiteSpace: 'nowrap' } as CSSProperties,
+  /**
+   * The card is a column with the figure pinned to the bottom, so a label that needs two lines does
+   * not push its number out of line with the others. `Value awaiting a decision` was being clipped
+   * mid-word — the label was `nowrap` in a cell that cannot grow, which reads as a rendering fault
+   * rather than a long label. A headline figure has to survive its own wording at any screen size.
+   */
+  kpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 4, minWidth: 0 } as CSSProperties,
+  kpiLabel: { color: 'var(--muted)', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, lineHeight: 1.3 } as CSSProperties,
   kpiValue: { fontSize: 19, fontWeight: 700, letterSpacing: -0.3, whiteSpace: 'nowrap' } as CSSProperties,
   toolbar: { display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '0 0 14px' } as CSSProperties,
   viewsRow: { display: 'flex', gap: 8, flexWrap: 'wrap' } as CSSProperties,
   viewBtn: { display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 999, padding: '6px 12px', fontSize: 12.5, cursor: 'pointer' } as CSSProperties,
   viewBtnActive: { borderColor: 'var(--accent)', color: 'var(--accent)', fontWeight: 700 } as CSSProperties,
   viewCount: { fontSize: 11, background: 'var(--panel-2)', borderRadius: 999, padding: '1px 7px', color: 'var(--muted)' } as CSSProperties,
-  search: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 12px', fontSize: 13, minWidth: 260 } as CSSProperties,
+  // `maxWidth` guards the `minWidth` below it: on a narrow phone a 260px floor is wider than the
+  // content box, and an input that cannot shrink is exactly how a page starts scrolling sideways.
+  search: { border: '1px solid var(--border)', background: 'var(--panel)', color: 'var(--text)', borderRadius: 9, padding: '8px 12px', fontSize: 13, minWidth: 260, maxWidth: '100%' } as CSSProperties,
 };

@@ -5,6 +5,7 @@ import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import ProjectIssueBar from './project-issue-bar';
+import { RegisterKpis, RegisterPanel } from './ui/register-view';
 
 interface StockItem {
   id: string;
@@ -152,6 +153,18 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
 
   return (
     <div>
+      {/* The same headline row the other registers read from. The total value and the reorder count
+          were already here as a bar and a banner — two more shapes for the one thing every other
+          register states the same way. */}
+      <RegisterKpis
+        items={[
+          { label: 'Items', value: String(items.length) },
+          { label: 'Warehouses', value: String(new Set(items.map((i) => i.warehouse)).size) },
+          { label: 'At or below reorder', value: String(belowReorder), tone: belowReorder > 0 ? 'bad' : 'good' },
+          { label: 'Inventory value (WAC)', value: `AED ${money(totalValue)}`, tone: 'accent' },
+        ]}
+      />
+
       <div style={s.createBar}>
         <input style={s.inputSm} placeholder="Code" value={code} onChange={(e) => setCode(e.target.value)} />
         <input style={s.input} placeholder="Item name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -164,16 +177,13 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
       </div>
       {err && <p style={s.err}>{err}</p>}
 
-      <div style={s.valBar}>
-        <span style={s.valLabel}>Total inventory value (WAC)</span>
-        <span style={s.valAmt}>AED {money(totalValue)}</span>
-      </div>
       {belowReorder > 0 && (
         <div style={s.reorderBanner}>
           ⚠ {belowReorder} item{belowReorder > 1 ? 's' : ''} at or below reorder level — replenishment needed.
         </div>
       )}
 
+      <RegisterPanel testId="stock-items">
       <table style={s.table}>
         <thead>
           <tr>
@@ -191,26 +201,26 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
           ) : (
             items.map((it) => (
               <Fragment key={it.id}>
-                <tr style={s.row} onClick={() => open(it.id)}>
+                <tr style={s.row} onClick={() => open(it.id)} data-testid={`stock-row-${it.code}`}>
                   <td style={s.tdCode}>{openId === it.id ? '▾ ' : '▸ '}{it.code}</td>
                   <td style={s.td}>{it.name}</td>
                   <td style={s.tdMuted}>{it.warehouse}</td>
-                  <td style={it.quantityOnHand <= 0 ? s.tdLow : s.tdR}>
+                  <td style={it.quantityOnHand <= 0 ? s.tdLow : s.tdR} data-testid={`stock-onhand-${it.code}`}>
                     {it.quantityOnHand} {it.unit}
                     {it.reorderLevel > 0 && it.quantityOnHand <= it.reorderLevel && <span style={s.roTag}>reorder</span>}
                   </td>
-                  <td style={s.tdR}>{money(it.avgCost)}</td>
-                  <td style={s.tdR}>{money(it.quantityOnHand * it.avgCost)}</td>
+                  <td style={s.tdR} data-testid={`stock-avgcost-${it.code}`}>{money(it.avgCost)}</td>
+                  <td style={s.tdR} data-testid={`stock-value-${it.code}`}>{money(it.quantityOnHand * it.avgCost)}</td>
                 </tr>
                 {openId === it.id && (
                   <tr>
                     <td style={s.detailCell} colSpan={6}>
                       <div style={s.moveBar}>
-                        <input style={s.inputXs} placeholder="Qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} />
-                        <input style={s.inputXs} placeholder="Cost/unit" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} />
-                        <input style={s.input} placeholder="Reason (e.g. GRN receipt, site issue)" value={reason} onChange={(e) => setReason(e.target.value)} />
-                        <button type="button" style={s.inBtn} onClick={() => move(it.id, 'in')}>Receive (in)</button>
-                        <button type="button" style={s.outBtn} onClick={() => move(it.id, 'out')}>Issue (out)</button>
+                        <input style={s.inputXs} placeholder="Qty" type="number" value={qty} onChange={(e) => setQty(e.target.value)} data-testid="movement-qty" aria-label="Quantity" />
+                        <input style={s.inputXs} placeholder="Cost/unit" type="number" value={unitCost} onChange={(e) => setUnitCost(e.target.value)} data-testid="movement-cost" aria-label="Cost per unit" />
+                        <input style={s.input} placeholder="Reason (e.g. GRN receipt, site issue)" value={reason} onChange={(e) => setReason(e.target.value)} data-testid="movement-reason" aria-label="Reason" />
+                        <button type="button" style={s.inBtn} onClick={() => move(it.id, 'in')} data-testid="movement-in">Receive (in)</button>
+                        <button type="button" style={s.outBtn} onClick={() => move(it.id, 'out')} data-testid="movement-out">Issue (out)</button>
                       </div>
                       {/*
                         The bar above moves stock in and out of the WAREHOUSE and carries no project.
@@ -239,6 +249,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                       ) : detail.movements.length === 0 ? (
                         <EmptyState compact title="No stock movements yet" description="Goods receipts, issues and transfers will appear here as they happen." />
                       ) : (
+                        <div className="table-scroll">
                         <table style={s.subTable}>
                           <thead>
                             <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thSR}>Unit cost</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th><th style={s.thSR}>Value</th></tr>
@@ -257,6 +268,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                             ))}
                           </tbody>
                         </table>
+                        </div>
                       )}
                     </td>
                   </tr>
@@ -266,26 +278,24 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
           )}
         </tbody>
       </table>
+      </RegisterPanel>
     </div>
   );
 }
 
 const s = {
   createBar: { display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' } as CSSProperties,
-  input: { flex: 1, minWidth: 140, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
+  input: { flex: '1 1 160px', minWidth: 140, maxWidth: 320, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
   inputSm: { width: 110, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
   inputXs: { width: 86, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 9, color: 'var(--text)', padding: '9px 11px', fontSize: 13.5 } as CSSProperties,
   primary: { background: 'var(--accent)', border: 'none', borderRadius: 9, color: 'var(--accent-ink)', padding: '9px 14px', fontSize: 13.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13, margin: '4px 2px' } as CSSProperties,
-  valBar: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px', marginTop: 4 } as CSSProperties,
-  valLabel: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,
-  valAmt: { fontSize: 18, fontWeight: 700, letterSpacing: -0.3 } as CSSProperties,
   reorderBanner: { background: 'var(--panel-2)', border: '1px solid var(--bad)', color: 'var(--bad)', borderRadius: 10, padding: '8px 14px', marginTop: 8, fontSize: 13 } as CSSProperties,
   roTag: { marginLeft: 6, fontSize: 10.5, color: 'var(--bad)', border: '1px solid var(--bad)', borderRadius: 999, padding: '0 6px', fontWeight: 600 } as CSSProperties,
   roLabel: { color: 'var(--muted)', fontSize: 13, alignSelf: 'center' } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 14, marginTop: 12 } as CSSProperties,
-  th: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
-  thR: { textAlign: 'right', color: 'var(--muted)', fontWeight: 500, padding: '8px 10px', borderBottom: '1px solid var(--border)', fontSize: 12.5 } as CSSProperties,
+  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
+  th: { textAlign: 'left', color: 'var(--muted)', fontWeight: 500, padding: '10px 10px', borderBottom: '1px solid var(--border)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' } as CSSProperties,
+  thR: { textAlign: 'right', color: 'var(--muted)', fontWeight: 500, padding: '10px 10px', borderBottom: '1px solid var(--border)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' } as CSSProperties,
   row: { cursor: 'pointer', borderBottom: '1px solid var(--border)' } as CSSProperties,
   td: { padding: '10px' } as CSSProperties,
   tdCode: { padding: '10px', fontFamily: 'ui-monospace, monospace', fontSize: 13 } as CSSProperties,

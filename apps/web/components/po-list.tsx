@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { PoEdit } from './po-create';
 import AuraAuditDiffViewer from './ui/aura-audit-diff-viewer';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
-import { RegisterKpis, RegisterToolbar } from './ui/register-view';
+import { RegisterKpis, RegisterPanel, RegisterToolbar, registerTable } from './ui/register-view';
 
 interface PurchaseOrder {
   id: string;
@@ -23,6 +23,12 @@ function money(n: number, currency: string): string {
   return typeof n === 'number'
     ? `${currency} ${n.toLocaleString(DISPLAY_LOCALE, { maximumFractionDigits: 0 })}`
     : '—';
+}
+
+/** `partially_received` is a column value, not something to put in front of a buyer. */
+function statusLabel(status: string): string {
+  const text = status.replace(/_/g, ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }
 
 function fmt(iso: string): string {
@@ -123,8 +129,6 @@ export default function PoList({ initialPos, currency, create }: {
         ]}
       />
 
-      {create}
-
       <RegisterToolbar
         views={[
           { key: 'all' as const, label: 'All', count: count('all') },
@@ -138,21 +142,25 @@ export default function PoList({ initialPos, currency, create }: {
         search={q}
         onSearch={setQ}
         placeholder="Search orders, suppliers, projects…"
-      />
+      >
+        {create}
+      </RegisterToolbar>
 
-      <section style={s.panel}>
-        {visible.length === 0 ? (
-          initialPos.length === 0 ? (
+      {visible.length === 0 ? (
+        <RegisterPanel scroll={false}>
+          {initialPos.length === 0 ? (
             <EmptyState compact title="No purchase orders yet" description="Raise a purchase order to commit spend against an approved supplier." />
           ) : (
             <EmptyState compact title="No order matches this view" description="Clear the search or choose another view." />
-          )
-        ) : (
-          <table style={s.table}>
+          )}
+        </RegisterPanel>
+      ) : (
+        <RegisterPanel testId="purchase-orders">
+          <table style={registerTable.table}>
             <thead>
               <tr>
                 {['Title', 'Supplier', 'Project', 'Status', 'Value', 'Created', 'Actions'].map((h) => (
-                  <th key={h} style={s.th}>
+                  <th key={h} style={registerTable.th}>
                     {h}
                   </th>
                 ))}
@@ -162,8 +170,8 @@ export default function PoList({ initialPos, currency, create }: {
               {visible.map((po) => {
                 const isBusy = busyId === po.id;
                 return (
-                  <tr key={po.id} style={s.row}>
-                    <td style={s.td}>
+                  <tr key={po.id}>
+                    <td style={registerTable.td}>
                       <a
                         href={`/procurement/purchase-orders/${po.id}`}
                         style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
@@ -171,14 +179,14 @@ export default function PoList({ initialPos, currency, create }: {
                         {po.title}
                       </a>
                     </td>
-                    <td style={s.tdMuted}>{po.supplierName ?? '—'}</td>
-                    <td style={s.tdMuted}>{po.projectName ?? '—'}</td>
-                    <td style={s.td}>
-                      <span style={s.tag(po.status)}>{po.status}</span>
+                    <td style={registerTable.tdMuted}>{po.supplierName ?? '—'}</td>
+                    <td style={registerTable.tdMuted}>{po.projectName ?? '—'}</td>
+                    <td style={registerTable.td}>
+                      <span style={s.tag(po.status)}>{statusLabel(po.status)}</span>
                     </td>
-                    <td style={s.td}>{money(po.value, currency)}</td>
-                    <td style={s.tdMuted}>{fmt(po.createdAt)}</td>
-                    <td style={s.td}>
+                    <td style={registerTable.td}>{money(po.value, currency)}</td>
+                    <td style={registerTable.tdMuted}>{fmt(po.createdAt)}</td>
+                    <td style={registerTable.td}>
                       {po.status === 'draft' && (
                         <button type="button" disabled={isBusy} onClick={() => act(po.id, 'submit')} style={s.btnAccent}>
                           {isBusy ? 'Submitting…' : 'Submit for approval'}
@@ -225,8 +233,8 @@ export default function PoList({ initialPos, currency, create }: {
               })}
             </tbody>
           </table>
-        )}
-      </section>
+        </RegisterPanel>
+      )}
 
       {/* Side-by-Side Visual Audit Diff Inspector Modal */}
       {diffPo && (
@@ -253,9 +261,7 @@ export default function PoList({ initialPos, currency, create }: {
 
 const s = {
   container: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
-  panel: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: '8px 8px' } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 12px', margin: 0 } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13.5 } as CSSProperties,
   th: {
     textAlign: 'left',
     color: 'var(--muted)',
@@ -266,9 +272,6 @@ const s = {
     padding: '10px 12px',
     borderBottom: '1px solid var(--border)',
   } as CSSProperties,
-  td: { padding: '11px 12px', borderBottom: '1px solid var(--border)', verticalAlign: 'middle' } as CSSProperties,
-  tdMuted: { padding: '11px 12px', borderBottom: '1px solid var(--border)', color: 'var(--muted)', verticalAlign: 'middle' } as CSSProperties,
-  row: { borderBottom: '1px solid var(--border)' } as CSSProperties,
   btnAccent: {
     background: 'var(--accent)',
     color: 'var(--accent-ink)',
@@ -314,16 +317,6 @@ const s = {
       border = '1px solid var(--good-soft)';
       background = 'var(--good-soft)';
     }
-    return {
-      fontSize: 11.5,
-      fontWeight: 500,
-      background,
-      border,
-      color,
-      borderRadius: 6,
-      padding: '2px 6px',
-      textTransform: 'uppercase',
-      letterSpacing: 0.5,
-    };
+    return { ...registerTable.chip, background, border, color };
   },
 };

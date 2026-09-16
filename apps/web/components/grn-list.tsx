@@ -3,7 +3,7 @@
 import { type CSSProperties, Fragment, useState } from 'react';
 import ReceiptLinesPanel from './receipt-lines-panel';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
-import { RegisterKpis, RegisterToolbar } from './ui/register-view';
+import { RegisterKpis, RegisterPanel, RegisterToolbar } from './ui/register-view';
 
 /**
  * The goods receipt register, with the receiving itself on it.
@@ -45,7 +45,12 @@ function fmt(iso: string): string {
   return new Date(iso).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE });
 }
 
-export default function GrnList({ grns, currency }: { grns: GoodsReceipt[]; currency: string }) {
+export default function GrnList({ grns, currency, create }: {
+  grns: GoodsReceipt[];
+  currency: string;
+  /** The register's own create control, placed where every Sales register puts it. */
+  create?: React.ReactNode;
+}) {
   /** One open at a time: the register stays readable. */
   const [openId, setOpenId] = useState<string | null>(null);
   const [view, setView] = useState<'all' | 'against_po' | 'unlinked'>('all');
@@ -88,16 +93,20 @@ export default function GrnList({ grns, currency }: { grns: GoodsReceipt[]; curr
         search={q}
         onSearch={setQ}
         placeholder="Search notes, orders, suppliers, projects…"
-      />
+      >
+        {create}
+      </RegisterToolbar>
 
-      <section className="panel">
-        {visible.length === 0 ? (
+      {visible.length === 0 ? (
+        <RegisterPanel scroll={false}>
           <p style={s.empty}>
             {grns.length === 0
               ? 'No goods receipts yet — record one against an issued PO above.'
               : 'No receipt note matches this view.'}
           </p>
-        ) : (
+        </RegisterPanel>
+      ) : (
+        <RegisterPanel testId="goods-receipts">
     <table className="data-table">
       <thead>
         <tr>
@@ -153,8 +162,8 @@ export default function GrnList({ grns, currency }: { grns: GoodsReceipt[]; curr
         ))}
       </tbody>
     </table>
-        )}
-      </section>
+        </RegisterPanel>
+      )}
     </>
   );
 }

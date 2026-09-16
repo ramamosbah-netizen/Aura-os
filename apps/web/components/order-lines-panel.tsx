@@ -166,6 +166,7 @@ export default function OrderLinesPanel({ poId, currency, editable }: {
           of materials.
         </p>
       ) : (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -226,6 +227,7 @@ export default function OrderLinesPanel({ poId, currency, editable }: {
             ))}
           </tbody>
         </table>
+        </div>
       )}
 
       {summary && summary.total.lineCount > 0 && (

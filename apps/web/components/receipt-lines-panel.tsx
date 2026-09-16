@@ -110,6 +110,7 @@ export default function ReceiptLinesPanel({ grnId, poId }: { grnId: string; poId
   return (
     <div style={st.wrap} data-testid={`receipt-lines-${grnId}`}>
       {recorded && recorded.length > 0 && (
+        <div className="table-scroll">
         <table className="data-table">
           <thead>
             <tr>
@@ -137,6 +138,7 @@ export default function ReceiptLinesPanel({ grnId, poId }: { grnId: string; poId
             })}
           </tbody>
         </table>
+        </div>
       )}
 
       <div style={st.form}>

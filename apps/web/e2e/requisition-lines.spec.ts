@@ -34,6 +34,17 @@ interface Material { id: string; code: string }
  * load of the full suite, which is the worst kind of test: one that reports the machine's speed
  * rather than the application's behaviour. The sibling specs in this suite already retry for the
  * same reason.
+ *
+ * WHAT IS AND IS NOT PROVEN ABOUT THIS FIX, precisely:
+ *
+ *   PROVEN — the expander works on the current code. Driven directly in the browser, the toggle
+ *   opened the panel and `req-line-qty-1` read "12 nr", which is what this spec expects.
+ *
+ *   NOT PROVEN — that the failure is absent from a full-suite run. It failed once inside a 219-test
+ *   run (200 passed / 10 failed / 9 skipped), and the retry above has only been exercised in a
+ *   targeted run of four specs since. No baseline comparison was made either: stashing to the
+ *   pre-change tree was unavailable, so "this was passing before" rests on an earlier FILTERED run
+ *   rather than on parity under the same load. The hydration explanation is evidenced, not settled.
  */
 async function openMaterials(page: Page, prId: string): Promise<void> {
   await expect(async () => {

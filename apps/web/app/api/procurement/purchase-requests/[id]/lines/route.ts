@@ -1,0 +1,31 @@
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
+
+const base = (id: string) => `${apiBase()}/api/v1/procurement/purchase-requests/${encodeURIComponent(id)}/lines`;
+
+export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
+  const { id } = await params;
+  try {
+    const res = await apiFetch(base(id), { headers: await authHeader(), cache: 'no-store' });
+    return Response.json(await res.json().catch(() => []), { status: res.status });
+  } catch {
+    return Response.json({ error: 'Requisition lines API unreachable' }, { status: 502 });
+  }
+}
+
+export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }): Promise<Response> {
+  const { id } = await params;
+  try {
+    const res = await apiFetch(base(id), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(await authHeader()) },
+      // `|| '{}'` because a PUT/POST declaring a JSON content-type with an EMPTY body is rejected by
+      // the parser before any rule is reached — the defect found twice during Wave 3, on two
+      // different routes. Never send a content-type without something to parse.
+      body: (await request.text()) || '{}',
+      cache: 'no-store',
+    });
+    return Response.json(await res.json().catch(() => ({})), { status: res.status });
+  } catch {
+    return Response.json({ error: 'Requisition lines API unreachable' }, { status: 502 });
+  }
+}

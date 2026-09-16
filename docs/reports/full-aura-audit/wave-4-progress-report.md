@@ -434,3 +434,157 @@ separate capability if the business wants it, and it will not be introduced quie
 if slice 1 delivers line-based requisition UI, browser proof, permissions and save/reload and every
 clause is met, it is promoted in slice 1. If a receipt or handoff clause genuinely remains open, it
 stays PARTIAL. No row is held back to fit a presumed sequence.
+
+## Iteration 3 — Slice 1: material identity, and a requisition that says what it needs
+
+The spine. A material master separated from stock position, and requisition lines that cite it.
+Nothing downstream of this wave can be built without it: every one of `SUP-01`–`SUP-12` is a fact
+*about an item*, and there were no items.
+
+### Where the master lives, and why no new module
+
+The dependency graph was checked before anything was written, because the decision said to revisit
+the architecture only if it forced the question. It does not:
+
+- `@aura/inventory` depends on **`@aura/core` and `@aura/shared` only** — nothing procurement-side.
+- So `procurement → inventory` is a clean one-way edge, and no fifth module is needed.
+
+The master is therefore `aura_inventory_materials` (migration 0333), inside the authority that
+migration 0304 already declared: *"the authority for a part is Inventory."* What is separated is the
+confusion inside one row — `aura_inventory_stock_items` carried `code`, `name`, `unit`, **and**
+`warehouse` and `quantity_on_hand`, so identity and position were the same record. A material that
+had never been stocked had nowhere to exist, which is precisely what a requisition needs to name.
+
+Migration 0334 gives a stock item a nullable `material_id`. **Not backfilled**: every existing
+position predates the master, and matching them by code would be a guess written into a reference
+column, indistinguishable afterwards from a fact somebody established. NULL means *"predates the
+master, nobody has said"* — not *"no material"*.
+
+### The rules that make the identity worth having
+
+| Rule | Why it is not mere strictness |
+| --- | --- |
+| `code` is **immutable** | It is the identity people type off a shelf label, and the key every existing reference resolved on. Re-pointing it rewrites what they meant. |
+| `uom` is **immutable** | The unit is what a quantity MEANS. Change `m` to `roll` and every on-hand balance and open demand is reinterpreted without anyone editing a number. |
+| name / spec / make / model are **freely editable** | Because every citing document keeps its OWN copy. Correcting the catalogue today cannot change what an order meant last year. |
+| `obsolete` blocks NEW demand only | Retirement is a statement about what may be ordered next, never a claim that the past did not happen. |
+
+**Identity by reference, description by value.** A line carries `material_id` forever *and* copies the
+code, name, specification, make, model and unit at authoring time. The reference answers *"is the
+thing installed the thing that was approved and bought"*; the copy answers *"what did we think we
+were ordering, when we ordered it"*. A reference alone lets a catalogue edit rewrite history; a copy
+alone is the free text this wave exists to remove.
+
+This is the same mechanism `ENG-05` already proved for conveyances — `TransmittalItem` snapshots
+number, title and revision at conveyance time — applied to a different noun.
+
+### An unpriced line does not quietly buy a weaker approval
+
+The sharpest rule in the slice, and it comes straight out of iteration 2's containment.
+
+A requisition's value decides **who may approve it** — `approvalMatrix.resolve(…, { value })`. So a
+line with no estimate makes the total smaller, and a smaller total needs a less senior approver.
+Letting an absent number stand in for a real one would buy a weaker approval with missing data:
+the same defect shape as an absent quantity declaring an order complete, one table over.
+
+So `requisitionTotal` reports `value: null` while **any** line is unpriced — not zero, and not the
+partial sum presented as a total. The partial figure is still returned as `pricedSubtotal`, because a
+half-written draft is legitimately useful, but it is never the requisition's value. A draft may be as
+incomplete as its author likes; a requisition **asking somebody to approve it** may not.
+
+The header value follows decision 4: derived where lines exist, and the authored figure where they do
+not. A requisition raised before lines existed keeps its header value, because that is what somebody
+actually stated and refusing to read it would invalidate history rather than improve it.
+
+### The `$` was contradicting an authority that already existed
+
+`J3-05` records the hardcoded `'$' + n`. The discovery is that `aura_companies.base_currency` has
+existed since migration 0135, `NOT NULL DEFAULT 'AED'`, and is already exposed through
+`CompaniesService`. The screen was not merely unlabelled — it was labelling AED figures as dollars.
+The currency is now resolved server-side and threaded through every figure and every input label.
+
+### Found while building it
+
+- **A field left out of a DTO is silently stripped, not refused.** The global `ValidationPipe` runs
+  with `whitelist: true`, so omitting `code` and `uom` from the material edit DTO — which looked like
+  the stronger statement about immutability — meant a caller asking to re-code a material got a
+  cheerful `200` and no change. They are now **declared in order to be refused**. Caught by the
+  Auth-ON e2e asserting a 400, not by review.
+- **The error-taxonomy fitness gate** caught a refusal message that would have escaped as a 500;
+  reworded to match the taxonomy rather than widening the classifier.
+- **A Buyer cannot submit their own requisition under Auth-ON.** `PATCH
+  /procurement/purchase-requests/:id/status` derives `procurement.purchase-request.status`, an action
+  word no shipped procurement role grants — the Buyer holds `procurement.*.create/read/update`.
+  Pre-existing, unrelated to lines, and NOT repaired inside this slice; the e2e submits as admin and
+  says why. **This blocks the `BUY-01` receipt clause** (see below).
+- **The `PROJECT_CODING` port needs the node KIND.** Without it a WBS id offered as a cost code would
+  be accepted purely for belonging to the right project, and the line would carry a work package in
+  the field a cost code is read from. Proven refused.
+- **Nest DI**: binding the port in `GatesModule` failed the container until `ProjectsModule` was
+  imported there. Safe — `ProjectsModule` imports only `CoreModule` and consumes the gate tokens
+  through the `@Global` registry rather than by importing back, so the edge is one-way.
+
+### What was proven
+
+**Domain — 39 tests.** Material identity, immutability of code and unit, retirement semantics,
+reference resolution by id and code, snapshot completeness; line quantity and cost rules, the freeze
+at submission, per-line money rounding, derived-vs-authored value, and renumbering.
+
+**Service — 23 tests.** A line cannot name a material outside the catalogue; an obsolete material is
+refused on new demand; the unit comes from the master and cannot be typed; cross-project and
+wrong-kind coding refused; **an absent coding authority REFUSES rather than passes**; the freeze;
+and the governing value in all three states.
+
+**API, Auth-ON with JWT — 14 tests.** Storekeeper authors the catalogue and the Buyer is refused
+`403`; a duplicate code is refused naming what holds it; code and unit changes refused `400`;
+a line copies the whole description; the unit comes from the material; an unresolvable material
+leaves the requisition empty; an obsolete material is refused `409` while the line that already cites
+it stays readable; **correcting the catalogue does not rewrite what the requisition meant**; a
+foreign cost code refused; the derived value; no value while unpriced; save, edit, remove, renumber
+and reload; the freeze at submission (`409` on add, edit and remove); unauthenticated `401`.
+
+**Browser, Auth-ON.** The panel shows materials in their own units (`12 nr`, `250 m`), money as
+`AED`, and — the one that matters — an unpriced line leaves the requisition showing
+`AED 4,500.00 so far` with *"1 of 2 lines are not priced — this requisition has no value yet"* and a
+refusal naming line 2. Pricing it settles the figure to `AED 6,400.00`. A zero quantity is refused in
+the domain's own words. Survives a reload.
+
+**Persistence.** Both new tables: RLS **ENABLED and FORCED with a policy**, and `aura_app` grants
+verified against the live database.
+
+### Regression at this checkpoint
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks** |
+| `pnpm build` | **27/27 tasks** |
+| `pnpm test` | **51/51 tasks** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| API e2e | **60 files passed, 12 failed (72)** — the identical pre-existing set; the passing count rose by this slice's spec |
+| Browser (this spec + the five Wave 3 specs + the three touching this screen) | **19 passed**, 1 skipped |
+| `pnpm lint` | **0 errors**, 683 warnings — unchanged |
+| Migration policy | **335 files**, sequential, `@DOWN` present |
+
+### Reconciliation — and no promotion
+
+`BUY-01`'s frozen acceptance proof asks for five things: *representative Buyer / Storekeeper
+execution in the canonical Procurement / Inventory context; save/reload; applicable permission
+denials; actual output; and next-role receipt.*
+
+| Clause | State |
+| --- | :---: |
+| Representative Buyer and Storekeeper, canonical context | **proved** |
+| Save / reload | **proved** |
+| Applicable permission denials | **proved** |
+| Actual output — the derived requisition total, a *calculation* under the frozen definition | **proved** |
+| **Next-role receipt** | **NOT proved** |
+
+The receipt clause is genuinely open, and it is open for a concrete reason rather than for want of
+effort: the requisition's next role is its approver, and **a Buyer cannot currently submit a
+requisition under Auth-ON at all** — the permission-derivation gap recorded above. Proving a handoff
+through a path the owning role cannot walk would be proving something else.
+
+**So `BUY-01` is NOT proposed for COMPLETE, and `J3-05` is not proposed for closure** — its
+acceptance proof is the same sentence. Both are proposed to move `UNVERIFIED → PARTIAL`, which is
+what the evidence supports: substantial governed behaviour, proven Auth-ON and in the browser, with
+one named clause outstanding. The decision is the programme owner's.

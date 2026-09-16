@@ -20,14 +20,31 @@ interface Project {
   title: string;
 }
 
+interface Company {
+  id: string;
+  baseCurrency: string;
+}
+
 export default async function PurchaseRequestsPage({ searchParams }: { searchParams: Promise<{ record?: string; projectId?: string }> }) {
   const { record, projectId } = await searchParams;
   const scopedProjectId = projectId?.trim() || '';
-  const [prs, projects] = await Promise.all([
+  const [prs, projects, companies] = await Promise.all([
     getJson<PurchaseRequest[]>(scopedProjectId ? `/api/procurement/purchase-requests?projectId=${encodeURIComponent(scopedProjectId)}` : '/api/procurement/purchase-requests'),
     getJson<Project[]>('/api/projects/projects'),
+    getJson<Company[]>('/api/admin/companies'),
   ]);
   const project = scopedProjectId ? projects?.find((item) => item.id === scopedProjectId) : null;
+
+  /**
+   * The company's own base currency — the figure on this page used to be labelled `$` while
+   * `aura_companies.base_currency` said AED (gap record J3-05).
+   *
+   * The fallback is AED because that column is NOT NULL DEFAULT 'AED': every company HAS a base
+   * currency, and the only thing that can fail here is READING it — this endpoint is admin-scoped,
+   * so a Buyer's request for it is forbidden rather than empty. Falling back to the schema's own
+   * default is therefore reading a known value out of band, not inventing a missing one.
+   */
+  const currency = companies?.[0]?.baseCurrency?.trim() || 'AED';
 
   return (
     <div style={st.page}>
@@ -52,7 +69,7 @@ export default async function PurchaseRequestsPage({ searchParams }: { searchPar
         {prs === null || projects === null ? (
           <p style={st.muted}>API offline.</p>
         ) : (
-          <PrList initialPrs={prs} projects={projects} focusedId={record ?? ''} initialProjectId={project ? scopedProjectId : ''} />
+          <PrList initialPrs={prs} projects={projects} focusedId={record ?? ''} initialProjectId={project ? scopedProjectId : ''} currency={currency} />
         )}
       </section>
     </div>

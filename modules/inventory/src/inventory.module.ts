@@ -26,6 +26,11 @@ import { InMemoryStorageLocationStore } from './in-memory-storage-location-store
 import { PostgresStorageLocationStore } from './postgres-storage-location-store';
 import { StorageLocationService } from './storage-location.service';
 
+import { MATERIAL_STORE } from './material-store';
+import { InMemoryMaterialStore } from './in-memory-material-store';
+import { PostgresMaterialStore } from './postgres-material-store';
+import { MaterialService } from './material.service';
+
 /** The Inventory business module — same shape as Procurement / the deal-chain modules. */
 @Module({
   imports: [CoreModule],
@@ -60,12 +65,19 @@ import { StorageLocationService } from './storage-location.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresStorageLocationStore(pool) : new InMemoryStorageLocationStore(),
     },
+    {
+      provide: MATERIAL_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresMaterialStore(pool) : new InMemoryMaterialStore(),
+    },
     GoodsReceiptService,
     StockService,
     TransferService,
     SerialService,
     StorageLocationService,
+    MaterialService,
   ],
-  exports: [GoodsReceiptService, StockService, TransferService, SerialService, StorageLocationService],
+  exports: [GoodsReceiptService, StockService, TransferService, SerialService, StorageLocationService, MaterialService],
 })
 export class InventoryModule {}

@@ -11,6 +11,11 @@ import { InMemoryPurchaseRequestStore } from './in-memory-purchase-request-store
 import { PostgresPurchaseRequestStore } from './postgres-purchase-request-store';
 import { PurchaseRequestService } from './purchase-request.service';
 
+import { PR_LINE_STORE } from './purchase-request-line-store';
+import { InMemoryPurchaseRequestLineStore } from './in-memory-purchase-request-line-store';
+import { PostgresPurchaseRequestLineStore } from './postgres-purchase-request-line-store';
+import { PurchaseRequestLineService } from './purchase-request-line.service';
+
 import { RFQ_STORE } from './rfq-store';
 import { InMemoryRfqStore } from './in-memory-rfq-store';
 import { PostgresRfqStore } from './postgres-rfq-store';
@@ -60,12 +65,19 @@ import { FrameworkAgreementService } from './framework-agreement.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresFrameworkAgreementStore(pool) : new InMemoryFrameworkAgreementStore(),
     },
+    {
+      provide: PR_LINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPurchaseRequestLineStore(pool) : new InMemoryPurchaseRequestLineStore(),
+    },
     PurchaseOrderService,
     PurchaseRequestService,
+    PurchaseRequestLineService,
     RfqService,
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [PurchaseOrderService, PurchaseRequestService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

@@ -3,6 +3,7 @@
 import { type CSSProperties, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import RequisitionLinesPanel from './requisition-lines-panel';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface PurchaseRequest {
@@ -21,8 +22,15 @@ interface Project {
   title: string;
 }
 
-function money(n: number): string {
-  return typeof n === 'number' ? '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
+/**
+ * The company's own base currency, never a hardcoded symbol.
+ *
+ * This read `'$' + n` while `aura_companies.base_currency` says AED — gap record J3-05 names it
+ * exactly. A figure labelled in the wrong currency is not a formatting slip; it is a different
+ * amount of money.
+ */
+function money(n: number, currency: string): string {
+  return typeof n === 'number' ? `${currency} ${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—';
 }
 
 function fmt(iso: string): string {
@@ -34,15 +42,20 @@ export default function PrList({
   projects,
   focusedId = '',
   initialProjectId = '',
+  currency,
 }: {
   initialPrs: PurchaseRequest[];
   projects: Project[];
   focusedId?: string;
   initialProjectId?: string;
+  /** The company's base currency, resolved on the server. */
+  currency: string;
 }) {
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  /** Which requisition has its materials open. One at a time: the table stays readable. */
+  const [openId, setOpenId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!focusedId) return;
@@ -85,7 +98,7 @@ export default function PrList({
           fields={[
             { name: 'title', label: 'Request title', kind: 'text', required: true, placeholder: 'e.g. Concrete supplier for Site B', span: 2 },
             { name: 'reference', label: 'Reference / memo', kind: 'text', placeholder: 'e.g. PR-2026-98' },
-            { name: 'value', label: 'Estimated cost ($)', kind: 'number', placeholder: '0' },
+            { name: 'value', label: `Estimated cost (${currency})`, kind: 'number', placeholder: '0' },
             {
               name: 'projectId',
               label: 'Link to project',
@@ -127,7 +140,7 @@ export default function PrList({
                     <td style={s.td}><strong>{pr.title}</strong></td>
                     <td style={s.tdMuted}>{pr.reference ?? '—'}</td>
                     <td style={s.tdMuted}>{pr.projectName ?? '—'}</td>
-                    <td style={s.td}>{money(pr.value)}</td>
+                    <td style={s.td}>{money(pr.value, currency)}</td>
                     <td style={s.td}>
                       <span style={s.tag(pr.status)}>{pr.status}</span>
                     </td>
@@ -160,11 +173,35 @@ export default function PrList({
                         {pr.status === 'rejected' && (
                           <span style={{ color: 'var(--bad)', fontSize: 12.5 }}>⚠ Rejected</span>
                         )}
+                        <button
+                          type="button"
+                          onClick={() => setOpenId(openId === pr.id ? null : pr.id)}
+                          style={s.btnSecondary}
+                          data-testid={`pr-materials-toggle-${pr.id}`}
+                        >
+                          {openId === pr.id ? 'Hide materials' : 'Materials'}
+                        </button>
                       </div>
                     </td>
                   </tr>
                 );
               })
+            )}
+            {/*
+              The materials sit under their own requisition rather than on a separate page: the
+              value in the row above is DERIVED from them, and a total shown away from the lines it
+              came from is a number nobody can check.
+            */}
+            {openId && initialPrs.some((pr) => pr.id === openId) && (
+              <tr>
+                <td colSpan={7} style={s.linesCell}>
+                  <RequisitionLinesPanel
+                    prId={openId}
+                    currency={currency}
+                    editable={initialPrs.find((pr) => pr.id === openId)?.status === 'draft'}
+                  />
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -174,6 +211,7 @@ export default function PrList({
 }
 
 const s = {
+  linesCell: { padding: 0, background: 'var(--bg)' } as CSSProperties,
   container: { display: 'flex', flexDirection: 'column', gap: 14 } as CSSProperties,
   header: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } as CSSProperties,
   subTitle: { fontSize: 18, margin: 0, fontWeight: 600 } as CSSProperties,

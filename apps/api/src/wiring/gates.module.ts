@@ -2,11 +2,12 @@ import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
 import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY } from '@aura/commissioning';
-import { InventoryModule, StockService } from '@aura/inventory';
+import { InventoryModule, StockService, MaterialService } from '@aura/inventory';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
-import { QUALITY_GATE, ProcurementModule, RfqService } from '@aura/procurement';
+import { QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ProcurementModule, RfqService } from '@aura/procurement';
+import { ProjectsModule, WbsService, CbsService } from '@aura/projects';
 import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH } from '@aura/projects';
 
 /**
@@ -33,9 +34,34 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
  */
 @Global()
 @Module({
-  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule, ElvModule, InventoryModule],
+  imports: [QualityModule, CommissioningModule, DocControlModule, HseModule, EngineeringModule, ProcurementModule, ElvModule, InventoryModule,
+    // ProjectsModule imports only CoreModule and consumes the tokens below through the @Global
+    // registry rather than by importing this module, so this edge is one-way and adds no cycle.
+    ProjectsModule],
   providers: [
     { provide: QUALITY_GATE, useExisting: QualityService },
+
+    // ── Material identity (Wave 4) ───────────────────────────────────────────────────────────
+    // A requisition line must name a canonical material, and Inventory is the authority for what a
+    // material IS (migration 0304, and 0333 which separated that identity from stock position).
+    // Procurement declares the `MATERIAL_CATALOGUE` port and never imports Inventory; the shapes
+    // match structurally and the wire is made here.
+    { provide: MATERIAL_CATALOGUE, useExisting: MaterialService },
+
+    // Canonical work-package and cost coding on a requisition line, each checked against the
+    // requisition's OWN project — AWD-05's rule, asked by a new caller. Composed from both node
+    // services because the kind is part of the question: without it a WBS id would be accepted as
+    // a cost code purely for belonging to the right project.
+    {
+      provide: PROJECT_CODING,
+      inject: [WbsService, CbsService],
+      useFactory: (wbs: WbsService, cbs: CbsService) => ({
+        async nodeBelongsToProject(tenantId: string, projectId: string, nodeId: string, kind: 'wbs' | 'cbs') {
+          const node = kind === 'wbs' ? await wbs.get(nodeId) : await cbs.get(nodeId);
+          return !!node && node.tenantId === tenantId && node.projectId === projectId;
+        },
+      }),
+    },
     { provide: ITP_GATE, useExisting: QualityService },
 
     { provide: QUALITY_READINESS, useExisting: QualityService },
@@ -99,6 +125,6 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // projection of code, name and unit. Nothing here moves stock.
     { provide: INVENTORY, useExisting: StockService },
   ],
-  exports: [QUALITY_GATE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
+  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY],
 })
 export class GatesModule {}

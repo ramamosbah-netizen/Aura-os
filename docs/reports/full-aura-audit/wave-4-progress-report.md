@@ -725,3 +725,10 @@ item by item. The decision is the programme owner's.
 
 Nothing else is proposed. `BUY-02`, `BUY-03`, `BUY-07` and the twelve `SUP` rows remain untouched,
 and the wave's exit gate is unchanged.
+
+### Applied
+
+The programme owner accepted both. **`BUY-01` is COMPLETE** and **gap record `J3-05` is
+CLOSED / VERIFIED.** The register moves to **18 of 180 COMPLETE** and 48 UNVERIFIED; three of the
+forty-six gap records are now closed. Nothing else moved: no other classification changed, and the
+wave’s exit gate is untouched — `BUY-01` is one of the sixteen pinned proofs, so fifteen remain.

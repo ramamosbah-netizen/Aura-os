@@ -1,0 +1,176 @@
+import { describe, it, expect } from 'vitest';
+import {
+  orderGoverningValue,
+  makePurchaseOrderLine,
+  mayEditOrderLines,
+  nextOrderLineNo,
+  orderedQuantityOf,
+  orderTotal,
+  provenanceOf,
+  type PurchaseOrderLine,
+  renumberOrderLines,
+} from './purchase-order-line';
+
+const snapshot = {
+  materialCode: 'CAM-DOME-4MP',
+  materialName: '4MP dome camera',
+  specification: 'IP67, 2.8mm',
+  manufacturer: 'Hikvision',
+  model: 'DS-2CD2143G2-I',
+  uom: 'nr',
+};
+
+const line = (over: Partial<Parameters<typeof makePurchaseOrderLine>[0]> = {}) =>
+  makePurchaseOrderLine({
+    tenantId: 't1',
+    poId: 'po-1',
+    lineNo: 1,
+    materialId: 'mat-1',
+    snapshot,
+    quantity: 10,
+    unitPrice: 450,
+    sourceType: 'direct',
+    ...over,
+  });
+
+describe('an order line names a material and says how it was bought', () => {
+  it('refuses a line with no canonical material', () => {
+    expect(() => line({ materialId: '' })).toThrow(/must name a canonical material/);
+  });
+
+  it('refuses a quantity of nothing, and a negative price', () => {
+    expect(() => line({ quantity: 0 })).toThrow(/greater than zero/);
+    expect(() => line({ unitPrice: -1 })).toThrow(/zero or more/);
+  });
+
+  it('accepts a price of zero — a free issue is a real commercial fact', () => {
+    expect(line({ unitPrice: 0 }).unitPrice).toBe(0);
+  });
+
+  it('takes the unit from the material snapshot', () => {
+    expect(line({ snapshot: { ...snapshot, uom: 'm' } }).uom).toBe('m');
+  });
+
+  it('rounds the authored unit price to money', () => {
+    expect(line({ unitPrice: 0.335 }).unitPrice).toBe(0.34);
+  });
+});
+
+describe('a claim to have been sourced needs the chain behind it', () => {
+  it('accepts a DIRECT line with no requisition at all — that is explicit lineage, not a gap', () => {
+    const direct = line({ sourceType: 'direct' });
+    expect(direct).toMatchObject({ sourceType: 'direct', sourcePrLineId: null, sourceQuoteLineId: null });
+  });
+
+  it('accepts a DIRECT line that happens to answer a requisition line', () => {
+    // Orthogonal facts: HOW the supplier was arrived at, and WHAT demand this answers.
+    expect(line({ sourceType: 'direct', sourcePrLineId: 'prl-1' }).sourcePrLineId).toBe('prl-1');
+  });
+
+  it('REFUSES a SOURCED line with no chain — the claim nobody may make by leaving a field empty', () => {
+    expect(() => line({ sourceType: 'sourced' })).toThrow(/cannot claim it was competitively sourced/);
+  });
+
+  it('refuses a SOURCED line that cites the requisition but not the selected quote line', () => {
+    expect(() => line({ sourceType: 'sourced', sourcePrLineId: 'prl-1' }))
+      .toThrow(/the supplier quote line a buyer selected/);
+  });
+
+  it('accepts a SOURCED line carrying both halves of the chain', () => {
+    const sourced = line({ sourceType: 'sourced', sourcePrLineId: 'prl-1', sourceQuoteLineId: 'ql-1' });
+    expect(sourced).toMatchObject({ sourceType: 'sourced', sourcePrLineId: 'prl-1', sourceQuoteLineId: 'ql-1' });
+  });
+
+  it('refuses LEGACY outright — it is not a lineage anybody chooses', () => {
+    expect(() => line({ sourceType: 'legacy' as never })).toThrow(/not a lineage anybody may choose/);
+  });
+
+  it('refuses an unrecognised source', () => {
+    expect(() => line({ sourceType: 'guessed' as never })).toThrow(/must say how it was bought/);
+  });
+});
+
+describe('what the order was arrived at, read from its lines', () => {
+  it('calls an order with no lines LEGACY rather than direct', () => {
+    // The distinction that matters: a historical order is not evidence that nobody sourced it.
+    expect(provenanceOf([])).toBe('legacy');
+  });
+
+  it('reports direct and sourced when every line agrees', () => {
+    expect(provenanceOf([line(), line({ lineNo: 2 })])).toBe('direct');
+    const s = { sourceType: 'sourced' as const, sourcePrLineId: 'prl-1', sourceQuoteLineId: 'ql-1' };
+    expect(provenanceOf([line(s), line({ lineNo: 2, ...s })])).toBe('sourced');
+  });
+
+  it('reports MIXED rather than collapsing to whichever line came first', () => {
+    const sourced = line({ lineNo: 2, sourceType: 'sourced', sourcePrLineId: 'prl-1', sourceQuoteLineId: 'ql-1' });
+    expect(provenanceOf([line(), sourced])).toBe('mixed');
+  });
+});
+
+describe('the order total', () => {
+  it('adds the lines up', () => {
+    expect(orderTotal([line(), line({ lineNo: 2, quantity: 250, unitPrice: 4 })]))
+      .toEqual({ lineCount: 2, value: 5500 });
+  });
+
+  it('rounds each extension before summing, not once at the end', () => {
+    // Two lines of 0.333 × 1.00 each round to 0.33, so the order is 0.66 — the figure the printed
+    // lines add up to. Summing raw and rounding once would print 0.67, which no line supports.
+    const lines = [line({ quantity: 0.333, unitPrice: 1 }), line({ lineNo: 2, quantity: 0.333, unitPrice: 1 })];
+    expect(orderTotal(lines).value).toBe(0.66);
+  });
+
+  it('has no unpriced state to carry — a line without a price cannot be created', () => {
+    expect(() => line({ unitPrice: Number.NaN })).toThrow(/unit price of zero or more/);
+  });
+});
+
+describe('the governing value', () => {
+  it('reads the authored header for a LEGACY order with no lines', () => {
+    expect(orderGoverningValue(7500, [])).toEqual({ value: 7500, derived: false });
+  });
+
+  it('derives from the lines once they exist, and the header stops speaking', () => {
+    expect(orderGoverningValue(999_999, [line()])).toEqual({ value: 4500, derived: true });
+  });
+});
+
+describe('lines are what the supplier was committed to', () => {
+  it('lets a draft be edited', () => {
+    expect(mayEditOrderLines('draft')).toEqual({ allowed: true });
+  });
+
+  it('refuses every later state, naming it', () => {
+    for (const status of ['pending_approval', 'approved', 'issued', 'partially_received', 'received']) {
+      const verdict = mayEditOrderLines(status);
+      expect(verdict.allowed).toBe(false);
+      expect(verdict.reason).toContain(status);
+      expect(verdict.reason).toMatch(/only be changed while it is a draft/);
+    }
+  });
+});
+
+describe('ordered quantity per material — what a receipt is measured against', () => {
+  it('sums every line of the same material', () => {
+    const lines = [line(), line({ lineNo: 2, quantity: 5 }), line({ lineNo: 3, materialId: 'mat-2', quantity: 99 })];
+    expect(orderedQuantityOf(lines, 'mat-1')).toBe(15);
+  });
+
+  it('answers zero for a material this order does not buy', () => {
+    expect(orderedQuantityOf([line()], 'mat-absent')).toBe(0);
+  });
+});
+
+describe('line numbering', () => {
+  const l = (lineNo: number): PurchaseOrderLine => line({ lineNo });
+
+  it('hands out the next free number', () => {
+    expect(nextOrderLineNo([])).toBe(1);
+    expect(nextOrderLineNo([l(1), l(4)])).toBe(5);
+  });
+
+  it('closes the gap left by a removal', () => {
+    expect(renumberOrderLines([l(1), l(3), l(7)]).map((x) => x.lineNo)).toEqual([1, 2, 3]);
+  });
+});

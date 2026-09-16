@@ -732,3 +732,140 @@ The programme owner accepted both. **`BUY-01` is COMPLETE** and **gap record `J3
 CLOSED / VERIFIED.** The register moves to **18 of 180 COMPLETE** and 48 UNVERIFIED; three of the
 forty-six gap records are now closed. Nothing else moved: no other classification changed, and the
 wave’s exit gate is untouched — `BUY-01` is one of the sixteen pinned proofs, so fifteen remain.
+
+## Iteration 5 — Slice 2: a purchase order buys materials, and says how it came to buy them
+
+An order was a header with one scalar value and, since 0212, one optional BOQ quantity. So *"what
+did we order"* had no answer, and everything downstream of it — receiving part of a delivery,
+issuing some of it to site, proving the material installed is the one approved — had no subject.
+Migration 0336 gives the order its lines.
+
+### Lineage: the rule that makes the same NULL mean two different things
+
+Two lawful routes, and the direct one is not a loophole:
+
+| Route | Chain |
+| --- | --- |
+| **SOURCED** | PR line → RFQ → supplier quote line → selection → PO line |
+| **DIRECT** | material master → PO line, with no competitive sourcing |
+
+`source_type` states which, **explicitly**, and that is the whole point:
+
+- `source_pr_line_id IS NULL` on a **direct** line is *explicit lineage* — somebody decided to buy
+  this without sourcing it, and the discriminator records that decision rather than leaving it to be
+  inferred from a missing column;
+- the same NULL on a line **claiming** to have been sourced is an unfounded claim, and it is
+  **refused**. "Competitively sourced" is exactly the assertion nobody should be able to make by
+  leaving a field empty.
+
+Absence is meaningful only because something explicitly declares what it means — the inverse of the
+defect this wave opened with, where an absent quantity declared an order complete.
+
+`direct` is the **default** when a caller says nothing, because it is the honest one: a line nobody
+has sourced has not been sourced. `sourced` is never inferred; it has to be claimed, and claiming it
+costs a chain. `source_quote_line_id` is declared and unused — selection arrives in a later slice, so
+until it exists `sourced` cannot be satisfied and is therefore refused. It is a reservation with a
+rule already attached, not a field waiting to be filled in by hand.
+
+**The third state — legacy/unknown — is carried by the ABSENCE OF LINES**, not by a line. Every order
+raised before this migration has a header value and no lines: it stays valid, keeps behaving as it
+did, and is never read as evidence that it was sourced or that it was direct, because it predates the
+authority that could have said either. It is not selectable at the DTO, refused by name at the
+domain, and excluded by a CHECK constraint — because it is not a choice anybody makes, it is what
+history looks like from here. `provenanceOf` reports `mixed` where an order carries both kinds,
+rather than collapsing to whichever line came first: *"some of this was competitively sourced"* is a
+different fact from *"all of it was"*.
+
+### The first real handoff in the chain
+
+An approved requisition's lines now travel onto the order it drafts, **without retyping**. The
+material identity, the description as the requisitioner saw it, the quantity, the unit and the
+coding all move, and each order line records the requisition line it answers. Retyping them would
+put a second, unchecked description of the same material into the system — which is what this wave
+exists to stop.
+
+The lineage is **DIRECT**, said plainly: the order was raised straight from a requisition with no RFQ
+and no selection. Calling it sourced because a requisition exists would be the same false claim the
+domain refuses — a requisition is demand, not sourcing.
+
+Both sides derive their total the same way, so the requisition and the order agree on 6,400 without
+anybody reconciling them. The carry is idempotent: a requisition line already on the order is
+skipped, so a redelivered approval does not order the same material twice.
+
+### One order, one total
+
+The persisted header follows the lines, exactly as the requisition's does. Unlike a requisition
+there is no incomplete state to represent — a line without a price cannot be created at all, since
+an order for an unknown amount is not a draft in progress — so an order with lines always has a
+whole figure. An order with no lines keeps the figure somebody authored.
+
+Money is the order's own currency: one order, one supplier, one currency, so it sits on the header
+(`currency`, nullable and **not** backfilled — a historical order was never told what currency it
+was in, and writing one in now would invent a commercial fact rather than record one). Normalisation
+across currencies belongs to the comparison slice, where quotations in different currencies actually
+meet.
+
+### Found while building it
+
+- **Five helper names collided in the module barrel.** `renumber`, `nextLineNo`, `governingValue`,
+  `mayEditLines` and `MaterialLineSnapshot` exist on both the requisition and the order side, and
+  re-exporting both broke the build. The order-side ones are renamed rather than the barrel narrowed,
+  so a reader always knows which document a helper is about.
+- **A cited requisition line is resolved, not trusted.** A lineage nobody checks is not a lineage; it
+  is a note that looks like one. A citation of a line that does not exist is refused 404.
+
+### What was proven
+
+**26 domain tests.** Quantity and price rules (zero price accepted — a free issue is a real
+commercial fact; negative refused as a credit); the sourced-needs-a-chain refusal in both its halves;
+`legacy` refused by name; provenance including `mixed`; per-line rounding before the sum; the freeze;
+ordered quantity per material — the figure a receipt will be measured against.
+
+**18 service tests.** The catalogue refusal; direct as the default; the sourced refusal through the
+service; a citation of a non-existent requisition line refused; cross-project coding refused; the
+header tracking the lines up, down and through a removal; `legacy` for a lineless order; the freeze
+after issue; and the whole carry — every line travelling with its own unit, each recording the
+demand it answers, provenance `direct`, both totals agreeing, idempotent on replay, and the
+requisition-side read answering *"was this demand ever bought?"*.
+
+**9 Auth-ON API tests, JWT on.** A line bought in the material's own unit with its description
+copied; the derived value overriding a header authored at 999,999; a legacy order reading its own
+value; **a sourced claim with no chain refused 400 and nothing written**; `legacy` refused at the
+DTO; a citation of a missing requisition line refused 404; **the full handoff** — requisition lines
+authored, submitted by the Buyer, approved by the manager, and the drafted order carrying both lines
+with identity, description, unit, quantity, the demand each answers, provenance `direct` and a total
+of 6,400 matching the requisition; the freeze after issue (409 on add, edit and delete);
+unauthenticated 401.
+
+**Persistence.** `aura_procurement_purchase_order_lines`: RLS **ENABLED and FORCED with a policy**,
+`aura_app` granted, and `aura_procurement_purchase_orders.currency` present — all verified against
+the live database.
+
+### Regression at this checkpoint
+
+| Gate | Result |
+| --- | --- |
+| `pnpm typecheck` | **51/51 tasks** |
+| `pnpm build` | **27/27 tasks** |
+| `pnpm test` | **51/51 tasks** |
+| API unit + all fitness gates | **541 passed**, 4 skipped |
+| API e2e | **61 files passed, 12 failed (73)** — the identical pre-existing set; passing tests rose 432 → 441 |
+| Migration policy | **336 files**, sequential, `@DOWN` present |
+
+### No promotion
+
+Nothing is proposed. This slice builds the subject that `BUY-05` (partial receipt), `BUY-06` (stock
+issue and return) and `BUY-07` (material delivery to work package) all need, and none of them is
+closable until receipt semantics are rebuilt on these lines — the next slice. `SUP-14` is untouched:
+carrying a requisition's lines onto an order is not selecting a supplier quotation, and this slice
+deliberately does not let anything claim it was.
+
+Two things are carried forward from here rather than silently absorbed:
+
+- **no UI yet for order lines.** The API and the domain are proven; the buyer's screen still shows an
+  order as a header. That is the same shape `BUY-01` was in after slice 1, and it is stated rather
+  than left to be discovered at reconciliation time.
+- **the drafted order's unit price is the requisition's ESTIMATE**, because that is the only figure
+  anybody has stated at that point. A buyer edits it to the agreed price while the order is a draft.
+  Where that agreed price should come from — a supplier quotation — is exactly what the comparison
+  slice delivers.

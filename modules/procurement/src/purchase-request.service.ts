@@ -6,6 +6,7 @@ import { PR_LINE_STORE, type PurchaseRequestLineStore } from './purchase-request
 import { governingValue, type PurchaseRequestLine, readyToSubmit } from './domain/purchase-request-line';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestFilter, type PurchaseRequestStore } from './purchase-request-store';
 import { PurchaseOrderService } from './purchase-order.service';
+import { PurchaseOrderLineService } from './purchase-order-line.service';
 
 @Injectable()
 export class PurchaseRequestService {
@@ -30,6 +31,11 @@ export class PurchaseRequestService {
      * exactly right for a requisition raised before lines existed.
      */
     @Optional() @Inject(PR_LINE_STORE) private readonly lines: PurchaseRequestLineStore | null = null,
+    /**
+     * Carries this requisition's lines onto the order its approval drafts. Optional and LAST, for
+     * the same positional-construction reason as the store above.
+     */
+    @Optional() @Inject(PurchaseOrderLineService) private readonly orderLines: PurchaseOrderLineService | null = null,
   ) {}
 
   /**
@@ -180,7 +186,24 @@ export class PurchaseRequestService {
         status: 'draft',
         createdBy: actorId,
       });
-      this.logger.log(`Auto-created PO ${po.title} (${po.id}) from approved PR ${updated.id}`);
+      /**
+       * The requisition's lines travel onto the order it drafts, WITHOUT RETYPING.
+       *
+       * This is the first real handoff in the procurement chain and the thing that makes the
+       * requisition's work mean something: the material identity, the description as the
+       * requisitioner saw it, the quantity and the coding all move, and each order line records
+       * which requisition line it answers. Retyping them here would put a second, unchecked
+       * description of the same material into the system — which is what this wave exists to stop.
+       *
+       * The lineage is DIRECT, said plainly: this order was raised straight from a requisition with
+       * no RFQ and no competitive selection. Calling it sourced because a requisition exists would
+       * be the false claim the domain refuses — a requisition is demand, not sourcing.
+       */
+      const carried = (await this.orderLines?.carryRequisitionLines(po.id, updated.id)) ?? [];
+      this.logger.log(
+        `Auto-created PO ${po.title} (${po.id}) from approved PR ${updated.id}` +
+        (carried.length > 0 ? ` with ${carried.length} line(s) carried` : ''),
+      );
     }
 
     return updated;

@@ -1481,6 +1481,110 @@ The decisions this now needs are the programme owner's, and they are larger than
    material — given that no field in the system does so today;
 4. whether **site installation** is gated alongside procurement.
 
+## Iteration 22 — a conveyance goes to people, and only they can say it arrived
+
+The last two rows Wave 3 owes, taken as one slice because they share one mechanism — and reconciled
+apart, because sharing a mechanism is not sharing a criterion.
+
+### Investigation first, and it moved the target
+
+Far more existed than the register implied. The conveyance lifecycle is properly enforced
+(`draft → sent → received → acknowledged`, no skipping, no re-send after acknowledgement), and
+`TransmittalItem` already snapshots the exact register revision **by value** — document number,
+title and revision captured at conveyance time so what was sent stays readable after the register
+moves on.
+
+Both frozen criteria reduced to one missing thing:
+
+> `recipient` was a single free-text field, and `acknowledgeTransmittal` checked a permission and
+> nothing else.
+
+So a release to a Site Engineer, a Project Engineer and a Buyer could name one of them, badly —
+*"Site team"* resolves to nobody — and **any** holder of `doccontrol.transmittal.acknowledge` on the
+project could sign for a document addressed to somebody else. A receipt signed by a person who was
+never sent the document is not a receipt; it is a second person's opinion that it probably arrived.
+
+### What replaced it
+
+Recipients are **rows** (migration 0332): a platform user, the capacity they receive in, and their
+own acknowledgement. Acknowledging now requires two things where it required one — the permission
+says you are the kind of person who acknowledges conveyances, being on the distribution says *this
+one* was sent to you.
+
+**Partial receipt is not receipt.** With three named recipients, one answering must not report that
+three people have it. The conveyance reaches `acknowledged` only when the last of them answers; until
+then the per-person receipts are the truth and *"the Buyer has it, Site has not"* stays readable —
+which is the fact a chase starts from and the fact a single status destroys. The event payload
+carries the same split, so a reader of the log is never left to infer whether the document landed
+everywhere.
+
+The distribution is fixed at `sent`: recipients go on while it is a draft, and adding somebody after
+is refused, because what was conveyed is what was conveyed. A conveyance with **no** named recipients
+keeps the previous permission-only behaviour — historical records carry no distribution to check
+against, and refusing them all would rewrite the past rather than govern the present.
+
+### ENG-05 reconciliation
+
+*Attach the exact controlled register revision(s), send once, show recipient receipt/acknowledgement
+and retain revision/purpose lineage under representative project and functional permissions.*
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| The exact controlled register revision(s) | each item snapshots number, title and revision FROM the register, so a package cannot claim a revision the controlled record never had | no |
+| …revision**s**, plural | two documents in one package, each keeping its OWN revision — a package is not one revision applied to several drawings | no |
+| Send once | `draft → sent` only; a second send is refused 409 | no |
+| Recipient receipt / acknowledgement | each named recipient answers for themselves; a holder of the identical permission who is not on the distribution is refused; a second answer from the same person is refused | no |
+| Revision / purpose lineage retained | the items still read back at their conveyed revision and purpose after the conveyance has closed | no |
+| Representative project and functional permissions | JWT ON throughout; document-controller and recipient roles kept apart; the assertion resources on the conveyance's own project; unauthenticated 401 | no |
+
+**Proposed: `ENG-05` PARTIAL → COMPLETE.**
+
+### ENG-06 reconciliation
+
+*Repeat the governed release with separate Design issuer and assigned Site Engineer, Project Engineer
+and Procurement recipients; prove only authorized recipients see/accept their exact drawing or
+material revision and retain receipt history.*
+
+| Criterion | Evidence | Open? |
+| --- | --- | :---: |
+| The governed release, repeated | `draft → submitted → under_review → approved → transmitted`, each step its own act, producing the conveyance | no |
+| Separate Design issuer | the issuer is Design and is deliberately NOT on the distribution — a release nobody outside Design has to accept is an announcement, not a handover | no |
+| Assigned Site Engineer, Project Engineer and Procurement recipients | three named people, each in the capacity they receive in | no |
+| **Only authorized** recipients accept | a bystander holding the identical acknowledge permission is refused, and the count stays at zero; Site accepting does not accept for the Project Engineer or the Buyer | no |
+| Their exact drawing revision | the conveyance code is derived from the immutable drawing-revision identity, so what was released cannot drift from what the register later becomes | no |
+| Retained receipt history | the acknowledgement history names each role that accepted, and each person's own receipt carries their own note rather than a shared one | no |
+
+**Proposed: `ENG-06` PARTIAL → COMPLETE.**
+
+### Found while proving it
+
+- **The acknowledge BFF sent a PUT declaring a JSON content-type with no body**, so the parser
+  rejected it before the "only a named recipient may acknowledge" rule was ever reached — the same
+  defect found on ENG-03's close route, in a second place.
+- **The service-scope fitness gate** caught both the new assertion and the changed provenance on
+  acknowledge; both are declared rather than silently added.
+- **This service is constructed positionally by several suites**, so a dependency inserted anywhere
+  but the end rebinds every later one. Noted in the constructor for whoever adds the next.
+
+### Verified live, not merely asserted
+
+The local verification database had been rebuilt empty overnight, so this run re-provisioned it. That
+carried an independent proof worth keeping: **RLS fitness reports 265 tenant-scoped tables, every one
+ENABLED, FORCED and policied**, with cross-tenant isolation verified under a non-bypass role across
+15 assertions. That covers the tables added by this slice and by the material-approval work before
+it — their isolation is verified live rather than asserted by the migration that wrote them.
+
+### Accepted limits
+
+- **No printable transmittal note.** The frozen criterion asks for the package, the send, the receipt
+  and the lineage, and all four are proven; issuing a formatted conveyance document is not among
+  them, and none is invented to fill a field that does not ask for one.
+- **Nothing notifies a recipient who is not looking at the register.** The conveyance reaches them in
+  the system; no message leaves it. The same shared notification authority still wanted elsewhere.
+- **`sender` remains free text.** ENG-06 asks for a *separate* Design issuer and that is proven by
+  the issuer not being on the distribution; making the sender a canonical user was not required and
+  is not claimed.
+
 ## Wave 3 remainder audit
 
 The section that stood here had become three paragraphs of accreted commentary. Every iteration

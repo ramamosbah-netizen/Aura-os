@@ -28,6 +28,8 @@ export * from './framework-agreement.service';
 export * from './domain/purchase-request-line';
 export * from './purchase-request-line-store';
 export * from './quotation-line.service';
+export * from './commercial-comparison.service';
+export * from './domain/commercial-normalisation';
 export * from './quotation-line-evaluation.service';
 export * from './quotation-line-evaluation.store';
 export * from './domain/quotation-line-evaluation';

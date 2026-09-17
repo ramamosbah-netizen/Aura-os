@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { QuotationLineService, type QuotationLine } from '@aura/procurement';
+import { CommercialComparisonService, QuotationLineService, type QuotationLine } from '@aura/procurement';
+import { admitCurrency } from '@aura/shared';
 
 /**
  * What a supplier offered, item by item (Wave 4 supplier-decision spine).
@@ -39,8 +40,44 @@ interface QuotationLineDto {
 export class QuotationLinesController {
   constructor(
     private readonly lines: QuotationLineService,
+    private readonly comparison: CommercialComparisonService,
     private readonly tenant: TenantContext,
   ) {}
+
+  /**
+   * SUP-06 — every offer against ONE requirement, made comparable.
+   *
+   * THE COMPARISON DATE IS A PARAMETER, not a default buried in the domain. The API supplies today
+   * when the caller does not name one, so a screen can open with a sensible date; the domain never
+   * reads the clock, and the date used comes back on every value. A buyer who reopens this tomorrow
+   * and sees different numbers can see immediately that the date moved, rather than wondering
+   * whether the offers did.
+   *
+   * It returns FACTS AND NO RANKING. There is no cheapest, no winner and no ordering by price here,
+   * because a governed recommendation is SUP-13's authority and an ordering is a recommendation
+   * wearing a different name.
+   */
+  @Permissions('procurement.rfq.read')
+  @Get('by-requirement/:prLineId/comparison')
+  compare(
+    @Param('prLineId', ParseUuidOr404Pipe) prLineId: string,
+    @Query('comparisonDate') comparisonDate?: string,
+    @Query('baseCurrency') baseCurrency?: string,
+  ) {
+    const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException('comparisonDate must be a date in YYYY-MM-DD form');
+    }
+    // The base currency is asked of the one currency policy, so this surface cannot admit a currency
+    // the FX authority could never govern a rate into (FX-01).
+    const verdict = admitCurrency(baseCurrency ?? 'AED');
+    if (!verdict.admissible) throw new BadRequestException(verdict.detail);
+
+    return this.comparison.compareRequirement(this.tenant.get().tenantId, prLineId, {
+      baseCurrency: verdict.currency,
+      comparisonDate: date,
+    });
+  }
 
   /**
    * The offers, each carrying the technical decision made about it.

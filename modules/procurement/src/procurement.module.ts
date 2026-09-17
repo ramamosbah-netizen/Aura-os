@@ -18,6 +18,7 @@ import { QuotationLineEvaluationService } from './quotation-line-evaluation.serv
 import { InMemoryQuotationLineEvaluationStore } from './in-memory-quotation-line-evaluation-store';
 import { PostgresQuotationLineEvaluationStore } from './postgres-quotation-line-evaluation-store';
 import { QuotationLineService } from './quotation-line.service';
+import { CommercialComparisonService } from './commercial-comparison.service';
 import { InMemoryQuotationLineStore } from './in-memory-quotation-line-store';
 import { PostgresQuotationLineStore } from './postgres-quotation-line-store';
 import { InMemoryPurchaseRequestLineStore } from './in-memory-purchase-request-line-store';
@@ -92,6 +93,7 @@ import { FrameworkAgreementService } from './framework-agreement.service';
         pool ? new PostgresQuotationLineStore(pool) : new InMemoryQuotationLineStore(),
     },
     QuotationLineService,
+    CommercialComparisonService,
     {
       // SUP-01 — the internal technical verdict. A different authority from the supplier's claim.
       provide: QUOTATION_LINE_EVALUATION_STORE,
@@ -114,6 +116,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [CommercialComparisonService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

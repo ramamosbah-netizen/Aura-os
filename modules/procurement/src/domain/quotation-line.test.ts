@@ -15,20 +15,20 @@ import {
 
 const line = (over: Partial<Parameters<typeof makeQuotationLine>[0]> = {}): QuotationLine =>
   makeQuotationLine({
-    tenantId: 't-1', quotationId: 'q-1', prLineId: 'prl-1',
+    tenantId: 't-1', revisionId: 'rev-1', prLineId: 'prl-1',
     quantity: 10, unitPrice: 50, uom: 'nr',
     ...over,
   });
 
 describe('a quotation line answers a requisition line', () => {
   it('requires the requirement it answers', () => {
-    expect(() => makeQuotationLine({ tenantId: 't-1', quotationId: 'q-1', prLineId: '', quantity: 1, unitPrice: 1 }))
+    expect(() => makeQuotationLine({ tenantId: 't-1', revisionId: 'rev-1', prLineId: '', quantity: 1, unitPrice: 1 }))
       .toThrow(/must answer a requisition line/);
   });
 
   it('keeps the supplier and RFQ off the line — they are reached through the quotation', () => {
     const l = line();
-    expect(l.quotationId).toBe('q-1');
+    expect(l.revisionId).toBe('rev-1');
     expect(l).not.toHaveProperty('supplierId');
     expect(l).not.toHaveProperty('rfqId');
   });

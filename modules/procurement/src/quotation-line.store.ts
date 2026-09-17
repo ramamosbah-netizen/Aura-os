@@ -9,8 +9,6 @@ export interface QuotationLineStore {
   update(line: QuotationLine): Promise<void>;
   get(id: Id): Promise<QuotationLine | null>;
   remove(id: Id): Promise<void>;
-  /** Everything one supplier offered on one quotation. */
-  listByQuotation(tenantId: Id, quotationId: Id): Promise<QuotationLine[]>;
   /**
    * Every supplier's answer to ONE requirement, across quotations.
    *
@@ -22,6 +20,4 @@ export interface QuotationLineStore {
   listByRequirement(tenantId: Id, prLineId: Id): Promise<QuotationLine[]>;
   /** Every line of one revision — what that supplier offered at the prices in that revision. */
   listByRevision(tenantId: Id, revisionId: Id): Promise<QuotationLine[]>;
-  /** One supplier's answer to one requirement — the uniqueness the table enforces. */
-  findForRequirement(tenantId: Id, quotationId: Id, prLineId: Id): Promise<QuotationLine | null>;
 }

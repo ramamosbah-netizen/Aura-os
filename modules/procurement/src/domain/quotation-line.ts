@@ -47,15 +47,13 @@ export interface QuotationLine {
   companyId: Id | null;
   /** Supplier and RFQ are reached through this, not copied onto every line. */
   /**
-   * LEGACY. Null on any line captured against a revision (QC-01).
+   * The immutable REVISION this line belongs to.
    *
    * A line used to belong to a quotation, which was a single mutable row — so a supplier revision
-   * overwrote the prices on it. A line now belongs to an immutable REVISION, and the previous
-   * revision keeps its own lines at the prices it actually quoted.
+   * overwrote the prices on it. It now belongs to a revision, and the previous revision keeps its
+   * own lines at the prices it actually quoted (QC-01, migration 0352).
    */
-  quotationId: Id | null;
-  /** The immutable revision this line belongs to. Null only on a line not yet backfilled. */
-  revisionId: Id | null;
+  revisionId: Id;
   /** The supplier's own words for what they are offering, which is not always the material's name. */
   supplierDescription: string | null;
   partNumber: string | null;
@@ -91,8 +89,7 @@ export interface QuotationLine {
 export interface NewQuotationLine {
   tenantId: Id;
   companyId?: Id | null;
-  quotationId?: Id | null;
-  revisionId?: Id | null;
+  revisionId: Id;
   supplierDescription?: string | null;
   partNumber?: string | null;
   commercialDeviation?: string | null;
@@ -128,11 +125,10 @@ export const NO_BID_CARRIES_NO_PRICE =
 
 export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
   /**
-   * A line must belong to SOMETHING — a revision for anything captured now, or a legacy quotation
-   * for a row that predates the family model. It may not float free: a price with no offer behind it
-   * cannot be attributed to a supplier, and a comparison would have no terms to read it under.
+   * A price may not float free: one with no offer behind it cannot be attributed to a supplier, and
+   * a comparison would have no commercial terms to read it under.
    */
-  if (!input.revisionId && !input.quotationId) {
+  if (!input.revisionId) {
     throw new Error('a quotation line must belong to a quotation revision');
   }
   if (!input.prLineId) throw new Error('a quotation line must answer a requisition line');
@@ -156,8 +152,7 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
     id: newId(),
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
-    quotationId: input.quotationId ?? null,
-    revisionId: input.revisionId ?? null,
+    revisionId: input.revisionId,
     supplierDescription: input.supplierDescription?.trim() || null,
     partNumber: input.partNumber?.trim() || null,
     commercialDeviation: input.commercialDeviation?.trim() || null,

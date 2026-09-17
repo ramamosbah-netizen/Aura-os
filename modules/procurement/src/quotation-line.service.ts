@@ -12,8 +12,7 @@ import { technicalEligibility, type TechnicalEligibility, type TechnicalVerdict 
 import { PR_LINE_STORE, type PurchaseRequestLineStore } from './purchase-request-line-store';
 
 export interface NewQuotationLineInput {
-  quotationId?: Id | null;
-  revisionId?: Id | null;
+  revisionId: Id;
   supplierDescription?: string | null;
   partNumber?: string | null;
   commercialDeviation?: string | null;
@@ -91,9 +90,15 @@ export class QuotationLineService {
    * price to it afterwards would change what the supplier is recorded as having sent.
    */
   async add(tenantId: Id, input: NewQuotationLineInput): Promise<QuotationLine> {
-    let companyId: string | null = null;
-
-    if (input.revisionId) {
+    /**
+     * A line belongs to a REVISION. The legacy quotation branch is gone with `quotation_id`
+     * (migration 0352): every line is now bound to the immutable revision that quoted it, so the
+     * prices in Rev 1 stay exactly as quoted when Rev 2 arrives.
+     */
+    if (!input.revisionId) {
+      throw new Error('a quotation line must belong to a quotation revision');
+    }
+    {
       if (!this.families) {
         throw new Error(
           'cannot verify which quotation revision this line belongs to — the quotation is unavailable, ' +
@@ -108,12 +113,6 @@ export class QuotationLineService {
           'record the supplier\u2019s change as a new revision',
         );
       }
-    } else {
-      const quote = await this.rfqs.getQuote(input.quotationId!);
-      if (!quote || quote.tenantId !== tenantId) {
-        throw new Error(`quotation ${input.quotationId} not found`);
-      }
-      companyId = quote.companyId ?? null;
     }
 
     if (!this.prLines) {
@@ -130,24 +129,18 @@ export class QuotationLineService {
     // One answer per requirement per OFFER. Two prices for one requirement inside one offer is an
     // ambiguity nobody can resolve; the same item priced on a base offer AND on an alternative is
     // two legitimate answers, which is why this is scoped to the revision rather than the supplier.
-    const siblings = input.revisionId
-      ? await this.lines.listByRevision(tenantId, input.revisionId)
-      : await this.lines.listByQuotation(tenantId, input.quotationId!);
+    const siblings = await this.lines.listByRevision(tenantId, input.revisionId);
     if (siblings.some((l) => l.prLineId === input.prLineId)) {
       throw new Error('this quotation revision already answers that requisition line');
     }
 
-    const line = makeQuotationLine({ ...input, tenantId, companyId });
+    const line = makeQuotationLine({ ...input, tenantId, companyId: null });
     await this.lines.create(line);
-    this.logger.log(
-      `${input.revisionId ? `Revision ${input.revisionId}` : `Quotation ${input.quotationId}`} answered requisition line ${input.prLineId} (${line.response})`,
-    );
+    this.logger.log(`Revision ${input.revisionId} answered requisition line ${input.prLineId} (${line.response})`);
     return line;
   }
 
-  listByQuotation(tenantId: Id, quotationId: Id): Promise<QuotationLine[]> {
-    return this.lines.listByQuotation(tenantId, quotationId);
-  }
+
 
   /**
    * THE OFFERS, EACH CARRYING THE TECHNICAL DECISION THAT WAS MADE ABOUT IT.
@@ -160,10 +153,10 @@ export class QuotationLineService {
    * whether an offer may be considered and who said so; the reasoning and the amendment trail belong
    * to the technical surface where the judgement was made.
    */
-  async listByQuotationForBuyer(tenantId: Id, quotationId: Id): Promise<Array<QuotationLine & {
+  async listByRevisionForBuyer(tenantId: Id, revisionId: Id): Promise<Array<QuotationLine & {
     eligibility: TechnicalEligibility; verdict: TechnicalVerdict | null; decidedBy: Id | null;
   }>> {
-    const lines = await this.lines.listByQuotation(tenantId, quotationId);
+    const lines = await this.lines.listByRevision(tenantId, revisionId);
     const decorated = [];
     for (const line of lines) {
       const current = this.evaluations ? await this.evaluations.findCurrent(tenantId, line.id) : null;
@@ -200,18 +193,18 @@ export class QuotationLineService {
    * stored. They are not comparable across suppliers — no conversion, no tax, no freight — and the
    * currency is returned beside them so a caller cannot forget that.
    */
-  async summarise(tenantId: Id, quotationId: Id, prLineIds: Id[]): Promise<{
+  async summarise(tenantId: Id, revisionId: Id, prLineIds: Id[]): Promise<{
     coverage: RequirementCoverage;
     currency: string | null;
     quotedAmount: number | null;
   }> {
-    const quote = await this.rfqs.getQuote(quotationId);
-    const lines = await this.lines.listByQuotation(tenantId, quotationId);
+    const revision = await this.families?.getRevision(tenantId, revisionId);
+    const lines = await this.lines.listByRevision(tenantId, revisionId);
     const amounts = lines.map(lineAmountInQuotedCurrency).filter((a): a is number => a !== null);
     return {
       coverage: requirementCoverage(prLineIds, lines),
       // NULL currency is UNKNOWN, never the base currency — see migration 0343.
-      currency: quote?.currency ?? null,
+      currency: revision?.currency ?? null,
       quotedAmount: amounts.length > 0 ? amounts.reduce((sum, a) => sum + a, 0) : null,
     };
   }

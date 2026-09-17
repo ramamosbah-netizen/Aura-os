@@ -23,7 +23,6 @@ interface QuotationLineDto {
   response?: 'quoted' | 'no_bid';
   offeredManufacturer?: string | null;
   offeredModel?: string | null;
-  isAlternate?: boolean;
   /** The SUPPLIER'S claim about the specification. Declared so the service can record it as a claim. */
   complianceResponse?: 'comply' | 'comply_with_deviation' | 'not_offered' | null;
   deviations?: string | null;
@@ -181,7 +180,9 @@ export class QuotationLinesController {
   @Permissions('procurement.rfq.read')
   @Get(':id/lines')
   list(@Param('id', ParseUuidOr404Pipe) id: string) {
-    return this.lines.listByQuotationForBuyer(this.tenant.get().tenantId, id);
+    // `:id` is a quotation REVISION. A verdict belongs to the lines of a specific revision — one
+    // recorded against Rev 1 must not silently attach itself to Rev 2's different price.
+    return this.lines.listByRevisionForBuyer(this.tenant.get().tenantId, id);
   }
 
   /**
@@ -196,6 +197,11 @@ export class QuotationLinesController {
     return this.lines.listByRequirement(this.tenant.get().tenantId, prLineId);
   }
 
+  /**
+   * `:id` is a quotation REVISION. An alternative is no longer a flag on a line: it is a separate
+   * OFFER with its own revisions (QC-01), which is the only way a supplier offering two variants for
+   * one requirement can be recorded at all.
+   */
   @Permissions('procurement.rfq.update')
   @Post(':id/lines')
   add(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: QuotationLineDto): Promise<QuotationLine> {
@@ -204,12 +210,11 @@ export class QuotationLinesController {
     }
     const ctx = this.tenant.get();
     return this.lines.add(ctx.tenantId, {
-      quotationId: id,
+      revisionId: id,
       prLineId: dto.prLineId,
       response: dto.response,
       offeredManufacturer: dto.offeredManufacturer ?? null,
       offeredModel: dto.offeredModel ?? null,
-      isAlternate: dto.isAlternate ?? false,
       complianceResponse: dto.complianceResponse ?? null,
       deviations: dto.deviations ?? null,
       exclusions: dto.exclusions ?? null,

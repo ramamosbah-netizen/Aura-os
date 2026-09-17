@@ -60,6 +60,26 @@ if (!who || (!who.owns && Number(who.bypasses) === 0 && Number(who.superuser) ==
   await pool.end(); process.exit(2);
 }
 
+/**
+ * HAS THE LEGACY COLUMN ALREADY BEEN RETIRED?
+ *
+ * Migration 0352 drops `quotation_id` once every line belongs to a revision. After that this script
+ * has nothing left to do, and it should say so rather than fail on a column that is gone by design —
+ * a staged migration's tools outlive the stage they were written for.
+ */
+const { rows: [legacy] } = await pool.query(
+  `SELECT count(*)::int AS present FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'aura_procurement_quotation_lines'
+      AND column_name = 'quotation_id'`);
+if (legacy.present === 0) {
+  console.log('
+   quotation_id has been retired (migration 0352). Every line belongs to a revision;');
+  console.log('   there is nothing left to backfill.
+');
+  await pool.end();
+  process.exit(0);
+}
+
 /** The census gate, re-checked here rather than trusted from a separate run. */
 const { rows: [shape] } = await pool.query(`
   SELECT count(*) FILTER (WHERE alternates > 0)::int AS with_alternates

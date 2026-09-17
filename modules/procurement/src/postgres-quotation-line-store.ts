@@ -4,8 +4,8 @@ import type { ComplianceResponse, QuotationLine, QuoteResponse } from './domain/
 import type { QuotationLineStore } from './quotation-line.store';
 
 interface Row {
-  id: string; tenant_id: string; company_id: string | null; quotation_id: string | null; pr_line_id: string;
-  revision_id: string | null; supplier_description: string | null; part_number: string | null;
+  id: string; tenant_id: string; company_id: string | null; pr_line_id: string;
+  revision_id: string; supplier_description: string | null; part_number: string | null;
   commercial_deviation: string | null;
   response: string; offered_manufacturer: string | null; offered_model: string | null;
   compliance_response: string | null; deviations: string | null;
@@ -19,14 +19,14 @@ const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() :
 const num = (v: string | number | null): number | null => (v === null ? null : Number(v));
 
 const COLS =
-  'id, tenant_id, company_id, quotation_id, revision_id, pr_line_id, supplier_description, part_number, ' +
+  'id, tenant_id, company_id, revision_id, pr_line_id, supplier_description, part_number, ' +
   'commercial_deviation, response, offered_manufacturer, offered_model, ' +
   'compliance_response, deviations, exclusions, quantity, uom, unit_price, line_discount, ' +
   'lead_time_days, warranty_months, notes, created_by, created_at, updated_at';
 
 const fromRow = (r: Row): QuotationLine => ({
   id: r.id, tenantId: r.tenant_id, companyId: r.company_id,
-  quotationId: r.quotation_id, revisionId: r.revision_id ?? null, prLineId: r.pr_line_id,
+  revisionId: r.revision_id, prLineId: r.pr_line_id,
   supplierDescription: r.supplier_description ?? null,
   partNumber: r.part_number ?? null,
   commercialDeviation: r.commercial_deviation ?? null,
@@ -46,8 +46,8 @@ export class PostgresQuotationLineStore implements QuotationLineStore {
   async create(l: QuotationLine): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_procurement_quotation_lines (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
-      [l.id, l.tenantId, l.companyId, l.quotationId, l.revisionId, l.prLineId,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)`,
+      [l.id, l.tenantId, l.companyId, l.revisionId, l.prLineId,
        l.supplierDescription, l.partNumber, l.commercialDeviation, l.response,
        l.offeredManufacturer, l.offeredModel, l.complianceResponse,
        l.deviations, l.exclusions, l.quantity, l.uom, l.unitPrice, l.lineDiscount,
@@ -80,16 +80,6 @@ export class PostgresQuotationLineStore implements QuotationLineStore {
     await this.pool.query('DELETE FROM public.aura_procurement_quotation_lines WHERE id = $1', [id]);
   }
 
-  async listByQuotation(tenantId: Id, quotationId: Id): Promise<QuotationLine[]> {
-    const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_procurement_quotation_lines
-        WHERE tenant_id = $1 AND quotation_id = $2 ORDER BY created_at ASC`,
-      [tenantId, quotationId],
-    );
-    return res.rows.map(fromRow);
-  }
-
-  /** Every line of one revision — what that supplier offered, at the prices in that revision. */
   async listByRevision(tenantId: Id, revisionId: Id): Promise<QuotationLine[]> {
     const res = await this.pool.query(
       `SELECT ${COLS} FROM public.aura_procurement_quotation_lines
@@ -106,14 +96,5 @@ export class PostgresQuotationLineStore implements QuotationLineStore {
       [tenantId, prLineId],
     );
     return res.rows.map(fromRow);
-  }
-
-  async findForRequirement(tenantId: Id, quotationId: Id, prLineId: Id): Promise<QuotationLine | null> {
-    const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_procurement_quotation_lines
-        WHERE tenant_id = $1 AND quotation_id = $2 AND pr_line_id = $3`,
-      [tenantId, quotationId, prLineId],
-    );
-    return res.rows[0] ? fromRow(res.rows[0]) : null;
   }
 }

@@ -39,7 +39,7 @@ describe('an offer nobody has evaluated is UNKNOWN', () => {
   it('does NOT fall back to the supplier’s own compliance claim', () => {
     // The supplier says `comply`. Nobody internal has looked. The answer is still unknown.
     const line = makeQuotationLine({
-      tenantId: 't-1', quotationId: 'q-1', prLineId: 'prl-1',
+      tenantId: 't-1', revisionId: 'rev-1', prLineId: 'prl-1',
       quantity: 12, unitPrice: 430, complianceResponse: 'comply',
     });
     expect(line.complianceResponse).toBe('comply');
@@ -81,13 +81,13 @@ describe('a verdict is amended by supersession, never overwritten', () => {
 
 describe('there is nothing to evaluate about a decline', () => {
   it('refuses to evaluate a no_bid line', () => {
-    const declined = makeQuotationLine({ tenantId: 't-1', quotationId: 'q-1', prLineId: 'prl-1', response: 'no_bid' });
+    const declined = makeQuotationLine({ tenantId: 't-1', revisionId: 'rev-1', prLineId: 'prl-1', response: 'no_bid' });
     expect(mayEvaluate(declined)).toMatchObject({ allowed: false });
     expect(mayEvaluate(declined).reason).toMatch(/did not offer anything/);
   });
 
   it('allows evaluating an actual offer', () => {
-    const offered = makeQuotationLine({ tenantId: 't-1', quotationId: 'q-1', prLineId: 'prl-1', quantity: 12, unitPrice: 430 });
+    const offered = makeQuotationLine({ tenantId: 't-1', revisionId: 'rev-1', prLineId: 'prl-1', quantity: 12, unitPrice: 430 });
     expect(mayEvaluate(offered)).toEqual({ allowed: true });
   });
 });

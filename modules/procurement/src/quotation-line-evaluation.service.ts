@@ -139,7 +139,7 @@ export class QuotationLineEvaluationService {
         payload: {
           quotationLineId: input.quotationLineId,
           prLineId: line.prLineId,
-          quotationId: line.quotationId,
+          revisionId: line.revisionId,
           verdict: evaluation.verdict,
           rationale: evaluation.rationale,
           decidedBy: input.decidedBy,
@@ -160,8 +160,8 @@ export class QuotationLineEvaluationService {
    * awaiting a decision precisely because nobody has made one, and a separate `pending` flag would
    * be a second way of saying that, free to disagree with the evaluations themselves.
    */
-  async awaitingEvaluation(tenantId: Id, quotationId: Id): Promise<QuotationLine[]> {
-    const lines = await this.lines.listByQuotation(tenantId, quotationId);
+  async awaitingEvaluation(tenantId: Id, revisionId: Id): Promise<QuotationLine[]> {
+    const lines = await this.lines.listByRevision(tenantId, revisionId);
     const pending: QuotationLine[] = [];
     for (const line of lines) {
       // A declined line offered nothing, so it is not work for an evaluator.

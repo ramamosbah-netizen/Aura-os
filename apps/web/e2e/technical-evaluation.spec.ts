@@ -47,11 +47,19 @@ test.describe('The technical verdict on a supplier offer', () => {
       material: camera.id, quantity: 12, estimatedUnitCost: 450,
     });
     const rfq = await post<{ id: string }>('/procurement/rfqs', { title: `RFQ ${run}`, prId: pr.id });
-    const quotation = await post<{ id: string }>(`/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: `Gulf ELV ${run}`, amount: 4300, currency: 'AED',
+    /**
+     * The offer is captured as a quotation REVISION (QC-01). A technical verdict belongs to the
+     * lines of a specific revision — one recorded against Rev 1 must not read as a verdict on Rev
+     * 2's different price — so the evaluation surfaces are keyed on the revision, not on a quotation.
+     */
+    const { baseOffer } = await post<{ baseOffer: { id: string } }>('/procurement/quotations/families', {
+      rfqId: rfq.id, supplierName: `Gulf ELV ${run}`, supplierQuotationRef: `Q-${run}`,
+    });
+    const quotation = await post<{ id: string }>(`/procurement/quotations/offers/${baseOffer.id}/revisions`, {
+      currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31',
     });
     // The supplier offers TEN against a request for TWELVE, and claims compliance.
-    const line = await post<{ id: string }>(`/procurement/quotations/${quotation.id}/lines`, {
+    const line = await post<{ id: string }>(`/procurement/quotations/revisions/${quotation.id}/lines`, {
       prLineId: prLine.id, quantity: 10, uom: 'nr', unitPrice: 430,
       offeredManufacturer: 'Hikvision', offeredModel: 'DS-2CD2143G2-I', complianceResponse: 'comply',
     });

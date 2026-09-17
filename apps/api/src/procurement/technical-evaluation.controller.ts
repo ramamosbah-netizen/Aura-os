@@ -43,9 +43,12 @@ export class TechnicalEvaluationController {
    * claim to be pending while a decision exists.
    */
   @Permissions('engineering.technical-evaluation.decide')
-  @Get('awaiting/:quotationId')
-  awaiting(@Param('quotationId', ParseUuidOr404Pipe) quotationId: string) {
-    return this.evaluations.awaitingEvaluation(this.tenant.get().tenantId, quotationId);
+  @Get('awaiting/:revisionId')
+  awaiting(@Param('revisionId', ParseUuidOr404Pipe) revisionId: string) {
+    // The evaluator's queue is the un-decided lines of one quotation REVISION. Keying it on the
+    // revision rather than on a quotation is what stops a verdict on Rev 1's line being read as a
+    // verdict on Rev 2's — they are different offers at different prices.
+    return this.evaluations.awaitingEvaluation(this.tenant.get().tenantId, revisionId);
   }
 
   /** Everything the decider needs: the requirement as authored, the offer, and the deviation. */

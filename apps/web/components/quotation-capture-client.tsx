@@ -41,6 +41,32 @@ interface Revision {
 
 interface Change { field: string; from: string | number | null; to: string | number | null }
 
+/** A requirement the supplier may price. The unit comes from the CATALOGUE, never from the supplier. */
+interface Requirement {
+  id: string;
+  materialCode: string;
+  materialName: string;
+  quantity: number;
+  uom: string;
+}
+
+interface Line {
+  id: string;
+  prLineId: string;
+  response: 'quoted' | 'no_bid';
+  supplierDescription: string | null;
+  offeredManufacturer: string | null;
+  offeredModel: string | null;
+  partNumber: string | null;
+  quantity: number | null;
+  uom: string | null;
+  unitPrice: number | null;
+  lineDiscount: number | null;
+  leadTimeDays: number | null;
+  deviations: string | null;
+  commercialDeviation: string | null;
+}
+
 interface OfferWithHistory {
   offer: { id: string; kind: 'base' | 'alternative'; label: string | null };
   effective: Revision | null;
@@ -58,6 +84,11 @@ const BLANK = {
   taxTreatment: '', taxRatePct: '', freightAmount: '', freightTerms: '', paymentTerms: '', notes: '',
 };
 
+const BLANK_LINE = {
+  prLineId: '', supplierDescription: '', offeredManufacturer: '', offeredModel: '', partNumber: '',
+  quantity: '', unitPrice: '', lineDiscount: '', leadTimeDays: '', deviations: '', commercialDeviation: '',
+};
+
 const show = (v: string | number | null) => (v === null || v === '' ? '—' : String(v));
 
 export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
@@ -69,6 +100,10 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
   const [supplierRef, setSupplierRef] = useState('');
   const [openOffer, setOpenOffer] = useState<string | null>(null);
   const [facts, setFacts] = useState({ ...BLANK });
+  const [requirements, setRequirements] = useState<Requirement[]>([]);
+  const [lines, setLines] = useState<Record<string, Line[]>>({});
+  const [openLines, setOpenLines] = useState<string | null>(null);
+  const [lineFacts, setLineFacts] = useState({ ...BLANK_LINE });
 
   const call = useCallback(async (path: string, init?: RequestInit): Promise<unknown | null> => {
     setBusy(true); setErr(null);
@@ -90,7 +125,27 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
     if (Array.isArray(body)) setFamilies(body as Family[]);
   }, [call, rfqId]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  /**
+   * What this RFQ is asking for, so a buyer prices a REQUIREMENT rather than typing a free-text item.
+   * The unit comes from the catalogue: a supplier quoting "box" against a requirement in "nr" is a
+   * mismatch the comparison must refuse, and it can only see that if the requirement's unit is known.
+   */
+  const loadRequirements = useCallback(async () => {
+    try {
+      const rfq = await (await fetch(`/api/procurement/rfqs/${rfqId}`)).json();
+      const prId = rfq?.rfq?.prId ?? rfq?.prId;
+      if (!prId) return;
+      const body = await (await fetch(`/api/procurement/purchase-requests/${prId}/lines`)).json();
+      if (Array.isArray(body)) setRequirements(body as Requirement[]);
+    } catch { /* the capture form still works; the requirement picker is simply empty */ }
+  }, [rfqId]);
+
+  const loadLines = useCallback(async (revisionId: string) => {
+    const body = await call(`revisions/${revisionId}/lines`);
+    if (Array.isArray(body)) setLines((prev) => ({ ...prev, [revisionId]: body as Line[] }));
+  }, [call]);
+
+  useEffect(() => { void reload(); void loadRequirements(); }, [reload, loadRequirements]);
 
   async function openQuotation() {
     if (!supplierName.trim()) { setErr('Name the supplier this quotation came from'); return; }
@@ -123,6 +178,30 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
     if (await call(`revisions/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'received' }) })) {
       setFacts({ ...BLANK }); setOpenOffer(null); await reload();
     }
+  }
+
+  async function addLine(revisionId: string) {
+    if (!lineFacts.prLineId) { setErr('Choose which requirement this price answers'); return; }
+    const created = await call(`revisions/${revisionId}/lines`, {
+      method: 'POST',
+      body: JSON.stringify({
+        prLineId: lineFacts.prLineId,
+        supplierDescription: lineFacts.supplierDescription.trim() || null,
+        offeredManufacturer: lineFacts.offeredManufacturer.trim() || null,
+        offeredModel: lineFacts.offeredModel.trim() || null,
+        partNumber: lineFacts.partNumber.trim() || null,
+        quantity: lineFacts.quantity === '' ? null : Number(lineFacts.quantity),
+        // The unit is the REQUIREMENT'S, copied at capture. A supplier quoting a different unit is a
+        // deviation to record deliberately, not something to type by accident.
+        uom: requirements.find((r) => r.id === lineFacts.prLineId)?.uom ?? null,
+        unitPrice: lineFacts.unitPrice === '' ? null : Number(lineFacts.unitPrice),
+        lineDiscount: lineFacts.lineDiscount === '' ? null : Number(lineFacts.lineDiscount),
+        leadTimeDays: lineFacts.leadTimeDays === '' ? null : Number(lineFacts.leadTimeDays),
+        deviations: lineFacts.deviations.trim() || null,
+        commercialDeviation: lineFacts.commercialDeviation.trim() || null,
+      }),
+    });
+    if (created) { setLineFacts({ ...BLANK_LINE }); await loadLines(revisionId); }
   }
 
   async function setStatus(revisionId: string, status: string) {
@@ -267,6 +346,15 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                               ))}
                         </td>
                         <td style={s.td}>
+                          {(revision.status === 'draft' || revision.status === 'received') && (
+                            <button type="button" className="btn btn-ghost" style={s.sm}
+                              data-testid={`price-items-${revision.id}`}
+                              onClick={() => {
+                                const next = openLines === revision.id ? null : revision.id;
+                                setOpenLines(next);
+                                if (next) void loadLines(revision.id);
+                              }}>{openLines === revision.id ? 'Close items' : 'Price items'}</button>
+                          )}
                           {revision.status === 'received' && (
                             <button type="button" className="btn btn-ghost" style={s.sm}
                               data-testid={`confirm-${revision.id}`} onClick={() => setStatus(revision.id, 'confirmed')}>Make current</button>
@@ -280,6 +368,94 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                     ))}
                   </tbody>
                 </table>
+              )}
+
+              {/*
+                PRICING THE ITEMS, inside the revision they belong to.
+                A price is recorded against a REQUIREMENT, not typed as free text: the comparison
+                answers "what did everyone offer for this item", and it can only do that if each
+                price names the item it answers. The unit comes from the requirement, so a supplier
+                quoting a different one is a deviation somebody records deliberately.
+              */}
+              {openLines && history.some((h) => h.revision.id === openLines) && (
+                <div style={s.form} data-testid={`lines-${openLines}`}>
+                  <div style={s.label}>Items priced in this revision</div>
+
+                  {(lines[openLines] ?? []).length === 0 ? (
+                    <p style={s.hint} data-testid={`no-lines-${openLines}`}>
+                      Nothing priced yet. A revision with no priced item cannot answer any requirement
+                      in a comparison.
+                    </p>
+                  ) : (
+                    <table className="data-table" data-testid={`line-table-${openLines}`}>
+                      <thead><tr>{['Requirement', 'Offered', 'Qty', 'Unit price', 'Lead days', 'Deviations'].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <tbody>
+                        {(lines[openLines] ?? []).map((l) => {
+                          const req = requirements.find((r) => r.id === l.prLineId);
+                          return (
+                            <tr key={l.id} data-testid={`line-${l.id}`}>
+                              <td style={s.td}>{req ? `${req.materialCode} · ${req.materialName}` : l.prLineId}</td>
+                              <td style={s.td}>
+                                {l.supplierDescription ?? <span style={s.unknown}>not described</span>}
+                                {(l.offeredManufacturer || l.offeredModel || l.partNumber) && (
+                                  <span style={s.tag}>{[l.offeredManufacturer, l.offeredModel, l.partNumber].filter(Boolean).join(' · ')}</span>
+                                )}
+                              </td>
+                              <td style={s.td}>{show(l.quantity)} {l.uom ?? ''}</td>
+                              <td style={s.td}>{show(l.unitPrice)}{l.lineDiscount ? <span style={s.tag}>less {l.lineDiscount}</span> : null}</td>
+                              <td style={s.td}>{l.leadTimeDays === null ? <span style={s.unknown}>not stated</span> : l.leadTimeDays}</td>
+                              <td style={s.td}>
+                                {l.deviations && <div style={s.change}>technical: {l.deviations}</div>}
+                                {l.commercialDeviation && <div style={s.change}>commercial: {l.commercialDeviation}</div>}
+                                {!l.deviations && !l.commercialDeviation && <span style={s.muted}>—</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+
+                  <div style={s.grid}>
+                    <div style={s.field}>
+                      <label style={s.fieldLabel} htmlFor="line-requirement">Requirement</label>
+                      <select id="line-requirement" style={s.input} data-testid="line-requirement"
+                        value={lineFacts.prLineId} onChange={(e) => setLineFacts({ ...lineFacts, prLineId: e.target.value })}>
+                        <option value="">Choose the item this price answers</option>
+                        {requirements.map((r) => (
+                          <option key={r.id} value={r.id}>{r.materialCode} · {r.materialName} — {r.quantity} {r.uom}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <Field label="Supplier's description" testId="line-description"
+                      value={lineFacts.supplierDescription} onChange={(v) => setLineFacts({ ...lineFacts, supplierDescription: v })} />
+                    <Field label="Make" testId="line-make"
+                      value={lineFacts.offeredManufacturer} onChange={(v) => setLineFacts({ ...lineFacts, offeredManufacturer: v })} />
+                    <Field label="Model" testId="line-model"
+                      value={lineFacts.offeredModel} onChange={(v) => setLineFacts({ ...lineFacts, offeredModel: v })} />
+                    <Field label="Part number" testId="line-part-number"
+                      value={lineFacts.partNumber} onChange={(v) => setLineFacts({ ...lineFacts, partNumber: v })} />
+                    <Field label="Quantity offered" type="number" testId="line-quantity"
+                      value={lineFacts.quantity} onChange={(v) => setLineFacts({ ...lineFacts, quantity: v })} />
+                    <Field label="Unit price" type="number" testId="line-unit-price"
+                      value={lineFacts.unitPrice} onChange={(v) => setLineFacts({ ...lineFacts, unitPrice: v })} />
+                    <Field label="Line discount" type="number" testId="line-discount"
+                      value={lineFacts.lineDiscount} onChange={(v) => setLineFacts({ ...lineFacts, lineDiscount: v })} />
+                    <Field label="Lead time (days)" type="number" testId="line-lead-time"
+                      value={lineFacts.leadTimeDays} onChange={(v) => setLineFacts({ ...lineFacts, leadTimeDays: v })} />
+                    <Field label="Technical deviation" testId="line-deviation"
+                      value={lineFacts.deviations} onChange={(v) => setLineFacts({ ...lineFacts, deviations: v })} />
+                    <Field label="Commercial deviation" testId="line-commercial-deviation"
+                      value={lineFacts.commercialDeviation} onChange={(v) => setLineFacts({ ...lineFacts, commercialDeviation: v })} />
+                  </div>
+                  <p style={s.hint}>
+                    Lead time is recorded here, per item, because one overall figure cannot say when
+                    each item arrives. The unit is taken from the requirement — a supplier quoting a
+                    different unit is a deviation to record, not something to type here.
+                  </p>
+                  <button type="button" className="btn btn-primary" data-testid={`save-line-${openLines}`}
+                    onClick={() => addLine(openLines!)} disabled={busy}>Record item price</button>
+                </div>
               )}
             </div>
           ))}

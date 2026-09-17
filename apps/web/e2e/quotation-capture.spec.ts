@@ -128,6 +128,90 @@ test.describe('Capturing a supplier quotation', () => {
     });
   });
 
+  /**
+   * THE WHOLE CHAIN, on screen: a buyer captures a quotation and prices its items, and the
+   * comparison reads exactly what they typed. Before this stage the buyer could enter a quotation
+   * header but not a single price, so nothing they captured reached SUP-06 at all.
+   */
+  test('prices the requirements, and the comparison reads what the buyer typed', async ({ page, request }) => {
+    test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    const run = Date.now().toString().slice(-6);
+    const headers = { 'content-type': 'application/json', ...apiAuthHeaders() };
+    const post = async <T>(path: string, data: unknown): Promise<T> => {
+      const res = await request.post(`${API}${path}`, { headers, data });
+      expect(res.ok(), `${path} — ${await res.text()}`).toBe(true);
+      return res.json() as Promise<T>;
+    };
+
+    // A governed rate so the comparison can value the offer, effective well before the compare date.
+    await request.post(`${API}/finance/fx/rates`, { headers, data: { from: 'EUR', to: 'AED', rate: 4.0, effectiveDate: '2026-02-01' } });
+
+    const project = await post<{ id: string }>('/projects/projects', { title: `QC-01 lines ${run}` });
+    const material = await post<{ id: string }>('/inventory/materials', { code: `CAM-${run}`, name: '4MP dome camera', uom: 'nr' });
+    const pr = await post<{ id: string }>('/procurement/purchase-requests', { title: `Cameras ${run}`, projectId: project.id, value: 0 });
+    const prLine = await post<{ id: string }>(`/procurement/purchase-requests/${pr.id}/lines`, { material: material.id, quantity: 12, estimatedUnitCost: 450 });
+    const rfq = await post<{ id: string }>('/procurement/rfqs', { title: `RFQ ${run}`, prId: pr.id });
+
+    await page.goto(`/procurement/rfqs/${rfq.id}/quotations`, { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('new-supplier').fill(`Priced Co ${run}`);
+    await expect(async () => {
+      await page.getByTestId('open-quotation').click();
+      await expect(page.locator('[data-testid^="family-"]')).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 60_000 });
+
+    const offerId = (await page.locator('[data-testid^="offer-"]').first().getAttribute('data-testid'))!.replace('offer-', '');
+
+    // ── A REVISION WITH ITS COMMERCIAL TERMS ────────────────────────────────
+    await page.getByTestId(`capture-revision-${offerId}`).click();
+    await expect(page.getByTestId(`revision-form-${offerId}`)).toBeVisible({ timeout: 10_000 });
+    await page.getByTestId('rev-currency').selectOption('EUR');
+    await page.getByTestId('rev-tax-treatment').selectOption('inclusive');
+    await page.getByTestId('rev-tax-rate').fill('5');
+    await page.getByTestId('rev-validity').fill('2026-12-31');
+    await page.getByTestId(`save-revision-${offerId}`).click();
+    await expect(page.getByTestId(`revision-form-${offerId}`)).toBeHidden({ timeout: 30_000 });
+
+    // ── AND ITS PRICED ITEMS ────────────────────────────────────────────────
+    const revisionId = (await page.locator('[data-testid^="revision-"]').first().getAttribute('data-testid'))!.replace('revision-', '');
+    await page.getByTestId(`price-items-${revisionId}`).click();
+    await expect(page.getByTestId(`no-lines-${revisionId}`)).toBeVisible({ timeout: 10_000 });
+
+    // The requirement is CHOSEN, not typed: a price must name the item it answers.
+    await page.getByTestId('line-requirement').selectOption(prLine.id);
+    await page.getByTestId('line-description').fill('4MP dome, IP67');
+    await page.getByTestId('line-make').fill('Hikvision');
+    await page.getByTestId('line-model').fill('DS-2CD2143G2-I');
+    await page.getByTestId('line-part-number').fill(`PN-${run}`);
+    await page.getByTestId('line-quantity').fill('12');
+    await page.getByTestId('line-unit-price').fill('126');
+    await page.getByTestId('line-lead-time').fill('21');
+    await page.getByTestId('line-commercial-deviation').fill('50% advance payment');
+    await page.getByTestId(`save-line-${revisionId}`).click();
+
+    await expect(page.getByTestId(`line-table-${revisionId}`)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId(`line-table-${revisionId}`)).toContainText(`CAM-${run}`);
+    await expect(page.getByTestId(`line-table-${revisionId}`)).toContainText('21');
+    await expect(page.getByTestId(`line-table-${revisionId}`)).toContainText('commercial: 50% advance payment');
+
+    await page.screenshot({ path: 'test-results/qc-01-line-capture.png', fullPage: true });
+
+    // ── MAKE IT THE CURRENT OFFER ───────────────────────────────────────────
+    await page.getByTestId(`confirm-${revisionId}`).click();
+    await expect(page.getByTestId(`effective-${offerId}`)).toContainText('is the current offer', { timeout: 30_000 });
+
+    // ── AND THE COMPARISON READS EXACTLY THAT ───────────────────────────────
+    await page.goto(`/procurement/requirements/${prLine.id}/comparison`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('comparison-table')).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('comparison-date').fill('2026-02-15');
+
+    const row = page.locator('[data-testid^="offer-"]', { hasText: `Priced Co ${run}` });
+    // 126 EUR inclusive of 5% is 120 ex-tax; at the governed 4.0 that is AED 480.
+    await expect(row).toContainText('480.00 AED', { timeout: 30_000 });
+    // Exactly 12 offered against 12 requested, so the requisition-line total IS known.
+    await expect(row).toContainText('5,760.00 AED');
+    await expect(row).toContainText('governed rate effective 2026-02-01');
+  });
+
   test('refuses at capture what a comparison would otherwise discover weeks later', async ({ page, request }) => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
     const run = Date.now().toString().slice(-6);

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { altApiAuthHeaders, apiAuthHeaders } from './api-auth';
+import { apiAuthHeaders } from './api-auth';
 
 /**
  * `BUY-07` on screen — the next-role receipt.
@@ -16,13 +16,9 @@ import { altApiAuthHeaders, apiAuthHeaders } from './api-auth';
  * server's own words rather than quietly accepting — no falling back to whoever happens to be
  * signed in.
  *
- * THE SECOND TEST IS THE ACTUAL HANDOFF, and it needs TWO people. A receipt is only a next-role
- * receipt if somebody else sent the material: one principal issuing and then signing for their own
- * delivery proves that a button works, not that a handoff happened. So the issue is made by a second
- * actor and the session user — the one who holds the responsibility — accepts it on screen. Without
- * a second actor configured the journey is not awkward but correctly IMPOSSIBLE, since maker/checker
- * refuses self-receipt, and the test states that requirement by skipping rather than failing as
- * though the product were broken.
+ * THE SECOND TEST IS THE ACTUAL HANDOFF, and it needs TWO REAL PEOPLE — a Storekeeper who issues and
+ * a Site Engineer who receives, each signed in as themselves, each holding a role AURA already ships.
+ * A receipt is only a next-role receipt if somebody else sent the material.
  */
 
 const API = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
@@ -125,86 +121,153 @@ test.describe('Site acknowledges a delivery at a work package', () => {
     await expect(page.getByTestId('issue-delivered')).toContainText('40 m delivered to this work package', { timeout: 30_000 });
   });
 
-  test('the next role receives it: a second actor issues, and the responsible person accepts on screen', async ({ page, request }) => {
-    const alt = altApiAuthHeaders();
+  /**
+   * THE HANDOFF, WITH TWO REAL PEOPLE, ENTIRELY THROUGH THE PRODUCT SURFACE.
+   *
+   * This is the clause the capability exists for, and one principal cannot prove it: somebody signing
+   * for their own delivery demonstrates that a button works, not that work reached the next role. So
+   * both actors sign in for themselves, each holding a role AURA already ships, unmodified:
+   *
+   *   u-e2e-storekeeper   r-store          `inventory.*` — issues the material
+   *   u-e2e-site          r-site-engineer  `inventory.*.read` — CANNOT write inventory, and accepts
+   *                                        the delivery by discharging the responsibility it holds
+   *
+   * The site engineer's READ-ONLY inventory rights are the point rather than an inconvenience. If
+   * accepting a delivery needed an inventory write, the next role could not do it at all, and the
+   * only way to make this pass would be to widen a shipped role to suit a test — changing
+   * authorization to fit a fixture, which is exactly backwards. It is governed instead by
+   * `projects.responsibility.update`: accepting material at your work package is discharging the
+   * responsibility you hold, and the domain then narrows it to the one person named for it.
+   */
+  test('a Storekeeper issues and a Site Engineer receives it, each signed in as themselves', async ({ browser, request }) => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
-    test.skip(!alt, 'a next-role receipt needs a SECOND actor — set E2E_ALT_USERNAME to an account this environment seeds');
-
     const run = Date.now().toString().slice(-6);
-    const mine = { 'content-type': 'application/json', ...apiAuthHeaders() };
-    const theirs = { 'content-type': 'application/json', ...(alt as Record<string, string>) };
-    const post = async <T>(path: string, data: unknown, headers = mine): Promise<T> => {
-      const response = await request.post(`${API}${path}`, { headers, data });
+    const password = process.env.E2E_PASSWORD ?? 'e2e-password';
+    const STOREKEEPER = process.env.E2E_STOREKEEPER_USERNAME ?? 'u-e2e-storekeeper';
+    const SITE = process.env.E2E_SITE_USERNAME ?? 'u-e2e-site';
+
+    const post = async <T>(path: string, data: unknown): Promise<T> => {
+      const response = await request.post(`${API}${path}`, {
+        headers: { 'content-type': 'application/json', ...apiAuthHeaders() }, data,
+      });
       expect(response.ok(), `${path} — ${await response.text()}`).toBe(true);
       return response.json() as Promise<T>;
     };
 
+    // ── The job, the work package, and WHO IS RESPONSIBLE FOR IT ──────────────
     const project = await post<{ id: string; title: string }>('/projects/projects', { title: `Handoff ${run}` });
     const wbs = await post<{ id: string }>('/projects/wbs', {
       projectId: project.id, code: `4.1-${run}`, title: 'Riser mains',
     });
-
-    // I am the person responsible for this work package.
-    const me = process.env.E2E_USERNAME ?? 'u-admin';
-    await post(`/projects/${project.id}/members`, { userId: me, roleId: 'r-site-engineer' });
+    // PROJECT SCOPE, not only tenant permission: a responsibility is assignable only to somebody on
+    // the project, and the delivery is accepted by the person named for THIS package.
+    await post(`/projects/${project.id}/members`, { userId: STOREKEEPER, roleId: 'r-store' });
+    await post(`/projects/${project.id}/members`, { userId: SITE, roleId: 'r-site-engineer' });
     await post(`/projects/${project.id}/responsibilities`, {
       workstream: 'site_execution', wbsNodeId: wbs.id,
-      title: `Site execution — riser mains ${run}`, assigneeId: me,
+      title: `Site execution — riser mains ${run}`, assigneeId: SITE,
     });
+
+    const code = `HND-${run}`;
+    await post('/inventory/stock', { code, name: '4mm² cable', unit: 'm', openingQty: 200, openingCost: 6 });
+
+    /** A browser signed in as one named person, with their own session rather than the suite's. */
+    const signIn = async (username: string) => {
+      const context = await browser.newContext({ storageState: undefined });
+      const page = await context.newPage();
+      await page.goto('/login', { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('login-username').fill(username);
+      await page.getByTestId('login-password').fill(password);
+      await page.getByTestId('login-submit').click();
+      await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 }).catch(async () => {
+        const shown = await page.getByTestId('login-error').innerText().catch(() => null);
+        throw new Error(`sign-in as '${username}' did not complete${shown ? ` — ${shown}` : ''}`);
+      });
+      return { context, page };
+    };
+
+    // ── 1. THE STOREKEEPER ISSUES THE MATERIAL ────────────────────────────────
+    const store = await signIn(STOREKEEPER);
+    await store.page.goto('/inventory/stock', { waitUntil: 'domcontentloaded' });
+    await openItem(store.page, code);
+    await store.page.getByTestId('issue-project').selectOption({ label: project.title });
+    await store.page.getByTestId('issue-work-package').selectOption(wbs.id);
+    await store.page.getByTestId('issue-quantity').fill('40');
+    await store.page.getByTestId('issue-out').click();
+    await expect(store.page.getByTestId('issue-delivered'))
+      .toContainText('40 m delivered to this work package', { timeout: 30_000 });
 
     /**
-     * SOMEBODY ELSE issues the material — what makes this a handoff rather than a signature on my
-     * own paperwork.
+     * ── 2. AND CANNOT SIGN FOR WHAT THEY SENT ────────────────────────────────
      *
-     * The second actor must actually hold store rights to do it. The identity this environment seeds
-     * for segregation of duties is a QUALITY/chat checker with no inventory permission at all, and
-     * that refusal is correct rather than a defect — so the requirement is STATED by skipping rather
-     * than met by weakening a role until the test goes green. The two-actor handoff is proved at the
-     * API in `apps/api/test/delivery-acknowledgement.e2e-spec.ts`, where both principals can be
-     * granted what they genuinely need.
+     * The storekeeper is refused because they are NOT the person responsible for this work package
+     * — which is the rule that fires first here, and the right one: the site engineer holds it.
+     *
+     * That is a different refusal from maker/checker, and this journey deliberately does not claim
+     * to exercise it. Maker/checker only applies when the issuer IS also the named recipient, and it
+     * is proved on its own in `apps/api/test/delivery-acknowledgement.e2e-spec.ts` by making the
+     * storekeeper the recipient of their own issue. Conflating the two would report one rule as
+     * evidence for another.
      */
-    const code = `HND-${run}`;
-    const created = await request.post(`${API}/inventory/stock`, {
-      headers: theirs,
-      data: { code, name: '4mm² cable', unit: 'm', openingQty: 200, openingCost: 6 },
-    });
-    test.skip(
-      created.status() === 403,
-      'the seeded second actor holds no inventory permission, so it cannot issue — set E2E_ALT_USERNAME ' +
-      'to an account with store rights to exercise the two-actor handoff on screen',
-    );
-    expect(created.ok(), await created.text()).toBe(true);
-    const item = (await created.json()) as { id: string };
-    await post(`/inventory/stock/${item.id}/movements`, {
-      direction: 'out', quantity: 40, projectId: project.id, wbsNodeId: wbs.id, reason: 'issued to riser mains',
-    }, theirs);
-
-    await page.goto('/inventory/stock', { waitUntil: 'domcontentloaded' });
-    await openItem(page, code);
-
-    // It is waiting for me, and it says so.
-    const acknowledge = () => page.getByRole('button', { name: 'Acknowledge' }).first();
-    await expect(acknowledge()).toBeVisible({ timeout: 30_000 });
-
-    await page.getByTestId('issue-project').selectOption({ label: project.title });
-    await page.getByTestId('issue-work-package').selectOption(wbs.id);
-    await expect(page.getByTestId('issue-delivered')).toContainText('40 m delivered to this work package', { timeout: 30_000 });
-
-    // ── I ACCEPT IT ───────────────────────────────────────────────────────────
-    const accepted = page.locator('[data-testid^="receipt-done-"]').first();
+    const storeAck = () => store.page.getByRole('button', { name: 'Acknowledge' }).first();
+    const storeError = store.page.locator('[data-testid^="receipt-error-"]').first();
+    await expect(storeAck()).toBeVisible({ timeout: 30_000 });
     await expect(async () => {
-      await acknowledge().click({ timeout: 5_000 });
+      await storeAck().click({ timeout: 5_000 });
+      await expect(storeError).toContainText(/only the person responsible/i, { timeout: 5_000 });
+    }).toPass({ timeout: 60_000 });
+
+    // ── 3. THE SITE ENGINEER SEES IT AND ACCEPTS IT ───────────────────────────
+    const site = await signIn(SITE);
+    await site.page.goto('/inventory/stock', { waitUntil: 'domcontentloaded' });
+    await openItem(site.page, code);
+    const siteAck = () => site.page.getByRole('button', { name: 'Acknowledge' }).first();
+    await expect(siteAck()).toBeVisible({ timeout: 30_000 });
+
+    const accepted = site.page.locator('[data-testid^="receipt-done-"]').first();
+    await expect(async () => {
+      await siteAck().click({ timeout: 5_000 });
       await expect(accepted).toBeVisible({ timeout: 5_000 });
     }).toPass({ timeout: 60_000 });
 
-    // ── IT SURVIVES A RELOAD, because the receipt is the server's and not this screen's ──
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await openItem(page, code);
-    await expect(page.locator('[data-testid^="receipt-done-"]').first()).toBeVisible({ timeout: 30_000 });
+    // ── 4. IT SURVIVES A RELOAD, because the receipt is the server's ──────────
+    await site.page.reload({ waitUntil: 'domcontentloaded' });
+    await openItem(site.page, code);
+    await expect(site.page.locator('[data-testid^="receipt-done-"]').first())
+      .toBeVisible({ timeout: 30_000 });
 
-    // ── AND THE DELIVERY IS UNCHANGED ─────────────────────────────────────────
-    await page.getByTestId('issue-project').selectOption({ label: project.title });
-    await page.getByTestId('issue-work-package').selectOption(wbs.id);
-    await expect(page.getByTestId('issue-delivered')).toContainText('40 m delivered to this work package', { timeout: 30_000 });
+    // ── 5. THE DELIVERY IS UNCHANGED BY BEING RECEIPTED ───────────────────────
+    await site.page.getByTestId('issue-project').selectOption({ label: project.title });
+    await site.page.getByTestId('issue-work-package').selectOption(wbs.id);
+    await expect(site.page.getByTestId('issue-delivered'))
+      .toContainText('40 m delivered to this work package', { timeout: 30_000 });
+
+    // ── 6. AND THE SERVER AGREES THE HANDOFF HAPPENED ─────────────────────────
+    const coverage = await request.get(`${API}/inventory/stock/acknowledgement-coverage`, {
+      headers: apiAuthHeaders(), params: { projectId: project.id, wbs: wbs.id },
+    });
+    expect(coverage.ok(), await coverage.text()).toBe(true);
+    expect(await coverage.json()).toMatchObject({ deliveries: 1, acknowledged: 1, outstanding: 0 });
+
+    /**
+     * ── 7. TWO DIFFERENT PEOPLE ARE ON THE RECORD ────────────────────────────
+     *
+     * Read back from the EVENT SPINE rather than inferred from the two sessions passing. This is the
+     * whole claim of a next-role receipt: the person who sent the material and the person who
+     * accepted it are not the same person, and the system can still say so afterwards.
+     */
+    const spine = await request.get(`${API}/events`, {
+      headers: apiAuthHeaders(), params: { type: 'inventory.delivery.acknowledged' },
+    });
+    expect(spine.ok(), await spine.text()).toBe(true);
+    const events = (await spine.json()) as Array<{ payload: Record<string, unknown> }>;
+    const handoff = events.find((e) => e.payload?.wbsNodeId === wbs.id);
+    expect(handoff, 'the handoff never reached the event spine').toBeDefined();
+    expect(handoff!.payload.issuedBy).toBe(STOREKEEPER);
+    expect(handoff!.payload.acknowledgedBy).toBe(SITE);
+    expect(handoff!.payload.issuedBy).not.toBe(handoff!.payload.acknowledgedBy);
+
+    await store.context.close();
+    await site.context.close();
   });
 });

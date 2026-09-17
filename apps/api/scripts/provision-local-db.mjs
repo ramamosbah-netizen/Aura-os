@@ -209,6 +209,66 @@ await actors.query(`
 `);
 await actors.end();
 console.log('✓ seeded u-e2e-checker (hse + e2e-chat-reader) and u-e2e-viewer (e2e-viewer)');
+// ── 8b. The two principals BUY-07's handoff needs, with the roles AURA already ships.
+//
+// A next-role receipt cannot be proved by one person: the material is issued by a Storekeeper and
+// accepted by whoever is responsible for the work package, and maker/checker refuses anybody signing
+// for their own delivery. The suite's existing second actor is a quality/chat checker holding
+// `inventory.*.read`, so it cannot issue — and the wrong fix would have been to widen that role until
+// the test passed, which is changing authorization to suit a fixture.
+//
+// So these are TEST DATA, not authorization changes. Both users are granted roles that already exist
+// in the shipped catalogue, unmodified:
+//
+//   u-e2e-storekeeper  r-store          `inventory.*` — can issue material
+//   u-e2e-site         r-site-engineer  `inventory.*.read` + `projects.responsibility.update`
+//
+// The site engineer deliberately CANNOT write inventory. Accepting a delivery is not an inventory
+// write — it is discharging the responsibility they hold — which is why the endpoint is governed by
+// `projects.responsibility.update`, a permission both roles genuinely have.
+//
+// They are NOT added to AUTH_DEV_ADMIN_USER: that variable grants r-admin, and an admin proves
+// nothing about whether the real roles work. Credentials are written here instead, with the same
+// scrypt wire format `CredentialsService` uses (shared/src/identity/password.ts).
+process.stdout.write('\n▶ BUY-07 handoff actors — a real Storekeeper and a real Site Engineer\n');
+
+const scryptHash = async (plain) => {
+  const { randomBytes, scrypt } = await import('node:crypto');
+  const N = 16_384, R = 8, P = 1, KEY_LEN = 32, SALT_LEN = 16, MAX_MEM = 64 * 1024 * 1024;
+  const salt = randomBytes(SALT_LEN);
+  const key = await new Promise((resolve, reject) =>
+    scrypt(plain, salt, KEY_LEN, { N, r: R, p: P, maxmem: MAX_MEM }, (err, dk) => (err ? reject(err) : resolve(dk))));
+  return `scrypt$${N}$${R}$${P}$${salt.toString('base64')}$${key.toString('base64')}`;
+};
+
+const handoff = new pg.Client({ connectionString: url });
+await handoff.connect();
+const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
+for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer']]) {
+  await handoff.query(
+    `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
+     VALUES ('dev-tenant', $1, $1, true, now())
+     ON CONFLICT (tenant_id, user_id) DO UPDATE SET active = true, updated_at = now()`,
+    [userId],
+  );
+  await handoff.query(
+    `INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at)
+     VALUES ($1, $2, 'org:tenant:dev-tenant', '{"kind":"org","level":"tenant","id":"dev-tenant"}'::jsonb, now())
+     ON CONFLICT (user_id, role_id, scope_key) DO NOTHING`,
+    [userId, roleId],
+  );
+  const existing = await handoff.query('SELECT 1 FROM public.auth_credentials WHERE tenant_id = $1 AND user_id = $2', ['dev-tenant', userId]);
+  if (existing.rowCount === 0) {
+    await handoff.query(
+      `INSERT INTO public.auth_credentials (tenant_id, user_id, password_hash) VALUES ($1, $2, $3)`,
+      ['dev-tenant', userId, await scryptHash(devPassword)],
+    );
+  }
+}
+await handoff.end();
+console.log('✓ seeded u-e2e-storekeeper (r-store) and u-e2e-site (r-site-engineer)');
+
+
 
 console.log(`
 ────────────────────────────────────────────────────────────────

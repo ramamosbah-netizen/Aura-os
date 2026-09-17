@@ -139,9 +139,24 @@ export class StockController {
    * carrying its own figure would be a second writer of that number — the competing-truth defect this
    * wave removes. This records only that a named person accepted receipt of this movement.
    */
-  // Declared explicitly rather than left to route derivation: this is the permission a denial
-  // matrix has to name, and a derived one is not something a role author can see.
-  @Permissions('inventory.delivery.acknowledge')
+  /**
+   * Governed by the permission for DISCHARGING A PROJECT RESPONSIBILITY, not by an inventory write.
+   *
+   * Declared explicitly rather than left to route derivation, because a derived permission is not
+   * something a role author can see. The first explicit choice here was
+   * `inventory.delivery.acknowledge`, and it was WRONG in a way only the real roles reveal: the
+   * Storekeeper holds `inventory.*`, but a Site Engineer holds `inventory.*.read` — so the invented
+   * permission would have made the next-role receipt impossible for the actual next role, and the
+   * only way to pass would have been to widen a production role to suit a test.
+   *
+   * The act is not an inventory operation. A site engineer accepting material at their work package
+   * is progressing the responsibility they hold, and `projects.responsibility.update` is the existing
+   * vocabulary for exactly that — held by the Storekeeper and the Site Engineer alike. The coarse
+   * permission says "you may discharge responsibilities"; the DOMAIN then narrows it to the one
+   * person named for this work package, and refuses the issuer. Same layering the responsibility
+   * service itself uses.
+   */
+  @Permissions('projects.responsibility.update')
   @Post(':id/movements/:movementId/acknowledge')
   acknowledgeDelivery(
     @Param('id', ParseUuidOr404Pipe) id: string,

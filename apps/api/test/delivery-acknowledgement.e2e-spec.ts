@@ -49,13 +49,21 @@ describe('Site acknowledges material delivered to a work package (JWT ON)', () =
     const users = app.get(UsersService);
     events = app.get(EVENT_STORE);
 
+    /**
+     * These mirror the roles AURA actually ships, rather than being convenient supersets.
+     *
+     * `r-store` holds `inventory.*`; `r-site-engineer` holds `inventory.*.read` and cannot write
+     * inventory at all. BOTH hold `projects.responsibility.update`, which is what governs accepting
+     * a delivery — the act is discharging the responsibility you hold, not an inventory write. A
+     * fixture that granted `inventory.*` to the site engineer would have hidden exactly that.
+     */
     access.registerRole({
       id: 'r-e2e-ack-store', name: 'Storekeeper (e2e)',
-      permissions: ['inventory.*', 'projects.project.read', 'projects.*.read'],
+      permissions: ['inventory.*', 'projects.responsibility.update', 'projects.project.read', 'projects.*.read'],
     });
     access.registerRole({
       id: 'r-e2e-ack-site', name: 'Site engineer (e2e)',
-      permissions: ['inventory.*', 'projects.project.read', 'projects.*.read'],
+      permissions: ['inventory.*.read', 'projects.responsibility.update', 'projects.project.read', 'projects.*.read'],
     });
     for (const userId of ['ack-store', 'ack-site', 'ack-other']) {
       const roleId = userId === 'ack-store' ? 'r-e2e-ack-store' : 'r-e2e-ack-site';

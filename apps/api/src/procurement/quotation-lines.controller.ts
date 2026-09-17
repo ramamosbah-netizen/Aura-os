@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, StreamableFile } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { CommercialComparisonService, QuotationLineService, type QuotationLine } from '@aura/procurement';
 import { admitCurrency } from '@aura/shared';
@@ -64,20 +65,111 @@ export class QuotationLinesController {
     @Query('comparisonDate') comparisonDate?: string,
     @Query('baseCurrency') baseCurrency?: string,
   ) {
+    return this.comparison.compareRequirement(
+      this.tenant.get().tenantId, prLineId, this.comparisonContext(comparisonDate, baseCurrency),
+    );
+  }
+
+  /**
+   * The comparison context a caller asked for, validated once for every surface that needs it.
+   *
+   * The date is a parameter and not a default buried in the domain; the API fills in today only so a
+   * screen can open somewhere sensible, and whatever is used travels back on every value.
+   */
+  private comparisonContext(comparisonDate?: string, baseCurrency?: string) {
     const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException('comparisonDate must be a date in YYYY-MM-DD form');
     }
-    // The base currency is asked of the one currency policy, so this surface cannot admit a currency
-    // the FX authority could never govern a rate into (FX-01).
     const verdict = admitCurrency(baseCurrency ?? 'AED');
     if (!verdict.admissible) throw new BadRequestException(verdict.detail);
+    return { baseCurrency: verdict.currency, comparisonDate: date };
+  }
 
-    return this.comparison.compareRequirement(this.tenant.get().tenantId, prLineId, {
-      baseCurrency: verdict.currency,
-      comparisonDate: date,
+  /**
+   * THE COMMERCIAL COMPARISON SHEET (XLSX).
+   *
+   * Built from the SAME service call the screen reads, so the spreadsheet cannot drift from what the
+   * buyer was looking at — it renders that result and computes nothing of its own. An UNKNOWN stays
+   * a written reason in the cell rather than becoming a blank or a zero, because a blank in a
+   * spreadsheet gets summed and a zero gets compared.
+   */
+  @Permissions('procurement.rfq.read')
+  @Get('by-requirement/:prLineId/comparison.xlsx')
+  async comparisonSheet(
+    @Param('prLineId', ParseUuidOr404Pipe) prLineId: string,
+    @Query('comparisonDate') comparisonDate?: string,
+    @Query('baseCurrency') baseCurrency?: string,
+  ): Promise<StreamableFile> {
+    const context = this.comparisonContext(comparisonDate, baseCurrency);
+    const result = await this.comparison.compareRequirement(this.tenant.get().tenantId, prLineId, context);
+
+    const say = (v: { status: string; unitValue?: number; reason?: string; missingInputs?: string[] }) =>
+      v.status === 'comparable' ? (v.unitValue as number) : `UNKNOWN — ${v.reason}${v.missingInputs?.length ? ` (${v.missingInputs.join('; ')})` : ''}`;
+
+    const basis = XLSX.utils.json_to_sheet([
+      { Field: 'Requirement', Value: `${result.materialCode ?? ''} ${result.materialName ?? ''}`.trim() },
+      { Field: 'Requested quantity', Value: result.requestedQuantity ?? 'UNKNOWN' },
+      { Field: 'Requested unit', Value: result.requestedUom ?? 'UNKNOWN' },
+      { Field: 'Comparison date', Value: context.comparisonDate },
+      { Field: 'Base currency', Value: context.baseCurrency },
+      { Field: 'Tax basis', Value: 'ex-tax' },
+      { Field: 'Freight basis', Value: 'excluded from line values; shown per quotation' },
+      { Field: 'Recommendation', Value: 'NONE. These are comparable facts; selecting a supplier is a separate governed decision.' },
+    ]);
+    basis['!cols'] = [{ wch: 22 }, { wch: 96 }];
+
+    const offers = XLSX.utils.json_to_sheet(result.offers.map((o) => ({
+      Supplier: o.supplierName,
+      'Requested qty': o.requestedQuantity ?? 'UNKNOWN',
+      'Quoted qty': o.quotedQuantity ?? 'UNKNOWN',
+      'Quantity deviation': o.quantityDeviation ?? 'UNKNOWN',
+      'Coverage': o.coverageRatio ?? 'UNKNOWN',
+      'Quantity compliance': o.quantityCompliance,
+      'Requested unit': o.requestedUom ?? 'UNKNOWN',
+      'Quoted unit': o.quotedUom ?? 'UNKNOWN',
+      [`Unit price (${context.baseCurrency}, ex-tax, ex-freight)`]: say(o.normalisedUnitPrice),
+      [`Requisition line total (${context.baseCurrency})`]: say(o.normalisedRequestedLineTotal),
+      'FX source': o.normalisedUnitPrice.status === 'comparable' ? o.normalisedUnitPrice.fx.source : '',
+      'FX rate': o.normalisedUnitPrice.status === 'comparable' ? o.normalisedUnitPrice.fx.rate : '',
+      'FX effective': o.normalisedUnitPrice.status === 'comparable' ? (o.normalisedUnitPrice.fx.effectiveDate ?? '') : '',
+      'Offer validity': o.validityDate ?? 'UNKNOWN',
+      'Commercial status': o.commercialStatus,
+    })));
+    if (result.offers.length > 0) offers['!autofilter'] = { ref: offers['!ref']! };
+    offers['!cols'] = [{ wch: 34 }, ...Array.from({ length: 14 }, () => ({ wch: 20 }))];
+
+    const quotations = XLSX.utils.json_to_sheet(result.quotations.map((q) => ({
+      Supplier: q.supplierName,
+      Currency: q.currency ?? 'UNKNOWN',
+      [`Freight (${context.baseCurrency}, ex-tax)`]: q.freight === null ? 'none quoted' : say(q.freight),
+      'Freight terms': q.freightTerms ?? '',
+      'Payment terms': q.paymentTerms ?? '',
+      'Offer validity': q.validityDate ?? 'UNKNOWN',
+      'Commercial status': q.commercialStatus,
+      Note: 'Freight is quoted for the offer as a whole and is NOT allocated to lines.',
+    })));
+    quotations['!cols'] = [{ wch: 34 }, { wch: 12 }, { wch: 26 }, { wch: 22 }, { wch: 22 }, { wch: 16 }, { wch: 18 }, { wch: 70 }];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, basis, 'Basis');
+    XLSX.utils.book_append_sheet(workbook, offers, 'Offers');
+    XLSX.utils.book_append_sheet(workbook, quotations, 'Quotation charges');
+    workbook.Props = {
+      Title: `Commercial comparison — ${result.materialName ?? prLineId}`,
+      Subject: `Comparable facts as at ${context.comparisonDate}, ex-tax, ex-freight, in ${context.baseCurrency}`,
+      Comments: 'Comparable facts only. No recommendation is expressed or implied.',
+    };
+
+    const bytes = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx', compression: true }) as Buffer;
+    const safe = (result.materialCode ?? prLineId).replace(/[^a-zA-Z0-9._-]+/g, '-');
+    return new StreamableFile(bytes, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${safe}-commercial-comparison-${context.comparisonDate}.xlsx"`,
+      length: bytes.length,
     });
   }
+
 
   /**
    * The offers, each carrying the technical decision made about it.

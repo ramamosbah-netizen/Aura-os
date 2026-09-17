@@ -22,7 +22,7 @@ export default async function RfqsPage() {
       <h1 style={st.h1}>Procurement · RFQs</h1>
       <p style={st.sub}>
         Source competitively: float a requirement to vendors, collect quotes, compare them side-by-side,
-        and award the winner. The cheapest received quote is flagged as the recommendation.
+        and award the winner. The quoted totals below are each supplier’s own header figure in their own currency — legacy, non-normalised, and not a recommendation. Comparable values live on the commercial comparison for each requirement.
       </p>
       <section style={{ marginTop: 10 }}>
         {rfqs === null ? <p style={st.muted}>API offline.</p> : <RfqClient initialRfqs={rfqs} />}

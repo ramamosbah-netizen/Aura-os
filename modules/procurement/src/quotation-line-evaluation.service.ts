@@ -1,4 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { EVENT_STORE, type EventStore } from '@aura/core';
+import { makeEvent } from '@aura/shared';
 import type { Id } from '@aura/shared';
 import {
   makeQuotationLineEvaluation, mayEvaluate, quantityDeviation, supersede, technicalEligibility,
@@ -24,6 +26,7 @@ export class QuotationLineEvaluationService {
     @Inject(QUOTATION_LINE_EVALUATION_STORE) private readonly evaluations: QuotationLineEvaluationStore,
     @Inject(QUOTATION_LINE_STORE) private readonly lines: QuotationLineStore,
     @Inject(PR_LINE_STORE) private readonly prLines: PurchaseRequestLineStore,
+    @Inject(EVENT_STORE) private readonly events: EventStore,
   ) {}
 
   /**
@@ -100,13 +103,72 @@ export class QuotationLineEvaluationService {
       amendmentReason: previous ? input.amendmentReason ?? null : null,
     });
 
-    await this.evaluations.create(evaluation);
+    /**
+     * SUPERSEDE FIRST, THEN INSERT — the order is load-bearing, not stylistic.
+     *
+     * `aura_quo_line_eval_one_current` is a PARTIAL unique index over the rows with no
+     * `superseded_at`, so inserting the replacement while the previous verdict is still current puts
+     * two current rows on one offer and Postgres rejects it. Creating first and marking second read
+     * more naturally and was wrong.
+     *
+     * It was invisible to the API suite, which runs against in-memory stores with no such
+     * constraint, and surfaced only when the browser drove the real database. The constraint did its
+     * job: it refused a state where an offer has two standing verdicts.
+     */
     if (previous) {
       const marked = supersede(previous, evaluation.id);
       await this.evaluations.markSuperseded(previous.id, marked.supersededAt as string, evaluation.id);
     }
+    await this.evaluations.create(evaluation);
+    /**
+     * THE ACTUAL OUTPUT: the verdict on the spine — who decided what, when, and why.
+     *
+     * A technical determination that lives only in one module's table is not an output; the reason a
+     * sourcing decision can be audited later is that the judgement and its rationale are readable
+     * without asking Procurement. It carries the SUPERSEDED id too, so an amendment is legible as an
+     * amendment rather than as a second opinion appearing from nowhere.
+     */
+    await this.events.append([
+      makeEvent({
+        type: 'procurement.quotation_line.evaluated',
+        tenantId,
+        companyId: line.companyId,
+        actorId: input.decidedBy,
+        aggregateType: 'procurement.quotation_line',
+        aggregateId: input.quotationLineId,
+        payload: {
+          quotationLineId: input.quotationLineId,
+          prLineId: line.prLineId,
+          quotationId: line.quotationId,
+          verdict: evaluation.verdict,
+          rationale: evaluation.rationale,
+          decidedBy: input.decidedBy,
+          decidedAt: evaluation.decidedAt,
+          supersedesId: evaluation.supersedesId,
+          amendmentReason: evaluation.amendmentReason,
+        },
+      }),
+    ]);
     this.logger.log(`Offer ${input.quotationLineId} evaluated ${input.verdict} by ${input.decidedBy}`);
     return evaluation;
+  }
+
+  /**
+   * OFFERS STILL AWAITING A TECHNICAL VERDICT — the work handed to the evaluator.
+   *
+   * Derived from the absence of a current evaluation rather than from a status field: an offer is
+   * awaiting a decision precisely because nobody has made one, and a separate `pending` flag would
+   * be a second way of saying that, free to disagree with the evaluations themselves.
+   */
+  async awaitingEvaluation(tenantId: Id, quotationId: Id): Promise<QuotationLine[]> {
+    const lines = await this.lines.listByQuotation(tenantId, quotationId);
+    const pending: QuotationLine[] = [];
+    for (const line of lines) {
+      // A declined line offered nothing, so it is not work for an evaluator.
+      if (line.response !== 'quoted') continue;
+      if (!(await this.evaluations.findCurrent(tenantId, line.id))) pending.push(line);
+    }
+    return pending;
   }
 
   /**

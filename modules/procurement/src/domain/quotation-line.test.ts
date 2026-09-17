@@ -100,8 +100,8 @@ describe('the line carries no verdict, and that is the design', () => {
 
   it('answers "is this compliant?" with the only honest answer available here', () => {
     // A supplier saying `comply` is a claim with exactly the standing of their price. Eligibility
-    // belongs to the technical evaluation authority (SUP-01, Procurement RFQ context), and MAR is
-    // evidence for that decision rather than the decision.
+    // belongs to the technical evaluation authority (SUP-01, Procurement RFQ context). Quality's MAR
+    // is a separate authority that this path does not read at all.
     expect(isSupplierClaimOnly(line({ complianceResponse: 'comply' }))).toBe(true);
   });
 });

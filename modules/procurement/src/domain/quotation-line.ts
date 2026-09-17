@@ -18,11 +18,12 @@ import { type Id, moneyNumber, newId } from '@aura/shared';
  *   · `SUP-01`'s frozen authority is the Procurement RFQ context with the Technical Manager among
  *     its roles. The verdict is an INTERNAL determination made later and recorded BESIDE this row.
  *     A boolean here would become a decision field by gravity, and the supplier would be filling it.
- *   · Quality's MAR is evidence a technical evaluator may consult — it says a make/model is approved
- *     for the project — and it is NOT this verdict. The same approved model can be offered with a
- *     deviation, a missing accessory or a narrower warranty, and so be approved and non-compliant at
- *     once. Treating MAR as the answer would convert a project-level material approval into a
- *     line-level compliance pass.
+ *   · Quality's MAR is a SEPARATE authority and is NOT consumed here. It says a make/model is
+ *     approved for the project, which cannot answer whether this offer meets this requisition line:
+ *     the same approved model can be offered with a deviation, a missing accessory or a narrower
+ *     warranty and be approved and non-compliant at once. Nothing on this path reads a MAR, so it is
+ *     not evidence this capability uses, and whether one is even required for a given material is
+ *     undetermined — some may need none.
  *   · A normalised or landed value is DERIVED from these facts against the Finance FX authority. One
  *     stored here would be a second commercial truth, free to drift from the supplier's own.
  */

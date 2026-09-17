@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AccessService, AuthService, TenantContext, UsersService } from '@aura/core';
+import { AccessService, AuthService, EVENT_STORE, type EventStore, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -29,6 +29,7 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
   let buyer: ReturnType<typeof request.agent>;
   let techManager: ReturnType<typeof request.agent>;
   let admin: ReturnType<typeof request.agent>;
+  let events: EventStore;
 
   beforeAll(async () => {
     process.env.AUTH_JWT_SECRET = 'technical-evaluation-e2e-only';
@@ -40,6 +41,7 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
     const tenant = app.get(TenantContext);
     const access = app.get(AccessService);
     const users = app.get(UsersService);
+    events = app.get(EVENT_STORE);
 
     // Mirrors of the shipped roles. The Technical Manager deliberately has no procurement rights,
     // and the Buyer deliberately has no engineering rights.
@@ -216,6 +218,84 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
       .send({ supplierName: `S ${run}`, amount: 100, currency: 'AED', leadTimeDays: 21 });
     expect(res.status).toBe(400);
     expect(String(res.body?.message)).toMatch(/must be recorded on the quotation line/i);
+  });
+
+  /**
+   * THE ACTUAL OUTPUT — the verdict on the spine, readable without asking Procurement.
+   *
+   * Asserted as PERSISTED rather than emitted: a determination that only the deciding module can see
+   * is not an output, and the reason a sourcing decision can be audited later is that the judgement
+   * AND ITS RATIONALE are on the record.
+   */
+  it('puts the verdict on the event spine, carrying who decided it and why', async () => {
+    const s = await scene();
+    await techManager.post(`/api/v1/procurement/quotation-lines/${s.lineId}/evaluation`)
+      .send({ verdict: 'compliant_with_deviation', rationale: 'lens variant accepted for this location' }).expect(201);
+
+    const recorded = (await events.list({ tenantId: TENANT }))
+      .filter((e) => e.type === 'procurement.quotation_line.evaluated')
+      .filter((e) => (e.payload as { quotationLineId?: string }).quotationLineId === s.lineId);
+    expect(recorded, 'the verdict never reached the spine').toHaveLength(1);
+
+    const payload = recorded[0].payload as Record<string, unknown>;
+    expect(payload.verdict).toBe('compliant_with_deviation');
+    expect(payload.decidedBy).toBe('tec-manager');
+    expect(payload.rationale).toMatch(/lens variant/);
+    expect(payload.supersedesId).toBeNull();
+  });
+
+  it('makes an amendment legible AS an amendment on the spine', async () => {
+    const s = await scene();
+    await techManager.post(`/api/v1/procurement/quotation-lines/${s.lineId}/evaluation`)
+      .send({ verdict: 'non_compliant', rationale: 'wrong lens' }).expect(201);
+    await techManager.post(`/api/v1/procurement/quotation-lines/${s.lineId}/evaluation`)
+      .send({ verdict: 'compliant', rationale: 'datasheet corrected', amendmentReason: 'supplier clarified' }).expect(201);
+
+    const recorded = (await events.list({ tenantId: TENANT }))
+      .filter((e) => e.type === 'procurement.quotation_line.evaluated')
+      .filter((e) => (e.payload as { quotationLineId?: string }).quotationLineId === s.lineId);
+    expect(recorded).toHaveLength(2);
+    // The amendment names what it replaced, so it is not a second opinion appearing from nowhere.
+    const amendment = recorded.find((e) => (e.payload as { supersedesId?: string }).supersedesId);
+    expect(amendment, 'the amendment did not name the decision it replaced').toBeDefined();
+    expect((amendment!.payload as Record<string, unknown>).amendmentReason).toBe('supplier clarified');
+  });
+
+  /**
+   * THE HANDOFF INTO THE TECHNICAL AUTHORITY — the Buyer records offers, and they arrive as work.
+   *
+   * Derived from the ABSENCE of a verdict rather than from a status field, so nothing can claim to be
+   * pending while a decision exists.
+   */
+  it('hands the evaluator the offers with no verdict yet, and drops them once decided', async () => {
+    const s = await scene();
+    const before = (await techManager.get(`/api/v1/procurement/quotation-lines/awaiting/${s.quotationId}`).expect(200)).body as Array<{ id: string }>;
+    expect(before.map((l) => l.id)).toContain(s.lineId);
+
+    await techManager.post(`/api/v1/procurement/quotation-lines/${s.lineId}/evaluation`)
+      .send({ verdict: 'compliant', rationale: 'meets spec' }).expect(201);
+
+    const after = (await techManager.get(`/api/v1/procurement/quotation-lines/awaiting/${s.quotationId}`).expect(200)).body as Array<{ id: string }>;
+    expect(after.map((l) => l.id)).not.toContain(s.lineId);
+  });
+
+  it('does not hand the evaluator a declined line — nothing was offered to judge', async () => {
+    const run = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const project = (await admin.post('/api/v1/projects/projects').send({ title: `NB ${run}` }).expect(201)).body;
+    const mat = (await buyer.post('/api/v1/inventory/materials').send({ code: `N-${run}`, name: 'cable', uom: 'm' }).expect(201)).body;
+    const pr = (await buyer.post('/api/v1/procurement/purchase-requests').send({ title: `P ${run}`, projectId: project.id, value: 0 }).expect(201)).body;
+    const prLine = (await buyer.post(`/api/v1/procurement/purchase-requests/${pr.id}/lines`).send({ material: mat.id, quantity: 5, estimatedUnitCost: 4 }).expect(201)).body;
+    const rfq = (await buyer.post('/api/v1/procurement/rfqs').send({ title: `R ${run}`, prId: pr.id }).expect(201)).body;
+    const quotation = (await buyer.post(`/api/v1/procurement/rfqs/${rfq.id}/quotes`).send({ supplierName: `S ${run}`, amount: 10, currency: 'AED' }).expect(201)).body;
+    await buyer.post(`/api/v1/procurement/quotations/${quotation.id}/lines`).send({ prLineId: prLine.id, response: 'no_bid' }).expect(201);
+
+    const awaiting = (await techManager.get(`/api/v1/procurement/quotation-lines/awaiting/${quotation.id}`).expect(200)).body as unknown[];
+    expect(awaiting).toHaveLength(0);
+  });
+
+  it('refuses the Buyer the evaluator’s work queue', async () => {
+    const s = await scene();
+    await buyer.get(`/api/v1/procurement/quotation-lines/awaiting/${s.quotationId}`).expect(403);
   });
 
   it('refuses an unauthenticated caller', async () => {

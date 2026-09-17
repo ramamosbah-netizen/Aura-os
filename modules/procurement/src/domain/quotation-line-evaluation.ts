@@ -14,10 +14,18 @@ import type { QuotationLine } from './quotation-line';
  * the catalogue already says of this role that "the engineer who proposed the product must not be
  * the one who approves it".
  *
- * QUALITY'S MAR IS EVIDENCE, NOT THIS VERDICT. It says a make/model is approved for the project; it
- * cannot say whether THIS offer meets THIS requisition line, because the same approved model can be
- * offered with a deviation, a missing accessory or a narrower warranty and so be approved and
- * non-compliant at once.
+ * QUALITY'S MAR IS A SEPARATE AUTHORITY, AND THIS CAPABILITY DOES NOT CONSUME IT.
+ *
+ * A MAR says a make/model is approved for the project. It cannot say whether THIS offer meets THIS
+ * requisition line, because the same approved model can be offered with a deviation, a missing
+ * accessory or a narrower warranty and so be approved and non-compliant at once.
+ *
+ * There is no MAR read anywhere on this path, so MAR is NOT evidence this capability uses — it is an
+ * authority that stays separate and unconsumed. Calling it "evidence the evaluator consults" would
+ * describe a linkage that does not exist. Whether an approved MAR is a precondition for purchasing a
+ * given material is UNDETERMINED and deliberately not assumed here: some materials may need no MAR
+ * at all, and turning one into a general purchasing precondition would be inventing policy rather
+ * than reconciling an authority.
  */
 
 export const TECHNICAL_VERDICTS = ['compliant', 'compliant_with_deviation', 'non_compliant'] as const;

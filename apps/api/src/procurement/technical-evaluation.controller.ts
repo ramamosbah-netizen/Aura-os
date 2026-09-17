@@ -35,6 +35,19 @@ export class TechnicalEvaluationController {
     private readonly tenant: TenantContext,
   ) {}
 
+  /**
+   * THE WORK WAITING FOR THIS EVALUATOR — offers on a quotation with no verdict yet.
+   *
+   * This is the handoff into the technical authority: the Buyer records what suppliers offered, and
+   * the offers arrive here for a decision. Derived from the absence of a verdict, so nothing can
+   * claim to be pending while a decision exists.
+   */
+  @Permissions('engineering.technical-evaluation.decide')
+  @Get('awaiting/:quotationId')
+  awaiting(@Param('quotationId', ParseUuidOr404Pipe) quotationId: string) {
+    return this.evaluations.awaitingEvaluation(this.tenant.get().tenantId, quotationId);
+  }
+
   /** Everything the decider needs: the requirement as authored, the offer, and the deviation. */
   @Permissions('engineering.technical-evaluation.decide')
   @Get(':id/evaluation')

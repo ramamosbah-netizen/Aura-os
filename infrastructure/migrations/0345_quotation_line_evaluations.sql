@@ -11,11 +11,13 @@
 -- of the Technical Manager that "the engineer who proposed the product must not be the one who
 -- approves it".
 --
--- QUALITY'S MAR IS EVIDENCE, NOT THIS VERDICT. A MAR says a make/model is approved for the project.
--- It cannot answer whether THIS offer meets THIS requisition line's requirements, because the same
--- approved model can be offered with a deviation, a missing accessory or a narrower warranty — and so
--- be approved and non-compliant at once. Treating MAR as the answer would convert a project-level
--- material approval into a line-level compliance pass.
+-- QUALITY'S MAR IS A SEPARATE AUTHORITY AND IS NOT CONSUMED HERE. A MAR says a make/model is approved
+-- for the project. It cannot answer whether THIS offer meets THIS requisition line's requirements,
+-- because the same approved model can be offered with a deviation, a missing accessory or a narrower
+-- warranty — and so be approved and non-compliant at once. Nothing on this path reads a MAR, so it is
+-- not evidence this capability uses. Whether an approved MAR is even required for a given material is
+-- UNDETERMINED and deliberately not assumed: some materials may need none, and making one a general
+-- purchasing precondition would be inventing policy rather than reconciling an authority.
 --
 -- A RATIONALE IS REQUIRED. A verdict nobody explained cannot be reviewed, appealed or relied on, and
 -- "non-compliant" with no reason gives a buyer nothing to put to the supplier. This is the same rule

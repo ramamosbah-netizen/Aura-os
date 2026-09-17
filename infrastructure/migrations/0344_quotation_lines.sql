@@ -29,9 +29,9 @@
 --   authority is the Procurement RFQ context with the Technical Manager among its roles — an
 --   INTERNAL determination, made later, recorded beside this row and never inside it. A supplier
 --   writing "compliant" is a claim exactly as a supplier writing a price is a claim. Quality's MAR
---   is evidence a technical evaluator may consult — it says a make/model is approved for the project
---   — and it is NOT this verdict: the same approved model can be offered with a deviation, a missing
---   accessory or a narrower warranty, and be approved and non-compliant at once.
+--   is a SEPARATE authority that this path does not read: it says a make/model is approved for the
+--   project, which cannot answer whether this offer meets this requisition line — the same approved
+--   model can be offered with a deviation, a missing accessory or a narrower warranty.
 --
 --   It is NOT a comparable value. No normalised total, no landed cost, no rank. Those are derived
 --   from these facts plus the Finance FX authority, and a stored one would be a second commercial

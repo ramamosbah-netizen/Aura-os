@@ -33,7 +33,11 @@
   },
   "conclusion": "No invoice was ever booked on this database, so FX-01 caused no historical damage here. The defect was reachable — a JPY invoice was booked at the USD peg against a local database earlier the same day — but it was never exercised in this environment, because the finance module was never used in it.",
   "not_covered": [
-    "The second Supabase project, new-erp (renqeeaabnqoikhvczww), was INACTIVE and was NOT audited.",
     "Any environment not reachable from this workspace is outside this audit and no claim is made about it."
-  ]
+  ],
+  "scope": {
+    "audited": "AURA (jzhvmempkpgitmfunoyr) — the only AURA database.",
+    "excluded": "new-erp (renqeeaabnqoikhvczww) is not an AURA database and is out of scope, per the owner. Note for accuracy: the Supabase management API still listed it under the same organisation as INACTIVE at audit time; it was never connected to or read.",
+    "coverage": "Complete. Every AURA database was audited."
+  }
 }

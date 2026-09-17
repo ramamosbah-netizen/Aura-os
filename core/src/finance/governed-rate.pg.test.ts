@@ -120,8 +120,7 @@ describe('the governed rate store (PostgreSQL)', () => {
   });
 
   skipless('NEVER falls back to a peg — an ungoverned pair stays unknown against the real table', async () => {
-    // getRate() answers this from a hardcoded constant even with a database present.
-    expect(await fx.getRate(TENANT, 'GBP', 'SAR')).toBeGreaterThan(0);
+    // The deleted path answered this from a hardcoded constant even with a database present.
     const resolved = await fx.resolveGovernedRate(TENANT, 'GBP', 'SAR', new Date('2026-09-17'));
     expect(resolved).toMatchObject({ status: 'unknown', reason: 'no_governed_rate' });
   });

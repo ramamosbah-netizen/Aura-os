@@ -30,6 +30,7 @@ import {
 } from '@aura/projects';
 import { CustomerInvoiceService, InMemoryCustomerInvoiceStore } from '@aura/finance';
 import { CrossModuleSubscriber } from './cross-module-subscriber';
+import { ExchangeRateService } from '@aura/core';
 
 /**
  * End-to-end proof that the deal chain is wired and automated through the
@@ -119,7 +120,7 @@ function buildHarness(pricedQuote?: { id: string; status: string; baselineId: st
   const quantityLedger = new QuantityLedgerService(new InMemoryQuantityLedgerStore());
   const wbs = new WbsService(wbsStore, events, access, quantityLedger, undefined, null, undefined, projectStore);
   const ledger = new CostLedgerService(new InMemoryCostLedgerStore(), cbs);
-  const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events, { getRate: async () => 1 } as any);
+  const customerInvoices = new CustomerInvoiceService(new InMemoryCustomerInvoiceStore(), events, new ExchangeRateService(null));
 
   /**
    * Walk a project to `active` the way a real one gets there.

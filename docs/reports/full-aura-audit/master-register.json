@@ -8572,21 +8572,15 @@
       "id": "FX-02",
       "title": "The legacy getRate() still cannot fail, still answers for the wrong tenant, and is still reachable",
       "capabilityIds": [
-        "SUP-06",
-        "COM-05",
-        "MGT-10"
+        "SUP-06"
       ],
       "classification": "WRONG_BEHAVIOR",
       "kind": "fresh defect — shared service, outside the frozen capability scope",
       "status": "OPEN",
       "roles": [
-        "Finance",
-        "Commercial Manager / QS",
-        "Procurement Manager / Buyer"
+        "Finance"
       ],
       "stages": [
-        "Procurement",
-        "Commercial / Certification",
         "Finance / Collection"
       ],
       "authority": "Finance FX (core ExchangeRateService) — the legacy resolution path left in place beside the governed one",
@@ -8594,8 +8588,8 @@
       "expectedOperationalBehavior": "One FX authority. Either the legacy path is removed with its remaining caller moved to the governed resolver, or it is retained deliberately as a clearly-labelled indicative conversion that states it is not governed — decided, not inherited.",
       "evidence": "FRESH audit following the FX-01 remediation: core/src/finance/exchange-rate.service.ts getRate/convert/getDefaultPeg/inMemoryRates; sole remaining consumer apps/api/src/finance/fx.controller.ts:47-48. The tenant leak and the peg fallback are both asserted as CURRENT behaviour in core/src/finance/governed-rate.test.ts, which contrasts them against the governed resolver rather than merely describing them.",
       "severity": "HIGH",
-      "remediationDependency": "None. FX-01 built the governed resolver this would move to; the decision is whether the legacy path survives at all.",
-      "acceptanceProof": "Either: no caller of getRate/convert remains and both are deleted, proved by a fitness test that fails if either is reintroduced; or the one surviving surface is proved to label its answer as indicative and ungoverned on screen, and the untenanted cache is removed so no tenant can be answered with another tenant’s rate — that last point proved against PostgreSQL with two bound connections, not in memory."
+      "remediationDependency": "None, and it BLOCKS NOTHING. SUP-06 is listed as a RELATED capability, not a hard dependency: modules/procurement has no FX coupling at all — it imports ExchangeRateService nowhere — and when SUP-06 normalises it will call resolveGovernedRate directly, never this endpoint. COM-05 and MGT-10 were dropped from the linkage because FX-01 already cut AP, AR and both revaluations away from the legacy path, so nothing they depend on touches it. SUP-06 may proceed before, during or after this record; they are independent.",
+      "acceptanceProof": "SINGLE TRACK. An earlier draft of this record offered \"keep the endpoint and label it indicative\" as an equal option, and that was wrong: a label is a documentation fix for a tenant-isolation defect, and it would have legitimised the untenanted cache rather than removed it. AURA either converts currency under governance or does not offer conversion. PHASE 1, CONSUMER PROOF (DONE): GET /api/v1/finance/fx/convert has ONE first-party consumer, the Convert widget in apps/web/components/fx-client.tsx reached through a BFF route; NO server-side caller; NO hand-maintained contract — packages/sdk/src/generated.ts is auto-generated from the OpenAPI document and its fxConvert method has zero callers; and no evidence of any external integration. PHASE 2, WHAT THIS RECORD CLOSES ON: the endpoint resolves through resolveGovernedRate and nothing else — tenant-scoped, no peg, no hardcoded EUR/GBP constant, no implicit cross-rate, an unsupported currency refused, a lookup failure reported as a failure rather than as absence, and the governed rate’s effective date, source and row id returned with the answer; then getRate, convert, getDefaultPeg, inMemoryRates and registerInMemoryRate are DELETED, proved by zero remaining callers and by a fitness test that fails if any of them is reintroduced; and the browser shows a finance user an ungoverned pair refused in the domain’s own words on the very page where rates are set — which is the point, because that screen today lists the governed rates and converts at a hardcoded constant at the same time. Conversion at a market or indicative rate is NOT in scope and must not be smuggled in under this record: it is a separate capability needing a provider, a source, a timestamp and freshness semantics of its own."
     }
   ],
   "totals": {

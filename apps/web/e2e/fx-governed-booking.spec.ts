@@ -27,14 +27,18 @@ test.describe('An invoice in a currency with no governed rate', () => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
     const run = Date.now().toString().slice(-6);
 
-    // GBP is deliberately left ungoverned. Assert that, rather than assuming it: a rate registered
-    // by another spec would turn this into a test of nothing.
+    /**
+     * The invoice is dated 5 Jan 2026 — EARLIER than any rate these suites register, all of which
+     * take effect in September. Pinning the refusal to a DATE rather than to a currency is what
+     * makes this repeatable: a later run, or another spec registering GBP, cannot make a January
+     * invoice governed, because a rate does not apply before it takes effect.
+     */
     const probe = await request.get(`${API}/finance/fx/governed-rate`, {
-      params: { from: 'GBP', to: 'AED', asOf: '2026-09-10' },
+      params: { from: 'GBP', to: 'AED', asOf: '2026-01-05' },
       headers: apiAuthHeaders(),
     });
     expect(probe.ok()).toBe(true);
-    expect((await probe.json()).status, 'GBP must be ungoverned for this spec to mean anything').toBe('unknown');
+    expect((await probe.json()).status, 'GBP must be ungoverned at 5 Jan 2026 for this spec to mean anything').toBe('unknown');
 
     await page.goto('/finance/invoices', { waitUntil: 'domcontentloaded' });
     await page.getByTestId('create-invoice').click();
@@ -44,7 +48,7 @@ test.describe('An invoice in a currency with no governed rate', () => {
     await page.getByTestId('field-title').fill(title);
     await page.getByTestId('field-value').fill('100000');
     await page.getByTestId('field-supplierName').fill(`Thames ELV ${run}`);
-    await page.getByTestId('field-invoiceDate').fill('2026-09-10');
+    await page.getByTestId('field-invoiceDate').fill('2026-01-05');
     await page.getByTestId('field-currency').selectOption('GBP');
 
     await page.getByTestId('submit-invoice').click();
@@ -52,7 +56,7 @@ test.describe('An invoice in a currency with no governed rate', () => {
     // ── 1. THE REFUSAL NAMES THE PAIR AND THE DATE ────────────────────────────
     const error = page.getByTestId('drawer-error-invoice');
     await expect(error).toBeVisible({ timeout: 30_000 });
-    await expect(error).toContainText('No governed GBP/AED exchange rate is available for 10 Sep 2026');
+    await expect(error).toContainText('No governed GBP/AED exchange rate is available for 5 Jan 2026');
     await expect(error).toContainText('must be registered');
 
     // The refusal as the user sees it, saved as evidence rather than described.
@@ -67,7 +71,7 @@ test.describe('An invoice in a currency with no governed rate', () => {
     await expect(page.getByTestId('field-title')).toHaveValue(title);
     await expect(page.getByTestId('field-value')).toHaveValue('100000');
     await expect(page.getByTestId('field-supplierName')).toHaveValue(`Thames ELV ${run}`);
-    await expect(page.getByTestId('field-invoiceDate')).toHaveValue('2026-09-10');
+    await expect(page.getByTestId('field-invoiceDate')).toHaveValue('2026-01-05');
     await expect(page.getByTestId('field-currency')).toHaveValue('GBP');
 
     // ── 4. THE USER CORRECTS THE CURRENCY AND RE-SUBMITS, RETYPING NOTHING ───
@@ -122,11 +126,12 @@ test.describe('An invoice in a currency with no governed rate', () => {
 
     // The AR half of the remediation, on the surface a Finance user actually uses. Asserted
     // ungoverned first, so a rate left behind by another spec cannot turn this into a no-op.
+    // Same reasoning as the AP half: the refusal is pinned to a date no rate reaches back to.
     const probe = await request.get(`${API}/finance/fx/governed-rate`, {
-      params: { from: 'USD', to: 'AED', asOf: '2026-09-10' },
+      params: { from: 'USD', to: 'AED', asOf: '2026-01-05' },
       headers: apiAuthHeaders(),
     });
-    expect((await probe.json()).status, 'USD must be ungoverned for this spec to mean anything').toBe('unknown');
+    expect((await probe.json()).status, 'USD must be ungoverned at that date for this spec to mean anything').toBe('unknown');
 
     await page.goto('/finance/customer-invoices', { waitUntil: 'domcontentloaded' });
     // The trigger is server-rendered and the drawer is client state, so a single click can land
@@ -139,7 +144,7 @@ test.describe('An invoice in a currency with no governed rate', () => {
 
     const number = `AR-${run}`;
     await page.getByTestId('field-invoiceNumber').fill(number);
-    await page.getByTestId('field-issueDate').fill('2026-09-10');
+    await page.getByTestId('field-issueDate').fill('2026-01-05');
     await page.getByTestId('field-customerName').fill(`US Client ${run}`);
     await page.getByTestId('field-currency').selectOption('USD');
     // The line editor is addressed by its accessible labels — it has no testids, and adding some
@@ -151,7 +156,7 @@ test.describe('An invoice in a currency with no governed rate', () => {
 
     const error = page.getByTestId('drawer-error-customer-invoice');
     await expect(error).toBeVisible({ timeout: 30_000 });
-    await expect(error).toContainText('No governed USD/AED exchange rate is available for 10 Sep 2026');
+    await expect(error).toContainText('No governed USD/AED exchange rate is available for 5 Jan 2026');
 
     // Nothing booked, and the invoice NUMBER is still free — the refusal consumed no identifier.
     const listed = await request.get(`${API}/finance/customer-invoices`, { headers: apiAuthHeaders() });

@@ -12,8 +12,9 @@ export default async function FxPage() {
     <div style={st.page}>
       <h1 style={st.h1}>Finance · Multi-Currency (FX)</h1>
       <p style={st.sub}>
-        Manage exchange rates and convert between currencies. Rates are effective-dated; unknown
-        pairs fall back to standard USD/GCC pegs and cross-rates through USD.
+        Manage exchange rates and convert between currencies. Rates are effective-dated, and a pair
+        with no rate for the date is refused rather than estimated — AURA does not fall back to a
+        peg or cross-rate through another currency.
       </p>
       <FxClient initialRates={rates ?? []} />
     </div>

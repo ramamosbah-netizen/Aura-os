@@ -5,10 +5,15 @@ import type { Pool } from 'pg';
 /**
  * FX-01's strict path — the rate resolution a DECISION is allowed to use.
  *
- * Every case here is one of the ways the old `getRate()` produces a confident wrong number. The
+ * Every case here is one of the ways the deleted `getRate()` produced a confident wrong number. The
  * point of the union return type is that none of them can be reached silently any more: a caller
  * has to handle `unknown` to compile, and the reasons are distinguishable so it can say WHICH kind
  * of not-knowing it hit.
+ *
+ * The assertions that used to sit beside these, showing what `getRate()` answered for the same
+ * input, are gone with the function (FX-02). What replaced them is
+ * `no-legacy-fx.fitness.test.ts`, which fails if any of it is reintroduced — a stronger guarantee
+ * than a comparison, because a comparison only holds while both sides still exist.
  */
 describe('resolveGovernedRate — the FX authority is allowed to say no', () => {
   const t = 'tenant-a';
@@ -16,10 +21,8 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
   it('refuses a currency it cannot govern, instead of cross-rating it into the USD peg', async () => {
     const service = new ExchangeRateService(null);
 
-    // THE FX-01 REPRODUCTION. getRate() answers 3.6725 for this — the USD peg — because the unknown
-    // leg of its cross-rate resolves to parity. That is how JPY 1,000,000 became AED 3,672,500.
-    expect(await service.getRate(t, 'JPY' as never, 'AED')).toBe(3.6725);
-
+    // THE FX-01 CASE. The old path answered 3.6725 here — the USD peg — because the unknown leg of
+    // its cross-rate resolved to parity. That is how JPY 1,000,000 became AED 3,672,500.
     const resolved = await service.resolveGovernedRate(t, 'JPY', 'AED');
     expect(resolved.status).toBe('unknown');
     if (resolved.status !== 'unknown') throw new Error('unreachable');
@@ -30,9 +33,8 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
   it('refuses a governable pair that nobody has registered — it does NOT reach for a peg', async () => {
     const service = new ExchangeRateService(null);
 
-    // getRate() hands back the hardcoded EUR:USD 1.09 crossed into AED. Nobody approved that number.
-    expect(await service.getRate(t, 'EUR', 'AED')).toBeCloseTo(4.003025, 6);
-
+    // The old path handed back a hardcoded EUR:USD 1.09 crossed into AED — 4.003025, a number
+    // nobody in any tenant had approved.
     const resolved = await service.resolveGovernedRate(t, 'EUR', 'AED');
     expect(resolved.status).toBe('unknown');
     if (resolved.status !== 'unknown') throw new Error('unreachable');
@@ -79,19 +81,10 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
     const service = new ExchangeRateService(null);
     await service.setRate('tenant-a', 'EUR', 'AED', 4.21, new Date('2026-09-01'));
 
-    // The legacy cache is keyed FROM:TO with no tenant at all, so getRate() leaks across tenants.
-    expect(await service.getRate('tenant-b', 'EUR', 'AED')).toBe(4.21);
-
+    // The deleted `inMemoryRates` was keyed FROM:TO with no tenant, so this exact call returned
+    // tenant-a's 4.21 to tenant-b. The registry that replaced it is keyed by tenant.
     const resolved = await service.resolveGovernedRate('tenant-b', 'EUR', 'AED');
     expect(resolved.status).toBe('unknown');
-  });
-
-  it('treats a rate registered only for testing as NOT governed', async () => {
-    const service = new ExchangeRateService(null);
-    service.registerInMemoryRate('EUR', 'AED', 4.21);
-
-    expect(await service.getRate(t, 'EUR', 'AED')).toBe(4.21);
-    expect((await service.resolveGovernedRate(t, 'EUR', 'AED')).status).toBe('unknown');
   });
 
   it('does not cross a governed EUR:USD and a governed USD:AED into a EUR:AED nobody declared', async () => {
@@ -122,9 +115,7 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
     const pool = { query: vi.fn().mockRejectedValue(new Error('connection terminated')) } as unknown as Pool;
     const service = new ExchangeRateService(pool);
 
-    // getRate() swallows this and answers with a peg, so an outage looks like a rate.
-    expect(await service.getRate(t, 'EUR', 'AED')).toBeCloseTo(4.003025, 6);
-
+    // The old path swallowed this and answered with a peg, so an outage looked like a rate.
     const resolved = await service.resolveGovernedRate(t, 'EUR', 'AED');
     expect(resolved.status).toBe('unknown');
     if (resolved.status !== 'unknown') throw new Error('unreachable');

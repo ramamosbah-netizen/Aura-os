@@ -19,6 +19,7 @@ import { AccessService, AuthService, ExchangeRateService, TenantContext, UsersSe
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
+import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 
 const TENANT = `fx-tenant-${Date.now()}`;
 
@@ -33,6 +34,9 @@ describe('the governed FX rate (HTTP, Auth-ON)', () => {
     app = await NestFactory.create(AppModule, { logger: false });
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false, transformOptions: { exposeUnsetFields: false } }));
+    // The conversion refusal is a plain domain Error; without the filter it surfaces as 500 and the
+    // taxonomy this spec asserts would not be running at all.
+    app.useGlobalFilters(new AllExceptionsFilter());
 
     const auth = app.get(AuthService);
     const tenant = app.get(TenantContext);
@@ -84,15 +88,40 @@ describe('the governed FX rate (HTTP, Auth-ON)', () => {
     expect(res.body.rate).toBeUndefined();
   });
 
-  it('says UNKNOWN for a governable pair nobody registered — where the old path invents a peg', async () => {
-    // The contrast, over the same HTTP surface and the same tenant: `convert` answers with a number
-    // derived from a hardcoded EUR:USD constant that nobody in this tenant ever approved.
-    const invented = await finance.get('/api/v1/finance/fx/convert')
-      .query({ amount: 1_000_000, from: 'EUR', to: 'AED' }).expect(200);
-    expect(invented.body.rate).toBeCloseTo(4.003025, 6);
-
+  it('says UNKNOWN for a governable pair nobody registered', async () => {
     const res = await governed('EUR', 'AED').expect(200);
     expect(res.body).toMatchObject({ status: 'unknown', reason: 'no_governed_rate' });
+  });
+
+  /**
+   * `GET convert` used to answer this with 4.003025, crossed from a hardcoded EUR:USD 1.09 that
+   * nobody in this tenant had approved. FX-02 moved it onto the governed resolver, so the two
+   * surfaces can no longer disagree: the read says unknown and the conversion refuses.
+   */
+  it('converts only at a governed rate, and refuses rather than inventing one', async () => {
+    const refused = await finance.get('/api/v1/finance/fx/convert')
+      .query({ amount: 1_000_000, from: 'EUR', to: 'AED' });
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(refused.body)).toContain('No governed EUR/AED exchange rate');
+
+    // A currency AURA cannot govern is refused too, where it used to convert at the USD peg.
+    const jpy = await finance.get('/api/v1/finance/fx/convert')
+      .query({ amount: 1_000_000, from: 'JPY', to: 'AED' });
+    expect(jpy.status).toBe(400);
+    expect(JSON.stringify(jpy.body)).toContain('JPY');
+
+    // A governed pair converts, and the answer says WHICH rate did it.
+    const ok = await finance.get('/api/v1/finance/fx/convert')
+      .query({ amount: 1_000, from: 'USD', to: 'AED', asOf: '2026-09-17' }).expect(200);
+    expect(ok.body).toMatchObject({
+      amount: 1_000, from: 'USD', to: 'AED', rate: 3.6701, converted: 3670.1,
+      effectiveDate: '2026-09-01', source: 'registered', asOf: '2026-09-17',
+    });
+
+    // …and it will not reach back before that rate took effect.
+    const early = await finance.get('/api/v1/finance/fx/convert')
+      .query({ amount: 1_000, from: 'USD', to: 'AED', asOf: '2026-08-15' });
+    expect(early.status).toBe(400);
   });
 
   it('will not answer with a rate that had not taken effect on the date asked about', async () => {

@@ -39,14 +39,44 @@ export class FxController {
     @Query('amount') amount?: string,
     @Query('from') from?: string,
     @Query('to') to?: string,
-  ): Promise<{ amount: number; from: Currency; to: Currency; rate: number; converted: number }> {
+    @Query('asOf') asOf?: string,
+  ): Promise<{
+    amount: number; from: Currency; to: Currency; rate: number; converted: number;
+    effectiveDate: string | null; source: string; rateId: string | null; asOf: string;
+  }> {
     const value = Number(amount);
     if (!Number.isFinite(value)) throw new BadRequestException('amount must be a number');
-    if (!isCurrency(from) || !isCurrency(to)) throw new BadRequestException(`from/to must be one of ${CURRENCIES.join(', ')}`);
-    const tenantId = this.tenant.get().tenantId;
-    const rate = await this.fx.getRate(tenantId, from, to);
-    const converted = await this.fx.convert(tenantId, Money.of(value, from), to);
-    return { amount: value, from, to, rate, converted: converted.major };
+    const date = asOf ? new Date(asOf) : new Date();
+    if (Number.isNaN(date.getTime())) throw new BadRequestException('asOf must be a date');
+
+    /**
+     * GOVERNED CONVERSION, or none (FX-02).
+     *
+     * This used to answer with whatever `getRate()` invented: a hardcoded peg for an unregistered
+     * pair, the USD peg for a currency AURA had never heard of, and the same confident number when
+     * the rate table could not be read at all. On the very screen that lists the governed rates.
+     *
+     * The currency is narrowed by `requireGovernedRate` rather than pre-filtered here, so an
+     * unsupported code is refused by the one policy that owns that question instead of by a second
+     * copy of the list. The answer carries its provenance for the same reason a booked invoice does:
+     * a rate with no effective date and no source is indistinguishable from an invented one.
+     *
+     * There is deliberately no indicative or market-rate fallback. If AURA ever wants indicative
+     * rates that is a different capability, with a provider, a timestamp and freshness semantics of
+     * its own — not a silent second meaning for this endpoint.
+     */
+    const governed = await this.fx.requireGovernedRate(this.tenant.get().tenantId, from ?? '', to ?? '', date);
+    return {
+      amount: value,
+      from: governed.from,
+      to: governed.to,
+      rate: governed.rate,
+      converted: Number((value * governed.rate).toFixed(2)),
+      effectiveDate: governed.effectiveDate,
+      source: governed.source,
+      rateId: governed.rateId,
+      asOf: governed.asOf,
+    };
   }
 
   /**

@@ -1,11 +1,11 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import { CURRENCIES } from '@aura/shared';
 import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 
 interface Rate { fromCurrency: string; toCurrency: string; rate: number; effectiveDate: string }
-const CURRENCIES = ['AED', 'USD', 'EUR', 'SAR', 'GBP'];
 
 export default function FxClient({ initialRates }: { initialRates: Rate[] }) {
   const router = useRouter();
@@ -19,14 +19,14 @@ export default function FxClient({ initialRates }: { initialRates: Rate[] }) {
   const [cAmount, setCAmount] = useState('1000');
   const [cFrom, setCFrom] = useState('USD');
   const [cTo, setCTo] = useState('AED');
-  const [result, setResult] = useState<{ rate: number; converted: number } | null>(null);
+  const [result, setResult] = useState<{ rate: number; converted: number; effectiveDate: string | null; source: string } | null>(null);
 
   async function save() {
     if (!(Number(rate) > 0)) { setErr('Rate must be positive'); return; }
     setBusy(true); setErr(null);
     try {
       const res = await fetch('/api/finance/fx/rates', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ from, to, rate: Number(rate) }) });
-      if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error ?? d.message ?? 'Error'); }
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.message ?? d.error ?? 'Error'); }
       else { setRate(''); router.refresh(); }
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   }
@@ -36,14 +36,17 @@ export default function FxClient({ initialRates }: { initialRates: Rate[] }) {
     try {
       const res = await fetch(`/api/finance/fx/convert?amount=${encodeURIComponent(cAmount)}&from=${cFrom}&to=${cTo}`);
       const d = await res.json().catch(() => ({}));
-      if (res.ok) setResult({ rate: d.rate, converted: d.converted });
-      else setErr(d.error ?? d.message ?? 'Error');
+      if (res.ok) setResult({ rate: d.rate, converted: d.converted, effectiveDate: d.effectiveDate, source: d.source });
+      // `message` first: the API envelope puts the machine code in `error` and the explanation in
+      // `message`, and reading them the other way round turned every refusal into the word
+      // BAD_REQUEST — the same defect that hid the invoice refusals (FX-01).
+      else setErr(d.message ?? d.error ?? 'Error');
     } catch { setErr('API unreachable'); } finally { setBusy(false); }
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {err && <div style={s.errorBar}>{err}</div>}
+      {err && <div style={s.errorBar} role="alert" data-testid="fx-error">{err}</div>}
 
       <div style={s.formPanel}>
         <div style={s.label}>Set rate</div>
@@ -60,19 +63,33 @@ export default function FxClient({ initialRates }: { initialRates: Rate[] }) {
         <div style={s.label}>Convert</div>
         <div style={s.formRow}>
           <input style={s.input} inputMode="decimal" value={cAmount} onChange={(e) => setCAmount(e.target.value)} />
-          <select style={s.input} value={cFrom} onChange={(e) => setCFrom(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
+          <select style={s.input} value={cFrom} data-testid="fx-convert-from" onChange={(e) => setCFrom(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
           <span style={s.muted}>→</span>
-          <select style={s.input} value={cTo} onChange={(e) => setCTo(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
-          <button type="button" style={s.btnSec} onClick={convert} disabled={busy}>Convert</button>
+          <select style={s.input} value={cTo} data-testid="fx-convert-to" onChange={(e) => setCTo(e.target.value)}>{CURRENCIES.map((c) => <option key={c}>{c}</option>)}</select>
+          <button type="button" style={s.btnSec} onClick={convert} disabled={busy} data-testid="fx-convert-submit">Convert</button>
         </div>
         {result && (
-          <div style={s.result}>{cAmount} {cFrom} = <strong>{result.converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {cTo}</strong> <span style={s.muted}>@ {result.rate}</span></div>
+          <div style={s.result} data-testid="fx-convert-result">
+            {cAmount} {cFrom} = <strong>{result.converted.toLocaleString(undefined, { maximumFractionDigits: 2 })} {cTo}</strong>{' '}
+            <span style={s.muted}>@ {result.rate}</span>
+            {/* WHICH rate answered. A converted figure with no date and no source is the thing FX-01
+                and FX-02 were about; showing it here is the difference between a number and evidence. */}
+            <span style={s.muted} data-testid="fx-convert-provenance">
+              {result.source === 'identity'
+                ? ' · same currency, no conversion'
+                : ` · governed rate effective ${result.effectiveDate ?? 'unknown'}${result.source.endsWith('-inverse') ? ' (derived as the inverse)' : ''}`}
+            </span>
+          </div>
         )}
       </div>
 
       <div style={s.panel}>
         {initialRates.length === 0 ? (
-          <EmptyState compact title="No stored exchange rates" description="Using default currency pegs. Set a rate above to override them." />
+          <EmptyState
+            compact
+            title="No stored exchange rates"
+            description="Nothing can be converted or valued in a foreign currency until a rate is set above. AURA does not fall back to a default rate — it says it does not know."
+          />
         ) : (
           <table style={s.table}>
             <thead><tr>{['Pair', 'Rate', 'Effective'].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr></thead>

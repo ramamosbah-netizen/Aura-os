@@ -52,7 +52,7 @@ const PROVENANCE: RevisionProvenance = {
 function line(over: Partial<QuotationLine> = {}): QuotationLine {
   return {
     id: 'ql1', tenantId: 't1', companyId: null, quotationId: 'q1', prLineId: 'pr1',
-    response: 'quoted', offeredManufacturer: null, offeredModel: null, isAlternate: false,
+    response: 'quoted', offeredManufacturer: null, offeredModel: null,
     complianceResponse: null, deviations: null, exclusions: null,
     quantity: 12, uom: 'nr', unitPrice: 100, lineDiscount: null,
     leadTimeDays: null, warrantyMonths: null, notes: null,

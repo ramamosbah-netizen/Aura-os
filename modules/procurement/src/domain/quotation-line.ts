@@ -72,7 +72,6 @@ export interface QuotationLine {
   offeredManufacturer: string | null;
   offeredModel: string | null;
   /** The supplier says this differs from what was asked. It does not become an equivalent by saying so. */
-  isAlternate: boolean;
   complianceResponse: ComplianceResponse | null;
   deviations: string | null;
   exclusions: string | null;
@@ -101,7 +100,6 @@ export interface NewQuotationLine {
   response?: QuoteResponse;
   offeredManufacturer?: string | null;
   offeredModel?: string | null;
-  isAlternate?: boolean;
   complianceResponse?: ComplianceResponse | null;
   deviations?: string | null;
   exclusions?: string | null;
@@ -119,6 +117,8 @@ export const QUOTED_MUST_BE_PRICED =
   'a quoted line requires a quantity and a unit price — an offer with neither is not a cheaper offer, ' +
   'it is an unanswerable one, and a supplier who will not price this requirement records no_bid instead';
 
+/** @deprecated Retired with `isAlternate` (migration 0351). An alternative is now an OFFER, and
+ * `makeQuotationOffer` requires it to say what is being offered instead. */
 export const ALTERNATE_MUST_BE_NAMED =
   'an alternate offer requires the make and model actually being offered — "something else" cannot be ' +
   'compared with what was asked for';
@@ -150,9 +150,6 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
     throw new Error(NO_BID_CARRIES_NO_PRICE);
   }
 
-  if (input.isAlternate && !(input.offeredManufacturer?.trim() && input.offeredModel?.trim())) {
-    throw new Error(ALTERNATE_MUST_BE_NAMED);
-  }
 
   const now = new Date().toISOString();
   return {
@@ -168,7 +165,6 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
     response,
     offeredManufacturer: input.offeredManufacturer?.trim() || null,
     offeredModel: input.offeredModel?.trim() || null,
-    isAlternate: input.isAlternate ?? false,
     complianceResponse: input.complianceResponse ?? null,
     deviations: input.deviations?.trim() || null,
     exclusions: input.exclusions?.trim() || null,

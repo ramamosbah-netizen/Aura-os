@@ -76,17 +76,17 @@ describe('silence and refusal are different facts', () => {
 
 describe('an alternate is a different thing, not an equivalent', () => {
   it('requires the make and model actually being offered', () => {
-    expect(() => line({ isAlternate: true })).toThrow(/requires the make and model/);
-    expect(() => line({ isAlternate: true, offeredManufacturer: 'Acme' })).toThrow(/requires the make and model/);
-  });
-
-  it('accepts a named alternate, and does NOT thereby make it compliant', () => {
-    const alt = line({ isAlternate: true, offeredManufacturer: 'Acme', offeredModel: 'X-9', complianceResponse: 'comply' });
-    expect(alt.isAlternate).toBe(true);
-    // The supplier claims compliance. The line records the claim and nothing more.
-    expect(alt.complianceResponse).toBe('comply');
-    expect(alt).not.toHaveProperty('isCompliant');
-    expect(alt).not.toHaveProperty('eligible');
+    // RETIRED (migration 0351). An alternative is a property of the OFFER, not of a line: a
+    // supplier offering a Bosch equivalent beside a Hikvision one is making two offers, and a line
+    // is unique per requisition line per revision, so the second variant had nowhere to go.
+    // `makeQuotationOffer` now carries the requirement that an alternative say what it offers
+    // instead — see quotation-family.test.ts.
+    //
+    // What the LINE still holds is the supplier's compliance CLAIM, and nothing more.
+    const claimed = line({ offeredManufacturer: 'Acme', offeredModel: 'X-9', complianceResponse: 'comply' });
+    expect(claimed.complianceResponse).toBe('comply');
+    expect(claimed).not.toHaveProperty('isCompliant');
+    expect(claimed).not.toHaveProperty('eligible');
   });
 });
 

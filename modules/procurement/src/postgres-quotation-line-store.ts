@@ -8,7 +8,7 @@ interface Row {
   revision_id: string | null; supplier_description: string | null; part_number: string | null;
   commercial_deviation: string | null;
   response: string; offered_manufacturer: string | null; offered_model: string | null;
-  is_alternate: boolean; compliance_response: string | null; deviations: string | null;
+  compliance_response: string | null; deviations: string | null;
   exclusions: string | null; quantity: string | number | null; uom: string | null;
   unit_price: string | number | null; line_discount: string | number | null;
   lead_time_days: number | null; warranty_months: number | null; notes: string | null;
@@ -21,7 +21,7 @@ const num = (v: string | number | null): number | null => (v === null ? null : N
 const COLS =
   'id, tenant_id, company_id, quotation_id, revision_id, pr_line_id, supplier_description, part_number, ' +
   'commercial_deviation, response, offered_manufacturer, offered_model, ' +
-  'is_alternate, compliance_response, deviations, exclusions, quantity, uom, unit_price, line_discount, ' +
+  'compliance_response, deviations, exclusions, quantity, uom, unit_price, line_discount, ' +
   'lead_time_days, warranty_months, notes, created_by, created_at, updated_at';
 
 const fromRow = (r: Row): QuotationLine => ({
@@ -32,7 +32,6 @@ const fromRow = (r: Row): QuotationLine => ({
   commercialDeviation: r.commercial_deviation ?? null,
   response: r.response as QuoteResponse,
   offeredManufacturer: r.offered_manufacturer, offeredModel: r.offered_model,
-  isAlternate: r.is_alternate,
   complianceResponse: r.compliance_response as ComplianceResponse | null,
   deviations: r.deviations, exclusions: r.exclusions,
   quantity: num(r.quantity), uom: r.uom, unitPrice: num(r.unit_price), lineDiscount: num(r.line_discount),
@@ -47,10 +46,10 @@ export class PostgresQuotationLineStore implements QuotationLineStore {
   async create(l: QuotationLine): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_procurement_quotation_lines (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)`,
       [l.id, l.tenantId, l.companyId, l.quotationId, l.revisionId, l.prLineId,
        l.supplierDescription, l.partNumber, l.commercialDeviation, l.response,
-       l.offeredManufacturer, l.offeredModel, l.isAlternate, l.complianceResponse,
+       l.offeredManufacturer, l.offeredModel, l.complianceResponse,
        l.deviations, l.exclusions, l.quantity, l.uom, l.unitPrice, l.lineDiscount,
        l.leadTimeDays, l.warrantyMonths, l.notes, l.createdBy, l.createdAt, l.updatedAt],
     );
@@ -59,12 +58,12 @@ export class PostgresQuotationLineStore implements QuotationLineStore {
   async update(l: QuotationLine): Promise<void> {
     await this.pool.query(
       `UPDATE public.aura_procurement_quotation_lines SET
-         response=$2, offered_manufacturer=$3, offered_model=$4, is_alternate=$5,
-         compliance_response=$6, deviations=$7, exclusions=$8, quantity=$9, uom=$10,
-         unit_price=$11, line_discount=$12, lead_time_days=$13, warranty_months=$14,
-         notes=$15, updated_at=$16
+         response=$2, offered_manufacturer=$3, offered_model=$4,
+         compliance_response=$5, deviations=$6, exclusions=$7, quantity=$8, uom=$9,
+         unit_price=$10, line_discount=$11, lead_time_days=$12, warranty_months=$13,
+         notes=$14, updated_at=$15
        WHERE id=$1`,
-      [l.id, l.response, l.offeredManufacturer, l.offeredModel, l.isAlternate,
+      [l.id, l.response, l.offeredManufacturer, l.offeredModel,
        l.complianceResponse, l.deviations, l.exclusions, l.quantity, l.uom,
        l.unitPrice, l.lineDiscount, l.leadTimeDays, l.warrantyMonths, l.notes, l.updatedAt],
     );

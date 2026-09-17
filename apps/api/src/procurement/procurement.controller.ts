@@ -79,6 +79,13 @@ class AddQuoteDto {
   @IsOptional() @IsString() freightTerms?: string | null;
   @IsOptional() @IsString() paymentTerms?: string | null;
   @IsOptional() @IsString() validityDate?: string | null;
+  /**
+   * SUPERSEDED — lead time is a per-item fact and belongs on the quotation LINE.
+   *
+   * Still DECLARED so it can be REFUSED with a message that says where it goes. Dropping it from the
+   * DTO would let the whitelist pipe strip it silently: the caller would get a 201 and believe the
+   * lead time had been recorded.
+   */
   @IsOptional() @IsNumber() leadTimeDays?: number | null;
   @IsOptional() @IsString() notes?: string | null;
 }
@@ -340,6 +347,12 @@ export class ProcurementController {
   async addQuote(@Param('id') id: string, @Body() dto: AddQuoteDto): Promise<RfqQuote> {
     if (!dto?.supplierName?.trim()) throw new BadRequestException('supplierName is required');
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
+    if (dto.leadTimeDays !== undefined && dto.leadTimeDays !== null) {
+      throw new BadRequestException(
+        'lead time must be recorded on the quotation line it applies to, not on the quotation — ' +
+        'an overall figure cannot say when each item arrives',
+      );
+    }
     const ctx = this.tenant.get();
     return this.rfqs.addQuote({
       rfqId: id,
@@ -354,7 +367,7 @@ export class ProcurementController {
       freightTerms: dto.freightTerms ?? null,
       paymentTerms: dto.paymentTerms ?? null,
       validityDate: dto.validityDate ?? null,
-      leadTimeDays: dto.leadTimeDays ?? null,
+      leadTimeDays: null,
       notes: dto.notes ?? null,
     });
   }

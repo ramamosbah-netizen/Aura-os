@@ -13,6 +13,10 @@ import { PurchaseRequestService } from './purchase-request.service';
 
 import { PR_LINE_STORE } from './purchase-request-line-store';
 import { QUOTATION_LINE_STORE } from './quotation-line.store';
+import { QUOTATION_LINE_EVALUATION_STORE } from './quotation-line-evaluation.store';
+import { QuotationLineEvaluationService } from './quotation-line-evaluation.service';
+import { InMemoryQuotationLineEvaluationStore } from './in-memory-quotation-line-evaluation-store';
+import { PostgresQuotationLineEvaluationStore } from './postgres-quotation-line-evaluation-store';
 import { QuotationLineService } from './quotation-line.service';
 import { InMemoryQuotationLineStore } from './in-memory-quotation-line-store';
 import { PostgresQuotationLineStore } from './postgres-quotation-line-store';
@@ -89,6 +93,14 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     },
     QuotationLineService,
     {
+      // SUP-01 — the internal technical verdict. A different authority from the supplier's claim.
+      provide: QUOTATION_LINE_EVALUATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresQuotationLineEvaluationStore(pool) : new InMemoryQuotationLineEvaluationStore(),
+    },
+    QuotationLineEvaluationService,
+    {
       provide: PO_LINE_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -102,6 +114,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

@@ -20,6 +20,10 @@ import { PostgresQuotationLineEvaluationStore } from './postgres-quotation-line-
 import { QuotationLineService } from './quotation-line.service';
 import { CommercialComparisonService } from './commercial-comparison.service';
 import { QuotationCaptureService } from './quotation-capture.service';
+import { SourcingRecommendationService } from './sourcing-recommendation.service';
+import { SOURCING_RECOMMENDATION_STORE } from './sourcing-recommendation.store';
+import { InMemorySourcingRecommendationStore } from './in-memory-sourcing-recommendation-store';
+import { PostgresSourcingRecommendationStore } from './postgres-sourcing-recommendation-store';
 import { QUOTATION_FAMILY_STORE } from './quotation-family.store';
 import { InMemoryQuotationFamilyStore } from './in-memory-quotation-family-store';
 import { PostgresQuotationFamilyStore } from './postgres-quotation-family-store';
@@ -109,6 +113,14 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     },
     QuotationCaptureService,
     {
+      // SUP-13 — the governed sourcing recommendation. A decision record, never a computed winner.
+      provide: SOURCING_RECOMMENDATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresSourcingRecommendationStore(pool) : new InMemorySourcingRecommendationStore(),
+    },
+    SourcingRecommendationService,
+    {
       // SUP-01 — the internal technical verdict. A different authority from the supplier's claim.
       provide: QUOTATION_LINE_EVALUATION_STORE,
       inject: [PG_POOL],
@@ -130,6 +142,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [CommercialComparisonService, QuotationCaptureService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [CommercialComparisonService, QuotationCaptureService, SourcingRecommendationService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

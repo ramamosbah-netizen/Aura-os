@@ -423,6 +423,29 @@ export class StockService {
       acknowledgedBy: actorId, acknowledgedAt: now, note: note?.trim() || null, createdAt: now,
     };
     await this.acks.create(value);
+    /**
+     * THE ACTUAL OUTPUT (`BUY-07`). The handoff's evidence is who accepted what and when, and it
+     * goes on the spine so another authority can read it without asking Inventory. No quantity —
+     * the movement remains the single authority for that.
+     */
+    await this.events.append([
+      makeEvent({
+        type: STOCK_EVENT.deliveryAcknowledged,
+        tenantId,
+        companyId: null,
+        actorId,
+        aggregateType: 'inventory.delivery',
+        aggregateId: movementId,
+        payload: {
+          movementId,
+          wbsNodeId: value.wbsNodeId,
+          projectId: value.projectId,
+          acknowledgedBy: actorId,
+          acknowledgedAt: value.acknowledgedAt,
+          issuedBy: movement.issuedBy,
+        },
+      }),
+    ]);
     this.logger.log(`Delivery ${movementId} acknowledged at work package ${value.wbsNodeId}`);
     return value;
   }

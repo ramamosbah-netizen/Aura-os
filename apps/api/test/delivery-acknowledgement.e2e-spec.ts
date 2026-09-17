@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { AccessService, AuthService, TenantContext, UsersService } from '@aura/core';
+import { AccessService, AuthService, EVENT_STORE, type EventStore, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -33,6 +33,8 @@ describe('Site acknowledges material delivered to a work package (JWT ON)', () =
   let store: ReturnType<typeof request.agent>;
   let site: ReturnType<typeof request.agent>;
   let other: ReturnType<typeof request.agent>;
+  let unprivileged: ReturnType<typeof request.agent>;
+  let events: EventStore;
   let admin: ReturnType<typeof request.agent>;
 
   beforeAll(async () => {
@@ -45,6 +47,7 @@ describe('Site acknowledges material delivered to a work package (JWT ON)', () =
     const tenant = app.get(TenantContext);
     const access = app.get(AccessService);
     const users = app.get(UsersService);
+    events = app.get(EVENT_STORE);
 
     access.registerRole({
       id: 'r-e2e-ack-store', name: 'Storekeeper (e2e)',
@@ -62,6 +65,12 @@ describe('Site acknowledges material delivered to a work package (JWT ON)', () =
     access.grant({ userId: 'ack-admin', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 10_000_000 });
     users.save({ tenantId: TENANT, userId: 'ack-admin', displayName: 'ack-admin', active: true });
 
+    // AUTHENTICATED BUT UNPRIVILEGED. Signs in perfectly well and holds no inventory permission at
+    // all — the case an unauthenticated 401 says nothing about.
+    access.registerRole({ id: 'r-e2e-ack-none', name: 'No inventory (e2e)', permissions: ['projects.project.read'] });
+    access.grant({ userId: 'ack-nobody', roleId: 'r-e2e-ack-none', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    users.save({ tenantId: TENANT, userId: 'ack-nobody', displayName: 'ack-nobody', active: true });
+
     app.use(async (req: { headers: { authorization?: string } }, res: { status: (n: number) => { end: () => void } }, next: () => void) => {
       const context = await auth.contextFromHeader(req.headers.authorization);
       if (!context) { res.status(401).end(); return; }
@@ -73,6 +82,7 @@ describe('Site acknowledges material delivered to a work package (JWT ON)', () =
     const server = app.getHttpServer();
     const agent = (sub: string) => request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub, tenantId: TENANT })}`);
     store = agent('ack-store');
+    unprivileged = agent('ack-nobody');
     site = agent('ack-site');
     other = agent('ack-other');
     admin = agent('ack-admin');
@@ -207,6 +217,115 @@ describe('Site acknowledges material delivered to a work package (JWT ON)', () =
     });
     expect(res.status).toBe(400);
     expect(String(res.body?.message ?? res.body?.error)).toMatch(/does not belong to this project/i);
+  });
+
+  /**
+   * THE DENIAL MATRIX — every refusal this capability can produce, with the status it must carry.
+   *
+   * Written because two of these came back as 500 INTERNAL SERVER ERROR while the static
+   * error-taxonomy gate reported the capability clean: that gate scans throw-statement literals, and
+   * a reason composed in a domain function and thrown elsewhere is invisible to it. A domain refusal
+   * that escapes as a 500 is an API CONTRACT DEFECT in this capability, not a cosmetic one — a
+   * caller cannot tell "you may not do this" from "the server broke".
+   *
+   * So the statuses are asserted here, through the HTTP layer, rather than inferred from wording.
+   */
+  it('gives every refusal a client status — no 500 escapes from any path', async () => {
+    const s = await scene();
+    const url = `/api/v1/inventory/stock/${s.itemId}/movements/${s.movementId}/acknowledge`;
+
+    const cases: Array<{ what: string; run: () => Promise<request.Response>; status: number; match: RegExp }> = [
+      {
+        what: 'authenticated but holds no inventory permission',
+        run: () => unprivileged.post(url).send({}),
+        status: 403,
+        match: /access denied|no grant satisfies|inventory.delivery.acknowledge/i,
+      },
+      {
+        what: 'not the person responsible for the work package',
+        run: () => other.post(url).send({}),
+        status: 409,
+        match: /only the person responsible/i,
+      },
+    ];
+
+    for (const c of cases) {
+      const res = await c.run();
+      expect(res.status, `${c.what} → ${res.status} ${JSON.stringify(res.body)}`).toBe(c.status);
+      expect(res.status, `${c.what} escaped as a server error`).toBeLessThan(500);
+      expect(String(res.body?.message ?? res.body?.error), c.what).toMatch(c.match);
+    }
+  });
+
+  it('gives the remaining refusals a client status too', async () => {
+    // Nobody responsible → 409 (a conflict with the current state of the work package).
+    const none = await scene({ recipient: null });
+    const r1 = await site.post(`/api/v1/inventory/stock/${none.itemId}/movements/${none.movementId}/acknowledge`).send({});
+    expect(r1.status, JSON.stringify(r1.body)).toBe(409);
+
+    // The issuer signing for themselves → 400.
+    const own = await scene({ recipient: 'ack-store' });
+    const r2 = await store.post(`/api/v1/inventory/stock/${own.itemId}/movements/${own.movementId}/acknowledge`).send({});
+    expect(r2.status, JSON.stringify(r2.body)).toBe(400);
+
+    // A second receipt for the same movement → 409.
+    const twice = await scene();
+    await site.post(`/api/v1/inventory/stock/${twice.itemId}/movements/${twice.movementId}/acknowledge`).send({}).expect(201);
+    const r3 = await site.post(`/api/v1/inventory/stock/${twice.itemId}/movements/${twice.movementId}/acknowledge`).send({});
+    expect(r3.status, JSON.stringify(r3.body)).toBe(409);
+
+    // An issue that named no work package → 400.
+    const run = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
+    const project = (await admin.post('/api/v1/projects/projects').send({ title: `Plain ${run}` }).expect(201)).body;
+    const item = (await store.post('/api/v1/inventory/stock')
+      .send({ code: `ACKN-${run}`, name: 'cable', unit: 'm', openingQty: 50, openingCost: 5 }).expect(201)).body;
+    const moved = (await store.post(`/api/v1/inventory/stock/${item.id}/movements`)
+      .send({ direction: 'out', quantity: 5, projectId: project.id, reason: 'issued to project' }).expect(201)).body;
+    const r4 = await site.post(`/api/v1/inventory/stock/${item.id}/movements/${moved.movement.id}/acknowledge`).send({});
+    expect(r4.status, JSON.stringify(r4.body)).toBe(400);
+
+    for (const [label, res] of [['no recipient', r1], ['own issue', r2], ['duplicate', r3], ['no package', r4]] as const) {
+      expect(res.status, `${label} escaped as a server error`).toBeLessThan(500);
+    }
+  });
+
+  /**
+   * THE ACTUAL OUTPUT — the frozen definition is "file, message, calculation or audit event where
+   * the capability produces one", and for a handoff receipt it is an AUDIT EVENT: who accepted what
+   * and when, on the spine, readable by any authority without asking Inventory.
+   *
+   * Asserted as PERSISTED rather than emitted. An event the code constructs but the spine never
+   * receives is not an output, and that difference is invisible from inside the service.
+   */
+  it('puts the receipt on the event spine, carrying who accepted and who issued — and no quantity', async () => {
+    const s = await scene();
+    await site.post(`/api/v1/inventory/stock/${s.itemId}/movements/${s.movementId}/acknowledge`)
+      .send({ note: 'received at the riser' }).expect(201);
+
+    const recorded = (await events.list({ tenantId: TENANT }))
+      .filter((e) => e.type === 'inventory.delivery.acknowledged');
+    const mine = recorded.find((e) => (e.payload as { movementId?: string }).movementId === s.movementId);
+    expect(mine, 'the acknowledgement never reached the spine').toBeDefined();
+
+    const payload = mine!.payload as Record<string, unknown>;
+    expect(payload.acknowledgedBy).toBe('ack-site');
+    // WHO ISSUED IT TRAVELS WITH IT: the segregation of duties is auditable after the fact, not only
+    // enforced at the moment of the click.
+    expect(payload.issuedBy).toBe('ack-store');
+    expect(payload.wbsNodeId).toBe(s.wbsId);
+    expect(mine!.aggregateId).toBe(s.movementId);
+    // Still no quantity, on the spine as in the record.
+    expect(payload).not.toHaveProperty('quantity');
+  });
+
+  it('emits nothing when the receipt is refused, so the spine never records a handoff that did not happen', async () => {
+    const s = await scene({ recipient: null });
+    await site.post(`/api/v1/inventory/stock/${s.itemId}/movements/${s.movementId}/acknowledge`).send({}).expect(409);
+
+    const recorded = (await events.list({ tenantId: TENANT }))
+      .filter((e) => e.type === 'inventory.delivery.acknowledged')
+      .filter((e) => (e.payload as { movementId?: string }).movementId === s.movementId);
+    expect(recorded).toHaveLength(0);
   });
 
   it('refuses an unauthenticated caller', async () => {

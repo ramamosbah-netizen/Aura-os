@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type StockItem, type StockMovement, type StockDirection, type ValuationSummary, type ReorderReport, type UomConversion, StockService } from '@aura/inventory';
 
@@ -139,6 +139,9 @@ export class StockController {
    * carrying its own figure would be a second writer of that number — the competing-truth defect this
    * wave removes. This records only that a named person accepted receipt of this movement.
    */
+  // Declared explicitly rather than left to route derivation: this is the permission a denial
+  // matrix has to name, and a derived one is not something a role author can see.
+  @Permissions('inventory.delivery.acknowledge')
   @Post(':id/movements/:movementId/acknowledge')
   acknowledgeDelivery(
     @Param('id', ParseUuidOr404Pipe) id: string,

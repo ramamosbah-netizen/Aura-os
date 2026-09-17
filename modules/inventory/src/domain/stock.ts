@@ -283,4 +283,13 @@ export const STOCK_EVENT = {
   itemCreated: 'inventory.stock.item_created',
   movementRecorded: 'inventory.stock.movement_recorded',
   reorderPolicySet: 'inventory.stock.reorder_policy_set',
+  /**
+   * `BUY-07`'s ACTUAL OUTPUT: a named person accepted receipt of a delivery at a work package.
+   *
+   * An audit event rather than a document, because that is what this capability genuinely produces —
+   * the handoff's evidence is WHO accepted WHAT and WHEN, and it belongs on the spine where any
+   * other authority can read it without asking Inventory. It carries no quantity, for the same
+   * reason the record does not.
+   */
+  deliveryAcknowledged: 'inventory.delivery.acknowledged',
 } as const;

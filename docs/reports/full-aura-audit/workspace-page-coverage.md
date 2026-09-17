@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-213 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+215 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -167,9 +167,11 @@
 | apps/web/app/procurement/purchase-orders/[id]/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/purchase-orders/[id]/print/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/purchase-requests/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/procurement/quotations/[id]/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/rfqs/page.tsx | PARTIAL | Live RFQ create and two-quote comparison |
 | apps/web/app/procurement/spend-analytics/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/suppliers/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/procurement/technical-evaluation/[quotationId]/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/three-way-match/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/controls/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/project/[projectId]/drawings/page.tsx | PARTIAL | Wave 3 live project-scoped drawing registration path passed |

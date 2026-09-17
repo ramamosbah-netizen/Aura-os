@@ -2077,7 +2077,7 @@
         "Procurement",
         "Pre-Sales"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Procurement RFQ",
       "evidence": [
         "N-RFQ"
@@ -2085,16 +2085,17 @@
       "source": "modules/procurement/src/domain/rfq.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Procurement Manager / Buyer, Technical Manager, Commercial Manager / QS role executes Technical compliance in the canonical Procurement RFQ context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "A SUPPLIER'S OFFER IS NOW JUDGED BY SOMEBODY WITH THE AUTHORITY TO JUDGE IT. A quotation was a header with one scalar `amount` and a free-text supplier name, so technical compliance had nowhere to exist — the fourth appearance in this wave of a header with a scalar where the business needs items. Migration 0344 gives the quotation lines at the grain of the REQUISITION LINE, and 0345 gives each offer an internal verdict recorded BESIDE it. The separation is the capability: the line carries only what the SUPPLIER DECLARES — make and model offered, deviations, exclusions and their own compliance response — and there is deliberately no `is_compliant` column, because a supplier writing “comply” is a claim with exactly the standing of their price. The verdict is an INTERNAL determination, governed by `engineering.technical-evaluation.decide`, which in the shipped role catalogue only the Technical Manager holds; the Buyer records offers and cannot decide compliance. AN OFFER NOBODY HAS EVALUATED IS UNKNOWN — not eligible, not ineligible, and never a reason to prefer it for being cheap — and the eligibility read never falls back to the supplier's own claim. A verdict costs a RATIONALE and is amended by SUPERSESSION rather than overwritten, so the replaced decision keeps its own reasoning. A quantity differing from the one requested is a DEVIATION, derived from the requisition line and the offer and surfaced to the evaluator rather than decided for them. Quality's MAR is a SEPARATE authority that this path does not read; whether an approved MAR is even required for a given material is undetermined and deliberately not assumed.",
+      "acceptanceProof": "JUDGED AGAINST THE FROZEN GENERIC CRITERION, restated so it is visibly satisfied rather than replaced: “Representative Procurement Manager / Buyer, Technical Manager, Commercial Manager / QS role executes Technical compliance in the canonical Procurement RFQ context; save/reload, applicable permission denials, actual output and next-role receipt are proved.” CANONICAL EXECUTION, BROWSER, AUTH-ON, AGAINST THE REAL DATABASE, TWO NAMED PEOPLE each signed in as themselves and each holding a role AURA already ships: `u-e2e-techmgr` (`r-technical-manager`, `engineering.*`, NO procurement permission) opens their own evaluation queue, sees the requirement beside the offer and a −2 quantity deviation, and records a verdict; `u-e2e-buyer` (`r-procurement`) works the quotation. SAVE/RELOAD: the verdict survives a reload because it is the server's, and an amendment keeps both decisions. PERMISSION DENIALS: the Buyer is refused the decision 403 NAMING the missing permission, refused the evaluator's view and refused the work queue, while still reading eligibility; unauthenticated 401. The permission itself was corrected during the work — an invented `inventory.delivery.acknowledge`-style choice would have made the determination impossible for the only role allowed to make it, so it is governed by an `engineering.*` permission the Technical Manager genuinely holds. ACTUAL OUTPUT: `procurement.quotation_line.evaluated` asserted as PERSISTED on the spine — verdict, rationale, who decided, when, and the superseded id so an amendment is legible AS an amendment. NEXT-ROLE RECEIPT: the Technical Manager decides on their surface, and the Buyer opens their own quotation and sees eligibility, verdict and WHO DECIDED IT, under the Buyer's own permission — while still being refused the reasoning. The decision reaches the next role where that role already works, which is the handoff; an endpoint the Buyer could have called is not. DEFECTS FOUND AND FIXED, all introduced by this work: `company_id` was added to the quotation type and the Postgres store but never to a migration, so every real insert failed; and the verdict amendment inserted the replacement BEFORE superseding the previous one, which the partial unique index correctly refused. Both passed twenty API tests and failed instantly against the real database. A wording overclaim was also corrected in code and schema comments: MAR had been described as “evidence a technical evaluator may consult” when nothing reads it. ACCEPTED LIMITS, stated rather than absorbed: the API e2e suite runs on IN-MEMORY stores (`vitest.config.e2e.ts` sets `DATABASE_URL: ''`), so its 25 passing tests prove the HTTP, auth and domain contract and NOT persistence — persistence here is proved by the browser suite against the real database and by RLS. There is no CROSS-SUPPLIER COMPARISON screen: the Buyer sees the verdict per offer on one quotation. That is deliberate and not a gap in this capability — a comparison surface is a later capability that CONSUMES this result, and requiring it here would make technical compliance depend on supplier recommendation, which the frozen criterion does not ask for. `lowestQuote` is untouched and still compares un-normalised scalars; SUP-06 and SUP-13 remain open."
     },
     {
       "id": "SUP-02",
@@ -8539,7 +8540,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 21,
+      "COMPLETE": 22,
       "PARTIAL": 89,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -8549,7 +8550,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 11,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 47,
+      "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
     "gaps": 46,

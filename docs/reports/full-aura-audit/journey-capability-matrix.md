@@ -88,7 +88,7 @@
 | Pre-Sales | EST-17 | PARTIAL |
 | Pre-Sales | EST-18 | PARTIAL |
 | Pre-Sales | EST-19 | WRONG_BEHAVIOR |
-| Pre-Sales | SUP-01 | UNVERIFIED |
+| Pre-Sales | SUP-01 | COMPLETE |
 | Pre-Sales | SUP-02 | UNVERIFIED |
 | Pre-Sales | SUP-03 | UNVERIFIED |
 | Pre-Sales | SUP-04 | UNVERIFIED |
@@ -386,7 +386,7 @@
 | Planning | MGT-13 | UNVERIFIED |
 | Planning | MGT-14 | PARTIAL |
 | Planning | MGT-15 | WRONG_BEHAVIOR |
-| Procurement | SUP-01 | UNVERIFIED |
+| Procurement | SUP-01 | COMPLETE |
 | Procurement | SUP-02 | UNVERIFIED |
 | Procurement | SUP-03 | UNVERIFIED |
 | Procurement | SUP-04 | UNVERIFIED |

@@ -430,7 +430,7 @@
 | Technical Manager | ENG-04 | COMPLETE | UNVERIFIED |
 | Technical Manager | ENG-05 | COMPLETE | UNVERIFIED |
 | Technical Manager | ENG-06 | COMPLETE | UNVERIFIED |
-| Technical Manager | SUP-01 | UNVERIFIED | UNVERIFIED |
+| Technical Manager | SUP-01 | COMPLETE | UNVERIFIED |
 | Technical Manager | SUP-02 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | SUP-03 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | SUP-04 | UNVERIFIED | UNVERIFIED |
@@ -521,7 +521,7 @@
 | Commercial Manager / QS | AWD-05 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | AWD-06 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | AWD-07 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | SUP-01 | UNVERIFIED | UNVERIFIED |
+| Commercial Manager / QS | SUP-01 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | SUP-02 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | SUP-03 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | SUP-04 | UNVERIFIED | UNVERIFIED |
@@ -596,7 +596,7 @@
 | Commercial Manager / QS | MGT-13 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | MGT-14 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-15 | WRONG_BEHAVIOR | UNVERIFIED |
-| Procurement Manager / Buyer | SUP-01 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | SUP-01 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-02 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-03 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-04 | UNVERIFIED | UNVERIFIED |

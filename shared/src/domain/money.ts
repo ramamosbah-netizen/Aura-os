@@ -1,4 +1,25 @@
-export type Currency = 'AED' | 'USD' | 'EUR' | 'SAR' | 'GBP';
+/**
+ * The currencies AURA can actually govern a rate for.
+ *
+ * Declared as a runtime list first and the type derived from it, so the two cannot drift apart. They
+ * had: `Currency` was a type with no runtime counterpart, which is why an unchecked `as Currency`
+ * cast could hand the FX authority a currency it had never heard of (FX-01).
+ */
+export const CURRENCIES = ['AED', 'USD', 'EUR', 'SAR', 'GBP'] as const;
+
+export type Currency = (typeof CURRENCIES)[number];
+
+/** Narrows an arbitrary string to a governable currency. Case-insensitive; trims. */
+export function isCurrency(value: unknown): value is Currency {
+  return typeof value === 'string' && (CURRENCIES as readonly string[]).includes(value.trim().toUpperCase());
+}
+
+/** The canonical form of a governable currency code, or null when it is not one. */
+export function toCurrency(value: unknown): Currency | null {
+  if (typeof value !== 'string') return null;
+  const upper = value.trim().toUpperCase();
+  return (CURRENCIES as readonly string[]).includes(upper) ? (upper as Currency) : null;
+}
 
 /**
  * Money as integer **minor units** (fils/cents) to avoid floating-point drift —

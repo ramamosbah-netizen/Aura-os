@@ -14,7 +14,7 @@
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 46,
+  "gapRecords": 47,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -64,6 +64,9 @@
     "F-10",
     "F-11",
     "F-12"
+  ],
+  "freshDefectIds": [
+    "FX-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,

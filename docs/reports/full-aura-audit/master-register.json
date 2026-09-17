@@ -8535,6 +8535,38 @@
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
       "acceptanceProof": "Rename the current action honestly or implement actual PDF/image/Excel extraction; show source/confidence/issues and never write governed truth before review."
+    },
+    {
+      "id": "FX-01",
+      "title": "The FX authority cannot refuse, and books an invented rate into AP, AR and the general ledger",
+      "capabilityIds": [
+        "SUP-06",
+        "COM-05",
+        "COM-09",
+        "MGT-10"
+      ],
+      "classification": "WRONG_BEHAVIOR",
+      "kind": "fresh defect — shared service, outside the frozen capability scope",
+      "status": "OPEN",
+      "roles": [
+        "Finance",
+        "Commercial Manager / QS",
+        "Procurement Manager / Buyer",
+        "Project Manager",
+        "Senior Management"
+      ],
+      "stages": [
+        "Procurement",
+        "Commercial / Certification",
+        "Finance / Collection"
+      ],
+      "authority": "Finance FX (core ExchangeRateService) — the single rate authority behind AP, AR and GL",
+      "currentBehavior": "ExchangeRateService.getRate() cannot fail. When no governed rate exists for a pair it returns a hardcoded peg, and when the currency is outside the five-currency union it cross-rates through USD where the unknown leg resolves to parity — so ANY unrecognised currency converts at the USD peg 3.6725. Executed, not inferred: an AP invoice of 1,000,000 JPY (about AED 24,000) was created through the running API against PostgreSQL and persisted exchangeRate 3.6725 and baseValue 3,672,500 — roughly 153x overstated, with nothing refusing or flagging it. It is reachable because the domain declares currency as an open ISO string while the FX authority is typed to five currencies, bridged by an unchecked `as Currency` cast, and the DTO validates @IsString() with no enum. The number does not stop at the invoice: base value is derived from it, fxRevaluation re-reads the SAME function for the current rate, and postFxRevaluation posts the resulting gain/loss as a journal to accounts 2010 / 4900 / 5900. A second, quieter failure rides along: EUR and GBP float but are hardcoded at 1.0900 and 1.2700, so an ungoverned EUR invoice books at a constant nobody approved and carries no effective date, and because booked and current rate are then the same constant the revaluation reports ZERO exposure — the system shows no FX risk exactly where its FX risk is uncontrolled. Underneath all of it, a caller has no way to ask whether a governed rate exists and be told no: absence returns a plausible number, in the one place where the number becomes money in the ledger.",
+      "expectedOperationalBehavior": "A decision-grade rate resolution that fails closed. A pair with no governed rate for the date is UNKNOWN and refuses; a resolved rate carries its effective date and names its source; a lookup failure is distinguished from an absent rate; and no decision path consults a hardcoded peg.",
+      "evidence": "FRESH audit on the getRate() dependency chain: core/src/finance/exchange-rate.service.ts getRate/getDefaultPeg; modules/finance/src/invoice.service.ts:104 (AP create) and :275 (AP revaluation); modules/finance/src/customer-invoice.service.ts:107 (AR create) and :211 (AR revaluation); apps/api/src/finance/finance.controller.ts:221 and :714 (posts the revaluation journal); executed reproduction — JPY AP invoice FX-AUDIT-651077 booked at 3.6725 through the live API against PostgreSQL",
+      "severity": "CRITICAL",
+      "remediationDependency": "None upstream — this is remediable on its own, and SUP-06 commercial normalisation depends on it rather than the other way round",
+      "acceptanceProof": "Role-driven Auth-ON proof that: a currency with no governed rate for the requested date resolves UNKNOWN and REFUSES instead of returning a number; AP and AR invoice creation in an unrated currency is refused rather than booked; a governed rate resolves with its effective date and a named source, and a stored inverse is distinguished from a stored direct rate; a lookup failure is reported as a failure and never as absence; no decision path reaches getDefaultPeg; the currency accepted at the API boundary is constrained to the currencies the authority can actually govern; and the refusal is visible on screen in the words of the domain, proved against PostgreSQL rather than in-memory stores."
     }
   ],
   "totals": {
@@ -8553,8 +8585,9 @@
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
-    "gaps": 46,
+    "gaps": 47,
     "reusedFindings": 34,
-    "newFindings": 12
+    "newFindings": 12,
+    "freshDefects": 1
   }
 }

@@ -35,6 +35,7 @@ export * from './postgres-quotation-family-store';
 export * from './quotation-capture.service';
 export * from './commercial-comparison.service';
 export * from './domain/commercial-normalisation';
+export * from './domain/sourcing-recommendation';
 export * from './quotation-line-evaluation.service';
 export * from './quotation-line-evaluation.store';
 export * from './domain/quotation-line-evaluation';

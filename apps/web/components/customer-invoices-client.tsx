@@ -5,6 +5,7 @@ import EmptyState from './ui/empty-state';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ExportButton from './export-button';
 import SaveViewButton from './save-view-button';
+import { CURRENCIES } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import NextBestActionBanner from './ui/next-best-action-banner';
 
@@ -105,6 +106,19 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
             { name: 'issueDate', label: 'Issue date', kind: 'date', required: true, defaultValue: today() },
             { name: 'customerName', label: 'Customer', kind: 'text', required: true, placeholder: 'e.g. Emaar Properties' },
             { name: 'projectName', label: 'Project', kind: 'text', placeholder: '(optional)' },
+            /**
+             * A client invoice can be raised in a foreign currency (FX-01). Without this field the
+             * screen could only ever produce AED, so the governed-rate refusal had nowhere to
+             * appear — and the AR half of the remediation was unreachable by a real user.
+             */
+            {
+              name: 'currency',
+              label: 'Currency',
+              kind: 'select',
+              defaultValue: 'AED',
+              hint: 'A non-AED invoice needs a governed rate for its issue date.',
+              options: CURRENCIES.map((code) => ({ value: code, label: code })),
+            },
             { name: 'lines', label: 'Line items', kind: 'lines', required: true },
           ]}
         />

@@ -115,4 +115,51 @@ test.describe('An invoice in a currency with no governed rate', () => {
     });
     expect(booked.exchangeRateId).toMatch(/^[0-9a-f-]{36}$/);
   });
+
+  test('AR — a client invoice is refused the same way, and keeps what was typed', async ({ page, request }) => {
+    test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    const run = Date.now().toString().slice(-6);
+
+    // The AR half of the remediation, on the surface a Finance user actually uses. Asserted
+    // ungoverned first, so a rate left behind by another spec cannot turn this into a no-op.
+    const probe = await request.get(`${API}/finance/fx/governed-rate`, {
+      params: { from: 'USD', to: 'AED', asOf: '2026-09-10' },
+      headers: apiAuthHeaders(),
+    });
+    expect((await probe.json()).status, 'USD must be ungoverned for this spec to mean anything').toBe('unknown');
+
+    await page.goto('/finance/customer-invoices', { waitUntil: 'domcontentloaded' });
+    // The trigger is server-rendered and the drawer is client state, so a single click can land
+    // before React has attached its handler and simply be lost — the same retry the rest of this
+    // suite uses.
+    await expect(async () => {
+      await page.getByTestId('create-customer-invoice').click();
+      await expect(page.getByTestId('drawer-customer-invoice')).toBeVisible({ timeout: 2_000 });
+    }).toPass({ timeout: 60_000 });
+
+    const number = `AR-${run}`;
+    await page.getByTestId('field-invoiceNumber').fill(number);
+    await page.getByTestId('field-issueDate').fill('2026-09-10');
+    await page.getByTestId('field-customerName').fill(`US Client ${run}`);
+    await page.getByTestId('field-currency').selectOption('USD');
+    // The line editor is addressed by its accessible labels — it has no testids, and adding some
+    // purely to be testable would be the test shaping the product.
+    await page.getByLabel('Line items, line 1, description').fill('CCTV supply');
+    await page.getByLabel('Line items, line 1, quantity').fill('1');
+    await page.getByLabel('Line items, line 1, unit price').fill('50000');
+    await page.getByTestId('submit-customer-invoice').click();
+
+    const error = page.getByTestId('drawer-error-customer-invoice');
+    await expect(error).toBeVisible({ timeout: 30_000 });
+    await expect(error).toContainText('No governed USD/AED exchange rate is available for 10 Sep 2026');
+
+    // Nothing booked, and the invoice NUMBER is still free — the refusal consumed no identifier.
+    const listed = await request.get(`${API}/finance/customer-invoices`, { headers: apiAuthHeaders() });
+    expect((await listed.json()).some((i: { invoiceNumber?: string }) => i.invoiceNumber === number)).toBe(false);
+
+    // The form kept everything, including the line item.
+    await expect(page.getByTestId('field-invoiceNumber')).toHaveValue(number);
+    await expect(page.getByTestId('field-customerName')).toHaveValue(`US Client ${run}`);
+    await expect(page.getByLabel('Line items, line 1, unit price')).toHaveValue('50000');
+  });
 });

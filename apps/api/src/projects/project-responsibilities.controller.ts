@@ -33,7 +33,7 @@ export class ProjectResponsibilitiesController {
   @Post(':projectId/responsibilities')
   async assign(
     @Param('projectId') projectId: string,
-    @Body() dto: { workstream?: string; title?: string; description?: string | null; assigneeId?: string; dueDate?: string | null },
+    @Body() dto: { workstream?: string; title?: string; description?: string | null; assigneeId?: string; dueDate?: string | null; wbsNodeId?: string | null },
   ): Promise<ResponsibilityView> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new UnauthorizedException('A signed-in user is required');
@@ -54,6 +54,9 @@ export class ProjectResponsibilitiesController {
       assigneeId,
       assignedBy: ctx.actorId,
       dueDate: dto.dueDate ?? null,
+      // Declared so the service can validate and refuse it. The whitelist pipe strips an
+      // undeclared field, which would answer 201 while quietly discarding the work-package scope.
+      wbsNodeId: dto.wbsNodeId ?? null,
     });
     return this.view(row, ctx.actorId);
   }

@@ -4,7 +4,7 @@ import type { ProjectResponsibility, ProjectResponsibilityStatus, ProjectRespons
 import type { ProjectResponsibilityFilter, ProjectResponsibilityStore } from './project-responsibility-store';
 
 interface Row {
-  id: string; tenant_id: string; project_id: string; workstream: string; title: string;
+  id: string; tenant_id: string; project_id: string; workstream: string; wbs_node_id: string | null; title: string;
   description: string | null; assignee_id: string; assigned_by: string; due_date: Date | string | null;
   status: string; accepted_at: Date | string | null; started_at: Date | string | null;
   completed_at: Date | string | null; source_type: string | null; source_id: string | null;
@@ -15,7 +15,7 @@ const iso = (value: Date | string | null): string | null => value === null ? nul
 const day = (value: Date | string | null): string | null => value === null ? null : value instanceof Date ? value.toISOString().slice(0, 10) : String(value).slice(0, 10);
 const fromRow = (row: Row): ProjectResponsibility => ({
   id: row.id, tenantId: row.tenant_id, projectId: row.project_id,
-  workstream: row.workstream as ProjectResponsibilityWorkstream, title: row.title, description: row.description,
+  workstream: row.workstream as ProjectResponsibilityWorkstream, wbsNodeId: row.wbs_node_id, title: row.title, description: row.description,
   assigneeId: row.assignee_id, assignedBy: row.assigned_by, dueDate: day(row.due_date),
   status: row.status as ProjectResponsibilityStatus, acceptedAt: iso(row.accepted_at), startedAt: iso(row.started_at),
   completedAt: iso(row.completed_at), createdAt: iso(row.created_at) ?? '', updatedAt: iso(row.updated_at) ?? '',
@@ -29,13 +29,13 @@ export class PostgresProjectResponsibilityStore implements ProjectResponsibility
   async create(v: ProjectResponsibility): Promise<void> {
     await this.pool.query(
       `insert into public.aura_projects_responsibilities
-       (id, tenant_id, project_id, workstream, title, description, assignee_id, assigned_by, due_date,
+       (id, tenant_id, project_id, workstream, wbs_node_id, title, description, assignee_id, assigned_by, due_date,
         status, accepted_at, started_at, completed_at, source_type, source_id, source_reference,
         source_revision, transmittal_ref, linked_at, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
+       values ($1,$2,$3,$4,$22,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)`,
       [v.id, v.tenantId, v.projectId, v.workstream, v.title, v.description, v.assigneeId, v.assignedBy,
        v.dueDate, v.status, v.acceptedAt, v.startedAt, v.completedAt, v.sourceType, v.sourceId,
-       v.sourceReference, v.sourceRevision, v.transmittalRef, v.linkedAt, v.createdAt, v.updatedAt],
+       v.sourceReference, v.sourceRevision, v.transmittalRef, v.linkedAt, v.createdAt, v.updatedAt, v.wbsNodeId],
     );
   }
   async update(v: ProjectResponsibility, expectedUpdatedAt?: string): Promise<boolean> {

@@ -7,7 +7,7 @@ import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
 import { QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ProcurementModule, RfqService } from '@aura/procurement';
-import { ProjectsModule, WbsService, CbsService, QuantityLedgerService } from '@aura/projects';
+import { ProjectsModule, WbsService, CbsService, QuantityLedgerService, ProjectResponsibilityService } from '@aura/projects';
 import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH } from '@aura/projects';
 
 /**
@@ -74,11 +74,16 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // to every package measuring against that item. Unbound, a declared destination is REFUSED.
     {
       provide: WORK_PACKAGE,
-      inject: [WbsService],
-      useFactory: (wbs: WbsService) => ({
+      inject: [WbsService, ProjectResponsibilityService],
+      useFactory: (wbs: WbsService, responsibilities: ProjectResponsibilityService) => ({
         async belongsToProject(tenantId: string, projectId: string, wbsNodeId: string) {
           const node = await wbs.get(wbsNodeId);
           return !!node && node.tenantId === tenantId && node.projectId === projectId;
+        },
+        // Operational ownership lives with Projects; Inventory asks who holds it rather than
+        // deciding. NULL is an answer — nobody does — and the handoff refuses on it.
+        siteRecipientFor(tenantId: string, projectId: string, wbsNodeId: string) {
+          return responsibilities.siteRecipientFor(tenantId, projectId, wbsNodeId);
         },
       }),
     },

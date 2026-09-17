@@ -1,0 +1,27 @@
+import { apiFetch, apiBase, authHeader } from '@/lib/api';
+
+/**
+ * BFF: the next-role receipt (`BUY-07`).
+ *
+ * Forwards no quantity and has no field for one — what was delivered is derived from the movement
+ * and keeps a single authority.
+ */
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string; movementId: string }> },
+): Promise<Response> {
+  const { id, movementId } = await params;
+  const body = await request.json().catch(() => ({}));
+  try {
+    const res = await apiFetch(`${apiBase()}/api/v1/inventory/stock/${id}/movements/${movementId}/acknowledge`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(await authHeader()) },
+      body: JSON.stringify({ note: (body as { note?: string })?.note ?? null }),
+      cache: 'no-store',
+    });
+    const data = await res.json().catch(() => ({}));
+    return Response.json(data, { status: res.status });
+  } catch {
+    return Response.json({ error: 'Inventory API unreachable' }, { status: 502 });
+  }
+}

@@ -31,4 +31,16 @@ export interface WorkPackage {
    * writes a provenance nobody checked. Optional dependency, never optional evidence.
    */
   belongsToProject(tenantId: string, projectId: string, wbsNodeId: string): Promise<boolean>;
+
+  /**
+   * WHO OWNS SITE EXECUTION FOR THIS WORK PACKAGE — the recipient `BUY-07`'s receipt is signed by.
+   *
+   * This is NOT the reverse lookup this port refuses to provide. It does not resolve a destination;
+   * it asks who is accountable for a destination already declared on the movement.
+   *
+   * NULL means NOBODY holds it, and that is an answer. The handoff refuses rather than falling back
+   * to a project-wide assignee or to whoever happens to hold a site role — inheriting accountability
+   * that nobody assigned is the same failure as inferring provenance, one layer up.
+   */
+  siteRecipientFor(tenantId: string, projectId: string, wbsNodeId: string): Promise<string | null>;
 }

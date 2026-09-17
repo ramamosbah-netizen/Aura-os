@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, makeEvent, mulMoney } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, makeEvent, mulMoney, newId } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import {
   STOCK_EVENT,
@@ -24,6 +24,8 @@ import { computeFifo, fifoIssueCost, fifoReceiptState, type FifoMove } from './d
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 import { ISSUED_POSITION, type IssuedPosition } from './issued-position.port';
 import { WORK_PACKAGE, type WorkPackage } from './work-package.port';
+import { DELIVERY_ACK_STORE, type DeliveryAcknowledgement, type DeliveryAcknowledgementStore } from './delivery-acknowledgement.store';
+import { mayAcknowledgeDelivery, acknowledgementCoverage } from './domain/delivery-acknowledgement';
 import { mayReturnFromProject } from './domain/material-return';
 import {
   deliveredToWorkPackage, issuedWithoutWorkPackage, type MovementFacts,
@@ -51,6 +53,7 @@ export class StockService {
      */
     @Optional() @Inject(ISSUED_POSITION) private readonly issuedPosition: IssuedPosition | null = null,
     @Optional() @Inject(WORK_PACKAGE) private readonly workPackage: WorkPackage | null = null,
+    @Optional() @Inject(DELIVERY_ACK_STORE) private readonly acks: DeliveryAcknowledgementStore | null = null,
   ) {}
 
   async createItem(input: NewStockItem): Promise<StockItem> {
@@ -99,6 +102,14 @@ export class StockService {
     // Project coding: when an issue/return is coded to a CBS cost line, the Transaction Engine
     // reacts to the emitted event and posts the material cost + quantity to that line.
     coding?: { projectId?: Id | null; cbsNodeId?: Id | null; boqItemId?: Id | null; wbsNodeId?: Id | null },
+    /**
+     * WHO is recording this movement. Appended LAST because this service is built positionally.
+     *
+     * Stock movements never recorded an actor. That is an audit gap on its own, and it is also what
+     * makes `BUY-07`'s receipt meaningful: a delivery the issuer signs for proves nothing, and the
+     * rule cannot be evaluated against a movement whose issuer is unknown.
+     */
+    actorId?: Id | null,
   ): Promise<{ item: StockItem; movement: StockMovement }> {
     const item = await this.store.getItem(stockItemId);
     if (!item) throw new Error(`stock item ${stockItemId} not found`);
@@ -200,7 +211,7 @@ export class StockService {
     const balanceAfter = applyMovement(item.quantityOnHand, direction, quantity);
     let newAvgCost = computeWac(item.quantityOnHand, item.avgCost, direction, Number(quantity), Number(unitCost));
     const movement = makeStockMovement(
-      { stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost, projectId: coding?.projectId ?? null, cbsNodeId: coding?.cbsNodeId ?? null, boqItemId: coding?.boqItemId ?? null, wbsNodeId: coding?.wbsNodeId ?? null },
+      { stockItemId, tenantId: item.tenantId, direction, quantity, reason, unitCost, projectId: coding?.projectId ?? null, cbsNodeId: coding?.cbsNodeId ?? null, boqItemId: coding?.boqItemId ?? null, wbsNodeId: coding?.wbsNodeId ?? null, issuedBy: actorId ?? null },
       balanceAfter,
       newAvgCost,
     );
@@ -292,10 +303,32 @@ export class StockService {
     return updated;
   }
 
-  async getItemWithMovements(id: Id): Promise<{ item: StockItem; movements: StockMovement[] } | null> {
+  async getItemWithMovements(id: Id): Promise<{
+    item: StockItem; movements: StockMovement[]; acknowledgedMovementIds: Id[];
+  } | null> {
     const item = await this.store.getItem(id);
     if (!item) return null;
-    return { item, movements: await this.store.listMovements(id) };
+    const movements = await this.store.listMovements(id);
+    /**
+     * WHICH DELIVERIES HAVE BEEN RECEIPTED (`BUY-07`), read from the server.
+     *
+     * The screen must not hold this in component state: the row re-renders after every movement,
+     * and a receipt remembered only in the browser disappears with it — the next role acknowledges
+     * and the screen forgets, which is indistinguishable from never having acknowledged. Found by
+     * the browser proof.
+     *
+     * Still no quantity: this says WHICH movements were accepted, never how much.
+     */
+    const packages = [...new Set(movements.map((m) => m.wbsNodeId).filter((w): w is Id => Boolean(w)))];
+    const acknowledgedMovementIds: Id[] = [];
+    if (this.acks) {
+      for (const wbsNodeId of packages) {
+        for (const ack of await this.acks.listByWorkPackage(item.tenantId, wbsNodeId)) {
+          acknowledgedMovementIds.push(ack.movementId);
+        }
+      }
+    }
+    return { item, movements, acknowledgedMovementIds };
   }
 
   /**
@@ -346,6 +379,69 @@ export class StockService {
 
   listItemsPaged(filter: StockFilter, page: import('@aura/shared').PageParams) {
     return this.store.listItemsPaged(filter, page);
+  }
+
+  /**
+   * THE NEXT-ROLE RECEIPT (`BUY-07`): Site accepts material delivered to a work package.
+   *
+   * Records ONE fact — a named person accepted receipt of an already-persisted movement — and writes
+   * NO quantity. What was delivered is derived from the movements and keeps a single authority; a
+   * receipt carrying its own figure would be a second writer of that number.
+   */
+  async acknowledgeDelivery(
+    tenantId: Id, stockItemId: Id, movementId: Id, actorId: Id, note?: string | null,
+  ): Promise<DeliveryAcknowledgement> {
+    // Worded so the HTTP taxonomy classifies it rather than letting it escape as a 500 — the same
+    // shape as the other unbound-port refusals in this service.
+    if (!this.acks) {
+      throw new Error('cannot record a delivery receipt — acknowledgements are unavailable in this deployment');
+    }
+    const movement = (await this.store.listMovements(stockItemId)).find((m) => m.id === movementId);
+    if (!movement || movement.tenantId !== tenantId) throw new Error(`movement ${movementId} not found`);
+
+    // Who is accountable for the package the MOVEMENT named. Unbound, nobody can be verified as the
+    // recipient, so the receipt is refused rather than recorded against an unchecked authority.
+    const recipientId = movement.wbsNodeId && movement.projectId && this.workPackage
+      ? await this.workPackage.siteRecipientFor(tenantId, movement.projectId, movement.wbsNodeId)
+      : null;
+
+    const existing = await this.acks.getByMovement(tenantId, movementId);
+    const verdict = mayAcknowledgeDelivery({
+      wbsNodeId: movement.wbsNodeId,
+      direction: movement.direction === 'in' ? 'in' : 'out',
+      issuedBy: movement.issuedBy,
+      actorId,
+      recipientId,
+      alreadyAcknowledged: Boolean(existing),
+    });
+    if (!verdict.allowed) throw new Error(verdict.message);
+
+    const now = new Date().toISOString();
+    const value: DeliveryAcknowledgement = {
+      id: newId(), tenantId, companyId: null, movementId,
+      wbsNodeId: movement.wbsNodeId as Id, projectId: movement.projectId as Id,
+      acknowledgedBy: actorId, acknowledgedAt: now, note: note?.trim() || null, createdAt: now,
+    };
+    await this.acks.create(value);
+    this.logger.log(`Delivery ${movementId} acknowledged at work package ${value.wbsNodeId}`);
+    return value;
+  }
+
+  /**
+   * How much of what reached a work package has been RECEIPTED — counted in MOVEMENTS.
+   *
+   * Deliberately not a quantity: "2 of 3 deliveries acknowledged" is a statement about receipts,
+   * while "18 m of 20 m acknowledged" would be a second quantity beside the one the movements
+   * already establish, free to drift away from it.
+   */
+  async acknowledgementCoverageFor(tenantId: Id, projectId: Id, wbsNodeId: Id): Promise<{
+    deliveries: number; acknowledged: number; outstanding: number;
+  }> {
+    if (!this.acks) return { deliveries: 0, acknowledged: 0, outstanding: 0 };
+    const moves = await this.store.listMovementsByProject(tenantId, projectId);
+    const deliveryIds = moves.filter((m) => m.wbsNodeId === wbsNodeId && m.direction === 'out').map((m) => m.id);
+    const acked = new Set((await this.acks.listByWorkPackage(tenantId, wbsNodeId)).map((a) => a.movementId));
+    return acknowledgementCoverage(deliveryIds, acked);
   }
 
   /**

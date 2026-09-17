@@ -22,6 +22,15 @@ export interface ProjectResponsibility {
   tenantId: Id;
   projectId: Id;
   workstream: ProjectResponsibilityWorkstream;
+  /**
+   * The WORK PACKAGE this responsibility is scoped to (`BUY-07`).
+   *
+   * NULL = project-wide, which is a legitimate and common assignment — "you own site execution on
+   * this job" is not the same statement as "you own the riser mains". It therefore does NOT make the
+   * assignee the recipient of any individual package: a package with no responsibility scoped to it
+   * has NO recipient, and the delivery handoff refuses rather than falling back to this row.
+   */
+  wbsNodeId: Id | null;
   title: string;
   description: string | null;
   assigneeId: Id;
@@ -45,6 +54,7 @@ export interface NewProjectResponsibility {
   tenantId: Id;
   projectId: Id;
   workstream: ProjectResponsibilityWorkstream;
+  wbsNodeId?: Id | null;
   title: string;
   description?: string | null;
   assigneeId: Id;
@@ -70,6 +80,7 @@ export function makeProjectResponsibility(input: NewProjectResponsibility): Proj
     tenantId: input.tenantId,
     projectId: input.projectId,
     workstream: input.workstream,
+    wbsNodeId: input.wbsNodeId ?? null,
     title: input.title.trim(),
     description: input.description?.trim() || null,
     assigneeId: input.assigneeId,

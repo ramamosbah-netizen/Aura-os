@@ -6,6 +6,7 @@ import ExportButton from './export-button';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import ProjectIssueBar from './project-issue-bar';
 import { RegisterKpis, RegisterPanel } from './ui/register-view';
+import DeliveryReceipt from './delivery-receipt';
 
 interface StockItem {
   id: string;
@@ -28,6 +29,9 @@ interface Movement {
   unitCost: number;
   valueAfter: number;
   createdAt: string;
+  /** The work package this movement was delivered to (`BUY-07`). NULL = none declared. */
+  wbsNodeId?: string | null;
+  createdBy?: string | null;
 }
 
 function money(n: number): string {
@@ -37,6 +41,8 @@ function money(n: number): string {
 interface Detail {
   item: StockItem;
   movements: Movement[];
+  /** Which deliveries have been receipted (`BUY-07`) — from the server, never component state. */
+  acknowledgedMovementIds?: string[];
 }
 
 function fmtDate(iso: string): string {
@@ -252,7 +258,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                         <div className="table-scroll">
                         <table style={s.subTable}>
                           <thead>
-                            <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thSR}>Unit cost</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th><th style={s.thSR}>Value</th></tr>
+                            <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thSR}>Unit cost</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th><th style={s.thSR}>Value</th><th style={s.thS}>Receipt</th></tr>
                           </thead>
                           <tbody>
                             {detail.movements.map((m) => (
@@ -264,6 +270,29 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                                 <td style={s.tdS}>{m.reason}</td>
                                 <td style={s.tdSR}>{m.balanceAfter}</td>
                                 <td style={s.tdSR}>{money(m.valueAfter)}</td>
+                                {/*
+                                  BUY-07's next-role receipt. Offered only where the movement
+                                  actually declared a work package — a delivery nobody can name
+                                  cannot be accepted on a package's behalf.
+                                */}
+                                <td style={s.tdS}>
+                                  {m.direction === 'out' && m.wbsNodeId ? (
+                                    <DeliveryReceipt
+                                      stockItemId={it.id}
+                                      movementId={m.id}
+                                      acknowledged={(detail.acknowledgedMovementIds ?? []).includes(m.id)}
+                                      // Re-read the detail in place. `open()` TOGGLES, so calling
+                                      // it here collapsed the row the moment a receipt was
+                                      // recorded — the confirmation vanished with the panel.
+                                      onDone={async () => {
+                                        const d = await fetch(`/api/inventory/stock/${it.id}`, { cache: 'no-store' });
+                                        if (d.ok) setDetail(await d.json());
+                                      }}
+                                    />
+                                  ) : (
+                                    <span style={s.muted}>—</span>
+                                  )}
+                                </td>
                               </tr>
                             ))}
                           </tbody>

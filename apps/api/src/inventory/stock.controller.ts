@@ -132,6 +132,32 @@ export class StockController {
     return this.stock.workPackageDeliveries(this.tenant.get().tenantId, projectId, ids);
   }
 
+  /**
+   * THE NEXT-ROLE RECEIPT (`BUY-07`): Site accepts a delivery at a work package.
+   *
+   * Takes no quantity, by design. The movement already established what was delivered, and a receipt
+   * carrying its own figure would be a second writer of that number — the competing-truth defect this
+   * wave removes. This records only that a named person accepted receipt of this movement.
+   */
+  @Post(':id/movements/:movementId/acknowledge')
+  acknowledgeDelivery(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('movementId', ParseUuidOr404Pipe) movementId: string,
+    @Body() dto: { note?: string | null },
+  ) {
+    const ctx = this.tenant.get();
+    if (!ctx.actorId) throw new BadRequestException('a signed-in user is required to acknowledge a delivery');
+    return this.stock.acknowledgeDelivery(ctx.tenantId, id, movementId, ctx.actorId, dto?.note ?? null);
+  }
+
+  /** How many of a work package's deliveries have been receipted — counted in movements. */
+  @Get('acknowledgement-coverage')
+  coverage(@Query('projectId') projectId?: string, @Query('wbs') wbs?: string) {
+    if (!projectId?.trim()) throw new BadRequestException('projectId is required');
+    if (!wbs?.trim()) throw new BadRequestException('wbs is required');
+    return this.stock.acknowledgementCoverageFor(this.tenant.get().tenantId, projectId, wbs);
+  }
+
   /** Scanner flow: barcode → item. */
   @Get('by-barcode/:barcode')
   async byBarcode(@Param('barcode') barcode: string): Promise<StockItem> {
@@ -167,7 +193,7 @@ export class StockController {
       cbsNodeId: dto.cbsNodeId ?? null,
       boqItemId: dto.boqItemId ?? null,
       wbsNodeId: dto.wbsNodeId ?? null,
-    });
+    }, this.tenant.get().actorId ?? null);
   }
 
   @Patch(':id/uom')

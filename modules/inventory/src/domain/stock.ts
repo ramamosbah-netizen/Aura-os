@@ -141,6 +141,8 @@ export interface StockMovement {
    * inferred from `boqItemId`. See `domain/work-package-delivery.ts` for the invariant.
    */
   wbsNodeId: Id | null;
+  /** Who recorded this movement. NULL = not recorded (historic rows predate the column). */
+  issuedBy: Id | null;
   createdAt: string;
 }
 
@@ -155,6 +157,7 @@ export interface NewStockMovement {
   cbsNodeId?: Id | null;
   boqItemId?: Id | null;
   wbsNodeId?: Id | null;
+  issuedBy?: Id | null;
 }
 
 /** Compute the new on-hand after applying a movement; throws if an issue would go negative. */
@@ -194,6 +197,7 @@ export function makeStockMovement(input: NewStockMovement, balanceAfter: number,
     cbsNodeId: input.cbsNodeId ?? null,
     boqItemId: input.boqItemId ?? null,
     wbsNodeId: input.wbsNodeId ?? null,
+    issuedBy: input.issuedBy ?? null,
     createdAt: new Date().toISOString(),
   };
 }

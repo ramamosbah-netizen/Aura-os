@@ -7,6 +7,9 @@ import { PostgresGoodsReceiptStore } from './postgres-goods-receipt-store';
 import { GoodsReceiptService } from './goods-receipt.service';
 
 import { STOCK_STORE } from './stock-store';
+import { DELIVERY_ACK_STORE } from './delivery-acknowledgement.store';
+import { InMemoryDeliveryAcknowledgementStore } from './in-memory-delivery-acknowledgement-store';
+import { PostgresDeliveryAcknowledgementStore } from './postgres-delivery-acknowledgement-store';
 import { InMemoryStockStore } from './in-memory-stock-store';
 import { PostgresStockStore } from './postgres-stock-store';
 import { StockService } from './stock.service';
@@ -50,6 +53,13 @@ import { MaterialService } from './material.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresStockStore(pool) : new InMemoryStockStore(),
+    },
+    {
+      // BUY-07 receipts. Carries no quantity — see domain/delivery-acknowledgement.ts.
+      provide: DELIVERY_ACK_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresDeliveryAcknowledgementStore(pool) : new InMemoryDeliveryAcknowledgementStore(),
     },
     {
       provide: TRANSFER_STORE,

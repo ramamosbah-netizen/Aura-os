@@ -7,6 +7,7 @@ import {
 } from './domain/project-responsibility';
 import { PROJECT_RESPONSIBILITY_STORE, type ProjectResponsibilityFilter, type ProjectResponsibilityStore } from './project-responsibility-store';
 import { PROJECT_STORE, type ProjectStore } from './project-store';
+import { WbsService } from './wbs.service';
 import { assertProjectWriteAllowed } from './project-write-guard';
 
 @Injectable()
@@ -17,6 +18,7 @@ export class ProjectResponsibilityService {
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(PROJECT_STORE) private readonly projects: ProjectStore | null = null,
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
+    @Optional() @Inject(WbsService) private readonly wbs: WbsService | null = null,
   ) {}
 
   /**
@@ -43,10 +45,42 @@ export class ProjectResponsibilityService {
     if (!this.canReceive(input.projectId, input.assigneeId)) {
       throw new BadRequestException('assignee must be a member of this project');
     }
+    /**
+     * A responsibility scoped to a WORK PACKAGE must name one of THIS project's (`BUY-07`).
+     *
+     * Unchecked, a responsibility could be scoped to another project's package and would then read
+     * as the recipient authority for material it has nothing to do with — an accountability claim
+     * nobody verified, which is worse than the absence it appears to fill.
+     */
+    if (input.wbsNodeId) {
+      const node = this.wbs ? await this.wbs.get(input.wbsNodeId) : null;
+      if (!node || node.tenantId !== input.tenantId || node.projectId !== input.projectId) {
+        throw new BadRequestException('work package does not belong to this project');
+      }
+    }
     const value = makeProjectResponsibility(input);
     await this.rows.create(value);
     await this.emit('projects.responsibility.assigned', value, input.assignedBy);
     return value;
+  }
+
+  /**
+   * WHO OWNS SITE EXECUTION FOR ONE WORK PACKAGE — the recipient authority `BUY-07` needs.
+   *
+   * NULL means nobody does, and NULL is an answer rather than a gap to be filled. It never falls
+   * back to a project-wide responsibility and never to "whoever holds the site engineer role":
+   * inheriting accountability that nobody assigned is the same failure as inferring a delivery
+   * destination from a BOQ item, one layer up.
+   *
+   * A COMPLETED responsibility no longer receives: the package was handed on, and material arriving
+   * afterwards needs somebody who is still accountable for it.
+   */
+  async siteRecipientFor(tenantId: Id, projectId: Id, wbsNodeId: Id): Promise<Id | null> {
+    const rows = await this.rows.list({ tenantId, projectId, limit: 1000 });
+    const owner = rows.find((r) =>
+      r.wbsNodeId === wbsNodeId && r.workstream === 'site_execution' && r.status !== 'completed',
+    );
+    return owner?.assigneeId ?? null;
   }
 
   list(filter: ProjectResponsibilityFilter): Promise<ProjectResponsibility[]> { return this.rows.list(filter); }

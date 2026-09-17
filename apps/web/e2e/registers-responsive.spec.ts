@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { apiAuthHeaders } from './api-auth';
 
 /**
  * The registers display on every screen.
@@ -69,7 +70,23 @@ test.describe('The registers display on every screen', () => {
     });
   }
 
-  test('a wide table scrolls inside its own panel rather than moving the page', async ({ page }) => {
+  test('a wide table scrolls inside its own panel rather than moving the page', async ({ page, request }) => {
+    test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    /**
+     * SEED THE ROW THIS ASSERTS ON.
+     *
+     * An earlier version read whatever happened to be in the register, and passed only because
+     * previous runs had left orders behind. On a database rebuilt from zero the register is empty,
+     * there is no table at all, and the test failed claiming the containment was missing — a test
+     * reporting the fixture rather than the behaviour.
+     */
+    const api = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
+    const run = Date.now().toString().slice(-6);
+    await request.post(`${api}/procurement/purchase-orders`, {
+      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+      data: { title: `Containment probe ${run}`, value: 1000 },
+    });
+
     await page.setViewportSize({ width: 375, height: 900 });
     await page.goto('/procurement/purchase-orders', { waitUntil: 'domcontentloaded' });
     await page.getByTestId('register-kpis').first().waitFor({ state: 'visible', timeout: 30_000 });

@@ -161,7 +161,22 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
     }
   };
 
-  const ready = Boolean(projectId && boqItemId && Number(qty) > 0);
+  /**
+   * WHAT AN ISSUE NEEDS, AND WHAT A RETURN NEEDS, ARE DIFFERENT.
+   *
+   * This required a BOQ item for BOTH, which made `BUY-07`'s own rule unreachable from the screen:
+   * a work package with no BOQ measurement linkage is a VALID destination — the material went there
+   * and was recorded going there — and the server accepts it, but the button stayed disabled so
+   * nobody could. That is the same defect shape as `BUY-06`, where the capability existed and the
+   * screen could not reach it. Found by the browser proof, not by review.
+   *
+   * An ISSUE needs a project, a quantity, and somewhere to send it — a measured BOQ item or a
+   * declared work package. A RETURN still needs the BOQ item, because it is bounded by the issued
+   * position and that position is keyed on the measured item; without one there is no balance to
+   * measure the return against.
+   */
+  const ready = Boolean(projectId && Number(qty) > 0 && (boqItemId || wbsNodeId));
+  const readyToReturn = Boolean(projectId && boqItemId && Number(qty) > 0);
   // The screen says what can come back, rather than letting somebody find the limit by being refused.
   const returnable = netIssued !== null && netIssued > 0;
 
@@ -196,7 +211,7 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
           onClick={() => void move('out')} data-testid="issue-out">
           Issue to project
         </button>
-        <button type="button" className="btn" disabled={busy || !ready || !returnable}
+        <button type="button" className="btn" disabled={busy || !readyToReturn || !returnable}
           onClick={() => void move('in')} data-testid="issue-return">
           Return from project
         </button>

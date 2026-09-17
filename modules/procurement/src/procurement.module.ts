@@ -19,6 +19,10 @@ import { InMemoryQuotationLineEvaluationStore } from './in-memory-quotation-line
 import { PostgresQuotationLineEvaluationStore } from './postgres-quotation-line-evaluation-store';
 import { QuotationLineService } from './quotation-line.service';
 import { CommercialComparisonService } from './commercial-comparison.service';
+import { QuotationCaptureService } from './quotation-capture.service';
+import { QUOTATION_FAMILY_STORE } from './quotation-family.store';
+import { InMemoryQuotationFamilyStore } from './in-memory-quotation-family-store';
+import { PostgresQuotationFamilyStore } from './postgres-quotation-family-store';
 import { InMemoryQuotationLineStore } from './in-memory-quotation-line-store';
 import { PostgresQuotationLineStore } from './postgres-quotation-line-store';
 import { InMemoryPurchaseRequestLineStore } from './in-memory-purchase-request-line-store';
@@ -95,6 +99,16 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     QuotationLineService,
     CommercialComparisonService,
     {
+      // QC-01 — the supplier quotation as an immutable family of offers and revisions. The in-memory
+      // store enforces the same invariants the Postgres indexes do, so a violation cannot be a
+      // surprise that only production sees.
+      provide: QUOTATION_FAMILY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresQuotationFamilyStore(pool) : new InMemoryQuotationFamilyStore(),
+    },
+    QuotationCaptureService,
+    {
       // SUP-01 — the internal technical verdict. A different authority from the supplier's claim.
       provide: QUOTATION_LINE_EVALUATION_STORE,
       inject: [PG_POOL],
@@ -116,6 +130,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [CommercialComparisonService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [CommercialComparisonService, QuotationCaptureService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

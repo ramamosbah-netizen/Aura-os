@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-216 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+217 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -170,6 +170,7 @@
 | apps/web/app/procurement/quotations/[id]/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/requirements/[prLineId]/comparison/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/rfqs/page.tsx | PARTIAL | Live RFQ create and two-quote comparison |
+| apps/web/app/procurement/rfqs/[rfqId]/quotations/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/spend-analytics/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/suppliers/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/procurement/technical-evaluation/[quotationId]/page.tsx | NOT_AUDITED | UNVERIFIED |

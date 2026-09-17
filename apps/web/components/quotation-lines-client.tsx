@@ -17,6 +17,10 @@ interface QuotationLine {
   unitPrice: number | null;
   leadTimeDays: number | null;
   warrantyMonths: number | null;
+  /** The technical decision, handed to the Buyer with the offer (`SUP-01` outbound). */
+  eligibility?: 'eligible' | 'not_eligible' | 'unknown';
+  verdict?: string | null;
+  decidedBy?: string | null;
 }
 
 /**
@@ -38,6 +42,11 @@ export default function QuotationLinesClient({ quotationId, lines }: { quotation
           { label: 'Requirements answered', value: String(lines.length) },
           { label: 'Offered', value: String(quoted.length) },
           { label: 'Declined', value: String(declined.length), tone: declined.length > 0 ? 'warn' : undefined },
+          {
+            label: 'Awaiting technical verdict',
+            value: String(quoted.filter((l) => (l.eligibility ?? 'unknown') === 'unknown').length),
+            tone: quoted.some((l) => (l.eligibility ?? 'unknown') === 'unknown') ? 'warn' : 'good',
+          },
         ]}
       />
 
@@ -50,7 +59,7 @@ export default function QuotationLinesClient({ quotationId, lines }: { quotation
           <table style={registerTable.table}>
             <thead>
               <tr>
-                {['Offered', 'Quantity', 'Unit price', 'Lead time', 'Warranty', 'Supplier states', ''].map((h) => (
+                {['Offered', 'Quantity', 'Unit price', 'Lead time', 'Warranty', 'Supplier states', 'Technical verdict', ''].map((h) => (
                   <th key={h} style={registerTable.th}>{h}</th>
                 ))}
               </tr>
@@ -73,6 +82,16 @@ export default function QuotationLinesClient({ quotationId, lines }: { quotation
                       {/* The supplier's words, labelled. Never a tick. */}
                       {l.complianceResponse ? l.complianceResponse.replace(/_/g, ' ') : '—'}
                     </td>
+                    <td style={registerTable.td} data-testid={`eligibility-${l.id}`}>
+                      {l.response !== 'quoted'
+                        ? <span style={st.declined}>—</span>
+                        : l.eligibility === 'eligible'
+                          ? <span className="badge badge-good">{(l.verdict ?? '').replace(/_/g, ' ')}</span>
+                          : l.eligibility === 'not_eligible'
+                            ? <span className="badge badge-bad">Not compliant</span>
+                            : <span className="badge badge-warn">Not yet evaluated</span>}
+                      {l.decidedBy && <div style={st.decider}>by {l.decidedBy}</div>}
+                    </td>
                     <td style={registerTable.td}>
                       {l.response === 'quoted' && (
                         <button type="button" className="btn btn-ghost" style={st.sm}
@@ -85,7 +104,7 @@ export default function QuotationLinesClient({ quotationId, lines }: { quotation
                   </tr>
                   {openId === l.id && (
                     <tr>
-                      <td style={st.detailCell} colSpan={7}>
+                      <td style={st.detailCell} colSpan={8}>
                         <TechnicalEvaluationPanel quotationLineId={l.id} />
                       </td>
                     </tr>
@@ -107,5 +126,6 @@ const st = {
   alt: { marginLeft: 6, fontSize: 10.5, border: '1px solid var(--warn-soft)', color: 'var(--warn)', borderRadius: 999, padding: '0 6px' } as CSSProperties,
   sm: { padding: '4px 10px', fontSize: 12 } as CSSProperties,
   detailCell: { background: 'var(--panel-2)', padding: '12px', borderBottom: '1px solid var(--border)' } as CSSProperties,
+  decider: { color: 'var(--muted)', fontSize: 11, marginTop: 3 } as CSSProperties,
   hint: { color: 'var(--muted)', fontSize: 11, marginTop: 14 } as CSSProperties,
 };

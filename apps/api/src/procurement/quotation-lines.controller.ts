@@ -42,10 +42,17 @@ export class QuotationLinesController {
     private readonly tenant: TenantContext,
   ) {}
 
+  /**
+   * The offers, each carrying the technical decision made about it.
+   *
+   * `SUP-01`'s OUTBOUND handoff: the verdict reaches the Buyer here, in the Buyer's own context and
+   * under the Buyer's own permission, rather than requiring them to look it up on the technical
+   * surface they cannot open. The rationale and amendment history stay there.
+   */
   @Permissions('procurement.rfq.read')
   @Get(':id/lines')
-  list(@Param('id', ParseUuidOr404Pipe) id: string): Promise<QuotationLine[]> {
-    return this.lines.listByQuotation(this.tenant.get().tenantId, id);
+  list(@Param('id', ParseUuidOr404Pipe) id: string) {
+    return this.lines.listByQuotationForBuyer(this.tenant.get().tenantId, id);
   }
 
   /**

@@ -244,7 +244,10 @@ const scryptHash = async (plain) => {
 const handoff = new pg.Client({ connectionString: url });
 await handoff.connect();
 const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
-for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer']]) {
+// `u-e2e-buyer` and `u-e2e-techmgr` prove SUP-01's OUTBOUND handoff: the Technical Manager decides,
+// and the verdict must reach the Buyer in the Buyer's own context. One principal cannot show that.
+for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
+                                ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -266,7 +269,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper (r-store) and u-e2e-site (r-site-engineer)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement) and u-e2e-techmgr (r-technical-manager)');
 
 
 

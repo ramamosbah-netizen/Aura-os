@@ -6,6 +6,8 @@ import {
 } from './domain/quotation-line';
 import { QUOTATION_LINE_STORE, type QuotationLineStore } from './quotation-line.store';
 import { RFQ_STORE, type RfqStore } from './rfq-store';
+import { QUOTATION_LINE_EVALUATION_STORE, type QuotationLineEvaluationStore } from './quotation-line-evaluation.store';
+import { technicalEligibility, type TechnicalEligibility, type TechnicalVerdict } from './domain/quotation-line-evaluation';
 import { PR_LINE_STORE, type PurchaseRequestLineStore } from './purchase-request-line-store';
 
 export interface NewQuotationLineInput {
@@ -56,6 +58,13 @@ export class QuotationLineService {
      * against an unverified requirement: optional dependency, never optional evidence.
      */
     @Optional() @Inject(PR_LINE_STORE) private readonly prLines: PurchaseRequestLineStore | null = null,
+    /**
+     * The technical verdicts, so the OUTBOUND handoff reaches the Buyer where they already work.
+     *
+     * OPTIONAL and LAST — positional construction. Unbound, eligibility reads `unknown`, which is the
+     * honest answer when the verdicts cannot be read: never eligible by default.
+     */
+    @Optional() @Inject(QUOTATION_LINE_EVALUATION_STORE) private readonly evaluations: QuotationLineEvaluationStore | null = null,
   ) {}
 
   async add(tenantId: Id, input: NewQuotationLineInput): Promise<QuotationLine> {
@@ -88,6 +97,34 @@ export class QuotationLineService {
 
   listByQuotation(tenantId: Id, quotationId: Id): Promise<QuotationLine[]> {
     return this.lines.listByQuotation(tenantId, quotationId);
+  }
+
+  /**
+   * THE OFFERS, EACH CARRYING THE TECHNICAL DECISION THAT WAS MADE ABOUT IT.
+   *
+   * This is `SUP-01`'s OUTBOUND handoff: the Technical Manager decides, and the verdict reaches the
+   * Buyer in the Buyer's own context and under the Buyer's own permission. A decision the next role
+   * has to go and look up in another surface has not been handed over.
+   *
+   * The RATIONALE and the decision history are deliberately NOT included. A buyer needs to know
+   * whether an offer may be considered and who said so; the reasoning and the amendment trail belong
+   * to the technical surface where the judgement was made.
+   */
+  async listByQuotationForBuyer(tenantId: Id, quotationId: Id): Promise<Array<QuotationLine & {
+    eligibility: TechnicalEligibility; verdict: TechnicalVerdict | null; decidedBy: Id | null;
+  }>> {
+    const lines = await this.lines.listByQuotation(tenantId, quotationId);
+    const decorated = [];
+    for (const line of lines) {
+      const current = this.evaluations ? await this.evaluations.findCurrent(tenantId, line.id) : null;
+      decorated.push({
+        ...line,
+        eligibility: technicalEligibility(current),
+        verdict: current?.verdict ?? null,
+        decidedBy: current?.decidedBy ?? null,
+      });
+    }
+    return decorated;
   }
 
   /** Every supplier's answer to one requirement — what a comparison is built from. */

@@ -127,7 +127,28 @@ if (!url) {
   console.error('No DATABASE_URL. This audit reads a real database and will not guess at one.');
   process.exit(2);
 }
-const pool = new Pool({ connectionString: url });
+const pool = new Pool({
+  connectionString: url,
+  // A live environment must not be hostage to this script. A slow full scan is a failed audit,
+  // never a stalled database.
+  statement_timeout: 60_000,
+  query_timeout: 60_000,
+  connectionTimeoutMillis: 15_000,
+  max: 2,
+  application_name: 'fx-01-impact-audit (read-only)',
+});
+
+/**
+ * READ-ONLY, ENFORCED BY POSTGRES RATHER THAN PROMISED BY ME.
+ *
+ * This audit is meant to be safe to point at a real, shared database, and "it only contains SELECTs"
+ * is an assurance a reader has to verify by reading every line. `default_transaction_read_only`
+ * makes the server refuse any INSERT, UPDATE, DELETE or DDL on this connection outright — so a
+ * mistake in this file, or a later edit to it, cannot write to the database it is auditing.
+ */
+pool.on('connect', (client) => {
+  void client.query('SET default_transaction_read_only = on');
+});
 
 /**
  * Refuse to report on a connection that cannot see across tenants. Without this the script happily
@@ -153,19 +174,62 @@ async function assertCrossTenantVisibility() {
 }
 await assertCrossTenantVisibility();
 
+/** Prove the read-only setting actually took, rather than assuming the SET ran. */
+async function assertReadOnly() {
+  const { rows } = await pool.query('SHOW default_transaction_read_only');
+  if (rows[0]?.default_transaction_read_only !== 'on') {
+    console.error('Refusing to audit: the connection is not read-only, so a mistake here could write.');
+    await pool.end();
+    process.exit(2);
+  }
+  try {
+    await pool.query('CREATE TEMP TABLE fx01_write_probe (x int)');
+    console.error('Refusing to audit: a write succeeded on a connection that reported read-only.');
+    await pool.end();
+    process.exit(2);
+  } catch {
+    // Expected — the server refused the write, which is the guarantee this audit runs under.
+  }
+}
+await assertReadOnly();
+
+
+/**
+ * DOES THIS DATABASE KNOW ABOUT PROVENANCE YET?
+ *
+ * The audit's whole purpose is to examine rows booked BEFORE the remediation, so it must run against
+ * a schema that predates migration 0348 — where `exchange_rate_source` and `invoice_date` do not
+ * exist. Selecting them unconditionally would make the audit fail on exactly the databases it was
+ * written for. Where they are absent, every foreign-currency row is legacy by definition.
+ */
+async function columnsPresent(table, names) {
+  const { rows } = await pool.query(
+    `SELECT column_name FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1 AND column_name = ANY($2)`,
+    [table, names],
+  );
+  const found = new Set(rows.map((r) => r.column_name));
+  return Object.fromEntries(names.map((n) => [n, found.has(n)]));
+}
+
 try {
   // AP: the FX date is the supplier's invoice date where known, else the date it was entered.
+  const apCols = await columnsPresent('aura_finance_invoices', ['exchange_rate_source', 'invoice_date']);
   const ap = await pool.query(
     `SELECT id, tenant_id, reference AS ref, currency, value::float AS value, exchange_rate::float AS exchange_rate,
-            base_value::float AS base_value, exchange_rate_source AS provenance,
-            COALESCE(invoice_date, created_at::date)::text AS on_date
+            base_value::float AS base_value,
+            ${apCols.exchange_rate_source ? 'exchange_rate_source' : 'NULL'} AS provenance,
+            ${apCols.invoice_date ? 'COALESCE(invoice_date, created_at::date)' : 'created_at::date'}::text AS on_date
        FROM public.aura_finance_invoices
       WHERE COALESCE(UPPER(currency), $1) <> $1`,
     [BASE],
   );
+  const arCols = await columnsPresent('aura_finance_customer_invoices', ['exchange_rate_source']);
   const ar = await pool.query(
     `SELECT id, tenant_id, invoice_number AS ref, currency, total::float AS value, exchange_rate::float AS exchange_rate,
-            base_total::float AS base_value, exchange_rate_source AS provenance, issue_date::text AS on_date
+            base_total::float AS base_value,
+            ${arCols.exchange_rate_source ? 'exchange_rate_source' : 'NULL'} AS provenance,
+            issue_date::text AS on_date
        FROM public.aura_finance_customer_invoices
       WHERE COALESCE(UPPER(currency), $1) <> $1`,
     [BASE],
@@ -175,6 +239,12 @@ try {
     generatedAt: new Date().toISOString(),
     defect: 'FX-01',
     reads_only: true,
+    schema: {
+      provenance_columns_present: apCols.exchange_rate_source && arCols.exchange_rate_source,
+      note: apCols.exchange_rate_source
+        ? 'migration 0348 applied — rows carrying provenance are post-remediation'
+        : 'migration 0348 NOT applied — every foreign-currency row here predates the remediation',
+    },
     ap: await classify(pool, ap.rows, 'AP supplier invoices'),
     ar: await classify(pool, ar.rows, 'AR customer invoices'),
   };
@@ -182,6 +252,8 @@ try {
   if (asJson) {
     console.log(JSON.stringify(report, null, 2));
   } else {
+    console.log(`
+schema: ${report.schema.note}`);
     for (const side of [report.ap, report.ar]) {
       console.log(`\n── ${side.label} ─────────────────────────────`);
       console.log(`   foreign-currency rows: ${side.total}`);

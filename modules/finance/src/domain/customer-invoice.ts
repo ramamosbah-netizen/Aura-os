@@ -68,6 +68,10 @@ export interface CustomerInvoice {
   exchangeRate: number;
   /** Total converted to base currency (AED) for consolidated reporting. */
   baseTotal: number;
+  /** WHICH governed rate valued this (FX-01). Null = booked before provenance existed. */
+  exchangeRateEffectiveDate: string | null;
+  exchangeRateSource: string | null;
+  exchangeRateId: string | null;
   amountPaid: number;
   status: CustomerInvoiceStatus;
   /** Soft-delete timestamp; null = live. Deleted rows are hidden from lists but restorable. */
@@ -90,6 +94,9 @@ export interface NewCustomerInvoice {
   lines: NewCustomerInvoiceLine[];
   currency?: string;
   exchangeRate?: number;
+  exchangeRateEffectiveDate?: string | null;
+  exchangeRateSource?: string | null;
+  exchangeRateId?: string | null;
   createdBy?: Id | null;
 }
 
@@ -151,6 +158,14 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
   }
   const { subtotal, vatTotal, total } = computeTotals(lines);
   const currency = (input.currency ?? 'AED').trim().toUpperCase();
+  /**
+   * A FOREIGN-CURRENCY INVOICE CANNOT BE CONSTRUCTED WITHOUT A RATE (FX-01). The default of 1 for a
+   * missing rate meant a EUR invoice could book its base total at par if the service ever failed to
+   * resolve one. The service refuses first; this is the invariant underneath it.
+   */
+  if (currency !== 'AED' && input.exchangeRate === undefined) {
+    throw new Error(`an invoice in ${currency} cannot be booked without a governed exchange rate to AED`);
+  }
   const exchangeRate = input.exchangeRate === undefined ? 1 : Number(input.exchangeRate);
   if (!Number.isFinite(exchangeRate) || exchangeRate <= 0) throw new Error('exchangeRate must be positive');
   if (currency === 'AED' && exchangeRate !== 1) throw new Error('base-currency (AED) invoices must have exchangeRate 1');
@@ -174,6 +189,9 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     currency,
     exchangeRate,
     baseTotal,
+    exchangeRateEffectiveDate: input.exchangeRateEffectiveDate ?? null,
+    exchangeRateSource: input.exchangeRateSource ?? null,
+    exchangeRateId: input.exchangeRateId ?? null,
     amountPaid: 0,
     status: 'draft',
     deletedAt: null,

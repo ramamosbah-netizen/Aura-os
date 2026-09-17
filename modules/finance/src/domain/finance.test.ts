@@ -15,6 +15,7 @@ import { InvoiceService } from '../invoice.service';
 import { AccessService, type EventStore, NumberingService, AuditService, type TxRunner, type CommandBus, type Command, type CommandDefinition } from '@aura/core';
 import { PurchaseOrderService, InMemoryPurchaseOrderStore, InMemorySupplierStore } from '@aura/procurement';
 import { GoodsReceiptService, InMemoryGoodsReceiptStore } from '@aura/inventory';
+import { ExchangeRateService } from '@aura/core';
 
 /** Test double for the app-layer PO-match adapter — builds the snapshot from real po/grn services
  *  (the 3-way match rule stays in InvoiceService; this only supplies the cross-context data). */
@@ -146,7 +147,7 @@ describe('Finance depth features', () => {
         fakeBus(),
         mockNumbering,
         mockAudit,
-        { getRate: async () => 1 } as any,
+        new ExchangeRateService(null),
         {} as any,
         {} as any,
         mockAccess,
@@ -224,7 +225,7 @@ describe('Finance depth features', () => {
       const paymentStore = new InMemoryPaymentStore();
       const invoiceService = new InvoiceService(
         invoiceStore, mockEvents, mockTx, fakeBus(), mockNumbering, mockAudit,
-        { getRate: async () => 1 } as any, {} as any, {} as any, mockAccess,
+        new ExchangeRateService(null), {} as any, {} as any, mockAccess,
       );
       invoiceService.onModuleInit();
       const accountService = new AccountService(accountStore, mockAccess);
@@ -288,7 +289,7 @@ describe('Finance depth features', () => {
         fakeBus(),
         mockNumbering,
         mockAudit,
-        { getRate: async () => 1 } as any,
+        new ExchangeRateService(null),
         {} as any,
         {} as any,
         mockAccess,
@@ -354,7 +355,7 @@ describe('Finance depth features', () => {
         fakeBus(),
         mockNumbering,
         mockAudit,
-        { getRate: async () => 1 } as any,
+        new ExchangeRateService(null),
         {} as any,
         {} as any,
         mockAccess,

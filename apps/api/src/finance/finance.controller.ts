@@ -1,7 +1,8 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
-import { parsePageParams, parseCsv, toCsv } from '@aura/shared';
+import { admitCurrency, parsePageParams, parseCsv, toCsv } from '@aura/shared';
+import { IsGovernableCurrency } from '../common/is-governable-currency';
 import {
   type Invoice,
   type InvoiceStatus,
@@ -62,8 +63,11 @@ class CreateInvoiceDto {
   @IsOptional() @IsString() projectName?: string | null;
   @IsOptional() @IsIn(['draft', 'approved', 'paid', 'cancelled']) status?: InvoiceStatus;
   @IsOptional() @IsNumber() @Min(0) value?: number;
-  @IsOptional() @IsString() currency?: string;
+  /** Refused at the boundary when AURA cannot govern a rate for it — see IsGovernableCurrency. */
+  @IsOptional() @IsGovernableCurrency() currency?: string;
   @IsOptional() @IsNumber() @Min(0) exchangeRate?: number;
+  /** The supplier's invoice date. The FX rate is governed at THIS date, not at entry time. */
+  @IsOptional() @IsString() invoiceDate?: string;
 }
 
 class UpdateInvoiceDto {
@@ -153,6 +157,7 @@ export class FinanceController {
       value: dto.value,
       currency: dto.currency,
       exchangeRate: dto.exchangeRate,
+      invoiceDate: dto.invoiceDate ?? null,
       ownerId: ctx.actorId,
       createdBy: ctx.actorId,
     }, idempotencyKey);
@@ -665,6 +670,12 @@ export class FinanceController {
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
     const ctx = this.tenant.get();
     if (dto.accountId && !(await this.accounts.get(dto.accountId))) throw new BadRequestException('account not found');
+    // The AR body is inline-typed rather than a decorated DTO, so the same currency policy is
+    // applied here by hand — one policy, two call shapes, never two answers (FX-01).
+    if (dto.currency !== undefined) {
+      const verdict = admitCurrency(dto.currency);
+      if (!verdict.admissible) throw new BadRequestException(verdict.detail);
+    }
     return await this.customerInvoices.create({
       tenantId: ctx.tenantId,
       companyId: ctx.companyId,

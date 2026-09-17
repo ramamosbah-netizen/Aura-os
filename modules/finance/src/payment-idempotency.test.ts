@@ -18,6 +18,7 @@ import { InMemoryPaymentStore } from './in-memory-payment-store';
 import { InMemoryJournalStore } from './in-memory-journal-store';
 import { InMemoryPeriodCloseStore } from './in-memory-period-close-store';
 import { InMemoryAccountStore } from './in-memory-account-store';
+import { ExchangeRateService } from '@aura/core';
 
 /**
  * The classic double-payment bug: a client retries a payment it never got a response for,
@@ -38,7 +39,7 @@ describe('Payment recording idempotency', () => {
 
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
-      { getRate: async () => 1 } as any, {} as any, {} as any, access,
+      new ExchangeRateService(null), {} as any, {} as any, access,
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);
@@ -70,7 +71,7 @@ describe('Payment recording idempotency', () => {
 
     const invoices = new InvoiceService(
       new InMemoryInvoiceStore(), events, new NullTxRunner(), bus, numbering, audit,
-      { getRate: async () => 1 } as any, {} as any, {} as any, access,
+      new ExchangeRateService(null), {} as any, {} as any, access,
     );
     invoices.onModuleInit();
     const accounts = new AccountService(new InMemoryAccountStore(), access);

@@ -1,3 +1,4 @@
+import { CURRENCIES } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 
 interface PoLite {
@@ -59,7 +60,24 @@ export default function InvoiceCreate({ pos }: { pos: PoLite[] }) {
         },
         { name: 'title', label: 'Invoice title', kind: 'text', required: true, placeholder: 'e.g. Invoice — CCTV supply', span: 2 },
         { name: 'reference', label: 'Reference', kind: 'text', placeholder: 'e.g. INV-8871' },
-        { name: 'value', label: 'Amount (AED)', kind: 'number', placeholder: '0' },
+        { name: 'value', label: 'Amount', kind: 'number', placeholder: '0' },
+        /**
+         * The currency is on the form because an invoice can be in one (FX-01). The label said
+         * "Amount (AED)" and nothing sent a currency, so a EUR supplier bill could not be entered
+         * here at all — and the refusal for an ungoverned rate had nowhere to appear.
+         *
+         * The list is the currencies AURA can govern a rate for. A currency with no governed rate
+         * for the invoice date is refused by the API and the reason is shown on this drawer.
+         */
+        {
+          name: 'currency',
+          label: 'Currency',
+          kind: 'select',
+          defaultValue: 'AED',
+          hint: 'A non-AED invoice needs a governed rate for its invoice date.',
+          options: CURRENCIES.map((code) => ({ value: code, label: code })),
+        },
+        { name: 'invoiceDate', label: 'Invoice date', kind: 'date', hint: 'The supplier’s date — the rate is taken at this date.' },
         { name: 'supplierName', label: 'Supplier', kind: 'text', placeholder: 'Auto-filled from PO, or type one', span: 2 },
       ]}
     />

@@ -205,7 +205,19 @@ function FormDrawerImpl({
       });
       if (!res.ok) {
         const d = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
-        setErr(d.error ?? d.message ?? `Error ${res.status}`);
+        /**
+         * PREFER THE SENTENCE OVER THE CODE.
+         *
+         * The API envelope is `{ error: 'BAD_REQUEST', message: '<why>' }` — `error` is a machine
+         * code and `message` is what a person needs. Reading `error` first meant every domain
+         * refusal reached the user as the word BAD_REQUEST: "No governed GBP/AED exchange rate is
+         * available for 10 Sep 2026" became an error class, and something the user could have
+         * fixed in seconds looked like a system fault.
+         *
+         * BFF routes that answer `{ error: '<sentence>' }` with no message still work, because the
+         * fallback is unchanged — this only stops a code outranking an explanation.
+         */
+        setErr(d.message ?? d.error ?? `Error ${res.status}`);
       } else {
         setOpen(false);
         setToast(`${schema.entity} ${isEdit ? 'updated' : 'created'}`);

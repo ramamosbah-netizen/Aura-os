@@ -8,7 +8,20 @@ import { Money, toCurrency, type Currency } from '@aura/shared';
  * Where a governed rate came from. A decision can see it and an audit can question it — the point of
  * FX-01 is that a number with no provenance is indistinguishable from an invented one.
  */
-export type GovernedRateSource = 'identity' | 'stored' | 'stored-inverse';
+export type GovernedRateSource =
+  /** A currency valued in itself. Not a market rate and not a fallback — see `resolveGovernedRate`. */
+  | 'identity'
+  /** A row in `aura_exchange_rates`, the production source of truth. */
+  | 'stored' | 'stored-inverse'
+  /**
+   * A rate registered through `setRate` in a run with NO database (the API e2e suite).
+   *
+   * Named apart from `stored` deliberately: it is not a governed row, it has no row id, and a
+   * caller — or an auditor reading a booked invoice — can tell the difference. In a production
+   * runtime a pool is always configured, so this can never be the answer; `governedSourceOfTruth`
+   * says which regime is in force and the service warns at construction when it is not Postgres.
+   */
+  | 'registered' | 'registered-inverse';
 
 /** Why no governed rate could be produced. Absence and failure are NOT the same answer. */
 export type GovernedRateUnknownReason =
@@ -37,6 +50,13 @@ export type GovernedRate =
       /** The date the governing rate took effect — null only for the identity rate. */
       effectiveDate: string | null;
       source: GovernedRateSource;
+      /**
+       * The `aura_exchange_rates` row this came from, so a booked invoice can cite it.
+       *
+       * Null for the identity rate and for a pool-less registration, because in neither case is
+       * there a row — which is itself the honest answer, not a missing one.
+       */
+      rateId: string | null;
     }
   | {
       status: 'unknown';
@@ -44,9 +64,24 @@ export type GovernedRate =
       to: string;
       asOf: string;
       reason: GovernedRateUnknownReason;
-      /** The refusal in the domain's own words, safe to show a user. */
+      /**
+       * THE COMPLETE REFUSAL SENTENCE, written to be read by the person who hit it.
+       *
+       * One sentence, used verbatim by the API and by the screen, so a user is never shown a
+       * generic "Error 400" for something as specific and as fixable as a missing rate. It names
+       * the pair and the date because those are what the reader has to act on, and it is phrased so
+       * the exception filter classifies it as a 400 rather than a 500.
+       */
       detail: string;
     };
+
+/** '2026-06-10' → '10 Jun 2026'. A refusal a user reads should carry a date a user reads. */
+function readableDate(iso: string): string {
+  const [y, m, d] = iso.split('-');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const month = months[Number(m) - 1];
+  return month ? `${Number(d)} ${month} ${y}` : iso;
+}
 
 @Injectable()
 export class ExchangeRateService {
@@ -213,47 +248,60 @@ export class ExchangeRateService {
     const source = toCurrency(from);
     const target = toCurrency(to);
     if (!source || !target) {
-      const offending = !source ? from : to;
+      const offending = String(!source ? from : to).trim().toUpperCase();
       return {
         status: 'unknown', from, to, asOf, reason: 'unsupported_currency',
-        detail: `'${String(offending).trim().toUpperCase()}' is not a currency AURA can govern a rate for`,
+        detail: `'${offending}' is not a currency AURA can govern an exchange rate for, so an amount in ${offending} cannot be valued.`,
       };
     }
 
     if (source === target) {
-      return { status: 'governed', rate: 1, from: source, to: target, asOf, effectiveDate: null, source: 'identity' };
+      /**
+       * A currency valued in ITSELF. Explicit, not a shortcut: base→base is 1 by definition, it is
+       * not a market rate and it is not a fallback, and it must never require a governed row —
+       * otherwise an ordinary AED invoice would be refused for want of an AED:AED rate. It is
+       * labelled `identity` so a booked invoice records that nothing was converted.
+       */
+      return { status: 'governed', rate: 1, from: source, to: target, asOf, effectiveDate: null, source: 'identity', rateId: null };
     }
 
     const absent: GovernedRate = {
       status: 'unknown', from: source, to: target, asOf, reason: 'no_governed_rate',
-      detail: `no exchange rate from ${source} to ${target} is registered effective on or before ${asOf}`,
+      detail: `No governed ${source}/${target} exchange rate is available for ${readableDate(asOf)} — a rate must be registered for that date before this amount can be valued.`,
     };
 
     if (!this.pool) {
+      // NO DATABASE. There is no governed store to read, so the only thing that can answer is what
+      // `setRate` registered in this process — reported as `registered`, never as `stored`.
       const direct = this.governedFromMemory(tenantId, source, target, asOf);
-      if (direct) return { status: 'governed', rate: direct.rate, from: source, to: target, asOf, effectiveDate: direct.effectiveDate, source: 'stored' };
+      if (direct) return { status: 'governed', rate: direct.rate, from: source, to: target, asOf, effectiveDate: direct.effectiveDate, source: 'registered', rateId: null };
       const inverse = this.governedFromMemory(tenantId, target, source, asOf);
-      if (inverse) return { status: 'governed', rate: 1 / inverse.rate, from: source, to: target, asOf, effectiveDate: inverse.effectiveDate, source: 'stored-inverse' };
+      if (inverse) return { status: 'governed', rate: 1 / inverse.rate, from: source, to: target, asOf, effectiveDate: inverse.effectiveDate, source: 'registered-inverse', rateId: null };
       return absent;
     }
 
+    /**
+     * A POOL IS CONFIGURED, so `aura_exchange_rates` is the ONLY authority consulted from here on.
+     * The in-memory registry is not read, not merged and not used as a fallback when the table has
+     * no row — a rate that exists only in this process has no audit trail and cannot govern money.
+     */
     const lookup = async (a: Currency, b: Currency) => {
       const res = await this.pool!.query(
-        `SELECT rate::float AS rate, effective_date::text AS effective_date
+        `SELECT id::text AS id, rate::float AS rate, effective_date::text AS effective_date
          FROM public.aura_exchange_rates
          WHERE tenant_id = $1 AND from_currency = $2 AND to_currency = $3 AND effective_date <= $4
          ORDER BY effective_date DESC
          LIMIT 1`,
         [tenantId, a, b, asOf],
       );
-      return res.rows[0] as { rate: number; effective_date: string } | undefined;
+      return res.rows[0] as { id: string; rate: number; effective_date: string } | undefined;
     };
 
     try {
       const direct = await lookup(source, target);
-      if (direct) return { status: 'governed', rate: direct.rate, from: source, to: target, asOf, effectiveDate: direct.effective_date, source: 'stored' };
+      if (direct) return { status: 'governed', rate: direct.rate, from: source, to: target, asOf, effectiveDate: direct.effective_date, source: 'stored', rateId: direct.id };
       const inverse = await lookup(target, source);
-      if (inverse) return { status: 'governed', rate: 1 / inverse.rate, from: source, to: target, asOf, effectiveDate: inverse.effective_date, source: 'stored-inverse' };
+      if (inverse) return { status: 'governed', rate: 1 / inverse.rate, from: source, to: target, asOf, effectiveDate: inverse.effective_date, source: 'stored-inverse', rateId: inverse.id };
       return absent;
     } catch (error: any) {
       // NOT absence. A caller that cannot read the rate store knows nothing about whether a rate
@@ -261,9 +309,19 @@ export class ExchangeRateService {
       this.logger.error(`Governed rate lookup failed ${source}->${target}: ${error?.message}`);
       return {
         status: 'unknown', from: source, to: target, asOf, reason: 'lookup_failed',
-        detail: `the exchange rate register could not be read, so ${source} cannot be valued in ${target}`,
+        detail: `The exchange rate register could not be read, so an amount in ${source} cannot be valued in ${target}.`,
       };
     }
+  }
+
+  /**
+   * WHICH REGIME IS GOVERNING RATES IN THIS RUNTIME. A production runtime must answer 'postgres'.
+   *
+   * Exposed so a caller, a health check or a test can assert it rather than infer it from whether a
+   * pool happens to be wired.
+   */
+  get governedSourceOfTruth(): 'postgres' | 'in-memory-registry' {
+    return this.pool ? 'postgres' : 'in-memory-registry';
   }
 
   /**
@@ -275,11 +333,12 @@ export class ExchangeRateService {
    */
   async requireGovernedRate(
     tenantId: string, from: string, to: string, date: Date = new Date(),
-  ): Promise<{ rate: number; from: Currency; to: Currency; effectiveDate: string | null; source: GovernedRateSource; asOf: string }> {
+  ): Promise<{ rate: number; from: Currency; to: Currency; effectiveDate: string | null; source: GovernedRateSource; rateId: string | null; asOf: string }> {
     const resolved = await this.resolveGovernedRate(tenantId, from, to, date);
-    if (resolved.status === 'unknown') {
-      throw new Error(`${resolved.detail} — a governed rate must be registered before this amount can be valued`);
-    }
+    // The refusal is thrown VERBATIM. One sentence, written once, shown identically by the API and
+    // by the screen — a message assembled differently at each layer is how a user ends up reading
+    // "Error 400" for a missing rate somebody could have registered in ten seconds.
+    if (resolved.status === 'unknown') throw new Error(resolved.detail);
     const { status, ...rate } = resolved;
     return rate;
   }

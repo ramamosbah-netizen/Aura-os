@@ -21,13 +21,17 @@ interface Row {
   currency: string | null;
   exchange_rate: string | number | null;
   base_value: string | number | null;
+  invoice_date: string | null;
+  exchange_rate_effective_date: string | null;
+  exchange_rate_source: string | null;
+  exchange_rate_id: string | null;
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
-  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, wbs_node_id, status, value, currency, exchange_rate, base_value, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, po_id, po_title, supplier_name, project_id, project_name, wbs_node_id, status, value, currency, exchange_rate, base_value, invoice_date, exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, owner_id, created_by, created_at';
 
 function rowToInvoice(r: Row): Invoice {
   return {
@@ -47,6 +51,11 @@ function rowToInvoice(r: Row): Invoice {
     currency: r.currency ?? 'AED',
     exchangeRate: r.exchange_rate == null ? 1 : Number(r.exchange_rate),
     baseValue: r.base_value == null ? Number(r.value) : Number(r.base_value),
+    // NULL provenance is legacy evidence — booked before FX-01 and never backfilled (migration 0348).
+    invoiceDate: r.invoice_date ?? null,
+    exchangeRateEffectiveDate: r.exchange_rate_effective_date ?? null,
+    exchangeRateSource: r.exchange_rate_source ?? null,
+    exchangeRateId: r.exchange_rate_id ?? null,
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
@@ -68,8 +77,8 @@ export class PostgresInvoiceStore implements InvoiceStore {
 
   private insert(executor: Pool | PoolClient, i: Invoice): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
-      [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.wbsNodeId, i.status, i.value, i.currency, i.exchangeRate, i.baseValue, i.ownerId, i.createdBy, i.createdAt],
+      `INSERT INTO public.aura_finance_invoices (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)`,
+      [i.id, i.tenantId, i.companyId, i.reference, i.title, i.poId, i.poTitle, i.supplierName, i.projectId, i.projectName, i.wbsNodeId, i.status, i.value, i.currency, i.exchangeRate, i.baseValue, i.invoiceDate, i.exchangeRateEffectiveDate, i.exchangeRateSource, i.exchangeRateId, i.ownerId, i.createdBy, i.createdAt],
     );
   }
 

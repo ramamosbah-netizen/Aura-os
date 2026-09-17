@@ -46,7 +46,7 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
 
     const resolved = await service.resolveGovernedRate(t, 'EUR', 'AED', new Date('2026-09-17'));
     expect(resolved).toMatchObject({
-      status: 'governed', rate: 4.21, source: 'stored', effectiveDate: '2026-09-01', asOf: '2026-09-17',
+      status: 'governed', rate: 4.21, source: 'registered', effectiveDate: '2026-09-01', asOf: '2026-09-17', rateId: null,
     });
   });
 
@@ -72,7 +72,7 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
     await service.setRate(t, 'AED', 'EUR', 0.25, new Date('2026-09-01'));
 
     const resolved = await service.resolveGovernedRate(t, 'EUR', 'AED', new Date('2026-09-17'));
-    expect(resolved).toMatchObject({ status: 'governed', rate: 4, source: 'stored-inverse' });
+    expect(resolved).toMatchObject({ status: 'governed', rate: 4, source: 'registered-inverse' });
   });
 
   it('does not answer one tenant with the rate registered by another', async () => {
@@ -133,20 +133,30 @@ describe('resolveGovernedRate — the FX authority is allowed to say no', () => 
 
   it('reads the governed rate from the database, with its effective date', async () => {
     const pool = {
-      query: vi.fn().mockResolvedValue({ rows: [{ rate: 4.18, effective_date: '2026-09-12' }] }),
+      query: vi.fn().mockResolvedValue({ rows: [{ id: 'row-7', rate: 4.18, effective_date: '2026-09-12' }] }),
     } as unknown as Pool;
 
     const resolved = await new ExchangeRateService(pool).resolveGovernedRate(t, 'EUR', 'AED', new Date('2026-09-17'));
-    expect(resolved).toMatchObject({ status: 'governed', rate: 4.18, effectiveDate: '2026-09-12', source: 'stored' });
+    expect(resolved).toMatchObject({ status: 'governed', rate: 4.18, effectiveDate: '2026-09-12', source: 'stored', rateId: 'row-7' });
   });
 });
 
 describe('requireGovernedRate — refusing in words the API can classify', () => {
-  it('refuses an ungoverned pair with a sentence that reads as a 400', async () => {
+  it('refuses each way of not knowing in a sentence a person can act on', async () => {
     const service = new ExchangeRateService(null);
-    await expect(service.requireGovernedRate('t', 'JPY', 'AED')).rejects.toThrow(/must be registered/);
-    // `must` is what the exception filter reads to place this as a 400 rather than a 500.
+
+    // A currency AURA cannot govern at all — telling the reader to register a rate would be wrong
+    // advice, because they cannot.
+    await expect(service.requireGovernedRate('t', 'JPY', 'AED'))
+      .rejects.toThrow(/'JPY' is not a currency AURA can govern an exchange rate for/);
+
+    // A governable pair with no rate — names the pair and the date, in the form a person reads.
+    await expect(service.requireGovernedRate('t', 'EUR', 'AED', new Date('2026-06-10')))
+      .rejects.toThrow(/No governed EUR\/AED exchange rate is available for 10 Jun 2026/);
+
+    // `cannot` / `must` is what the exception filter reads to place these as 400s, not 500s.
     await expect(service.requireGovernedRate('t', 'JPY', 'AED')).rejects.toThrow(/cannot|must/);
+    await expect(service.requireGovernedRate('t', 'EUR', 'AED')).rejects.toThrow(/cannot|must/);
   });
 
   it('returns the rate with its provenance when one is governed', async () => {
@@ -154,6 +164,46 @@ describe('requireGovernedRate — refusing in words the API can classify', () =>
     await service.setRate('t', 'USD', 'AED', 3.67, new Date('2026-09-01'));
 
     await expect(service.requireGovernedRate('t', 'USD', 'AED', new Date('2026-09-17')))
-      .resolves.toMatchObject({ rate: 3.67, from: 'USD', to: 'AED', effectiveDate: '2026-09-01', source: 'stored' });
+      .resolves.toMatchObject({ rate: 3.67, from: 'USD', to: 'AED', effectiveDate: '2026-09-01', source: 'registered' });
+  });
+});
+
+describe('the production authority is PostgreSQL, and only PostgreSQL', () => {
+  it('says which regime is governing rates, rather than leaving it to be inferred', () => {
+    expect(new ExchangeRateService(null).governedSourceOfTruth).toBe('in-memory-registry');
+    expect(new ExchangeRateService({ query: vi.fn() } as unknown as Pool).governedSourceOfTruth).toBe('postgres');
+  });
+
+  it('never falls back to an in-process registration when a pool is configured', async () => {
+    // The INSERT from setRate succeeds; every SELECT finds nothing. That is a tenant whose rate
+    // lives only in this process's memory — exactly the case that must NOT govern money.
+    const query = vi.fn().mockImplementation((sql: string) =>
+      sql.trim().toUpperCase().startsWith('INSERT') ? { rows: [] } : { rows: [] });
+    const service = new ExchangeRateService({ query } as unknown as Pool);
+    await service.setRate('t', 'EUR', 'AED', 4.21, new Date('2026-09-01'));
+
+    // It IS in the in-process registry — a pool-less service would answer with it…
+    const poolless = new ExchangeRateService(null);
+    await poolless.setRate('t', 'EUR', 'AED', 4.21, new Date('2026-09-01'));
+    expect((await poolless.resolveGovernedRate('t', 'EUR', 'AED', new Date('2026-09-17'))).status).toBe('governed');
+
+    // …and the pool-backed one refuses, because the governed table has no row.
+    const resolved = await service.resolveGovernedRate('t', 'EUR', 'AED', new Date('2026-09-17'));
+    expect(resolved.status).toBe('unknown');
+    if (resolved.status !== 'unknown') throw new Error('unreachable');
+    expect(resolved.reason).toBe('no_governed_rate');
+  });
+
+  it('carries the governed row id, so a booked amount can cite WHY the rate was that number', async () => {
+    const pool = {
+      query: vi.fn().mockResolvedValue({ rows: [{ id: 'rate-row-1', rate: 4.18, effective_date: '2026-09-12' }] }),
+    } as unknown as Pool;
+    const resolved = await new ExchangeRateService(pool).resolveGovernedRate('t', 'EUR', 'AED');
+    expect(resolved).toMatchObject({ status: 'governed', rateId: 'rate-row-1', source: 'stored' });
+  });
+
+  it('gives the identity rate no row and no effective date, because there is no rate to cite', async () => {
+    const resolved = await new ExchangeRateService(null).resolveGovernedRate('t', 'AED', 'AED');
+    expect(resolved).toMatchObject({ status: 'governed', rate: 1, source: 'identity', rateId: null, effectiveDate: null });
   });
 });

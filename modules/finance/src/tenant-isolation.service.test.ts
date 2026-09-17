@@ -27,6 +27,7 @@ import { makeInvoice } from './domain/invoice';
 import { makeCustomerInvoice } from './domain/customer-invoice';
 import { makeBankTransaction } from './domain/bank-transaction';
 import { makePayment } from './domain/payment';
+import { ExchangeRateService } from '@aura/core';
 
 /**
  * Cross-tenant isolation at the SERVICE layer (register G-03).
@@ -62,7 +63,7 @@ function invoiceHarness() {
   const bus = new CommandBus(ac, new IdempotencyService(null), new LockService(), new NullTxRunner());
   const svc = new InvoiceService(
     store, events(), new NullTxRunner(), bus, numbering(), audit(),
-    { getRate: async () => 1 } as any, {} as any, {} as any, ac,
+    new ExchangeRateService(null), {} as any, {} as any, ac,
     undefined, tenant,
   );
   return { store, svc, tenant };
@@ -112,7 +113,7 @@ function customerInvoiceHarness() {
   const store = new InMemoryCustomerInvoiceStore();
   const tenant = new TenantContext();
   const svc = new CustomerInvoiceService(
-    store, events(), { getRate: async () => 1 } as any, {} as any, {} as any, undefined, tenant,
+    store, events(), new ExchangeRateService(null), {} as any, {} as any, undefined, tenant,
   );
   const seed = () =>
     makeCustomerInvoice({
@@ -167,7 +168,7 @@ function paymentHarness() {
   const invStore = new InMemoryInvoiceStore();
   const invoices = new InvoiceService(
     invStore, ev, new NullTxRunner(), bus, numbering(), audit(),
-    { getRate: async () => 1 } as any, {} as any, {} as any, ac,
+    new ExchangeRateService(null), {} as any, {} as any, ac,
   );
   invoices.onModuleInit();
   const accounts = new AccountService(new InMemoryAccountStore(), ac);

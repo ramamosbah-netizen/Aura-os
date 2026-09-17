@@ -11,6 +11,8 @@ export async function POST(request: Request): Promise<Response> {
     supplierName?: unknown;
     projectId?: unknown;
     projectName?: unknown;
+    currency?: unknown;
+    invoiceDate?: unknown;
   };
   const title = typeof body.title === 'string' ? body.title : '';
   if (!title.trim()) {
@@ -29,6 +31,11 @@ export async function POST(request: Request): Promise<Response> {
         supplierName: typeof body.supplierName === 'string' ? body.supplierName : null,
         projectId: typeof body.projectId === 'string' ? body.projectId : null,
         projectName: typeof body.projectName === 'string' ? body.projectName : null,
+        // Forwarded, not defaulted. An unforwarded currency silently became AED, which meant the
+        // screen could not express a foreign-currency invoice at all — and could not be refused
+        // for one either (FX-01).
+        currency: typeof body.currency === 'string' && body.currency.trim() ? body.currency.trim() : undefined,
+        invoiceDate: typeof body.invoiceDate === 'string' && body.invoiceDate.trim() ? body.invoiceDate.trim() : undefined,
       }),
       cache: 'no-store',
     });

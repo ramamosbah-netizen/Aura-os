@@ -71,7 +71,9 @@ describe('the governed FX rate (HTTP, Auth-ON)', () => {
     const res = await governed('USD', 'AED', '2026-09-17').expect(200);
     expect(res.body).toMatchObject({
       status: 'governed', rate: 3.6701, from: 'USD', to: 'AED',
-      effectiveDate: '2026-09-01', asOf: '2026-09-17', source: 'stored',
+      // `registered`, not `stored`: this suite has no database, so the rate came from the service's
+      // own in-process registry. The source names that difference rather than hiding it.
+      effectiveDate: '2026-09-01', asOf: '2026-09-17', source: 'registered', rateId: null,
     });
   });
 

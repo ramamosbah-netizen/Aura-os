@@ -97,12 +97,36 @@ export class InvoiceService implements OnModuleInit {
     });
   }
 
+
+  /**
+   * RESOLVE THE BOOKING RATE, OR REFUSE THE INVOICE (FX-01).
+   *
+   * Runs BEFORE anything is written, which is what makes the refusal atomic: the command bus has
+   * not been entered, so there is no row, no line, no outbox event and no journal to unwind. The
+   * domain carries the same invariant inside the transaction as a second line of defence.
+   *
+   * The rate is governed AT THE INVOICE DATE — the date the supplier issued it, not the date
+   * somebody typed it in. An invoice dated last month is worth last month's rate.
+   *
+   * An explicit rate from the caller is honoured and left alone. Somebody who supplies a rate is
+   * asserting it, and its provenance is recorded as exactly that: nothing, because AURA did not
+   * govern it.
+   */
+  private async valueInBaseCurrency(input: NewInvoice): Promise<NewInvoice> {
+    if (input.exchangeRate !== undefined) return input;
+    const asOf = input.invoiceDate ? new Date(input.invoiceDate) : new Date();
+    const rate = await this.fx.requireGovernedRate(input.tenantId, input.currency ?? 'AED', 'AED', asOf);
+    return {
+      ...input,
+      exchangeRate: rate.rate,
+      exchangeRateEffectiveDate: rate.effectiveDate,
+      exchangeRateSource: rate.source,
+      exchangeRateId: rate.rateId,
+    };
+  }
+
   async create(input: NewInvoice, idempotencyKey?: string | null): Promise<Invoice> {
-    // Multi-currency: resolve the effective rate to base for a non-AED AP invoice without an explicit rate.
-    const currency = (input.currency ?? 'AED').toUpperCase();
-    if (currency !== 'AED' && input.exchangeRate === undefined) {
-      input = { ...input, exchangeRate: await this.fx.getRate(input.tenantId, currency as Currency, 'AED') };
-    }
+    input = await this.valueInBaseCurrency(input);
     const invoice = await this.commands.execute<Invoice>({
       id: newId(),
       name: CREATE_INVOICE,
@@ -268,18 +292,29 @@ export class InvoiceService implements OnModuleInit {
   /** FX revaluation — unrealized gain/loss on open foreign-currency AP at current rates. */
   async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
-    const rateCache = new Map<string, number>();
+    const on = asOf ?? new Date().toISOString().slice(0, 10);
+    /**
+     * The CURRENT rate is resolved AT THE REVALUATION DATE, not at today (FX-01). A period-end
+     * revaluation as of 30 June must use June's governed rate; reading today's was the old
+     * behaviour and it silently made a closed period move.
+     *
+     * A currency with no governed rate at that date maps to null, and every invoice in it comes
+     * back as unresolved rather than as a flat position.
+     */
+    const rateCache = new Map<string, number | null>();
     for (const inv of all) {
       const c = (inv.currency ?? baseCurrency).toUpperCase();
       if (c !== baseCurrency && !rateCache.has(c)) {
-        rateCache.set(c, await this.fx.getRate(tenantId, c as Currency, baseCurrency as Currency));
+        const resolved = await this.fx.resolveGovernedRate(tenantId, c, baseCurrency, new Date(on));
+        rateCache.set(c, resolved.status === 'governed' ? resolved.rate : null);
       }
     }
     return computeFxRevaluation(
-      // AP has no partial payments: outstanding = full value while approved.
-      all.map((i) => ({ invoiceNumber: i.reference ?? i.id, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate ?? 1, total: i.value, amountPaid: 0, status: i.status })),
-      (c) => rateCache.get(c) ?? 1,
-      asOf ?? new Date().toISOString().slice(0, 10),
+      // AP has no partial payments: outstanding = full value while approved. The BOOKED rate is
+      // read off the document as persisted and is never re-resolved.
+      all.map((i) => ({ invoiceNumber: i.reference ?? i.id, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate, total: i.value, amountPaid: 0, status: i.status })),
+      (c) => rateCache.get(c) ?? null,
+      on,
       baseCurrency,
       AP_OPEN,
     );
@@ -293,6 +328,15 @@ export class InvoiceService implements OnModuleInit {
   /** Compute the AP FX revaluation and post the unrealized gain/loss journal to the GL. */
   async postFxRevaluation(tenantId: string, asOf?: string, actorId?: Id): Promise<{ revaluation: Awaited<ReturnType<InvoiceService['fxRevaluation']>>; journalId: string | null }> {
     const reval = await this.fxRevaluation(tenantId, asOf);
+    /**
+     * AN INCOMPLETE REVALUATION IS NOT POSTED (FX-01). If any open exposure could not be valued, the
+     * total is a partial figure, and posting it would state as fact that the rest did not move.
+     * Refuse and name what is missing; the read above still shows the measurable part.
+     */
+    if (!reval.complete) {
+      const [first] = reval.unresolved;
+      throw new Error(`the AP FX revaluation as of ${reval.asOf} is incomplete and cannot be posted — ${first.detail}`);
+    }
     // AP is a credit-normal liability: a higher current rate means we owe MORE in base terms,
     // so a positive delta (base@current − base@booked) is an economic LOSS. Invert for P&L.
     const economicGain = moneyNumber(-reval.totalGainLoss);

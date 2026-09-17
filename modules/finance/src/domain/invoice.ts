@@ -31,6 +31,15 @@ export interface Invoice {
   /** Rate to base (AED): baseValue = value × exchangeRate. 1 for base-currency invoices. */
   exchangeRate: number;
   baseValue: number;
+  /**
+   * The date the SUPPLIER issued the invoice, which is the date its rate is governed at — not the
+   * date it was typed in. Null on rows booked before FX-01, where it is genuinely unknown.
+   */
+  invoiceDate: string | null;
+  /** WHICH governed rate valued this (FX-01). Null = booked before provenance existed. */
+  exchangeRateEffectiveDate: string | null;
+  exchangeRateSource: string | null;
+  exchangeRateId: string | null;
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
@@ -51,11 +60,35 @@ export interface NewInvoice {
   value?: number;
   currency?: string;
   exchangeRate?: number;
+  invoiceDate?: string | null;
+  exchangeRateEffectiveDate?: string | null;
+  exchangeRateSource?: string | null;
+  exchangeRateId?: string | null;
   ownerId?: Id | null;
   createdBy?: Id | null;
 }
 
+/** The company base currency. Everything is valued in this; an invoice in it needs no rate. */
+const BASE_CURRENCY = 'AED';
+
 export function makeInvoice(input: NewInvoice): Invoice {
+  const currency = (input.currency ?? BASE_CURRENCY).trim().toUpperCase();
+  /**
+   * A FOREIGN-CURRENCY INVOICE CANNOT BE CONSTRUCTED WITHOUT A RATE (FX-01).
+   *
+   * This used to default a missing rate to 1, so a EUR 100,000 invoice booked AED 100,000 if the
+   * service ever failed to resolve one. The service now refuses first, and this is the invariant
+   * underneath it: the domain will not produce a base value nobody can justify. It lives inside the
+   * command handler's transaction, so tripping it rolls the whole create back.
+   */
+  const rateGiven = input.exchangeRate !== undefined && Number.isFinite(Number(input.exchangeRate));
+  if (currency !== BASE_CURRENCY && !rateGiven) {
+    throw new Error(`an invoice in ${currency} cannot be booked without a governed exchange rate to ${BASE_CURRENCY}`);
+  }
+  if (rateGiven && !(Number(input.exchangeRate) > 0)) {
+    throw new Error('an exchange rate must be a positive number');
+  }
+  const exchangeRate = rateGiven ? Number(input.exchangeRate) : 1;
   return {
     id: newId(),
     tenantId: input.tenantId,
@@ -70,9 +103,13 @@ export function makeInvoice(input: NewInvoice): Invoice {
     wbsNodeId: input.wbsNodeId ?? null,
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
-    currency: (input.currency ?? 'AED').trim().toUpperCase(),
-    exchangeRate: input.exchangeRate === undefined ? 1 : Number(input.exchangeRate),
-    baseValue: Number(convertMoney(Number.isFinite(input.value) ? Number(input.value) : 0, input.exchangeRate === undefined ? 1 : Number(input.exchangeRate))),
+    currency,
+    exchangeRate,
+    baseValue: Number(convertMoney(Number.isFinite(input.value) ? Number(input.value) : 0, exchangeRate)),
+    invoiceDate: input.invoiceDate ?? null,
+    exchangeRateEffectiveDate: input.exchangeRateEffectiveDate ?? null,
+    exchangeRateSource: input.exchangeRateSource ?? null,
+    exchangeRateId: input.exchangeRateId ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

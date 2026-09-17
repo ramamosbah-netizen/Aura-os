@@ -81,6 +81,14 @@ export class CustomerInvoiceService {
   /** Compute the AR FX revaluation and post the unrealized gain/loss journal to the GL. */
   async postFxRevaluation(tenantId: string, asOf?: string, actorId?: Id): Promise<{ revaluation: Awaited<ReturnType<CustomerInvoiceService['fxRevaluation']>>; journalId: string | null }> {
     const reval = await this.fxRevaluation(tenantId, asOf);
+    /**
+     * AN INCOMPLETE REVALUATION IS NOT POSTED (FX-01). A partial total posted to the ledger states
+     * that the exposure it could not measure did not move. Refuse, and name what is missing.
+     */
+    if (!reval.complete) {
+      const [first] = reval.unresolved;
+      throw new Error(`the AR FX revaluation as of ${reval.asOf} is incomplete and cannot be posted — ${first.detail}`);
+    }
     const gl = moneyNumber(reval.totalGainLoss);
     if (gl === 0) return { revaluation: reval, journalId: null };
 
@@ -99,14 +107,29 @@ export class CustomerInvoiceService {
     return { revaluation: reval, journalId: journal.id };
   }
 
+  /**
+   * RESOLVE THE BOOKING RATE, OR REFUSE THE INVOICE (FX-01).
+   *
+   * Before the invoice is built and long before anything is saved or any event appended, so the
+   * refusal leaves nothing behind. Governed AT THE ISSUE DATE — an invoice issued last month is
+   * worth last month's rate, not today's. An explicit rate from the caller is their assertion and
+   * is left alone, with no governed provenance recorded, because AURA did not govern it.
+   */
+  private async valueInBaseCurrency(input: NewCustomerInvoice): Promise<NewCustomerInvoice> {
+    if (input.exchangeRate !== undefined) return input;
+    const asOf = /^\d{4}-\d{2}-\d{2}$/.test(input.issueDate ?? '') ? new Date(input.issueDate) : new Date();
+    const rate = await this.fx.requireGovernedRate(input.tenantId, input.currency ?? 'AED', 'AED', asOf);
+    return {
+      ...input,
+      exchangeRate: rate.rate,
+      exchangeRateEffectiveDate: rate.effectiveDate,
+      exchangeRateSource: rate.source,
+      exchangeRateId: rate.rateId,
+    };
+  }
+
   async create(input: NewCustomerInvoice): Promise<CustomerInvoice> {
-    // Multi-currency: for a non-base (≠AED) invoice with no explicit rate, resolve the
-    // effective rate to the base currency so baseTotal is computed for consolidated reporting.
-    const currency = (input.currency ?? 'AED').toUpperCase();
-    if (currency !== 'AED' && input.exchangeRate === undefined) {
-      const rate = await this.fx.getRate(input.tenantId, currency as Currency, 'AED');
-      input = { ...input, exchangeRate: rate };
-    }
+    input = await this.valueInBaseCurrency(input);
     const inv = makeCustomerInvoice(input);
     // Invoice numbers are the legal identifier on an AR document and the key the customer, the FTA
     // VAT return and the audit trail all cite. They are user-supplied here (unlike AP references,
@@ -204,17 +227,25 @@ export class CustomerInvoiceService {
   /** FX revaluation — unrealized gain/loss on open foreign-currency AR at current rates. */
   async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
     const all = await this.store.list({ tenantId, limit: 1000 });
-    const rateCache = new Map<string, number>();
+    const on = asOf ?? new Date().toISOString().slice(0, 10);
+    /**
+     * The CURRENT rate is resolved AT THE REVALUATION DATE, not at today (FX-01), and a currency
+     * with no governed rate at that date maps to null so its invoices come back unresolved rather
+     * than as a flat position.
+     */
+    const rateCache = new Map<string, number | null>();
     for (const inv of all) {
       const c = (inv.currency ?? baseCurrency).toUpperCase();
       if (c !== baseCurrency && !rateCache.has(c)) {
-        rateCache.set(c, await this.fx.getRate(tenantId, c as Currency, baseCurrency as Currency));
+        const resolved = await this.fx.resolveGovernedRate(tenantId, c, baseCurrency, new Date(on));
+        rateCache.set(c, resolved.status === 'governed' ? resolved.rate : null);
       }
     }
     return computeFxRevaluation(
-      all.map((i) => ({ invoiceNumber: i.invoiceNumber, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate ?? 1, total: i.total, amountPaid: i.amountPaid, status: i.status })),
-      (c) => rateCache.get(c) ?? 1,
-      asOf ?? new Date().toISOString().slice(0, 10),
+      // The BOOKED rate is read off the document as persisted and is never re-resolved.
+      all.map((i) => ({ invoiceNumber: i.invoiceNumber, currency: i.currency ?? baseCurrency, exchangeRate: i.exchangeRate, total: i.total, amountPaid: i.amountPaid, status: i.status })),
+      (c) => rateCache.get(c) ?? null,
+      on,
       baseCurrency,
     );
   }

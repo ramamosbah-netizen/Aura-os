@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-09-17T17:24:45.770Z",
+  "defect": "FX-01",
+  "reads_only": true,
+  "schema": {
+    "provenance_columns_present": false,
+    "note": "migration 0348 NOT applied — every foreign-currency row here predates the remediation"
+  },
+  "ap": {
+    "label": "AP supplier invoices",
+    "total": 0,
+    "booked_after_remediation": 0,
+    "classes": {},
+    "rows": []
+  },
+  "ar": {
+    "label": "AR customer invoices",
+    "total": 0,
+    "booked_after_remediation": 0,
+    "classes": {},
+    "rows": []
+  },
+  "environment": {
+    "project": "AURA (jzhvmempkpgitmfunoyr), Supabase, ap-northeast-2",
+    "connection": "owner role `postgres`, default_transaction_read_only = on (write probe refused before the audit ran)",
+    "migrations_applied": 281,
+    "migrations_on_disk_at_audit_time": 348
+  },
+  "corroboration": {
+    "why_zero_is_a_real_answer": "A zero from this audit has been wrong before: read as `aura_app` it reported nothing because RLS hid every row. This run used the owning role and passed the cross-tenant visibility guard. To distinguish \"no FX exposure\" from \"no data\", all 250 aura_ tables were counted: 40 hold rows.",
+    "database_is_populated": "559 events, 5 projects, 5 contracts, 16 opportunities, 9 tenders, 11 CRM accounts, 26 roles, 2 users",
+    "finance_module_unused": "aura_finance_invoices = 0 rows, aura_finance_customer_invoices = 0 rows, aura_exchange_rates = 0 rows; no finance table holds any row"
+  },
+  "conclusion": "No invoice was ever booked on this database, so FX-01 caused no historical damage here. The defect was reachable — a JPY invoice was booked at the USD peg against a local database earlier the same day — but it was never exercised in this environment, because the finance module was never used in it.",
+  "not_covered": [
+    "The second Supabase project, new-erp (renqeeaabnqoikhvczww), was INACTIVE and was NOT audited.",
+    "Any environment not reachable from this workspace is outside this audit and no claim is made about it."
+  ]
+}

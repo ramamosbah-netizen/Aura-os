@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { QuotationCaptureService } from '@aura/procurement';
+import { QuotationCaptureService, QuotationLineService } from '@aura/procurement';
 import { admitCurrency } from '@aura/shared';
 import { IsGovernableCurrency } from '../common/is-governable-currency';
 
@@ -54,10 +54,36 @@ class AlternativeDto {
   @IsString() label!: string;
 }
 
+
+class RevisionLineDto {
+  @IsString() prLineId!: string;
+  @IsOptional() @IsIn(['quoted', 'no_bid']) response?: 'quoted' | 'no_bid';
+  /** The supplier's own words for what they are offering. */
+  @IsOptional() @IsString() supplierDescription?: string | null;
+  @IsOptional() @IsString() offeredManufacturer?: string | null;
+  @IsOptional() @IsString() offeredModel?: string | null;
+  @IsOptional() @IsString() partNumber?: string | null;
+  @IsOptional() @IsNumber() @Min(0) quantity?: number | null;
+  @IsOptional() @IsString() uom?: string | null;
+  @IsOptional() @IsNumber() @Min(0) unitPrice?: number | null;
+  @IsOptional() @IsNumber() @Min(0) lineDiscount?: number | null;
+  /** The supplier's TECHNICAL departure from the specification — their claim, not a verdict. */
+  @IsOptional() @IsString() deviations?: string | null;
+  /** A COMMERCIAL condition: part shipment, a price condition, terms. A different kind of claim. */
+  @IsOptional() @IsString() commercialDeviation?: string | null;
+  @IsOptional() @IsString() exclusions?: string | null;
+  /** Lead time lives HERE and not on the header: one figure cannot say when each item arrives. */
+  @IsOptional() @IsNumber() @Min(0) leadTimeDays?: number | null;
+  @IsOptional() @IsNumber() @Min(0) warrantyMonths?: number | null;
+  @IsOptional() @IsString() notes?: string | null;
+  @IsOptional() @IsIn(['comply', 'comply_with_deviation', 'not_offered']) complianceResponse?: 'comply' | 'comply_with_deviation' | 'not_offered' | null;
+}
+
 @Controller('procurement/quotations')
 export class QuotationCaptureController {
   constructor(
     private readonly capture: QuotationCaptureService,
+    private readonly lines: QuotationLineService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -174,5 +200,49 @@ export class QuotationCaptureController {
   listByRfq(@Query('rfqId') rfqId?: string) {
     if (!rfqId?.trim()) throw new BadRequestException('rfqId is required');
     return this.capture.readByRfq(this.tenant.get().tenantId, rfqId);
+  }
+
+  /**
+   * What the supplier offered for ONE requirement, inside this revision.
+   *
+   * Bound to the revision rather than to the quotation, so the prices in Rev 1 stay exactly as
+   * quoted when Rev 2 arrives. Refused once the revision is confirmed or retired: a commercial
+   * snapshot that can still take new prices is not a snapshot.
+   */
+  @Permissions('procurement.rfq.create')
+  @Post('revisions/:revisionId/lines')
+  addLine(@Param('revisionId', ParseUuidOr404Pipe) revisionId: string, @Body() dto: RevisionLineDto) {
+    if (!dto?.prLineId?.trim()) {
+      throw new BadRequestException('prLineId is required — a quotation line must answer a requisition line');
+    }
+    const ctx = this.tenant.get();
+    return this.lines.add(ctx.tenantId, {
+      revisionId,
+      prLineId: dto.prLineId,
+      response: dto.response,
+      supplierDescription: dto.supplierDescription ?? null,
+      offeredManufacturer: dto.offeredManufacturer ?? null,
+      offeredModel: dto.offeredModel ?? null,
+      partNumber: dto.partNumber ?? null,
+      quantity: dto.quantity ?? null,
+      uom: dto.uom ?? null,
+      unitPrice: dto.unitPrice ?? null,
+      lineDiscount: dto.lineDiscount ?? null,
+      deviations: dto.deviations ?? null,
+      commercialDeviation: dto.commercialDeviation ?? null,
+      exclusions: dto.exclusions ?? null,
+      leadTimeDays: dto.leadTimeDays ?? null,
+      warrantyMonths: dto.warrantyMonths ?? null,
+      notes: dto.notes ?? null,
+      complianceResponse: dto.complianceResponse ?? null,
+      createdBy: ctx.actorId ?? null,
+    });
+  }
+
+  /** The lines of one revision, at the prices that revision actually quoted. */
+  @Permissions('procurement.rfq.read')
+  @Get('revisions/:revisionId/lines')
+  listLines(@Param('revisionId', ParseUuidOr404Pipe) revisionId: string) {
+    return this.lines.listByRevision(this.tenant.get().tenantId, revisionId);
   }
 }

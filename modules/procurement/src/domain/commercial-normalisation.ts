@@ -1,6 +1,6 @@
 import { moneyNumber } from '@aura/shared';
 import type { QuotationLine } from './quotation-line';
-import type { RfqQuote } from './rfq';
+import type { QuotationRevision } from './quotation-family';
 
 /**
  * SUP-06 — COMMERCIAL NORMALISATION.
@@ -98,11 +98,36 @@ export type CommercialStatus = 'live' | 'expired' | 'validity_unknown';
 /** Whether the quantity offered answers the quantity asked for. Separate again. */
 export type QuantityCompliance = 'exact' | 'deviated' | 'unknown';
 
+/**
+ * WHICH OFFER, AND WHICH REVISION OF IT, produced this row.
+ *
+ * Carried on every comparison row so a sheet reads "Supplier A, Q-1001 Rev 2, received 15 Sep 2026"
+ * rather than "Supplier A — AED 95". A comparable figure whose origin cannot be named is not
+ * auditable, and a supplier's Rev 1 and Rev 2 are different offers at different prices.
+ */
+export interface RevisionProvenance {
+  familyId: string;
+  supplierQuotationRef: string | null;
+  offerId: string;
+  offerKind: 'base' | 'alternative';
+  offerLabel: string | null;
+  revisionId: string;
+  revisionNo: number;
+  supplierRevisionRef: string | null;
+  receivedAt: string | null;
+}
+
 export interface NormalisedRequirementLine {
-  quotationId: string;
-  quotationLineId: string;
+  quotationLineId: string | null;
   supplierId: string | null;
   supplierName: string;
+  /** Null only when the offer has NO commercially effective revision — see `notComparableReason`. */
+  provenance: RevisionProvenance | null;
+  /**
+   * Why this supplier appears with no values at all. A supplier whose current offer was withdrawn
+   * MUST still appear: one vanishing from a comparison is the failure nobody notices.
+   */
+  notComparableReason: string | null;
 
   requestedQuantity: number | null;
   requestedUom: string | null;
@@ -152,7 +177,7 @@ function discountedUnitPrice(line: QuotationLine): number | null {
  */
 function toExTax(
   unitPrice: number,
-  quote: Pick<RfqQuote, 'taxTreatment' | 'taxRatePct'>,
+  quote: Pick<QuotationRevision, 'taxTreatment' | 'taxRatePct'>,
 ): { ok: true; value: number } | { ok: false; reason: UnknownReason; missing: string[] } {
   if (quote.taxTreatment === null) {
     return { ok: false, reason: 'tax_treatment_unknown', missing: ['quotation.taxTreatment'] };
@@ -168,7 +193,7 @@ function toExTax(
 }
 
 /** Is the offer still open on the comparison date? Not a claim about its price. */
-export function commercialStatus(quote: Pick<RfqQuote, 'validityDate'>, context: ComparisonContext): CommercialStatus {
+export function commercialStatus(quote: Pick<QuotationRevision, 'validityDate'>, context: ComparisonContext): CommercialStatus {
   if (!quote.validityDate) return 'validity_unknown';
   return quote.validityDate >= context.comparisonDate ? 'live' : 'expired';
 }
@@ -182,13 +207,16 @@ export function commercialStatus(quote: Pick<RfqQuote, 'validityDate'>, context:
  */
 export function normaliseRequirementLine(input: {
   line: QuotationLine;
-  quote: RfqQuote;
+  revision: QuotationRevision;
+  supplierName: string;
+  supplierId: string | null;
+  provenance: RevisionProvenance;
   requestedQuantity: number | null;
   requestedUom: string | null;
   fx: ResolvedFx;
   context: ComparisonContext;
 }): NormalisedRequirementLine {
-  const { line, quote, requestedQuantity, requestedUom, fx, context } = input;
+  const { line, revision: quote, supplierName, supplierId, provenance, requestedQuantity, requestedUom, fx, context } = input;
 
   const quotedQuantity = line.quantity;
   const quotedUom = line.uom;
@@ -200,10 +228,11 @@ export function normaliseRequirementLine(input: {
     !bothQuantities ? 'unknown' : quantityDeviation === 0 ? 'exact' : 'deviated';
 
   const base = {
-    quotationId: line.quotationId,
     quotationLineId: line.id,
-    supplierId: quote.supplierId,
-    supplierName: quote.supplierName,
+    supplierId,
+    supplierName,
+    provenance,
+    notComparableReason: null,
     requestedQuantity,
     requestedUom,
     quotedQuantity,
@@ -303,13 +332,14 @@ export interface QuotationCommercialComponents {
 }
 
 export function quotationCommercialComponents(
-  quote: RfqQuote,
+  quote: QuotationRevision,
+  supplierName: string,
   fx: ResolvedFx,
   context: ComparisonContext,
 ): QuotationCommercialComponents {
   const shared = {
     quotationId: quote.id,
-    supplierName: quote.supplierName,
+    supplierName,
     currency: quote.currency,
     freightTerms: quote.freightTerms,
     paymentTerms: quote.paymentTerms,

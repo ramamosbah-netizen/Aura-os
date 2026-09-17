@@ -63,23 +63,37 @@ test.describe('The commercial comparison for one requirement', () => {
     const prLine = await post<{ id: string }>(`/procurement/purchase-requests/${pr.id}/lines`, { material: material.id, quantity: 12, estimatedUnitCost: 450 });
     const rfq = await post<{ id: string }>('/procurement/rfqs', { title: `RFQ ${run}`, prId: pr.id });
 
-    const alpha = await post<{ id: string }>(`/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: `Alpha ${run}`, amount: 6000, currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31',
-    });
-    await post(`/procurement/quotations/${alpha.id}/lines`, { prLineId: prLine.id, quantity: 12, uom: 'nr', unitPrice: 500 });
+    /**
+     * The offers are captured through the QC-01 surface, because the comparison reads the
+     * commercially effective REVISION of each supplier's offer. Legacy quotations are no longer a
+     * path into it — which is exactly what the read switch changed.
+     */
+    const quote = async (supplierName: string, terms: Record<string, unknown>, line: Record<string, unknown>) => {
+      const { baseOffer } = await post<{ baseOffer: { id: string } }>(
+        '/procurement/quotations/families', { rfqId: rfq.id, supplierName });
+      const revision = await post<{ id: string }>(
+        `/procurement/quotations/offers/${baseOffer.id}/revisions`, terms);
+      await post(`/procurement/quotations/revisions/${revision.id}/lines`, { prLineId: prLine.id, ...line });
+      for (const status of ['received', 'confirmed']) {
+        const res = await request.patch(`${API}/procurement/quotations/revisions/${revision.id}/status`, { headers, data: { status } });
+        expect(res.ok(), await res.text()).toBe(true);
+      }
+      return revision.id;
+    };
+
+    await quote(`Alpha ${run}`,
+      { currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31' },
+      { quantity: 12, uom: 'nr', unitPrice: 500 });
 
     // Cheaper per unit, but SHORT — the case a naive comparison gets wrong.
-    const beta = await post<{ id: string }>(`/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: `Beta ${run}`, amount: 1260, currency: 'EUR', taxTreatment: 'inclusive', taxRatePct: 5,
-      freightAmount: 200, freightTerms: 'DAP Dubai', validityDate: '2026-12-31',
-    });
-    await post(`/procurement/quotations/${beta.id}/lines`, { prLineId: prLine.id, quantity: 10, uom: 'nr', unitPrice: 126 });
+    await quote(`Beta ${run}`,
+      { currency: 'EUR', taxTreatment: 'inclusive', taxRatePct: 5, freightAmount: 200, freightTerms: 'DAP Dubai', validityDate: '2026-12-31' },
+      { quantity: 10, uom: 'nr', unitPrice: 126 });
 
-    // Cheapest-looking header scalar of all, and not valuable at all: no governed GBP rate.
-    const gamma = await post<{ id: string }>(`/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: `Gamma ${run}`, amount: 1080, currency: 'GBP', taxTreatment: 'exclusive', taxRatePct: 0, validityDate: '2026-01-31',
-    });
-    const gammaLine = await post<{ id: string }>(`/procurement/quotations/${gamma.id}/lines`, { prLineId: prLine.id, quantity: 12, uom: 'nr', unitPrice: 90 });
+    // No governed GBP rate at the comparison date, and expired by then too.
+    await quote(`Gamma ${run}`,
+      { currency: 'GBP', taxTreatment: 'exclusive', taxRatePct: 0, validityDate: '2026-01-31' },
+      { quantity: 12, uom: 'nr', unitPrice: 90 });
 
     await page.goto(`/procurement/requirements/${prLine.id}/comparison`, { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('comparison-table')).toBeVisible({ timeout: 30_000 });
@@ -91,7 +105,7 @@ test.describe('The commercial comparison for one requirement', () => {
     await expect(page.getByTestId('comparison-context')).toContainText('exclude freight');
 
     // Before any rate took effect, the foreign offers cannot be valued at all — and say so.
-    await expect(page.getByTestId(`unit-price-${gammaLine.id}`)).toContainText('Not known', { timeout: 30_000 });
+    await expect(page.locator('[data-testid^="offer-"]', { hasText: `Gamma ${run}` })).toContainText('Not known', { timeout: 30_000 });
 
     // ── MOVE TO A DATE THE EUR RATE GOVERNS ─────────────────────────────────
     await page.getByTestId('comparison-date').fill(COMPARISON_DATE);
@@ -120,7 +134,7 @@ test.describe('The commercial comparison for one requirement', () => {
     const charges = page.getByTestId('quotation-charges');
     await expect(charges).toContainText('not');
     await expect(charges).toContainText('allocated across lines');
-    await expect(charges.locator(`[data-testid="freight-${beta.id}"]`)).toContainText('761.90 AED');
+    await expect(charges).toContainText('761.90 AED');
 
     // ── AND NOTHING IS RANKED ───────────────────────────────────────────────
     await expect(page.getByTestId('comparison-no-recommendation')).toContainText('not a recommendation');

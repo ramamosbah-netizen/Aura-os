@@ -7,7 +7,8 @@ import {
   type ResolvedFx,
 } from './commercial-normalisation';
 import type { QuotationLine } from './quotation-line';
-import type { RfqQuote } from './rfq';
+import type { QuotationRevision } from './quotation-family';
+import type { RevisionProvenance } from './commercial-normalisation';
 
 /**
  * SUP-06 — the facts a comparison is allowed to state, and the ones it must refuse to.
@@ -23,17 +24,30 @@ const GOVERNED: ResolvedFx = {
 };
 const IDENTITY: ResolvedFx = { status: 'governed', rate: 1, source: 'identity', effectiveDate: null, rateId: null };
 
-function quote(over: Partial<RfqQuote> = {}): RfqQuote {
+/**
+ * The commercial terms now come from a REVISION (QC-01), not from a mutable quotation row. That is
+ * the whole difference: Rev 1's terms stay exactly as quoted when Rev 2 arrives.
+ */
+function quote(over: Partial<QuotationRevision> = {}): QuotationRevision {
   return {
-    id: 'q1', rfqId: 'rfq1', tenantId: 't1', companyId: null,
-    supplierName: 'Gulf ELV', supplierId: 'sup-1', amount: 0,
+    id: 'rev-1', tenantId: 't1', offerId: 'offer-1', revisionNo: 0,
+    supplierRevisionRef: null, origin: 'captured',
+    receivedAt: '2026-09-01T00:00:00.000Z', quotationDate: '2026-09-01',
     currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5,
     freightAmount: null, freightTerms: null, paymentTerms: null,
-    validityDate: '2026-12-31', leadTimeDays: null, notes: null,
-    status: 'received', createdAt: '2026-09-01T00:00:00.000Z',
+    validityDate: '2026-12-31', notes: null, status: 'confirmed',
+    supersedesRevisionId: null, sourceAttachmentId: null,
+    createdBy: null, createdAt: '2026-09-01T00:00:00.000Z',
     ...over,
-  } as RfqQuote;
+  } as QuotationRevision;
 }
+
+const PROVENANCE: RevisionProvenance = {
+  familyId: 'fam-1', supplierQuotationRef: 'Q-1001',
+  offerId: 'offer-1', offerKind: 'base', offerLabel: null,
+  revisionId: 'rev-1', revisionNo: 0, supplierRevisionRef: null,
+  receivedAt: '2026-09-01T00:00:00.000Z',
+};
 
 function line(over: Partial<QuotationLine> = {}): QuotationLine {
   return {
@@ -47,12 +61,15 @@ function line(over: Partial<QuotationLine> = {}): QuotationLine {
   } as QuotationLine;
 }
 
-const normalise = (over: Parameters<typeof normaliseRequirementLine>[0] extends infer _ ? Partial<{
-  line: QuotationLine; quote: RfqQuote; requestedQuantity: number | null; requestedUom: string | null; fx: ResolvedFx;
-}> : never = {}) =>
+const normalise = (over: Partial<{
+  line: QuotationLine; quote: QuotationRevision; requestedQuantity: number | null; requestedUom: string | null; fx: ResolvedFx;
+}> = {}) =>
   normaliseRequirementLine({
     line: over.line ?? line(),
-    quote: over.quote ?? quote(),
+    revision: over.quote ?? quote(),
+    supplierName: 'Gulf ELV',
+    supplierId: 'sup-1',
+    provenance: PROVENANCE,
     requestedQuantity: over.requestedQuantity === undefined ? 12 : over.requestedQuantity,
     requestedUom: over.requestedUom === undefined ? 'nr' : over.requestedUom,
     fx: over.fx ?? IDENTITY,
@@ -60,6 +77,14 @@ const normalise = (over: Parameters<typeof normaliseRequirementLine>[0] extends 
   });
 
 describe('normalising one supplier answer to one requisition line', () => {
+  it('carries WHICH revision produced the row, so a sheet can name the offer it came from', () => {
+    const result = normalise();
+    expect(result.provenance).toMatchObject({
+      supplierQuotationRef: 'Q-1001', offerKind: 'base', revisionNo: 0, revisionId: 'rev-1',
+    });
+    expect(result.notComparableReason).toBeNull();
+  });
+
   it('states the unit price ex-tax, ex-freight, in the base currency, carrying how it got there', () => {
     const result = normalise();
     expect(result.normalisedUnitPrice).toMatchObject({
@@ -202,26 +227,26 @@ describe('comparability is not commercial eligibility', () => {
 describe('freight stays a quotation-level component and is never pushed into a line', () => {
   it('converts freight for the offer as a whole, ex-tax, with provenance', () => {
     const components = quotationCommercialComponents(
-      quote({ currency: 'EUR', freightAmount: 1000, freightTerms: 'DAP Dubai' }), GOVERNED, CONTEXT,
+      quote({ currency: 'EUR', freightAmount: 1000, freightTerms: 'DAP Dubai' }), 'Gulf ELV', GOVERNED, CONTEXT,
     );
     expect(components.freight).toMatchObject({ status: 'comparable', unitValue: 4207.1, currency: 'AED' });
     expect(components.freightTerms).toBe('DAP Dubai');
   });
 
   it('reports no freight as absent rather than as zero', () => {
-    const components = quotationCommercialComponents(quote({ freightAmount: null }), IDENTITY, CONTEXT);
+    const components = quotationCommercialComponents(quote({ freightAmount: null }), 'Gulf ELV', IDENTITY, CONTEXT);
     expect(components.freight).toBeNull();
   });
 
   it('refuses to value freight it cannot convert, instead of dropping it silently', () => {
     const components = quotationCommercialComponents(
-      quote({ currency: 'EUR', freightAmount: 1000 }), { status: 'unknown', reason: 'no_governed_rate' }, CONTEXT,
+      quote({ currency: 'EUR', freightAmount: 1000 }), 'Gulf ELV', { status: 'unknown', reason: 'no_governed_rate' }, CONTEXT,
     );
     expect(components.freight).toMatchObject({ status: 'unknown', reason: 'no_governed_rate' });
   });
 
   it('never claims a landed total, because the landed components are not all known', () => {
-    const components = quotationCommercialComponents(quote({ freightAmount: 500 }), IDENTITY, CONTEXT);
+    const components = quotationCommercialComponents(quote({ freightAmount: 500 }), 'Gulf ELV', IDENTITY, CONTEXT);
     expect('landedTotal' in components).toBe(false);
     expect(JSON.stringify(components)).not.toMatch(/landed|all-?in/i);
   });
@@ -234,7 +259,8 @@ describe('freight stays a quotation-level component and is never pushed into a l
 describe('the comparison date is explicit', () => {
   it('travels onto every value computed under it', () => {
     const june = normaliseRequirementLine({
-      line: line(), quote: quote(), requestedQuantity: 12, requestedUom: 'nr', fx: IDENTITY,
+      line: line(), revision: quote(), supplierName: 'Gulf ELV', supplierId: 'sup-1', provenance: PROVENANCE,
+      requestedQuantity: 12, requestedUom: 'nr', fx: IDENTITY,
       context: { baseCurrency: 'AED', comparisonDate: '2026-06-30' },
     });
     expect(june.normalisedUnitPrice).toMatchObject({ comparisonDate: '2026-06-30' });

@@ -7,11 +7,16 @@ import {
 import { QUOTATION_LINE_STORE, type QuotationLineStore } from './quotation-line.store';
 import { RFQ_STORE, type RfqStore } from './rfq-store';
 import { QUOTATION_LINE_EVALUATION_STORE, type QuotationLineEvaluationStore } from './quotation-line-evaluation.store';
+import { QUOTATION_FAMILY_STORE, type QuotationFamilyStore } from './quotation-family.store';
 import { technicalEligibility, type TechnicalEligibility, type TechnicalVerdict } from './domain/quotation-line-evaluation';
 import { PR_LINE_STORE, type PurchaseRequestLineStore } from './purchase-request-line-store';
 
 export interface NewQuotationLineInput {
-  quotationId: Id;
+  quotationId?: Id | null;
+  revisionId?: Id | null;
+  supplierDescription?: string | null;
+  partNumber?: string | null;
+  commercialDeviation?: string | null;
   prLineId: Id;
   response?: QuoteResponse;
   offeredManufacturer?: string | null;
@@ -65,12 +70,50 @@ export class QuotationLineService {
      * honest answer when the verdicts cannot be read: never eligible by default.
      */
     @Optional() @Inject(QUOTATION_LINE_EVALUATION_STORE) private readonly evaluations: QuotationLineEvaluationStore | null = null,
+    /**
+     * The quotation families, so a revision-bound line can be checked against the offer it belongs
+     * to. OPTIONAL and LAST — a union-typed constructor parameter emits `Object` in
+     * design:paramtypes, so the explicit @Inject is what makes Nest bind it at all, and appending
+     * rather than inserting is what keeps every existing positional construction working.
+     *
+     * Unbound, a revision-bound line is REFUSED rather than written against an unverified offer:
+     * optional dependency, never optional evidence.
+     */
+    @Optional() @Inject(QUOTATION_FAMILY_STORE) private readonly families: QuotationFamilyStore | null = null,
   ) {}
 
+  /**
+   * Record what a supplier offered for ONE requirement.
+   *
+   * A line may be bound to a quotation REVISION (QC-01) or, for rows that predate the family model,
+   * to a legacy quotation. The revision path is checked here so a line cannot be written against a
+   * revision that is closed: once a revision is received it is a commercial snapshot, and adding a
+   * price to it afterwards would change what the supplier is recorded as having sent.
+   */
   async add(tenantId: Id, input: NewQuotationLineInput): Promise<QuotationLine> {
-    const quote = await this.rfqs.getQuote(input.quotationId);
-    if (!quote || quote.tenantId !== tenantId) {
-      throw new Error(`quotation ${input.quotationId} not found`);
+    let companyId: string | null = null;
+
+    if (input.revisionId) {
+      if (!this.families) {
+        throw new Error(
+          'cannot verify which quotation revision this line belongs to — the quotation is unavailable, ' +
+          'and a price recorded against an unchecked offer cannot be attributed to a supplier',
+        );
+      }
+      const revision = await this.families.getRevision(tenantId, input.revisionId);
+      if (!revision) throw new Error(`quotation revision ${input.revisionId} not found`);
+      if (revision.status !== 'draft' && revision.status !== 'received') {
+        throw new Error(
+          `revision ${revision.revisionNo} is ${revision.status} and cannot take new lines — ` +
+          'record the supplier\u2019s change as a new revision',
+        );
+      }
+    } else {
+      const quote = await this.rfqs.getQuote(input.quotationId!);
+      if (!quote || quote.tenantId !== tenantId) {
+        throw new Error(`quotation ${input.quotationId} not found`);
+      }
+      companyId = quote.companyId ?? null;
     }
 
     if (!this.prLines) {
@@ -84,14 +127,21 @@ export class QuotationLineService {
       throw new Error(`requisition line ${input.prLineId} not found`);
     }
 
-    const existing = await this.lines.findForRequirement(tenantId, input.quotationId, input.prLineId);
-    if (existing) {
-      throw new Error('this quotation already answers that requisition line');
+    // One answer per requirement per OFFER. Two prices for one requirement inside one offer is an
+    // ambiguity nobody can resolve; the same item priced on a base offer AND on an alternative is
+    // two legitimate answers, which is why this is scoped to the revision rather than the supplier.
+    const siblings = input.revisionId
+      ? await this.lines.listByRevision(tenantId, input.revisionId)
+      : await this.lines.listByQuotation(tenantId, input.quotationId!);
+    if (siblings.some((l) => l.prLineId === input.prLineId)) {
+      throw new Error('this quotation revision already answers that requisition line');
     }
 
-    const line = makeQuotationLine({ ...input, tenantId, companyId: quote.companyId ?? null });
+    const line = makeQuotationLine({ ...input, tenantId, companyId });
     await this.lines.create(line);
-    this.logger.log(`Quotation ${input.quotationId} answered requisition line ${input.prLineId} (${line.response})`);
+    this.logger.log(
+      `${input.revisionId ? `Revision ${input.revisionId}` : `Quotation ${input.quotationId}`} answered requisition line ${input.prLineId} (${line.response})`,
+    );
     return line;
   }
 
@@ -128,6 +178,11 @@ export class QuotationLineService {
   }
 
   /** Every supplier's answer to one requirement — what a comparison is built from. */
+  /** Every line of one revision — what that supplier offered at the prices in that revision. */
+  listByRevision(tenantId: Id, revisionId: Id): Promise<QuotationLine[]> {
+    return this.lines.listByRevision(tenantId, revisionId);
+  }
+
   listByRequirement(tenantId: Id, prLineId: Id): Promise<QuotationLine[]> {
     return this.lines.listByRequirement(tenantId, prLineId);
   }

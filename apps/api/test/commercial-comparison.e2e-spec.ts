@@ -26,6 +26,9 @@ describe('comparing offers against one requirement (HTTP, Auth-ON)', () => {
   /** Sets up the project and the catalogue material — neither of which is the Buyer's to create. */
   let seeder: ReturnType<typeof request.agent>;
   let prLineId: string;
+  let rfqId: string;
+  /** Post as the Buyer — the capture routes are theirs since QC-01. */
+  let capture: <T>(path: string, data: unknown) => Promise<T>;
 
   beforeAll(async () => {
     process.env.AUTH_JWT_SECRET = 'sup06-e2e-only';
@@ -69,22 +72,20 @@ describe('comparing offers against one requirement (HTTP, Auth-ON)', () => {
       return res.body as T;
     };
     /**
-     * The Buyer READS the comparison — that is the SUP-06 surface under test, and the permission
-     * assertion at the bottom is about exactly that read.
+     * The Buyer READS the comparison — that is the SUP-06 surface under test.
      *
-     * The fixture is seeded by an administrator because the Buyer cannot create the project or the
-     * catalogue material (they hold those read-only, correctly), and because recording a quotation
-     * derives the permission `procurement.rfq.quotes`, which NO shipped role holds — a Buyer with
-     * `procurement.*.create` does not match it. That looks like a real authorisation gap in the
-     * quote-capture route rather than anything SUP-06 introduces, and it is left alone here: this
-     * spec will not widen a role to make its own fixture convenient.
+     * The project and the catalogue material are seeded by an administrator because a Buyer holds
+     * those read-only, correctly. The QUOTATIONS are not: QC-01 gave the capture routes
+     * permissions a Buyer actually holds, so `seed` and `post` are the same actor for them.
      */
     const post = as(buyer);
-    const seed = as(seeder);
+    const seed = as(buyer);
+    const seedAsAdmin = as(seeder);
+    capture = seed;
 
     // A requirement for 12 cameras…
-    const project = await seed<{ id: string }>('/api/v1/projects/projects', { title: `SUP-06 ${Date.now()}` });
-    const material = await seed<{ id: string }>('/api/v1/inventory/materials', {
+    const project = await seedAsAdmin<{ id: string }>('/api/v1/projects/projects', { title: `SUP-06 ${Date.now()}` });
+    const material = await seedAsAdmin<{ id: string }>('/api/v1/inventory/materials', {
       code: `CAM-${Date.now()}`, name: '4MP dome camera', uom: 'nr',
     });
     const pr = await post<{ id: string }>('/api/v1/procurement/purchase-requests', {
@@ -95,41 +96,53 @@ describe('comparing offers against one requirement (HTTP, Auth-ON)', () => {
     });
     prLineId = prLine.id;
     const rfq = await post<{ id: string }>('/api/v1/procurement/rfqs', { title: 'RFQ', prId: pr.id });
+    rfqId = rfq.id;
 
     /**
-     * …and three offers on deliberately different terms.
+     * …and three offers on deliberately different terms, captured through the QC-01 surface.
      *
-     * The `amount` each carries is the LEGACY header scalar — 6000 AED, 1260 EUR, 1080 GBP. Sorted
-     * as bare numbers they would rank Gamma cheapest, which is exactly the comparison SUP-06 exists
-     * to replace: three different currencies, three different tax treatments, one of them with no
-     * governed rate at all.
+     * The comparison reads the commercially effective REVISION of each supplier's offer, so the
+     * fixture opens a quotation family, records a revision carrying the commercial terms, confirms
+     * it, and prices the requirement inside it. Building these as legacy quotations would exercise a
+     * path the comparison no longer reads — which is exactly what this stage changed.
      */
-    const alpha = await seed<{ id: string }>(`/api/v1/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: 'Alpha (AED, tax-exclusive, exact quantity)', amount: 6000,
-      currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31',
-    });
-    await seed(`/api/v1/procurement/quotations/${alpha.id}/lines`, {
-      prLineId, quantity: 12, uom: 'nr', unitPrice: 500,
-    });
+    const quote = async (
+      supplierName: string,
+      terms: Record<string, unknown>,
+      lineFacts: Record<string, unknown>,
+    ) => {
+      const { baseOffer } = await seed<{ baseOffer: { id: string } }>(
+        '/api/v1/procurement/quotations/families', { rfqId: rfq.id, supplierName },
+      );
+      const revision = await seed<{ id: string }>(
+        `/api/v1/procurement/quotations/offers/${baseOffer.id}/revisions`, terms,
+      );
+      await seed(`/api/v1/procurement/quotations/revisions/${revision.id}/lines`, { prLineId, ...lineFacts });
+      // Received, then confirmed: only a confirmed revision is the commercially effective offer.
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${revision.id}/status`).send({ status: 'received' }).expect(200);
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${revision.id}/status`).send({ status: 'confirmed' }).expect(200);
+      return revision.id;
+    };
 
-    const beta = await seed<{ id: string }>(`/api/v1/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: 'Beta (EUR, tax-inclusive, short quantity)', amount: 1260,
-      currency: 'EUR', taxTreatment: 'inclusive', taxRatePct: 5, freightAmount: 200, freightTerms: 'DAP Dubai',
-      validityDate: '2026-12-31',
-    });
-    await seed(`/api/v1/procurement/quotations/${beta.id}/lines`, {
-      prLineId, quantity: 10, uom: 'nr', unitPrice: 126,
-    });
+    await quote(
+      'Alpha (AED, tax-exclusive, exact quantity)',
+      { currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31' },
+      { quantity: 12, uom: 'nr', unitPrice: 500 },
+    );
 
-    const gamma = await seed<{ id: string }>(`/api/v1/procurement/rfqs/${rfq.id}/quotes`, {
-      supplierName: 'Gamma (GBP, no governed rate)', amount: 1080,
+    await quote(
+      'Beta (EUR, tax-inclusive, short quantity)',
+      { currency: 'EUR', taxTreatment: 'inclusive', taxRatePct: 5, freightAmount: 200, freightTerms: 'DAP Dubai', validityDate: '2026-12-31' },
+      { quantity: 10, uom: 'nr', unitPrice: 126 },
+    );
+
+    await quote(
+      'Gamma (GBP, no governed rate)',
       // Valid until 31 July: LIVE on a June comparison date, EXPIRED on a September one. Validity is
       // judged against the comparison date, and this offer exists to prove that.
-      currency: 'GBP', taxTreatment: 'exclusive', taxRatePct: 0, validityDate: '2026-07-31',
-    });
-    await seed(`/api/v1/procurement/quotations/${gamma.id}/lines`, {
-      prLineId, quantity: 12, uom: 'nr', unitPrice: 90,
-    });
+      { currency: 'GBP', taxTreatment: 'exclusive', taxRatePct: 0, validityDate: '2026-07-31' },
+      { quantity: 12, uom: 'nr', unitPrice: 90 },
+    );
   });
 
   afterAll(async () => { await app?.close(); });
@@ -224,6 +237,62 @@ describe('comparing offers against one requirement (HTTP, Auth-ON)', () => {
 
     // Alpha is in the base currency, so it is comparable on both dates — and says which.
     expect(offerOf(june.body, 'Alpha').normalisedUnitPrice).toMatchObject({ comparisonDate: '2026-06-30' });
+  });
+
+  /**
+   * The failure nobody notices: a supplier quietly missing from a comparison. A buyer sees three
+   * rows where there were four and has no reason to ask why.
+   */
+  describe('a supplier with no commercially effective revision still appears', () => {
+    it('shows a WITHDRAWN current offer as unknown, and never reinstates the revision before it', async () => {
+      const { baseOffer } = await capture<{ baseOffer: { id: string } }>(
+        '/api/v1/procurement/quotations/families', { rfqId, supplierName: 'Delta (withdrawn)' });
+
+      // Two revisions, the second confirmed and then pulled by the supplier.
+      const first = await capture<{ id: string }>(`/api/v1/procurement/quotations/offers/${baseOffer.id}/revisions`,
+        { currency: 'AED', taxTreatment: 'exclusive' });
+      await capture(`/api/v1/procurement/quotations/revisions/${first.id}/lines`, { prLineId, quantity: 12, uom: 'nr', unitPrice: 400 });
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${first.id}/status`).send({ status: 'received' }).expect(200);
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${first.id}/status`).send({ status: 'confirmed' }).expect(200);
+
+      const second = await capture<{ id: string }>(`/api/v1/procurement/quotations/offers/${baseOffer.id}/revisions`,
+        { currency: 'AED', taxTreatment: 'exclusive' });
+      await capture(`/api/v1/procurement/quotations/revisions/${second.id}/lines`, { prLineId, quantity: 12, uom: 'nr', unitPrice: 380 });
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${second.id}/status`).send({ status: 'received' }).expect(200);
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${second.id}/status`).send({ status: 'confirmed' }).expect(200);
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${second.id}/status`).send({ status: 'withdrawn' }).expect(200);
+
+      const res = await compare().expect(200);
+      const delta = offerOf(res.body, 'Delta');
+
+      // PRESENT, with the reason — not filtered out, and not quietly priced at Rev 0's 400.
+      expect(delta, 'a supplier whose offer was withdrawn must still appear').toBeTruthy();
+      expect(delta.notComparableReason).toMatch(/withdrawn by the supplier and no earlier revision is reinstated/);
+      expect(delta.normalisedUnitPrice.status).toBe('unknown');
+      expect(JSON.stringify(delta)).not.toContain('400');
+    });
+
+    it('shows a quotation captured but never confirmed as unknown, with the reason', async () => {
+      const { baseOffer } = await capture<{ baseOffer: { id: string } }>(
+        '/api/v1/procurement/quotations/families', { rfqId, supplierName: 'Epsilon (unconfirmed)' });
+      const draft = await capture<{ id: string }>(`/api/v1/procurement/quotations/offers/${baseOffer.id}/revisions`,
+        { currency: 'AED', taxTreatment: 'exclusive' });
+      await capture(`/api/v1/procurement/quotations/revisions/${draft.id}/lines`, { prLineId, quantity: 12, uom: 'nr', unitPrice: 300 });
+      await buyer.patch(`/api/v1/procurement/quotations/revisions/${draft.id}/status`).send({ status: 'received' }).expect(200);
+
+      const res = await compare().expect(200);
+      const epsilon = offerOf(res.body, 'Epsilon');
+      expect(epsilon).toBeTruthy();
+      expect(epsilon.notComparableReason).toMatch(/received but not confirmed/);
+      expect(epsilon.normalisedUnitPrice.status).toBe('unknown');
+    });
+  });
+
+  it('carries the revision provenance, so a sheet can name the offer a figure came from', async () => {
+    const res = await compare().expect(200);
+    const alpha = offerOf(res.body, 'Alpha');
+    expect(alpha.provenance).toMatchObject({ offerKind: 'base', revisionNo: 0 });
+    expect(alpha.provenance.revisionId).toBeTruthy();
   });
 
   it('refuses a malformed date or an ungovernable base currency rather than guessing', async () => {

@@ -20,6 +20,8 @@ export interface QuotationLineStore {
    * depend on which quotations the caller happened to know about.
    */
   listByRequirement(tenantId: Id, prLineId: Id): Promise<QuotationLine[]>;
+  /** Every line of one revision — what that supplier offered at the prices in that revision. */
+  listByRevision(tenantId: Id, revisionId: Id): Promise<QuotationLine[]>;
   /** One supplier's answer to one requirement — the uniqueness the table enforces. */
   findForRequirement(tenantId: Id, quotationId: Id, prLineId: Id): Promise<QuotationLine | null>;
 }

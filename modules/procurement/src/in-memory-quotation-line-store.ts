@@ -6,11 +6,27 @@ export class InMemoryQuotationLineStore implements QuotationLineStore {
   private readonly rows = new Map<string, QuotationLine>();
 
   async create(line: QuotationLine): Promise<void> {
-    const clash = await this.findForRequirement(line.tenantId, line.quotationId, line.prLineId);
-    // Mirrors the table's unique constraint: two prices for one requirement from one supplier is an
-    // ambiguity nobody can resolve, not a richer offer.
-    if (clash) throw new Error('this quotation already answers that requisition line');
+    /**
+     * Mirrors the table's unique constraints: two prices for one requirement within one offer is an
+     * ambiguity nobody can resolve, not a richer offer. Scoped to the REVISION for anything captured
+     * now, and to the legacy quotation for rows that predate the family model — the same split the
+     * two partial indexes make.
+     */
+    const clash = line.revisionId
+      ? [...this.rows.values()].find(
+          (r) => r.tenantId === line.tenantId && r.revisionId === line.revisionId && r.prLineId === line.prLineId)
+      : line.quotationId
+        ? await this.findForRequirement(line.tenantId, line.quotationId, line.prLineId)
+        : null;
+    if (clash) throw new Error('this quotation revision already answers that requisition line');
     this.rows.set(line.id, { ...line });
+  }
+
+  async listByRevision(tenantId: Id, revisionId: Id): Promise<QuotationLine[]> {
+    return [...this.rows.values()]
+      .filter((r) => r.tenantId === tenantId && r.revisionId === revisionId)
+      .map((r) => ({ ...r }))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async update(line: QuotationLine): Promise<void> {

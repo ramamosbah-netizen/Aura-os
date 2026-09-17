@@ -8590,6 +8590,36 @@
       "severity": "HIGH",
       "remediationDependency": "None, and it BLOCKS NOTHING. SUP-06 is listed as a RELATED capability, not a hard dependency: modules/procurement has no FX coupling at all — it imports ExchangeRateService nowhere — and when SUP-06 normalises it will call resolveGovernedRate directly, never this endpoint. COM-05 and MGT-10 were dropped from the linkage because FX-01 already cut AP, AR and both revaluations away from the legacy path, so nothing they depend on touches it. SUP-06 may proceed before, during or after this record; they are independent.",
       "acceptanceProof": "PASSED: legacy getRate consumers 0, legacy convert consumers 0, inMemoryRates gone, peg constants gone — each counted, not asserted. The fitness test guards it BOTH structurally (no such methods on the prototype, no peg literal in the comment-stripped source, and every cache key built from the tenant first) and behaviourally (with nothing registered every governable pair resolves unknown; an ungovernable currency is refused rather than crossed through USD; one tenant is never answered with another’s rate) — both halves, because a source scan misses a renamed method and a behavioural check misses a helper that is never called. Over HTTP: an unregistered pair and an ungovernable currency are both refused 400 where the endpoint previously converted, a governed pair converts carrying its effective date and source, and a date before the rate took effect is refused. On screen, against the real API and PostgreSQL: an ungoverned pair is refused in the domain’s own sentence with no figure shown beside it, and a governed pair converts showing which rate valued it. Regression 705 shared / 326 core / 262 finance / 32 API e2e / 4 browser. The browser specs were additionally made IDEMPOTENT — an earlier version registered a rate to prove its positive case and so falsified its own precondition on every subsequent run; the refusals are now pinned to a date no rate reaches back to and to a pair nothing registers, verified by running the suite twice consecutively. NOT CLAIMED: that AURA offers indicative or market-rate conversion. It does not, deliberately."
+    },
+    {
+      "id": "QC-01",
+      "title": "A buyer cannot capture a supplier quotation, and a supplier revision destroys the offer it replaces",
+      "capabilityIds": [
+        "SUP-02",
+        "SUP-03",
+        "SUP-04",
+        "SUP-05",
+        "SUP-06"
+      ],
+      "classification": "PARTIAL",
+      "kind": "fresh finding — capture workflow, discovered while proving SUP-06",
+      "status": "OPEN",
+      "roles": [
+        "Procurement Manager / Buyer",
+        "Technical Manager",
+        "Commercial Manager / QS"
+      ],
+      "stages": [
+        "Procurement",
+        "Pre-Sales"
+      ],
+      "authority": "Procurement RFQ",
+      "currentBehavior": "The quotation LINE API is complete and the line SCREEN is read-only — it contains no POST at all, so every priced line proved during SUP-01 and SUP-06 was created through the API. The quotation HEADER screen sends three fields (supplierName, amount, leadTimeDays) and therefore captures NONE of the commercial facts SUP-06 normalises on: currency, tax treatment, tax rate, freight, payment terms and validity are all absent, so a quotation entered on screen is correctly reported as “the tax treatment was never stated” for every line. Three facts have no home even in the API — quotation reference, quotation date and source attachment — and neither does a part number, nor a split between technical and commercial deviation. TWO LIVE DEFECTS sit inside this: the header route carries no explicit @Permissions, so the guard derives `procurement.rfq.quotes`, which NO shipped role holds — a Buyer with procurement.*.create does not match a third segment of `quotes`, so only an administrator can record a quotation at all; and the RFQ form still offers a “Lead days” input that the API now explicitly refuses, because migration 0346 moved lead time onto the line. Worst of all, a supplier revision is DESTRUCTIVE: RfqQuoteStatus is received|rejected|awarded with no draft, no revision, no version and no supersede, and the only write path is a whole-object overwrite, so Rev 0 at 100 followed by Rev 1 at 92 leaves one row saying 92 and no evidence that 100 was ever offered. Quotation lines already have a supersede model from SUP-01; the header has none.",
+      "expectedOperationalBehavior": "A Buyer captures a complete supplier quotation from the screen — header commercial facts, lines, attachment and reference — under a permission their role actually holds, and a supplier revision creates a new immutable revision rather than overwriting the offer it replaces.",
+      "evidence": "FRESH discovery during SUP-06: apps/web/components/rfq-client.tsx addQuote (three fields, and a Lead days input the API refuses); apps/web/components/quotation-lines-client.tsx (no POST); apps/api/src/procurement/procurement.controller.ts AddQuoteDto and the derived permission procurement.rfq.quotes; modules/procurement/src/domain/rfq.ts RfqQuoteStatus and the updateQuote overwrite; infrastructure/migrations/0344_quotation_lines.sql UNIQUE (tenant_id, quotation_id, pr_line_id); infrastructure/migrations/0346_lead_time_unified_on_line.sql.",
+      "severity": "HIGH",
+      "remediationDependency": "None upstream. It is a CLOSURE DEPENDENCY OF SUP-06 as an end-to-end workflow, and not of SUP-06 as a calculation: the normalisation engine is built and proved on its own evidence, and this record is why SUP-06 must not be closed as a usable product workflow until a Buyer can enter the quotations it compares. Ownership stays here; SUP-06 does not absorb the capture code.",
+      "acceptanceProof": "FROZEN MODEL, to be proved rather than assumed: a supplier quotation is an IMMUTABLE FAMILY (supplier + RFQ) containing one or more OFFERS (a base offer and any technical alternatives), each carrying an append-only chain of immutable REVISIONS; a materially different technical or commercial alternative is a separate OFFER and never a revision, so a Bosch equivalent cannot silently replace a Hikvision offer. Once a revision is received its commercial facts are immutable — a change creates the next revision, never an UPDATE of a price. Exactly ONE revision per offer may be commercially effective, enforced by a PARTIAL UNIQUE INDEX over un-superseded rows, with the supersede written BEFORE the insert (SUP-01 proved both halves of that the hard way, in PostgreSQL, after twenty in-memory tests passed). Lifecycle stored as DRAFT, RECEIVED, CONFIRMED, SUPERSEDED, WITHDRAWN, REJECTED — EXPIRED is DERIVED against the comparison date and never stored, because a revision expired today was live on a June comparison and a stored flag cannot say both. SUP-06 compares the commercially effective revision only, never all revisions as competing offers; a family with NO effective revision — withdrawn, or captured and never confirmed — appears in the comparison as UNKNOWN(no_confirmed_revision) and is NEVER silently omitted, because a supplier vanishing from a comparison is the failure nobody notices. A buyer may override which revision is effective only with a recorded reason, actor and timestamp, and the override must be VISIBLE on screen and in the PDF rather than merely stored. Every comparison row carries its revision provenance — quotation reference, offer, revision number and id, received date, validity — so the sheet reads “Supplier A, Q-1001 Rev 2, received 15 Sep 2026” and not merely “Supplier A — AED 95”. Superseded revisions stay readable, with a diff between them, since the move from 92 + freight to 95 + free freight is commercial information a buyer needs. And the two live defects are fixed: the header capture permission is one a Buyer holds, proved Auth-ON, and the refused Lead days input is gone. Proved with a Buyer on screen against PostgreSQL, not through the API."
     }
   ],
   "totals": {
@@ -8608,9 +8638,9 @@
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
-    "gaps": 48,
+    "gaps": 49,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 2
+    "freshDefects": 3
   }
 }

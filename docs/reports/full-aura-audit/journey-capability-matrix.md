@@ -406,7 +406,7 @@
 | Procurement | BUY-04 | WRONG_BEHAVIOR |
 | Procurement | BUY-05 | COMPLETE |
 | Procurement | BUY-06 | COMPLETE |
-| Procurement | BUY-07 | UNVERIFIED |
+| Procurement | BUY-07 | COMPLETE |
 | Procurement | BUY-08 | PARTIAL |
 | Procurement | OUT-01 | PARTIAL |
 | Procurement | OUT-02 | PARTIAL |

@@ -616,7 +616,7 @@
 | Procurement Manager / Buyer | BUY-04 | WRONG_BEHAVIOR | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-05 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-06 | COMPLETE | UNVERIFIED |
-| Procurement Manager / Buyer | BUY-07 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | BUY-07 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-08 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | OUT-01 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | OUT-02 | PARTIAL | UNVERIFIED |
@@ -675,7 +675,7 @@
 | Storekeeper | BUY-04 | WRONG_BEHAVIOR | UNVERIFIED |
 | Storekeeper | BUY-05 | COMPLETE | UNVERIFIED |
 | Storekeeper | BUY-06 | COMPLETE | UNVERIFIED |
-| Storekeeper | BUY-07 | UNVERIFIED | UNVERIFIED |
+| Storekeeper | BUY-07 | COMPLETE | UNVERIFIED |
 | Storekeeper | BUY-08 | PARTIAL | UNVERIFIED |
 | Storekeeper | OUT-01 | PARTIAL | UNVERIFIED |
 | Storekeeper | OUT-02 | PARTIAL | UNVERIFIED |

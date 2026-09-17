@@ -4,7 +4,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 20 |
+| COMPLETE | 21 |
 | PARTIAL | 89 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
@@ -14,7 +14,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | DISCONNECTED | 8 |
 | WRONG_BEHAVIOR | 11 |
 | UNREACHABLE | 0 |
-| UNVERIFIED | 48 |
+| UNVERIFIED | 47 |
 | NOT_AUDITED | 0 |
 
 ## Capabilities
@@ -103,7 +103,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 46 gap records (34 reused + 12 ne
 | BUY-04 | Purchase approval | WRONG_BEHAVIOR | Procurement / Inventory | R-J26 |
 | BUY-05 | Partial receipt | COMPLETE | Procurement / Inventory | R-J26 |
 | BUY-06 | Stock issue and return | COMPLETE | Procurement / Inventory | R-J26 |
-| BUY-07 | Material delivery to work package | UNVERIFIED | Procurement / Inventory | R-J26 |
+| BUY-07 | Material delivery to work package | COMPLETE | Procurement / Inventory | R-J26 |
 | BUY-08 | Commitment and exposure | PARTIAL | Procurement / Inventory | R-J26 |
 | SIT-01 | Daily work allocation | UNVERIFIED | Site | R-J26 |
 | SIT-02 | Installed quantities | PARTIAL | Site | R-J26 |

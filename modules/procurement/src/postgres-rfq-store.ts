@@ -23,8 +23,17 @@ interface QuoteRow {
   id: string;
   rfq_id: string;
   tenant_id: string;
+  company_id: string | null;
   supplier_name: string;
+  supplier_id: string | null;
   amount: string | number;
+  currency: string | null;
+  tax_treatment: string | null;
+  tax_rate_pct: string | number | null;
+  freight_amount: string | number | null;
+  freight_terms: string | null;
+  payment_terms: string | null;
+  validity_date: Date | string | null;
   lead_time_days: number | null;
   notes: string | null;
   status: string;
@@ -33,7 +42,7 @@ interface QuoteRow {
 
 const RFQ_COLS =
   'id, tenant_id, company_id, reference, title, pr_id, pr_title, status, due_date, owner_id, created_by, created_at';
-const QUOTE_COLS = 'id, rfq_id, tenant_id, supplier_name, amount, lead_time_days, notes, status, created_at';
+const QUOTE_COLS = 'id, rfq_id, tenant_id, company_id, supplier_name, supplier_id, amount, currency, tax_treatment, tax_rate_pct, freight_amount, freight_terms, payment_terms, validity_date, lead_time_days, notes, status, created_at';
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
@@ -59,8 +68,17 @@ function rowToQuote(r: QuoteRow): RfqQuote {
     id: r.id,
     rfqId: r.rfq_id,
     tenantId: r.tenant_id,
+    companyId: r.company_id,
     supplierName: r.supplier_name,
+    supplierId: r.supplier_id,
     amount: Number(r.amount),
+    currency: r.currency,
+    taxTreatment: r.tax_treatment as RfqQuote['taxTreatment'],
+    taxRatePct: r.tax_rate_pct === null ? null : Number(r.tax_rate_pct),
+    freightAmount: r.freight_amount === null ? null : Number(r.freight_amount),
+    freightTerms: r.freight_terms,
+    paymentTerms: r.payment_terms,
+    validityDate: r.validity_date === null ? null : String(r.validity_date instanceof Date ? r.validity_date.toISOString().slice(0,10) : r.validity_date).slice(0,10),
     leadTimeDays: r.lead_time_days,
     notes: r.notes,
     status: r.status as RfqQuote['status'],
@@ -145,8 +163,10 @@ export class PostgresRfqStore implements RfqStore {
 
   async addQuote(q: RfqQuote): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_procurement_rfq_quotes (${QUOTE_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-      [q.id, q.rfqId, q.tenantId, q.supplierName, q.amount, q.leadTimeDays, q.notes, q.status, q.createdAt],
+      `INSERT INTO public.aura_procurement_rfq_quotes (${QUOTE_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
+      [q.id, q.rfqId, q.tenantId, q.companyId, q.supplierName, q.supplierId, q.amount, q.currency,
+       q.taxTreatment, q.taxRatePct, q.freightAmount, q.freightTerms, q.paymentTerms, q.validityDate,
+       q.leadTimeDays, q.notes, q.status, q.createdAt],
     );
   }
 

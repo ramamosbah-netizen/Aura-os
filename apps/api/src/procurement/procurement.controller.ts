@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { IsNumber, IsOptional, IsString } from 'class-validator';
+import { IsNumber, IsOptional, IsString, IsIn } from 'class-validator';
 import { TenantContext, ApprovalMatrixService, Permissions, type ApprovalRule } from '@aura/core';
 import { parsePageParams, type Discipline } from '@aura/shared';
 import {
@@ -57,9 +57,28 @@ class CreateRfqDto {
   @IsOptional() @IsString() dueDate?: string | null;
 }
 
+/**
+ * A supplier's offer, and the TERMS IT WAS GIVEN UNDER.
+ *
+ * `amount` alone cannot support a decision: a price means nothing without the currency it is in,
+ * whether tax sits inside or outside it, what freight was quoted separately, how long the offer
+ * stands and on what payment terms. Every one of these is DECLARED here rather than left out —
+ * the global whitelist pipe strips an undeclared field, so an offer sent in USD would have been
+ * accepted with a 201 and silently stored with no currency at all.
+ *
+ * All optional, and NULL means UNKNOWN. None of them defaults to a convenient assumption.
+ */
 class AddQuoteDto {
   @IsString() supplierName!: string;
+  @IsOptional() @IsString() supplierId?: string | null;
   @IsNumber() amount!: number;
+  @IsOptional() @IsString() currency?: string | null;
+  @IsOptional() @IsIn(['exclusive', 'inclusive', 'exempt']) taxTreatment?: 'exclusive' | 'inclusive' | 'exempt' | null;
+  @IsOptional() @IsNumber() taxRatePct?: number | null;
+  @IsOptional() @IsNumber() freightAmount?: number | null;
+  @IsOptional() @IsString() freightTerms?: string | null;
+  @IsOptional() @IsString() paymentTerms?: string | null;
+  @IsOptional() @IsString() validityDate?: string | null;
   @IsOptional() @IsNumber() leadTimeDays?: number | null;
   @IsOptional() @IsString() notes?: string | null;
 }
@@ -326,7 +345,15 @@ export class ProcurementController {
       rfqId: id,
       tenantId: ctx.tenantId,
       supplierName: dto.supplierName,
+      supplierId: dto.supplierId ?? null,
       amount: dto.amount,
+      currency: dto.currency ?? null,
+      taxTreatment: dto.taxTreatment ?? null,
+      taxRatePct: dto.taxRatePct ?? null,
+      freightAmount: dto.freightAmount ?? null,
+      freightTerms: dto.freightTerms ?? null,
+      paymentTerms: dto.paymentTerms ?? null,
+      validityDate: dto.validityDate ?? null,
       leadTimeDays: dto.leadTimeDays ?? null,
       notes: dto.notes ?? null,
     });

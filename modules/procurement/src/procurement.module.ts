@@ -12,6 +12,10 @@ import { PostgresPurchaseRequestStore } from './postgres-purchase-request-store'
 import { PurchaseRequestService } from './purchase-request.service';
 
 import { PR_LINE_STORE } from './purchase-request-line-store';
+import { QUOTATION_LINE_STORE } from './quotation-line.store';
+import { QuotationLineService } from './quotation-line.service';
+import { InMemoryQuotationLineStore } from './in-memory-quotation-line-store';
+import { PostgresQuotationLineStore } from './postgres-quotation-line-store';
 import { InMemoryPurchaseRequestLineStore } from './in-memory-purchase-request-line-store';
 import { PostgresPurchaseRequestLineStore } from './postgres-purchase-request-line-store';
 import { PurchaseRequestLineService } from './purchase-request-line.service';
@@ -77,6 +81,14 @@ import { FrameworkAgreementService } from './framework-agreement.service';
         pool ? new PostgresPurchaseRequestLineStore(pool) : new InMemoryPurchaseRequestLineStore(),
     },
     {
+      // What a supplier offered, item by item. Declarations only — no verdicts, no comparable value.
+      provide: QUOTATION_LINE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresQuotationLineStore(pool) : new InMemoryQuotationLineStore(),
+    },
+    QuotationLineService,
+    {
       provide: PO_LINE_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -90,6 +102,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

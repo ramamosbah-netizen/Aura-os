@@ -442,8 +442,8 @@
 | Technical Manager | SUP-10 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | SUP-11 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | SUP-12 | UNVERIFIED | UNVERIFIED |
-| Technical Manager | SUP-13 | PARTIAL | UNVERIFIED |
-| Technical Manager | SUP-14 | PARTIAL | UNVERIFIED |
+| Technical Manager | SUP-13 | COMPLETE | UNVERIFIED |
+| Technical Manager | SUP-14 | COMPLETE | UNVERIFIED |
 | Technical Manager | OUT-01 | PARTIAL | UNVERIFIED |
 | Technical Manager | OUT-02 | PARTIAL | UNVERIFIED |
 | Technical Manager | OUT-03 | UNVERIFIED | UNVERIFIED |
@@ -533,8 +533,8 @@
 | Commercial Manager / QS | SUP-10 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | SUP-11 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | SUP-12 | UNVERIFIED | UNVERIFIED |
-| Commercial Manager / QS | SUP-13 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | SUP-14 | PARTIAL | UNVERIFIED |
+| Commercial Manager / QS | SUP-13 | COMPLETE | UNVERIFIED |
+| Commercial Manager / QS | SUP-14 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | COM-01 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | COM-02 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | COM-03 | PARTIAL | UNVERIFIED |
@@ -608,8 +608,8 @@
 | Procurement Manager / Buyer | SUP-10 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-11 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-12 | UNVERIFIED | UNVERIFIED |
-| Procurement Manager / Buyer | SUP-13 | PARTIAL | UNVERIFIED |
-| Procurement Manager / Buyer | SUP-14 | PARTIAL | UNVERIFIED |
+| Procurement Manager / Buyer | SUP-13 | COMPLETE | UNVERIFIED |
+| Procurement Manager / Buyer | SUP-14 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-01 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-02 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-03 | UNVERIFIED | UNVERIFIED |

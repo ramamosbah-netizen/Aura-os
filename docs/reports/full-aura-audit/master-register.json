@@ -2462,7 +2462,7 @@
         "Procurement",
         "Pre-Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Procurement RFQ",
       "evidence": [
         "N-RFQ"
@@ -2470,17 +2470,17 @@
       "source": "modules/procurement/src/domain/rfq.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "RFQ recommends lowest aggregate amount and permits buyer selection.",
-      "acceptanceProof": "Normalize compliant line offers including all commercial conditions and record governed rationale."
+      "currentBehavior": "AURA ASSEMBLES; A PERSON DECIDES; SOMEBODY ELSE APPROVES. A recommendation is a recorded human decision, never a computed winner: every supplier's current offer is gathered with its comparable values, technical verdict, whole-offer total, validity and terms, and of each whether it MAY be recommended and why not — named, sorted by nothing, with no winner anywhere in the payload. `lowestQuote` is DELETED and a fitness test fails if it or anything of its shape returns; ranking incomparable header scalars and calling the smallest one “the default award recommendation” is the behaviour this capability replaces. An offer may be recommended only with an effective revision, a technical verdict on EVERY required line, a known whole-offer total and a live validity — an unevaluated line is UNKNOWN, never acceptable-by-default. The scope must be whole: a requisition line covered by nobody would vanish from the orders, one covered twice would be ordered twice, and both are refused. A REASON IS OWED whenever the choice is not the lowest governed total and always for a split award, because a departure from the cheapest option is what a reviewer most needs explained. MAKER AND CHECKER ARE DIFFERENT PEOPLE by design rather than by accidental route derivation: the Buyer prepares and submits under `procurement.rfq.create` / `.update`, the Procurement Manager decides under `procurement.rfq.award`, and the submitter is refused approving their own. THE APPROVAL MATRIX IS CHECKED ON THE ACTUAL AWARD VALUE TWICE — on each supplier's award AND on the whole sourcing decision — so an amount beyond somebody's authority cannot be waved through by splitting it into smaller purchase orders. Each selection names the REVISION it was decided on and is never re-pointed; a newer confirmed revision makes the recommendation STALE, which a person then acts on. WITHDRAWAL exists because an approved recommendation that must not be awarded would otherwise block its RFQ for good, and it never erases what it stands down: the approval keeps `decided_by/at/note` and the withdrawal records its own actor and reason (migration 0356). The historical acts are immutable; `status` is a projection of them and legitimately moves (ADR-0022).",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Normalize compliant line offers including all commercial conditions and record governed rationale” — and against the four extra conditions set before promotion would be accepted. DOMAIN: 326 procurement tests, including the rounding authority, recommendability, coverage, staleness and the reason rule. API, AUTH-ON: 11 e2e tests prove the HTTP contract, the maker/checker split and BOTH matrix checks — an approver whose limit clears each award individually is refused on the total (403 naming ‘this sourcing decision in total’), and the Buyer is refused the decision. BROWSER AGAINST POSTGRESQL, two principals each signed in as themselves on roles AURA already ships — `u-e2e-buyer` (r-procurement) and `u-e2e-procmgr` (r-procurement-manager): the buyer records a recommendation for a supplier that is NOT the cheapest with the reason it requires, submits it, and cannot approve or award it; the manager approves; a withdrawal then stands an approved recommendation down and the approver survives it, read back out of the database. A DEFECT FOUND BY THAT PROOF AND FIXED: the governed total was STORED as 13,588.30 where the supplier's own arithmetic gave 13,588.25, because the conversion rounded the unit price and multiplied — a systematic error growing with quantity, always favouring whichever unit price rounds up, on the figure the approval was given against (FX-03, closed). AUTHORITY: ADR-0022 states what this capability may do, what facts it creates that may never be erased, and what it must never do, and `sourcing-authority.fitness.test.ts` fails on every one of those boundaries — verified by mutation, not merely by passing. ACCEPTED LIMITS, stated rather than absorbed: the API e2e suite runs on IN-MEMORY stores by construction, so persistence is proved by the browser suite and the PostgreSQL tests and not by it; a recommendation is raised per RFQ and re-sourcing after an award is not decided here; and the wider apps/api e2e run remains independently red at 14 files / 39 tests, unchanged from HEAD before this work and unrelated to this path — this promotion is of SUP-13 against its own evidence, and is not a statement that Procurement is green."
     },
     {
       "id": "SUP-14",
@@ -2495,7 +2495,7 @@
         "Procurement",
         "Pre-Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Procurement RFQ",
       "evidence": [
         "N-RFQ"
@@ -2503,17 +2503,17 @@
       "source": "modules/procurement/src/domain/rfq.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Mocked service test transfers supplier, value, RFQ, PR and derived project to PO.",
-      "acceptanceProof": "Auth-ON buyer selects full quotation; resulting PO preserves item costs and terms without retyping."
+      "currentBehavior": "AN APPROVED DECISION BECOMES PURCHASE ORDERS, AND NOTHING ELSE HAPPENS ON THE WAY. One order per supplier, each carrying only the requisition lines that supplier was recommended for, IN THAT SUPPLIER'S OWN CURRENCY at the prices they quoted — the heading fact of the whole record: a decision made on AED 13,588.25 produces a USD 3,500 order, because the comparison was a way of weighing offers against each other and the order is a contract with somebody who never quoted in AED. The comparison rate and its provenance live on the recommendation and in the event trail as evidence of how the decision was reached, never as the order's commercial authority. The supplier's own terms cross untouched: gross unit price, line discount and the KIND of discount it is, offered make and model, tax treatment and rate, freight, payment terms and their quotation reference — with every line `sourced`, naming both the requisition line it answers and the quotation line it was priced from. THE LEGACY AWARD IS RETIRED: `RfqService.award` raised an order valued at one header figure with NO LINES, consulted no technical verdict and checked nobody's authority; it is deleted, its route refuses and says where the award went, the RFQ screen's ‘lowest’ tag and Award button are gone, and a fitness test fails if any of it returns. CONCURRENCY IS PART OF CORRECTNESS HERE. The whole award — orders, lines, events and the claim — runs in ONE transaction, so there is no state in which one supplier is ordered from and the next is not. Awarding twice is prevented three times over: an advisory lock on the recommendation taken before anything is read, a conditional claim `approved → awarded` whose row count decides the winner, and a unique index on the recommendation SELECTION (migration 0358) that makes a second order impossible even from a future code path that forgets the first two. The staleness check holds its rows `FOR SHARE` inside the transaction, so it is true AT COMMIT rather than merely when it was made. The award holds NO commercial discretion: it computes no price, converts no currency, makes no decision and never touches an order again once raised (ADR-0022).",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Auth-ON buyer selects full quotation; resulting PO preserves item costs and terms without retyping” — met and exceeded in one respect worth naming: the buyer selects, a SECOND person approves, and only then is the order raised. API, AUTH-ON: 8 e2e tests — a USD offer becomes a USD 3,500 order with two lines at 100 and 250; a split award produces one order per supplier in two different currencies side by side; a discounted offer is awarded keeping the gross unit price with its discount beside it; and the award refuses an unapproved recommendation (409), a stale one, an already-awarded one, and a Buyer attempting it (403). BROWSER AGAINST POSTGRESQL: PO-2026-000001 read back out of the database at value 3,500 currency USD with tax treatment, rate, freight, freight terms, payment terms and the supplier's quotation reference intact, naming both the recommendation and the revision it came from; and a discounted award at value 4,000 with unit_price 500, line_discount 1,000 and line_discount_basis line_unconditional_prorata. CONCURRENCY, AGAINST REAL POSTGRESQL WITH TWO CONNECTIONS — the evidence that was missing and is the reason this row was held back: two concurrent awards leave exactly one winner, one deterministic refusal and exactly two orders, not four; an injected failure on the second supplier leaves ZERO orders and the recommendation still approved and still awardable; and an award racing a revision confirmation cannot produce an order on a superseded revision. EVERY ONE OF THOSE VERIFIED TO BITE BY MUTATION: removing the transaction leaves an orphaned order and fails the atomicity test; removing BOTH application defences still fails the double-award test, on the unique index alone, which proves the database invariant is load-bearing rather than decorative. TWO DEFECTS THIS WORK CREATED AND FIXED, recorded rather than smoothed: the award's synthetic line list dropped first the discount and then its kind — representation drift, now one named `LineValuation` the type enforces; and the first purchase orders with freight made `PO.value` differ from the commitment, which four Finance and approval readers were treating as the total (an invoice for goods AND freight read as EXCEEDING its own order). ACCEPTED LIMITS: PO-01 and FX-03 were closure blockers and are CLOSED; BID-01 remains OPEN and separate — bid-time estimate restamping was keyed to the retired legacy quote award and no honest mapping exists from a governed award back to it; the API e2e suite runs on IN-MEMORY stores so persistence and concurrency are proved elsewhere; and the wider apps/api e2e run remains independently red at 14 files / 39 tests, unchanged from HEAD before this work. SUP-13 and SUP-14 are promoted and verified against their frozen authority, persistence, transactional, concurrency and browser/database evidence. That is not a claim that Procurement is green, and the repository-wide regression baseline is a separate question with a separate answer."
     },
     {
       "id": "BUY-01",
@@ -8208,7 +8208,7 @@
       "capabilityIds": [
         "SUP-13"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
       "status": "OPEN",
       "roles": [
@@ -8220,13 +8220,13 @@
         "Procurement",
         "Pre-Sales"
       ],
-      "currentBehavior": "RFQ recommends lowest aggregate amount and permits buyer selection.",
+      "currentBehavior": "AURA ASSEMBLES; A PERSON DECIDES; SOMEBODY ELSE APPROVES. A recommendation is a recorded human decision, never a computed winner: every supplier's current offer is gathered with its comparable values, technical verdict, whole-offer total, validity and terms, and of each whether it MAY be recommended and why not — named, sorted by nothing, with no winner anywhere in the payload. `lowestQuote` is DELETED and a fitness test fails if it or anything of its shape returns; ranking incomparable header scalars and calling the smallest one “the default award recommendation” is the behaviour this capability replaces. An offer may be recommended only with an effective revision, a technical verdict on EVERY required line, a known whole-offer total and a live validity — an unevaluated line is UNKNOWN, never acceptable-by-default. The scope must be whole: a requisition line covered by nobody would vanish from the orders, one covered twice would be ordered twice, and both are refused. A REASON IS OWED whenever the choice is not the lowest governed total and always for a split award, because a departure from the cheapest option is what a reviewer most needs explained. MAKER AND CHECKER ARE DIFFERENT PEOPLE by design rather than by accidental route derivation: the Buyer prepares and submits under `procurement.rfq.create` / `.update`, the Procurement Manager decides under `procurement.rfq.award`, and the submitter is refused approving their own. THE APPROVAL MATRIX IS CHECKED ON THE ACTUAL AWARD VALUE TWICE — on each supplier's award AND on the whole sourcing decision — so an amount beyond somebody's authority cannot be waved through by splitting it into smaller purchase orders. Each selection names the REVISION it was decided on and is never re-pointed; a newer confirmed revision makes the recommendation STALE, which a person then acts on. WITHDRAWAL exists because an approved recommendation that must not be awarded would otherwise block its RFQ for good, and it never erases what it stands down: the approval keeps `decided_by/at/note` and the withdrawal records its own actor and reason (migration 0356). The historical acts are immutable; `status` is a projection of them and legitimately moves (ADR-0022).",
       "expectedOperationalBehavior": "Approval and recommendation from governed canonical records with actual usable output",
       "authority": "Procurement RFQ",
       "evidence": "NEW source inspection: modules/procurement/src/domain/rfq.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Normalize compliant line offers including all commercial conditions and record governed rationale."
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Normalize compliant line offers including all commercial conditions and record governed rationale” — and against the four extra conditions set before promotion would be accepted. DOMAIN: 326 procurement tests, including the rounding authority, recommendability, coverage, staleness and the reason rule. API, AUTH-ON: 11 e2e tests prove the HTTP contract, the maker/checker split and BOTH matrix checks — an approver whose limit clears each award individually is refused on the total (403 naming ‘this sourcing decision in total’), and the Buyer is refused the decision. BROWSER AGAINST POSTGRESQL, two principals each signed in as themselves on roles AURA already ships — `u-e2e-buyer` (r-procurement) and `u-e2e-procmgr` (r-procurement-manager): the buyer records a recommendation for a supplier that is NOT the cheapest with the reason it requires, submits it, and cannot approve or award it; the manager approves; a withdrawal then stands an approved recommendation down and the approver survives it, read back out of the database. A DEFECT FOUND BY THAT PROOF AND FIXED: the governed total was STORED as 13,588.30 where the supplier's own arithmetic gave 13,588.25, because the conversion rounded the unit price and multiplied — a systematic error growing with quantity, always favouring whichever unit price rounds up, on the figure the approval was given against (FX-03, closed). AUTHORITY: ADR-0022 states what this capability may do, what facts it creates that may never be erased, and what it must never do, and `sourcing-authority.fitness.test.ts` fails on every one of those boundaries — verified by mutation, not merely by passing. ACCEPTED LIMITS, stated rather than absorbed: the API e2e suite runs on IN-MEMORY stores by construction, so persistence is proved by the browser suite and the PostgreSQL tests and not by it; a recommendation is raised per RFQ and re-sourcing after an award is not decided here; and the wider apps/api e2e run remains independently red at 14 files / 39 tests, unchanged from HEAD before this work and unrelated to this path — this promotion is of SUP-13 against its own evidence, and is not a statement that Procurement is green."
     },
     {
       "id": "F-05",
@@ -8702,8 +8702,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 22,
-      "PARTIAL": 89,
+      "COMPLETE": 24,
+      "PARTIAL": 87,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

@@ -100,8 +100,8 @@
 | Pre-Sales | SUP-10 | UNVERIFIED |
 | Pre-Sales | SUP-11 | UNVERIFIED |
 | Pre-Sales | SUP-12 | UNVERIFIED |
-| Pre-Sales | SUP-13 | PARTIAL |
-| Pre-Sales | SUP-14 | PARTIAL |
+| Pre-Sales | SUP-13 | COMPLETE |
+| Pre-Sales | SUP-14 | COMPLETE |
 | Pre-Sales | OUT-01 | PARTIAL |
 | Pre-Sales | OUT-02 | PARTIAL |
 | Pre-Sales | OUT-03 | UNVERIFIED |
@@ -398,8 +398,8 @@
 | Procurement | SUP-10 | UNVERIFIED |
 | Procurement | SUP-11 | UNVERIFIED |
 | Procurement | SUP-12 | UNVERIFIED |
-| Procurement | SUP-13 | PARTIAL |
-| Procurement | SUP-14 | PARTIAL |
+| Procurement | SUP-13 | COMPLETE |
+| Procurement | SUP-14 | COMPLETE |
 | Procurement | BUY-01 | COMPLETE |
 | Procurement | BUY-02 | UNVERIFIED |
 | Procurement | BUY-03 | UNVERIFIED |

@@ -74,7 +74,7 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     expect(committed[0].committedAmount).toBe(50_000);
 
     // 3. Cancel the PO → a NEGATIVE committed entry reverses it. The ledger is append-only.
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/cancel`).send({ reason: 'the requirement was withdrawn' }).expect(201);
     const afterCancel = await eventually(async () => { const rows = await ledger(node.id); return rows.length >= 2 ? rows : []; });
     expect(afterCancel).toHaveLength(2);
     expect(afterCancel.some((t) => t.type === 'committed' && t.amount === -50_000 && t.source === 'reversal')).toBe(true);
@@ -82,8 +82,15 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     const zeroed = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.committedAmount === 0 ? [n] : []; });
     expect(zeroed[0].committedAmount).toBe(0);
 
-    // 4. Idempotent: a redelivered cancel must NOT post a second reversal (the ledger's integrity is the whole point).
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
+    // 4. A SECOND cancel is REFUSED outright now (J3-01), which is stronger than the idempotent
+    //    no-op this used to assert: an order cannot be cancelled twice, so a second reversal has no
+    //    way to reach the ledger at all. The ledger's integrity is still the point.
+    const second = await http.post(`/api/v1/procurement/purchase-orders/${po.id}/cancel`).send({ reason: 'again' });
+    // REFUSED, not a silent no-op. The status code is deliberately not asserted here: this spec does
+    // not register AllExceptionsFilter, so a domain refusal surfaces as a bare 500 — an artefact of
+    // the harness, not of the product. What matters is that it did not succeed and the ledger did
+    // not move, and both of those are true whatever the filter would have made of it.
+    expect(second.status).toBeGreaterThanOrEqual(400);
     await new Promise((r) => setTimeout(r, 250)); // let the (guarded) reactor run
     expect(await ledger(node.id)).toHaveLength(2);
   });

@@ -106,13 +106,16 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
     expect(ordered).toMatchObject({ boq: 500, ordered: 300, remainingToOrder: 200 });
 
     // Cancel the PO → a −ordered reversal. Ordered nets back to 0 (append-only, never a mutation).
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/cancel`).send({ reason: 'the requirement was withdrawn' }).expect(201);
     const reversed = await until(async () => { const p = await position(boqItemId); return p.ordered === 0 ? p : null; });
     expect(reversed!.ordered).toBe(0);
     expect((await ledger(boqItemId)).filter((t) => t.type === 'ordered')).toHaveLength(2); // +300 and −300
 
-    // Idempotent: a redelivered cancel must not double-reverse.
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'cancelled' }).expect(200);
+    // A SECOND cancel is REFUSED (J3-01) — stronger than the idempotent no-op this used to assert:
+    // a second reversal has no way to reach the ledger at all. The code is not asserted because this
+    // spec registers no exception filter, so a domain refusal arrives as a bare 500.
+    const second = await http.post(`/api/v1/procurement/purchase-orders/${po.id}/cancel`).send({ reason: 'again' });
+    expect(second.status).toBeGreaterThanOrEqual(400);
     await new Promise((r) => setTimeout(r, 200));
     expect((await ledger(boqItemId)).filter((t) => t.type === 'ordered')).toHaveLength(2);
   });

@@ -24,6 +24,11 @@ export class InMemoryPurchaseOrderStore implements PurchaseOrderStore {
     return this.update(po);
   }
 
+  /** Nothing to hold in memory; the contract is the same so callers read one way. */
+  async getForUpdate(id: Id): Promise<PurchaseOrder | null> {
+    return this.get(id);
+  }
+
   async get(id: Id): Promise<PurchaseOrder | null> {
     const po = this.pos.get(id);
     return po ? { ...po } : null;

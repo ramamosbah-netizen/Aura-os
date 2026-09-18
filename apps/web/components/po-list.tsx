@@ -69,30 +69,16 @@ export default function PoList({ initialPos, currency, create }: {
     .filter((po) => inView(po, 'outstanding'))
     .reduce((sum, po) => sum + (po.value || 0), 0);
 
-  async function updateStatus(id: string, status: string) {
-    setBusyId(id);
-    setErr(null);
-    try {
-      const res = await fetch(`/api/procurement/purchase-orders/${id}/status`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        setErr(d.error ?? d.message ?? 'Failed to update PO status');
-      } else {
-        router.refresh();
-      }
-    } catch {
-      setErr('Failed to connect to the API.');
-    } finally {
-      setBusyId(null);
-    }
-  }
-
-  // Approval matrix actions: draft → submit (auto-approves small POs) → approve → issue.
-  async function act(id: string, action: 'submit' | 'approve', body?: Record<string, unknown>) {
+  /**
+   * EVERY LIFECYCLE ACT IS ITS OWN COMMAND (J3-01).
+   *
+   * This screen used to PATCH a status for issuing — one call, one permission (`po.update`), four
+   * different business acts — which is how a Buyer could issue an order to a supplier, cancel a
+   * Director-approved one and close it, all from the same generic call. Each act now has its own
+   * route, its own permission and its own refusals: submit → approve → issue, with cancel and close
+   * as separate authorities.
+   */
+  async function act(id: string, action: 'submit' | 'approve' | 'issue' | 'cancel' | 'close', body?: Record<string, unknown>) {
     setBusyId(id);
     setErr(null);
     try {
@@ -103,7 +89,9 @@ export default function PoList({ initialPos, currency, create }: {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        setErr(d.error ?? d.message ?? `Failed to ${action} PO`);
+        // `message` FIRST: the API puts its sentence there and a bare code in `error`, so reading
+        // `error` first showed people "BAD_REQUEST" where the reason was the whole point.
+        setErr(d.message ?? d.error ?? `Failed to ${action} this purchase order`);
       } else {
         router.refresh();
       }
@@ -198,7 +186,7 @@ export default function PoList({ initialPos, currency, create }: {
                         </button>
                       )}
                       {po.status === 'approved' && (
-                        <button type="button" disabled={isBusy} onClick={() => updateStatus(po.id, 'issued')} style={s.btnAccent}>
+                        <button type="button" disabled={isBusy} onClick={() => act(po.id, 'issue')} style={s.btnAccent}>
                           {isBusy ? 'Issuing…' : 'Issue PO'}
                         </button>
                       )}

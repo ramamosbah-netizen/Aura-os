@@ -231,7 +231,10 @@ describe('business-chain e2e (HTTP)', () => {
         .send({ title: 'Cat6 cable drums', supplierName: 'Gulf Cables', value: 900, orderedQuantity: 10, unit: 'drum' })
         .expect(201)
     ).body;
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'issued' }).expect(200);
+    // Submit, then issue (J3-01). 900 is in the auto-approve tier, so submitting RECORDS the
+    // approval rather than skipping it — and issuing is reachable only from approved, at any value.
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/submit`).expect(201);
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/issue`).expect(201);
 
     // Goods arrive in full: GRN against the PO → reactor flips the PO to received.
     await http
@@ -256,7 +259,10 @@ describe('business-chain e2e (HTTP)', () => {
         .send({ title: 'Trunking — quantity not recorded', supplierName: 'Gulf Cables', value: 900 })
         .expect(201)
     ).body;
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'issued' }).expect(200);
+    // Submit, then issue (J3-01). 900 is in the auto-approve tier, so submitting RECORDS the
+    // approval rather than skipping it — and issuing is reachable only from approved, at any value.
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/submit`).expect(201);
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/issue`).expect(201);
 
     await http
       .post('/api/v1/inventory/grns')

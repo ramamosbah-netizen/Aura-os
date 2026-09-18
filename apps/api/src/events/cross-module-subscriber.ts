@@ -1171,7 +1171,18 @@ export class CrossModuleSubscriber implements OnModuleInit {
         if (p.status !== 'cancelled') return;
         const cbsNodeId = p.cbsNodeId as string | null;
         const project = p.project as { id: string; name: string } | null;
-        const value = Number(p.value) || 0;
+        /**
+         * WHAT WAS CANCELLABLE, NOT WHAT THE ORDER WAS WORTH (J3-01).
+         *
+         * An order part delivered has part become real. Reversing its whole value would say the
+         * company never committed to goods standing in its store, and this cost line would drop by
+         * more than the order ever put on it. `cancelledValue` is the commitment less whatever had
+         * already been received or invoiced, decided by the domain at the moment of cancellation.
+         *
+         * `?? p.value` is for orders cancelled BEFORE this existed: their events carry no
+         * cancelledValue, and the old behaviour is the only thing that can be honest about them.
+         */
+        const value = Number(p.cancelledValue ?? p.value) || 0;
         if (!cbsNodeId || !project?.id || value <= 0) return;
         const existing = await this.ledger.list({ tenantId: e.tenantId, cbsNodeId });
         if (existing.some((t) => t.source === 'reversal' && t.dimensions?.poId === e.aggregateId)) return; // already reversed
@@ -1222,7 +1233,12 @@ export class CrossModuleSubscriber implements OnModuleInit {
         if (p.status !== 'cancelled') return;
         const boqItemId = p.boqItemId as string | null;
         const project = p.project as { id: string; name: string } | null;
-        const qty = Number(p.orderedQuantity) || 0;
+        // The share that was never delivered, in proportion to the value cancelled (J3-01). The
+        // header carries ONE ordered quantity and no line-level receipt mapping to apportion it any
+        // other way, so the ratio is stated rather than claimed exact — and a full cancellation,
+        // where the ratio is 1, is unchanged.
+        const ratio = p.cancellableQuantityRatio === undefined ? 1 : Number(p.cancellableQuantityRatio);
+        const qty = (Number(p.orderedQuantity) || 0) * (Number.isFinite(ratio) ? Math.max(0, Math.min(1, ratio)) : 1);
         if (!boqItemId || !project?.id || qty <= 0) return;
         await this.quantityLedger.post({
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId: project.id,

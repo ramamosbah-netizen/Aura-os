@@ -190,20 +190,67 @@ export class ProcurementController {
     return found;
   }
 
+  /**
+   * THE GENERIC STATUS ROUTE, REFUSED (J3-01).
+   *
+   * It carried `procurement.po.update` and accepted four statuses, which is how a Buyer holding only
+   * update could issue an order to a supplier, cancel a Director-approved one — reversing its
+   * committed cost — and close it. The record said "can set status=approved"; refusing that one
+   * string left every other transition exactly where it was.
+   *
+   * It refuses rather than disappearing so a caller still pointing here is told where each act went.
+   * The permission stays `update` deliberately: this route can no longer do anything, and widening
+   * it would suggest it still could.
+   */
   @Permissions('procurement.po.update')
   @Patch('purchase-orders/:id/status')
-  async changePoStatus(
-    @Param('id') id: string,
-    @Body() dto: { status: PurchaseOrderStatus },
-  ): Promise<PurchaseOrder> {
-    if (!dto?.status) throw new BadRequestException('status is required');
+  changePoStatus(): never {
+    throw new BadRequestException(
+      'a purchase order\'s status cannot be set directly — each step is its own governed act with its ' +
+      'own authority: POST purchase-orders/:id/submit, /approve, /issue, /cancel or /close',
+    );
+  }
+
+  /**
+   * ISSUE — the commitment goes out to the supplier. Its own permission, because sending an order is
+   * not editing one: `procurement.po.issue` is held by the Procurement Manager and NOT by the Buyer,
+   * who prepares orders without committing them.
+   */
+  @Permissions('procurement.po.issue')
+  @Post('purchase-orders/:id/issue')
+  async issuePo(@Param('id') id: string): Promise<PurchaseOrder> {
     const found = await this.pos.get(id);
     if (!found) throw new NotFoundException(`purchase order ${id} not found`);
-    try {
-      return await this.pos.changeStatus(id, dto.status);
-    } catch (error) {
-      throw new BadRequestException((error as Error).message);
+    return this.pos.issue(id, this.tenant.get().actorId ?? null);
+  }
+
+  /**
+   * CANCEL — undoing a commitment. A reason is required, and the service additionally checks the
+   * approval authority on WHAT IS BEING REVERSED, so cancelling the remainder of a large order asks
+   * for the authority that remainder deserves rather than the one its face value would imply.
+   */
+  @Permissions('procurement.po.cancel')
+  @Post('purchase-orders/:id/cancel')
+  async cancelPo(@Param('id') id: string, @Body() dto: { reason?: string }): Promise<PurchaseOrder> {
+    const found = await this.pos.get(id);
+    if (!found) throw new NotFoundException(`purchase order ${id} not found`);
+    if (!dto?.reason?.trim()) {
+      throw new BadRequestException('cancelling a purchase order must record why — it reverses a commitment somebody approved');
     }
+    return this.pos.cancel(id, { actorId: this.tenant.get().actorId ?? null, reason: dto.reason });
+  }
+
+  /**
+   * CLOSE — operational completion, and deliberately NOT governed like a cancellation. It asks
+   * whether the order is finished, not whether somebody may undo it, so it carries its own
+   * permission and no approval-authority check.
+   */
+  @Permissions('procurement.po.close')
+  @Post('purchase-orders/:id/close')
+  async closePo(@Param('id') id: string): Promise<PurchaseOrder> {
+    const found = await this.pos.get(id);
+    if (!found) throw new NotFoundException(`purchase order ${id} not found`);
+    return this.pos.close(id, this.tenant.get().actorId ?? null);
   }
 
   @Permissions('procurement.po.submit')

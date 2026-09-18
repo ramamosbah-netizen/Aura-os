@@ -85,6 +85,29 @@ export interface PurchaseOrder {
   freightTerms: string | null;
   paymentTerms: string | null;
   status: PurchaseOrderStatus;
+  /**
+   * HOW THIS ORDER GOT TO ITS STATUS (J3-01). A status says WHERE an order is and has never said how
+   * it arrived — no approver, no time, no reason — so a status set by a governed command and one set
+   * by a generic PATCH were indistinguishable after the fact. That is why an update-only actor could
+   * issue, cancel and close orders for as long as they could.
+   *
+   * `approvalBasis` is the one worth reading twice: `automatic` is an approval that HAPPENED, taken
+   * by the matrix on nobody's behalf because the value fell in the auto-approve tier. It is not an
+   * order that skipped approval — that distinction is the whole of the issue rule.
+   */
+  approvedBy: Id | null;
+  approvedAt: string | null;
+  approvalLevel: number | null;
+  approvalBasis: 'manual' | 'automatic' | null;
+  issuedBy: Id | null;
+  issuedAt: string | null;
+  cancelledBy: Id | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
+  /** What the cancellation REVERSED — the commitment less whatever had already become real. */
+  cancelledValue: number | null;
+  closedBy: Id | null;
+  closedAt: string | null;
   value: number;
   ownerId: Id | null;
   createdAt: string;
@@ -121,6 +144,18 @@ export interface NewPurchaseOrder {
   freightAmount?: number | null;
   freightTerms?: string | null;
   paymentTerms?: string | null;
+  approvedBy?: Id | null;
+  approvedAt?: string | null;
+  approvalLevel?: number | null;
+  approvalBasis?: 'manual' | 'automatic' | null;
+  issuedBy?: Id | null;
+  issuedAt?: string | null;
+  cancelledBy?: Id | null;
+  cancelledAt?: string | null;
+  cancellationReason?: string | null;
+  cancelledValue?: number | null;
+  closedBy?: Id | null;
+  closedAt?: string | null;
 }
 
 export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
@@ -153,6 +188,20 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     freightAmount: input.freightAmount ?? null,
     freightTerms: input.freightTerms?.trim() || null,
     paymentTerms: input.paymentTerms?.trim() || null,
+    // NULL throughout on creation. A new order has been approved by nobody, issued by nobody and
+    // cancelled by nobody, and saying so is different from having no opinion.
+    approvedBy: input.approvedBy ?? null,
+    approvedAt: input.approvedAt ?? null,
+    approvalLevel: input.approvalLevel ?? null,
+    approvalBasis: input.approvalBasis ?? null,
+    issuedBy: input.issuedBy ?? null,
+    issuedAt: input.issuedAt ?? null,
+    cancelledBy: input.cancelledBy ?? null,
+    cancelledAt: input.cancelledAt ?? null,
+    cancellationReason: input.cancellationReason ?? null,
+    cancelledValue: input.cancelledValue ?? null,
+    closedBy: input.closedBy ?? null,
+    closedAt: input.closedAt ?? null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

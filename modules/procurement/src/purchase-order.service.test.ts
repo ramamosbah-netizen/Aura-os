@@ -124,10 +124,18 @@ describe('PurchaseOrderService — governed supplier and status boundaries', () 
     await expect(svc.update(po.id, { supplierId: 'sup-pending' })).rejects.toThrow(/not approved/);
   });
 
-  it('keeps approval and receipt states behind their governed commands', async () => {
+  /**
+   * J3-01. This test used to assert that `approved` and `received` were behind governed commands —
+   * and it passed, while `issued`, `cancelled` and `closed` went straight through the same generic
+   * call under `procurement.po.update`. Refusing four values out of eight is what kept the finding
+   * open: the shape was the defect, not the list.
+   */
+  it('keeps EVERY status behind its own governed command, not four of them', async () => {
     const { svc, po } = await harness();
-    await expect(svc.changeStatus(po.id, 'approved')).rejects.toThrow(/governed submit, approve or receipt command/);
-    await expect(svc.changeStatus(po.id, 'received')).rejects.toThrow(/governed submit, approve or receipt command/);
+    for (const status of ['draft', 'pending_approval', 'approved', 'issued', 'partially_received', 'received', 'closed', 'cancelled'] as const) {
+      await expect(svc.changeStatus(po.id, status), `${status} must not be reachable generically`)
+        .rejects.toThrow(/each step is its own governed act/);
+    }
   });
 
   it('distinguishes partial receipt from full receipt using canonical cumulative quantity', async () => {

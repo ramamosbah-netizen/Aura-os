@@ -72,8 +72,13 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
     await http.post(`/api/v1/procurement/purchase-orders/${po.id}/approve`).send({ approverLevel: 1 }).expect(201);
     return po;
   };
+  /**
+   * Issuing is its own command and reachable only from approved (J3-01). The order arrives here
+   * already approved — `raise` above submits and approves it — so this is the act the quality gate
+   * actually guards: the moment the commitment goes out to the supplier.
+   */
   const issue = (po: Po) =>
-    http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'issued' });
+    http.post(`/api/v1/procurement/purchase-orders/${po.id}/issue`);
 
   const raise = async (reference: string, supplier: string): Promise<Mar> =>
     (await http.post('/api/v1/quality/material-approvals').send({
@@ -101,7 +106,8 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
     // Procurement's owned rule, in the direction its own suite pins: no rejection means allow.
     const po = await orderFrom('Gulf Cables LLC', 'PO-CLEAR');
     const issued = await issue(po);
-    expect(issued.status, JSON.stringify(issued.body)).toBe(200);
+    // 201: issuing is a POSTed command now, not a PATCHed status (J3-01).
+    expect(issued.status, JSON.stringify(issued.body)).toBe(201);
     expect(issued.body.status).toBe('issued');
   });
 
@@ -147,7 +153,7 @@ describe('the canonical material approval, and the rule Procurement owns (HTTP)'
     // A completely different material from the same supplier. Nothing distinguishes it.
     const other = await orderFrom('Clean Supplier LLC', 'PO-OTHER-MATERIAL');
     const issued = await issue(other);
-    expect(issued.status).toBe(200);
+    expect(issued.status).toBe(201);
     // The order names no material, which is exactly why the question cannot be asked yet.
     const po = (await http.get(`/api/v1/procurement/purchase-orders/${other.id}`).expect(200)).body as { boqItemId: string | null };
     expect(po.boqItemId).toBeNull();

@@ -200,6 +200,13 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'tenant-or-project',
     permissions: [
       'procurement.*.read', 'procurement.*.create', 'procurement.*.update',
+      /**
+       * The Buyer PREPARES. `issue`, `cancel` and `close` are deliberately absent (J3-01): sending a
+       * commitment to a supplier, undoing one, and declaring an order finished are not editing it,
+       * and until each became its own permission the Buyer could do all three through a generic
+       * status update. The role description already said "without approving their own order" — this
+       * is that sentence becoming true.
+       */
       'procurement.po.view', 'procurement.po.create', 'procurement.po.update', 'procurement.po.submit',
       readOnly('inventory'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('subcontracts'), ...STAFF_BASE,
     ],

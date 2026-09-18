@@ -106,9 +106,10 @@ describe('Procurement Full Cycle', () => {
         value: 50,
       });
 
-      await expect(
-        poService.changeStatus(po.id, 'issued'),
-      ).rejects.toThrow('Quality gate blocked PO issuance');
+      // Approved first, because issuing is reachable only from approved now (J3-01) — 50 is in the
+      // auto-approve tier, so the approval is recorded automatically rather than skipped.
+      await poService.submitForApproval(po.id);
+      await expect(poService.issue(po.id, 'u-buyer')).rejects.toThrow('Quality gate blocked PO issuance');
     });
 
     it('allows PO issuance when the supplier has no rejected MARs', async () => {
@@ -129,8 +130,16 @@ describe('Procurement Full Cycle', () => {
         value: 50,
       });
 
-      const issued = await poService.changeStatus(po.id, 'issued');
+      const approved = await poService.submitForApproval(po.id);
+      // THE APPROVAL FACT EXISTS even though nobody signed it: the auto-approve tier records who
+      // (nobody), when and on what basis, instead of the order skipping the step entirely.
+      expect(approved.status).toBe('approved');
+      expect(approved.approvalBasis).toBe('automatic');
+      expect(approved.approvedAt).toBeTruthy();
+
+      const issued = await poService.issue(po.id, 'u-buyer');
       expect(issued.status).toBe('issued');
+      expect(issued.issuedBy).toBe('u-buyer');
     });
   });
 });

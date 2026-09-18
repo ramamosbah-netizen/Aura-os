@@ -103,7 +103,10 @@ test.describe('An order shows what it buys and where it stands', () => {
     await expect(page.getByTestId('order-lines-value')).toHaveText('AED 1,700.00');
 
     // ── Issue it, then receive ONE of the twelve cameras ───────────────────────
-    await patch(`/procurement/purchase-orders/${drafted!.id}/status`, { status: 'issued' });
+    // Submit, then issue (J3-01): each act is its own command, and issuing is reachable only from
+    // approved — an order under the threshold has its approval RECORDED rather than skipped.
+    await post(`/procurement/purchase-orders/${drafted!.id}/submit`, {});
+    await post(`/procurement/purchase-orders/${drafted!.id}/issue`, {});
     const orderLines = await (await request.get(`${API}/procurement/purchase-orders/${drafted!.id}/lines`, { headers: apiAuthHeaders() })).json() as OrderLine[];
     const grn = await post<{ id: string }>('/inventory/grns', {
       title: `GRN ${run}`, poId: drafted!.id, projectId: project.id,

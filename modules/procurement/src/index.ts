@@ -38,6 +38,8 @@ export * from './in-memory-sourcing-recommendation-store';
 export * from './postgres-sourcing-recommendation-store';
 export * from './sourcing-recommendation.service';
 export * from './sourcing-award.service';
+export * from './po-position.port';
+export * from './domain/purchase-order-lifecycle';
 export * from './commercial-comparison.service';
 export * from './domain/commercial-normalisation';
 export * from './domain/sourcing-recommendation';

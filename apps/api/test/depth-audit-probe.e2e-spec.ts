@@ -32,7 +32,10 @@ it('enforces governed PO approval, supplier and partial-receipt integrity', asyn
     const editorToken = `Bearer ${auth.mint({ sub: 'depth-editor', tenantId: 'depth-audit' })}`;
     const project = (await http.post('/api/v1/projects/projects').send({ title: 'Audit fixture' }).expect(201)).body;
     const po = (await http.post('/api/v1/procurement/purchase-orders').send({ title: '100 units', projectId: project.id, value: 1000, orderedQuantity: 100, unit: 'nr' }).expect(201)).body;
-    await http.patch(`/api/v1/procurement/purchase-orders/${po.id}/status`).send({ status: 'issued' }).expect(200);
+    // Submit, then issue (J3-01): issuing is reachable only from approved, and an order under the
+    // auto-approve threshold has its approval RECORDED rather than skipped.
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/submit`).expect(201);
+    await http.post(`/api/v1/procurement/purchase-orders/${po.id}/issue`).expect(201);
     const firstReceipt = await http.post('/api/v1/inventory/grns').send({ title: 'One unit only', poId: po.id, projectId: project.id, receivedQuantity: 1, unit: 'nr', value: 10 });
     expect(firstReceipt.status, JSON.stringify(firstReceipt.body)).toBe(201);
     let observed = po;

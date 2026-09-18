@@ -1,12 +1,15 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { assertSameTenant, diffFields, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxHandle, type TxRunner, TenantContext } from '@aura/core';
+import { type OrgLevel, assertSameTenant, diffFields, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
+import { AccessService, CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxHandle, type TxRunner, TenantContext } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
 import { isApproved } from './domain/supplier';
 import { PO_LINE_STORE, type PurchaseOrderLineStore } from './purchase-order-line-store';
+import { PO_POSITION_PORT, type PoPositionPort } from './po-position.port';
+import { cancellationPosition, closureReadiness, issuability, type OrderPosition } from './domain/purchase-order-lifecycle';
+import type { PurchaseOrderLine } from './domain/purchase-order-line';
 import { orderCommitment } from './domain/purchase-order-line';
 import { type AcceptedByLine, receiptOf, receiptStatus, type RejectedByLine } from './domain/order-receipt';
 
@@ -57,6 +60,20 @@ export class PurchaseOrderService implements OnModuleInit {
      * lines", which is exactly right for an order raised before lines existed.
      */
     @Optional() @Inject(PO_LINE_STORE) private readonly lines: PurchaseOrderLineStore | null = null,
+    /**
+     * What has already happened against an order, from Inventory and Finance (ADR-0004: the app
+     * layer composes it). Optional so an in-memory test can build this service; cancelling and
+     * closing REFUSE without it rather than assuming nothing has happened.
+     */
+    @Optional() @Inject(PO_POSITION_PORT) private readonly positions: PoPositionPort | null = null,
+    /**
+     * The authority to UNDO a commitment. Last and optional so the several suites that build this
+     * service positionally keep working — inserting a parameter anywhere else silently rebinds every
+     * later one, which this file has been bitten by before. Absent, `cancel` REFUSES an attributed
+     * cancellation rather than skipping the check: a guard that quietly does not run is worse than
+     * no guard, because it reads as one.
+     */
+    @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
   ) {}
 
   /** The real acting user from the request context (ALS), falling back to the record's creator. */
@@ -166,12 +183,43 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   /** Submit a PO for approval. Auto-approves below the matrix threshold; otherwise → pending_approval. */
+  /**
+   * Submit for approval — and, below the threshold, RECORD THE APPROVAL rather than skip it (J3-01).
+   *
+   * The auto-approve tier used to mean "this order needs no approval", implemented as a jump
+   * straight to `approved` with nothing written down: no approver, no time, no level, no note that
+   * the matrix had even been consulted. An order issued that way could not say, afterwards, whether
+   * it had been approved automatically or whether somebody had simply set its status.
+   *
+   * It now means "the approval is taken by the matrix on nobody's behalf" — a fact with a basis, a
+   * time and a level. The difference is invisible in a status and decisive in an audit, and it is
+   * what makes `issued` reachable ONLY from `approved` a rule rather than an obstacle.
+   */
   async submitForApproval(id: Id): Promise<PurchaseOrder> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
-    const req = requiredApproval(existing.value);
-    return this.transition(existing, req.autoApproved ? 'approved' : 'pending_approval', PROCUREMENT_EVENT.poUpdated, {
-      requiredLevel: req.level, requiredLabel: req.label, autoApproved: req.autoApproved,
-    });
+    const lines = this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : [];
+    // The threshold is read against what the order COMMITS US TO — lines plus the freight quoted on
+    // the header (SUP-14) — not what its lines come to.
+    const req = requiredApproval(orderCommitment(existing, lines).exTax);
+    if (!req.autoApproved) {
+      return this.transition(existing, 'pending_approval', PROCUREMENT_EVENT.poUpdated, {
+        requiredLevel: req.level, requiredLabel: req.label, autoApproved: false,
+      });
+    }
+
+    const at = new Date().toISOString();
+    return this.transition(
+      {
+        ...existing,
+        approvedBy: this.actor(null), approvedAt: at,
+        approvalLevel: req.level, approvalBasis: 'automatic',
+      },
+      'approved', PROCUREMENT_EVENT.poApproved,
+      {
+        requiredLevel: req.level, requiredLabel: req.label, autoApproved: true,
+        approvalBasis: 'automatic', approvedAt: at,
+      },
+    );
   }
 
   /**
@@ -180,13 +228,24 @@ export class PurchaseOrderService implements OnModuleInit {
    */
   async approve(id: Id, approverLevel: number): Promise<PurchaseOrder> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
-    const req = requiredApproval(existing.value);
+    const lines = this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : [];
+    const req = requiredApproval(orderCommitment(existing, lines).exTax);
     if (Number(approverLevel) < req.level) {
       throw new Error(`approval level ${approverLevel} is below the required level ${req.level} (${req.label}) for value ${existing.value}`);
     }
-    return this.transition(existing, 'approved', PROCUREMENT_EVENT.poApproved, {
-      approverLevel: Number(approverLevel), requiredLevel: req.level, requiredLabel: req.label,
-    });
+    const at = new Date().toISOString();
+    return this.transition(
+      {
+        ...existing,
+        approvedBy: this.actor(null), approvedAt: at,
+        approvalLevel: Number(approverLevel), approvalBasis: 'manual',
+      },
+      'approved', PROCUREMENT_EVENT.poApproved,
+      {
+        approverLevel: Number(approverLevel), requiredLevel: req.level, requiredLabel: req.label,
+        approvalBasis: 'manual', approvedAt: at,
+      },
+    );
   }
 
   /** Update descriptive fields on a PO (title, reference, supplier snapshot).
@@ -238,74 +297,192 @@ export class PurchaseOrderService implements OnModuleInit {
     return updated;
   }
 
+  /**
+   * THE GENERIC STATUS PATH, REFUSED (J3-01).
+   *
+   * It accepted `draft`, `issued`, `closed` and `cancelled` under ONE permission —
+   * `procurement.po.update` — which is how a Buyer could issue an order to a supplier, cancel a
+   * Director-approved order of 90,000 (reversing its committed cost in the ledger) and close one.
+   * The record was written as "can set status=approved"; refusing that one string left every other
+   * transition exactly as it was, which is why it stayed open.
+   *
+   * The lesson is the shape, not the value: A GENERIC MUTATION PATH MUST NEVER OWN A GOVERNED
+   * LIFECYCLE TRANSITION. `issue`, `cancel` and `close` are commands below, each with its own
+   * authority and its own conditions, beside `submitForApproval` and `approve` which always were.
+   *
+   * It refuses rather than disappearing so a caller still pointing here is told where each act went,
+   * and `no-generic-po-status.fitness.test.ts` fails if it starts writing again.
+   */
   async changeStatus(id: Id, status: PurchaseOrderStatus): Promise<PurchaseOrder> {
-    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
+    void id;
+    throw new Error(
+      `a purchase order cannot be moved to ${status} through a generic status update — each step is ` +
+      'its own governed act with its own authority: submit, approve, issue, cancel or close',
+    );
+  }
 
-    if (!['draft', 'issued', 'closed', 'cancelled'].includes(status)) {
-      throw new Error(`PO status ${status} requires its governed submit, approve or receipt command`);
+  /**
+   * ISSUE — the commitment goes out to the supplier.
+   *
+   * Reachable ONLY from `approved`, at every value. The old path allowed `draft → issued` whenever
+   * the value fell under the auto-approve threshold, which read as "small orders need no approval"
+   * and meant "small orders are issued with no approval fact anywhere". The threshold decides WHO
+   * approves — nobody, automatically — not WHETHER the step happens.
+   */
+  async issue(id: Id, actorId: Id | null): Promise<PurchaseOrder> {
+    const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PO', id);
+    const verdict = issuability(existing);
+    if (!verdict.allowed) throw new Error(verdict.detail);
+
+    // The quality gate keeps its place: a supplier with rejected material approvals on this project
+    // does not get an order sent to them, however well approved it is.
+    if (this.qualityGate && existing.projectId && existing.supplierName) {
+      const gate = await this.qualityGate.checkMaterialApprovalGate(existing.tenantId, existing.projectId, existing.supplierName);
+      if (!gate.passed) throw new Error(`Quality gate blocked PO issuance: ${gate.reason}`);
     }
+
+    const at = new Date().toISOString();
+    return this.transition(
+      { ...existing, issuedBy: this.actor(actorId), issuedAt: at },
+      'issued', PROCUREMENT_EVENT.poIssued,
+      { issuedBy: this.actor(actorId), issuedAt: at, cbsNodeId: existing.cbsNodeId, boqItemId: existing.boqItemId },
+    );
+  }
+
+  /**
+   * CANCEL — undoing a commitment, bounded by what is still undoable.
+   *
+   * The approval matrix is checked on the REMAINING commitment, mirroring the rule SUP-13 uses for
+   * standing down an approved recommendation: undoing something approved needs the authority the
+   * approval needed. A reason is required, and both are recorded on the order rather than inferred
+   * later from a status.
+   *
+   * `cancelledValue` is what actually gets reversed — NOT the order's value. An order part delivered
+   * has part become real, and the ledger reverses exactly this figure.
+   */
+  async cancel(id: Id, input: { actorId: Id | null; reason: string }): Promise<PurchaseOrder> {
+    return this.tx.run(async (handle) => {
+      /**
+       * HELD WHILE THE DECISION IS MADE. Reading the position and then writing the cancellation
+       * leaves a window in which a delivery lands — and the cancellation then reverses a commitment
+       * that goods had already arrived against. A receipt reconciles onto this same row, so holding
+       * it here is what a concurrent receipt blocks on.
+       */
+      const existing = assertSameTenant(
+        await this.store.getForUpdate(id, handle), this.tenant?.boundTenantId(), 'PO', id);
+      const lines = this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : [];
+      const committed = orderCommitment(existing, lines).exTax;
+      const position = await this.position(existing, lines);
+
+      const verdict = cancellationPosition(existing, committed, position, input.reason);
+      if (!verdict.allowed) throw new Error(verdict.detail);
 
     /**
-     * Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue —
-     * and the threshold is checked against WHAT THE ORDER COMMITS US TO, not what its lines come to.
-     * Freight is quoted for the order as a whole and lives on the header (SUP-14), so an order for
-     * 3,500 of goods plus 200 of freight commits 3,700, and checking 3,500 would let an order slip
-     * under a threshold by exactly the freight on it.
+     * The authority to undo. Checked on what is being reversed rather than on the order's face
+     * value: cancelling the last 2,000 of a 500,000 order is not a board-level act, and pretending
+     * it is would push people to work around the control rather than through it.
      */
-    if (status === 'issued' && existing.status !== 'approved') {
-      const committed = orderCommitment(existing, this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : []).exTax;
-      if (!requiredApproval(committed).autoApproved) {
-        throw new Error(`PO ${existing.reference ?? id} (value ${committed}) requires approval before it can be issued`);
+    if (input.actorId) {
+      if (!this.access) {
+        throw new Error('the authority to cancel this purchase order cannot be checked, so it is not cancelled');
       }
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      if (existing.companyId) orgPath.push({ level: 'company', id: existing.companyId });
+      this.access.assertApprovalAuthority(
+        input.actorId,
+        { permission: 'procurement.po.approve', orgPath, amount: verdict.cancellable },
+        `cancelling ${verdict.cancellable} of this purchase order`,
+      );
     }
 
-    // Quality gate: reject issuance if the supplier has rejected MARs on the same project.
-    if (status === 'issued' && this.qualityGate && existing.projectId && existing.supplierName) {
-      const gate = await this.qualityGate.checkMaterialApprovalGate(existing.tenantId, existing.projectId, existing.supplierName);
-      if (!gate.passed) {
-        throw new Error(`Quality gate blocked PO issuance: ${gate.reason}`);
-      }
-    }
-
-    const updated: PurchaseOrder = { ...existing, status };
-
-    let eventType: string = PROCUREMENT_EVENT.poUpdated;
-    if (status === 'issued') {
-      eventType = PROCUREMENT_EVENT.poIssued;
-    } else if (status === 'closed') {
-      eventType = PROCUREMENT_EVENT.poClosed;
-    }
-
-    const event = makeEvent({
-      type: eventType,
-      tenantId: updated.tenantId,
-      companyId: updated.companyId,
-      actorId: null,
-      aggregateType: 'procurement.po',
-      aggregateId: updated.id,
-      payload: {
-        title: updated.title,
-        status: updated.status,
-        value: updated.value,
-        supplier: updated.supplierName,
-        // Carried so the cost engine can REVERSE the committed cost when the PO is cancelled
-        // (a negative ledger entry on this same cost line) — the ledger never mutates.
-        cbsNodeId: updated.cbsNodeId,
-        project: updated.projectId ? { id: updated.projectId, name: updated.projectName } : null,
-        // BOQ coding → the Quantity Ledger reverses the ORDERED quantity on cancel too.
-        boqItemId: updated.boqItemId,
-        orderedQuantity: updated.orderedQuantity,
-        unit: updated.unit,
+    const at = new Date().toISOString();
+    return this.write(
+      handle,
+      {
+        ...existing,
+        cancelledBy: this.actor(input.actorId), cancelledAt: at,
+        cancellationReason: input.reason.trim(), cancelledValue: verdict.cancellable,
       },
+      'cancelled', PROCUREMENT_EVENT.poUpdated,
+      {
+        // THE REVERSAL AMOUNT, carried so the cost engine reverses what is actually cancellable and
+        // not the order's value. `value` stays in the payload for every other reader.
+        cancelledValue: verdict.cancellable,
+        settledValue: verdict.settled,
+        cancellationReason: input.reason.trim(),
+        cancelledBy: this.actor(input.actorId),
+        cbsNodeId: existing.cbsNodeId,
+        boqItemId: existing.boqItemId,
+        orderedQuantity: existing.orderedQuantity,
+        unit: existing.unit,
+        /**
+         * The share of the ordered quantity that was never delivered, so the quantity ledger
+         * reverses only that. Proportional to the value cancelled, because the header carries one
+         * ordered quantity and no line-level receipt mapping to apportion it any other way — stated
+         * rather than assumed exact.
+         */
+        cancellableQuantityRatio: committed > 0 ? verdict.cancellable / committed : 1,
+      },
+      );
     });
+  }
 
-    // Atomic: the status update and its event commit together.
-    await this.tx.run(async (handle) => {
-      await this.store.updateWithClient(handle, updated);
-      await this.events.appendWithClient(handle, [event]);
+  /**
+   * CLOSE — operational completion, which is NOT a variant of cancelling.
+   *
+   * Cancelling asks "may this person undo a commitment". Closing asks "is this order finished". They
+   * share neither authority nor conditions, and treating close as a kind of cancel was the mistake
+   * worth naming: it has no business asking for approval authority, and no business being possible
+   * while something is still outstanding against the order.
+   */
+  async close(id: Id, actorId: Id | null): Promise<PurchaseOrder> {
+    return this.tx.run(async (handle) => {
+      // Held for the same reason as cancelling: "nothing is outstanding" must still be true when the
+      // closure is written, not merely when it was checked.
+      const existing = assertSameTenant(
+        await this.store.getForUpdate(id, handle), this.tenant?.boundTenantId(), 'PO', id);
+      const lines = this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : [];
+      const position = await this.position(existing, lines);
+
+      const verdict = closureReadiness(existing, position);
+      if (!verdict.allowed) throw new Error(verdict.detail);
+
+      const at = new Date().toISOString();
+      return this.write(
+        handle,
+        { ...existing, closedBy: this.actor(actorId), closedAt: at },
+        'closed', PROCUREMENT_EVENT.poClosed,
+        { closedBy: this.actor(actorId), closedAt: at },
+      );
     });
-    this.logger.log(`PO ${updated.title} (${updated.id}) status changed to ${status}`);
-    return updated;
+  }
+
+  /**
+   * What has already happened against this order, from Inventory and Finance through the port.
+   *
+   * A position that CANNOT be read refuses rather than reporting zero. Zero would make every order
+   * look freely cancellable and freshly closable at exactly the moment the system cannot see what
+   * has happened to it — the §22 rule, at the point where it decides money.
+   */
+  private async position(order: PurchaseOrder, lines: PurchaseOrderLine[]): Promise<OrderPosition> {
+    if (!this.positions) {
+      throw new Error(
+        'this purchase order\'s delivery and invoicing position cannot be read, so whether it may be ' +
+        'cancelled or closed is not known',
+      );
+    }
+    const answer = await this.positions.positionOf(order.tenantId, order.id, lines.map((l) => l.id));
+    if (!answer.known) {
+      throw new Error(
+        `this purchase order's delivery and invoicing position cannot be read (${answer.reason}), so ` +
+        'whether it may be cancelled or closed is not known',
+      );
+    }
+    return {
+      receivedValue: answer.receivedValue,
+      invoicedValue: answer.invoicedValue,
+      receipt: lines.length > 0 ? receiptOf(lines, answer.acceptedByLine, answer.rejectedByLine) : null,
+    };
   }
 
   /**
@@ -387,7 +564,22 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   /** Atomic status transition + spine event (shared by submit/approve/changeStatus paths). */
-  private async transition(
+  private transition(
+    existing: PurchaseOrder,
+    status: PurchaseOrderStatus,
+    eventType: string,
+    extra: Record<string, unknown> = {},
+  ): Promise<PurchaseOrder> {
+    return this.tx.run((handle) => this.write(handle, existing, status, eventType, extra));
+  }
+
+  /**
+   * The row and its event, inside a transaction the CALLER owns — because cancelling and closing
+   * decide on a position they must still hold when the write lands, so the decision and the write
+   * are one transaction rather than two.
+   */
+  private async write(
+    handle: TxHandle | null,
     existing: PurchaseOrder,
     status: PurchaseOrderStatus,
     eventType: string,
@@ -407,10 +599,8 @@ export class PurchaseOrderService implements OnModuleInit {
         ...extra,
       },
     });
-    await this.tx.run(async (handle) => {
-      await this.store.updateWithClient(handle, updated);
-      await this.events.appendWithClient(handle, [event]);
-    });
+    await this.store.updateWithClient(handle, updated);
+    await this.events.appendWithClient(handle, [event]);
     this.logger.log(`PO ${updated.title} (${updated.id}) → ${status}`);
     return updated;
   }

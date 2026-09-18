@@ -110,7 +110,10 @@ describe('a purchase order is received when every line is (JWT ON)', () => {
     for (const l of lines) {
       await buyer.post(`/api/v1/procurement/purchase-orders/${poId}/lines`).send(l).expect(201);
     }
-    await admin.patch(`/api/v1/procurement/purchase-orders/${poId}/status`).send({ status: 'issued' }).expect(200);
+    // Submit, then issue (J3-01): issuing is reachable only from approved, and an order under the
+    // auto-approve threshold has its approval RECORDED rather than skipped.
+    await admin.post(`/api/v1/procurement/purchase-orders/${poId}/submit`).expect(201);
+    await admin.post(`/api/v1/procurement/purchase-orders/${poId}/issue`).expect(201);
     const authored = (await buyer.get(`/api/v1/procurement/purchase-orders/${poId}/lines`).expect(200)).body as OrderLine[];
     return { poId, lines: authored };
   }
@@ -221,7 +224,10 @@ describe('a purchase order is received when every line is (JWT ON)', () => {
     // from iteration 2 still refuses to conclude completion from it.
     const poId = (await buyer.post('/api/v1/procurement/purchase-orders')
       .send({ title: `Legacy ${Date.now()}`, projectId, value: 900 }).expect(201)).body.id;
-    await admin.patch(`/api/v1/procurement/purchase-orders/${poId}/status`).send({ status: 'issued' }).expect(200);
+    // Submit, then issue (J3-01): issuing is reachable only from approved, and an order under the
+    // auto-approve threshold has its approval RECORDED rather than skipped.
+    await admin.post(`/api/v1/procurement/purchase-orders/${poId}/submit`).expect(201);
+    await admin.post(`/api/v1/procurement/purchase-orders/${poId}/issue`).expect(201);
 
     await store.post('/api/v1/inventory/grns')
       .send({ title: 'GRN against a headerless order', poId, projectId, value: 900 }).expect(201);

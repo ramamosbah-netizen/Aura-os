@@ -225,7 +225,12 @@ describe('a purchase order buys materials, and says how it came to buy them (JWT
     const line = (await buyer.post(`/api/v1/procurement/purchase-orders/${poId}/lines`)
       .send({ material: camera.code, quantity: 4, unitPrice: 450 }).expect(201)).body as OrderLine;
 
-    await admin.patch(`/api/v1/procurement/purchase-orders/${poId}/status`).send({ status: 'issued' }).expect(200);
+    // Submit, then issue (J3-01): issuing is reachable only from approved, and an order under the
+    // auto-approve threshold has its approval RECORDED rather than skipped.
+
+    await admin.post(`/api/v1/procurement/purchase-orders/${poId}/submit`).expect(201);
+
+    await admin.post(`/api/v1/procurement/purchase-orders/${poId}/issue`).expect(201);
 
     // After issue these lines are what the supplier was told to deliver — and what a receipt will
     // be measured against.

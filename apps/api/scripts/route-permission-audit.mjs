@@ -103,6 +103,11 @@ const holding = (permission) =>
 
 /* ── every route in the API ───────────────────────────────────────────────── */
 
+/**
+ * ONE IMPLEMENTATION, TWO CONSUMERS. This file is both the human-facing report and the engine the
+ * fitness test runs, because a guard that re-implements the audit is a guard that can disagree with
+ * it — and the disagreement would surface as a build failing for a reason the report denies.
+ */
 function controllers(dir) {
   const out = [];
   for (const entry of readdirSync(dir)) {
@@ -115,8 +120,10 @@ function controllers(dir) {
 
 const HTTP = /@(Get|Post|Put|Patch|Delete)\(\s*(?:'([^']*)'|"([^"]*)"|`([^`]*)`)?\s*\)/g;
 
-const rows = [];
-for (const file of controllers(API_SRC)) {
+/** Every route that derives a permission, with how that permission is held. */
+export function scanRoutes() {
+  const rows = [];
+  for (const file of controllers(API_SRC)) {
   const src = readFileSync(file, 'utf8');
   const ctrl = src.match(/@Controller\(\s*['"`]([^'"`]*)['"`]\s*\)/)?.[1];
   if (ctrl === undefined) continue;
@@ -139,11 +146,37 @@ for (const file of controllers(API_SRC)) {
     const derived = derivePermissionFromRoute(method, ctrl, handlerPath);
     if (!derived) continue;
     rows.push({ file: file.replace(repo, '').replace(/\\/g, '/'), method, route: `${ctrl}/${handlerPath}`.replace(/\/+$/, ''), derived, held: holding(derived) });
+    }
   }
+  return rows;
 }
+
+/**
+ * The verbs worth looking at first. A name ending in one of these is almost never "an edit": it is
+ * an authority fact, an external release, or an irreversible state change — the categories that made
+ * J3-01 and J1-07 critical rather than untidy.
+ */
+export const GOVERNING_VERB =
+  /\.(approve|reject|submit|release|publish|issue|award|cancel|close|withdraw|sign|certify|freeze|baseline|confirm|decide|reopen|void|post|transmit|send|activate|complete|handover)$/;
+
+/** A route's stable identity in the allowlist: what it is, not where it happens to live. */
+export const routeKey = (r) => `${r.method} ${r.route}`;
+
+/**
+ * THE ROUTES STAGE 2 FREEZES: mutating, and governed by a name no role names. A GET that only a
+ * wildcard reaches shows somebody more than intended and is worth knowing; one of these MANUFACTURES
+ * A BUSINESS FACT under a name nobody chose, which is the shape behind every finding this came from.
+ */
+export const ungovernedMutations = (rows = scanRoutes()) =>
+  rows.filter((r) => r.method !== 'GET' && r.held !== 'named');
 
 /* ── report ───────────────────────────────────────────────────────────────── */
 
+const invokedDirectly = process.argv[1] && process.argv[1].endsWith('route-permission-audit.mjs');
+if (!invokedDirectly) {
+  // Imported by the fitness test: expose the scan and say nothing.
+} else {
+const rows = scanRoutes();
 const showAll = process.argv.includes('--all');
 const orphans = rows.filter((r) => r.held !== 'named');
 const byPermission = new Map();
@@ -180,7 +213,7 @@ for (const r of mutating) {
  * an authority fact, an external release, or an irreversible state change -- the categories that
  * made J3-01 and J1-07 critical rather than untidy.
  */
-const GOVERNING = /\.(approve|reject|submit|release|publish|issue|award|cancel|close|withdraw|sign|certify|freeze|baseline|confirm|decide|reopen|void|post|transmit|send|activate|complete|handover)$/;
+const GOVERNING = GOVERNING_VERB;
 const governing = [...byName.entries()].filter(([n]) => GOVERNING.test(n)).sort((a, b) => b[1].length - a[1].length);
 const rest = [...byName.entries()].filter(([n]) => !GOVERNING.test(n)).sort((a, b) => b[1].length - a[1].length);
 
@@ -221,3 +254,4 @@ if (missed.length === 0) {
   process.exitCode = 1;
 }
 console.log('');
+}

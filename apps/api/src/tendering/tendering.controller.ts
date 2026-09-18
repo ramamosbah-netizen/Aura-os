@@ -384,6 +384,7 @@ export class TenderingController {
   }
 
   @Post()
+  @Permissions('tendering.tender.create')
   async create(@Body() dto: CreateTenderDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Tender> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     assertSource(dto.source);
@@ -407,6 +408,7 @@ export class TenderingController {
 
   /** PATCH /api/tendering/tenders/:id — update mutable fields (title, reference, value, account). */
   @Patch(':id')
+  @Permissions('tendering.tender.update')
   async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateTenderDto): Promise<Tender> {
     assertSource(dto.source);
     try {
@@ -434,6 +436,7 @@ export class TenderingController {
    * The service rejects it; use POST :id/award below.
    */
   @Patch(':id/status')
+  @Permissions('tendering.tender.status')
   async changeStatus(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: TenderStatus },
@@ -457,6 +460,7 @@ export class TenderingController {
    * A tender awarded without this evidence stays "award not evidenced" (LEGACY_WON), by design.
    */
   @Post(':id/award')
+  @Permissions('tendering.tender.award')
   async award(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: AwardTenderDto,
@@ -532,6 +536,7 @@ export class TenderingController {
    * on an already-submitted tender this records a resubmission (a second record, not an edit).
    */
   @Post(':id/submit')
+  @Permissions('tendering.tender.submit')
   async submit(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: SubmitTenderDto,
@@ -574,6 +579,7 @@ export class TenderingController {
    * `deadlineExtendedTo` also moves the tender's submission deadline.
    */
   @Post(':id/clarifications')
+  @Permissions('tendering.tender.clarifications')
   async addClarification(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: CreateClarificationDto,
@@ -614,6 +620,7 @@ export class TenderingController {
 
   /** Answer a clarification / acknowledge an addendum. */
   @Patch(':id/clarifications/:clarificationId/answer')
+  @Permissions('tendering.tender.answer')
   async answerClarification(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('clarificationId', ParseUuidOr404Pipe) clarificationId: string,

@@ -1,6 +1,6 @@
 {
   "recordedAt": "2026-09-18",
-  "note": "SEC-01, the OTHER DIRECTION from the route audit. These permissions are DEMANDED by a route decorator or a service assertion and NO shipped role holds them, so only an administrator can perform the act. administrative[] is by design: platform configuration, not a tenant job. orphaned[] is DEBT and may only SHRINK - a new one fails the build, and a fixed one must be deleted from here or the test says so. Written after enumerating module wildcards dropped finance.invoice.approve, procurement.pr.create and procurement.rfq.award in three consecutive waves, each found by a different accident rather than a check.",
+  "note": "SEC-01, the OTHER DIRECTION from the route audit. These permissions are DEMANDED by a route decorator or a service assertion and NO shipped role holds them, so only an administrator can perform the act. administrative[] is by design: platform configuration, not a tenant job. orphaned[] is DEBT and may only SHRINK - a new one fails the build, and a fixed one must be deleted from here or the test says so. Written after enumerating module wildcards dropped finance.invoice.approve, procurement.pr.create and procurement.rfq.award in three consecutive waves, each found by a different accident rather than a check. HR left this list entirely when r-hr and r-hr-manager were added and Finance took the three money-out acts.",
   "administrative": [
     "admin.access.manage",
     "admin.ai.manage",
@@ -39,13 +39,6 @@
     "fleet.maintenance.create",
     "fleet.maintenance.update",
     "fleet.vehicle.create",
-    "fleet.vehicle.delete",
-    "hr.employee.create",
-    "hr.employee.delete",
-    "hr.employee.link-account",
-    "hr.leave.approve",
-    "hr.leave.create",
-    "hr.payroll.create",
-    "hr.payroll.pay"
+    "fleet.vehicle.delete"
   ]
 }

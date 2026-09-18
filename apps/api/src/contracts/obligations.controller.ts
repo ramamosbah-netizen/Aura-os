@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type ContractObligation, type ObligationStatus, type ObligationType, type ObligationParty, ObligationService } from '@aura/contracts';
 
@@ -12,6 +12,7 @@ export class ObligationsController {
   ) {}
 
   @Post()
+  @Permissions('contracts.obligation.create')
   create(
     @Body() dto: { contractId: string; contractTitle?: string; title: string; description?: string; obligationType?: ObligationType; responsibleParty?: ObligationParty; dueDate: string; notes?: string },
   ): Promise<ContractObligation> {
@@ -70,6 +71,7 @@ export class ObligationsController {
   }
 
   @Patch(':id/status')
+  @Permissions('contracts.obligation.status')
   async changeStatus(@Param('id') id: string, @Body() dto: { status: ObligationStatus; on?: string }): Promise<ContractObligation> {
     if (!dto?.status) throw new BadRequestException('status is required');
     return await this.obligations.changeStatus(id, dto.status, dto.on);

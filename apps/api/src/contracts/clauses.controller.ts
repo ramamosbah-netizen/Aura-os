@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type ContractClause, type ClauseCategory, ClauseService } from '@aura/contracts';
 
@@ -12,6 +12,7 @@ export class ClausesController {
   ) {}
 
   @Post()
+  @Permissions('contracts.clause.create')
   create(
     @Body() dto: { code: string; title: string; category?: ClauseCategory; body: string; tags?: string[]; active?: boolean },
   ): Promise<ContractClause> {
@@ -66,6 +67,7 @@ export class ClausesController {
   }
 
   @Patch(':id')
+  @Permissions('contracts.clause.update')
   async revise(
     @Param('id') id: string,
     @Body() dto: { title?: string; body?: string; category?: ClauseCategory; tags?: string[]; active?: boolean },

@@ -464,10 +464,24 @@ export class HrService {
     return entry;
   }
 
-  async submitTimesheetEntry(tenantId: string, id: string): Promise<TimesheetEntry> {
+
+  /**
+   * The USER account linked to an employee, or null.
+   *
+   * Every maker/checker rule in this module compares an ACTOR (a user id) with a CLAIMANT (an
+   * employee record id), and those are different identifiers for different things. The link is what
+   * joins them, and it is resolved here rather than in the domain so the rule stays a pure function.
+   * No link means the check cannot run, and the caller is told that rather than told it passed.
+   */
+  private async linkedAccountOf(tenantId: string, employeeId: string): Promise<string | null> {
+    const employee = await this.employeeStore.findById(tenantId, employeeId);
+    return employee?.userId ?? null;
+  }
+
+  async submitTimesheetEntry(tenantId: string, id: string, submittedBy: string | null = null): Promise<TimesheetEntry> {
     const entry = await this.timesheetStore.findById(tenantId, id);
     if (!entry) throw new Error(`timesheet entry ${id} not found`);
-    const updated = submitTimesheet(entry);
+    const updated = submitTimesheet(entry, submittedBy);
     await this.timesheetStore.save(updated);
     await this.events.append([
       makeEvent({
@@ -486,7 +500,7 @@ export class HrService {
   async approveTimesheetEntry(tenantId: string, id: string, approverId: string): Promise<TimesheetEntry> {
     const entry = await this.timesheetStore.findById(tenantId, id);
     if (!entry) throw new Error(`timesheet entry ${id} not found`);
-    const updated = approveTimesheet(entry, approverId);
+    const updated = approveTimesheet(entry, approverId, await this.linkedAccountOf(tenantId, entry.employeeId));
     await this.timesheetStore.save(updated);
     await this.events.append([
       makeEvent({
@@ -502,10 +516,10 @@ export class HrService {
     return updated;
   }
 
-  async rejectTimesheetEntry(tenantId: string, id: string): Promise<TimesheetEntry> {
+  async rejectTimesheetEntry(tenantId: string, id: string, rejectedBy: string | null = null): Promise<TimesheetEntry> {
     const entry = await this.timesheetStore.findById(tenantId, id);
     if (!entry) throw new Error(`timesheet entry ${id} not found`);
-    const updated = rejectTimesheet(entry);
+    const updated = rejectTimesheet(entry, rejectedBy);
     await this.timesheetStore.save(updated);
     return updated;
   }
@@ -627,10 +641,10 @@ export class HrService {
     return claim;
   }
 
-  async submitExpenseClaim(tenantId: string, id: string): Promise<ExpenseClaim> {
+  async submitExpenseClaim(tenantId: string, id: string, submittedBy: string | null = null): Promise<ExpenseClaim> {
     const claim = await this.expenseClaimStore.findById(tenantId, id);
     if (!claim) throw new Error(`expense claim ${id} not found`);
-    const updated = submitClaim(claim);
+    const updated = submitClaim(claim, submittedBy);
     await this.expenseClaimStore.save(updated);
     await this.events.append([
       makeEvent({
@@ -646,7 +660,7 @@ export class HrService {
   async approveExpenseClaim(tenantId: string, id: string, approverId: string): Promise<ExpenseClaim> {
     const claim = await this.expenseClaimStore.findById(tenantId, id);
     if (!claim) throw new Error(`expense claim ${id} not found`);
-    const updated = approveClaim(claim, approverId);
+    const updated = approveClaim(claim, approverId, await this.linkedAccountOf(tenantId, claim.employeeId));
     await this.expenseClaimStore.save(updated);
     await this.events.append([
       makeEvent({
@@ -659,18 +673,18 @@ export class HrService {
     return updated;
   }
 
-  async rejectExpenseClaim(tenantId: string, id: string): Promise<ExpenseClaim> {
+  async rejectExpenseClaim(tenantId: string, id: string, rejectedBy: string | null = null): Promise<ExpenseClaim> {
     const claim = await this.expenseClaimStore.findById(tenantId, id);
     if (!claim) throw new Error(`expense claim ${id} not found`);
-    const updated = rejectClaim(claim);
+    const updated = rejectClaim(claim, rejectedBy);
     await this.expenseClaimStore.save(updated);
     return updated;
   }
 
-  async reimburseExpenseClaim(tenantId: string, id: string, reimbursedDate?: string): Promise<ExpenseClaim> {
+  async reimburseExpenseClaim(tenantId: string, id: string, reimbursedBy: string | null = null, reimbursedDate?: string): Promise<ExpenseClaim> {
     const claim = await this.expenseClaimStore.findById(tenantId, id);
     if (!claim) throw new Error(`expense claim ${id} not found`);
-    const updated = reimburseClaim(claim, reimbursedDate);
+    const updated = reimburseClaim(claim, { by: reimbursedBy, claimantUserId: await this.linkedAccountOf(tenantId, claim.employeeId), date: reimbursedDate });
     await this.expenseClaimStore.save(updated);
     await this.events.append([
       makeEvent({
@@ -711,7 +725,7 @@ export class HrService {
   async approveStaffAdvance(tenantId: string, id: string, approverId: string): Promise<StaffAdvance> {
     const advance = await this.staffAdvanceStore.findById(tenantId, id);
     if (!advance) throw new Error(`staff advance ${id} not found`);
-    const updated = approveAdvance(advance, approverId);
+    const updated = approveAdvance(advance, approverId, await this.linkedAccountOf(tenantId, advance.employeeId));
     await this.staffAdvanceStore.save(updated);
     await this.events.append([
       makeEvent({
@@ -724,18 +738,18 @@ export class HrService {
     return updated;
   }
 
-  async rejectStaffAdvance(tenantId: string, id: string): Promise<StaffAdvance> {
+  async rejectStaffAdvance(tenantId: string, id: string, rejectedBy: string | null = null): Promise<StaffAdvance> {
     const advance = await this.staffAdvanceStore.findById(tenantId, id);
     if (!advance) throw new Error(`staff advance ${id} not found`);
-    const updated = rejectAdvance(advance);
+    const updated = rejectAdvance(advance, rejectedBy);
     await this.staffAdvanceStore.save(updated);
     return updated;
   }
 
-  async disburseStaffAdvance(tenantId: string, id: string, disbursedDate?: string): Promise<StaffAdvance> {
+  async disburseStaffAdvance(tenantId: string, id: string, disbursedBy: string | null = null, disbursedDate?: string): Promise<StaffAdvance> {
     const advance = await this.staffAdvanceStore.findById(tenantId, id);
     if (!advance) throw new Error(`staff advance ${id} not found`);
-    const updated = disburseAdvance(advance, disbursedDate);
+    const updated = disburseAdvance(advance, { by: disbursedBy, requestorUserId: await this.linkedAccountOf(tenantId, advance.employeeId), date: disbursedDate });
     await this.staffAdvanceStore.save(updated);
     await this.events.append([
       makeEvent({

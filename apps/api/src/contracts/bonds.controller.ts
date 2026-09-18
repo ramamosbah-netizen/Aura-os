@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { ParseUuidOr404Pipe, TenantContext } from '@aura/core';
+import { ParseUuidOr404Pipe, TenantContext, Permissions } from '@aura/core';
 import { BOND_KINDS, BondService, type BondAction, type BondKind, type ContractBond } from '@aura/contracts';
 
 class CreateBondDto {
@@ -25,6 +25,7 @@ export class BondsController {
   ) {}
 
   @Post()
+  @Permissions('contracts.bond.create')
   create(@Body() dto: CreateBondDto): Promise<ContractBond> {
     if (!BOND_KINDS.includes(dto?.kind)) throw new BadRequestException(`kind must be one of ${BOND_KINDS.join(', ')}`);
     const ctx = this.tenant.get();
@@ -67,6 +68,7 @@ export class BondsController {
   }
 
   @Patch(':id/status')
+  @Permissions('contracts.bond.status')
   async act(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { action: BondAction }): Promise<ContractBond> {
     if (!ACTIONS.includes(dto?.action)) throw new BadRequestException(`action must be one of ${ACTIONS.join(', ')}`);
     try {

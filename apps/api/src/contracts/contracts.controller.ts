@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { ContractAmendmentService, ContractApprovalService, ContractClientShareService, ContractNegotiationService, ContractRevisionService, type Contract, type ContractRevisionClause, type ContractRevisionStatus, type ContractStatus, ContractService } from '@aura/contracts';
 import { AccountService } from '@aura/crm';
@@ -69,6 +69,7 @@ export class ContractsController {
 
   /** PATCH /api/contracts/contracts/:id — update mutable fields (title, reference, value, account). */
   @Patch(':id')
+  @Permissions('contracts.contract.update')
   async update(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: UpdateContractDto): Promise<Contract> {
     try {
       return await this.contracts.update(id, {
@@ -91,6 +92,7 @@ export class ContractsController {
    * triggers auto-creation of a Project via the cross-module subscriber.
    */
   @Patch(':id/status')
+  @Permissions('contracts.contract.status')
   async changeStatus(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: ContractStatus },
@@ -106,24 +108,26 @@ export class ContractsController {
     return this.contracts.changeStatus(id, dto.status, this.tenant.get().actorId ?? undefined);
   }
 
-  /** Governed terminal command: complete an active contract after reviewing closeout readiness. */
+  /**
+   * Governed terminal command: complete an active contract after reviewing closeout readiness.
+   *
+   * IT USED TO WRAP EVERY FAILURE IN `BadRequestException`, which is precisely what the comment on
+   * `changeStatus` three handlers above argues against in its own words: "Wrapping every domain error
+   * as BadRequest would turn SoD/approval denials into misleading validation failures." The generic
+   * status route had learned that and the two GOVERNED TERMINAL COMMANDS had not, so a
+   * separation-of-duties refusal on the more consequential path was the one that read as bad input.
+   */
   @Post(':id/complete')
+  @Permissions('contracts.contract.complete')
   async complete(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Contract> {
-    try {
-      return await this.contracts.changeStatus(id, 'completed', this.tenant.get().actorId ?? undefined);
-    } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'invalid contract completion');
-    }
+    return await this.contracts.changeStatus(id, 'completed', this.tenant.get().actorId ?? undefined);
   }
 
   /** Governed terminal command: cancel a draft/active contract with an explicit command boundary. */
   @Post(':id/cancel')
+  @Permissions('contracts.contract.cancel')
   async cancel(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Contract> {
-    try {
-      return await this.contracts.changeStatus(id, 'cancelled', this.tenant.get().actorId ?? undefined);
-    } catch (e) {
-      throw new BadRequestException(e instanceof Error ? e.message : 'invalid contract cancellation');
-    }
+    return await this.contracts.changeStatus(id, 'cancelled', this.tenant.get().actorId ?? undefined);
   }
 
   @Get()
@@ -166,6 +170,7 @@ export class ContractsController {
   }
 
   @Post(':id/revisions')
+  @Permissions('contracts.contract.revisions')
   revisionsCreate(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { revisionReason?: string; terms?: Record<string, unknown>; clauses?: ContractRevisionClause[] }) {
     if (!this.revisions) throw new NotFoundException('contract revisions unavailable');
     const ctx = this.tenant.get();
@@ -173,6 +178,7 @@ export class ContractsController {
   }
 
   @Patch(':id/revisions/:revisionId/status')
+  @Permissions('contracts.contract.status')
   async revisionsStatus(@Param('id', ParseUuidOr404Pipe) contractId: string, @Param('revisionId', ParseUuidOr404Pipe) revisionId: string, @Body() dto: { status: ContractRevisionStatus }) {
     if (!this.revisions) throw new NotFoundException('contract revisions unavailable');
     const valid: ContractRevisionStatus[] = ['draft','internal_review','client_review','negotiation','approved','signed','returned','rejected','superseded'];
@@ -187,6 +193,7 @@ export class ContractsController {
   }
 
   @Post(':id/revisions/:revisionId/submit-approval')
+  @Permissions('contracts.contract.submit-approval')
   revisionSubmitApproval(@Param('id', ParseUuidOr404Pipe) contractId: string, @Param('revisionId', ParseUuidOr404Pipe) revisionId: string) {
     if (!this.revisions) throw new NotFoundException('contract revisions unavailable');
     return this.revisions.submitForApprovalForContract(contractId, revisionId, this.tenant.get().actorId);
@@ -206,6 +213,7 @@ export class ContractsController {
   }
 
   @Post(':id/negotiation')
+  @Permissions('contracts.contract.negotiation')
   negotiationCreate(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { revisionId: string; type: 'comment'|'change_request'; content: string; visibility?: 'internal'|'client_visible'; ownerId?: string | null }) {
     if (!this.negotiation) throw new NotFoundException('contract negotiation unavailable');
     const ctx = this.tenant.get();
@@ -213,6 +221,7 @@ export class ContractsController {
   }
 
   @Patch(':id/negotiation/:itemId')
+  @Permissions('contracts.contract.negotiation')
   async negotiationResolve(@Param('itemId', ParseUuidOr404Pipe) itemId: string, @Body() dto: { status: 'resolved'|'rejected'; resolution: string }) {
     if (!this.negotiation) throw new NotFoundException('contract negotiation unavailable');
     try { return await this.negotiation.resolve(itemId, dto?.status, dto?.resolution); }
@@ -226,6 +235,7 @@ export class ContractsController {
   }
 
   @Post(':id/client-shares')
+  @Permissions('contracts.contract.client-shares')
   clientShareCreate(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { revisionId: string; recipient: string; method: 'download'|'email'|'link'; correlationId?: string }) {
     if (!this.shares) throw new NotFoundException('client sharing unavailable');
     const ctx = this.tenant.get();
@@ -233,6 +243,7 @@ export class ContractsController {
   }
 
   @Post(':id/client-shares/:shareId/dispatch')
+  @Permissions('contracts.contract.dispatch')
   async clientShareDispatch(@Param('shareId', ParseUuidOr404Pipe) shareId: string) {
     if (!this.shares) throw new NotFoundException('client sharing unavailable');
     try { return await this.shares.dispatch(shareId); }
@@ -246,6 +257,7 @@ export class ContractsController {
   }
 
   @Post(':id/amendments')
+  @Permissions('contracts.contract.amendments')
   amendmentsCreate(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { baseRevisionId: string; title: string; content: string; sourceVariationId?: string | null }) {
     if (!this.amendments) throw new NotFoundException('amendments unavailable');
     const ctx = this.tenant.get();
@@ -253,6 +265,7 @@ export class ContractsController {
   }
 
   @Patch(':id/amendments/:amendmentId/status')
+  @Permissions('contracts.contract.status')
   async amendmentsStatus(@Param('id', ParseUuidOr404Pipe) contractId: string, @Param('amendmentId', ParseUuidOr404Pipe) amendmentId: string, @Body() dto: { status: import('@aura/contracts').ContractAmendmentStatus }) {
     if (!this.amendments) throw new NotFoundException('amendments unavailable');
     try {
@@ -266,6 +279,7 @@ export class ContractsController {
   }
 
   @Post(':id/amendments/:amendmentId/submit-approval')
+  @Permissions('contracts.contract.submit-approval')
   amendmentSubmitApproval(@Param('id', ParseUuidOr404Pipe) contractId: string, @Param('amendmentId', ParseUuidOr404Pipe) amendmentId: string) {
     if (!this.amendments) throw new NotFoundException('amendments unavailable');
     return this.amendments.submitForApprovalForContract(contractId, amendmentId, this.tenant.get().actorId);

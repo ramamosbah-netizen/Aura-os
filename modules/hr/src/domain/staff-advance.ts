@@ -19,6 +19,11 @@ export interface StaffAdvance {
   status: StaffAdvanceStatus;
   requestDate: string; // YYYY-MM-DD
   approvedBy: Id | null;
+  /** Who refused it, and when. A refusal an employee feels, attributable to nobody. */
+  rejectedBy: Id | null;
+  rejectedAt: string | null;
+  /** Who released the cash. The row kept a DATE and no actor. */
+  disbursedBy: Id | null;
   disbursedDate: string | null;
   createdAt: string;
 }
@@ -52,26 +57,50 @@ export function makeStaffAdvance(input: NewStaffAdvance): StaffAdvance {
     status: 'requested',
     requestDate: input.requestDate,
     approvedBy: null,
+    rejectedBy: null,
+    rejectedAt: null,
+    disbursedBy: null,
     disbursedDate: null,
     createdAt: new Date().toISOString(),
   };
 }
 
 
-export function approveAdvance(a: StaffAdvance, approverId: Id): StaffAdvance {
+/**
+ * APPROVE the advance — the act that commits this business to hand an employee cash.
+ *
+ * THE EMPLOYEE MAY NOT APPROVE THEIR OWN. `requestorUserId` is the employee's LINKED ACCOUNT,
+ * resolved by the caller, because `employeeId` is the employee RECORD's id and the approver is a
+ * USER id. Where there is no link the check cannot run and says so rather than implying a control.
+ */
+export function approveAdvance(a: StaffAdvance, approverId: Id, requestorUserId?: Id | null): StaffAdvance {
   if (a.status !== 'requested') throw new Error(`cannot approve from status ${a.status}`);
   if (!approverId) throw new Error('approverId is required');
+  if (requestorUserId && approverId === requestorUserId) {
+    throw new Error('the employee who requested this advance may not approve their own request — a second person is what makes it an approval');
+  }
   return { ...a, status: 'approved', approvedBy: approverId };
 }
 
-export function rejectAdvance(a: StaffAdvance): StaffAdvance {
+export function rejectAdvance(a: StaffAdvance, rejectedBy: Id | null = null): StaffAdvance {
   if (a.status !== 'requested') throw new Error(`cannot reject from status ${a.status}`);
-  return { ...a, status: 'rejected' };
+  return { ...a, status: 'rejected', rejectedBy, rejectedAt: new Date().toISOString() };
 }
 
-export function disburseAdvance(a: StaffAdvance, disbursedDate?: string): StaffAdvance {
+/** Hand over the cash. Approving says the advance is owed; disbursing says the money goes now. */
+export function disburseAdvance(
+  a: StaffAdvance,
+  opts: { by?: Id | null; requestorUserId?: Id | null; date?: string } = {},
+): StaffAdvance {
+  const { by: disbursedBy = null, requestorUserId, date: disbursedDate } = opts;
   if (a.status !== 'approved') throw new Error(`cannot disburse from status ${a.status} — must be approved first`);
-  return { ...a, status: 'disbursed', disbursedDate: disbursedDate ?? new Date().toISOString().slice(0, 10) };
+  if (disbursedBy && requestorUserId && disbursedBy === requestorUserId) {
+    throw new Error('the employee who requested this advance may not disburse their own — paying is a separate hand from asking');
+  }
+  if (disbursedBy && a.approvedBy && disbursedBy === a.approvedBy) {
+    throw new Error('the person who approved this advance may not release their own approval for payment — approving and paying are two signatures');
+  }
+  return { ...a, status: 'disbursed', disbursedBy, disbursedDate: disbursedDate ?? new Date().toISOString().slice(0, 10) };
 }
 
 /** Record an installment repayment; settles the advance once fully repaid. */

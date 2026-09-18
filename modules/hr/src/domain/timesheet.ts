@@ -14,7 +14,13 @@ export interface TimesheetEntry {
   description: string;
   status: TimesheetStatus;
   createdAt: string;
+  /** Who put the hours forward, and when. The transition took no actor. */
+  submittedBy: Id | null;
+  submittedAt: string | null;
   approvedBy: Id | null;
+  /** Who refused them, and when. */
+  rejectedBy: Id | null;
+  rejectedAt: string | null;
 }
 
 export interface NewTimesheetEntry {
@@ -49,23 +55,36 @@ export function makeTimesheetEntry(input: NewTimesheetEntry): TimesheetEntry {
     description: input.description?.trim() || '',
     status: 'draft',
     createdAt: new Date().toISOString(),
+    submittedBy: null,
+    submittedAt: null,
     approvedBy: null,
+    rejectedBy: null,
+    rejectedAt: null,
   };
 }
 
-export function submitTimesheet(entry: TimesheetEntry): TimesheetEntry {
+export function submitTimesheet(entry: TimesheetEntry, submittedBy: Id | null = null): TimesheetEntry {
   if (entry.status !== 'draft') throw new Error(`cannot submit from status ${entry.status}`);
-  return { ...entry, status: 'submitted' };
+  return { ...entry, status: 'submitted', submittedBy, submittedAt: new Date().toISOString() };
 }
 
-export function approveTimesheet(entry: TimesheetEntry, approverId: Id): TimesheetEntry {
+/**
+ * APPROVE the hours — which become cost against a project and, through payroll, money.
+ *
+ * THE EMPLOYEE MAY NOT APPROVE THEIR OWN HOURS. `employeeUserId` is the linked account, resolved by
+ * the caller, for the same reason it is on the claim and the advance.
+ */
+export function approveTimesheet(entry: TimesheetEntry, approverId: Id, employeeUserId?: Id | null): TimesheetEntry {
   if (entry.status !== 'submitted') throw new Error(`cannot approve from status ${entry.status}`);
+  if (approverId && employeeUserId && approverId === employeeUserId) {
+    throw new Error('an employee may not approve their own timesheet — hours become cost, and a second person is what makes it an approval');
+  }
   return { ...entry, status: 'approved', approvedBy: approverId };
 }
 
-export function rejectTimesheet(entry: TimesheetEntry): TimesheetEntry {
+export function rejectTimesheet(entry: TimesheetEntry, rejectedBy: Id | null = null): TimesheetEntry {
   if (entry.status !== 'submitted') throw new Error(`cannot reject from status ${entry.status}`);
-  return { ...entry, status: 'rejected' };
+  return { ...entry, status: 'rejected', rejectedBy, rejectedAt: new Date().toISOString() };
 }
 
 export interface WeeklySummary {

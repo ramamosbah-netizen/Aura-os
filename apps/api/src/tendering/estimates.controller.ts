@@ -1,5 +1,5 @@
 import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
-import { TenantContext } from '@aura/core';
+import { TenantContext, Permissions } from '@aura/core';
 import { type CostComponent, type RateBuildUp, type TenderEstimate, EstimateService } from '@aura/tendering';
 import { isQuotationCommitted, QuotationService } from '@aura/crm';
 
@@ -27,6 +27,7 @@ export class EstimatesController {
   ) {}
 
   @Post()
+  @Permissions('tendering.estimate.create')
   async buildRate(@Body() dto: BuildRateDto): Promise<RateBuildUp> {
     if (!dto?.boqItemId) throw new BadRequestException('boqItemId is required');
     if (!Array.isArray(dto?.components) || dto.components.length === 0) {

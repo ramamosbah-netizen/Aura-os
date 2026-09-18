@@ -29,7 +29,7 @@ function dateOnly(v: Date | string | null): string | null {
 }
 
 const ADVANCE_COLS =
-  'id, tenant_id, employee_id, amount, reason, installments, amount_repaid, status, request_date::text AS request_date, approved_by, disbursed_date::text AS disbursed_date, created_at';
+  'id, tenant_id, employee_id, amount, reason, installments, amount_repaid, status, request_date::text AS request_date, approved_by, disbursed_date::text AS disbursed_date, created_at, rejected_by, rejected_at, disbursed_by';
 
 export class PostgresStaffAdvanceStore implements StaffAdvanceStore {
   constructor(private readonly pool: Pool) {}
@@ -38,11 +38,15 @@ export class PostgresStaffAdvanceStore implements StaffAdvanceStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_hr_staff_advances (
-        id, tenant_id, employee_id, amount, reason, installments, amount_repaid, status, request_date, approved_by, disbursed_date, created_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        id, tenant_id, employee_id, amount, reason, installments, amount_repaid, status, request_date, approved_by, disbursed_date, created_at,
+        rejected_by, rejected_at, disbursed_by
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
       on conflict (id) do update set
-        amount_repaid = excluded.amount_repaid, status = excluded.status, approved_by = excluded.approved_by, disbursed_date = excluded.disbursed_date`,
-      [a.id, a.tenantId, a.employeeId, a.amount, a.reason, a.installments, a.amountRepaid, a.status, a.requestDate, a.approvedBy, a.disbursedDate, a.createdAt],
+        amount_repaid = excluded.amount_repaid, status = excluded.status, approved_by = excluded.approved_by,
+        disbursed_date = excluded.disbursed_date, rejected_by = excluded.rejected_by,
+        rejected_at = excluded.rejected_at, disbursed_by = excluded.disbursed_by`,
+      [a.id, a.tenantId, a.employeeId, a.amount, a.reason, a.installments, a.amountRepaid, a.status, a.requestDate, a.approvedBy, a.disbursedDate, a.createdAt,
+       a.rejectedBy, a.rejectedAt, a.disbursedBy],
     );
     return a;
   }
@@ -79,6 +83,9 @@ export class PostgresStaffAdvanceStore implements StaffAdvanceStore {
       status: row.status,
       requestDate: String(row.request_date),
       approvedBy: row.approved_by,
+      rejectedBy: row.rejected_by ?? null,
+      rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
+      disbursedBy: row.disbursed_by ?? null,
       disbursedDate: row.disbursed_date ? String(row.disbursed_date) : null,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     };

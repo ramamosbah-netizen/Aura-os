@@ -35,12 +35,16 @@ export class PostgresTimesheetStore implements TimesheetStore {
     const conn = (tx as PoolClient) || this.pool;
     const res = await conn.query(
       `insert into public.aura_hr_timesheets (
-        id, tenant_id, employee_id, project_id, wbs_node_id, date, hours, overtime, description, status, created_at, approved_by
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        id, tenant_id, employee_id, project_id, wbs_node_id, date, hours, overtime, description, status, created_at, approved_by,
+        submitted_by, submitted_at, rejected_by, rejected_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       on conflict (id) do update set
-        status = excluded.status, approved_by = excluded.approved_by
+        status = excluded.status, approved_by = excluded.approved_by,
+        submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
+        rejected_by = excluded.rejected_by, rejected_at = excluded.rejected_at
       returning *`,
-      [entry.id, entry.tenantId, entry.employeeId, entry.projectId, entry.wbsNodeId, entry.date, entry.hours, entry.overtime, entry.description, entry.status, entry.createdAt, entry.approvedBy],
+      [entry.id, entry.tenantId, entry.employeeId, entry.projectId, entry.wbsNodeId, entry.date, entry.hours, entry.overtime, entry.description, entry.status, entry.createdAt, entry.approvedBy,
+       entry.submittedBy, entry.submittedAt, entry.rejectedBy, entry.rejectedAt],
     );
     return this.mapTs(res.rows[0]);
   }
@@ -86,7 +90,11 @@ export class PostgresTimesheetStore implements TimesheetStore {
       description: row.description || '',
       status: row.status,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
+      submittedBy: row.submitted_by ?? null,
+      submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
       approvedBy: row.approved_by,
+      rejectedBy: row.rejected_by ?? null,
+      rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
     };
   }
 }

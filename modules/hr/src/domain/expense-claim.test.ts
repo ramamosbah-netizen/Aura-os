@@ -31,7 +31,7 @@ describe('ExpenseClaim', () => {
     c = approveClaim(c, 'mgr-9');
     expect(c.status).toBe('approved');
     expect(c.approvedBy).toBe('mgr-9');
-    c = reimburseClaim(c, '2026-06-28');
+    c = reimburseClaim(c, { date: '2026-06-28' });
     expect(c.status).toBe('reimbursed');
     expect(c.reimbursedDate).toBe('2026-06-28');
   });

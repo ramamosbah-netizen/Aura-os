@@ -19,11 +19,12 @@ const can = (roleId: string, method: string, ctrl: string, handler = ''): boolea
 describe('ELV role matrix — shape', () => {
   it('seeds the complete ELV/MEP operating roles with canonical unique ids', () => {
     const ids = ELV_ROLE_MATRIX.map((r) => r.id);
-    // 23 since r-finance-controller was split out. Closing and reopening the books left the
-    // operational Finance role, which carried `finance.*` and therefore held both acts however the
-    // routes were declared.
-    expect(ids).toHaveLength(23);
+    // 25: r-finance-controller (the books), then r-hr and r-hr-manager. HR had NO role at all —
+    // payroll, expense claims, staff advances and timesheets were reachable only by an admin.
+    expect(ids).toHaveLength(25);
     expect(ids).toContain('r-finance-controller');
+    expect(ids).toContain('r-hr');
+    expect(ids).toContain('r-hr-manager');
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.every((id) => id.startsWith('r-'))).toBe(true);
   });

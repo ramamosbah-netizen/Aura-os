@@ -72,6 +72,7 @@ export class HrController {
   // ── Employees ──────────────────────────────────────────────────────────────
 
   @Post('employees')
+  @Permissions('hr.employee.create')
   async createEmployee(@Body() dto: CreateEmployeeDto, @Req() req: { body?: Record<string, unknown> }): Promise<Employee> {
     const body = req.body;
     if (!dto?.firstName?.trim()) throw new BadRequestException('firstName is required');
@@ -114,6 +115,7 @@ export class HrController {
   }
 
   @Post('wps')
+  @Permissions('hr.wp.create')
   async generateWps(@Body() dto: { periodStart: string; periodEnd: string; establishmentId: string; bankCode: string }): Promise<import('@aura/hr').SifResult> {
     if (!dto?.periodStart || !dto?.periodEnd) throw new BadRequestException('periodStart and periodEnd are required');
     if (!dto?.establishmentId?.trim() || !dto?.bankCode?.trim()) throw new BadRequestException('establishmentId and bankCode are required');
@@ -121,6 +123,7 @@ export class HrController {
   }
 
   @Delete('employees/:id')
+  @Permissions('hr.employee.delete')
   async deleteEmployee(@Param('id') id: string): Promise<{ success: boolean }> {
     const ctx = this.tenant.get();
     const success = await this.hrService.deleteEmployee(ctx.tenantId, ctx.actorId, id);
@@ -128,6 +131,7 @@ export class HrController {
   }
 
   @Post('employees/:id/restore')
+  @Permissions('hr.employee.restore')
   restoreEmployee(@Param('id') id: string): Promise<Employee> {
     // "employee profile not found" is classified to 404 by the global error taxonomy.
     return this.hrService.restoreEmployee(this.tenant.get().tenantId, id);
@@ -176,6 +180,7 @@ export class HrController {
   // ── Leaves ─────────────────────────────────────────────────────────────────
 
   @Post('leaves')
+  @Permissions('hr.leave.create')
   requestLeave(@Body() dto: RequestLeaveDto): Promise<Leave> {
     if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
     if (!dto?.leaveType?.trim()) throw new BadRequestException('leaveType is required');
@@ -195,6 +200,7 @@ export class HrController {
   }
 
   @Put('leaves/:id/resolve')
+  @Permissions('hr.leave.resolve')
   resolveLeave(
     @Param('id') id: string,
     @Body() dto: ResolveLeaveDto,
@@ -221,6 +227,7 @@ export class HrController {
   // ── Payroll Runs ────────────────────────────────────────────────────────────
 
   @Post('payroll')
+  @Permissions('hr.payroll.create')
   runPayroll(@Body() dto: RunPayrollDto): Promise<PayrollRun> {
     if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
     if (!dto?.periodStart?.trim()) throw new BadRequestException('periodStart is required');
@@ -243,6 +250,7 @@ export class HrController {
   }
 
   @Put('payroll/:id/pay')
+  @Permissions('hr.payroll.pay')
   markPayrollPaid(@Param('id') id: string): Promise<PayrollRun> {
     const ctx = this.tenant.get();
     return this.hrService.markPayrollPaid(ctx.tenantId, ctx.actorId, id);
@@ -277,6 +285,7 @@ export class HrController {
 
   // ── End-of-Service Benefit (gratuity) — stateless UAE calculator ──────────
   @Post('eosb')
+  @Permissions('hr.eosb.create')
   calcEosb(
     @Body() dto: { basicSalary: number; joinedDate: string; lastWorkingDay: string; terminationType: TerminationType },
   ): EosbResult {
@@ -293,6 +302,7 @@ export class HrController {
   // ── Timesheets ─────────────────────────────────────────────────────────────
 
   @Post('timesheets')
+  @Permissions('hr.timesheet.create')
   async createTimesheet(@Body() dto: { employeeId: string; projectId?: string; wbsNodeId?: string; date: string; hours: number; overtime?: number; description?: string }): Promise<TimesheetEntry> {
     if (!dto?.employeeId || !dto?.date) throw new BadRequestException('employeeId and date required');
     const ctx = this.tenant.get();
@@ -310,24 +320,28 @@ export class HrController {
   }
 
   @Post('timesheets/:id/submit')
+  @Permissions('hr.timesheet.submit')
   async submitTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
-    return await this.hrService.submitTimesheetEntry(this.tenant.get().tenantId, id);
+    return await this.hrService.submitTimesheetEntry(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
   }
 
   @Post('timesheets/:id/approve')
+  @Permissions('hr.timesheet.approve')
   async approveTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
     const ctx = this.tenant.get();
     return await this.hrService.approveTimesheetEntry(ctx.tenantId, id, ctx.actorId ?? 'system');
   }
 
   @Post('timesheets/:id/reject')
+  @Permissions('hr.timesheet.approve')
   async rejectTimesheet(@Param('id') id: string): Promise<TimesheetEntry> {
-    return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id);
+    return await this.hrService.rejectTimesheetEntry(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
   }
 
   // ── Attendance ───────────────────────────────────────────────────────────
 
   @Post('attendance')
+  @Permissions('hr.attendance.create')
   async recordAttendance(@Body() dto: { employeeId: string; employeeName?: string; date: string; checkIn?: string; checkOut?: string; status?: AttendanceStatus; notes?: string }): Promise<AttendanceRecord> {
     if (!dto?.employeeId || !dto?.date) throw new BadRequestException('employeeId and date required');
     const ctx = this.tenant.get();
@@ -355,6 +369,7 @@ export class HrController {
   }
 
   @Put('attendance/:id/checkout')
+  @Permissions('hr.attendance.checkout')
   async checkOutAttendance(@Param('id') id: string, @Body() dto: { checkOut: string }): Promise<AttendanceRecord> {
     if (!dto?.checkOut) throw new BadRequestException('checkOut (HH:MM) is required');
     return await this.hrService.checkOutAttendance(this.tenant.get().tenantId, id, dto.checkOut);
@@ -363,6 +378,7 @@ export class HrController {
   // ── Expense Claims ───────────────────────────────────────────────────────
 
   @Post('expense-claims')
+  @Permissions('hr.expense-claim.create')
   async createExpenseClaim(@Body() dto: { employeeId: string; projectId?: string; category: ExpenseClaim['category']; amount: number; expenseDate: string; description?: string }): Promise<ExpenseClaim> {
     if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
     if (!dto?.expenseDate) throw new BadRequestException('expenseDate is required');
@@ -381,11 +397,13 @@ export class HrController {
   }
 
   @Post('expense-claims/:id/submit')
+  @Permissions('hr.expense-claim.submit')
   async submitExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
-    return await this.hrService.submitExpenseClaim(this.tenant.get().tenantId, id);
+    return await this.hrService.submitExpenseClaim(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
   }
 
   @Post('expense-claims/:id/approve')
+  @Permissions('hr.expense-claim.approve')
   async approveExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
     const ctx = this.tenant.get();
     // approved_by is a uuid column; fall back to the nil-uuid system actor when unauthenticated (dev)
@@ -394,18 +412,21 @@ export class HrController {
   }
 
   @Post('expense-claims/:id/reject')
+  @Permissions('hr.expense-claim.approve')
   async rejectExpenseClaim(@Param('id') id: string): Promise<ExpenseClaim> {
-    return await this.hrService.rejectExpenseClaim(this.tenant.get().tenantId, id);
+    return await this.hrService.rejectExpenseClaim(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
   }
 
   @Post('expense-claims/:id/reimburse')
+  @Permissions('hr.expense-claim.reimburse')
   async reimburseExpenseClaim(@Param('id') id: string, @Body() dto: { reimbursedDate?: string }): Promise<ExpenseClaim> {
-    return await this.hrService.reimburseExpenseClaim(this.tenant.get().tenantId, id, dto?.reimbursedDate);
+    return await this.hrService.reimburseExpenseClaim(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null, dto?.reimbursedDate);
   }
 
   // ── Staff Advances / Loans ────────────────────────────────────────────────
 
   @Post('staff-advances')
+  @Permissions('hr.staff-advance.create')
   async createStaffAdvance(@Body() dto: { employeeId: string; amount: number; reason?: string; installments?: number; requestDate: string }): Promise<StaffAdvance> {
     if (!dto?.employeeId) throw new BadRequestException('employeeId is required');
     if (!dto?.requestDate) throw new BadRequestException('requestDate is required');
@@ -424,6 +445,7 @@ export class HrController {
   }
 
   @Post('staff-advances/:id/approve')
+  @Permissions('hr.staff-advance.approve')
   async approveStaffAdvance(@Param('id') id: string): Promise<StaffAdvance> {
     const ctx = this.tenant.get();
     const approverId = ctx.actorId ?? '00000000-0000-0000-0000-000000000000';
@@ -431,16 +453,19 @@ export class HrController {
   }
 
   @Post('staff-advances/:id/reject')
+  @Permissions('hr.staff-advance.approve')
   async rejectStaffAdvance(@Param('id') id: string): Promise<StaffAdvance> {
-    return await this.hrService.rejectStaffAdvance(this.tenant.get().tenantId, id);
+    return await this.hrService.rejectStaffAdvance(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
   }
 
   @Post('staff-advances/:id/disburse')
+  @Permissions('hr.staff-advance.disburse')
   async disburseStaffAdvance(@Param('id') id: string, @Body() dto: { disbursedDate?: string }): Promise<StaffAdvance> {
     return await this.hrService.disburseStaffAdvance(this.tenant.get().tenantId, id, dto?.disbursedDate);
   }
 
   @Post('staff-advances/:id/repay')
+  @Permissions('hr.staff-advance.repay')
   async repayStaffAdvance(@Param('id') id: string, @Body() dto: { amount: number }): Promise<StaffAdvance> {
     if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
     return await this.hrService.repayStaffAdvance(this.tenant.get().tenantId, id, Number(dto.amount));
@@ -449,6 +474,7 @@ export class HrController {
   // ── Performance appraisals ──────────────────────────────────────────────────
 
   @Post('appraisals')
+  @Permissions('hr.appraisal.create')
   createAppraisal(
     @Body() dto: { employeeId: string; employeeName?: string; period: string; reviewerId?: string; criteria: AppraisalCriterion[]; strengths?: string; improvements?: string; comments?: string },
   ): Promise<PerformanceAppraisal> {
@@ -482,11 +508,13 @@ export class HrController {
   }
 
   @Put('appraisals/:id/submit')
+  @Permissions('hr.appraisal.submit')
   async submitAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
     return await this.hrService.submitAppraisal(this.tenant.get().tenantId, id);
   }
 
   @Put('appraisals/:id/acknowledge')
+  @Permissions('hr.appraisal.acknowledge')
   async acknowledgeAppraisal(@Param('id') id: string): Promise<PerformanceAppraisal> {
     return await this.hrService.acknowledgeAppraisal(this.tenant.get().tenantId, id);
   }

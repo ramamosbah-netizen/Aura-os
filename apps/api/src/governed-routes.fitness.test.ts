@@ -22,11 +22,12 @@ import allowlist from './route-permission-allowlist.json';
  *   crm.opportunity.scopes / .approve      the author cannot author, the approver cannot approve (J1-07)
  *
  * 423 mutating routes were in that state when this guard was written — 419 was the number it recorded,
- * and the four it missed are in the allowlist now, found by mutation-testing this very test. 379 are
- * in that state today: six left with J1-07, two with the finance period close, eleven with the
- * subcontracts module, thirteen with customer invoicing and ten with the procurement commitments —
- * plus two TOMBSTONES that were never debt at all. Fixing them is staged work — 53 of them end in a
- * GOVERNING VERB and each needs its own maker/checker question answered, which is not a rename. What
+ * and the four it missed are in the allowlist now, found by mutation-testing this very test. 320 are
+ * in that state today. WAVE A IS COMPLETE: every governing verb in subcontracts, finance,
+ * procurement, tendering, HR and contracts is gone from this list, and 40 remain across the modules
+ * the programme has not reached — hse 8, doccontrol 7, commissioning 4, projects 4, site 4, crm 3,
+ * quality 3, and one or two each in amc, assets, engineering, fleet, intelligence and inventory.
+ * Each needs its own maker/checker question answered, which is not a rename. What
  * this test does is stop the number growing while that happens, and make every fix visible: the
  * allowlist is the debt, written down, and it may only shrink.
  *
@@ -103,8 +104,9 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     // not because the scan broke. `subcontracts.claim.certify` and then `procurement.rfq.quotes` were
     // each one of these until their wave landed, and have been replaced in turn. A canary is never
     // chosen from the next remediation, for the obvious reason that it is about to stop being true.
+    // `hr.timesheet.approve` was the third of these until wave A reached HR, and has been replaced.
     const derived = new Set((scanRoutes() as Array<{ derived: string }>).map((r) => r.derived));
-    for (const known of ['hse.ptw.approve', 'doccontrol.transmittal.send', 'hr.timesheet.approve']) {
+    for (const known of ['hse.ptw.approve', 'doccontrol.transmittal.send', 'site.daily-report.approve']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);
     }
   });

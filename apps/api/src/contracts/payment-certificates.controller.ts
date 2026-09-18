@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { TenantContext, ParseUuidOr404Pipe, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type CertificateStatus, type PaymentCertificate, type IpcLine, PaymentCertificateService } from '@aura/contracts';
 
@@ -91,6 +91,7 @@ export class PaymentCertificatesController {
   /** Add a valuation line (a BOQ item's certified quantity × rate) to a draft IPC. On certification
    *  each line posts its quantity to the Quantity Ledger as the item's INVOICED position. */
   @Post(':id/lines')
+  @Permissions('contracts.certificate.lines')
   addLine(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddIpcLineDto): Promise<IpcLine> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.boqItemId) throw new BadRequestException('boqItemId is required');
@@ -114,6 +115,7 @@ export class PaymentCertificatesController {
   }
 
   @Patch(':id/status')
+  @Permissions('contracts.certificate.status')
   async changeStatus(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: CertificateStatus },

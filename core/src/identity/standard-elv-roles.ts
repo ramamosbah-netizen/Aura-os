@@ -130,6 +130,82 @@ const PROCUREMENT_AUTHORITY = [
   'procurement.pr.approve', 'procurement.config.manage',
 ] as const;
 
+/**
+ * TENDERING, split so that a new act is not granted by accident.
+ *
+ * Unlike the three waves before it, nothing here was BROKEN: both governed transitions already record
+ * their actor, `won` is already refused on the generic status route (ADR-0021), and `submitted` is
+ * already routed through `submit()` so the invariant "submitted implies a submission record" holds by
+ * construction. The service comments say so and the code does it.
+ *
+ * What was wrong is narrower and still worth fixing: NO ROLE NAMED ANY TENDERING ACT. The Sales
+ * Manager held `tendering.*`, one pattern covering preparation, Q&A traffic, PUTTING A PRICED OFFER
+ * IN FRONT OF A CUSTOMER, and RECORDING AN AWARD that auto-creates a Contract and closes the source
+ * Opportunity as Won. Those are not the same kind of act, and under a module wildcard every act added
+ * to this module in future is granted to that role the moment it exists — which is the whole SEC-01
+ * thesis, not a hypothetical.
+ *
+ * NO NEW SEPARATION IS INVENTED HERE, deliberately. Submission is already gated on three approvals
+ * held by other people — an approved technical study, an approved quantity take-off and an internally
+ * approved commercial offer — and that is a stronger control than a second signature. Recording the
+ * customer's award is capturing an external fact, not approving one's own work, and the Contract it
+ * creates inherits a commercial baseline that was approved upstream. Adding a gate at either point
+ * would be inventing a control rather than closing a hole.
+ */
+const TENDERING_PREPARATION = [
+  'tendering.tender.read', 'tendering.tender.create', 'tendering.tender.update',
+  'tendering.tender.clarifications', 'tendering.tender.answer',
+  'tendering.bid-score.read', 'tendering.bid-score.create', 'tendering.bid-score.amend',
+  'tendering.outcome.read', 'tendering.outcome.create',
+  'tendering.estimate.*', 'tendering.study.*', 'tendering.takeoff.*',
+] as const;
+
+/**
+ * The two acts that face the customer, plus the remaining lifecycle transitions. Named, so that
+ * granting them is a decision somebody made rather than a side effect of the module they live in.
+ */
+const TENDERING_OFFER = [
+  'tendering.tender.submit', 'tendering.tender.award', 'tendering.tender.status',
+] as const;
+
+/**
+ * CONTRACTS, named rather than granted by the module they live in.
+ *
+ * `contracts.*` on the Commercial Manager covered the day-to-day — clauses, revisions, negotiation,
+ * amendments, obligations — and also COMPLETING a contract, CANCELLING one, DISPATCHING a revision to
+ * the client, and moving a payment certificate's status. Those are terminal or outward-facing acts,
+ * and under a module wildcard every act added to this module in future is granted the moment it
+ * exists.
+ *
+ * As with tendering, no new separation is invented: the Commercial Manager IS the contracts authority
+ * and there is no second role in the catalogue whose job any of these is. What changes is that
+ * holding them is now a decision rather than a side effect, and adding one is too.
+ */
+const CONTRACTS_COMMERCIAL = [
+  'contracts.contract.create', 'contracts.contract.update', 'contracts.contract.revisions',
+  'contracts.contract.negotiation', 'contracts.contract.amendments',
+  'contracts.contract.submit-approval', 'contracts.contract.client-shares',
+  'contracts.clause.create', 'contracts.clause.update',
+  'contracts.obligation.create', 'contracts.obligation.status',
+  'contracts.bond.create', 'contracts.bond.status',
+  'contracts.certificate.create', 'contracts.certificate.update', 'contracts.certificate.lines',
+  // Asserted in the services rather than derived from a route, so no route audit would ever see
+  // them — the permission-vocabulary guard did, on its fourth catch of this exact shape.
+  // `ipc` is a third vocabulary for the payment certificate, after `certificate`; listed, not
+  // renamed, for the same reason `pr`/`purchase-request` and `leave.approve`/`leave.resolve` are.
+  'contracts.contract.sign', 'contracts.ipc.create',
+] as const;
+
+/** Terminal and outward-facing: ending a contract, and sending one to the client. */
+const CONTRACTS_AUTHORITY = [
+  'contracts.contract.complete', 'contracts.contract.cancel',
+  'contracts.contract.status', 'contracts.contract.dispatch',
+  'contracts.certificate.status',
+  // Certifying an interim payment certificate — money owed to a subcontractor or claimed from a
+  // client. Asserted in PaymentCertificateService under the `ipc` name.
+  'contracts.ipc.certify',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -175,7 +251,13 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Reviews the pipeline, approves commercial offers and governs tender Bid/No-Bid amendments.',
     assignmentScope: 'tenant',
     permissions: [
-      'crm.*', 'tendering.*', 'contracts.contract.create', readOnly('contracts'),
+      'crm.*',
+      // `tendering.*` USED TO BE HERE. One pattern covering preparation, the submission of a priced
+      // offer to a customer, and the capture of an award that creates a Contract — and, more to the
+      // point, covering every tendering act added after it was written.
+      ...TENDERING_PREPARATION, ...TENDERING_OFFER,
+      'tendering.internal-pricing.access',
+      'contracts.contract.create', readOnly('contracts'),
       readOnly('projects'), readOnly('finance'), ...STAFF_BASE,
     ],
   },
@@ -321,7 +403,9 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       'crm.estimate.read', 'crm.estimate.approve', 'crm.quotation.*', 'crm.internal-pricing.access',
       'tendering.internal-pricing.access',
-      'contracts.*', 'projects.variation.*', 'projects.eot-claim.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
+      // `contracts.*` USED TO BE HERE.
+      ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY,
+      'projects.variation.*', 'projects.eot-claim.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
       // SUBCONTRACTOR COMMERCIAL AUTHORITY. This role’s description already said it — “governs
       // estimates, quotations, contracts, variations, CLAIMS and payment applications” — and it held
       // no `subcontracts.*` permission whatsoever. The whole module was reachable only by r-admin, so
@@ -424,6 +508,13 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // RELEASES a certified subcontractor claim for payment, and certifies nothing. It already held
       // `subcontracts.*.read`; paying was reachable only through r-admin’s global wildcard.
       'subcontracts.claim.pay',
+      // AND THE MONEY HR COMMITS. Paying a payroll run, reimbursing an approved expense claim and
+      // disbursing an approved staff advance are cash leaving the business — Finance's act, not the
+      // HR Manager's who approved the entitlement. The domain refuses the approver the payment on
+      // top of this, because one person may hold both roles.
+      'hr.payroll.pay', 'hr.expense-claim.reimburse', 'hr.staff-advance.disburse',
+      'hr.staff-advance.repay',
+      readOnly('hr'),
       'contracts.certificate.certify', readOnly('contracts'), readOnly('projects'),
       readOnly('procurement'), readOnly('subcontracts'), readOnly('crm'), ...STAFF_BASE,
     ],
@@ -463,6 +554,62 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Prepares O&M, training, spares, dossier and handover readiness records for acceptance.',
     assignmentScope: 'project',
     permissions: ['commissioning.handover.*', readOnly('commissioning'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), readOnly('amc'), readOnly('doccontrol'), ...STAFF_BASE],
+  },
+  {
+    /**
+     * HR OFFICER — and the module had NO ROLE AT ALL until this existed.
+     *
+     * Measured: no shipped role held a single `hr.*` permission except `r-hse`, which holds
+     * `hr.*.read`. Payroll, expense claims, staff advances, timesheets, appraisals and end-of-service
+     * were reachable only through r-admin's global wildcard. 28 mutating routes, nine of them
+     * governing verbs. The subcontracts shape, at larger scale, on the department that pays people.
+     *
+     * This role runs the department: the employee master, leave, attendance, timesheet capture,
+     * appraisals, end-of-service, and PREPARING a payroll run. It approves none of the things that
+     * cost money and pays none of them — those are below.
+     */
+    id: 'r-hr',
+    name: 'HR Officer',
+    description: 'Maintains employee records, leave, attendance, timesheets and appraisals, and prepares payroll.',
+    assignmentScope: 'tenant',
+    permissions: [
+      'hr.employee.create', 'hr.employee.update', 'hr.employee.link-account',
+      'hr.leave.create', 'hr.attendance.create', 'hr.attendance.checkout',
+      'hr.timesheet.create', 'hr.timesheet.submit',
+      'hr.expense-claim.create', 'hr.expense-claim.submit',
+      'hr.staff-advance.create',
+      'hr.appraisal.create', 'hr.appraisal.acknowledge',
+      'hr.payroll.create', 'hr.eosb.create', 'hr.wp.create',
+      readOnly('hr'), readOnly('projects'), ...STAFF_BASE,
+    ],
+  },
+  {
+    /**
+     * HR MANAGER — the approvals, and nothing that pays.
+     *
+     * Approving a timesheet turns hours into project cost and, through payroll, into money. Approving
+     * an expense claim or a staff advance commits the business to hand an employee cash. Those three
+     * are the department's governing acts and they sit here, apart from the officer who captures the
+     * records and apart from Finance who releases the money.
+     *
+     * `hr.employee.delete` is here too: removing a person from the master is not day-to-day
+     * maintenance.
+     */
+    id: 'r-hr-manager',
+    name: 'HR Manager',
+    description: 'Approves timesheets, expense claims, staff advances and appraisals; governs the employee master.',
+    assignmentScope: 'tenant',
+    permissions: [
+      'hr.timesheet.approve', 'hr.expense-claim.approve', 'hr.staff-advance.approve',
+      'hr.appraisal.submit',
+      // TWO NAMES FOR ONE ACT, again: the route declares `hr.leave.resolve` and the service asserts
+      // `hr.leave.approve`. Same shape as `pr`/`purchase-request` in procurement, and it is listed
+      // rather than renamed because renaming a permission is a separate change with its own blast
+      // radius. The permission-vocabulary guard is what found it.
+      'hr.leave.resolve', 'hr.leave.approve',
+      'hr.employee.delete', 'hr.employee.restore',
+      readOnly('hr'), readOnly('projects'), ...STAFF_BASE,
+    ],
   },
   {
     id: 'r-executive',

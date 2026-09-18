@@ -30,7 +30,7 @@ describe('lifecycle', () => {
     let a = approveAdvance(makeStaffAdvance(base), 'mgr-9');
     expect(a.status).toBe('approved');
     expect(a.approvedBy).toBe('mgr-9');
-    a = disburseAdvance(a, '2026-06-25');
+    a = disburseAdvance(a, { date: '2026-06-25' });
     expect(a.status).toBe('disbursed');
     a = recordRepayment(a, 3000);
     expect(a.status).toBe('disbursed');

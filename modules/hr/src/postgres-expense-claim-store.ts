@@ -29,7 +29,8 @@ function dateOnly(v: Date | string | null): string | null {
 }
 
 const EXPENSE_COLS =
-  'id, tenant_id, employee_id, project_id, category, amount, expense_date::text AS expense_date, description, status, approved_by, reimbursed_date::text AS reimbursed_date, created_at';
+  'id, tenant_id, employee_id, project_id, category, amount, expense_date::text AS expense_date, description, status, approved_by, reimbursed_date::text AS reimbursed_date, created_at, ' +
+  'submitted_by, submitted_at, rejected_by, rejected_at, reimbursed_by';
 
 export class PostgresExpenseClaimStore implements ExpenseClaimStore {
   constructor(private readonly pool: Pool) {}
@@ -38,11 +39,16 @@ export class PostgresExpenseClaimStore implements ExpenseClaimStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_hr_expense_claims (
-        id, tenant_id, employee_id, project_id, category, amount, expense_date, description, status, approved_by, reimbursed_date, created_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+        id, tenant_id, employee_id, project_id, category, amount, expense_date, description, status, approved_by, reimbursed_date, created_at,
+        submitted_by, submitted_at, rejected_by, rejected_at, reimbursed_by
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       on conflict (id) do update set
-        status = excluded.status, approved_by = excluded.approved_by, reimbursed_date = excluded.reimbursed_date`,
-      [claim.id, claim.tenantId, claim.employeeId, claim.projectId, claim.category, claim.amount, claim.expenseDate, claim.description, claim.status, claim.approvedBy, claim.reimbursedDate, claim.createdAt],
+        status = excluded.status, approved_by = excluded.approved_by, reimbursed_date = excluded.reimbursed_date,
+        submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
+        rejected_by = excluded.rejected_by, rejected_at = excluded.rejected_at,
+        reimbursed_by = excluded.reimbursed_by`,
+      [claim.id, claim.tenantId, claim.employeeId, claim.projectId, claim.category, claim.amount, claim.expenseDate, claim.description, claim.status, claim.approvedBy, claim.reimbursedDate, claim.createdAt,
+       claim.submittedBy, claim.submittedAt, claim.rejectedBy, claim.rejectedAt, claim.reimbursedBy],
     );
     return claim;
   }
@@ -78,7 +84,12 @@ export class PostgresExpenseClaimStore implements ExpenseClaimStore {
       expenseDate: String(row.expense_date),
       description: row.description || '',
       status: row.status,
+      submittedBy: row.submitted_by ?? null,
+      submittedAt: row.submitted_at ? new Date(row.submitted_at).toISOString() : null,
       approvedBy: row.approved_by,
+      rejectedBy: row.rejected_by ?? null,
+      rejectedAt: row.rejected_at ? new Date(row.rejected_at).toISOString() : null,
+      reimbursedBy: row.reimbursed_by ?? null,
       reimbursedDate: row.reimbursed_date ? String(row.reimbursed_date) : null,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
     };

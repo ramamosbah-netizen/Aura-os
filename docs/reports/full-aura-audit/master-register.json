@@ -8674,6 +8674,43 @@
       "acceptanceProof": "MET. The stored governed_total and the screen now both read 13,588.25, and the tests fail on the old behaviour rather than merely describing it."
     },
     {
+      "id": "SEC-01",
+      "title": "64 governing acts — approve, award, certify, issue, close — are governed by permission names no role names",
+      "capabilityIds": [
+        "STU-08",
+        "COM-05",
+        "QHS-03",
+        "SIT-04",
+        "HO-05"
+      ],
+      "classification": "WRONG_BEHAVIOR",
+      "kind": "systemic finding — the mechanism behind J3-01, J1-07, QC-01 and BUY-01, measured rather than met again by accident",
+      "status": "OPEN",
+      "roles": [
+        "Architecture",
+        "Technical Manager",
+        "Commercial Manager / QS",
+        "Finance",
+        "HSE",
+        "Project Manager"
+      ],
+      "stages": [
+        "Pre-Sales",
+        "Engineering",
+        "Procurement",
+        "Site",
+        "Commercial / Certification",
+        "Finance / Collection"
+      ],
+      "authority": "PermissionsGuard route derivation (core/src/identity/permissions.guard.ts)",
+      "currentBehavior": "A route with no explicit `@Permissions` is not ungoverned: the guard DERIVES a name from its path. That default is sensible and has a failure mode nothing checks — the derived name may belong to no vocabulary any role speaks, so the route is reachable ONLY by a wildcard holder and refused for the role whose job it is. Four findings have already been produced by it, each discovered by accident while working on something else: `procurement.rfq.quotes` (QC-01 — no role could record a supplier quotation), `procurement.purchase-request.status` (BUY-01 — submission required approval authority, making maker/checker unreachable), the purchase-order lifecycle (J3-01 — one permission owned issue, cancel and close), and `crm.opportunity.scopes`/`.approve` (J1-07 — the scope author’s role cannot author a scope and the Technical Manager cannot sign one off). MEASURED, by apps/api/scripts/route-permission-audit.mjs: of 865 routes that derive a permission, only 66 derive a name a role NAMES. 799 derive a name reachable solely through a wildcard; 419 of those MUTATE, and 64 of them end in a GOVERNING VERB — among them `subcontracts.claim.certify`, `tendering.tender.award`, `finance.period.close` and `.reopen`, `finance.customer-invoice.issue` and `.cancel`, `hse.ptw.approve`, `hr.expense-claim.approve`, `hr.staff-advance.approve`, `doccontrol.revision.approve` and `.issue`, `site.daily-report.approve`, `projects.eot-claim.decide`, `quality.itp.close` and `crm.opportunity.approve`. Every one of those manufactures an authority fact, an external release or an irreversible state change under a name nobody chose for it. This is not a claim that all 64 are exploitable today; it is a claim that none of them is governed by a name any role declares, so whether the right person can perform them is presently an accident of who holds a wildcard.",
+      "expectedOperationalBehavior": "Every route that manufactures a business fact declares the permission that governs it, in a vocabulary the shipped roles speak — and a route whose derived name no role names fails the build rather than waiting to be tripped over.",
+      "evidence": "apps/api/scripts/route-permission-audit.mjs (read-only; self-checks against the three known findings and reports a floor, not a total, if it cannot find them). Mutating ungoverned routes by module: crm 47, finance 38, commissioning 32, hr 28, projects 28, contracts 22, doccontrol 19, quality 19, site 19, hse 17, fleet 16, inventory 15, amc 14, engineering 14, subcontracts 11, procurement 10, tendering 9.",
+      "severity": "CRITICAL",
+      "remediationDependency": "None upstream. It is the MECHANISM behind J1-07 and behind two already-closed records, so fixing J1-07 alone leaves 63 of the same shape standing.",
+      "acceptanceProof": "STAGED, because 64 acts is not one piece of work and pretending otherwise would produce 64 unproved permission renames. STAGE 1: the audit exists and is honest — done. STAGE 2: a fitness test fails the build when a MUTATING route derives a name no role names, with the current 419 recorded as an explicit, shrinking allowlist so the count cannot grow while it is worked down. STAGE 3: the 64 governing verbs are given declared permissions in the roles’ own vocabulary, each with the maker/checker question asked — who performs it, who may not, and whether the actor may act on their own work — highest-consequence first: money certified or issued, safety permits approved, accounting periods closed. A permission RENAMED without that question answered is not remediation, it is relabelling. STAGE 4: the allowlist is empty and the fitness test stands alone. Each stage closes on its own Auth-ON proof with two real principals, never on the audit going quiet."
+    },
+    {
       "id": "ARCH-01",
       "title": "A cross-domain port reached through ModuleRef instead of the module graph — watch, not yet a defect",
       "capabilityIds": [
@@ -8739,9 +8776,9 @@
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
-    "gaps": 53,
+    "gaps": 54,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 7
+    "freshDefects": 8
   }
 }

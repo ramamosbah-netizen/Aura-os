@@ -4,7 +4,7 @@
      the ADR files in this folder are the source of truth (YAML frontmatter). Run
      `pnpm adr:new "<title>"` to reserve the next number safely — never pick one manually. -->
 
-21 decisions.
+22 decisions.
 
 | # | Decision | Status | Category | Date | Links (↦ supersedes · related) |
 |--:|---|---|---|---|---|
@@ -29,3 +29,4 @@
 | [0019](0019-canonical-project-360-route.md) | Canonical Project 360 route and ownership | Accepted | — | 2026-08-16 | — |
 | [0020](0020-qualification-record-and-award-snapshot.md) | Qualification is an evidence-bearing record; qualification-at-award is an immutable snapshot | Accepted | — | 2026-08-26 | — |
 | [0021](0021-tender-award-evidence.md) | Tender Award Evidence and Governed Won Provenance | Accepted | Architecture | 2026-08-27 | 0020 |
+| [0022](0022-sourcing-authority-boundaries.md) | Sourcing authority — what recommendation, approval, award and order creation may each do | Accepted | Architecture | 2026-09-18 | 0004 0011 |

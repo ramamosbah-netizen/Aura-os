@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query, StreamableFile } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { CommercialComparisonService, QuotationLineService, type QuotationLine } from '@aura/procurement';
+import { type LineDiscountBasis, CommercialComparisonService, QuotationLineService, type QuotationLine } from '@aura/procurement';
 import { admitCurrency } from '@aura/shared';
 
 /**
@@ -31,6 +31,8 @@ interface QuotationLineDto {
   uom?: string | null;
   unitPrice?: number | null;
   lineDiscount?: number | null;
+  /** WHICH KIND of discount — see LINE_DISCOUNT_BASES. Defaults to the one kind AURA records. */
+  lineDiscountBasis?: LineDiscountBasis | null;
   leadTimeDays?: number | null;
   warrantyMonths?: number | null;
   notes?: string | null;
@@ -222,6 +224,7 @@ export class QuotationLinesController {
       uom: dto.uom ?? null,
       unitPrice: dto.unitPrice ?? null,
       lineDiscount: dto.lineDiscount ?? null,
+      lineDiscountBasis: dto.lineDiscountBasis ?? null,
       leadTimeDays: dto.leadTimeDays ?? null,
       warrantyMonths: dto.warrantyMonths ?? null,
       notes: dto.notes ?? null,

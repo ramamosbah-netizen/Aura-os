@@ -52,6 +52,11 @@ export interface PurchaseOrderLine {
    * `lineEffectiveUnitPrice` x 4. Everything downstream reads that one function.
    */
   lineDiscount: number | null;
+  /**
+   * WHICH KIND `lineDiscount` is. NULL exactly when there is no discount — a discount with no
+   * declared kind is a half-stated commercial term, and half-stated is how a wrong reading gets in.
+   */
+  lineDiscountBasis: LineDiscountBasis | null;
 
   /** How this line came to be bought. See `LINE_SOURCES`. */
   sourceType: PurchaseOrderLineSource;
@@ -93,6 +98,31 @@ export type PurchaseOrderLineSource = (typeof LINE_SOURCES)[number];
  * They are never blended. A carried estimate stays an estimate until something with the authority
  * to set a price replaces it.
  */
+/**
+ * WHICH KIND OF DISCOUNT A `lineDiscount` IS — declared on the row, never assumed by its reader.
+ *
+ * Exactly one kind exists, and the narrowness is the point. `line_unconditional_prorata` means: a
+ * reduction of THIS line, owed unconditionally, earned pro rata with the quantity delivered. That is
+ * what makes `lineEffectiveUnitPrice` correct, and it is correct for nothing else.
+ *
+ * These are NOT this kind, and none of them may be recorded in `lineDiscount`:
+ *
+ *   a HEADER discount          belongs to the order, not to any line. Pushing it down invents a
+ *                              per-item cost nobody quoted — the same reason freight is never
+ *                              allocated across lines.
+ *   a CONDITIONAL rebate       is earned on a condition (annual volume, a framework tier) that is
+ *                              not known at receipt, so it cannot reduce a line at delivery.
+ *   an EARLY-PAYMENT discount  is earned by PAYING early, not by receiving. It is a financing term
+ *                              and never belongs in the goods value at all.
+ *   a RETROSPECTIVE credit     is a later document against an order already placed, not a term of it.
+ *
+ * Each needs its own answer about receipt, matching and cost. Adding one to this union deliberately
+ * breaks the exhaustive switch in `lineEffectiveUnitPrice`, so nobody can add a kind without being
+ * made to say what it is worth when half of it turns up.
+ */
+export const LINE_DISCOUNT_BASES = ['line_unconditional_prorata'] as const;
+export type LineDiscountBasis = (typeof LINE_DISCOUNT_BASES)[number];
+
 export const UNIT_PRICE_BASES = ['estimate', 'agreed'] as const;
 export type UnitPriceBasis = (typeof UNIT_PRICE_BASES)[number];
 
@@ -126,8 +156,13 @@ export interface NewPurchaseOrderLine {
   snapshot: OrderMaterialSnapshot;
   quantity: number;
   unitPrice: number;
-  /** The supplier's own line discount, if they gave one. Never folded into `unitPrice`. */
+  /**
+   * The supplier's own line discount, if they gave one. Never folded into `unitPrice`. Defaults to
+   * `line_unconditional_prorata` because that is the only kind AURA records; passing anything else
+   * is refused rather than stored, since no reader knows what it would be worth.
+   */
   lineDiscount?: number | null;
+  lineDiscountBasis?: LineDiscountBasis | null;
   sourceType: PurchaseOrderLineSource;
   unitPriceBasis: UnitPriceBasis;
   sourcePrLineId?: Id | null;
@@ -183,6 +218,9 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
    * change a commercial term.
    */
   const lineDiscount = input.lineDiscount == null ? null : Number(input.lineDiscount);
+  const lineDiscountBasis = lineDiscount === null
+    ? null
+    : (input.lineDiscountBasis ?? 'line_unconditional_prorata');
   if (lineDiscount !== null) {
     if (!Number.isFinite(lineDiscount) || lineDiscount < 0) {
       throw new Error('a line discount cannot be negative — a surcharge is not a discount');
@@ -190,6 +228,15 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     if (lineDiscount > moneyNumber(quantity * unitPrice)) {
       throw new Error('a line discount cannot exceed what the line comes to before it');
     }
+    if (lineDiscountBasis === null || !(LINE_DISCOUNT_BASES as readonly string[]).includes(lineDiscountBasis)) {
+      throw new Error(
+        `a line discount must say which kind it is, and AURA records only ${LINE_DISCOUNT_BASES.join(', ')} — ` +
+        'a header discount, a conditional rebate and an early-payment discount are each worth something ' +
+        'different when half the line arrives, and none of them may be recorded as this one',
+      );
+    }
+  } else if (input.lineDiscountBasis) {
+    throw new Error('a discount kind was given with no discount — a kind requires the amount it applies to, so state both or neither');
   }
 
   if (!(UNIT_PRICE_BASES as readonly string[]).includes(input.unitPriceBasis)) {
@@ -231,6 +278,7 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     unitPrice: moneyNumber(unitPrice),
     unitPriceBasis: input.unitPriceBasis,
     lineDiscount: lineDiscount === null ? null : moneyNumber(lineDiscount),
+    lineDiscountBasis,
     sourceType: input.sourceType,
     sourcePrLineId,
     sourceQuoteLineId,
@@ -320,6 +368,8 @@ export function orderCommitment(
  * cannot be honoured in one reading and forgotten in another.
  */
 export function lineNetValue(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount'>): number {
+  // Deliberately kind-agnostic: every kind of discount reduces what the LINE is worth in total. What
+  // differs between kinds is what a PART of it is worth, which is `lineEffectiveUnitPrice`'s job.
   return moneyNumber(moneyNumber(line.quantity * line.unitPrice) - (line.lineDiscount ?? 0));
 }
 
@@ -329,9 +379,32 @@ export function lineNetValue(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPri
  * part delivery at the gross unit price would credit the supplier for a discount they have not yet
  * fully earned, and the numbers would only come right if the last unit ever turned up.
  */
-export function lineEffectiveUnitPrice(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount'>): number {
+export function lineEffectiveUnitPrice(
+  line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount' | 'lineDiscountBasis'>,
+): number {
   if (!line.quantity) return moneyNumber(line.unitPrice);
-  return lineNetValue(line) / line.quantity;
+  if (line.lineDiscount === null || line.lineDiscount === undefined) {
+    return moneyNumber(line.unitPrice);
+  }
+  /**
+   * THE SWITCH IS THE POLICY. Pro rata is what an UNCONDITIONAL LINE discount is worth on a part
+   * delivery, and it is not a general truth about discounts. A second kind added to
+   * `LINE_DISCOUNT_BASES` fails to compile here until somebody says what it is worth when half the
+   * line arrives — which is exactly the question a conditional rebate or an early-payment discount
+   * answers differently, and the question this switch exists to make unavoidable.
+   */
+  switch (line.lineDiscountBasis) {
+    case 'line_unconditional_prorata':
+      return lineNetValue(line) / line.quantity;
+    case null:
+    case undefined:
+      // A discount with no declared kind: refuse rather than guess it is the pro-rata one.
+      throw new Error('this line carries a discount that does not say which kind it is, so what one unit of it is worth cannot be determined');
+    default: {
+      const unreached: never = line.lineDiscountBasis;
+      throw new Error(`discount kind ${String(unreached)} is invalid here: no per-unit rule is declared for it`);
+    }
+  }
 }
 
 export function orderTotal(lines: PurchaseOrderLine[]): OrderTotal {

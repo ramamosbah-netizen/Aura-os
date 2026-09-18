@@ -21,6 +21,11 @@ graph LR
   0015["0015<br/>CRM email integration via Micros…"]
   0016["0016<br/>Metadata designer sequencing - f…"]
   0017["0017<br/>Metadata-Driven Definitions"]
+  0018["0018<br/>Compliance Core"]
+  0019["0019<br/>Canonical Project 360 route and …"]
+  0020["0020<br/>Qualification is an evidence-bea…"]
+  0021["0021<br/>Tender Award Evidence and Govern…"]
+  0022["0022<br/>Sourcing authority — what recomm…"]
   0008 -.-> 0006
   0011 -.-> 0004
   0011 -.-> 0006
@@ -33,6 +38,13 @@ graph LR
   0017 -.-> 0011
   0017 -.-> 0012
   0017 -.-> 0016
+  0018 -.-> 0011
+  0018 -.-> 0012
+  0018 -.-> 0002
+  0018 -.-> 0004
+  0021 -.-> 0020
+  0022 -.-> 0004
+  0022 -.-> 0011
   classDef accepted fill:#e8f5e9,stroke:#2e7d32;
-  class 0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017 accepted;
+  class 0001,0002,0003,0004,0005,0006,0007,0008,0009,0010,0011,0012,0013,0014,0015,0016,0017,0018,0019,0020,0021,0022 accepted;
 ```

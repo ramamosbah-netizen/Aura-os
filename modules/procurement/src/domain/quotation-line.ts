@@ -1,4 +1,5 @@
 import { type Id, moneyNumber, newId } from '@aura/shared';
+import { LINE_DISCOUNT_BASES, type LineDiscountBasis } from './purchase-order-line';
 
 /**
  * What a supplier is OFFERING, item by item (Wave 4 — supplier decision spine).
@@ -77,7 +78,20 @@ export interface QuotationLine {
   uom: string | null;
   /** In the QUOTATION's currency. Never converted here. */
   unitPrice: number | null;
+  /**
+   * The discount the supplier gave ON THIS LINE, as they stated it. Never folded into `unitPrice`:
+   * the gross figure is what they will print on their invoice line, and restating it would make
+   * their own invoice look wrong against our order.
+   */
   lineDiscount: number | null;
+  /**
+   * WHICH KIND of discount that is — declared here, where the fact originates, and carried onto the
+   * purchase order unchanged. `line_unconditional_prorata` is the only kind AURA records; a header
+   * discount, a conditional rebate and an early-payment discount are each worth something different
+   * when half the line arrives, so none of them may be recorded as this one. See
+   * `LINE_DISCOUNT_BASES` in purchase-order-line.ts for the full statement of why.
+   */
+  lineDiscountBasis: LineDiscountBasis | null;
   leadTimeDays: number | null;
   warrantyMonths: number | null;
   notes: string | null;
@@ -104,6 +118,7 @@ export interface NewQuotationLine {
   uom?: string | null;
   unitPrice?: number | null;
   lineDiscount?: number | null;
+  lineDiscountBasis?: LineDiscountBasis | null;
   leadTimeDays?: number | null;
   warrantyMonths?: number | null;
   notes?: string | null;
@@ -137,6 +152,23 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
   const quantity = input.quantity ?? null;
   const unitPrice = input.unitPrice ?? null;
 
+  /**
+   * A DISCOUNT MUST SAY WHICH KIND IT IS, at the point the supplier's offer is captured — which is
+   * the only point anybody can still ask them. AURA records one kind; anything else is refused here
+   * rather than stored and read later as if it were that one.
+   */
+  if (input.lineDiscount != null && input.lineDiscountBasis
+      && !(LINE_DISCOUNT_BASES as readonly string[]).includes(input.lineDiscountBasis)) {
+    throw new Error(
+      `a line discount must say which kind it is, and AURA records only ${LINE_DISCOUNT_BASES.join(', ')} — ` +
+      'a header discount, a conditional rebate and an early-payment discount are each worth something ' +
+      'different when half the line arrives',
+    );
+  }
+  if (input.lineDiscount == null && input.lineDiscountBasis) {
+    throw new Error('a discount kind was given with no discount — a kind requires the amount it applies to, so state both or neither');
+  }
+
   if (response === 'quoted') {
     if (quantity === null || !(Number(quantity) > 0) || unitPrice === null) {
       throw new Error(QUOTED_MUST_BE_PRICED);
@@ -167,6 +199,9 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
     uom: input.uom?.trim() || null,
     unitPrice: unitPrice === null ? null : Number(unitPrice),
     lineDiscount: input.lineDiscount ?? null,
+    // Defaulted rather than demanded, because there is one kind to choose from — and refused when it
+    // is something else, because no reader would know what that was worth.
+    lineDiscountBasis: input.lineDiscount == null ? null : (input.lineDiscountBasis ?? 'line_unconditional_prorata'),
     leadTimeDays: input.leadTimeDays ?? null,
     warrantyMonths: input.warrantyMonths ?? null,
     notes: input.notes?.trim() || null,

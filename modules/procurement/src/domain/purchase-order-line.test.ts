@@ -278,3 +278,42 @@ describe('a line discount', () => {
     expect(line({ quantity: 10, unitPrice: 250 }).lineDiscount).toBeNull();
   });
 });
+
+/**
+ * A DISCOUNT SAYS WHICH KIND IT IS.
+ *
+ * Pro rata is what an UNCONDITIONAL LINE discount is worth when half the line arrives. It is not a
+ * general truth about discounts, and the field invited it to be read as one. A header discount
+ * belongs to the order and not to any line; a conditional rebate is earned on something not known at
+ * receipt; an early-payment discount is earned by paying, not by receiving. Each needs its own
+ * answer, so the kind is declared on the row rather than assumed by whoever reads it next.
+ */
+describe('which kind of discount', () => {
+  it('defaults to the one kind AURA records, rather than leaving it unstated', () => {
+    const l = line({ quantity: 10, unitPrice: 250, lineDiscount: 500 });
+    expect(l.lineDiscountBasis).toBe('line_unconditional_prorata');
+  });
+
+  it('is NULL exactly when there is no discount', () => {
+    expect(line({ quantity: 10, unitPrice: 250 }).lineDiscountBasis).toBeNull();
+    expect(() => line({ quantity: 10, unitPrice: 250, lineDiscountBasis: 'line_unconditional_prorata' }))
+      .toThrow(/discount kind was given with no discount/);
+  });
+
+  it('refuses a kind whose worth on a part delivery nobody has decided', () => {
+    for (const kind of ['header_discount', 'conditional_rebate', 'early_payment']) {
+      expect(() => line({ quantity: 10, unitPrice: 250, lineDiscount: 500, lineDiscountBasis: kind as never }),
+        `${kind} must not be recordable as a pro-rata line discount`)
+        .toThrow(/must say which kind it is/);
+    }
+  });
+
+  it('refuses to value a unit when a discount does not say which kind it is', () => {
+    // Only reachable by bypassing the factory — a row written before the kind existed, or a store
+    // that forgot the column. It refuses rather than assuming the pro-rata rule applies.
+    const smuggled = { ...line({ quantity: 10, unitPrice: 250, lineDiscount: 500 }), lineDiscountBasis: null } as PurchaseOrderLine;
+    expect(() => domain.lineEffectiveUnitPrice(smuggled)).toThrow(/does not say which kind it is/);
+    // The LINE total is still known: every kind of discount reduces what the whole line is worth.
+    expect(domain.lineNetValue(smuggled)).toBe(2_000);
+  });
+});

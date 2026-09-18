@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { QuotationCaptureService, QuotationLineService } from '@aura/procurement';
+import { LINE_DISCOUNT_BASES, QuotationCaptureService, QuotationLineService, type LineDiscountBasis } from '@aura/procurement';
 import { admitCurrency } from '@aura/shared';
 import { IsGovernableCurrency } from '../common/is-governable-currency';
 
@@ -67,6 +67,12 @@ class RevisionLineDto {
   @IsOptional() @IsString() uom?: string | null;
   @IsOptional() @IsNumber() @Min(0) unitPrice?: number | null;
   @IsOptional() @IsNumber() @Min(0) lineDiscount?: number | null;
+  /**
+   * WHICH KIND of discount. Optional because there is exactly one kind and the domain defaults to
+   * it; named in the contract so a caller with a header discount or a conditional rebate is refused
+   * rather than having it silently recorded as the pro-rata one.
+   */
+  @IsOptional() @IsIn(LINE_DISCOUNT_BASES as unknown as string[]) lineDiscountBasis?: LineDiscountBasis | null;
   /** The supplier's TECHNICAL departure from the specification — their claim, not a verdict. */
   @IsOptional() @IsString() deviations?: string | null;
   /** A COMMERCIAL condition: part shipment, a price condition, terms. A different kind of claim. */
@@ -228,6 +234,7 @@ export class QuotationCaptureController {
       uom: dto.uom ?? null,
       unitPrice: dto.unitPrice ?? null,
       lineDiscount: dto.lineDiscount ?? null,
+      lineDiscountBasis: dto.lineDiscountBasis ?? null,
       deviations: dto.deviations ?? null,
       commercialDeviation: dto.commercialDeviation ?? null,
       exclusions: dto.exclusions ?? null,

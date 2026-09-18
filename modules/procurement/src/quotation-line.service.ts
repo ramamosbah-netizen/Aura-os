@@ -9,6 +9,7 @@ import { RFQ_STORE, type RfqStore } from './rfq-store';
 import { QUOTATION_LINE_EVALUATION_STORE, type QuotationLineEvaluationStore } from './quotation-line-evaluation.store';
 import { QUOTATION_FAMILY_STORE, type QuotationFamilyStore } from './quotation-family.store';
 import { technicalEligibility, type TechnicalEligibility, type TechnicalVerdict } from './domain/quotation-line-evaluation';
+import type { LineDiscountBasis } from './domain/purchase-order-line';
 import { PR_LINE_STORE, type PurchaseRequestLineStore } from './purchase-request-line-store';
 
 export interface NewQuotationLineInput {
@@ -28,6 +29,8 @@ export interface NewQuotationLineInput {
   uom?: string | null;
   unitPrice?: number | null;
   lineDiscount?: number | null;
+  /** WHICH KIND of discount — the domain defaults to the one AURA records and refuses others. */
+  lineDiscountBasis?: LineDiscountBasis | null;
   leadTimeDays?: number | null;
   warrantyMonths?: number | null;
   notes?: string | null;

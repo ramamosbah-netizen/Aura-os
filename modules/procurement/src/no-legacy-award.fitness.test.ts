@@ -49,7 +49,12 @@ describe('the legacy award stays retired', () => {
 
     const offenders = fs
       .readdirSync(SRC, { recursive: true, encoding: 'utf8' })
-      .filter((f) => typeof f === 'string' && f.endsWith('.ts') && !f.endsWith('no-legacy-award.fitness.test.ts'))
+      /**
+       * Fitness tests are excluded because naming a retired symbol IN ORDER TO BAN IT is the
+       * opposite of calling it — this file and ADR-0022's authority guard both do exactly that, and
+       * counting them as offenders would make each one fail the moment the other was written.
+       */
+      .filter((f) => typeof f === 'string' && f.endsWith('.ts') && !f.endsWith('.fitness.test.ts'))
       .filter((f) => sourceWithoutComments(path.join(SRC, f)).includes('lowestQuote'));
     expect(offenders, 'lowestQuote is retired — a recommendation is a recorded decision (SUP-13)').toEqual([]);
   });

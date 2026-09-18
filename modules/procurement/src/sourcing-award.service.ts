@@ -236,9 +236,12 @@ export class SourcingAwardService {
           // folding it would restate a price the supplier never gave and make their invoice look
           // wrong against our own order.
           unitPrice: quoted.unitPrice ?? 0,
-          // The supplier's own line discount, carried across rather than retyped. Its provenance is
-          // `sourceQuoteLineId` below: the quotation line it came from, still readable.
+          // The supplier's own line discount, carried across rather than retyped — AND THE KIND OF
+          // DISCOUNT IT IS, because what it is worth when half the line arrives depends on that and
+          // the order must not have to guess. Its provenance is `sourceQuoteLineId` below: the
+          // quotation line it came from, still readable.
           lineDiscount: quoted.lineDiscount,
+          lineDiscountBasis: quoted.lineDiscountBasis,
           // AGREED, not an estimate: this price was quoted by the supplier and accepted through a
           // governed recommendation that somebody with the authority to commit it approved.
           unitPriceBasis: 'agreed',

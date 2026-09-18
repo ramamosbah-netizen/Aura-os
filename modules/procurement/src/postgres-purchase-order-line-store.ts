@@ -6,15 +6,17 @@ interface Row {
   id: string; tenant_id: string; company_id: string | null; po_id: string; line_no: number;
   material_id: string; material_code: string; material_name: string; specification: string | null;
   manufacturer: string | null; model: string | null; uom: string;
-  quantity: string; unit_price: string; unit_price_basis: string | null; line_discount: string | null;
+  quantity: string; unit_price: string; unit_price_basis: string | null;
+  line_discount: string | null; line_discount_basis: string | null;
   source_type: string; source_pr_line_id: string | null; source_quote_line_id: string | null;
   wbs_node_id: string | null; cbs_node_id: string | null; notes: string | null;
   created_by: string | null; created_at: string;
 }
 
 const COLS = `id, tenant_id, company_id, po_id, line_no, material_id, material_code, material_name,
-  specification, manufacturer, model, uom, quantity, unit_price, unit_price_basis, line_discount, source_type,
-  source_pr_line_id, source_quote_line_id, wbs_node_id, cbs_node_id, notes, created_by, created_at`;
+  specification, manufacturer, model, uom, quantity, unit_price, unit_price_basis, line_discount,
+  line_discount_basis, source_type, source_pr_line_id, source_quote_line_id, wbs_node_id, cbs_node_id,
+  notes, created_by, created_at`;
 
 function toLine(r: Row): PurchaseOrderLine {
   return {
@@ -26,6 +28,7 @@ function toLine(r: Row): PurchaseOrderLine {
     // NULL is no discount. Read as well as written: a column the store never selects is a
     // commercial term the domain carried and the database quietly dropped (PO-01).
     lineDiscount: r.line_discount === null ? null : Number(r.line_discount),
+    lineDiscountBasis: (r.line_discount_basis as PurchaseOrderLine['lineDiscountBasis']) ?? null,
     sourceType: r.source_type as PurchaseOrderLineSource,
     sourcePrLineId: r.source_pr_line_id, sourceQuoteLineId: r.source_quote_line_id,
     wbsNodeId: r.wbs_node_id, cbsNodeId: r.cbs_node_id, notes: r.notes,
@@ -47,19 +50,21 @@ export class PostgresPurchaseOrderLineStore implements PurchaseOrderLineStore {
   async save(l: PurchaseOrderLine): Promise<void> {
     await this.pool.query(
       `insert into public.aura_procurement_purchase_order_lines (${COLS})
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        on conflict (id) do update set
          line_no = excluded.line_no,
          quantity = excluded.quantity,
          unit_price = excluded.unit_price,
          unit_price_basis = excluded.unit_price_basis,
          line_discount = excluded.line_discount,
+         line_discount_basis = excluded.line_discount_basis,
          wbs_node_id = excluded.wbs_node_id,
          cbs_node_id = excluded.cbs_node_id,
          notes = excluded.notes`,
       [l.id, l.tenantId, l.companyId, l.poId, l.lineNo, l.materialId, l.materialCode, l.materialName,
        l.specification, l.manufacturer, l.model, l.uom, l.quantity, l.unitPrice, l.unitPriceBasis, l.lineDiscount,
-       l.sourceType, l.sourcePrLineId, l.sourceQuoteLineId, l.wbsNodeId, l.cbsNodeId, l.notes, l.createdBy, l.createdAt],
+       l.lineDiscountBasis, l.sourceType, l.sourcePrLineId, l.sourceQuoteLineId, l.wbsNodeId, l.cbsNodeId,
+       l.notes, l.createdBy, l.createdAt],
     );
   }
 

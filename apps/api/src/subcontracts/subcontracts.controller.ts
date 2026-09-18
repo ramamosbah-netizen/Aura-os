@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Patch, Post, Query, Req } from '@nestjs/common';
 import { IsBoolean, IsNumber, IsOptional, IsString } from 'class-validator';
-import { FormCustomValuesService, FormOverridesService, SettingsService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
+import { FormCustomValuesService, FormOverridesService, Permissions, SettingsService, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, subcontractFormSchema } from '@aura/shared';
 import {
   type Subcontract,
@@ -55,6 +55,7 @@ export class SubcontractsController {
   // ── SUBCONTRACTS ─────────────────────────────────────────────────────────
 
   @Post()
+  @Permissions('subcontracts.subcontract.create')
   async createSubcontract(@Body() dto: CreateSubcontractDto, @Req() req: { body?: Record<string, unknown> }): Promise<Subcontract> {
     // Server-side metadata-form enforcement (gap #8) — same schema the renderer runs.
     // Raw body: designer-added cf_* fields (P2) are stripped from the decorated DTO.
@@ -88,6 +89,7 @@ export class SubcontractsController {
   }
 
   @Get()
+  @Permissions('subcontracts.subcontract.read')
   listSubcontracts(
     @Query('projectId') projectId?: string,
     @Query('status') status?: SubcontractStatus,
@@ -101,6 +103,7 @@ export class SubcontractsController {
   }
 
   @Get('paged')
+  @Permissions('subcontracts.subcontract.read')
   pagedSubcontracts(
     @Query('projectId') projectId?: string,
     @Query('status') status?: SubcontractStatus,
@@ -116,6 +119,7 @@ export class SubcontractsController {
   // ── CLAIMS (literal routes before :id to avoid route-order capture) ─────
 
   @Post('claims')
+  @Permissions('subcontracts.claim.create')
   createClaim(@Body() dto: CreateClaimDto): Promise<Claim> {
     if (!dto?.subcontractId) throw new BadRequestException('subcontractId is required');
     if (!dto.isRetentionRelease && dto?.workCompletedValue === undefined) {
@@ -134,6 +138,7 @@ export class SubcontractsController {
   }
 
   @Get('claims')
+  @Permissions('subcontracts.claim.read')
   listClaims(
     @Query('subcontractId') subcontractId?: string,
     @Query('status') status?: ClaimStatus,
@@ -147,6 +152,7 @@ export class SubcontractsController {
   }
 
   @Get('claims/:id')
+  @Permissions('subcontracts.claim.read')
   async getClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const found = await this.subcontracts.getClaim(id);
     if (!found) throw new NotFoundException(`Claim ${id} not found`);
@@ -154,6 +160,7 @@ export class SubcontractsController {
   }
 
   @Patch('claims/:id/certify')
+  @Permissions('subcontracts.claim.certify')
   certifyClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new BadRequestException('Authentication required');
@@ -161,6 +168,7 @@ export class SubcontractsController {
   }
 
   @Patch('claims/:id/pay')
+  @Permissions('subcontracts.claim.pay')
   payClaim(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Claim> {
     const ctx = this.tenant.get();
     return this.subcontracts.payClaim(id, ctx.actorId ?? undefined);
@@ -169,6 +177,7 @@ export class SubcontractsController {
   // ── VARIATIONS (literal routes before :id) ─────────────────────────────
 
   @Post('variations')
+  @Permissions('subcontracts.variation.create')
   async createVariation(@Body() dto: { subcontractId: string; reference: string; type: VariationType; amount: number; description?: string }): Promise<SubcontractVariation> {
     if (!dto?.subcontractId) throw new BadRequestException('subcontractId is required');
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
@@ -187,16 +196,19 @@ export class SubcontractsController {
   }
 
   @Get('variations')
+  @Permissions('subcontracts.variation.read')
   listVariations(@Query('subcontractId') subcontractId?: string, @Query('status') status?: SubcontractVariation['status']): Promise<SubcontractVariation[]> {
     return this.subcontracts.listVariations({ tenantId: this.tenant.get().tenantId, subcontractId, status });
   }
 
   @Patch('variations/:id/approve')
+  @Permissions('subcontracts.variation.approve')
   async approveVariation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<SubcontractVariation> {
     return await this.subcontracts.approveVariation(id, this.tenant.get().actorId ?? undefined);
   }
 
   @Patch('variations/:id/reject')
+  @Permissions('subcontracts.variation.approve')
   async rejectVariation(@Param('id', ParseUuidOr404Pipe) id: string): Promise<SubcontractVariation> {
     return await this.subcontracts.rejectVariation(id, this.tenant.get().actorId ?? undefined);
   }
@@ -204,6 +216,7 @@ export class SubcontractsController {
   // ── BACK-CHARGES (literal routes before :id to avoid route-order capture) ─
 
   @Post('back-charges')
+  @Permissions('subcontracts.back-charge.create')
   createBackCharge(@Body() dto: CreateBackChargeDto): Promise<BackCharge> {
     if (!dto?.subcontractId) throw new BadRequestException('subcontractId is required');
     if (!dto?.description?.trim()) throw new BadRequestException('description is required');
@@ -222,6 +235,7 @@ export class SubcontractsController {
   }
 
   @Get('back-charges')
+  @Permissions('subcontracts.back-charge.read')
   listBackCharges(
     @Query('subcontractId') subcontractId?: string,
     @Query('status') status?: BackChargeStatus,
@@ -235,6 +249,7 @@ export class SubcontractsController {
   }
 
   @Get('back-charges/summary')
+  @Permissions('subcontracts.back-charge.read')
   async backChargeSummary(@Query('subcontractId') subcontractId?: string): Promise<ReturnType<typeof summariseBackCharges>> {
     const ctx = this.tenant.get();
     const list = await this.subcontracts.listBackCharges({ tenantId: ctx.tenantId, subcontractId });
@@ -242,6 +257,7 @@ export class SubcontractsController {
   }
 
   @Get('back-charges/:id')
+  @Permissions('subcontracts.back-charge.read')
   async getBackCharge(@Param('id', ParseUuidOr404Pipe) id: string): Promise<BackCharge> {
     const found = await this.subcontracts.getBackCharge(id);
     if (!found) throw new NotFoundException(`Back-charge ${id} not found`);
@@ -249,6 +265,7 @@ export class SubcontractsController {
   }
 
   @Patch('back-charges/:id/status')
+  @Permissions('subcontracts.back-charge.status')
   changeBackChargeStatus(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: BackChargeStatus },
@@ -259,6 +276,7 @@ export class SubcontractsController {
   }
 
   @Patch('back-charges/:id/recover')
+  @Permissions('subcontracts.back-charge.recover')
   recoverBackCharge(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { amount: number },
@@ -271,6 +289,7 @@ export class SubcontractsController {
   // ── SUBCONTRACT by ID (after literal routes) ───────────────────────────
 
   @Get(':id')
+  @Permissions('subcontracts.subcontract.read')
   async getSubcontract(@Param('id', ParseUuidOr404Pipe) id: string): Promise<Subcontract> {
     const found = await this.subcontracts.getSubcontract(id);
     if (!found) throw new NotFoundException(`Subcontract ${id} not found`);
@@ -278,6 +297,7 @@ export class SubcontractsController {
   }
 
   @Patch(':id/status')
+  @Permissions('subcontracts.subcontract.status')
   changeStatus(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Body() dto: { status: SubcontractStatus },

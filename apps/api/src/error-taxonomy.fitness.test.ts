@@ -48,10 +48,29 @@ function tsFiles(dir: string): string[] {
   return out;
 }
 
-/** Extract throw-message literals; `${…}` interpolations become the placeholder "X". */
+/**
+ * Extract throw-message literals; `${…}` interpolations become the placeholder "X".
+ *
+ * The gap between `Error(` and the literal may contain COMMENTS, not only whitespace. A guard message
+ * worth a sentence of explanation usually gets one, and it goes exactly there:
+ *
+ *     throw new Error(
+ *       // why this refusal classifies the way it does
+ *       `certifying ${x} would take this subcontract past its authorised value of ${y}`,
+ *     );
+ *
+ * Matching only `\s*` made every such message INVISIBLE to this test — which is the one shape most
+ * likely to be a new refusal, since a message nobody had to explain is usually an old one. Two live
+ * messages were already hidden this way when it was found, both of them SEC-01 maker/checker
+ * refusals, and one of them did escape to 500.
+ */
 function extractThrowMessages(src: string): string[] {
   const out: string[] = [];
-  const re = /throw new Error\(\s*(?:`((?:[^`\\]|\\.)*)`|'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")/g;
+  const gap = String.raw`(?:\s|\/\/[^\n]*\n|\/\*[\s\S]*?\*\/)*`;
+  const re = new RegExp(
+    String.raw`throw new Error\(${gap}(?:\`((?:[^\`\\]|\\.)*)\`|'((?:[^'\\]|\\.)*)'|"((?:[^"\\]|\\.)*)")`,
+    'g',
+  );
   for (const m of src.matchAll(re)) {
     const raw = m[1] ?? m[2] ?? m[3] ?? '';
     const msg = raw.replace(/\$\{[^}]*\}/g, 'X').trim();

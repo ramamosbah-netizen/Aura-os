@@ -13,6 +13,14 @@ import { AppModule } from '../src/app.module';
 
 const TENANT = 'ledger-tenant';
 const ACTOR = '00000000-0000-0000-0000-0000000000aa'; // a granted actor (certify requires an authenticated approver)
+/**
+ * A SECOND granted actor, used only to certify. Certifying a subcontractor claim now refuses the
+ * person who raised it — a payment certificate is one party accepting another party's account of the
+ * work — so a spec that drove every request as one actor was raising and certifying as the same
+ * person. Nothing about the cost postings under test changed; the fixture had to stop being one
+ * person doing both halves of a control.
+ */
+const CERTIFIER = '00000000-0000-0000-0000-0000000000bb';
 
 /** Poll until the fetcher returns a non-empty array (reactor handlers are async). */
 async function eventually<T>(fetcher: () => Promise<T[]>, tries = 25): Promise<T[]> {
@@ -37,9 +45,14 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
     const access = app.get(AccessService);
     access.registerRole({ id: 'role-e2e-super', name: 'E2E Super', permissions: ['*'] });
     access.grant({ userId: ACTOR, roleId: 'role-e2e-super', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    access.grant({ userId: CERTIFIER, roleId: 'role-e2e-super', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     const tenant = app.get(TenantContext);
-    app.use((_req: unknown, _res: unknown, next: () => void) =>
-      tenant.run({ tenantId: TENANT, companyId: null, actorId: ACTOR, correlationId: 'e2e-ledger' }, () => next()),
+    // `x-e2e-actor` lets one request act as somebody else. Only the certify calls use it.
+    app.use((req: { headers?: Record<string, string | undefined> }, _res: unknown, next: () => void) =>
+      tenant.run(
+        { tenantId: TENANT, companyId: null, actorId: req?.headers?.['x-e2e-actor'] ?? ACTOR, correlationId: 'e2e-ledger' },
+        () => next(),
+      ),
     );
     await app.init();
     http = request(app.getHttpServer());
@@ -144,13 +157,13 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
 
     // 3. Certify claim #1 (40,000 gross work done) → ACTUAL 40,000. Retention is withheld payment, not a cost cut.
     const c1 = (await http.post('/api/v1/subcontracts/claims').send({ subcontractId: sc.id, workCompletedValue: 40_000 }).expect(201)).body;
-    await http.patch(`/api/v1/subcontracts/claims/${c1.id}/certify`).send({}).expect(200);
+    await http.patch(`/api/v1/subcontracts/claims/${c1.id}/certify`).set('x-e2e-actor', CERTIFIER).send({}).expect(200);
     const act1 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 40_000 ? [n] : []; });
     expect(act1[0].actualAmount).toBe(40_000);
 
     // 4. Certify claim #2 (cumulative 70,000) → ACTUAL += 30,000 (this-period gross). Total actual = 70,000.
     const c2 = (await http.post('/api/v1/subcontracts/claims').send({ subcontractId: sc.id, workCompletedValue: 70_000 }).expect(201)).body;
-    await http.patch(`/api/v1/subcontracts/claims/${c2.id}/certify`).send({}).expect(200);
+    await http.patch(`/api/v1/subcontracts/claims/${c2.id}/certify`).set('x-e2e-actor', CERTIFIER).send({}).expect(200);
     const act2 = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.actualAmount === 70_000 ? [n] : []; });
     expect(act2[0].actualAmount).toBe(70_000);
     // Committed is unchanged by claims — committed (100k) and actual (70k) are independent columns.

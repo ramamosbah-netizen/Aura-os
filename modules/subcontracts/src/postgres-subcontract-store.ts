@@ -36,6 +36,9 @@ interface ClaimRow {
   retention_released: string | number;
   certified_at: Date | string | null;
   certified_by: string | null;
+  created_by: string | null;
+  paid_by: string | null;
+  paid_at: Date | string | null;
   created_at: Date | string;
 }
 
@@ -61,9 +64,12 @@ interface BackChargeRow {
 }
 
 const SUB_COLS = 'id, tenant_id, project_id, project_name, cbs_node_id, title, subcontractor_name, status, value, retention_percentage, created_at';
-const CLAIM_COLS = 'id, tenant_id, subcontract_id, claim_number, status, work_completed_value, previously_certified_value, this_period_gross_value, retention_withheld, net_certified_value, is_retention_release, retention_released, certified_at, certified_by, created_at';
+// Shared by SELECT and INSERT. New names are APPENDED, never inserted mid-list: the placeholders
+// below are positional, so a name added in the middle silently writes a different column.
+const CLAIM_COLS = 'id, tenant_id, subcontract_id, claim_number, status, work_completed_value, previously_certified_value, this_period_gross_value, retention_withheld, net_certified_value, is_retention_release, retention_released, certified_at, certified_by, created_at, created_by, paid_by, paid_at';
 const BC_COLS = 'id, tenant_id, subcontract_id, subcontractor_name, reference, category, description, gross_amount, markup_percent, markup_amount, recoverable_amount, recovered_amount, outstanding_amount, status, raised_at, agreed_at, created_at, updated_at';
-const VAR_COLS = 'id, tenant_id, subcontract_id, reference, type, amount, description, status, approved_by, created_at';
+// Shared by SELECT and INSERT; new names are APPENDED so the positional placeholders keep meaning.
+const VAR_COLS = 'id, tenant_id, subcontract_id, reference, type, amount, description, status, approved_by, created_at, created_by, decided_by, decided_at';
 
 interface VariationRow {
   id: string;
@@ -75,6 +81,9 @@ interface VariationRow {
   description: string;
   status: string;
   approved_by: string | null;
+  created_by: string | null;
+  decided_by: string | null;
+  decided_at: Date | string | null;
   created_at: Date | string;
 }
 
@@ -89,6 +98,9 @@ function rowToVariation(r: VariationRow): SubcontractVariation {
     description: r.description || '',
     status: r.status as SubcontractVariation['status'],
     approvedBy: r.approved_by,
+    createdBy: r.created_by,
+    decidedBy: r.decided_by,
+    decidedAt: r.decided_at instanceof Date ? r.decided_at.toISOString() : r.decided_at ? String(r.decided_at) : null,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
 }
@@ -125,6 +137,9 @@ function rowToClaim(r: ClaimRow): Claim {
     retentionReleased: Number(r.retention_released),
     certifiedAt: r.certified_at instanceof Date ? r.certified_at.toISOString() : r.certified_at ? String(r.certified_at) : null,
     certifiedBy: r.certified_by,
+    createdBy: r.created_by,
+    paidBy: r.paid_by,
+    paidAt: r.paid_at instanceof Date ? r.paid_at.toISOString() : r.paid_at ? String(r.paid_at) : null,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
 }
@@ -237,7 +252,7 @@ export class PostgresSubcontractStore implements SubcontractStore {
 
   async createClaim(c: Claim): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_subcontracts_claims (${CLAIM_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+      `INSERT INTO public.aura_subcontracts_claims (${CLAIM_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)`,
       [
         c.id,
         c.tenantId,
@@ -254,13 +269,19 @@ export class PostgresSubcontractStore implements SubcontractStore {
         c.certifiedAt,
         c.certifiedBy,
         c.createdAt,
+        c.createdBy,
+        c.paidBy,
+        c.paidAt,
       ],
     );
   }
 
   async updateClaim(c: Claim): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_subcontracts_claims SET status=$2, work_completed_value=$3, previously_certified_value=$4, this_period_gross_value=$5, retention_withheld=$6, net_certified_value=$7, is_retention_release=$8, retention_released=$9, certified_at=$10, certified_by=$11 WHERE id=$1`,
+      `UPDATE public.aura_subcontracts_claims SET status=$2, work_completed_value=$3, previously_certified_value=$4, this_period_gross_value=$5, retention_withheld=$6, net_certified_value=$7, is_retention_release=$8, retention_released=$9, certified_at=$10, certified_by=$11, paid_by=$12, paid_at=$13 WHERE id=$1`,
+      // `created_by` is written on INSERT and deliberately absent here: who RAISED a claim is fixed
+      // when it is raised, and a later write — the certification itself — must not be able to restate
+      // it. That is the fact the maker/checker refusal is measured against.
       [
         c.id,
         c.status,
@@ -273,6 +294,8 @@ export class PostgresSubcontractStore implements SubcontractStore {
         c.retentionReleased,
         c.certifiedAt,
         c.certifiedBy,
+        c.paidBy,
+        c.paidAt,
       ],
     );
   }
@@ -308,15 +331,18 @@ export class PostgresSubcontractStore implements SubcontractStore {
 
   async createVariation(v: SubcontractVariation): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_subcontracts_variations (${VAR_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [v.id, v.tenantId, v.subcontractId, v.reference, v.type, v.amount, v.description, v.status, v.approvedBy, v.createdAt],
+      `INSERT INTO public.aura_subcontracts_variations (${VAR_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [v.id, v.tenantId, v.subcontractId, v.reference, v.type, v.amount, v.description, v.status, v.approvedBy, v.createdAt,
+       v.createdBy, v.decidedBy, v.decidedAt],
     );
   }
 
   async updateVariation(v: SubcontractVariation): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_subcontracts_variations SET status=$2, approved_by=$3 WHERE id=$1`,
-      [v.id, v.status, v.approvedBy],
+      // `created_by` is absent on purpose: who INSTRUCTED a variation is fixed when it is raised, and
+      // the decision must not be able to restate it — that is the fact the approval is refused on.
+      `UPDATE public.aura_subcontracts_variations SET status=$2, approved_by=$3, decided_by=$4, decided_at=$5 WHERE id=$1`,
+      [v.id, v.status, v.approvedBy, v.decidedBy, v.decidedAt],
     );
   }
 

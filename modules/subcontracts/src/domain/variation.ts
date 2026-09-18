@@ -19,6 +19,13 @@ export interface SubcontractVariation {
   description: string;
   status: VariationStatus;
   approvedBy: Id | null;
+  /** Who instructed it. Recorded so the approval can be refused to them: a variation changes what the
+   * subcontract is worth, which is the ceiling every certification is measured against. */
+  createdBy: Id | null;
+  /** Who DECIDED it, either way, and when. `approvedBy` names one outcome; a rejection is a decision
+   * somebody made, and it was anonymous and undated. */
+  decidedBy: Id | null;
+  decidedAt: string | null;
   createdAt: string;
 }
 
@@ -29,6 +36,7 @@ export interface NewSubcontractVariation {
   type: VariationType;
   amount: number;
   description?: string;
+  createdBy?: Id | null;
 }
 
 export function makeSubcontractVariation(input: NewSubcontractVariation): SubcontractVariation {
@@ -47,6 +55,9 @@ export function makeSubcontractVariation(input: NewSubcontractVariation): Subcon
     description: input.description?.trim() || '',
     status: 'pending',
     approvedBy: null,
+    createdBy: input.createdBy ?? null,
+    decidedBy: null,
+    decidedAt: null,
     createdAt: new Date().toISOString(),
   };
 }
@@ -56,15 +67,26 @@ export function signedAmount(v: SubcontractVariation): number {
   return v.type === 'omission' ? -v.amount : v.amount;
 }
 
+/**
+ * Approve the instruction — which ADDS its signed amount to the subcontract value, and so raises the
+ * ceiling every future certification is measured against. That is why the raiser may not approve it,
+ * a rule the service applies against the record.
+ */
 export function approveVariation(v: SubcontractVariation, approverId: Id): SubcontractVariation {
   if (v.status !== 'pending') throw new Error(`cannot approve from status ${v.status}`);
   if (!approverId) throw new Error('approverId is required');
-  return { ...v, status: 'approved', approvedBy: approverId };
+  const now = new Date().toISOString();
+  return { ...v, status: 'approved', approvedBy: approverId, decidedBy: approverId, decidedAt: now };
 }
 
-export function rejectVariation(v: SubcontractVariation): SubcontractVariation {
+/**
+ * Reject it. `decidedBy`/`decidedAt` are recorded for the same reason they are on an approval: a
+ * rejection is a decision a person made, and it used to be anonymous and undated — the subcontractor
+ * was told no by nobody in particular.
+ */
+export function rejectVariation(v: SubcontractVariation, rejectedBy: Id | null = null): SubcontractVariation {
   if (v.status !== 'pending') throw new Error(`cannot reject from status ${v.status}`);
-  return { ...v, status: 'rejected' };
+  return { ...v, status: 'rejected', decidedBy: rejectedBy, decidedAt: new Date().toISOString() };
 }
 
 export const VARIATION_EVENT = {

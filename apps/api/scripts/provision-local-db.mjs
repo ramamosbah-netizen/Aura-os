@@ -253,6 +253,11 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // ships. r-procurement-manager, unmodified: `procurement.*`, no approval limit attached, because a
 // limit invented for a fixture would prove something about the fixture.
 //
+// `u-e2e-pm`, the two `u-e2e-qs*` and `u-e2e-finance` are the subcontractor certification proof:
+// the PM raises the application, Commercial/QS certifies it, Finance releases the money. TWO QS
+// principals on the SAME shipped role, because the refusal is that the person who raised a claim may
+// not certify it — a separation between people, which one principal cannot demonstrate.
+//
 // `u-e2e-finance` and the two `u-e2e-controller-*` are the finance period-close proof. Closing the
 // books and running the department are no longer one permission: r-finance lost `finance.*` and the
 // two acts moved to r-finance-controller. ONE controller principal cannot prove the maker/checker
@@ -269,7 +274,9 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
                                 ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales'],
                                 ['u-e2e-finance', 'r-finance'],
-                                ['u-e2e-controller-a', 'r-finance-controller'], ['u-e2e-controller-b', 'r-finance-controller']]) {
+                                ['u-e2e-controller-a', 'r-finance-controller'], ['u-e2e-controller-b', 'r-finance-controller'],
+                                ['u-e2e-pm', 'r-pm'],
+                                ['u-e2e-qs', 'r-commercial-manager'], ['u-e2e-qs2', 'r-commercial-manager']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -291,7 +298,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) and u-e2e-controller-a/b (r-finance-controller)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) and u-e2e-qs/qs2 (r-commercial-manager)');
 
 
 

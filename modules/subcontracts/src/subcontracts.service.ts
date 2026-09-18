@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
 import { type Subcontract, type SubcontractStatus, makeSubcontract, SUBCONTRACT_EVENT } from './domain/subcontract';
-import { type Claim, type ClaimStatus, makeClaim, CLAIM_EVENT } from './domain/claim';
+import { type Claim, type ClaimStatus, makeClaim, certifyClaim, certificationSeparation, payClaim, CLAIM_EVENT } from './domain/claim';
 import { type SubcontractVariation, type VariationType, makeSubcontractVariation, approveVariation, rejectVariation, signedAmount, VARIATION_EVENT } from './domain/variation';
 import { type BackCharge, type BackChargeStatus, type BackChargeCategory, makeBackCharge, applyRecovery, BACK_CHARGE_EVENT } from './domain/back-charge';
 import { SUBCONTRACT_STORE, type SubcontractFilter, type ClaimFilter, type VariationFilter, type BackChargeFilter, type SubcontractStore } from './subcontract-store';
@@ -32,7 +32,10 @@ export class SubcontractsService {
   }): Promise<Subcontract> {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      // Named in THIS module's vocabulary. Every assertion in this service used to borrow one
+      // from somewhere else — `projects.project.update` or `finance.invoice.approve` — which is
+      // how a subcontractor payment certificate came to require an invoice-approval authority.
+      const target: AccessTarget = { permission: 'subcontracts.subcontract.create', orgPath };
       this.access.assert(input.createdBy, target);
     }
 
@@ -75,7 +78,10 @@ export class SubcontractsService {
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      // Named in THIS module's vocabulary. Every assertion in this service used to borrow one
+      // from somewhere else — `projects.project.update` or `finance.invoice.approve` — which is
+      // how a subcontractor payment certificate came to require an invoice-approval authority.
+      const target: AccessTarget = { permission: 'subcontracts.subcontract.status', orgPath };
       this.access.assert(actorId, target);
     }
 
@@ -147,6 +153,10 @@ export class SubcontractsService {
       previouslyCertifiedValue: previouslyCertified,
       isRetentionRelease: input.isRetentionRelease,
       retentionReleased: input.retentionReleased,
+      // WHO RAISED IT, on the record. `createdBy` already travelled this far and was dropped here,
+      // so the claim could never say who applied for the money it asks for — which is what made the
+      // maker/checker rule unwritable rather than merely absent.
+      createdBy: input.createdBy ?? null,
     }, subcontract.retentionPercentage);
 
     await this.store.createClaim(claim);
@@ -155,20 +165,33 @@ export class SubcontractsService {
     return claim;
   }
 
+  /**
+   * Certify a subcontractor's application — the act that turns it into a sum this business owes.
+   *
+   * IT USED TO ASSERT `finance.invoice.approve`. Certifying a subcontractor's WORK ON SITE is a
+   * quantity-surveying judgement, not an invoice approval, and the assertion was unreachable anyway:
+   * the route guard refused Finance before the service could run it. The route now declares
+   * `subcontracts.claim.certify`, a name the QS role holds, and the rules that matter — already
+   * certified, the raiser certifying their own application, and over-certification — live in the
+   * domain where the record can be read.
+   */
   async certifyClaim(id: Id, certifierId: Id): Promise<Claim> {
     const existing = await this.store.getClaim(id);
     if (!existing) throw new Error(`Claim ${id} not found`);
 
-    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
-    const target: AccessTarget = { permission: 'finance.invoice.approve', orgPath };
-    this.access.assert(certifierId, target);
+    // The ceiling is the subcontract's OWN value, which approving a variation already adds its signed
+    // amount to. Read here rather than recomputed, so there is one figure and not two that can differ.
+    const subcontractForCeiling = await this.store.getSubcontract(existing.subcontractId);
+    if (!subcontractForCeiling) throw new Error(`Subcontract ${existing.subcontractId} not found`);
 
-    const updated: Claim = {
-      ...existing,
-      status: 'certified',
-      certifiedAt: new Date().toISOString(),
-      certifiedBy: certifierId,
-    };
+    // Its own permission, asserted here as well as at the route. The service used to assert
+    // `finance.invoice.approve` for this, which is a different question about a different document.
+    if (certifierId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
+      this.access.assert(certifierId, { permission: 'subcontracts.claim.certify', orgPath });
+    }
+
+    const updated = certifyClaim(existing, certifierId, subcontractForCeiling.value);
 
     await this.store.updateClaim(updated);
     this.logger.log(`Claim #${updated.claimNumber} certified by ${certifierId} for net amount $${updated.netCertifiedValue}`);
@@ -205,18 +228,17 @@ export class SubcontractsService {
     return updated;
   }
 
+  /**
+   * Release a certified claim for payment — the money actually leaving.
+   *
+   * The status guard already existed; the row recorded NOBODY, and the certifier could pay against
+   * their own certificate. Certifying says the work is worth this; paying says the money goes now.
+   */
   async payClaim(id: Id, actorId?: Id): Promise<Claim> {
     const existing = await this.store.getClaim(id);
     if (!existing) throw new Error(`Claim ${id} not found`);
 
-    if (existing.status !== 'certified') {
-      throw new Error(`Only certified claims can be marked as paid (current status: ${existing.status})`);
-    }
-
-    const updated: Claim = {
-      ...existing,
-      status: 'paid',
-    };
+    const updated = payClaim(existing, actorId ?? null);
 
     await this.store.updateClaim(updated);
     this.logger.log(`Claim #${updated.claimNumber} paid`);
@@ -281,13 +303,19 @@ export class SubcontractsService {
     const existing = await this.store.getVariation(id);
     if (!existing) throw new Error(`Variation ${id} not found`);
 
-    if (actorId) {
-      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
-      this.access.assert(actorId, { permission: 'projects.project.update', orgPath });
-    }
-
-    // approvedBy records the actor (nil-uuid when unauthenticated in dev)
+    // IT USED TO ASSERT `projects.project.update` — a PROJECTS permission, to approve a SUBCONTRACT
+    // variation that changes what this business owes a subcontractor. Same wrong-authority shape as
+    // the claim certification asserting `finance.invoice.approve`, and unreachable for the same
+    // reason. The route now declares `subcontracts.variation.approve`.
+    //
+    // A variation raises or lowers the subcontract value, which is the ceiling every certification is
+    // measured against — so the person who RAISED it may not be the one who approves it.
     const updated = approveVariation(existing, actorId ?? '00000000-0000-0000-0000-000000000000');
+    if (actorId && existing.createdBy && actorId === existing.createdBy) {
+      throw new Error(
+        'the person who raised this variation may not approve their own instruction — it changes what the subcontract is worth',
+      );
+    }
     const subcontract = await this.store.getSubcontract(existing.subcontractId);
     if (!subcontract) throw new Error(`Subcontract ${existing.subcontractId} not found`);
     const revised: Subcontract = { ...subcontract, value: subcontract.value + signedAmount(updated) };
@@ -309,7 +337,7 @@ export class SubcontractsService {
   async rejectVariation(id: Id, actorId?: Id): Promise<SubcontractVariation> {
     const existing = await this.store.getVariation(id);
     if (!existing) throw new Error(`Variation ${id} not found`);
-    const updated = rejectVariation(existing);
+    const updated = rejectVariation(existing, actorId ?? null);
     await this.store.updateVariation(updated);
     return updated;
   }
@@ -334,7 +362,10 @@ export class SubcontractsService {
 
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      // Named in THIS module's vocabulary. Every assertion in this service used to borrow one
+      // from somewhere else — `projects.project.update` or `finance.invoice.approve` — which is
+      // how a subcontractor payment certificate came to require an invoice-approval authority.
+      const target: AccessTarget = { permission: 'subcontracts.back-charge.create', orgPath };
       this.access.assert(input.createdBy, target);
     }
 
@@ -387,7 +418,10 @@ export class SubcontractsService {
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath };
+      // Named in THIS module's vocabulary. Every assertion in this service used to borrow one
+      // from somewhere else — `projects.project.update` or `finance.invoice.approve` — which is
+      // how a subcontractor payment certificate came to require an invoice-approval authority.
+      const target: AccessTarget = { permission: 'subcontracts.back-charge.status', orgPath };
       this.access.assert(actorId, target);
     }
 
@@ -422,7 +456,10 @@ export class SubcontractsService {
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: existing.tenantId }];
-      const target: AccessTarget = { permission: 'finance.invoice.approve', orgPath };
+      // Named in THIS module's vocabulary. Every assertion in this service used to borrow one
+      // from somewhere else — `projects.project.update` or `finance.invoice.approve` — which is
+      // how a subcontractor payment certificate came to require an invoice-approval authority.
+      const target: AccessTarget = { permission: 'subcontracts.back-charge.recover', orgPath };
       this.access.assert(actorId, target);
     }
 

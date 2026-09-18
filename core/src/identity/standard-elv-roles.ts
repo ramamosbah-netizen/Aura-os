@@ -195,6 +195,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'project',
     permissions: [
       'projects.*', 'contracts.certificate.create', 'contracts.certificate.update',
+      // RAISES a subcontractor application and instructs a variation for work on their own project,
+      // and CERTIFIES NEITHER. That separation is the point: the person who says the work was done is
+      // not the person who accepts the account of it. `subcontracts.claim.certify` and
+      // `subcontracts.variation.approve` are deliberately absent — both belong to Commercial / QS.
+      'subcontracts.subcontract.read', 'subcontracts.claim.create', 'subcontracts.claim.read',
+      'subcontracts.variation.create', 'subcontracts.variation.read',
       readOnly('contracts'), readOnly('site'), readOnly('engineering'), readOnly('procurement'),
       readOnly('quality'), readOnly('commissioning'), readOnly('finance'), ...STAFF_BASE,
     ],
@@ -229,6 +235,21 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.estimate.read', 'crm.estimate.approve', 'crm.quotation.*', 'crm.internal-pricing.access',
       'tendering.internal-pricing.access',
       'contracts.*', 'projects.variation.*', 'projects.eot-claim.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
+      // SUBCONTRACTOR COMMERCIAL AUTHORITY. This role’s description already said it — “governs
+      // estimates, quotations, contracts, variations, CLAIMS and payment applications” — and it held
+      // no `subcontracts.*` permission whatsoever. The whole module was reachable only by r-admin, so
+      // in practice one administrator raised a subcontractor claim, certified it and paid it.
+      //
+      // Certifying is a QUANTITY-SURVEYING judgement about work done on site, which is why it sits
+      // here and not with Finance: the service used to assert `finance.invoice.approve` for it, an
+      // authority that belongs to a different question entirely. Paying is Finance’s, below.
+      // `subcontracts.claim.pay` is deliberately absent: certifying says the work is worth this,
+      // paying says the money goes now, and one signature for both is not a control.
+      'subcontracts.subcontract.create', 'subcontracts.subcontract.read', 'subcontracts.subcontract.status',
+      'subcontracts.claim.create', 'subcontracts.claim.read', 'subcontracts.claim.certify',
+      'subcontracts.variation.create', 'subcontracts.variation.read', 'subcontracts.variation.approve',
+      'subcontracts.back-charge.create', 'subcontracts.back-charge.read', 'subcontracts.back-charge.status',
+      'subcontracts.back-charge.recover',
       readOnly('tendering'), readOnly('projects'), readOnly('procurement'), readOnly('finance'), ...STAFF_BASE,
     ],
   },
@@ -289,6 +310,9 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // chose to grant. Running the department and closing the books were one permission.
       ...FINANCE_OPERATIONS,
       'finance.period.read', // sees which periods are closed; cannot close or reopen one
+      // RELEASES a certified subcontractor claim for payment, and certifies nothing. It already held
+      // `subcontracts.*.read`; paying was reachable only through r-admin’s global wildcard.
+      'subcontracts.claim.pay',
       'contracts.certificate.certify', readOnly('contracts'), readOnly('projects'),
       readOnly('procurement'), readOnly('subcontracts'), readOnly('crm'), ...STAFF_BASE,
     ],

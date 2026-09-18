@@ -57,6 +57,12 @@ export function classifyDomainMessage(m: string): DomainClassification {
     // claim the period is unknown, which it is not, and 400 would tell the caller to fix a request
     // that has nothing wrong with it.
     || /\bis not currently\b/i.test(m)
+    // CEILINGS. "Certifying 250000 would take this subcontract past its authorised value of 100000"
+    // is not bad input: the request is well formed and the caller is entitled to make it, and the
+    // figure is raised by a DIFFERENT governed act — instructing a variation — not by correcting this
+    // request. A shape rather than one message: cumulative positions measured against an authorised
+    // figure recur across the governing acts SEC-01 has still to reach.
+    || /\bwould take\b[^.]*\b(?:past|beyond|over)\b/i.test(m)
     // Immutability and concurrency. A signed revision, an approved baseline and a certified
     // payment certificate all refuse the same way: the record is closed to further writes, or
     // someone else moved it first. The caller must re-read and use the governed correction path.

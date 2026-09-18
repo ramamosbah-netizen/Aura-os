@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Header, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsArray, IsIn, IsNumber, IsOptional, IsString, Min } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { admitCurrency, parsePageParams, parseCsv, toCsv } from '@aura/shared';
 import { IsGovernableCurrency } from '../common/is-governable-currency';
 import {
@@ -140,6 +140,7 @@ export class FinanceController {
   // ── INVOICES ─────────────────────────────────────────────────────────────
 
   @Post('invoices')
+  @Permissions('finance.invoice.create')
   createInvoice(@Body() dto: CreateInvoiceDto, @Headers('idempotency-key') idempotencyKey?: string): Promise<Invoice> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
@@ -221,6 +222,7 @@ export class FinanceController {
   }
 
   @Post('invoices/fx-revaluation/post')
+  @Permissions('finance.invoice.post')
   postApFxRevaluation(@Body() body?: { asOf?: string }) {
     const ctx = this.tenant.get();
     return this.invoices.postFxRevaluation(ctx.tenantId, body?.asOf, ctx.actorId ?? undefined);
@@ -242,6 +244,7 @@ export class FinanceController {
 
   /** PATCH /invoices/:id — update descriptive fields (value is fixed after creation). */
   @Patch('invoices/:id')
+  @Permissions('finance.invoice.update')
   async updateInvoice(@Param('id') id: string, @Body() dto: UpdateInvoiceDto): Promise<Invoice> {
     try {
       return await this.invoices.update(id, {
@@ -264,6 +267,7 @@ export class FinanceController {
   }
 
   @Patch('invoices/:id/status')
+  @Permissions('finance.invoice.status')
   async changeInvoiceStatus(
     @Param('id') id: string,
     @Body() dto: { status: InvoiceStatus },
@@ -557,6 +561,7 @@ export class FinanceController {
   }
 
   @Post('invoices/:id/tax-lines')
+  @Permissions('finance.invoice.tax-lines')
   applyTaxLine(
     @Param('id') invoiceId: string,
     @Body() dto: { taxCodeId: string; taxableAmount: number; isInclusive?: boolean },
@@ -661,6 +666,7 @@ export class FinanceController {
   // ── CUSTOMER INVOICES (AR / sales) ───────────────────────────────────────
 
   @Post('customer-invoices')
+  @Permissions('finance.customer-invoice.create')
   async createCustomerInvoice(
     @Body() dto: { invoiceNumber: string; customerName: string; accountId?: string; projectId?: string; projectName?: string; contractRef?: string; issueDate: string; dueDate?: string; lines: NewCustomerInvoiceLine[]; currency?: string; exchangeRate?: number },
   ): Promise<CustomerInvoice> {
@@ -720,6 +726,7 @@ export class FinanceController {
   }
 
   @Post('customer-invoices/fx-revaluation/post')
+  @Permissions('finance.customer-invoice.post')
   postFxRevaluation(@Query('asOf') asOf?: string) {
     const ctx = this.tenant.get();
     return this.customerInvoices.postFxRevaluation(ctx.tenantId, asOf, ctx.actorId ?? undefined);
@@ -746,42 +753,57 @@ export class FinanceController {
     return found;
   }
 
+  /**
+   * ISSUE it to the customer. Its own permission, and the actor finally reaches the service — the
+   * `issued` event carried `actorId: null` because there was nobody to pass.
+   */
   @Post('customer-invoices/:id/issue')
+  @Permissions('finance.customer-invoice.issue')
   async issueCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
-    return await this.customerInvoices.issue(id);
+    return await this.customerInvoices.issue(id, this.tenant.get().actorId ?? null);
   }
 
   @Post('customer-invoices/:id/receipts')
+  @Permissions('finance.customer-invoice.receipts')
   async recordReceipt(@Param('id') id: string, @Body() dto: { amount: number }): Promise<CustomerInvoice> {
     if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
-    return await this.customerInvoices.recordReceipt(id, Number(dto.amount));
+    return await this.customerInvoices.recordReceipt(id, Number(dto.amount), this.tenant.get().actorId ?? null);
   }
 
+  /**
+   * VOID the receivable — a separate authority from issuing it, held by the Finance Controller.
+   * Raising and sending an invoice is day-to-day AR work; withdrawing one the customer has already
+   * seen is a correction, and the domain refuses the person who issued it either way.
+   */
   @Post('customer-invoices/:id/cancel')
-  async cancelCustomerInvoice(@Param('id') id: string): Promise<CustomerInvoice> {
-    return await this.customerInvoices.cancel(id);
+  @Permissions('finance.customer-invoice.cancel')
+  async cancelCustomerInvoice(@Param('id') id: string, @Body() dto: { reason?: string }): Promise<CustomerInvoice> {
+    return await this.customerInvoices.cancel(id, this.tenant.get().actorId ?? null, dto?.reason ?? null);
   }
 
   // Bulk operation (reference): soft-delete or restore many invoices in one call.
   @Post('customer-invoices/bulk')
+  @Permissions('finance.customer-invoice.delete')
   async bulkCustomerInvoices(@Body() dto: { action?: 'delete' | 'restore'; ids?: string[] }): Promise<{ action: string; affected: number }> {
     if (dto?.action !== 'delete' && dto?.action !== 'restore') throw new BadRequestException("action must be 'delete' or 'restore'");
     if (!Array.isArray(dto?.ids) || dto.ids.length === 0) throw new BadRequestException('ids[] is required');
     const tenantId = this.tenant.get().tenantId;
     for (const id of dto.ids) {
-      if (dto.action === 'delete') await this.customerInvoices.softDelete(tenantId, id);
+      if (dto.action === 'delete') await this.customerInvoices.softDelete(tenantId, id, this.tenant.get().actorId ?? null);
       else await this.customerInvoices.restore(tenantId, id);
     }
     return { action: dto.action, affected: dto.ids.length };
   }
 
   @Delete('customer-invoices/:id')
+  @Permissions('finance.customer-invoice.delete')
   async softDeleteCustomerInvoice(@Param('id') id: string): Promise<{ deleted: string }> {
-    await this.customerInvoices.softDelete(this.tenant.get().tenantId, id);
+    await this.customerInvoices.softDelete(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
     return { deleted: id };
   }
 
   @Post('customer-invoices/:id/restore')
+  @Permissions('finance.customer-invoice.restore')
   async restoreCustomerInvoice(@Param('id') id: string): Promise<{ restored: string }> {
     await this.customerInvoices.restore(this.tenant.get().tenantId, id);
     return { restored: id };

@@ -29,13 +29,20 @@ interface Row {
   status: string;
   deleted_at: Date | string | null;
   created_by: string | null;
+  issued_by: string | null;
+  issued_at: Date | string | null;
+  cancelled_by: string | null;
+  cancelled_at: Date | string | null;
+  cancel_reason: string | null;
+  deleted_by: string | null;
   created_at: Date | string;
 }
 
 const COLS =
   'id, tenant_id, company_id, invoice_number, account_id, customer_name, project_id, project_name, contract_ref, ' +
   'issue_date::text AS issue_date, due_date::text AS due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total, ' +
-  'exchange_rate_effective_date::text AS exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, amount_paid, status, deleted_at, created_by, created_at';
+  'exchange_rate_effective_date::text AS exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, amount_paid, status, deleted_at, created_by, created_at, ' +
+  'issued_by, issued_at, cancelled_by, cancelled_at, cancel_reason, deleted_by';
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
 function rowTo(r: Row): CustomerInvoice {
@@ -68,6 +75,12 @@ function rowTo(r: Row): CustomerInvoice {
     deletedAt: r.deleted_at ? iso(r.deleted_at) : null,
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
+    issuedBy: r.issued_by ?? null,
+    issuedAt: r.issued_at ? iso(r.issued_at) : null,
+    cancelledBy: r.cancelled_by ?? null,
+    cancelledAt: r.cancelled_at ? iso(r.cancelled_at) : null,
+    cancelReason: r.cancel_reason ?? null,
+    deletedBy: r.deleted_by ?? null,
   };
 }
 
@@ -79,14 +92,23 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
       `INSERT INTO public.aura_finance_customer_invoices
         (id, tenant_id, company_id, invoice_number, account_id, customer_name, project_id, project_name, contract_ref,
          issue_date, due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total,
-         exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, amount_paid, status, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
+         exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, amount_paid, status, created_by, created_at,
+         issued_by, issued_at, cancelled_by, cancelled_at, cancel_reason, deleted_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
        ON CONFLICT (id) DO UPDATE SET
-         amount_paid = EXCLUDED.amount_paid, status = EXCLUDED.status`,
+         amount_paid = EXCLUDED.amount_paid, status = EXCLUDED.status,
+         issued_by = EXCLUDED.issued_by, issued_at = EXCLUDED.issued_at,
+         cancelled_by = EXCLUDED.cancelled_by, cancelled_at = EXCLUDED.cancelled_at,
+         cancel_reason = EXCLUDED.cancel_reason, deleted_by = EXCLUDED.deleted_by`,
       [
         inv.id, inv.tenantId, inv.companyId, inv.invoiceNumber, inv.accountId, inv.customerName, inv.projectId, inv.projectName, inv.contractRef,
         inv.issueDate, inv.dueDate, JSON.stringify(inv.lines), inv.subtotal, inv.vatTotal, inv.total, inv.currency, inv.exchangeRate, inv.baseTotal,
         inv.exchangeRateEffectiveDate, inv.exchangeRateSource, inv.exchangeRateId, inv.amountPaid, inv.status, inv.createdBy, inv.createdAt,
+        // `created_by` and `created_at` stay out of the DO UPDATE SET above, as they always have:
+        // who raised the invoice is fixed when it is raised. `issued_by` is in it, because the row is
+        // written once at create and again at issue — and it is the fact the cancellation is refused
+        // against, so the domain, not the store, is what stops it being restated.
+        inv.issuedBy, inv.issuedAt, inv.cancelledBy, inv.cancelledAt, inv.cancelReason, inv.deletedBy,
       ],
     );
   }

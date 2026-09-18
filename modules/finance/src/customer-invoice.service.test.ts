@@ -64,7 +64,8 @@ describe('CustomerInvoiceService — audit trail', () => {
     // event, unlike create/issue/receipt.
     const { svc, input, append } = harness();
     const inv = await svc.create(input(A, 'AR-1'));
-    await svc.cancel(inv.id);
+    // A void now names who and why. The event this test is about used to carry `actorId: null`.
+    await svc.cancel(inv.id, 'u-controller', 'raised against the wrong contract');
     expect(emittedTypes(append)).toContain('finance.customer_invoice.cancelled');
   });
 });

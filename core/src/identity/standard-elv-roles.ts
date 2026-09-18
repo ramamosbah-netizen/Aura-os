@@ -36,9 +36,41 @@ const readOnly = (module: string): string => `${module}.*.read`;
  * wildcard gets put back.
  */
 const FINANCE_ENTITIES = [
-  'account', 'bank-guarantee', 'bank-transaction', 'budget', 'cost-center', 'customer-invoice',
-  'fx', 'invoice', 'journal', 'payment', 'petty-cash', 'post-dated-cheque', 'profit-center',
+  'account', 'bank-guarantee', 'bank-transaction', 'budget', 'cost-center',
+  'fx', 'journal', 'payment', 'petty-cash', 'post-dated-cheque', 'profit-center',
   'revenue-recognition', 'statement', 'tax-code', 'tax-summary', 'vat-return',
+] as const;
+
+/**
+ * `customer-invoice` and `invoice` are NOT in the list above, and that is the point.
+ *
+ * Enumerating `finance.*` entity by entity removed one wildcard and left sixteen smaller ones. Three
+ * of the acts SEC-01 is about live behind two of them: `customer-invoice.issue` (sending a claim to a
+ * customer), `customer-invoice.cancel` (withdrawing one they have already seen) and the two
+ * `.post` acts (writing FX revaluation journals). `finance.customer-invoice.*` re-granted all of
+ * them to the same role that raises the invoice in the first place.
+ *
+ * So the two invoice entities are spelled out act by act. AR is day-to-day work and stays with
+ * Finance: raise it, read it, correct a draft, send it, take money against it. The CORRECTIONS —
+ * voiding a receivable, deleting or restoring one, and posting revaluation journals at period end —
+ * sit with the Finance Controller, alongside the period close it already owns.
+ */
+const FINANCE_AR_OPERATIONS = [
+  'finance.customer-invoice.create', 'finance.customer-invoice.read', 'finance.customer-invoice.update',
+  'finance.customer-invoice.issue', 'finance.customer-invoice.receipts',
+  'finance.invoice.create', 'finance.invoice.read', 'finance.invoice.update',
+  'finance.invoice.status', 'finance.invoice.tax-lines',
+  // Approving a SUPPLIER invoice for payment, which `finance.invoice.*` used to cover. It is asserted
+  // in InvoiceService rather than derived from a route, so no route audit would have missed it — the
+  // finance-authority fitness test did, the moment the wildcard was enumerated. Left with Finance,
+  // whose description already reads "within approval limits"; whether it needs its own separation is
+  // a SEC-01 question that has not been asked yet, and pretending otherwise would be worse.
+  'finance.invoice.approve',
+] as const;
+/** The corrections and the period-end postings. Held by the controller, not by AR. */
+const FINANCE_INVOICE_CORRECTIONS = [
+  'finance.customer-invoice.cancel', 'finance.customer-invoice.delete', 'finance.customer-invoice.restore',
+  'finance.customer-invoice.post', 'finance.invoice.post',
 ] as const;
 export const FINANCE_OPERATION_ENTITIES: readonly string[] = FINANCE_ENTITIES;
 const FINANCE_OPERATIONS = FINANCE_ENTITIES.map((entity) => `finance.${entity}.*`);
@@ -309,6 +341,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // nothing while it was: a wildcard matches every name in the module, including the ones nobody
       // chose to grant. Running the department and closing the books were one permission.
       ...FINANCE_OPERATIONS,
+      ...FINANCE_AR_OPERATIONS,
       'finance.period.read', // sees which periods are closed; cannot close or reopen one
       // RELEASES a certified subcontractor claim for payment, and certifies nothing. It already held
       // `subcontracts.*.read`; paying was reachable only through r-admin’s global wildcard.
@@ -332,6 +365,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'tenant',
     permissions: [
       'finance.period.close', 'finance.period.reopen', 'finance.period.read',
+      // Voiding a receivable the customer has seen, removing one from the register, and posting the
+      // period-end revaluation. Corrections and period-end acts, not day-to-day AR — and the domain
+      // refuses the person who ISSUED an invoice its cancellation, whichever role they hold.
+      ...FINANCE_INVOICE_CORRECTIONS,
       readOnly('finance'), readOnly('contracts'), readOnly('projects'), ...STAFF_BASE,
     ],
   },

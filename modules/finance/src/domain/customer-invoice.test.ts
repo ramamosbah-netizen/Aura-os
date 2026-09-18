@@ -79,11 +79,20 @@ describe('lifecycle', () => {
 
   it('cannot cancel once a receipt is recorded', () => {
     const inv = recordReceipt(issueInvoice(makeCustomerInvoice(base)), 100);
-    expect(() => cancelInvoice(inv)).toThrow('receipts recorded');
+    expect(() => cancelInvoice(inv, 'u-controller', 'change of mind')).toThrow('receipts recorded');
   });
 
-  it('can cancel a draft', () => {
-    expect(cancelInvoice(makeCustomerInvoice(base)).status).toBe('cancelled');
+  it('can cancel a draft, with a reason', () => {
+    // The reason is required now. Withdrawing a receivable used to be possible with no actor and no
+    // explanation, and the `cancelled` event carried a null actor because none was passed.
+    const voided = cancelInvoice(makeCustomerInvoice(base), 'u-controller', 'raised against the wrong contract');
+    expect(voided.status).toBe('cancelled');
+    expect(voided.cancelledBy).toBe('u-controller');
+    expect(voided.cancelReason).toBe('raised against the wrong contract');
+  });
+
+  it('will not void a receivable silently', () => {
+    expect(() => cancelInvoice(makeCustomerInvoice(base), 'u-controller')).toThrow(/a reason is required/);
   });
 });
 

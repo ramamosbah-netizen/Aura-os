@@ -24,9 +24,18 @@ const controller = STANDARD_ELV_ROLES.find((r) => r.id === 'r-finance-controller
 const holds = (role: typeof financeRole, permission: string) =>
   role.permissions.some((p) => permissionMatches(p, permission));
 
-/** Entities deliberately NOT in the operations list, with the reason they are authority acts. */
+/**
+ * Entities deliberately NOT covered by an entity-wide wildcard, with the reason.
+ *
+ * `customer-invoice` and `invoice` are here because enumerating `finance.*` removed one wildcard and
+ * left sixteen smaller ones — and three of the acts SEC-01 is about lived behind two of them.
+ * `finance.customer-invoice.*` re-granted issue, cancel and post to the same role that raises the
+ * invoice. They are now split act by act, which the test below checks act by act.
+ */
 const AUTHORITY_ENTITIES: Record<string, string> = {
   period: 'closing and reopening the books — r-finance-controller holds these; r-finance reads them',
+  'customer-invoice': 'split act by act: AR issues and takes receipts; the controller voids, deletes and posts',
+  invoice: 'split act by act: AR creates, updates and codes tax lines; the controller posts the revaluation',
 };
 
 describe('finance authority — the operational role does not close its own books', () => {
@@ -71,6 +80,37 @@ describe('finance authority — the operational role does not close its own book
     // from the scan, so this asserts the overlap is substantial rather than demanding an exact match.
     const stillRouted = FINANCE_OPERATION_ENTITIES.filter((e) => routed.has(e));
     expect(stillRouted.length).toBeGreaterThanOrEqual(FINANCE_OPERATION_ENTITIES.length - 2);
+  });
+
+  it('splits the invoice acts instead of handing them over by wildcard', () => {
+    // AR's day-to-day work. Raising an invoice and sending it to the customer IS the job.
+    for (const p of [
+      'finance.customer-invoice.create', 'finance.customer-invoice.read',
+      'finance.customer-invoice.issue', 'finance.customer-invoice.receipts',
+      'finance.invoice.create', 'finance.invoice.read', 'finance.invoice.status',
+    ]) {
+      expect(holds(financeRole, p), `r-finance must hold ${p}`).toBe(true);
+    }
+
+    // THE CORRECTIONS. Voiding a receivable the customer has already seen, removing one from the
+    // register, and posting the period-end revaluation. Not AR's, and not reachable by a wildcard —
+    // which is what `finance.customer-invoice.*` used to make them.
+    for (const p of [
+      'finance.customer-invoice.cancel', 'finance.customer-invoice.delete',
+      'finance.customer-invoice.restore', 'finance.customer-invoice.post', 'finance.invoice.post',
+    ]) {
+      expect(holds(financeRole, p), `r-finance must NOT hold ${p}`).toBe(false);
+      expect(holds(controller, p), `r-finance-controller must hold ${p}`).toBe(true);
+    }
+
+    // No entity-wide wildcard on either invoice entity, for anybody but the admin. One of those is
+    // exactly how these five acts were granted in the first place.
+    for (const role of STANDARD_ELV_ROLES.filter((r) => r.id !== 'r-admin')) {
+      expect(
+        role.permissions.filter((p) => /^finance\.(customer-)?invoice\.\*/.test(p)),
+        `${role.id} carries an invoice wildcard, which re-grants issue, cancel and post`,
+      ).toEqual([]);
+    }
   });
 
   it('keeps the controller out of the work it signs off', () => {

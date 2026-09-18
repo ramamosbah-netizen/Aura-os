@@ -20,10 +20,11 @@ import allowlist from './route-permission-allowlist.json';
  *   crm.opportunity.scopes / .approve      the author cannot author, the approver cannot approve (J1-07)
  *
  * 423 mutating routes were in that state when this guard was written — 419 was the number it recorded,
- * and the four it missed are in the allowlist now, found by mutation-testing this very test. 404 are
- * in that state today: six left with J1-07, two with the finance period close and eleven with the
- * subcontracts module. Fixing them is staged work — 60 of them end in a GOVERNING VERB and each needs
- * its own maker/checker question answered, which is not a rename. What
+ * and the four it missed are in the allowlist now, found by mutation-testing this very test. 391 are
+ * in that state today: six left with J1-07, two with the finance period close, eleven with the
+ * subcontracts module and thirteen with customer invoicing. Fixing them is staged work — 56 of them
+ * end in a GOVERNING VERB and each needs its own maker/checker question answered, which is not a
+ * rename. What
  * this test does is stop the number growing while that happens, and make every fix visible: the
  * allowlist is the debt, written down, and it may only shrink.
  *

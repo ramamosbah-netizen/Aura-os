@@ -9,6 +9,8 @@ import {
   issueInvoice,
   recordReceipt,
   cancelInvoice,
+  assertSoftDeletable,
+  cancellationSeparation,
 } from './domain/customer-invoice';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
@@ -156,15 +158,20 @@ export class CustomerInvoiceService {
     return inv;
   }
 
-  async issue(id: Id): Promise<CustomerInvoice> {
+  /**
+   * Issue it to the customer. THE ACTOR IS A PARAMETER NOW: it was not one, which is why the `issued`
+   * event was written with `actorId: null` and the row held nothing. The most consequential thing
+   * that happens to this record was anonymous.
+   */
+  async issue(id: Id, issuedBy: Id | null = null): Promise<CustomerInvoice> {
     // Tenant boundary (G-03): assert ownership before issuing — see tenant-guard.ts.
     const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
-    const updated = issueInvoice(inv);
+    const updated = issueInvoice(inv, issuedBy);
     await this.store.save(updated);
     await this.events.append([
       makeEvent({
         type: CUSTOMER_INVOICE_EVENT.issued,
-        tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
+        tenantId: inv.tenantId, companyId: inv.companyId, actorId: issuedBy ?? null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
         payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
       }),
@@ -172,7 +179,7 @@ export class CustomerInvoiceService {
     return updated;
   }
 
-  async recordReceipt(id: Id, amount: number): Promise<CustomerInvoice> {
+  async recordReceipt(id: Id, amount: number, recordedBy: Id | null = null): Promise<CustomerInvoice> {
     // Tenant boundary (G-03): a receipt must not post against another tenant's invoice.
     const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
     const updated = recordReceipt(inv, amount);
@@ -180,7 +187,7 @@ export class CustomerInvoiceService {
     await this.events.append([
       makeEvent({
         type: CUSTOMER_INVOICE_EVENT.receiptRecorded,
-        tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
+        tenantId: inv.tenantId, companyId: inv.companyId, actorId: recordedBy ?? null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
         payload: { amount: Number(amount), amountPaid: updated.amountPaid, status: updated.status },
       }),
@@ -189,19 +196,24 @@ export class CustomerInvoiceService {
     return updated;
   }
 
-  async cancel(id: Id): Promise<CustomerInvoice> {
+  async cancel(id: Id, cancelledBy: Id | null = null, reason?: string | null): Promise<CustomerInvoice> {
     // Tenant boundary (G-03): cancelling is a mutation — assert ownership first.
     const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
-    const updated = cancelInvoice(inv);
+    const updated = cancelInvoice(inv, cancelledBy, reason);
     await this.store.save(updated);
     // Voiding a receivable is an auditable financial act — it must leave a trace on the spine, as
     // create/issue/receipt already do. Without this, a cancelled invoice vanished silently.
     await this.events.append([
       makeEvent({
         type: CUSTOMER_INVOICE_EVENT.cancelled,
-        tenantId: inv.tenantId, companyId: inv.companyId, actorId: null,
+        tenantId: inv.tenantId, companyId: inv.companyId, actorId: cancelledBy ?? null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { invoiceNumber: inv.invoiceNumber, total: inv.total },
+        payload: {
+          invoiceNumber: inv.invoiceNumber, total: inv.total, reason: updated.cancelReason,
+          // Whether the issuer/canceller separation could be checked here. Derived from the row, so
+          // the event cannot claim a control the record does not support.
+          separation: cancellationSeparation(updated),
+        },
       }),
     ]);
     this.logger.log(`Customer invoice ${inv.invoiceNumber} (${id}) cancelled`);
@@ -217,7 +229,17 @@ export class CustomerInvoiceService {
     return this.store.list(filter);
   }
 
-  softDelete(tenantId: Id, id: Id): Promise<void> { return this.store.setDeleted(tenantId, id, true); }
+  /**
+   * Soft-delete a DRAFT raised by mistake. An issued invoice used to be accepted here — 200 — so a
+   * document already sent to a customer vanished from every list. It is withdrawn by CANCELLING it,
+   * which records who, when and why.
+   */
+  async softDelete(tenantId: Id, id: Id, deletedBy: Id | null = null): Promise<void> {
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
+    assertSoftDeletable(inv);
+    await this.store.save({ ...inv, deletedBy });
+    await this.store.setDeleted(tenantId, id, true);
+  }
   restore(tenantId: Id, id: Id): Promise<void> { return this.store.setDeleted(tenantId, id, false); }
 
   listPaged(filter: CustomerInvoiceFilter, page: PageParams) {

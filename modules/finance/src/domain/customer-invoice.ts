@@ -78,6 +78,23 @@ export interface CustomerInvoice {
   deletedAt: string | null;
   createdAt: string;
   createdBy: Id | null;
+  /**
+   * WHO SENT IT TO THE CUSTOMER, and when — the moment this stops being an internal draft and becomes
+   * a claim on somebody. `createdBy` existed; this did not, and the `issued` event carried a null
+   * actor because no actor ever reached the service.
+   */
+  issuedBy: Id | null;
+  issuedAt: string | null;
+  /**
+   * WHO VOIDED THE RECEIVABLE, when, and WHY. Raising an invoice may be routine; un-raising one the
+   * customer has already seen may not be silent, which is why the reason is required and the note on
+   * a close is not.
+   */
+  cancelledBy: Id | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  /** Who soft-deleted it. Only a draft may be deleted — see `softDeletable` below. */
+  deletedBy: Id | null;
 }
 
 export interface NewCustomerInvoice {
@@ -197,12 +214,24 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     deletedAt: null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
+    issuedBy: null,
+    issuedAt: null,
+    cancelledBy: null,
+    cancelledAt: null,
+    cancelReason: null,
+    deletedBy: null,
   };
 }
 
-export function issueInvoice(inv: CustomerInvoice): CustomerInvoice {
+/**
+ * ISSUE it — the act that turns an internal draft into a claim on a customer.
+ *
+ * The status guard already existed. What did not: the record could not say who did it. `issue(id)`
+ * took no actor, so the event was written with `actorId: null` and the row held nothing at all.
+ */
+export function issueInvoice(inv: CustomerInvoice, issuedBy: Id | null = null): CustomerInvoice {
   if (inv.status !== 'draft') throw new Error(`cannot issue from status ${inv.status}`);
-  return { ...inv, status: 'issued' };
+  return { ...inv, status: 'issued', issuedBy, issuedAt: new Date().toISOString() };
 }
 
 /** Record a customer receipt against an issued invoice; advances to partially_paid / paid. */
@@ -218,10 +247,64 @@ export function recordReceipt(inv: CustomerInvoice, amount: number): CustomerInv
   return { ...inv, amountPaid, status };
 }
 
-export function cancelInvoice(inv: CustomerInvoice): CustomerInvoice {
+/**
+ * VOID the receivable.
+ *
+ * Two refusals were already here and are correct. Two things were not.
+ *
+ * A REASON IS REQUIRED. The customer has seen this document; withdrawing it is a commercial act, and
+ * "cancelled, by nobody, for no reason" is the shape this programme keeps removing — a status that
+ * says where the record is and never how it got there.
+ *
+ * THE PERSON WHO ISSUED IT MAY NOT VOID IT. Issuing makes the claim; voiding removes it, and one
+ * signature for both is not a control. Where the issuer is unknown — an invoice issued before the
+ * column existed — it proceeds rather than blocking work over a fact nobody recorded at the time.
+ */
+export function cancelInvoice(
+  inv: CustomerInvoice,
+  cancelledBy: Id | null = null,
+  reason?: string | null,
+): CustomerInvoice {
   if (inv.status === 'paid') throw new Error('cannot cancel a fully paid invoice');
   if (inv.amountPaid > 0) throw new Error('cannot cancel an invoice with receipts recorded');
-  return { ...inv, status: 'cancelled' };
+  const trimmed = (reason ?? '').trim();
+  if (!trimmed) {
+    throw new Error('a reason is required to cancel a customer invoice — the customer has seen this document');
+  }
+  if (cancelledBy && inv.issuedBy && cancelledBy === inv.issuedBy) {
+    throw new Error(
+      'the person who issued this invoice may not cancel their own issue — a second signature is what makes it a control',
+    );
+  }
+  return {
+    ...inv,
+    status: 'cancelled',
+    cancelledBy,
+    cancelledAt: new Date().toISOString(),
+    cancelReason: trimmed,
+  };
+}
+
+/**
+ * MAY THIS BE SOFT-DELETED? Only while it is a draft.
+ *
+ * A soft-delete of an ISSUED invoice was accepted — 200 — so a document already sent to a customer
+ * vanished from every list with `deleted_at` set and nobody named. Deleting is for a draft raised by
+ * mistake; a receivable the customer has seen is withdrawn by CANCELLING it, which leaves the reason
+ * and both signatures on the record.
+ */
+export function assertSoftDeletable(inv: CustomerInvoice): void {
+  if (inv.status !== 'draft' && inv.status !== 'cancelled') {
+    throw new Error(
+      `only a draft or cancelled customer invoice may be deleted — this one is ${inv.status}, and an issued invoice is withdrawn by cancelling it, which records who and why`,
+    );
+  }
+}
+
+/** Was the issuer/canceller separation actually CHECKED? Derived, never stored twice. */
+export function cancellationSeparation(inv: CustomerInvoice): 'enforced' | 'unverifiable' | null {
+  if (inv.cancelledAt === null) return null;
+  return inv.issuedBy ? 'enforced' : 'unverifiable';
 }
 
 export function balanceOf(inv: CustomerInvoice): number {

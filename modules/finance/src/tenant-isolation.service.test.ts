@@ -144,10 +144,10 @@ describe('CustomerInvoiceService — tenant isolation', () => {
     const { store, svc, tenant, seed } = customerInvoiceHarness();
     const ci = seed();
     await store.save(ci);
-    await asB(tenant, () => expect(svc.cancel(ci.id)).rejects.toThrow(/not found/i));
+    await asB(tenant, () => expect(svc.cancel(ci.id, 'u-b', 'not mine')).rejects.toThrow(/not found/i));
     expect((await store.get(ci.id))?.status).not.toBe('cancelled');
 
-    const cancelled = await asA(tenant, () => svc.cancel(ci.id));
+    const cancelled = await asA(tenant, () => svc.cancel(ci.id, 'u-a', 'raised in error'));
     expect(cancelled.status).toBe('cancelled');
   });
 

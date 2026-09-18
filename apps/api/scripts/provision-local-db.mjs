@@ -270,6 +270,22 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // controllers on the SAME shipped role are the minimum, which is also the point: the separation is
 // between people, not between job titles.
 //
+// `u-e2e-eng`, `u-e2e-techmgr` and `u-e2e-doccon` are the wave-C proof, and this one needs THREE
+// principals rather than two. Document control separates a chain, not a pair:
+//
+//   r-technical-engineer  writes and submits it    (author)
+//   r-technical-manager   reviews and approves it  (technical authority — and issues NOTHING)
+//   r-document-controller registers and issues it  (release authority — and approves NOTHING)
+//
+// Two people can show that the author does not approve their own work. They CANNOT show the rule
+// this wave exists for — that the person who approved a document may not be the one who releases it
+// outside the business — because with two principals the approver and the issuer are the only pair
+// available and the test would have to permit exactly what it is meant to forbid. Measured before
+// this: one principal walked submit → review → approve → issue and every status was correct.
+//
+// `r-document-controller` is NEW. There was no such role in the shipped catalogue at all, so all 19
+// mutating document-control routes were reachable only through an administrator's wildcard.
+
 // `u-e2e-presales` is the MAKER for J1-07, and `u-e2e-techmgr` doubles as its CHECKER. A solution
 // scope is written by Pre-Sales and signed off by the Technical Manager, and until J1-07 neither
 // could do their own job through the API: the routes derived `crm.opportunity.scopes`/`.approve`,
@@ -282,7 +298,8 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-controller-a', 'r-finance-controller'], ['u-e2e-controller-b', 'r-finance-controller'],
                                 ['u-e2e-pm', 'r-pm'],
                                 ['u-e2e-qs', 'r-commercial-manager'], ['u-e2e-qs2', 'r-commercial-manager'],
-                                ['u-e2e-hse', 'r-hse'], ['u-e2e-hse2', 'r-hse']]) {
+                                ['u-e2e-hse', 'r-hse'], ['u-e2e-hse2', 'r-hse'],
+                                ['u-e2e-eng', 'r-technical-engineer'], ['u-e2e-doccon', 'r-document-controller']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -304,7 +321,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) and u-e2e-hse/hse2 (r-hse)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) and u-e2e-doccon (r-document-controller)');
 
 
 

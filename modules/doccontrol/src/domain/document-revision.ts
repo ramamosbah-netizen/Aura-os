@@ -144,25 +144,77 @@ export function startReviewDocument(d: DocumentRevision, reviewerId: string | nu
   return { ...touch(d), status: 'under_review', reviewedBy: reviewerId, reviewedAt: new Date().toISOString() };
 }
 
-/** under_review → approved. */
+/**
+ * under_review → approved.
+ *
+ * TWO RULES, and neither invents a stage that was not already there.
+ *
+ * THE AUTHOR MAY NOT APPROVE THEIR OWN REVISION. Measured before this existed: one principal
+ * submitted, reviewed, approved and issued the same drawing, with `submittedBy = decidedBy =
+ * issuedBy`. Nothing refused any step.
+ *
+ * APPROVAL NEVER FABRICATES `reviewedBy`. This used to read `reviewedBy: actorId ?? d.reviewedBy`,
+ * so where review had left no name the APPROVER silently became the reviewer and the record then
+ * claimed a review that nobody performed. The state machine already forces
+ * `submitted → under_review → approved` with no shortcut, so review is a formal stage and not
+ * decoration — what was missing is that the stage had to leave a name behind. It does now: an
+ * approval is refused until it has, rather than filling the gap with the approver.
+ */
 export function approveDocument(d: DocumentRevision, actorId: string | null, comments?: string): DocumentRevision {
   assertDocumentTransition(d.status, 'approved');
+  if (!d.reviewedBy) {
+    throw new Error(
+      'this revision cannot be approved until its review records who performed it — an approval must not stand in for a review that left no name',
+    );
+  }
+  if (actorId && d.submittedBy && actorId === d.submittedBy) {
+    throw new Error('the person who submitted this revision may not approve their own — a second pair of eyes is what review means');
+  }
   const now = new Date().toISOString();
-  return { ...touch(d), status: 'approved', reviewedBy: actorId ?? d.reviewedBy, decidedBy: actorId, decidedAt: now, decisionComments: comments?.trim() || null };
+  return { ...touch(d), status: 'approved', decidedBy: actorId, decidedAt: now, decisionComments: comments?.trim() || null };
 }
 
 /** under_review → rejected. The reason is MANDATORY. */
 export function rejectDocument(d: DocumentRevision, actorId: string | null, reason: string): DocumentRevision {
   if (!reason?.trim()) throw new Error('a rejection reason is required');
   assertDocumentTransition(d.status, 'rejected');
+  if (actorId && d.submittedBy && actorId === d.submittedBy) {
+    throw new Error('the person who submitted this revision may not reject their own — withdrawing it is a revision, not a decision');
+  }
   const now = new Date().toISOString();
-  return { ...touch(d), status: 'rejected', reviewedBy: actorId ?? d.reviewedBy, decidedBy: actorId, decidedAt: now, decisionComments: reason.trim() };
+  // `reviewedBy` is NOT back-filled here either: a rejection records who DECIDED, and who reviewed
+  // is whatever the review stage recorded.
+  return { ...touch(d), status: 'rejected', decidedBy: actorId, decidedAt: now, decisionComments: reason.trim() };
 }
 
-/** approved → issued. Immutable thereafter. */
+/**
+ * approved → issued. Immutable thereafter — a later revision SUPERSEDES it; nothing overwrites it.
+ *
+ * APPROVE IS NOT ISSUE. Approving a revision is an internal technical judgement; issuing it releases
+ * the document outside the business, and one permission must never do both by accident. The role
+ * split makes that organisational — the Technical Manager approves and does not hold
+ * `doccontrol.revision.issue`, the Document Controller issues and approves nothing — and this rule
+ * is what holds when one person carries both roles, which no permission can see.
+ */
 export function issueDocument(d: DocumentRevision, actorId: string | null): DocumentRevision {
   assertDocumentTransition(d.status, 'issued');
+  if (actorId && d.decidedBy && actorId === d.decidedBy) {
+    throw new Error(
+      'the person who approved this revision may not issue it — approving it internally and releasing it outside are two acts',
+    );
+  }
   return { ...touch(d), status: 'issued', issuedBy: actorId, issuedAt: new Date().toISOString() };
+}
+
+/** Whether each separation could actually be CHECKED on this revision. Derived, never stored twice. */
+export function revisionSeparation(d: DocumentRevision): {
+  authorVsApprover: 'enforced' | 'unverifiable' | null;
+  approverVsIssuer: 'enforced' | 'unverifiable' | null;
+} {
+  return {
+    authorVsApprover: d.decidedBy === null ? null : d.submittedBy ? 'enforced' : 'unverifiable',
+    approverVsIssuer: d.issuedBy === null ? null : d.decidedBy ? 'enforced' : 'unverifiable',
+  };
 }
 
 /** issued → superseded (when a later revision is issued). */

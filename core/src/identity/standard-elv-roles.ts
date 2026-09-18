@@ -248,6 +248,51 @@ const HSE_AUTHORITY = [
   'hse.capa.raise', 'hse.toolbox.record', 'hse.training.record', 'hse.risk_assessment.create',
 ] as const;
 
+/**
+ * DOCUMENT CONTROL, split Author → Technical Authority → External Release Authority.
+ *
+ * NO SHIPPED ROLE HELD A SINGLE `doccontrol` WRITE PERMISSION. All 24 roles held `doccontrol.*.read`
+ * or `documents.*.read` and nothing else, so 19 mutating routes and seven governing verbs were
+ * reachable only through r-admin, and there was NO DOCUMENT CONTROLLER ROLE AT ALL.
+ *
+ * The record was never the problem: `createdBy`, `submittedBy`, `reviewedBy`, `decidedBy` and
+ * `issuedBy` are five separate columns, the state machine forbids shortcuts, and an issued revision
+ * is superseded rather than overwritten. What no rule connected was WHO may stand in each column.
+ * Measured, one principal: submit, start-review, approve, issue — all 201, all the same person.
+ *
+ * APPROVE IS NOT ISSUE. Approving a revision is an internal technical judgement; issuing it releases
+ * the document outside the business. The Technical Manager approves and does NOT hold
+ * `doccontrol.revision.issue`; the Document Controller issues and holds no approval. One permission
+ * never does both.
+ */
+const DOCCONTROL_AUTHOR = [
+  'doccontrol.revision.submit', 'doccontrol.submittal.create', 'doccontrol.submittal.submit',
+] as const;
+
+/** The technical decision. Review and approve/reject — and no release. */
+const DOCCONTROL_TECHNICAL_AUTHORITY = [
+  'doccontrol.revision.start-review', 'doccontrol.revision.approve',
+  'doccontrol.submittal.return',
+] as const;
+
+/**
+ * The registry and the release. Everything that leaves the building goes through this role, and it
+ * approves nothing that goes.
+ */
+const DOCCONTROL_RELEASE_AUTHORITY = [
+  'doccontrol.register.create', 'doccontrol.register.revise',
+  'doccontrol.revision.issue',
+  'doccontrol.transmittal.create', 'doccontrol.transmittal.send',
+  'doccontrol.transmittal.recipients', 'doccontrol.transmittal.items',
+  // Asserted in the service for adding a recipient while the route derives `.recipients` — two names
+  // for one act, as in procurement (`pr`/`purchase-request`), HR (`leave.approve`/`leave.resolve`),
+  // contracts (`ipc`/`certificate`) and HSE (`capa.raise`/`capa.create`). Listed, not renamed.
+  'doccontrol.transmittal.update',
+  'doccontrol.transmittal.receive', 'doccontrol.transmittal.acknowledge',
+  'doccontrol.correspondence.create', 'doccontrol.correspondence.close',
+  'doccontrol.submittal.create',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -344,12 +389,24 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'tenant-or-project',
     permissions: [
       'engineering.*.read', 'engineering.*.create', 'engineering.*.update',
-      'engineering.drawing.submit', 'engineering.drawing.revise', 'engineering.drawing.transmit',
+      'engineering.drawing.submit', 'engineering.drawing.revise',
+      // RELEASE, NOT TRANSMIT. This act hands an approved drawing to the site team who take an
+      // `engineering_release` responsibility for it; it conveys nothing outside the business. It was
+      // called `transmit`, and its reactor produced a doccontrol transmittal marked `sent` and signed
+      // by nobody — a record the register could not tell apart from one the Document Controller had
+      // released to the client. Conveying a document OUT is `doccontrol.transmittal.send`, and this
+      // role does not hold it. (The route path, the drawing's `transmitted` status and the
+      // `engineering.drawing.transmitted` event keep their names: those are public API and persisted
+      // values. The authority is what was misnamed.)
+      'engineering.drawing.release',
       // Raises technical queries and CLOSES them once the answer is adequate to build to — but does
       // NOT hold `engineering.tq.respond`. The design decision is the Technical Manager's to give;
       // judging it good enough belongs to whoever has to build to it, and one person holding both
       // turns the whole exchange into a note they wrote to themselves.
       'engineering.tq.close',
+      // AUTHORS a controlled document and submits it for review. Approves nothing and issues nothing:
+      // `doccontrol.revision.approve` and `.issue` are deliberately absent.
+      ...DOCCONTROL_AUTHOR,
       // PROPOSES a material for approval and never decides one (ENG-04). Raising a Material Approval
       // Request is engineering authorship — this is the product the engineer intends to install;
       // `quality.material-approval.review` is deliberately absent, because the whole value of the
@@ -438,6 +495,9 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // one who approves it, so this sits with the internal technical authority — alongside QA/QC,
       // which owns the register itself and holds `quality.*`.
       'quality.material-approval.review', 'quality.material-approval.read',
+      // REVIEWS AND APPROVES a controlled document — and does not release it. `doccontrol.revision.issue`
+      // is absent on purpose: approving internally and issuing externally are two acts.
+      ...DOCCONTROL_TECHNICAL_AUTHORITY,
       readOnly('tendering'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },
@@ -660,6 +720,28 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'hr.leave.resolve', 'hr.leave.approve',
       'hr.employee.delete', 'hr.employee.restore',
       readOnly('hr'), readOnly('projects'), ...STAFF_BASE,
+    ],
+  },
+  {
+    /**
+     * DOCUMENT CONTROLLER — and the module had no such role until this existed.
+     *
+     * The EXTERNAL RELEASE AUTHORITY. It owns the register, ISSUES an approved revision, creates and
+     * SENDS transmittals, and logs and closes correspondence. It APPROVES NOTHING: a document reaches
+     * this role only after the Technical Manager has approved it, and `doccontrol.revision.approve`
+     * is deliberately absent so that approving and releasing can never be the same permission.
+     *
+     * Issuing and then sending is NOT a self-approval: the approval happened elsewhere, and a
+     * conveyance carries many documents. That is why no maker/checker is invented between issuer and
+     * sender — inventing one would be inventing a control.
+     */
+    id: 'r-document-controller',
+    name: 'Document Controller',
+    description: 'Owns the document register, issues approved revisions and releases them externally by transmittal.',
+    assignmentScope: 'tenant-or-project',
+    permissions: [
+      ...DOCCONTROL_RELEASE_AUTHORITY,
+      readOnly('doccontrol'), readOnly('engineering'), readOnly('projects'), ...STAFF_BASE,
     ],
   },
   {

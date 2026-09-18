@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { TenantContext, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Transmittal,
@@ -65,6 +65,7 @@ export class DocControlController {
   // ── Transmittals ──────────────────────────────────────────────────────────
 
   @Post('transmittals')
+  @Permissions('doccontrol.transmittal.create')
   createTransmittal(@Body() dto: CreateTransmittalDto): Promise<Transmittal> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
@@ -86,18 +87,21 @@ export class DocControlController {
   }
 
   @Post('transmittals/:id/send')
+  @Permissions('doccontrol.transmittal.send')
   sendTransmittal(@Param('id') id: string): Promise<Transmittal> {
     const ctx = this.tenant.get();
     return this.docControlService.sendTransmittal(ctx.tenantId, ctx.actorId, id);
   }
 
   @Post('transmittals/:id/receive')
+  @Permissions('doccontrol.transmittal.receive')
   receiveTransmittal(@Param('id') id: string): Promise<Transmittal> {
     const ctx = this.tenant.get();
     return this.docControlService.receiveTransmittal(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('transmittals/:id/acknowledge')
+  @Permissions('doccontrol.transmittal.acknowledge')
   acknowledgeTransmittal(@Param('id') id: string, @Body() dto?: AckTransmittalDto): Promise<Transmittal> {
     const ctx = this.tenant.get();
     return this.docControlService.acknowledgeTransmittal(ctx.tenantId, ctx.actorId, id, dto?.note);
@@ -110,6 +114,7 @@ export class DocControlController {
    * later would leave a receipt list that no longer matches the act it records.
    */
   @Post('transmittals/:id/recipients')
+  @Permissions('doccontrol.transmittal.recipients')
   addTransmittalRecipient(
     @Param('id') id: string,
     @Body() dto: { userId: string; party?: string },
@@ -151,6 +156,7 @@ export class DocControlController {
   }
 
   @Post('transmittals/:id/items')
+  @Permissions('doccontrol.transmittal.items')
   async addTransmittalItems(
     @Param('id') id: string,
     @Body() dto: { items: Array<{ registerEntryId: string; revision?: string; purpose?: TransmittalPurpose }> },
@@ -161,11 +167,13 @@ export class DocControlController {
     if (dto.items.some((i) => !i?.registerEntryId)) {
       throw new BadRequestException('every item needs a registerEntryId');
     }
-    try {
-      return await this.docControlService.addTransmittalItems(this.tenant.get().tenantId, id, dto.items);
-    } catch (err) {
-      throw new BadRequestException(err instanceof Error ? err.message : 'attach items failed');
-    }
+    // NO BLANKET `catch → BadRequestException` HERE ANY MORE. It turned every refusal this method can
+    // make into a 400, including the one this wave added: attaching a document to an already-sent
+    // transmittal is a STATE CONFLICT (409), and the caller was told to fix a request that was
+    // perfectly well formed. Measured — 400 where the service had correctly said "can only be
+    // attached to a draft transmittal". The global taxonomy classifies each message on its own terms:
+    // a missing register entry is 404, a cross-project attachment is 400, a frozen conveyance is 409.
+    return await this.docControlService.addTransmittalItems(this.tenant.get().tenantId, id, dto.items);
   }
 
   @Get('transmittals/:id/items')
@@ -176,6 +184,7 @@ export class DocControlController {
   // ── Correspondence ─────────────────────────────────────────────────────────
 
   @Post('correspondence')
+  @Permissions('doccontrol.correspondence.create')
   createCorrespondence(@Body() dto: CreateCorrespondenceDto): Promise<Correspondence> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
@@ -200,9 +209,10 @@ export class DocControlController {
   }
 
   @Put('correspondence/:id/close')
-  closeCorrespondence(@Param('id') id: string): Promise<Correspondence> {
+  @Permissions('doccontrol.correspondence.close')
+  closeCorrespondence(@Param('id') id: string, @Body() dto: { reason?: string }): Promise<Correspondence> {
     const ctx = this.tenant.get();
-    return this.docControlService.closeCorrespondence(ctx.tenantId, ctx.actorId, id);
+    return this.docControlService.closeCorrespondence(ctx.tenantId, ctx.actorId, id, dto?.reason ?? null);
   }
 
   @Get('correspondence')
@@ -219,6 +229,7 @@ export class DocControlController {
   // ── Submittals (document review register) ──────────────────────────────────
 
   @Post('submittals')
+  @Permissions('doccontrol.submittal.create')
   async createSubmittal(@Body() dto: { projectId: string; projectName?: string; reference: string; title: string; discipline?: Submittal['discipline']; revision?: number }): Promise<Submittal> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
@@ -248,19 +259,24 @@ export class DocControlController {
   }
 
   @Put('submittals/:id/submit')
+  @Permissions('doccontrol.submittal.submit')
   async submitSubmittal(@Param('id') id: string): Promise<Submittal> {
-    return await this.docControlService.submitSubmittal(this.tenant.get().tenantId, id);
+    const ctx = this.tenant.get();
+    return await this.docControlService.submitSubmittal(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('submittals/:id/return')
+  @Permissions('doccontrol.submittal.return')
   async returnSubmittal(@Param('id') id: string, @Body() dto: { reviewCode: ReviewCode; reviewComments?: string }): Promise<Submittal> {
     if (!['A', 'B', 'C', 'D'].includes(dto?.reviewCode)) throw new BadRequestException('reviewCode must be A, B, C, or D');
-    return await this.docControlService.returnSubmittal(this.tenant.get().tenantId, id, dto.reviewCode, dto.reviewComments);
+    const ctx = this.tenant.get();
+    return await this.docControlService.returnSubmittal(ctx.tenantId, ctx.actorId, id, dto.reviewCode, dto.reviewComments);
   }
 
   // ── Drawing / Document Register ─────────────────────────────────────────────
 
   @Post('register')
+  @Permissions('doccontrol.register.create')
   createRegisterEntry(
     @Body() dto: { projectId: string; projectName?: string; documentNumber: string; title: string; discipline?: RegisterDiscipline; docType?: RegisterDocType; currentRevision?: string; status?: RegisterStatus; custodian?: string; distribution?: string[]; revisionDate?: string },
   ): Promise<DrawingRegisterEntry> {
@@ -297,6 +313,7 @@ export class DocControlController {
   }
 
   @Put('register/:id/revise')
+  @Permissions('doccontrol.register.revise')
   async reviseRegisterEntry(
     @Param('id') id: string,
     @Body() dto: { revision: string; status: RegisterStatus; revisionDate?: string },
@@ -326,24 +343,28 @@ export class DocControlController {
   }
 
   @Post('revisions/:revId/submit')
+  @Permissions('doccontrol.revision.submit')
   submitDocument(@Param('revId') revId: string): Promise<DocumentRevision> {
     const ctx = this.tenant.get();
     return this.docControlService.submitDocument(ctx.tenantId, ctx.actorId, revId);
   }
 
   @Post('revisions/:revId/start-review')
+  @Permissions('doccontrol.revision.start-review')
   startReviewDocument(@Param('revId') revId: string): Promise<DocumentRevision> {
     const ctx = this.tenant.get();
     return this.docControlService.startReviewDocument(ctx.tenantId, ctx.actorId, revId);
   }
 
   @Post('revisions/:revId/approve')
+  @Permissions('doccontrol.revision.approve')
   approveDocument(@Param('revId') revId: string, @Body() dto?: ApproveDocumentDto): Promise<DocumentRevision> {
     const ctx = this.tenant.get();
     return this.docControlService.approveDocument(ctx.tenantId, ctx.actorId, revId, dto?.comments);
   }
 
   @Post('revisions/:revId/reject')
+  @Permissions('doccontrol.revision.approve')
   rejectDocument(@Param('revId') revId: string, @Body() dto: RejectDocumentDto): Promise<DocumentRevision> {
     if (!dto?.reason?.trim()) throw new BadRequestException('a rejection reason is required');
     const ctx = this.tenant.get();
@@ -351,12 +372,14 @@ export class DocControlController {
   }
 
   @Post('revisions/:revId/issue')
+  @Permissions('doccontrol.revision.issue')
   issueDocument(@Param('revId') revId: string): Promise<DocumentRevision> {
     const ctx = this.tenant.get();
     return this.docControlService.issueDocument(ctx.tenantId, ctx.actorId, revId);
   }
 
   @Post('revisions/:revId/revise')
+  @Permissions('doccontrol.register.revise')
   reviseDocument(@Param('revId') revId: string, @Body() dto: ReviseDocumentDto): Promise<DocumentRevision> {
     if (!dto?.reason?.trim()) throw new BadRequestException('reason for the new revision is required');
     const ctx = this.tenant.get();

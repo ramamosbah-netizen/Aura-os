@@ -2,32 +2,32 @@
   {
     "file": "modules/doccontrol/src/doccontrol.service.ts",
     "method": "approveDocument",
-    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId)"
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.approve', rev.projectId)"
   },
   {
     "file": "modules/doccontrol/src/doccontrol.service.ts",
     "method": "createRevision",
-    "call": "this.assertDocPerm(actorId, source.tenantId, source.companyId, 'doccontrol.document.revise', source.projectId)"
+    "call": "this.assertDocPerm(actorId, source.tenantId, source.companyId, 'doccontrol.register.revise', source.projectId)"
   },
   {
     "file": "modules/doccontrol/src/doccontrol.service.ts",
     "method": "issueDocument",
-    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.issue', rev.projectId)"
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.issue', rev.projectId)"
   },
   {
     "file": "modules/doccontrol/src/doccontrol.service.ts",
     "method": "rejectDocument",
-    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId)"
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.approve', rev.projectId)"
   },
   {
     "file": "modules/doccontrol/src/doccontrol.service.ts",
     "method": "startReviewDocument",
-    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.review', rev.projectId)"
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.start-review', rev.projectId)"
   },
   {
     "file": "modules/doccontrol/src/doccontrol.service.ts",
     "method": "submitDocument",
-    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.submit', rev.projectId)"
+    "call": "this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.submit', rev.projectId)"
   },
   {
     "file": "modules/engineering/src/engineering.service.ts",
@@ -57,7 +57,7 @@
   {
     "file": "modules/engineering/src/engineering.service.ts",
     "method": "transmitDrawing",
-    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.transmit', drawing.projectId)"
+    "call": "this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.release', drawing.projectId)"
   },
   {
     "file": "modules/hse/src/hse.service.ts",

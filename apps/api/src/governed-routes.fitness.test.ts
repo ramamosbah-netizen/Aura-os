@@ -106,8 +106,34 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     // chosen from the next remediation, for the obvious reason that it is about to stop being true.
     // `hr.timesheet.approve` was one of these until wave A reached HR, and `hse.ptw.approve` until
     // wave B reached HSE. Both have been replaced in turn.
+    //
+    // WAVE C CHANGED HOW THIS IS DONE, and the reason is worth stating. `doccontrol.transmittal.send`
+    // was one of the three and is now governed, so under the old convention it would be swapped for
+    // another name by hand. But the other two — `site.daily-report.approve` and `quality.itp.close`
+    // — ARE WAVE D, which breaks the rule the paragraph above states: a canary is never chosen from
+    // the next remediation. A canary named after a finding dies when the finding is fixed, and the
+    // route audit's own self-check proved how that fails quietly: its three canaries had all been
+    // remediated, two of them renamed out of existence, so it printed a FALSE incompleteness warning
+    // under every measurement for three waves and nobody read the line any more.
+    //
+    // So the liveness proof is STRUCTURAL now, and cannot go stale: the scan must still return a
+    // large derived set (an empty or broken scan fails here rather than passing everything above),
+    // and names this programme has ALREADY governed must be ABSENT from it. The second half is the
+    // stronger assertion — it turns "the canary went quiet" from something a human has to notice
+    // into something the suite states, and it gets truer with every wave rather than staler.
     const derived = new Set((scanRoutes() as Array<{ derived: string }>).map((r) => r.derived));
-    for (const known of ['doccontrol.transmittal.send', 'site.daily-report.approve', 'quality.itp.close']) {
+    expect(derived.size, 'the scan returned almost nothing — it is broken, not the codebase fixed').toBeGreaterThan(400);
+    for (const governed of [
+      'doccontrol.transmittal.send', 'doccontrol.revision.issue', // wave C
+      'hse.ptw.approve',                                          // wave B
+      'hr.timesheet.approve', 'subcontracts.claim.certify',       // wave A
+      'crm.opportunity.approve',                                  // J1-07
+    ]) {
+      expect([...derived], `${governed} is GOVERNED — it must no longer be derived from a path`).not.toContain(governed);
+    }
+    // And three still in this state, chosen from modules with no wave in the current plan, so they
+    // are not about to stop being true.
+    for (const known of ['amc.work-order.cancel', 'fleet.maintenance.complete', 'inventory.serial.issue']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);
     }
   });

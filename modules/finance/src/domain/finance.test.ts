@@ -303,7 +303,15 @@ describe('Finance depth features', () => {
         title: 'Cables Supply PO',
         value: 1000,
       });
-      await poService.changeStatus(po.id, 'issued');
+      // THE GOVERNED PATH, not a generic status write. `changeStatus` was retired by J3-01 — issue,
+      // cancel and close each became their own act with their own authority — and it now throws
+      // unconditionally so a caller still pointing at it is told where each act went. This test was
+      // that caller, and had been red since, which is why a full `pnpm test` stopped short of
+      // apps/api entirely. Three-way matching is what is under test here, so the PO gets to `issued`
+      // the way a PO actually does.
+      await poService.submitForApproval(po.id);
+      await poService.approve(po.id, 3);
+      await poService.issue(po.id, 'u-buyer');
 
       // 2. Create Invoice referencing PO
       const invoice = await invoiceService.create({
@@ -368,7 +376,15 @@ describe('Finance depth features', () => {
         title: 'Cement Supply',
         value: 2000,
       });
-      await poService.changeStatus(po.id, 'issued');
+      // THE GOVERNED PATH, not a generic status write. `changeStatus` was retired by J3-01 — issue,
+      // cancel and close each became their own act with their own authority — and it now throws
+      // unconditionally so a caller still pointing at it is told where each act went. This test was
+      // that caller, and had been red since, which is why a full `pnpm test` stopped short of
+      // apps/api entirely. Three-way matching is what is under test here, so the PO gets to `issued`
+      // the way a PO actually does.
+      await poService.submitForApproval(po.id);
+      await poService.approve(po.id, 3);
+      await poService.issue(po.id, 'u-buyer');
 
       // Register GRN of 2500 (excess delivery)
       await grnService.create({

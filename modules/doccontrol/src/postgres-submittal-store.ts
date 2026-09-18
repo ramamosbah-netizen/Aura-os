@@ -12,16 +12,18 @@ export class PostgresSubmittalStore implements SubmittalStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_submittals (
-        id, tenant_id, company_id, project_id, project_name, reference, title, discipline, revision, status, review_code, review_comments, submitted_at, returned_at, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        id, tenant_id, company_id, project_id, project_name, reference, title, discipline, revision, status, review_code, review_comments, submitted_at, submitted_by, returned_at, returned_by, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       on conflict (id) do update set
         status = excluded.status,
         review_code = excluded.review_code,
         review_comments = excluded.review_comments,
         submitted_at = excluded.submitted_at,
+        submitted_by = excluded.submitted_by,
         returned_at = excluded.returned_at,
+        returned_by = excluded.returned_by,
         updated_at = excluded.updated_at`,
-      [s.id, s.tenantId, s.companyId, s.projectId, s.projectName, s.reference, s.title, s.discipline, s.revision, s.status, s.reviewCode, s.reviewComments, s.submittedAt, s.returnedAt, s.createdBy, s.createdAt, s.updatedAt],
+      [s.id, s.tenantId, s.companyId, s.projectId, s.projectName, s.reference, s.title, s.discipline, s.revision, s.status, s.reviewCode, s.reviewComments, s.submittedAt, s.submittedBy, s.returnedAt, s.returnedBy, s.createdBy, s.createdAt, s.updatedAt],
     );
   }
 
@@ -60,7 +62,9 @@ export class PostgresSubmittalStore implements SubmittalStore {
       reviewCode: row.review_code,
       reviewComments: row.review_comments || '',
       submittedAt: row.submitted_at ? row.submitted_at.toISOString() : null,
+      submittedBy: row.submitted_by ?? null,
       returnedAt: row.returned_at ? row.returned_at.toISOString() : null,
+      returnedBy: row.returned_by ?? null,
       createdBy: row.created_by,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),

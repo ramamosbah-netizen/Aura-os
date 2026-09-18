@@ -41,6 +41,18 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // another pattern being added.
   if (/\bmay not\b[^.]*\b(?:their|your) own\b/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
 
+  // 403 — SEPARATION OF DUTIES BETWEEN TWO DIFFERENT ACTS, which the shape above does not catch.
+  // "The person who APPROVED this revision may not ISSUE it" names no "own": the second act is not
+  // the person's own work, it is a second authority they must not also hold. The rule above was
+  // written for self-approval and predicted this — "deliberately a shape, not one message" — but its
+  // shape only fits a self-act, and Wave C's headline rule is not one. Without this branch, refusing
+  // the approver their own release returned 500: a correct, deliberate refusal reported to the
+  // caller as a server fault, which is how a working control looks like a broken system.
+  if (/\bthe person who\b[^.]*\bmay not\b/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
+  // 403 — the same question asked of a ROUTE rather than a person: this path is not the one that
+  // holds the authority for this act. `releaseInternally` refuses an external conveyance here.
+  if (/\bmay not be (?:released|issued|conveyed|sent)\b/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
+
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
   if (

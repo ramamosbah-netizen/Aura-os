@@ -83,6 +83,14 @@ function demandedPermissions(): Map<string, Set<string>> {
         for (const lit of m[1].matchAll(/'([^']+)'/g)) add(lit[1], file);
       }
       for (const m of src.matchAll(/permission:\s*'([^']+)'/g)) add(m[1], file);
+      // A PERMISSION PASSED POSITIONALLY TO AN ASSERT HELPER. This third shape is how six
+      // `doccontrol.document.*` names stayed invisible to this very test while the service refused
+      // every non-admin who reached them: `assertDocPerm(actorId, tenantId, companyId,
+      // 'doccontrol.document.submit', projectId)` names a permission in an argument list, not in a
+      // decorator and not behind a `permission:` key. Matching any dotted, lower-case, wildcard-free
+      // literal inside a call whose name starts with `assert` keeps this narrow enough to avoid
+      // sweeping up unrelated strings, and wide enough that the next helper of this shape is seen.
+      for (const m of src.matchAll(/\bassert\w*\([^)]*?'([a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*)+)'/g)) add(m[1], file);
     }
   }
   return found;
@@ -96,7 +104,10 @@ describe('permission vocabulary — nothing the code demands belongs to nobody',
     // A scan that quietly stopped matching would pass every assertion below by finding nothing.
     const demanded = demandedPermissions();
     expect(demanded.size).toBeGreaterThan(100);
-    for (const known of ['finance.invoice.approve', 'procurement.rfq.award', 'subcontracts.claim.certify']) {
+    for (const known of ['finance.invoice.approve', 'procurement.rfq.award', 'subcontracts.claim.certify',
+      // The positional shape. If this one stops being found, the hole that hid the whole
+      // document-approval lifecycle from this guard has reopened.
+      'engineering.drawing.release']) {
       expect([...demanded.keys()], `${known} must be found — if it is not, this guard is blind`).toContain(known);
     }
   });

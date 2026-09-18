@@ -12,8 +12,8 @@ export class PostgresTransmittalStore implements TransmittalStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_transmittals (
-        id, tenant_id, company_id, code, title, project_id, project_name, sender, recipient, purpose, status, owner_id, created_by, created_at, updated_at, sent_at, received_at, acknowledged_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        id, tenant_id, company_id, code, title, project_id, project_name, sender, recipient, purpose, status, owner_id, created_by, created_at, updated_at, sent_at, received_at, acknowledged_at, sent_by, kind
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       on conflict (id) do update set
         company_id = excluded.company_id,
         code = excluded.code,
@@ -28,7 +28,9 @@ export class PostgresTransmittalStore implements TransmittalStore {
         updated_at = excluded.updated_at,
         sent_at = excluded.sent_at,
         received_at = excluded.received_at,
-        acknowledged_at = excluded.acknowledged_at`,
+        acknowledged_at = excluded.acknowledged_at,
+        sent_by = excluded.sent_by,
+        kind = excluded.kind`,
       [
         transmittal.id,
         transmittal.tenantId,
@@ -48,6 +50,8 @@ export class PostgresTransmittalStore implements TransmittalStore {
         transmittal.sentAt,
         transmittal.receivedAt,
         transmittal.acknowledgedAt,
+        transmittal.sentBy,
+        transmittal.kind,
       ],
     );
   }
@@ -95,6 +99,8 @@ export class PostgresTransmittalStore implements TransmittalStore {
       recipient: row.recipient,
       purpose: row.purpose,
       status: row.status,
+      sentBy: row.sent_by ?? null,
+      kind: (row.kind as Transmittal['kind']) ?? null,
       sentAt: row.sent_at ? new Date(row.sent_at).toISOString() : null,
       receivedAt: row.received_at ? new Date(row.received_at).toISOString() : null,
       acknowledgedAt: row.acknowledged_at ? new Date(row.acknowledged_at).toISOString() : null,

@@ -273,7 +273,12 @@ const GOVERNING = GOVERNING_VERB;
 const governing = [...byName.entries()].filter(([n]) => GOVERNING.test(n)).sort((a, b) => b[1].length - a[1].length);
 const rest = [...byName.entries()].filter(([n]) => !GOVERNING.test(n)).sort((a, b) => b[1].length - a[1].length);
 
-console.log(`   ${governing.length} of those names are GOVERNING VERBS -- approve, release, award, issue,`);
+// BOTH UNITS, because they are not the same and had quietly diverged. This line printed the NAME
+// count while `governed-routes.fitness.test.ts` compares its allowlist against the ROUTE count, and
+// one name can be reached by several routes (`crm.opportunity.freeze` by three). Reporting one
+// number as if it were the other is how a wave's progress gets misstated by two.
+const governingRoutes = governing.reduce((n, [, rs]) => n + rs.length, 0);
+console.log(`   ${governing.length} of those names are GOVERNING VERBS, on ${governingRoutes} routes -- approve, release, award, issue,`);
 console.log(`   cancel, sign, certify and the like. THESE COME FIRST:\n`);
 for (const [permission, hits] of governing) {
   console.log(`   ${permission}`);
@@ -296,17 +301,46 @@ console.log('\n   mutating routes by module:');
 for (const [m, n] of Object.entries(modules).sort((a, b) => b[1] - a[1])) console.log(`       ${m.padEnd(22)} ${n}`);
 
 /**
- * THE THREE KNOWN CASES, asserted. If this audit cannot find the findings that motivated it, its
- * silence about everything else means nothing.
+ * SELF-CHECK: IS THE SCAN STILL LOOKING?
+ *
+ * This began as "the three findings that motivated the audit must appear in the ungoverned list" —
+ * `procurement.rfq.quotes`, `crm.opportunity.scopes`, `crm.opportunity.approve`. If the scan could
+ * not see THEM, its silence about everything else meant nothing.
+ *
+ * ALL THREE HAVE BEEN REMEDIATED, and two of them no longer exist as names at all: J1-07 did not
+ * merely declare the derived names, it replaced them with the vocabulary the ROLES already spoke
+ * (`crm.scope.create`, `crm.scope.approve`). So the old canary failed on every run and printed "the
+ * count above is a floor and not a total" — a FALSE warning under every measurement, which is worse
+ * than none, because it teaches the reader to skip the line where a real one would appear.
+ *
+ * A canary named after a finding dies when the finding is fixed. This one is STRUCTURAL instead: for
+ * each controller that held a founding case, every HTTP route in the file must be accounted for —
+ * either it derives (and is in `rows`) or it declares (`@Permissions`) or it is a tombstone. If the
+ * parser starts skipping routes, that sum stops adding up, and it does so whether or not anybody has
+ * fixed anything. It cannot go stale, because it is about the scanner, not about the findings.
  */
-const known = ['procurement.rfq.quotes', 'crm.opportunity.scopes', 'crm.opportunity.approve'];
-const missed = known.filter((k) => !byPermission.has(k));
+const FOUNDING = ['crm/pre-award.controller.ts', 'procurement/procurement.controller.ts'];
+const problems = [];
+for (const file of controllers(API_SRC)) {
+  const rel = file.replace(repo, '').replace(/\\/g, '/');
+  if (!FOUNDING.some((f) => rel.endsWith(f))) continue;
+  const src = readFileSync(file, 'utf8');
+  const total = [...src.matchAll(/@(Get|Post|Put|Patch|Delete)\(/g)].length;
+  const declaredHere = [...src.matchAll(/@Permissions\(/g)].length;
+  const tombstones = [...src.matchAll(/\)\s*:\s*never\s*\{/g)].length;
+  const derivedHere = rows.filter((r) => r.file.endsWith(rel)).length;
+  if (total === 0) problems.push(`${rel}: the scan found NO routes in it at all`);
+  else if (derivedHere + declaredHere + tombstones < total) {
+    problems.push(`${rel}: ${total} routes, but only ${derivedHere} derived + ${declaredHere} declared + ${tombstones} tombstoned are accounted for`);
+  }
+}
 console.log('');
-if (missed.length === 0) {
-  console.log('   ✓ self-check: all three known findings appear in this list, so its silence elsewhere means something.');
+if (problems.length === 0) {
+  console.log('   ✓ self-check: every route in the founding controllers is accounted for — derived, declared');
+  console.log('     or tombstoned — so the parser is not skipping routes and the silence above means something.');
 } else {
-  console.log(`   ✗ self-check FAILED: ${missed.join(', ')} not found — the scan is missing routes,`);
-  console.log('     so the count above is a floor and not a total.');
+  for (const p of problems) console.log(`   ✗ self-check FAILED: ${p}`);
+  console.log('     The scan is missing routes, so the count above is a floor, not a total.');
   process.exitCode = 1;
 }
 console.log('');

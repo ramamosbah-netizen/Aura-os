@@ -27,7 +27,11 @@ export interface Submittal {
   reviewCode: ReviewCode | null;
   reviewComments: string;
   submittedAt: string | null;
+  /** Who sent it to the consultant. The row kept the timestamp and no actor. */
+  submittedBy: string | null;
   returnedAt: string | null;
+  /** Who recorded the consultant's decision. A review code arrived from nobody. */
+  returnedBy: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -67,25 +71,44 @@ export function makeSubmittal(input: NewSubmittal): Submittal {
     reviewCode: null,
     reviewComments: '',
     submittedAt: null,
+    submittedBy: null,
     returnedAt: null,
+    returnedBy: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,
   };
 }
 
-export function submitForReview(s: Submittal): Submittal {
+/** draft → submitted. Records WHO sent it out; the act used to record only when. */
+export function submitForReview(s: Submittal, submittedBy: string | null): Submittal {
   if (s.status !== 'draft') throw new Error(`cannot submit from status ${s.status}`);
   const now = new Date().toISOString();
-  return { ...s, status: 'submitted', submittedAt: now, updatedAt: now };
+  return { ...s, status: 'submitted', submittedAt: now, submittedBy, updatedAt: now };
 }
 
-/** Consultant returns the submittal with a review code (A–D) and optional comments. */
-export function returnWithCode(s: Submittal, reviewCode: ReviewCode, reviewComments?: string): Submittal {
+/**
+ * Consultant returns the submittal with a review code (A–D) and optional comments.
+ *
+ * THE TRAILING ARGUMENTS ARE AN OPTIONS OBJECT ON PURPOSE. The actor and the comments are both
+ * `string`, so adding the actor as a third positional parameter would have let every existing
+ * `returnWithCode(s, 'B', 'looks fine')` call keep compiling while silently filing the comment text
+ * as the person who recorded the decision. That exact substitution shipped once this month in
+ * `reimburseClaim` and TypeScript could not see it. A named field cannot be passed by accident.
+ */
+export function returnWithCode(
+  s: Submittal,
+  reviewCode: ReviewCode,
+  opts: { returnedBy: string | null; comments?: string },
+): Submittal {
   if (s.status !== 'submitted') throw new Error(`cannot return from status ${s.status} — must be submitted first`);
   if (!['A', 'B', 'C', 'D'].includes(reviewCode)) throw new Error('reviewCode must be A, B, C, or D');
   const now = new Date().toISOString();
-  return { ...s, status: 'returned', reviewCode, reviewComments: reviewComments?.trim() || '', returnedAt: now, updatedAt: now };
+  return {
+    ...s, status: 'returned', reviewCode,
+    reviewComments: opts.comments?.trim() || '',
+    returnedAt: now, returnedBy: opts.returnedBy, updatedAt: now,
+  };
 }
 
 /** True when the returned code requires a resubmission (C = revise & resubmit, D = rejected). */
@@ -105,10 +128,22 @@ export function reviseSubmittal(s: Submittal): Submittal {
     reviewCode: null,
     reviewComments: '',
     submittedAt: null,
+    submittedBy: null,
     returnedAt: null,
+    returnedBy: null,
     createdAt: now,
     updatedAt: now,
   };
+}
+
+/**
+ * Whether this submittal's two acts were performed by two different people, for the same reason the
+ * revision carries `revisionSeparation`: a status says a thing happened, never who made it happen.
+ * `null` = the pair has not both occurred yet, so there is nothing to judge.
+ */
+export function submittalProvenance(s: Submittal): 'recorded' | 'incomplete' | null {
+  if (s.status !== 'returned') return s.status === 'submitted' ? (s.submittedBy ? 'recorded' : 'incomplete') : null;
+  return s.submittedBy && s.returnedBy ? 'recorded' : 'incomplete';
 }
 
 export const SUBMITTAL_EVENT = {

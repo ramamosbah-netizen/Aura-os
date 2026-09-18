@@ -13,6 +13,23 @@ import { ProjectResponsibilityService } from '@aura/projects';
  * decoupled (ADR-0004: cross-context coordination in the app layer) while the engineer sees the
  * transmittal on the drawing's Transmittals tab.
  *
+ * THIS IS AN INTERNAL RELEASE, AND IT IS NOW MARKED AS ONE.
+ *
+ * The recipients are platform `userId`s — the Site Engineer, Project Engineer and Buyer who take an
+ * `engineering_release` responsibility for the drawing. Nothing leaves the business here. But the
+ * record it produced was indistinguishable from a conveyance to the client: the same Transmittal,
+ * marked `sent`, created with no actor and sent by nobody, by an engineer holding no document-control
+ * permission at all. Read back from the register afterwards, there was nothing to tell the two apart.
+ *
+ * Two things fix that, and neither of them takes the handoff away from engineering:
+ *   • `kind: 'internal_release'` — unreachable from any request body, so this path CANNOT produce an
+ *     external conveyance even if someone asks it to.
+ *   • the engineer is recorded as creator and releaser. `engineering.drawing.transmit` was already
+ *     asserted upstream; what was missing was not authority, it was the signature.
+ *
+ * Issuing a controlled document OUTSIDE the business remains `doccontrol.revision.issue`, held by the
+ * Document Controller, and no part of this path reaches it.
+ *
  * Idempotent: the transmittal code is derived from the drawing id + revision, so an at-least-once
  * re-delivery never creates a second transmittal for the same transmitted revision.
  */
@@ -62,7 +79,11 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
           sender: 'Engineering',
           recipient: p.recipient ?? undefined,
           purpose: p.purpose ?? undefined,
-          // System-initiated conveyance: no createdBy → no cross-module permission coupling.
+          kind: 'internal_release',
+          // The engineer who released the drawing. An internal release asserts no document-control
+          // permission (see `createTransmittal`), so naming them costs nothing and buys the record
+          // an author — which is exactly the trade the old `no createdBy` comment got backwards.
+          createdBy: e.actorId ?? undefined,
         });
       }
 
@@ -85,7 +106,11 @@ export class DrawingTransmittalSubscriber implements OnModuleInit {
             if (!/already a recipient/i.test((error as Error).message)) throw error;
           }
         }
-        transmittal = await this.doccontrol.sendTransmittal(e.tenantId, null, transmittal.id);
+        // Released BY THE ENGINEER, not by nobody. This used to call `sendTransmittal(…, null, …)`:
+        // the null both skipped the permission check and emptied `sent_by`, so the way the engineer
+        // got past a guard they should not have to satisfy was by not saying who they were.
+        // `releaseInternally` refuses anything that is not an internal release, and records them.
+        transmittal = await this.doccontrol.releaseInternally(e.tenantId, e.actorId ?? null, transmittal.id);
       }
 
       // Link on every delivery, including a replay that found the conveyance already present.

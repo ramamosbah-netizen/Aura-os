@@ -8,6 +8,9 @@ import {
   sendTransmittal,
   receiveTransmittal,
   acknowledgeTransmittal as ackTransmittalDomain,
+  isConveyed,
+  isExternalConveyance,
+  type TransmittalKind,
 } from './domain/transmittal';
 import { makeTransmittalAcknowledgement, type TransmittalAcknowledgement } from './domain/transmittal-acknowledgement';
 import {
@@ -35,7 +38,9 @@ import {
 } from './domain/document-revision';
 import { DOCUMENT_REVISION_STORE, type DocumentRevisionStore } from './store.interface';
 
-import { type Correspondence, makeCorrespondence } from './domain/correspondence';
+import { type Correspondence, makeCorrespondence,
+  closeCorrespondence,
+} from './domain/correspondence';
 import { CORRESPONDENCE_STORE, type CorrespondenceStore } from './store.interface';
 
 import { type Submittal, type ReviewCode, makeSubmittal, submitForReview, returnWithCode } from './domain/submittal';
@@ -100,9 +105,25 @@ export class DocControlService {
     recipient?: string;
     purpose?: string;
     createdBy?: string;
+    /** See {@link TransmittalKind}. Omitted — and unreachable from any request body — means external. */
+    kind?: TransmittalKind;
   }): Promise<Transmittal> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
-    if (input.createdBy) {
+    // WHICH PERMISSION APPLIES NOW DEPENDS ON WHAT KIND OF CONVEYANCE THIS IS, not on whether an
+    // actor happened to be supplied.
+    //
+    // The old test was `if (input.createdBy)`, and the engineering reactor passed none — commented
+    // at the call site as "system-initiated conveyance: no createdBy → no cross-module permission
+    // coupling". Declining to name the actor was therefore the very thing that skipped the check,
+    // and the resulting transmittal recorded nobody. Two defects wearing one line of code.
+    //
+    // An INTERNAL RELEASE still requires no document-control permission, and that is correct rather
+    // than a concession: `engineering.drawing.transmit` was already asserted upstream, and an
+    // engineer handing an approved drawing to the site team is not exercising release authority.
+    // What changes is that the actor is now RECORDED either way. Skipping a permission check is not
+    // a reason to forget who acted.
+    const external = (input.kind ?? 'external') === 'external';
+    if (input.createdBy && external) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
       const target: AccessTarget = { permission: 'doccontrol.transmittal.create', orgPath, resource: { type: 'project', id: input.projectId } };
@@ -134,18 +155,28 @@ export class DocControlService {
     tenantId: Id,
     actorId: Id | null,
     id: Id,
-    apply: (t: Transmittal) => Transmittal,
-    permission: string,
+    // TAKES THE ACTOR. It used to be `(t: Transmittal) => Transmittal`, so `sendTransmittal`'s
+    // `sentBy` parameter fell back to its default and every send through the service recorded null
+    // — the actor was checked for permission and then dropped on the floor. A guard that knows who
+    // is acting and a record that does not is the shape of this whole finding in miniature.
+    apply: (t: Transmittal, actorId: Id | null) => Transmittal,
+    /**
+     * `null` means the authority for this act was established somewhere else and the caller has said
+     * so deliberately. Exactly one caller does — {@link releaseInternally}, which checks that the
+     * conveyance is an internal engineering release before it gets here. It is NOT a way to make a
+     * permission optional; an unnamed permission with no such check is a bug.
+     */
+    permission: string | null,
     eventType: string,
   ): Promise<Transmittal> {
     const transmittal = await this.transmittalStore.findById(id, tenantId);
     if (!transmittal) throw new Error(`Transmittal with ID ${id} not found`);
-    if (actorId) {
+    if (actorId && permission) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (transmittal.companyId) orgPath.push({ level: 'company', id: transmittal.companyId });
       this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: transmittal.projectId } });
     }
-    const updated = apply(transmittal); // enforces the transition (throws 409 on illegal)
+    const updated = apply(transmittal, actorId); // enforces the transition (throws 409 on illegal)
     const event = makeEvent({
       type: eventType,
       tenantId, companyId: transmittal.companyId, actorId,
@@ -163,6 +194,34 @@ export class DocControlService {
   /** draft → sent. */
   sendTransmittal(tenantId: Id, actorId: Id | null, id: Id): Promise<Transmittal> {
     return this.transitionTransmittal(tenantId, actorId, id, sendTransmittal, 'doccontrol.transmittal.send', DOCCONTROL_EVENT.transmittalSent);
+  }
+
+  /**
+   * draft → sent FOR AN INTERNAL ENGINEERING RELEASE ONLY, and it verifies that before proceeding.
+   *
+   * The engineering reactor releases an approved drawing to the site team. That team's authority is
+   * `engineering.drawing.transmit`, asserted upstream on the drawing itself; none of them holds
+   * `doccontrol.transmittal.send`, and they should not — sending a conveyance OUT OF THE BUSINESS is
+   * the Document Controller's act.
+   *
+   * The reactor used to square that circle by passing `actorId: null`, which skipped the guard and
+   * left the conveyance released by nobody. This does the opposite: it refuses outright unless the
+   * transmittal is an internal release, and RECORDS the engineer either way. An external conveyance
+   * arriving here gets no special treatment — it is sent through `sendTransmittal` by someone who
+   * holds the permission, or not at all.
+   */
+  async releaseInternally(tenantId: Id, actorId: Id | null, id: Id): Promise<Transmittal> {
+    const transmittal = await this.transmittalStore.findById(id, tenantId);
+    if (!transmittal) throw new Error(`Transmittal with ID ${id} not found`);
+    if (isExternalConveyance(transmittal)) {
+      // No HTTP route reaches this method — the engineering reactor is its only caller — so this is
+      // an internal invariant rather than a response the API shapes. It is stated as a refusal, not
+      // an assertion, because a future second caller should be told why it was turned away.
+      throw new Error(
+        `${transmittal.code} is an external conveyance and may not be released by the engineering handoff — sending a document outside the business is document control's act`,
+      );
+    }
+    return this.transitionTransmittal(tenantId, actorId, id, sendTransmittal, null, DOCCONTROL_EVENT.transmittalSent);
   }
 
   /** sent → received. */
@@ -305,13 +364,23 @@ export class DocControlService {
   ): Promise<TransmittalItem[]> {
     const transmittal = await this.transmittalStore.findById(transmittalId, tenantId);
     if (!transmittal) throw new Error(`Transmittal with ID ${transmittalId} not found`);
+    // WHAT WAS CONVEYED CANNOT CHANGE AFTER THE CONVEYANCE. Recipients were already frozen at `sent`
+    // and items were not, so the distribution list could not move while the document list could —
+    // measured, 201 on attaching a document to an already-sent transmittal. The argument the
+    // recipient path makes about itself applies here more directly: a correction is a NEW
+    // transmittal superseding this one, never an edit to the record of what already went out.
+    if (isConveyed(transmittal)) {
+      throw new Error(
+        `documents can only be attached to a draft transmittal; ${transmittal.code} is already ${transmittal.status} — issue a new transmittal rather than changing what was conveyed`,
+      );
+    }
 
     const created: TransmittalItem[] = [];
     for (const input of items) {
       const entry = await this.registerStore.findById(input.registerEntryId, tenantId);
       if (!entry) throw new Error(`register entry ${input.registerEntryId} not found`);
       if (entry.projectId !== transmittal.projectId) {
-        throw new Error(`register entry ${entry.documentNumber} belongs to another project`);
+        throw new Error(`register entry ${entry.documentNumber} belongs to another project and cannot be attached to this transmittal`);
       }
       created.push(
         makeTransmittalItem({
@@ -414,7 +483,7 @@ export class DocControlService {
     return correspondence;
   }
 
-  async closeCorrespondence(tenantId: Id, actorId: Id | null, id: Id): Promise<Correspondence> {
+  async closeCorrespondence(tenantId: Id, actorId: Id | null, id: Id, reason?: string | null): Promise<Correspondence> {
     const correspondence = await this.correspondenceStore.findById(id, tenantId);
     if (!correspondence) throw new Error(`Correspondence with ID ${id} not found`);
 
@@ -424,8 +493,8 @@ export class DocControlService {
       this.access.assert(actorId, { permission: 'doccontrol.correspondence.close', orgPath, resource: { type: 'project', id: correspondence.projectId } });
     }
 
-    correspondence.status = 'closed';
-    correspondence.updatedAt = new Date().toISOString();
+    const closed = closeCorrespondence(correspondence, actorId ?? null, reason);
+    Object.assign(correspondence, closed);
 
     await this.tx.run(async (handle) => {
       await this.correspondenceStore.save(correspondence, handle);
@@ -470,13 +539,13 @@ export class DocControlService {
     return submittal;
   }
 
-  async submitSubmittal(tenantId: Id, id: Id): Promise<Submittal> {
+  async submitSubmittal(tenantId: Id, actorId: Id | null, id: Id): Promise<Submittal> {
     const found = await this.submittalStore.findById(id, tenantId);
     if (!found) throw new Error(`submittal ${id} not found`);
-    const updated = submitForReview(found);
+    const updated = submitForReview(found, actorId);
     const event = makeEvent({
       type: DOCCONTROL_EVENT.submittalSubmitted,
-      tenantId, companyId: found.companyId, actorId: null,
+      tenantId, companyId: found.companyId, actorId,
       aggregateType: 'doccontrol.submittal', aggregateId: id,
       payload: { reference: found.reference, revision: found.revision, projectId: found.projectId },
     });
@@ -487,13 +556,13 @@ export class DocControlService {
     return updated;
   }
 
-  async returnSubmittal(tenantId: Id, id: Id, reviewCode: ReviewCode, reviewComments?: string): Promise<Submittal> {
+  async returnSubmittal(tenantId: Id, actorId: Id | null, id: Id, reviewCode: ReviewCode, reviewComments?: string): Promise<Submittal> {
     const found = await this.submittalStore.findById(id, tenantId);
     if (!found) throw new Error(`submittal ${id} not found`);
-    const updated = returnWithCode(found, reviewCode, reviewComments);
+    const updated = returnWithCode(found, reviewCode, { returnedBy: actorId, comments: reviewComments });
     const event = makeEvent({
       type: DOCCONTROL_EVENT.submittalReturned,
-      tenantId, companyId: found.companyId, actorId: null,
+      tenantId, companyId: found.companyId, actorId,
       aggregateType: 'doccontrol.submittal', aggregateId: id,
       payload: { reference: found.reference, reviewCode, revision: found.revision },
     });
@@ -559,6 +628,31 @@ export class DocControlService {
     return rev;
   }
 
+  /**
+   * ONE ACT, ONE NAME. These assertions used to demand a `doccontrol.document.*` vocabulary while the
+   * routes above them declared `doccontrol.revision.*` — two names for the same five acts, and NO
+   * SHIPPED ROLE HELD EITHER HALF of the service's set. Measured live against the running API with
+   * every permission of this wave already in place:
+   *
+   *   403  POST doccontrol/revisions/:id/submit        as r-technical-engineer (holds .revision.submit)
+   *   403  POST doccontrol/revisions/:id/start-review  as r-technical-manager  (holds .revision.start-review)
+   *   403  POST doccontrol/revisions/:id/issue         as r-document-controller (holds .revision.issue)
+   *
+   * The guard let them through and the service refused them, so the whole approval lifecycle was
+   * reachable by an administrator and nobody else — which is exactly the state this wave existed to
+   * end, hiding one layer below where it was being fixed.
+   *
+   * This is the SIXTH time enumeration has dropped a service-asserted name (finance.invoice.approve,
+   * procurement.pr.create, procurement.rfq.award, contracts.ipc.certify, hse.capa.raise, and now
+   * these). The permission-vocabulary fitness test was written after the third to catch exactly this
+   * and did not, because it scans decorator arguments and permission-keyed object fields, and these are
+   * POSITIONAL arguments to a helper. That hole is closed in the same commit; a guard that misses the
+   * thing it was built for is worse than no guard, because it is also a reassurance.
+   *
+   * Aligned rather than listed: unlike `doccontrol.transmittal.update`, which is a second name a role
+   * genuinely holds, `doccontrol.document.*` was held by NOBODY, so renaming it can remove no one's
+   * access.
+   */
   private assertDocPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string, projectId: Id): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
@@ -583,28 +677,28 @@ export class DocControlService {
   /** draft → submitted. */
   async submitDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.submit', rev.projectId);
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.submit', rev.projectId);
     return this.saveRevisionWithEvent(submitDocument(rev, actorId), actorId, DOCCONTROL_EVENT.documentSubmitted);
   }
 
   /** submitted → under_review. */
   async startReviewDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.review', rev.projectId);
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.start-review', rev.projectId);
     return this.saveRevisionWithEvent(startReviewDocument(rev, actorId), actorId, DOCCONTROL_EVENT.documentReviewStarted);
   }
 
   /** under_review → approved. */
   async approveDocument(tenantId: Id, actorId: Id | null, revisionId: Id, comments?: string): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId);
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.approve', rev.projectId);
     return this.saveRevisionWithEvent(approveDocument(rev, actorId, comments), actorId, DOCCONTROL_EVENT.documentApproved);
   }
 
   /** under_review → rejected. Reason is mandatory. */
   async rejectDocument(tenantId: Id, actorId: Id | null, revisionId: Id, reason: string): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.approve', rev.projectId);
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.approve', rev.projectId);
     return this.saveRevisionWithEvent(rejectDocument(rev, actorId, reason), actorId, DOCCONTROL_EVENT.documentRejected);
   }
 
@@ -614,7 +708,7 @@ export class DocControlService {
    */
   async issueDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.document.issue', rev.projectId);
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.issue', rev.projectId);
     const issued = issueDocument(rev, actorId);
 
     const entry = await this.registerStore.findById(rev.registerEntryId, tenantId);
@@ -645,7 +739,7 @@ export class DocControlService {
   /** Raise the next revision (draft) of a rejected/issued document. The source stays immutable. */
   async createRevision(tenantId: Id, actorId: Id | null, revisionId: Id, reason: string, revision?: string): Promise<DocumentRevision> {
     const source = await this.loadRevision(tenantId, revisionId);
-    this.assertDocPerm(actorId, source.tenantId, source.companyId, 'doccontrol.document.revise', source.projectId);
+    this.assertDocPerm(actorId, source.tenantId, source.companyId, 'doccontrol.register.revise', source.projectId);
     const next = createNextRevision(source, { reason, revision, actorId });
     return this.saveRevisionWithEvent(next, actorId, DOCCONTROL_EVENT.documentRevised);
   }

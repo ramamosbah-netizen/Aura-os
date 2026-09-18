@@ -12,8 +12,8 @@ export class PostgresCorrespondenceStore implements CorrespondenceStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_correspondence (
-        id, tenant_id, company_id, code, subject, project_id, project_name, direction, sender, recipient, status, owner_id, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        id, tenant_id, company_id, code, subject, project_id, project_name, direction, sender, recipient, status, owner_id, created_by, created_at, updated_at, closed_by, closed_at, close_reason
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       on conflict (id) do update set
         company_id = excluded.company_id,
         code = excluded.code,
@@ -25,7 +25,10 @@ export class PostgresCorrespondenceStore implements CorrespondenceStore {
         recipient = excluded.recipient,
         status = excluded.status,
         owner_id = excluded.owner_id,
-        updated_at = excluded.updated_at`,
+        updated_at = excluded.updated_at,
+        closed_by = excluded.closed_by,
+        closed_at = excluded.closed_at,
+        close_reason = excluded.close_reason`,
       [
         correspondence.id,
         correspondence.tenantId,
@@ -42,6 +45,9 @@ export class PostgresCorrespondenceStore implements CorrespondenceStore {
         correspondence.createdBy,
         correspondence.createdAt,
         correspondence.updatedAt,
+        correspondence.closedBy,
+        correspondence.closedAt,
+        correspondence.closeReason,
       ],
     );
   }
@@ -90,6 +96,9 @@ export class PostgresCorrespondenceStore implements CorrespondenceStore {
       recipient: row.recipient,
       status: row.status,
       ownerId: row.owner_id,
+      closedBy: row.closed_by ?? null,
+      closedAt: row.closed_at ? new Date(row.closed_at).toISOString() : null,
+      closeReason: row.close_reason ?? null,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),

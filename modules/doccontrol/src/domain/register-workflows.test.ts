@@ -66,10 +66,10 @@ describe('Drawing register (service workflow)', () => {
     });
     expect(submittal.status).toBe('draft');
 
-    const submitted = await svc.submitSubmittal('t1', submittal.id);
+    const submitted = await svc.submitSubmittal('t1', 'u-dc', submittal.id);
     expect(submitted.status).toBe('submitted');
 
-    const returned = await svc.returnSubmittal('t1', submittal.id, 'B', 'Approved with comments — resubmit shop dwgs');
+    const returned = await svc.returnSubmittal('t1', 'u-dc', submittal.id, 'B', 'Approved with comments — resubmit shop dwgs');
     expect(returned.reviewCode).toBe('B');
     expect(returned.reviewComments).toContain('resubmit');
   });

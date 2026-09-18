@@ -71,7 +71,19 @@ class ReviseDrawingDto {
 class TransmitDrawingDto {
   @IsOptional() @IsString() recipient?: string;
   @IsOptional() @IsString() purpose?: string;
-  @IsOptional() @IsString() transmittalRef?: string;
+  /**
+   * `transmittalRef` USED TO BE ACCEPTED HERE AND IS NOT ANY MORE.
+   *
+   * The field means "the doccontrol transmittal that conveyed this revision", and it is written by
+   * the transmittal reactor from a transmittal that document control actually sent
+   * (apps/api/src/events/drawing-transmittal-subscriber.ts). Taking it from the request let an
+   * engineering release CLAIM a conveyance nobody performed — a reference to a transmittal that need
+   * not exist, on a record that then reads as though the document had gone out.
+   *
+   * This route is an INTERNAL HANDOFF: engineering releases an approved drawing to named platform
+   * recipients who take an `engineering_release` responsibility for it. Nothing leaves the business
+   * through here. The one path out is doccontrol's transmittal, held by the Document Controller.
+   */
   @IsOptional() @IsString() responsibilityId?: string;
   /**
    * The people this release is addressed to, by platform account and receiving capacity (ENG-06).
@@ -220,6 +232,12 @@ export class EngineeringController {
   }
 
   @Post('drawings/:id/transmit')
+  // DECLARED, because the authority was renamed. The guard DERIVES `engineering.drawing.transmit`
+  // from this path, and the service asserts `engineering.drawing.release` — the honest name for an
+  // internal handoff. Leaving the route to derive would recreate, in engineering, the exact defect
+  // this wave just removed from document control: two names for one act, with the guard admitting
+  // the caller and the service refusing them.
+  @Permissions('engineering.drawing.release')
   async transmitDrawing(@Param('id') id: string, @Body() dto: TransmitDrawingDto): Promise<Drawing> {
     if (!dto?.recipient?.trim()) throw new BadRequestException('recipient is required');
     if (!dto?.purpose?.trim()) throw new BadRequestException('purpose is required');
@@ -243,7 +261,6 @@ export class EngineeringController {
     return this.engineeringService.transmitDrawing(ctx.tenantId, ctx.actorId, id, {
       recipient: dto?.recipient,
       purpose: dto?.purpose,
-      transmittalRef: dto?.transmittalRef,
       responsibilityId: dto?.responsibilityId, recipients: dto?.recipients ?? []});
   }
 

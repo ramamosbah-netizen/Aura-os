@@ -19,12 +19,14 @@ const can = (roleId: string, method: string, ctrl: string, handler = ''): boolea
 describe('ELV role matrix — shape', () => {
   it('seeds the complete ELV/MEP operating roles with canonical unique ids', () => {
     const ids = ELV_ROLE_MATRIX.map((r) => r.id);
-    // 25: r-finance-controller (the books), then r-hr and r-hr-manager. HR had NO role at all —
-    // payroll, expense claims, staff advances and timesheets were reachable only by an admin.
-    expect(ids).toHaveLength(25);
+    // 26: r-finance-controller (the books), r-hr and r-hr-manager, then r-document-controller.
+    // Three of the four exist because the department had NO role at all — payroll, expense claims,
+    // staff advances, timesheets and the whole document register were reachable only by an admin.
+    expect(ids).toHaveLength(26);
     expect(ids).toContain('r-finance-controller');
     expect(ids).toContain('r-hr');
     expect(ids).toContain('r-hr-manager');
+    expect(ids).toContain('r-document-controller');
     expect(new Set(ids).size).toBe(ids.length);
     expect(ids.every((id) => id.startsWith('r-'))).toBe(true);
   });

@@ -15,6 +15,13 @@ import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 
 const mockTx: TxRunner = { run: (fn) => fn(null) };
 
+/**
+ * The Document Controller is a REAL SEEDED ROLE here, not a permissive stub. These tests used to
+ * close correspondence as `null`, which skipped the guard entirely — so naming an actor is what made
+ * `doccontrol.correspondence.close` start being checked at all.
+ */
+const DC = 'u-document-controller';
+
 function build(): { svc: DocControlService; emitted: Array<{ type: string; payload: Record<string, unknown> }> } {
   const emitted: Array<{ type: string; payload: Record<string, unknown> }> = [];
   const events = {
@@ -23,6 +30,9 @@ function build(): { svc: DocControlService; emitted: Array<{ type: string; paylo
       return evts;
     },
   } as unknown as EventStore;
+  const access = new AccessService(null); // no pool → in-memory grants
+  access.seedStandardRoles();
+  access.grant({ userId: DC, roleId: 'r-document-controller', scope: { kind: 'org', level: 'tenant', id: 't1' } });
   const svc = new DocControlService(
     new InMemoryTransmittalStore(),
     new InMemoryTransmittalItemStore(), new InMemoryTransmittalAcknowledgementStore(), new InMemoryTransmittalRecipientStore(), new InMemoryDocumentRevisionStore(),
@@ -31,7 +41,7 @@ function build(): { svc: DocControlService; emitted: Array<{ type: string; paylo
     new InMemoryDrawingRegisterStore(),
     events,
     mockTx,
-    new AccessService(),
+    access,
   );
   return { svc, emitted };
 }
@@ -48,8 +58,22 @@ describe('Correspondence log → close', () => {
     const logged = emitted.find((e) => e.type.includes('correspondence'));
     expect(logged?.payload).toMatchObject({ code: 'COR-IN-014', direction: 'inbound', projectId: 'p1' });
 
-    const closed = await svc.closeCorrespondence('t1', null, corr.id);
+    const closed = await svc.closeCorrespondence('t1', DC, corr.id, 'Answered by RFI-0042');
     expect(closed.status).toBe('closed');
+    expect(closed.closedBy).toBe(DC);
+    expect(closed.closeReason).toBe('Answered by RFI-0042');
+  });
+
+  it('refuses a close with no reason, and refuses a second one', async () => {
+    const { svc } = build();
+    const corr = await svc.createCorrespondence({
+      tenantId: 't1', projectId: 'p1', code: 'COR-2', subject: 'x', direction: 'inbound',
+    });
+    await expect(svc.closeCorrespondence('t1', DC, corr.id, '   ')).rejects.toThrow(/reason/i);
+    await svc.closeCorrespondence('t1', DC, corr.id, 'Superseded by COR-3');
+    // Second close → 409. Closing an already-closed item used to return 200 and quietly rewrite who
+    // closed it and why, overwriting the first account of it with the second.
+    await expect(svc.closeCorrespondence('t1', DC, corr.id, 'again')).rejects.toThrow(/already closed/i);
   });
 
   it('is tenant-isolated on close', async () => {
@@ -57,7 +81,7 @@ describe('Correspondence log → close', () => {
     const corr = await svc.createCorrespondence({
       tenantId: 't1', projectId: 'p1', code: 'COR-1', subject: 'x', direction: 'outbound',
     });
-    await expect(svc.closeCorrespondence('t2', null, corr.id)).rejects.toThrow(/not found/);
+    await expect(svc.closeCorrespondence('t2', DC, corr.id, 'wrong tenant')).rejects.toThrow(/not found/);
   });
 });
 

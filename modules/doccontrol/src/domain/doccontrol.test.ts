@@ -122,8 +122,13 @@ describe('Document Control Module Bounded Context', () => {
       expect(corr.status).toBe('logged');
       expect(corr.direction).toBe('outbound');
 
-      const closed = await service.closeCorrespondence('t1', null, corr.id);
+      // A CLOSE NOW NEEDS A REASON AND A NAME. Closing a piece of project correspondence ends an
+      // obligation, and this call used to end one anonymously and unexplained.
+      const closed = await service.closeCorrespondence('t1', null, corr.id, 'Consultant confirmed receipt');
       expect(closed.status).toBe('closed');
+      expect(closed.closedBy).toBeNull(); // Auth-OFF harness: no actor to record, and it says so rather than inventing one
+      expect(closed.closeReason).toBe('Consultant confirmed receipt');
+      expect(closed.closedAt).not.toBeNull();
     });
   });
 });

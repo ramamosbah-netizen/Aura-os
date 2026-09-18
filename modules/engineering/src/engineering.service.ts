@@ -281,7 +281,7 @@ export class EngineeringService {
     } = {},
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
-    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.transmit', drawing.projectId);
+    this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.release', drawing.projectId);
     if (!input.recipient?.trim()) throw new Error('recipient is required to transmit a drawing');
     if (!input.purpose?.trim()) throw new Error('purpose is required to transmit a drawing');
     if (input.purpose.trim() === 'For Construction' && !input.responsibilityId?.trim()) {

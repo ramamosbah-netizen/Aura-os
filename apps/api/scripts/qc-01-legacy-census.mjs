@@ -17,6 +17,7 @@ import { Pool } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 function databaseUrl() {
   if (process.env.MIGRATION_DATABASE_URL) return process.env.MIGRATION_DATABASE_URL;
@@ -35,6 +36,14 @@ if (!url) { console.error('No database connection. This census reads a real data
 const pool = new Pool({ connectionString: url, statement_timeout: 60_000, connectionTimeoutMillis: 15_000, max: 2, application_name: 'qc-01-legacy-census (read-only)' });
 pool.on('connect', (c) => { void c.query('SET default_transaction_read_only = on'); });
 
+/**
+ * A census counts rows ACROSS every tenant, so it has to be able to see them. Under FORCE ROW LEVEL
+ * SECURITY a role with no tenant bound — including the table's own owner — matches nothing and
+ * PostgreSQL raises no error, so an unguarded census prints "0 legacy quotations" and reads as an
+ * all-clear. This makes that case RAISE instead (TC-GATE-21).
+ */
+await openCrossTenantSession(pool, 'QC-01 legacy quotation census');
+
 const { rows: [who] } = await pool.query(
   `SELECT current_user AS who,
           (SELECT count(*) FROM pg_roles WHERE rolname = current_user AND rolbypassrls) AS bypasses,
@@ -50,6 +59,29 @@ if (!who || (!who.owns && Number(who.bypasses) === 0 && Number(who.superuser) ==
 }
 
 const q = async (sql) => (await pool.query(sql)).rows;
+
+/**
+ * THIS CENSUS HAS DONE ITS JOB, and says so rather than failing with a SQL error.
+ *
+ * It existed to answer one question before the backfill ran: do any legacy quotation lines carry
+ * alternate semantics that the simple mapping would flatten? Migration 0351 retired
+ * `quotation_lines.is_alternate` and 0352 retired `quotation_lines.quotation_id`, so the columns it
+ * counted are gone — which is the answer being acted on, not a fault. Reporting that plainly is the
+ * point: a tool that crashes leaves a reader wondering whether the census was ever run.
+ */
+const [{ retired }] = await q(`
+  SELECT (SELECT count(*) FROM information_schema.columns
+           WHERE table_schema = 'public' AND table_name = 'aura_procurement_quotation_lines'
+             AND column_name = 'is_alternate') = 0 AS retired`);
+if (retired) {
+  console.log('\n── Legacy quotation census ─────────────────────────────');
+  console.log('   RETIRED. quotation_lines.is_alternate no longer exists (migration 0351), and');
+  console.log('   quotation_lines.quotation_id went with it (0352). This census answered whether the');
+  console.log('   backfill could safely flatten alternate lines; that question is closed and the');
+  console.log('   backfill has run. Nothing to count — kept as the record of how the answer was reached.');
+  await pool.end();
+  process.exit(0);
+}
 
 const [totals] = await q(`
   SELECT

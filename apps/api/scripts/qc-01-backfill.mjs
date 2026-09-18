@@ -29,6 +29,7 @@ import { Pool } from 'pg';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 
 const verifyOnly = process.argv.includes('--verify');
 
@@ -98,6 +99,13 @@ if (Number(shape.with_alternates) > 0 && !verifyOnly) {
 if (!verifyOnly) {
   const client = await pool.connect();
   try {
+    /**
+     * A backfill that cannot see across tenants UPDATEs nothing and reports success — the worst
+     * outcome a migration has, and an invisible one, because FORCE RLS filters rather than errors.
+     * This makes it raise (TC-GATE-21). Opened on the CLIENT, since that is the session the
+     * transaction below runs in.
+     */
+    await openCrossTenantSession(client, 'QC-01 legacy quotation backfill');
     await client.query('BEGIN');
 
     // Families: one per legacy quotation, keyed off the quotation id so a rerun is a no-op.

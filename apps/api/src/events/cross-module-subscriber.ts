@@ -17,7 +17,7 @@ import {
 } from '@aura/projects';
 import { PurchaseOrderLineService, PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateService, EstimateSourcingService, type Tender } from '@aura/tendering';
-import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, isQuotationCommitted, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
+import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
 import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
@@ -1935,41 +1935,41 @@ export class CrossModuleSubscriber implements OnModuleInit {
       }),
     );
 
-    // ── Bid-time sourcing (R5): RFQ awarded → restamp sourced estimate components ──
-    // A build-up component sourced from this RFQ is repriced to the awarded quote's amount, so the
-    // tender estimate stays consistent with the real supplier price. EstimateSourcingService owns
-    // the link + recompute; it no-ops when nothing was sourced from the RFQ.
-    this.bus.subscribe('procurement.rfq.awarded', (e: DomainEvent) =>
-      // RETRYABLE: `restampFromAward` sets sourced components to the awarded amount (a fixed target) and
-      // no-ops when nothing was sourced, so re-running it converges to the same prices. Sole subscriber.
-      this.retryable('restamp sourced estimates from rfq.awarded', e, async () => {
+    /**
+     * Bid-time sourcing (R5) — WHAT A GOVERNED AWARD CAN AND CANNOT DO TO AN ESTIMATE.
+     *
+     * This used to subscribe to `procurement.rfq.awarded` and restamp every build-up component
+     * sourced from that RFQ to the awarded quote's amount. That event no longer exists: awarding a
+     * quote by its header number is retired (SUP-14), because it raised a purchase order for one
+     * figure with no lines, in no stated currency, against no technical verdict.
+     *
+     * A governed award CANNOT take its place as a restamp trigger, and pretending otherwise would be
+     * worse than doing nothing. A sourcing link records the legacy RFQ QUOTE a component was priced
+     * from — not a material, not a requisition line — while a governed award is made on quotation
+     * revisions with a price per line. There is no honest mapping from one to the other, and the old
+     * restamp set EVERY component on the RFQ to a SINGLE amount, so feeding it a whole-offer total
+     * would write one supplier's entire offer onto each component as a unit cost.
+     *
+     * So this SAYS SO instead. An estimate sourced from an RFQ that has since been awarded through a
+     * recommendation is stale, and the log names it. Re-basing bid-time sourcing on quotation
+     * revisions is its own piece of work, and this is the marker that it is outstanding — a silent
+     * subscriber that never fires would just look like a feature that works.
+     */
+    this.bus.subscribe('procurement.sourcing.awarded', (e: DomainEvent) =>
+      // RETRYABLE: it reads and logs. Re-running it changes nothing.
+      this.retryable('report sourced estimates left stale by a governed award', e, async () => {
         const p = e.payload as Record<string, unknown>;
-        const quoteId = p.quoteId as string | undefined;
-        const amount = Number(p.amount) || 0;
-        if (!quoteId || amount <= 0) return;
-        const n = await this.estimateSourcing.restampFromAward({
-          tenantId: e.tenantId,
-          rfqId: e.aggregateId,
-          quoteId,
-          supplierName: (p.supplier as string) ?? 'Supplier',
-          amount,
-          actorId: e.actorId,
-          // Governance: never restamp the costing behind a quotation already committed to the
-          // client — an award must not silently rewrite a price we are standing behind. CRM owns
-          // this rule; tendering has it passed in (ADR-0011).
-          isTenderCommitted: async (tenderId) => {
-            const generated = await this.quotations.listBySourceTender(e.tenantId, tenderId);
-            const committed = generated.filter((q) => isQuotationCommitted(q));
-            if (committed.length > 0) {
-              this.logger.log(
-                `⚡ rfq.awarded → estimate for tender ${tenderId} left frozen: ` +
-                  `${committed.map((q) => `${q.quoteNumber} (${q.status})`).join(', ')} committed`,
-              );
-            }
-            return committed.length > 0;
-          },
-        });
-        if (n > 0) this.logger.log(`⚡ rfq.awarded → restamped ${n} sourced estimate component(s) to ${amount}`);
+        const rfqId = p.rfqId as string | undefined;
+        if (!rfqId) return;
+        const links = await this.estimateSourcing.listByRfq(e.tenantId, rfqId);
+        if (links.length === 0) return;
+        const tenders = [...new Set(links.map((l) => l.tenderId))];
+        this.logger.warn(
+          `⚡ sourcing.awarded → ${links.length} estimate component(s) on ${tenders.length} tender(s) were priced ` +
+            `from RFQ ${rfqId}'s legacy quotes and are NOT restamped: bid-time sourcing is keyed to the retired ` +
+            'quote award, and a governed award prices per line on a quotation revision. Re-source them from the ' +
+            'awarded offer before relying on those estimates.',
+        );
       }),
     );
 

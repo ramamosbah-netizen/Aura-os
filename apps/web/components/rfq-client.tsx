@@ -24,7 +24,6 @@ interface Quote {
 interface Detail {
   rfq: Rfq;
   quotes: Quote[];
-  recommended: Quote | null;
 }
 
 function money(n: number): string {
@@ -116,15 +115,6 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
     await reloadDetail(id);
   }
 
-  async function award(id: string, quoteId: string): Promise<void> {
-    await fetch(`/api/procurement/rfqs/${id}/award`, {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ quoteId }),
-    });
-    await reloadDetail(id);
-  }
-
   return (
     <div>
       <div style={s.createBar}>
@@ -162,8 +152,10 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
                       <div style={s.detailBar}>
                         <span style={s.muted}>
                           {detail.quotes.length} quote{detail.quotes.length === 1 ? '' : 's'}
-                          {detail.recommended && ` · lowest: ${detail.recommended.supplierName} ${money(detail.recommended.amount)}`}
                         </span>
+                        <a style={s.decisionLink} href={`/procurement/rfqs/${r.id}/recommendation`}>
+                          Sourcing decision →
+                        </a>
                         {r.status === 'draft' && (
                           <button type="button" style={s.smallBtn} onClick={() => send(r.id)}>
                             Send to vendors
@@ -172,6 +164,20 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
                       </div>
 
                       {detail.quotes.length > 0 && (
+                        <>
+                        {/*
+                          NO "lowest" TAG AND NO Award BUTTON (SUP-13/SUP-14). The tag ranked these
+                          amounts against each other, and they are not comparable: a bare figure
+                          carries no currency, no tax treatment and no freight. The button awarded
+                          one of them and raised a purchase order for that single number with no
+                          lines. Choosing a supplier is a decision recorded and approved on the
+                          sourcing screen, and it is what produces orders now.
+                        */}
+                        <p style={s.notComparable}>
+                          These are the amounts suppliers wrote at the top of their quotations. They
+                          are not comparable with each other — no currency, tax treatment or freight
+                          is stated — and nothing is awarded from them.
+                        </p>
                         <table style={s.table}>
                           <thead>
                             <tr>
@@ -179,34 +185,22 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
                               <th style={s.thR}>Amount</th>
                               <th style={s.thR}>Lead (days)</th>
                               <th style={s.th}>Status</th>
-                              <th style={s.th} />
                             </tr>
                           </thead>
                           <tbody>
-                            {detail.quotes.map((q) => {
-                              const isLow = detail.recommended?.id === q.id;
-                              return (
-                                <tr key={q.id} style={isLow ? s.rowLow : undefined}>
-                                  <td style={s.td}>
-                                    {q.supplierName} {isLow && <span style={s.lowTag}>lowest</span>}
-                                  </td>
-                                  <td style={s.tdR}>{money(q.amount)}</td>
-                                  <td style={s.tdR}>{q.leadTimeDays ?? '—'}</td>
-                                  <td style={s.td}>
-                                    <span style={s.tag(q.status)}>{q.status}</span>
-                                  </td>
-                                  <td style={s.tdR}>
-                                    {r.status !== 'awarded' && q.status !== 'rejected' && (
-                                      <button type="button" style={s.awardBtn} onClick={() => award(r.id, q.id)}>
-                                        Award
-                                      </button>
-                                    )}
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                            {detail.quotes.map((q) => (
+                              <tr key={q.id}>
+                                <td style={s.td}>{q.supplierName}</td>
+                                <td style={s.tdR}>{money(q.amount)}</td>
+                                <td style={s.tdR}>{q.leadTimeDays ?? '—'}</td>
+                                <td style={s.td}>
+                                  <span style={s.tag(q.status)}>{q.status}</span>
+                                </td>
+                              </tr>
+                            ))}
                           </tbody>
                         </table>
+                        </>
                       )}
 
                       {r.status !== 'awarded' && (
@@ -289,9 +283,8 @@ const s = {
   thR: { textAlign: 'right', color: 'var(--muted)', fontWeight: 500, padding: '6px 8px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   td: { padding: '8px', borderBottom: '1px solid var(--border)' } as CSSProperties,
   tdR: { padding: '8px', borderBottom: '1px solid var(--border)', textAlign: 'right' } as CSSProperties,
-  rowLow: { background: 'var(--good-soft)' } as CSSProperties,
-  lowTag: { fontSize: 10.5, color: 'var(--good)', border: '1px solid var(--good)', borderRadius: 999, padding: '0 6px', marginLeft: 6 } as CSSProperties,
-  awardBtn: { background: 'var(--good)', border: 'none', borderRadius: 7, color: 'var(--accent-ink)', padding: '4px 10px', fontSize: 12.5, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  decisionLink: { color: 'var(--accent)', textDecoration: 'none', fontSize: 12.5, fontWeight: 600 } as CSSProperties,
+  notComparable: { color: 'var(--muted)', fontSize: 12, lineHeight: 1.5, margin: '0 0 8px' } as CSSProperties,
   quoteForm: { display: 'flex', gap: 8, marginTop: 10 } as CSSProperties,
   qInput: { flex: 1, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13 } as CSSProperties,
   qInputSm: { width: 100, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13 } as CSSProperties,

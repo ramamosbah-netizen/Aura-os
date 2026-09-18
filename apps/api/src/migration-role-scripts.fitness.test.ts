@@ -28,6 +28,9 @@ const REGISTRY: Record<string, { guard: boolean; why: string }> = {
   'merge-duplicate-accounts.mjs': { guard: true, why: 'rewrites account references across tenants' },
   'backfill-pre-award.mjs': { guard: true, why: 'a backfill INSERTs across every tenant' },
   'orphan-scan.mjs': { guard: true, why: 'a scan that sees nothing reports a false CLEAN' },
+  'qc-01-backfill.mjs': { guard: true, why: 'a backfill INSERTs quotation families across every tenant' },
+  'qc-01-legacy-census.mjs': { guard: true, why: 'a census that sees nothing reports "no legacy quotations"' },
+  'fx-01-impact-audit.mjs': { guard: true, why: 'an impact audit that sees nothing prints a false all-clear — the exact output it exists to prevent' },
 
   'rls-isolation-test.mjs': { guard: false, why: 'exists to OBSERVE RLS filtering — the guard would break the thing it proves' },
   'rls-fitness.mjs': { guard: false, why: 'reads pg_catalog, which carries no policy' },

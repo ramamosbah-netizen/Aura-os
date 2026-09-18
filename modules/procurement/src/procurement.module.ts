@@ -21,6 +21,7 @@ import { QuotationLineService } from './quotation-line.service';
 import { CommercialComparisonService } from './commercial-comparison.service';
 import { QuotationCaptureService } from './quotation-capture.service';
 import { SourcingRecommendationService } from './sourcing-recommendation.service';
+import { SourcingAwardService } from './sourcing-award.service';
 import { SOURCING_RECOMMENDATION_STORE } from './sourcing-recommendation.store';
 import { InMemorySourcingRecommendationStore } from './in-memory-sourcing-recommendation-store';
 import { PostgresSourcingRecommendationStore } from './postgres-sourcing-recommendation-store';
@@ -120,6 +121,10 @@ import { FrameworkAgreementService } from './framework-agreement.service';
         pool ? new PostgresSourcingRecommendationStore(pool) : new InMemorySourcingRecommendationStore(),
     },
     SourcingRecommendationService,
+    // SUP-14 — the award. Turns an APPROVED recommendation into purchase orders that carry each
+    // supplier's own currency and terms. It binds no store of its own: an award writes purchase
+    // orders and their lines, and reads the offers the decision was made on.
+    SourcingAwardService,
     {
       // SUP-01 — the internal technical verdict. A different authority from the supplier's claim.
       provide: QUOTATION_LINE_EVALUATION_STORE,
@@ -142,6 +147,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [CommercialComparisonService, QuotationCaptureService, SourcingRecommendationService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [CommercialComparisonService, QuotationCaptureService, SourcingRecommendationService, SourcingAwardService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

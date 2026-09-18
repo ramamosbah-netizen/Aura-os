@@ -330,7 +330,7 @@ export class ProcurementController {
   }
 
   @Get('rfqs/:id')
-  async getRfq(@Param('id') id: string): Promise<{ rfq: Rfq; quotes: RfqQuote[]; recommended: RfqQuote | null }> {
+  async getRfq(@Param('id') id: string): Promise<{ rfq: Rfq; quotes: RfqQuote[] }> {
     const found = await this.rfqs.getWithQuotes(id);
     if (!found) throw new NotFoundException(`RFQ ${id} not found`);
     return found;
@@ -372,14 +372,25 @@ export class ProcurementController {
     });
   }
 
+  /**
+   * THE LEGACY AWARD, REFUSED (SUP-14).
+   *
+   * It awarded a quote by its header number and raised a purchase order valued at that one figure
+   * with no lines — nothing to receive against, nothing to match an invoice to, and no statement of
+   * the currency the supplier quoted in. It asked nothing about technical compliance and nothing
+   * about whether the caller could commit the amount.
+   *
+   * It REFUSES rather than disappearing, so a caller still pointing here is told where the award
+   * went instead of getting a 404 that reads like a bug. `awardRfq` keeps its name and its route so
+   * that anything still calling it fails loudly and traceably.
+   */
   @Patch('rfqs/:id/award')
-  async awardRfq(
-    @Param('id') id: string,
-    @Body() dto: { quoteId: string },
-  ): Promise<{ rfq: Rfq; quotes: RfqQuote[] }> {
-    if (!dto?.quoteId) throw new BadRequestException('quoteId is required');
-    const ctx = this.tenant.get();
-    return this.rfqs.award(id, dto.quoteId, ctx.actorId ?? undefined);
+  awardRfq(): never {
+    throw new BadRequestException(
+      'awarding a quote directly is no longer possible — an award must come from an approved sourcing ' +
+        'recommendation, which records which offers were chosen, why, on what comparison, and who ' +
+        'approved it: POST /procurement/rfqs/recommendations/:id/award',
+    );
   }
 
   // ── SUPPLIER MASTER ──────────────────────────────────────────────────────

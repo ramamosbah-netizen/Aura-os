@@ -9,12 +9,9 @@ import {
   type NewRfqQuote,
   makeRfq,
   makeRfqQuote,
-  lowestQuote,
 } from './domain/rfq';
 import { RFQ_STORE, type RfqFilter, type RfqStore } from './rfq-store';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestStore } from './purchase-request-store';
-import { PurchaseOrderService } from './purchase-order.service';
-import type { PurchaseOrder } from './domain/purchase-order';
 
 /**
  * RFQ service — the sourcing step (PR → RFQ → quotes → award → PO). Owns
@@ -35,10 +32,11 @@ export class RfqService {
     // Needed only to resolve an RFQ to a project: an RFQ carries `prId`, never `projectId`.
     // Same module, so no ADR-0004 edge — Procurement reading its own request register.
     @Optional() @Inject(PURCHASE_REQUEST_STORE) private readonly requests: PurchaseRequestStore | null = null,
-    // Awarding an RFQ raises the PO that closes the sourcing chain (PROC-GAP-03). Same module, so no
-    // ADR-0004 edge. Optional so an RFQ test without the PO service still runs; bound in the module,
-    // it is what makes a competitively sourced spend trace back to the RFQ and PR it came from.
-    @Optional() @Inject(PurchaseOrderService) private readonly purchaseOrders: PurchaseOrderService | null = null,
+    // NO PURCHASE-ORDER SERVICE. It was injected here so `award` could raise an order from the
+    // winning quote's header number; that authority moved to `SourcingAwardService` (SUP-14), which
+    // raises one order per supplier from the offer revision an approved recommendation selected.
+    // Removing the dependency is part of the retirement: this service now has nothing to raise an
+    // order WITH, so the old path cannot creep back as a convenience.
   ) {}
 
   async create(input: NewRfq): Promise<Rfq> {
@@ -106,69 +104,34 @@ export class RfqService {
   }
 
   /**
-   * Award the RFQ to a quote: the winner is marked awarded, the rest rejected, the RFQ closed-out —
-   * and a purchase order is raised from the winning quote, closing the sourcing chain (PROC-GAP-03).
+   * `award` IS DELETED (SUP-14).
+   *
+   * It marked the winning quote, rejected the rest, closed the RFQ — and raised a purchase order
+   * valued at `winner.amount`: one header figure, NO LINES. A purchase order with no lines cannot be
+   * received against line by line, cannot be matched to an invoice line by line, and states no
+   * currency the supplier quoted in. It also asked nothing about whether the winning offer was
+   * technically compliant, or whether the person clicking Award was allowed to commit that amount.
+   *
+   * An award is now `POST /procurement/rfqs/recommendations/:id/award`: an approved recommendation,
+   * one purchase order per supplier, each in that supplier's own currency with the lines they
+   * quoted, refused if the recommendation is not approved or has gone stale.
+   *
+   * `no-legacy-award.fitness.test.ts` fails if this method, its route, or `lowestQuote` return.
    */
-  async award(rfqId: Id, quoteId: Id, actorId?: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[]; po: PurchaseOrder | null }> {
-    const rfq = assertSameTenant(await this.store.get(rfqId), this.tenant?.boundTenantId(), 'RFQ', rfqId);
-    const quotes = await this.store.listQuotes(rfqId);
-    const winner = quotes.find((q) => q.id === quoteId);
-    if (!winner) throw new Error(`quote ${quoteId} not found on RFQ ${rfqId}`);
-
-    for (const q of quotes) {
-      const status = q.id === quoteId ? 'awarded' : 'rejected';
-      if (q.status !== status) await this.store.updateQuote({ ...q, status });
-    }
-    const updated: Rfq = { ...rfq, status: 'awarded' };
-    await this.store.update(updated);
-
-    // Raise the PO from the winning quote, carrying the lineage the chain lacked. The RFQ knows only
-    // its purchase request; the project comes from that request's snapshot, not a cross-module join.
-    let po: PurchaseOrder | null = null;
-    if (this.purchaseOrders) {
-      const pr = rfq.prId && this.requests ? await this.requests.get(rfq.prId) : null;
-      po = await this.purchaseOrders.create({
-        tenantId: rfq.tenantId,
-        companyId: rfq.companyId,
-        title: `PO — ${rfq.title}`,
-        supplierName: winner.supplierName,
-        projectId: pr?.projectId ?? null,
-        projectName: pr?.projectName ?? null,
-        rfqId: rfq.id,
-        prId: rfq.prId ?? null,
-        value: winner.amount,
-        status: 'draft',
-        createdBy: actorId ?? null,
-      });
-    }
-
-    await this.events.append([
-      makeEvent({
-        type: RFQ_EVENT.rfqAwarded,
-        tenantId: rfq.tenantId,
-        companyId: rfq.companyId,
-        actorId: actorId ?? null,
-        aggregateType: 'procurement.rfq',
-        aggregateId: rfq.id,
-        // quoteId lets the tendering estimate-sourcing reactor restamp components sourced from
-        // this RFQ to the awarded price (R5 / G-P1-4). poId records the spend the award raised.
-        payload: { title: rfq.title, quoteId: winner.id, supplier: winner.supplierName, amount: winner.amount, poId: po?.id ?? null },
-      }),
-    ]);
-    this.logger.log(`RFQ ${rfq.title} (${rfq.id}) awarded to ${winner.supplierName} @ ${winner.amount}${po ? ` → PO ${po.id}` : ''}`);
-    return { rfq: updated, quotes: await this.store.listQuotes(rfqId), po };
-  }
 
   /** Tenant-scoped read (N-08): never hand back another tenant's record. */
   async get(id: Id): Promise<Rfq | null> {
     return sameTenantOrNull(await this.store.get(id), this.tenant?.boundTenantId());
   }
 
-  async getWithQuotes(id: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[]; recommended: RfqQuote | null } | null> {
+  /**
+   * The RFQ with its legacy quotes. It no longer returns a `recommended` quote: that field was
+   * `lowestQuote`, and a sort by an incomparable number is not a recommendation (SUP-13).
+   */
+  async getWithQuotes(id: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[] } | null> {
     const rfq = await this.store.get(id);
     if (!rfq) return null;
-    const quotes = await this.store.listQuotes(id);
-    return { rfq, quotes, recommended: lowestQuote(quotes) };
+    return { rfq, quotes: await this.store.listQuotes(id) };
   }
 
   /**

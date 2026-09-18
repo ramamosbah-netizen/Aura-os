@@ -246,8 +246,15 @@ await handoff.connect();
 const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // `u-e2e-buyer` and `u-e2e-techmgr` prove SUP-01's OUTBOUND handoff: the Technical Manager decides,
 // and the verdict must reach the Buyer in the Buyer's own context. One principal cannot show that.
+//
+// `u-e2e-procmgr` is the CHECKER for SUP-13/SUP-14. The sourcing decision refuses the person who
+// submitted it as its own approver, and the award is the Procurement Manager's permission, which the
+// Buyer does not hold — so proving either needs a second principal holding a role AURA already
+// ships. r-procurement-manager, unmodified: `procurement.*`, no approval limit attached, because a
+// limit invented for a fixture would prove something about the fixture.
 for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
-                                ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager']]) {
+                                ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
+                                ['u-e2e-procmgr', 'r-procurement-manager']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -269,7 +276,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement) and u-e2e-techmgr (r-technical-manager)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager) and u-e2e-procmgr (r-procurement-manager)');
 
 
 

@@ -156,6 +156,19 @@ export class EstimateSourcingService {
     return this.sources.listByTender(tenantId, tenderId);
   }
 
+  /**
+   * The bid-time sourcing links hanging off one RFQ.
+   *
+   * Read so that a governed sourcing award can SAY that these estimates are now out of date, rather
+   * than leave it silent. It cannot restamp them: a link records the legacy RFQ QUOTE a component
+   * was priced from, and a governed award is made on quotation revisions and per-line prices that
+   * the link has no way to point at. Re-basing bid-time sourcing on revisions is its own work, and
+   * guessing a mapping here would restamp every component on an RFQ to one number.
+   */
+  listByRfq(tenantId: Id, rfqId: Id): Promise<EstimateSource[]> {
+    return this.sources.listByRfq(tenantId, rfqId);
+  }
+
   /** Cleanup hook for a rebuilt/deleted build-up (called by the estimate service). */
   removeForBuildUp(tenantId: Id, buildUpId: Id): Promise<void> {
     return this.sources.removeByBuildUp(tenantId, buildUpId);

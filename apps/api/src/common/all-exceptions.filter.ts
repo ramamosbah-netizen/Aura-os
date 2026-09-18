@@ -33,7 +33,14 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
   if (
-    /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|is not a locked|immutable after handover|require(?:s)? a signed contract|\bonly\b.*\bcan\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another|belongs to a different/i.test(m)
+    // `\bonly\b.*\b(?:can|may)\b` covers both moods: "only a draft agreement CAN be activated" and
+    // "only a draft revision MAY be edited" are the same refusal, and a message that said `may`
+    // escaped to a 500 until it was added.
+    /\balready\b|\blineage\b.*\bwithout\b|is closed|is inactive|is not (in|active|approved)|is not a locked|immutable after handover|require(?:s)? a signed contract|\bonly\b.*\b(?:can|may)\b|can only\b|requires approval|approval blocked|readiness checklist|below the required|insufficient|outside its validity|belongs to another|belongs to a different/i.test(m)
+    // Maker/checker queues: "a draft recommendation is not awaiting a decision" is a state guard —
+    // the request is well formed and the caller entitled to make it; the record is simply not at
+    // the step being acted on.
+    || /\bis not awaiting\b/i.test(m)
     // Immutability and concurrency. A signed revision, an approved baseline and a certified
     // payment certificate all refuse the same way: the record is closed to further writes, or
     // someone else moved it first. The caller must re-read and use the governed correction path.

@@ -40,6 +40,7 @@
  *   node apps/api/scripts/fx-01-impact-audit.mjs --json          # machine-readable
  */
 import { Pool } from 'pg';
+import { openCrossTenantSession } from './lib/cross-tenant-session.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -173,6 +174,15 @@ async function assertCrossTenantVisibility() {
   }
 }
 await assertCrossTenantVisibility();
+
+/**
+ * …and then the stronger check, because the one above is not sufficient on its own: it accepts the
+ * table's OWNER, and FORCE ROW LEVEL SECURITY extends RLS TO THE OWNER. On a deployment whose owner
+ * is not a superuser, an owner connection passes the check above, sees nothing, and the audit prints
+ * the false all-clear it exists to prevent. `SET row_security = off` makes PostgreSQL RAISE in that
+ * case instead of filtering (TC-GATE-21), and is a no-op for a role that genuinely bypasses policy.
+ */
+await openCrossTenantSession(pool, 'FX-01 historical impact audit');
 
 /** Prove the read-only setting actually took, rather than assuming the SET ran. */
 async function assertReadOnly() {

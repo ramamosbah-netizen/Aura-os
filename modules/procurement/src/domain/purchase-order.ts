@@ -44,6 +44,40 @@ export interface PurchaseOrder {
   unit: string | null;
   /** Shared dimension (ADR-0012) — the trade/discipline this spend belongs to. */
   discipline: Discipline;
+  /**
+   * THE SUPPLIER'S OWN COMMERCIAL TERMS (SUP-14), carried across from the offer that was awarded
+   * rather than retyped. Every one of them is NULL when unknown, and NULL is UNKNOWN throughout: an
+   * order whose tax treatment nobody stated must not read as tax-exclusive by accident.
+   *
+   * `currency` is the TRANSACTION currency — one order, one supplier, one currency (migration 0336).
+   * It is the currency the supplier quoted in and will invoice in, never the currency offers were
+   * compared in. A comparison normalises a USD offer to AED so a buyer can weigh it against another;
+   * writing that AED figure onto the order would redenominate a contract into a currency the
+   * supplier never quoted, at a rate they never agreed. NULL keeps its historical meaning: an order
+   * raised before this existed was never told its currency, and is read as the company's base.
+   */
+  currency: string | null;
+  /**
+   * The approved sourcing decision that raised this order, and the offer revision it was awarded
+   * from — so the order's terms can always be read back against their source, and the spend traced
+   * to the authority that approved it. Both NULL for an order raised outside sourcing, which stays
+   * valid: a requisition can become an order directly.
+   */
+  sourcingRecommendationId: Id | null;
+  quotationRevisionId: Id | null;
+  /** The supplier's OWN reference for the quotation, as they wrote it. */
+  supplierQuotationRef: string | null;
+  taxTreatment: 'exclusive' | 'inclusive' | 'exempt' | null;
+  taxRatePct: number | null;
+  /**
+   * Freight as the supplier quoted it: AT THE ORDER, not spread across the lines. Allocating it
+   * would invent a per-item cost nobody quoted, and `value` therefore excludes it — the order's
+   * governing value is what its lines come to (`orderGoverningValue`), and freight is a term of the
+   * order stated beside it.
+   */
+  freightAmount: number | null;
+  freightTerms: string | null;
+  paymentTerms: string | null;
   status: PurchaseOrderStatus;
   value: number;
   ownerId: Id | null;
@@ -71,6 +105,15 @@ export interface NewPurchaseOrder {
   value?: number;
   ownerId?: Id | null;
   createdBy?: Id | null;
+  currency?: string | null;
+  sourcingRecommendationId?: Id | null;
+  quotationRevisionId?: Id | null;
+  supplierQuotationRef?: string | null;
+  taxTreatment?: 'exclusive' | 'inclusive' | 'exempt' | null;
+  taxRatePct?: number | null;
+  freightAmount?: number | null;
+  freightTerms?: string | null;
+  paymentTerms?: string | null;
 }
 
 export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
@@ -93,6 +136,15 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     discipline: toDiscipline(input.discipline),
     status: input.status ?? 'draft',
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
+    currency: input.currency?.trim() || null,
+    sourcingRecommendationId: input.sourcingRecommendationId ?? null,
+    quotationRevisionId: input.quotationRevisionId ?? null,
+    supplierQuotationRef: input.supplierQuotationRef?.trim() || null,
+    taxTreatment: input.taxTreatment ?? null,
+    taxRatePct: input.taxRatePct ?? null,
+    freightAmount: input.freightAmount ?? null,
+    freightTerms: input.freightTerms?.trim() || null,
+    paymentTerms: input.paymentTerms?.trim() || null,
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,

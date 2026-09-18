@@ -14,7 +14,7 @@
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 49,
+  "gapRecords": 51,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -68,13 +68,15 @@
   "freshDefectIds": [
     "FX-01",
     "FX-02",
-    "QC-01"
+    "QC-01",
+    "PO-01",
+    "BID-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,
-  "pageTemplates": 217,
+  "pageTemplates": 218,
   "newPageAudited": 36,
-  "newPageNotAudited": 181,
+  "newPageNotAudited": 182,
   "newTestsPassed": 563,
   "newTestsFailed": 3,
   "newTestFilesExecuted": 89,

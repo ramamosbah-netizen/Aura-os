@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { type EventStore, type AccessService } from '@aura/core';
-import { makeRfq, makeRfqQuote, lowestQuote, type RfqQuote } from './rfq';
+import { makeRfq, makeRfqQuote, type RfqQuote } from './rfq';
 import { RfqService } from '../rfq.service';
 import { InMemoryRfqStore } from '../in-memory-rfq-store';
 
@@ -18,14 +18,6 @@ describe('RFQ domain', () => {
     expect(() => makeRfqQuote({ rfqId: 'r1', tenantId: 't1', supplierName: 'X', amount: 0 })).toThrow('amount must be positive');
   });
 
-  it('lowestQuote picks the cheapest non-rejected quote', () => {
-    const q = (over: Partial<RfqQuote>): RfqQuote => makeRfqQuote({ rfqId: 'r1', tenantId: 't1', supplierName: 's', amount: 100, ...over });
-    const a = q({ amount: 300 });
-    const b = q({ amount: 150 });
-    const c = q({ amount: 120, status: 'rejected' });
-    expect(lowestQuote([a, b, c])?.amount).toBe(150); // c rejected, b cheapest
-    expect(lowestQuote([])).toBeNull();
-  });
 });
 
 describe('RfqService', () => {
@@ -35,20 +27,20 @@ describe('RfqService', () => {
     return { service: new RfqService(new InMemoryRfqStore(), events, access), events };
   };
 
-  it('creates, collects quotes, and awards (winner awarded, rest rejected, RFQ awarded)', async () => {
+  it('creates and collects quotes — and names no winner among them', async () => {
     const { service } = build();
     const rfq = await service.create({ tenantId: 't1', title: 'Cabling', createdBy: 'u1' });
 
     await service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Gulf Cables', amount: 5000 });
-    const win = await service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Acme', amount: 4200 });
+    await service.addQuote({ rfqId: rfq.id, tenantId: 't1', supplierName: 'Acme', amount: 4200 });
 
     const detail = await service.getWithQuotes(rfq.id);
     expect(detail?.quotes).toHaveLength(2);
-    expect(detail?.recommended?.supplierName).toBe('Acme'); // cheapest
 
-    const awarded = await service.award(rfq.id, win.id, 'u1');
-    expect(awarded.rfq.status).toBe('awarded');
-    expect(awarded.quotes.find((q) => q.id === win.id)?.status).toBe('awarded');
-    expect(awarded.quotes.filter((q) => q.status === 'rejected')).toHaveLength(1);
+    // The cheaper figure is NOT marked, recommended or sorted to the top. 4200 against 5000 is not a
+    // comparison until both are in one currency, on one tax treatment, with freight accounted for
+    // and every required line technically compliant — which is SUP-06's work, not a `<` operator's.
+    expect(detail).not.toHaveProperty('recommended');
+    expect((service as unknown as Record<string, unknown>).award).toBeUndefined();
   });
 });

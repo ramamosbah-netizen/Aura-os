@@ -11,6 +11,7 @@ import { technicalEligibility } from './domain/quotation-line-evaluation';
 import { effectiveRevision } from './domain/quotation-family';
 import type { NormalisedCommercialValue } from './domain/commercial-normalisation';
 import {
+  aStatus,
   makeSourcingRecommendation,
   offerRecommendability,
   reasonRequired,
@@ -220,7 +221,7 @@ export class SourcingRecommendationService {
 
     if (input.selections.length === 0) throw new Error('a recommendation must choose at least one offer');
     if (input.mode === 'single_supplier' && input.selections.length > 1) {
-      throw new Error('a single-supplier recommendation names one offer — use a split award to source from several');
+      throw new Error('a single-supplier recommendation must name exactly one offer — use a split award to source from several');
     }
 
     // THE SCOPE MUST BE WHOLE. An uncovered line vanishes from the purchase orders; a duplicated one
@@ -245,7 +246,7 @@ export class SourcingRecommendationService {
 
     for (const chosen of input.selections) {
       const candidate = assembled.candidates.find((c) => c.offerId === chosen.offerId);
-      if (!candidate) throw new Error(`offer ${chosen.offerId} is not an offer against this RFQ`);
+      if (!candidate) throw new Error(`this recommendation cannot be recorded: offer ${chosen.offerId} is not an offer against this RFQ`);
 
       // Recommendability is judged against THIS supplier's scope, not the whole requirement — which
       // is how a partial offer legitimately enters a split award.
@@ -326,7 +327,7 @@ export class SourcingRecommendationService {
   async submit(tenantId: Id, id: Id, actorId?: Id | null): Promise<SourcingRecommendation> {
     const { recommendation, staleness } = await this.read(tenantId, id);
     if (recommendation.status !== 'draft' && recommendation.status !== 'returned') {
-      throw new Error(`a ${recommendation.status} recommendation cannot be submitted`);
+      throw new Error(`${aStatus(recommendation.status)} recommendation cannot be submitted`);
     }
     if (staleness.stale) {
       throw new Error(`this recommendation is out of date and cannot be submitted: ${staleness.affected.map((a) => a.detail).join('; ')}`);
@@ -358,7 +359,7 @@ export class SourcingRecommendationService {
   }): Promise<SourcingRecommendation> {
     const { recommendation, selections, staleness } = await this.read(tenantId, id);
     if (recommendation.status !== 'submitted') {
-      throw new Error(`a ${recommendation.status} recommendation is not awaiting a decision`);
+      throw new Error(`${aStatus(recommendation.status)} recommendation is not awaiting a decision`);
     }
     if (recommendation.submittedBy && recommendation.submittedBy === input.actorId) {
       throw new Error('the person who submitted a recommendation cannot approve it — a second pair of eyes is the point');
@@ -406,6 +407,52 @@ export class SourcingRecommendationService {
     });
     this.logger.log(`Recommendation ${id} ${input.decision} by ${input.actorId}`);
     return decided;
+  }
+
+  /**
+   * STANDING A RECOMMENDATION DOWN.
+   *
+   * One live recommendation per RFQ is a real rule, and `approved` counts as live — so an approved
+   * recommendation that must NOT be awarded had nowhere to go. That is not hypothetical: the award
+   * refuses a recommendation that has gone stale, and a stale approved one could then neither be
+   * awarded, nor decided again, nor replaced. The RFQ was stuck.
+   *
+   * WHO MAY DO IT FOLLOWS WHAT IS BEING UNDONE. Standing down a draft is the buyer tidying up their
+   * own work. Standing down something SUBMITTED OR APPROVED is undoing a decision that went through
+   * the approval, so it asks for the same authority the approval did — otherwise the maker could
+   * quietly reverse their own checker.
+   *
+   * A REASON IS REQUIRED. "This was approved and then abandoned" is exactly the thing somebody reads
+   * back six months later and needs explained.
+   */
+  async withdraw(tenantId: Id, id: Id, input: { actorId: Id; reason: string }): Promise<SourcingRecommendation> {
+    const recommendation = await this.store.get(tenantId, id);
+    if (!recommendation) throw new Error(`recommendation ${id} not found`);
+    if (recommendation.status === 'awarded') {
+      throw new Error('an awarded recommendation cannot be withdrawn — the purchase orders it raised are real, and cancelling those is the order’s own decision');
+    }
+    if (recommendation.status === 'rejected' || recommendation.status === 'withdrawn') {
+      throw new Error(`${aStatus(recommendation.status)} recommendation is already closed`);
+    }
+    if (!input.reason?.trim()) throw new Error('withdrawing a recommendation must record why');
+
+    if (recommendation.status === 'submitted' || recommendation.status === 'approved') {
+      const orgPath: Array<{ level: 'tenant' | 'company'; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (recommendation.companyId) orgPath.push({ level: 'company', id: recommendation.companyId });
+      this.access.assert(input.actorId, { permission: 'procurement.rfq.award', orgPath });
+    }
+
+    const withdrawn: SourcingRecommendation = {
+      ...recommendation, status: 'withdrawn',
+      decidedBy: input.actorId, decidedAt: new Date().toISOString(),
+      decisionNote: input.reason.trim(),
+    };
+    await this.store.updateStatus(withdrawn);
+    await this.emit(RECOMMENDATION_EVENT.decided, withdrawn, input.actorId, {
+      rfqId: withdrawn.rfqId, decision: 'withdrawn', reason: input.reason.trim(),
+    });
+    this.logger.log(`Recommendation ${id} withdrawn by ${input.actorId}: ${input.reason.trim()}`);
+    return withdrawn;
   }
 
   /** Every recommendation raised against an RFQ. Rejected and returned ones stay readable. */

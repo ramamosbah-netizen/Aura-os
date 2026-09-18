@@ -32,8 +32,24 @@ import type { NormalisedCommercialValue } from './commercial-normalisation';
 export const RECOMMENDATION_MODES = ['single_supplier', 'split_award'] as const;
 export type RecommendationMode = (typeof RECOMMENDATION_MODES)[number];
 
-export const RECOMMENDATION_STATUSES = ['draft', 'submitted', 'approved', 'rejected', 'returned', 'awarded'] as const;
+/**
+ * `withdrawn` is the maker or the approver standing a recommendation down, and it is its own status
+ * rather than a reuse of `rejected`. A rejection is a checker's verdict ON a recommendation — "I
+ * looked at this and I will not approve it" — and recording a withdrawal as one would put words in
+ * the approver's mouth. It exists because `approved` had nowhere else to go: an approved
+ * recommendation that has gone stale cannot be awarded and cannot be decided again, and without a
+ * way to stand it down it would block its RFQ for good (migration 0355).
+ */
+export const RECOMMENDATION_STATUSES = ['draft', 'submitted', 'approved', 'rejected', 'returned', 'awarded', 'withdrawn'] as const;
 export type RecommendationStatus = (typeof RECOMMENDATION_STATUSES)[number];
+
+/**
+ * "a draft" / "an approved" — these statuses appear in refusals a buyer reads, and "a approved
+ * recommendation" is the kind of thing that makes somebody trust the rest of the sentence less.
+ */
+export function aStatus(status: RecommendationStatus): string {
+  return `${/^[aeiou]/i.test(status) ? 'an' : 'a'} ${status}`;
+}
 
 /** Why an offer was chosen over a cheaper one. Coded so it can be analysed, with text so it reads. */
 export const RECOMMENDATION_REASONS = [

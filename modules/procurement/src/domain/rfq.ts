@@ -74,11 +74,11 @@ export interface RfqQuote {
   /**
    * LEGACY HEADER SCALAR — one number for the whole offer.
    *
-   * It is what `lowestQuote` still compares, and it is why that comparison cannot support a
-   * decision: a bare number carries no currency, no tax treatment and no freight. The truth is now
-   * the LINES. This field is left in place deliberately rather than removed here: reconciling or
-   * retiring it belongs to the commercial-normalisation slice, and removing it now would change the
-   * award path this stage is explicitly not touching.
+   * A bare number carrying no currency, no tax treatment and no freight — which is why nothing
+   * compares it any more and nothing awards from it. The truth is the LINES, and the order is
+   * raised from the offer revision an approved recommendation selected (SUP-14). This field
+   * survives only because quotations captured before the family model carry it; retiring the
+   * legacy quote record itself is separate work.
    */
   amount: number;
   /** The currency the offer is made in. NULL is UNKNOWN and is NEVER the base currency. */
@@ -144,12 +144,19 @@ export function makeRfqQuote(input: NewRfqQuote): RfqQuote {
   };
 }
 
-/** The cheapest received quote — the default award recommendation. */
-export function lowestQuote(quotes: RfqQuote[]): RfqQuote | null {
-  const received = quotes.filter((q) => q.status !== 'rejected');
-  if (received.length === 0) return null;
-  return received.reduce((best, q) => (q.amount < best.amount ? q : best));
-}
+/**
+ * `lowestQuote` IS DELETED (SUP-13/SUP-14).
+ *
+ * It read the legacy header scalar off every quote and returned the smallest one as "the default
+ * award recommendation". A bare number carries no currency, no tax treatment and no freight, so the
+ * comparison it made was between figures that were never comparable — and calling the result a
+ * recommendation gave a sort order the authority of a decision.
+ *
+ * A recommendation is now a record: a person chose these offers, for this reason, on values
+ * normalised to one currency at a stated comparison date, against the technical verdict on every
+ * required line — and somebody else approved it. `sourcing-recommendation.ts` owns that, and
+ * `no-legacy-award.fitness.test.ts` fails if this function or the header-scalar award returns.
+ */
 
 export const RFQ_EVENT = {
   rfqCreated: 'procurement.rfq.created',

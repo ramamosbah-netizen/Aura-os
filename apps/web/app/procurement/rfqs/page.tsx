@@ -20,9 +20,16 @@ export default async function RfqsPage() {
   return (
     <div style={st.page}>
       <h1 style={st.h1}>Procurement · RFQs</h1>
+      {/*
+        The copy said "compare them side-by-side, and award the winner", beside an Award button that
+        raised a purchase order for one header figure with no lines. Both are retired (SUP-13/SUP-14):
+        an award is a recorded decision somebody else approves, and it happens on the sourcing screen.
+      */}
       <p style={st.sub}>
-        Source competitively: float a requirement to vendors, collect quotes, compare them side-by-side,
-        and award the winner. The quoted totals below are each supplier’s own header figure in their own currency — legacy, non-normalised, and not a recommendation. Comparable values live on the commercial comparison for each requirement.
+        Source competitively: float a requirement to vendors and collect their offers. The totals
+        below are each supplier’s own header figure in their own currency — legacy, non-normalised,
+        and not comparable with one another. Comparable values live on the commercial comparison for
+        each requirement, and choosing a supplier is a governed decision on the sourcing screen.
       </p>
       <section style={{ marginTop: 10 }}>
         {rfqs === null ? <p style={st.muted}>API offline.</p> : <RfqClient initialRfqs={rfqs} />}

@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
-import { SourcingRecommendationService, RECOMMENDATION_REASONS, type RecommendationReasonCode } from '@aura/procurement';
+import { SourcingAwardService, SourcingRecommendationService, RECOMMENDATION_REASONS, type RecommendationReasonCode } from '@aura/procurement';
 import { admitCurrency } from '@aura/shared';
 
 /**
@@ -30,6 +30,10 @@ class PrepareRecommendationDto {
   @IsArray() selections!: Array<{ offerId: string; coveredPrLineIds: string[] }>;
 }
 
+class WithdrawDto {
+  @IsString() reason!: string;
+}
+
 class DecisionDto {
   @IsIn(['approved', 'rejected', 'returned']) decision!: 'approved' | 'rejected' | 'returned';
   @IsOptional() @IsString() note?: string | null;
@@ -39,6 +43,7 @@ class DecisionDto {
 export class SourcingRecommendationController {
   constructor(
     private readonly recommendations: SourcingRecommendationService,
+    private readonly awards: SourcingAwardService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -128,5 +133,42 @@ export class SourcingRecommendationController {
     return this.recommendations.decide(ctx.tenantId, id, {
       decision: dto.decision, note: dto.note ?? null, actorId: ctx.actorId,
     });
+  }
+
+  /**
+   * Stand a recommendation down, so an RFQ is never stuck with one that must not be awarded.
+   *
+   * `procurement.rfq.update` is the floor — a buyer tidying up their own draft. The service asks for
+   * the award permission on top when what is being undone is a SUBMITTED or APPROVED
+   * recommendation, because reversing an approval needs the authority the approval needed.
+   */
+  @Permissions('procurement.rfq.update')
+  @Post('recommendations/:id/withdraw')
+  withdraw(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: WithdrawDto) {
+    const ctx = this.tenant.get();
+    if (!ctx.actorId) throw new BadRequestException('withdrawing a recommendation must be attributable to a person');
+    if (!dto?.reason?.trim()) throw new BadRequestException('withdrawing a recommendation must record why');
+    return this.recommendations.withdraw(ctx.tenantId, id, { actorId: ctx.actorId, reason: dto.reason });
+  }
+
+  /**
+   * SUP-14 — THE AWARD. One purchase order per supplier, in that supplier's own currency and on the
+   * terms they quoted.
+   *
+   * This is the only way a purchase order can be raised from sourcing. The old
+   * `PATCH /procurement/rfqs/:id/award` — which took a quote's header number and raised an order
+   * with that one figure and no lines — refuses, and `no-legacy-award.fitness.test.ts` fails if it
+   * comes back.
+   *
+   * `procurement.rfq.award` again, deliberately: the person executing an award must be the one who
+   * could have approved it. The service refuses anything not approved, and anything that has gone
+   * stale because a supplier sent a newer revision after approval.
+   */
+  @Permissions('procurement.rfq.award')
+  @Post('recommendations/:id/award')
+  award(@Param('id', ParseUuidOr404Pipe) id: string) {
+    const ctx = this.tenant.get();
+    if (!ctx.actorId) throw new BadRequestException('an award must be attributable to a person');
+    return this.awards.award(ctx.tenantId, id, ctx.actorId);
   }
 }

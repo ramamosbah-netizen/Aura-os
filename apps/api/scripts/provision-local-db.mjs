@@ -253,6 +253,11 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // ships. r-procurement-manager, unmodified: `procurement.*`, no approval limit attached, because a
 // limit invented for a fixture would prove something about the fixture.
 //
+// `u-e2e-hse` and `u-e2e-hse2` are the wave-B proof. A permit to work refuses the requester its own
+// approval, and that rule can only be DEMONSTRATED with two people on the same shipped role — note
+// that `u-e2e-checker` holds a legacy role literally named `hse`, which is NOT `r-hse` and holds
+// none of these permissions; using it would have proved nothing about the shipped catalogue.
+//
 // `u-e2e-pm`, the two `u-e2e-qs*` and `u-e2e-finance` are the subcontractor certification proof:
 // the PM raises the application, Commercial/QS certifies it, Finance releases the money. TWO QS
 // principals on the SAME shipped role, because the refusal is that the person who raised a claim may
@@ -276,7 +281,8 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-finance', 'r-finance'],
                                 ['u-e2e-controller-a', 'r-finance-controller'], ['u-e2e-controller-b', 'r-finance-controller'],
                                 ['u-e2e-pm', 'r-pm'],
-                                ['u-e2e-qs', 'r-commercial-manager'], ['u-e2e-qs2', 'r-commercial-manager']]) {
+                                ['u-e2e-qs', 'r-commercial-manager'], ['u-e2e-qs2', 'r-commercial-manager'],
+                                ['u-e2e-hse', 'r-hse'], ['u-e2e-hse2', 'r-hse']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -298,7 +304,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) and u-e2e-qs/qs2 (r-commercial-manager)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) and u-e2e-hse/hse2 (r-hse)');
 
 
 

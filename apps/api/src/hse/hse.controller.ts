@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { TenantContext, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type HseIncident,
@@ -63,6 +63,7 @@ export class HseController {
   // ── Incidents ──────────────────────────────────────────────────────────────
 
   @Post('incidents')
+  @Permissions('hse.incident.create')
   reportIncident(@Body() dto: ReportIncidentDto): Promise<HseIncident> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.date?.trim()) throw new BadRequestException('date is required');
@@ -90,12 +91,14 @@ export class HseController {
   }
 
   @Put('incidents/:id/investigate')
+  @Permissions('hse.incident.investigate')
   investigateIncident(@Param('id') id: string): Promise<HseIncident> {
     const ctx = this.tenant.get();
     return this.hseService.investigateIncident(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('incidents/:id/close')
+  @Permissions('hse.incident.close')
   closeIncident(@Param('id') id: string, @Body() dto: { rootCause?: string }): Promise<HseIncident> {
     if (!dto?.rootCause?.trim()) throw new BadRequestException('rootCause is required to close an incident');
     const ctx = this.tenant.get();
@@ -103,6 +106,7 @@ export class HseController {
   }
 
   @Put('incidents/:id/reopen')
+  @Permissions('hse.incident.reopen')
   reopenIncident(@Param('id') id: string): Promise<HseIncident> {
     const ctx = this.tenant.get();
     return this.hseService.reopenIncident(ctx.tenantId, ctx.actorId, id);
@@ -131,6 +135,7 @@ export class HseController {
   // ── Permits to Work ────────────────────────────────────────────────────────
 
   @Post('ptws')
+  @Permissions('hse.ptw.create')
   requestPermit(@Body() dto: RequestPermitDto): Promise<PermitToWork> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.permitType?.trim()) throw new BadRequestException('permitType is required');
@@ -159,18 +164,21 @@ export class HseController {
   }
 
   @Put('ptws/:id/approve')
+  @Permissions('hse.ptw.approve')
   approvePermit(@Param('id') id: string): Promise<PermitToWork> {
     const ctx = this.tenant.get();
     return this.hseService.approvePermit(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('ptws/:id/request')
+  @Permissions('hse.ptw.request')
   requestPermitApproval(@Param('id') id: string): Promise<PermitToWork> {
     const ctx = this.tenant.get();
     return this.hseService.requestPermitApproval(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('ptws/:id/reject')
+  @Permissions('hse.ptw.approve')
   rejectPermit(@Param('id') id: string, @Body() dto: { reason?: string }): Promise<PermitToWork> {
     if (!dto?.reason?.trim()) throw new BadRequestException('reason is required to reject a permit');
     const ctx = this.tenant.get();
@@ -178,18 +186,21 @@ export class HseController {
   }
 
   @Put('ptws/:id/reopen')
+  @Permissions('hse.ptw.reopen')
   reopenPermit(@Param('id') id: string): Promise<PermitToWork> {
     const ctx = this.tenant.get();
     return this.hseService.reopenPermit(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('ptws/:id/expire')
+  @Permissions('hse.ptw.expire')
   expirePermit(@Param('id') id: string): Promise<PermitToWork> {
     const ctx = this.tenant.get();
     return this.hseService.expirePermit(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('ptws/:id/close')
+  @Permissions('hse.ptw.close')
   closePermit(@Param('id') id: string): Promise<PermitToWork> {
     const ctx = this.tenant.get();
     return this.hseService.closePermit(ctx.tenantId, ctx.actorId, id);
@@ -218,6 +229,7 @@ export class HseController {
   // ── Corrective Actions (CAPA) ──────────────────────────────────────────────
 
   @Post('capas')
+  @Permissions('hse.capa.create')
   raiseCapa(@Body() dto: RaiseCapaDto): Promise<CapaAction> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.sourceType?.trim()) throw new BadRequestException('sourceType is required');
@@ -245,6 +257,7 @@ export class HseController {
   }
 
   @Put('capas/:id/complete')
+  @Permissions('hse.capa.complete')
   completeCapa(@Param('id') id: string): Promise<CapaAction> {
     const ctx = this.tenant.get();
     return this.hseService.completeCapa(ctx.tenantId, ctx.actorId, id);
@@ -259,6 +272,7 @@ export class HseController {
   // ── Toolbox Talks ──────────────────────────────────────────────────────────
 
   @Post('toolbox-talks')
+  @Permissions('hse.toolbox-talk.create')
   async recordToolboxTalk(@Body() dto: { projectId: string; projectName?: string; topic: string; conductedBy: string; talkDate: string; attendeeCount: number; notes?: string }): Promise<ToolboxTalk> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.topic?.trim()) throw new BadRequestException('topic is required');
@@ -288,6 +302,7 @@ export class HseController {
   // ── Risk assessments (JSA) ──────────────────────────────────────────────────
 
   @Post('risk-assessments')
+  @Permissions('hse.risk-assessment.create')
   createRiskAssessment(
     @Body() dto: { projectId: string; projectName?: string; reference: string; activity: string; assessor?: string; hazards: RiskLine[]; status?: RiskAssessmentStatus; reviewDate?: string },
   ): Promise<RiskAssessment> {
@@ -317,13 +332,15 @@ export class HseController {
   }
 
   @Put('risk-assessments/:id/approve')
+  @Permissions('hse.risk-assessment.approve')
   async approveRiskAssessment(@Param('id') id: string): Promise<RiskAssessment> {
-    return await this.hseService.approveRiskAssessment(this.tenant.get().tenantId, id);
+    return await this.hseService.approveRiskAssessment(this.tenant.get().tenantId, id, this.tenant.get().actorId ?? null);
   }
 
   // ── Safety Training Matrix ──────────────────────────────────────────────────
 
   @Post('training')
+  @Permissions('hse.training.create')
   async recordSafetyTraining(@Body() dto: RecordSafetyTrainingDto): Promise<SafetyTrainingRecord> {
     if (!dto?.workerName?.trim()) throw new BadRequestException('workerName is required');
     if (!dto?.workerId?.trim()) throw new BadRequestException('workerId is required');

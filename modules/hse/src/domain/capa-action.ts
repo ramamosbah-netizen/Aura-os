@@ -12,6 +12,8 @@ export interface CapaAction {
   assignedTo: string | null;
   dueDate: string; // YYYY-MM-DD
   status: 'pending' | 'in_progress' | 'completed';
+  /** Who closed out the corrective action. The row kept a timestamp and no actor. */
+  completedBy: string | null;
   completedAt: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -46,6 +48,7 @@ export function makeCapaAction(input: NewCapaAction): CapaAction {
     assignedTo: input.assignedTo ?? null,
     dueDate: input.dueDate,
     status: input.status ?? 'pending',
+    completedBy: null,
     completedAt: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,

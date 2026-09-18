@@ -18,15 +18,20 @@ export class PostgresRiskAssessmentStore implements RiskAssessmentStore {
     await conn.query(
       `insert into public.aura_hse_risk_assessments (
         id, tenant_id, company_id, project_id, project_name, reference, activity, assessor, hazards,
-        initial_score, residual_score, residual_band, status, review_date, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        initial_score, residual_score, residual_band, status, review_date, created_by, created_at, updated_at,
+        approved_by, approved_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
       on conflict (id) do update set
         activity = excluded.activity, assessor = excluded.assessor, hazards = excluded.hazards,
         initial_score = excluded.initial_score, residual_score = excluded.residual_score,
         residual_band = excluded.residual_band, status = excluded.status, review_date = excluded.review_date,
-        updated_at = excluded.updated_at`,
+        updated_at = excluded.updated_at,
+        approved_by = excluded.approved_by, approved_at = excluded.approved_at`,
+      // `created_by` stays out of the DO UPDATE SET: who wrote the assessment is fixed when it is
+      // written, and it is the fact the approval is refused against.
       [ra.id, ra.tenantId, ra.companyId, ra.projectId, ra.projectName, ra.reference, ra.activity, ra.assessor, JSON.stringify(ra.hazards),
-       ra.initialScore, ra.residualScore, ra.residualBand, ra.status, ra.reviewDate, ra.createdBy, ra.createdAt, ra.updatedAt],
+       ra.initialScore, ra.residualScore, ra.residualBand, ra.status, ra.reviewDate, ra.createdBy, ra.createdAt, ra.updatedAt,
+       ra.approvedBy, ra.approvedAt],
     );
   }
 
@@ -61,6 +66,8 @@ export class PostgresRiskAssessmentStore implements RiskAssessmentStore {
       residualBand: row.residual_band,
       status: row.status,
       reviewDate: row.review_date instanceof Date ? row.review_date.toISOString().split('T')[0] : (row.review_date ? String(row.review_date) : null),
+      approvedBy: row.approved_by ?? null,
+      approvedAt: row.approved_at ? new Date(row.approved_at).toISOString() : null,
       createdBy: row.created_by,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
@@ -284,11 +291,13 @@ export class PostgresCapaActionStore implements CapaActionStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_hse_capas (
-        id, tenant_id, company_id, project_id, project_name, source_type, source_id, action_required, assigned_to, due_date, status, completed_at, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+        id, tenant_id, company_id, project_id, project_name, source_type, source_id, action_required, assigned_to, due_date, status, completed_at, created_by, created_at, updated_at,
+        completed_by
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       on conflict (id) do update set
         status = excluded.status,
         completed_at = excluded.completed_at,
+        completed_by = excluded.completed_by,
         updated_at = excluded.updated_at`,
       [
         action.id,
@@ -306,6 +315,7 @@ export class PostgresCapaActionStore implements CapaActionStore {
         action.createdBy,
         action.createdAt,
         action.updatedAt,
+        action.completedBy,
       ],
     );
   }
@@ -362,6 +372,7 @@ export class PostgresCapaActionStore implements CapaActionStore {
       assignedTo: row.assigned_to,
       dueDate: row.due_date instanceof Date ? row.due_date.toISOString().split('T')[0] : String(row.due_date),
       status: row.status,
+      completedBy: row.completed_by ?? null,
       completedAt: row.completed_at ? row.completed_at.toISOString() : null,
       createdBy: row.created_by,
       createdAt: row.created_at.toISOString(),

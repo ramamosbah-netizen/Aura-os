@@ -206,6 +206,48 @@ const CONTRACTS_AUTHORITY = [
   'contracts.ipc.certify',
 ] as const;
 
+/**
+ * HSE, split by who does the work and who authorises it.
+ *
+ * `hse.*` on r-hse covered everything: raising an incident, writing a risk assessment AND approving
+ * it, creating a permit, requesting one, approving it, rejecting it, closing it, completing a CAPA.
+ * Nobody else in the catalogue held a single HSE write permission — the Site Engineer who has to do
+ * the hot work held `hse.*.read`.
+ *
+ * THAT IS WHY THE PERMIT'S OWN TWO-PERSON RULE WAS WEAKER THAN IT LOOKED. The service has always
+ * refused the requester their own approval, and the record holds `requestedBy` separately from
+ * `createdBy` so the check is possible — measured against the running API, the refusal fires. But
+ * with only one role able to request, every permit was requested and authorised inside the HSE
+ * function, and the rule separated two officers rather than the worker from the authoriser.
+ *
+ * So the people who do the work can now RAISE an incident and REQUEST a permit, and HSE authorises.
+ * The existing rule becomes an organisational separation instead of a personal one.
+ */
+const HSE_SITE_PARTICIPATION = [
+  // Anyone on site can report what happened. A near miss nobody can raise is a near miss nobody hears.
+  'hse.incident.create',
+  // …and ask for permission to do the work. Requesting is not authorising: `hse.ptw.approve` is not
+  // here, and the domain refuses the requester their own approval on top of that.
+  'hse.ptw.create', 'hse.ptw.request',
+  'hse.toolbox-talk.create',
+] as const;
+
+/** The HSE function: authorising work, closing findings, and approving what authorises a permit. */
+const HSE_AUTHORITY = [
+  'hse.ptw.approve', 'hse.ptw.reopen', 'hse.ptw.expire', 'hse.ptw.close',
+  'hse.incident.investigate', 'hse.incident.close', 'hse.incident.reopen',
+  'hse.capa.create', 'hse.capa.complete',
+  'hse.risk-assessment.create', 'hse.risk-assessment.approve',
+  'hse.training.create',
+  // FOUR VOCABULARIES IN ONE MODULE. The routes derive `capa.create`, `toolbox-talk.create`,
+  // `training.create` and `risk-assessment.create`; the services assert `capa.raise`,
+  // `toolbox.record`, `training.record` and `risk_assessment.create` — note the underscore. Listed
+  // rather than renamed, as in procurement (`pr`/`purchase-request`), HR (`leave.approve`/
+  // `leave.resolve`) and contracts (`ipc`/`certificate`): a permission rename is its own change with
+  // its own blast radius. The permission-vocabulary guard is what found all four.
+  'hse.capa.raise', 'hse.toolbox.record', 'hse.training.record', 'hse.risk_assessment.create',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -324,6 +366,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'project',
     permissions: [
       'site.*', 'quality.inspection-request.create', readOnly('quality'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK,
+      // Raises an incident and REQUESTS a permit for the work it has to do. Authorises neither —
+      // which is what turns the permit's two-person rule from a separation between HSE officers into
+      // a separation between the worker and the authoriser.
+      ...HSE_SITE_PARTICIPATION,
       readOnly('engineering'), readOnly('hse'), readOnly('inventory'), ...STAFF_BASE,
     ],
   },
@@ -491,7 +537,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'HSE',
     description: 'Owns permits, incidents, risk assessments, toolbox talks and corrective actions.',
     assignmentScope: 'project',
-    permissions: ['hse.*', readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('engineering'), readOnly('hr'), ...STAFF_BASE],
+    permissions: [
+      // `hse.*` USED TO BE HERE, covering raising, writing, requesting, authorising and closing
+      // alike — and covering every HSE act added to the module in future.
+      ...HSE_SITE_PARTICIPATION, ...HSE_AUTHORITY,
+      readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('engineering'), readOnly('hr'), ...STAFF_BASE,
+    ],
   },
   {
     id: 'r-finance',

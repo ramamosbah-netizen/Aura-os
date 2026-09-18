@@ -35,6 +35,13 @@ export interface RiskAssessment {
   residualBand: RiskBand;
   status: RiskAssessmentStatus;
   reviewDate: string | null;
+  /**
+   * WHO APPROVED IT, and when. A permit to work cannot be approved until its risk assessment is
+   * approved, so this is the signature the whole permit gate rests on — and `approveRiskAssessment`
+   * took no actor at all, recorded nothing, and let the assessor approve their own work.
+   */
+  approvedBy: string | null;
+  approvedAt: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -90,12 +97,44 @@ export function makeRiskAssessment(input: NewRiskAssessment): RiskAssessment {
     residualBand: riskBand(residualScore),
     status: input.status ?? 'draft',
     reviewDate: input.reviewDate ?? null,
+    approvedBy: null,
+    approvedAt: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,
   };
 }
 
-export function approveRiskAssessment(ra: RiskAssessment): RiskAssessment {
-  return { ...ra, status: 'approved', updatedAt: new Date().toISOString() };
+/**
+ * APPROVE the assessment — the act that lets a permit to work be approved at all.
+ *
+ * THE ASSESSOR MAY NOT APPROVE THEIR OWN. The permit this authorises already refuses its requester
+ * their own approval, in a record that holds `requestedBy` separately from `createdBy` so the check
+ * is possible; the document underneath had neither the rule nor anywhere to put the answer. A chain
+ * of controls is as strong as its weakest link, and this was the weakest by a distance.
+ *
+ * Where the assessment has no recorded author — written before authorship existed — the approval
+ * proceeds and says the check could not run, rather than blocking safety-critical work over a fact
+ * nobody wrote down at the time.
+ */
+export function approveRiskAssessment(ra: RiskAssessment, approvedBy: string | null = null): RiskAssessment {
+  if (ra.status === 'approved') throw new Error('this risk assessment is already approved');
+  if (approvedBy && ra.createdBy && approvedBy === ra.createdBy) {
+    throw new Error(
+      'the person who wrote this risk assessment may not approve their own — it is what authorises a permit to work',
+    );
+  }
+  return {
+    ...ra,
+    status: 'approved',
+    approvedBy,
+    approvedAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+/** Was the assessor/approver separation actually CHECKED? Derived, never stored twice. */
+export function assessmentSeparation(ra: RiskAssessment): 'enforced' | 'unverifiable' | null {
+  if (ra.approvedAt === null) return null;
+  return ra.createdBy ? 'enforced' : 'unverifiable';
 }

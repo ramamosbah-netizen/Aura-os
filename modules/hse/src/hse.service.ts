@@ -22,7 +22,7 @@ import {
 } from './domain/permit-to-work';
 import { type CapaAction, makeCapaAction } from './domain/capa-action';
 import { type ToolboxTalk, makeToolboxTalk } from './domain/toolbox-talk';
-import { type RiskAssessment, type NewRiskAssessment, makeRiskAssessment, approveRiskAssessment } from './domain/risk-assessment';
+import { type RiskAssessment, type NewRiskAssessment, makeRiskAssessment, approveRiskAssessment, assessmentSeparation } from './domain/risk-assessment';
 import { type SafetyTrainingRecord, type NewSafetyTrainingRecord, makeSafetyTrainingRecord, SAFETY_TRAINING_EVENT } from './domain/safety-training';
 
 export const INCIDENT_STORE = Symbol('INCIDENT_STORE');
@@ -296,7 +296,7 @@ export class HseService {
   async closePermit(tenantId: Id, actorId: Id | null, id: Id): Promise<PermitToWork> {
     const found = await this.ptwStore.findById(id, tenantId);
     if (!found) throw new Error(`Permit with ID ${id} not found`);
-    this.assertPermitPermission(found, actorId);
+    this.assertPermitPermission(found, actorId, 'hse.ptw.close');
 
     const permit = closePermitTransition(found, actorId);
 
@@ -326,7 +326,7 @@ export class HseService {
   async requestPermitApproval(tenantId: Id, actorId: Id | null, id: Id): Promise<PermitToWork> {
     const found = await this.ptwStore.findById(id, tenantId);
     if (!found) throw new Error(`Permit with ID ${id} not found`);
-    this.assertPermitPermission(found, actorId);
+    this.assertPermitPermission(found, actorId, 'hse.ptw.request');
 
     const permit = requestPermitTransition(found, actorId);
     await this.tx.run(async (handle) => { await this.ptwStore.save(permit, handle); });
@@ -337,7 +337,7 @@ export class HseService {
   async rejectPermit(tenantId: Id, actorId: Id | null, id: Id, reason: string): Promise<PermitToWork> {
     const found = await this.ptwStore.findById(id, tenantId);
     if (!found) throw new Error(`Permit with ID ${id} not found`);
-    this.assertPermitPermission(found, actorId);
+    this.assertPermitPermission(found, actorId, 'hse.ptw.approve');
 
     const permit = rejectPermitTransition(found, actorId, reason);
     await this.tx.run(async (handle) => { await this.ptwStore.save(permit, handle); });
@@ -348,7 +348,7 @@ export class HseService {
   async reopenPermit(tenantId: Id, actorId: Id | null, id: Id): Promise<PermitToWork> {
     const found = await this.ptwStore.findById(id, tenantId);
     if (!found) throw new Error(`Permit with ID ${id} not found`);
-    this.assertPermitPermission(found, actorId);
+    this.assertPermitPermission(found, actorId, 'hse.ptw.reopen');
 
     const permit = reopenPermitTransition(found);
     await this.tx.run(async (handle) => { await this.ptwStore.save(permit, handle); });
@@ -363,7 +363,7 @@ export class HseService {
   async expirePermit(tenantId: Id, actorId: Id | null, id: Id): Promise<PermitToWork> {
     const found = await this.ptwStore.findById(id, tenantId);
     if (!found) throw new Error(`Permit with ID ${id} not found`);
-    this.assertPermitPermission(found, actorId);
+    this.assertPermitPermission(found, actorId, 'hse.ptw.expire');
 
     const permit = expirePermitTransition(found);
     await this.tx.run(async (handle) => { await this.ptwStore.save(permit, handle); });
@@ -384,11 +384,22 @@ export class HseService {
     return { permit, riskAssessment };
   }
 
-  private assertPermitPermission(permit: PermitToWork, actorId: Id | null): void {
+  /**
+   * THE PERMISSION FOR THE ACT, not for the module.
+   *
+   * This helper asserted `hse.ptw.approve` for FIVE different acts — close, request, reject, reopen
+   * and expire — which is the shape J3-01 removed from the purchase order, where one permission owned
+   * issue, cancel and close alike. It had a consequence here that it did not have there: ASKING for a
+   * permit required the authority to GRANT one, so the person doing the work could never request
+   * their own permit however the routes were declared, and the permit's two-person rule could only
+   * ever separate two HSE officers. Measured: 403, "no grant satisfies hse.ptw.approve", on
+   * `PUT ptws/:id/request` by a Site Engineer who holds `hse.ptw.request`.
+   */
+  private assertPermitPermission(permit: PermitToWork, actorId: Id | null, permission: string): void {
     if (!actorId) return;
     const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: permit.tenantId }];
     if (permit.companyId) orgPath.push({ level: 'company', id: permit.companyId });
-    this.access.assert(actorId, { permission: 'hse.ptw.approve', orgPath, resource: { type: 'project', id: permit.projectId } });
+    this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: permit.projectId } });
   }
 
   /** Optionally narrowed to one project — see the workspace project scope (server-side). */
@@ -498,6 +509,8 @@ export class HseService {
     }
 
     capa.status = 'completed';
+    // WHO closed the corrective action out. The row kept a timestamp and no actor.
+    capa.completedBy = actorId ?? null;
     capa.completedAt = new Date().toISOString();
     capa.updatedAt = new Date().toISOString();
 
@@ -601,11 +614,28 @@ export class HseService {
     return ra;
   }
 
-  async approveRiskAssessment(tenantId: Id, id: Id): Promise<RiskAssessment> {
+  /**
+   * Approve the assessment — the act that lets a permit to work be approved at all.
+   *
+   * It took NO ACTOR: no permission was asserted, nothing was recorded, and the person who wrote the
+   * assessment approved it. The permit that depends on this document has held a two-person rule all
+   * along; the document underneath had neither the rule nor anywhere to put the answer.
+   */
+  async approveRiskAssessment(tenantId: Id, id: Id, actorId: Id | null = null): Promise<RiskAssessment> {
     const ra = await this.riskStore.findById(id, tenantId);
     if (!ra) throw new Error(`risk assessment ${id} not found`);
-    const updated = approveRiskAssessment(ra);
+
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (ra.companyId) orgPath.push({ level: 'company', id: ra.companyId });
+      this.access.assert(actorId, {
+        permission: 'hse.risk-assessment.approve', orgPath, resource: { type: 'project', id: ra.projectId },
+      });
+    }
+
+    const updated = approveRiskAssessment(ra, actorId);
     await this.tx.run(async (handle) => { await this.riskStore.save(updated, handle); });
+    this.logger.log(`Risk assessment ${updated.reference} approved by ${actorId ?? 'unknown'} (separation: ${assessmentSeparation(updated)})`);
     return updated;
   }
 

@@ -391,13 +391,13 @@
   {
     "key": "modules/hse/src/hse.service.ts#assertPermitPermission",
     "classification": "PROJECT_SCOPE_REQUIRED",
-    "resolution": "Canonical permit.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
+    "resolution": "Canonical permit.projectId loaded from the owning store, never an authorization override from URL/query/body. The PERMISSION is now a parameter: this helper asserted `hse.ptw.approve` for five different acts — close, request, reject, reopen, expire — so asking for a permit required the authority to grant one, and the permit's two-person rule could only separate two HSE officers.",
     "organizationBranch": null,
     "baselineScope": "scoped",
-    "change": "Retained canonical project scope",
+    "change": "Retained canonical project scope; the permission is per-act rather than one name for the whole lifecycle",
     "evidence": "hse.assertPermitPermission",
     "security": {
-      "target": "{ permission: 'hse.ptw.approve', orgPath, resource: { type: 'project', id: permit.projectId } }",
+      "target": "{ permission, orgPath, resource: { type: 'project', id: permit.projectId } }",
       "checks": [],
       "provenance": []
     }
@@ -979,6 +979,22 @@
       "checks": [],
       "provenance": [
         "log = await this.delayLogStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/hse/src/hse.service.ts#approveRiskAssessment",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical riskAssessment.projectId loaded from the owning store, never an authorization override from URL/query/body. NEW assertion: approving a risk assessment previously asserted nothing at all, recorded nobody, and let the assessor approve their own work — while a permit to work cannot be approved until its risk assessment is, so the permit gate rested on an unsigned authorisation.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "Added canonical project-scoped authority where there was none",
+    "evidence": "hse.approveRiskAssessment",
+    "security": {
+      "target": "{ permission: 'hse.risk-assessment.approve', orgPath, resource: { type: 'project', id: ra.projectId }, }",
+      "checks": [],
+      "provenance": [
+        "ra = await this.riskStore.findById(id, tenantId)"
       ]
     }
   }

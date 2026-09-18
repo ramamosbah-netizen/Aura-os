@@ -67,12 +67,12 @@
   {
     "file": "modules/hse/src/hse.service.ts",
     "method": "closePermit",
-    "call": "this.assertPermitPermission(found, actorId)"
+    "call": "this.assertPermitPermission(found, actorId, 'hse.ptw.close')"
   },
   {
     "file": "modules/hse/src/hse.service.ts",
     "method": "expirePermit",
-    "call": "this.assertPermitPermission(found, actorId)"
+    "call": "this.assertPermitPermission(found, actorId, 'hse.ptw.expire')"
   },
   {
     "file": "modules/hse/src/hse.service.ts",
@@ -82,7 +82,7 @@
   {
     "file": "modules/hse/src/hse.service.ts",
     "method": "rejectPermit",
-    "call": "this.assertPermitPermission(found, actorId)"
+    "call": "this.assertPermitPermission(found, actorId, 'hse.ptw.approve')"
   },
   {
     "file": "modules/hse/src/hse.service.ts",
@@ -92,12 +92,12 @@
   {
     "file": "modules/hse/src/hse.service.ts",
     "method": "reopenPermit",
-    "call": "this.assertPermitPermission(found, actorId)"
+    "call": "this.assertPermitPermission(found, actorId, 'hse.ptw.reopen')"
   },
   {
     "file": "modules/hse/src/hse.service.ts",
     "method": "requestPermitApproval",
-    "call": "this.assertPermitPermission(found, actorId)"
+    "call": "this.assertPermitPermission(found, actorId, 'hse.ptw.request')"
   },
   {
     "file": "modules/projects/src/delay-eot.service.ts",

@@ -115,7 +115,7 @@ describe('the supplier’s own arithmetic, in the supplier’s own currency', ()
   });
 
   it('applies a line discount the supplier gave', () => {
-    expect(lineAmountInQuotedCurrency(line({ quantity: 10, unitPrice: 50, lineDiscount: 75 }))).toBe(425);
+    expect(lineAmountInQuotedCurrency(line({ quantity: 10, unitPrice: 50, lineDiscount: 75, lineDiscountBasis: 'line_unconditional_prorata' }))).toBe(425);
   });
 
   it('reads nothing for a declined line', () => {

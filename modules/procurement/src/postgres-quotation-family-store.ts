@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+import type { TxHandle } from '@aura/core';
 import type { Id } from '@aura/shared';
 import type {
   OfferKind, QuotationFamily, QuotationOffer, QuotationRevision, RevisionOrigin, RevisionStatus,
@@ -141,6 +142,25 @@ export class PostgresQuotationFamilyStore implements QuotationFamilyStore {
     const res = await this.pool.query(
       `SELECT ${REVISION_COLS} FROM public.aura_procurement_quotation_revisions
         WHERE tenant_id = $1 AND offer_id = $2 AND status = 'confirmed' LIMIT 1`,
+      [tenantId, offerId],
+    );
+    return res.rows[0] ? toRevision(res.rows[0]) : null;
+  }
+
+  /**
+   * The confirmed revision, HELD against supersede for the life of the caller's transaction.
+   *
+   * `FOR SHARE` rather than `FOR UPDATE`: an award does not change the revision, it depends on the
+   * row still meaning what it said. Other readers pass; a concurrent `applyConfirmation` — which
+   * must UPDATE this row to 'superseded' before it can promote the next one past the partial unique
+   * index — waits until the award commits or rolls back. So the award's view of "not stale" is true
+   * AT COMMIT, not merely when it was checked.
+   */
+  async findConfirmedRevisionForAward(tenantId: Id, offerId: Id, tx: TxHandle | null): Promise<QuotationRevision | null> {
+    const executor = (tx as PoolClient) ?? this.pool;
+    const res = await executor.query(
+      `SELECT ${REVISION_COLS} FROM public.aura_procurement_quotation_revisions
+        WHERE tenant_id = $1 AND offer_id = $2 AND status = 'confirmed' LIMIT 1 FOR SHARE`,
       [tenantId, offerId],
     );
     return res.rows[0] ? toRevision(res.rows[0]) : null;

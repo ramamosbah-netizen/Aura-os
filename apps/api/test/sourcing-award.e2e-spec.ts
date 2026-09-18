@@ -103,7 +103,9 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
       for (const [i, prLineId] of prLineIds.entries()) {
         await post(buyer, `/api/v1/procurement/quotations/revisions/${revision.id}/lines`, {
           prLineId, quantity: 10, uom: 'nr', unitPrice: unitPrices[i],
-          ...(discounts?.[i] ? { lineDiscount: discounts[i] } : {}),
+          // The KIND is stated, never defaulted: a discount that does not say what it is gets
+          // refused at capture, which is the point of PO-01's basis.
+          ...(discounts?.[i] ? { lineDiscount: discounts[i], lineDiscountBasis: 'line_unconditional_prorata' } : {}),
           offeredManufacturer: `${supplierName} Industries`, offeredModel: `M-${i + 1}`,
         });
       }
@@ -361,6 +363,8 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
     expect(lines.map((l) => l.unitPrice)).toEqual([500, 1_000]);
     // …and the discount travels beside it rather than being folded in or dropped.
     expect(lines.map((l) => l.lineDiscount)).toEqual([1_000, 3_000]);
+    // …with the KIND of discount it is, so what it is worth on a part delivery is not a guess.
+    expect(lines.every((l) => l.lineDiscountBasis === 'line_unconditional_prorata')).toBe(true);
     // Its provenance is the quotation line it came from, still readable.
     expect(lines.every((l) => Boolean(l.sourceQuoteLineId))).toBe(true);
 

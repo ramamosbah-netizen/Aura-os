@@ -157,6 +157,12 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
    * the only point anybody can still ask them. AURA records one kind; anything else is refused here
    * rather than stored and read later as if it were that one.
    */
+  if (input.lineDiscount != null && !input.lineDiscountBasis) {
+    throw new Error(
+      'a line discount must say which kind it is: what it is worth when half the line arrives ' +
+      'depends on that, and no reader may assume the answer',
+    );
+  }
   if (input.lineDiscount != null && input.lineDiscountBasis
       && !(LINE_DISCOUNT_BASES as readonly string[]).includes(input.lineDiscountBasis)) {
     throw new Error(
@@ -199,9 +205,8 @@ export function makeQuotationLine(input: NewQuotationLine): QuotationLine {
     uom: input.uom?.trim() || null,
     unitPrice: unitPrice === null ? null : Number(unitPrice),
     lineDiscount: input.lineDiscount ?? null,
-    // Defaulted rather than demanded, because there is one kind to choose from — and refused when it
-    // is something else, because no reader would know what that was worth.
-    lineDiscountBasis: input.lineDiscount == null ? null : (input.lineDiscountBasis ?? 'line_unconditional_prorata'),
+    // Never defaulted: a discount states its kind above or it does not get this far.
+    lineDiscountBasis: input.lineDiscountBasis ?? null,
     leadTimeDays: input.leadTimeDays ?? null,
     warrantyMonths: input.warrantyMonths ?? null,
     notes: input.notes?.trim() || null,

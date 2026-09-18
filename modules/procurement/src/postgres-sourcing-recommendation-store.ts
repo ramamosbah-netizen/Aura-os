@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+import type { TxHandle } from '@aura/core';
 import type { Id } from '@aura/shared';
 import type {
   RecommendationMode, RecommendationReasonCode, RecommendationSelection,
@@ -12,7 +13,8 @@ const num = (v: string | number | null): number | null => (v === null ? null : N
 const RECO_COLS =
   'id, tenant_id, company_id, rfq_id, comparison_date::text AS comparison_date, comparison_currency, ' +
   'mode, status, reason_code, reason, created_by, created_at, submitted_by, submitted_at, ' +
-  'decided_by, decided_at, decision_note, withdrawn_by, withdrawn_at, withdrawal_reason';
+  'decided_by, decided_at, decision_note, withdrawn_by, withdrawn_at, withdrawal_reason, ' +
+  'awarded_by, awarded_at';
 
 const SELECTION_COLS =
   'id, tenant_id, recommendation_id, family_id, offer_id, revision_id, supplier_name, ' +
@@ -29,6 +31,7 @@ const toReco = (r: any): SourcingRecommendation => ({
   decidedBy: r.decided_by, decidedAt: iso(r.decided_at), decisionNote: r.decision_note,
   // Read as well as written — a withdrawal nobody can see is not an audit trail.
   withdrawnBy: r.withdrawn_by, withdrawnAt: iso(r.withdrawn_at), withdrawalReason: r.withdrawal_reason,
+  awardedBy: r.awarded_by, awardedAt: iso(r.awarded_at),
 });
 
 const toSelection = (r: any): RecommendationSelection => ({
@@ -56,7 +59,7 @@ export class PostgresSourcingRecommendationStore implements SourcingRecommendati
       await client.query('BEGIN');
       await client.query(
         `INSERT INTO public.aura_procurement_sourcing_recommendations (${RECO_COLS.replace(/::text AS \w+/g, '')})
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
         // One column list serves the SELECT and the INSERT, so every column added to it needs a
         // placeholder here too. Adding the withdrawal columns without these three made every
         // recommendation fail with "INSERT has more target columns than expressions" — invisible to
@@ -64,7 +67,7 @@ export class PostgresSourcingRecommendationStore implements SourcingRecommendati
         [r.id, r.tenantId, r.companyId, r.rfqId, r.comparisonDate, r.comparisonCurrency,
          r.mode, r.status, r.reasonCode, r.reason, r.createdBy, r.createdAt,
          r.submittedBy, r.submittedAt, r.decidedBy, r.decidedAt, r.decisionNote,
-         r.withdrawnBy, r.withdrawnAt, r.withdrawalReason],
+         r.withdrawnBy, r.withdrawnAt, r.withdrawalReason, r.awardedBy, r.awardedAt],
       );
       for (const s of selections) {
         await client.query(
@@ -116,6 +119,23 @@ export class PostgresSourcingRecommendationStore implements SourcingRecommendati
   }
 
   /** Lifecycle only: the commercial content of a decision is never rewritten after the fact. */
+  /**
+   * The claim. `WHERE status = 'approved'` is the whole protection: PostgreSQL applies it to one row
+   * at a time, so of two concurrent awards exactly one sees a row count of 1 and the other sees 0.
+   * It runs inside the caller's transaction, so the claim and the purchase orders it authorises
+   * commit together or not at all.
+   */
+  async claimForAward(tenantId: Id, id: Id, actorId: Id | null, tx: TxHandle | null): Promise<boolean> {
+    const executor = (tx as PoolClient) ?? this.pool;
+    const res = await executor.query(
+      `UPDATE public.aura_procurement_sourcing_recommendations
+          SET status = 'awarded', awarded_by = $3, awarded_at = now()
+        WHERE tenant_id = $1 AND id = $2 AND status = 'approved'`,
+      [tenantId, id, actorId],
+    );
+    return res.rowCount === 1;
+  }
+
   async updateStatus(r: SourcingRecommendation): Promise<void> {
     const res = await this.pool.query(
       `UPDATE public.aura_procurement_sourcing_recommendations

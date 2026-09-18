@@ -64,6 +64,12 @@ export interface PurchaseOrder {
    * valid: a requisition can become an order directly.
    */
   sourcingRecommendationId: Id | null;
+  /**
+   * WHICH SELECTION within that recommendation — one supplier's share of the decision. A unique
+   * index keys on it (migration 0358), so one selection can raise at most one order however many
+   * times an award is attempted.
+   */
+  recommendationSelectionId: Id | null;
   quotationRevisionId: Id | null;
   /** The supplier's OWN reference for the quotation, as they wrote it. */
   supplierQuotationRef: string | null;
@@ -107,6 +113,7 @@ export interface NewPurchaseOrder {
   createdBy?: Id | null;
   currency?: string | null;
   sourcingRecommendationId?: Id | null;
+  recommendationSelectionId?: Id | null;
   quotationRevisionId?: Id | null;
   supplierQuotationRef?: string | null;
   taxTreatment?: 'exclusive' | 'inclusive' | 'exempt' | null;
@@ -138,6 +145,7 @@ export function makePurchaseOrder(input: NewPurchaseOrder): PurchaseOrder {
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     currency: input.currency?.trim() || null,
     sourcingRecommendationId: input.sourcingRecommendationId ?? null,
+    recommendationSelectionId: input.recommendationSelectionId ?? null,
     quotationRevisionId: input.quotationRevisionId ?? null,
     supplierQuotationRef: input.supplierQuotationRef?.trim() || null,
     taxTreatment: input.taxTreatment ?? null,

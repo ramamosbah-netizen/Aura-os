@@ -33,7 +33,13 @@ without a decision, because somebody is in a hurry. Each of those is one commit 
 and none of them looks wrong in the diff that introduces it.
 
 So for each act, three questions are answered here and nowhere else: **what authority it holds**,
-**what irreversible facts it creates**, and **what it must never do**.
+**what facts it creates that may never be erased**, and **what it must never do**.
+
+The middle one is deliberately worded that way rather than as "what it makes irreversible". Only one
+act in sourcing is irreversible — raising the purchase orders — and calling a recommendation's
+lifecycle irreversible would forbid transitions the business legitimately needs. What must survive
+is the record that each act HAPPENED; the current status is a projection of those acts and moves as
+they accumulate.
 
 ## SUP-13 — the recommendation and its approval
 
@@ -44,13 +50,32 @@ normalised at a stated comparison date — and that a *different* person approve
 or stood down that choice. It holds the approval matrix check on the **actual award value**, on each
 supplier's award and on the whole decision, so splitting a commitment cannot evade a limit.
 
-### Irreversible facts it creates
+### The facts it records, and the state it projects
 
-| Fact | Why it cannot be taken back |
+The distinction matters more here than anywhere else in this ADR, and an earlier draft got it
+wrong by calling the recommendation itself "irreversible". It is not. A recommendation is a
+working record with a legitimate lifecycle — drafted, submitted, returned, approved, stood down —
+and freezing that lifecycle in the name of auditability would block transitions the business
+genuinely needs.
+
+**What is immutable is that each act HAPPENED**, not the state the record is in now:
+
+| Durable fact — never erased | Why |
 |---|---|
-| The recommendation and its selections | Each selection names the **revision** the decision was made on. It is never re-pointed: a decision made on Rev 1 was a decision about Rev 1, and a newer revision makes it STALE rather than updated. |
-| The decision — who, when, note | It is the record that somebody with authority accepted a commitment. `decided_by/at/note` are never overwritten, including by a withdrawal (migration 0356). |
-| The withdrawal — who, when, why | A second fact ABOUT the decision, never a replacement for it. |
+| This recommendation was made, on these offers, on these revisions | Each selection names the **revision** the decision was made on, and is never re-pointed. A decision made on Rev 1 was a decision about Rev 1; a newer revision makes it STALE, which is something a person then acts on, not something the record quietly absorbs. |
+| It was submitted, by whom and when | The maker's act. |
+| It was decided — approved, rejected or returned — by whom, when, with what note | Somebody with authority accepted or refused a commitment. `decided_by/at/note` are never overwritten, including by a withdrawal (migration 0356). |
+| It was stood down, by whom, when and why | A LATER fact ABOUT the decision, never a replacement for it (`withdrawn_by/at/reason`). |
+| It was awarded, by whom and when | `awarded_by/at`, written by the claim that authorises the purchase orders (migration 0359). |
+
+**`status` is none of those.** It is a projection of them — the current position, derived from what
+has happened, and legitimately mutable as more happens. The rule is not "the status may never
+change"; it is that **changing it never costs a fact**. A transition that would have to overwrite
+one of the rows above is the thing this ADR forbids, and that is a much narrower and more useful
+prohibition than calling the aggregate immutable.
+
+The genuinely irreversible act in sourcing is one act, and it is SUP-14's: raising the purchase
+orders. Everything before it is a record of deliberation.
 
 ### What it must never do
 
@@ -72,13 +97,29 @@ To execute an **already-made** decision: turn an approved recommendation into pu
 per supplier, carrying each supplier's own currency, prices, discounts and terms. It holds no
 commercial discretion whatsoever. Everything it writes was decided somewhere else and is copied.
 
-### Irreversible facts it creates
+### The facts it creates — and these ARE irreversible
 
 | Fact | Why it cannot be taken back |
 |---|---|
 | Purchase orders, numbered, with lines | `procurement.po.created` reaches committed project cost and the quantity ledger. An order is an instruction to a supplier; unsaying it is a cancellation, which is the order's own governed act. |
 | The recommendation becomes `awarded` | It is no longer live, no longer withdrawable, and cannot be awarded twice. |
 | `procurement.sourcing.awarded` | The audit trail of which decision, on which comparison basis, produced which orders. |
+
+### What "exactly once" means here, and how it is held
+
+The award is where sourcing stops being deliberation and becomes money, so its correctness includes
+what happens when two of them run at the same moment. None of these is hypothetical: two buyers
+click Award in the same second, or a request is retried while the first attempt is still running.
+
+| Must never happen | Held by |
+|---|---|
+| Two sets of purchase orders for one decision | An advisory lock on the recommendation, taken inside the transaction BEFORE anything is read; a conditional claim `approved → awarded` whose row count decides the winner; and a unique index on the recommendation selection (migration 0358) that makes a second order impossible even from a future code path that forgets the first two. |
+| One supplier ordered from and the next not | One transaction around the whole award — orders, lines, events and the claim. It commits or it does not. |
+| Orders that exist while the decision still reads unawarded | The same transaction: the claim is part of it. |
+| An order placed on a revision that had already been superseded | The staleness check reads the confirmed revisions `FOR SHARE` inside the transaction, so a concurrent confirmation — which must supersede the current revision before it can promote the next past the partial unique index — waits. The check is true AT COMMIT, not merely when it was made. |
+
+Proved in `sourcing-award.pg.test.ts` against real PostgreSQL with two connections, because none of
+these failures can be reproduced in memory or by a sequential test however thorough.
 
 ### What it must never do
 

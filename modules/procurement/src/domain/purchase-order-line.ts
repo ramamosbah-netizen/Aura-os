@@ -116,9 +116,22 @@ export type PurchaseOrderLineSource = (typeof LINE_SOURCES)[number];
  *                              and never belongs in the goods value at all.
  *   a RETROSPECTIVE credit     is a later document against an order already placed, not a term of it.
  *
- * Each needs its own answer about receipt, matching and cost. Adding one to this union deliberately
- * breaks the exhaustive switch in `lineEffectiveUnitPrice`, so nobody can add a kind without being
- * made to say what it is worth when half of it turns up.
+ * AND NONE OF THEM BELONGS IN THIS UNION AT ALL — not even later, with a rule written for it.
+ *
+ * This is a LINE VALUATION concept: "what is one unit of this line worth". A discount that is not a
+ * property of a line cannot be given a per-unit answer however carefully it is worded, and adding
+ * one here would turn an exhaustive switch over a single narrow question into the place every
+ * commercial adjustment in the system ends up being decided. Each of those is its own thing, with
+ * its own lifecycle, its own timing and its own document:
+ *
+ *   OrderAdjustment       a discount or charge belonging to the ORDER — its header, not its lines
+ *   PaymentTermDiscount   earned by paying, so it settles against the invoice, not the goods
+ *   RebateAgreement       earned on a condition over time, and possibly never earned at all
+ *   CreditAdjustment      a later document against an order already placed
+ *
+ * So this union may grow only with another way a LINE's own price is reduced — and each addition
+ * breaks the exhaustive switches below until somebody says what it is worth when half the line
+ * turns up, which is the question they exist to make unavoidable.
  */
 export const LINE_DISCOUNT_BASES = ['line_unconditional_prorata'] as const;
 export type LineDiscountBasis = (typeof LINE_DISCOUNT_BASES)[number];
@@ -218,9 +231,15 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
    * change a commercial term.
    */
   const lineDiscount = input.lineDiscount == null ? null : Number(input.lineDiscount);
-  const lineDiscountBasis = lineDiscount === null
-    ? null
-    : (input.lineDiscountBasis ?? 'line_unconditional_prorata');
+  /**
+   * NO FREE DEFAULT. Defaulting the kind would reinstate the assumption the kind exists to remove:
+   * a caller who has a header discount or an early-payment term would have it recorded as a
+   * pro-rata line discount by omission, and nobody would ever see the decision being made. A
+   * discount states its kind or it is refused. The historical rows migration 0357 backfilled are a
+   * different case: their semantics were known, because the capture surface could express nothing
+   * else — that is a controlled statement about the past, not a default for the future.
+   */
+  const lineDiscountBasis = input.lineDiscountBasis ?? null;
   if (lineDiscount !== null) {
     if (!Number.isFinite(lineDiscount) || lineDiscount < 0) {
       throw new Error('a line discount cannot be negative — a surcharge is not a discount');
@@ -228,7 +247,13 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     if (lineDiscount > moneyNumber(quantity * unitPrice)) {
       throw new Error('a line discount cannot exceed what the line comes to before it');
     }
-    if (lineDiscountBasis === null || !(LINE_DISCOUNT_BASES as readonly string[]).includes(lineDiscountBasis)) {
+    if (lineDiscountBasis === null) {
+      throw new Error(
+        'a line discount must say which kind it is: what it is worth when half the line arrives ' +
+        'depends on that, and no reader may assume the answer',
+      );
+    }
+    if (!(LINE_DISCOUNT_BASES as readonly string[]).includes(lineDiscountBasis)) {
       throw new Error(
         `a line discount must say which kind it is, and AURA records only ${LINE_DISCOUNT_BASES.join(', ')} — ` +
         'a header discount, a conditional rebate and an early-payment discount are each worth something ' +
@@ -367,10 +392,37 @@ export function orderCommitment(
  * partial receipt, the commitment an approver is asked for — goes through here, so a discount
  * cannot be honoured in one reading and forgotten in another.
  */
-export function lineNetValue(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount'>): number {
-  // Deliberately kind-agnostic: every kind of discount reduces what the LINE is worth in total. What
-  // differs between kinds is what a PART of it is worth, which is `lineEffectiveUnitPrice`'s job.
-  return moneyNumber(moneyNumber(line.quantity * line.unitPrice) - (line.lineDiscount ?? 0));
+/**
+ * THE FACTS THAT DECIDE WHAT A LINE IS WORTH, and nothing else. Named so that every reading of a
+ * line's value takes the same four, and so a caller that has them but has not built an order line
+ * yet — an award computing a header value before the order exists — asks the same function rather
+ * than assembling a lookalike of its own.
+ */
+export type LineValuation = Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount' | 'lineDiscountBasis'>;
+
+export function lineNetValue(line: LineValuation): number {
+  const gross = moneyNumber(line.quantity * line.unitPrice);
+  if (line.lineDiscount === null || line.lineDiscount === undefined) return gross;
+  /**
+   * SUBTRACTING IS NOT A GENERAL RULE ABOUT DISCOUNTS, it is what THIS kind does. It is tempting to
+   * say "every discount reduces what the line is worth" and skip the switch — and it would be wrong
+   * for three of the four things people call a discount: an early-payment discount does not reduce
+   * the goods commitment when the order is placed, a rebate may never be earned at all, and a
+   * retrospective credit does not rewrite an order that already exists. Those are not kinds this
+   * union may gain (see `LINE_DISCOUNT_BASES`), and the switch is here so that a fourth one which
+   * IS a line valuation concept cannot be added without its own answer here too.
+   */
+  switch (line.lineDiscountBasis) {
+    case 'line_unconditional_prorata':
+      return moneyNumber(gross - line.lineDiscount);
+    case null:
+    case undefined:
+      throw new Error('this line carries a discount that does not say which kind it is, so what the line is worth cannot be determined');
+    default: {
+      const unreached: never = line.lineDiscountBasis;
+      throw new Error(`discount kind ${String(unreached)} is invalid here: no line rule is declared for it`);
+    }
+  }
 }
 
 /**
@@ -379,20 +431,13 @@ export function lineNetValue(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPri
  * part delivery at the gross unit price would credit the supplier for a discount they have not yet
  * fully earned, and the numbers would only come right if the last unit ever turned up.
  */
-export function lineEffectiveUnitPrice(
-  line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount' | 'lineDiscountBasis'>,
-): number {
+export function lineEffectiveUnitPrice(line: LineValuation): number {
   if (!line.quantity) return moneyNumber(line.unitPrice);
   if (line.lineDiscount === null || line.lineDiscount === undefined) {
     return moneyNumber(line.unitPrice);
   }
-  /**
-   * THE SWITCH IS THE POLICY. Pro rata is what an UNCONDITIONAL LINE discount is worth on a part
-   * delivery, and it is not a general truth about discounts. A second kind added to
-   * `LINE_DISCOUNT_BASES` fails to compile here until somebody says what it is worth when half the
-   * line arrives — which is exactly the question a conditional rebate or an early-payment discount
-   * answers differently, and the question this switch exists to make unavoidable.
-   */
+  // Pro rata is what an UNCONDITIONAL LINE discount is worth on a part delivery. Same reasoning as
+  // `lineNetValue`: the rule belongs to the kind, not to the word "discount".
   switch (line.lineDiscountBasis) {
     case 'line_unconditional_prorata':
       return lineNetValue(line) / line.quantity;
@@ -407,7 +452,7 @@ export function lineEffectiveUnitPrice(
   }
 }
 
-export function orderTotal(lines: PurchaseOrderLine[]): OrderTotal {
+export function orderTotal(lines: LineValuation[]): OrderTotal {
   return {
     lineCount: lines.length,
     // Each line extension rounds before the sum, so the total is what the printed lines add up to.

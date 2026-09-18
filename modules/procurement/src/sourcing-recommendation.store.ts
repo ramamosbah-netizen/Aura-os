@@ -1,3 +1,4 @@
+import type { TxHandle } from '@aura/core';
 import type { Id } from '@aura/shared';
 import type { RecommendationSelection, SourcingRecommendation } from './domain/sourcing-recommendation';
 
@@ -22,4 +23,14 @@ export interface SourcingRecommendationStore {
   listSelections(tenantId: Id, recommendationId: Id): Promise<RecommendationSelection[]>;
   /** Lifecycle only. Commercial content is never rewritten after it is created. */
   updateStatus(recommendation: SourcingRecommendation): Promise<void>;
+  /**
+   * CLAIM this recommendation for an award: move it from `approved` to `awarded` and say whether
+   * THIS caller was the one who moved it.
+   *
+   * A conditional update, not a read followed by a write. Two requests awarding the same
+   * recommendation can both read `approved` before either writes — the check-then-act that looks
+   * safe in one process and is not safe at all in two. The database decides, once, and the loser is
+   * told it lost rather than raising a second set of purchase orders.
+   */
+  claimForAward(tenantId: Id, id: Id, actorId: Id | null, tx: TxHandle | null): Promise<boolean>;
 }

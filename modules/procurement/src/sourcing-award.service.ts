@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { EVENT_STORE, type EventStore, LockService, TX_RUNNER, type TxHandle, type TxRunner } from '@aura/core';
 import { makeEvent, type Id } from '@aura/shared';
 import { PR_LINE_STORE, type PurchaseRequestLineStore } from './purchase-request-line-store';
 import type { PurchaseRequestLine } from './domain/purchase-request-line';
@@ -12,7 +12,7 @@ import type { QuotationLine } from './domain/quotation-line';
 import { RFQ_STORE, type RfqStore } from './rfq-store';
 import { SOURCING_RECOMMENDATION_STORE, type SourcingRecommendationStore } from './sourcing-recommendation.store';
 import { makePurchaseOrder, type PurchaseOrder } from './domain/purchase-order';
-import { orderTotal, type PurchaseOrderLine } from './domain/purchase-order-line';
+import { orderTotal, type LineValuation } from './domain/purchase-order-line';
 import { makePurchaseOrderLine } from './domain/purchase-order-line';
 import { aStatus, recommendationStaleness, type RecommendationSelection } from './domain/sourcing-recommendation';
 
@@ -34,6 +34,33 @@ import { aStatus, recommendationStaleness, type RecommendationSelection } from '
  * both the requisition line it answers and the quotation line it was priced from — so a price that
  * cannot be traced back to an offer cannot be written at all.
  *
+ * ONE TRANSACTION, AND THREE DEFENCES AGAINST AWARDING TWICE.
+ *
+ * An award raises several purchase orders, their lines and their events, and moves the
+ * recommendation to `awarded`. All of it commits together or none of it does — because the states
+ * in between are each a real, expensive mess: one supplier ordered from and the next not, or both
+ * ordered from with the decision still sitting unawarded for somebody to award again.
+ *
+ * Concurrency is part of correctness here, not a refinement of it. Two requests can both read
+ * `approved` before either writes — the check-then-act that is safe in one process and is not safe
+ * at all in two — and the result is a duplicated order to a supplier who is entitled to be paid for
+ * both. So:
+ *
+ *   1. AN ADVISORY LOCK on the recommendation, taken inside the transaction, so the second request
+ *      waits rather than reading a state the first is about to change.
+ *   2. A CONDITIONAL CLAIM, `approved → awarded`, whose row count decides which request won. This is
+ *      the authority: the database answers once, and the loser is told it lost.
+ *   3. A UNIQUE INDEX on the recommendation SELECTION (migration 0358), so a second order for the
+ *      same supplier's share of the same decision cannot be written at all — including by a future
+ *      code path that forgets the first two.
+ *
+ * AND THE STALENESS CHECK HOLDS ITS ROWS. Reading "no newer revision has been confirmed" and then
+ * awarding leaves a window for exactly that to happen in between. The revisions are read `FOR SHARE`
+ * inside the transaction, so a concurrent confirmation — which must supersede the current revision
+ * before it can promote the next past the partial unique index — waits for this award to finish.
+ * Either it lands first and this read sees it, or it lands after an award that was true when it
+ * committed.
+ *
  * NOTHING COMMERCIAL IS LEFT BEHIND. The quantity, the gross unit price, the line discount, the make
  * and model offered, the tax treatment, freight and payment terms all cross from the offer to the
  * order untouched. The award used to REFUSE a discounted line, because a purchase-order line could
@@ -41,6 +68,23 @@ import { aStatus, recommendationStaleness, type RecommendationSelection } from '
  * the line a discount of its own, so a valid quotation can now reach an order whatever terms it
  * carries.
  */
+/**
+ * EVERY FACT THAT DECIDES WHAT AN AWARDED LINE IS WORTH, mapped in ONE place.
+ *
+ * The header value is computed from these before the order exists, and the order line is built from
+ * the same offer line afterwards — two constructions of the same thing, which is exactly how they
+ * drift. They have drifted twice already: once omitting the discount, so a discounted offer produced
+ * an order whose header said the gross figure while its lines said the net one; once omitting the
+ * discount's KIND, so the value could not be computed at all. Adding a field to the line's valuation
+ * means adding it here, and the type stops the build until it is.
+ */
+const asOrderValue = (l: QuotationLine): LineValuation => ({
+  quantity: l.quantity ?? 0,
+  unitPrice: l.unitPrice ?? 0,
+  lineDiscount: l.lineDiscount,
+  lineDiscountBasis: l.lineDiscountBasis,
+});
+
 export const AWARD_EVENT = {
   awarded: 'procurement.sourcing.awarded',
 } as const;
@@ -65,8 +109,16 @@ export class SourcingAwardService {
      * would only show up in a cost report months later.
      */
     private readonly orders: PurchaseOrderService,
-    @Optional() @Inject(PURCHASE_REQUEST_STORE) private readonly requests: PurchaseRequestStore | null = null,
     @Inject(PO_LINE_STORE) private readonly orderLines: PurchaseOrderLineStore,
+    @Optional() @Inject(PURCHASE_REQUEST_STORE) private readonly requests: PurchaseRequestStore | null = null,
+    /**
+     * The transaction this whole award runs in, and the lock that serialises it against another
+     * award of the same recommendation. Optional so a unit test can build the service without a
+     * database; `NullTxRunner` then runs the same code with no transaction, which is honest about
+     * what in-memory mode can and cannot promise.
+     */
+    @Optional() @Inject(TX_RUNNER) private readonly txRunner: TxRunner | null = null,
+    @Optional() private readonly locks: LockService | null = null,
     @Optional() @Inject(EVENT_STORE) private readonly events: EventStore | null = null,
   ) {}
 
@@ -81,6 +133,23 @@ export class SourcingAwardService {
     recommendation: { id: Id; rfqId: Id; mode: string };
     orders: PurchaseOrder[];
   }> {
+    const lockKey = `sourcing-award:${recommendationId}`;
+    const run = this.txRunner ?? { run: <T,>(fn: (tx: TxHandle | null) => Promise<T>) => fn(null) };
+    return run.run(async (tx) => {
+      try {
+        // Taken FIRST, before anything is read: a lock acquired after the read it is meant to
+        // protect protects nothing.
+        if (this.locks) await this.locks.acquireLock(tx, lockKey);
+        return await this.awardWithin(tx, tenantId, recommendationId, actorId ?? null);
+      } finally {
+        if (this.locks && !tx) this.locks.releaseInMemoryLock(lockKey);
+      }
+    });
+  }
+
+  private async awardWithin(
+    tx: TxHandle | null, tenantId: Id, recommendationId: Id, actorId: Id | null,
+  ): Promise<{ recommendation: { id: Id; rfqId: Id; mode: string }; orders: PurchaseOrder[] }> {
     const recommendation = await this.recommendations.get(tenantId, recommendationId);
     if (!recommendation) throw new Error(`recommendation ${recommendationId} not found`);
     if (recommendation.status !== 'approved') {
@@ -92,7 +161,8 @@ export class SourcingAwardService {
 
     const current: Record<string, { revisionId: string } | null> = {};
     for (const selection of selections) {
-      const effective = await this.families.findConfirmedRevision(tenantId, selection.offerId);
+      // Held for the life of this transaction, so "not stale" is still true when it commits.
+      const effective = await this.families.findConfirmedRevisionForAward(tenantId, selection.offerId, tx);
       current[selection.offerId] = effective ? { revisionId: effective.id } : null;
     }
     const staleness = recommendationStaleness(selections, current);
@@ -156,15 +226,7 @@ export class SourcingAwardService {
        * the header as the supplier quoted it — stated beside the value, not folded into it and not
        * spread across the lines, which would invent a per-item cost nobody quoted.
        */
-      const value = orderTotal(
-        // EVERY FIELD THAT AFFECTS WHAT A LINE IS WORTH, including the discount. An earlier version
-        // mapped only quantity and unit price here, so a discounted offer produced an order whose
-        // header said the GROSS figure while its lines said the net one — two totals disagreeing
-        // inside a single order, written by the same function call.
-        awarded.map((l) => ({
-          quantity: l.quantity ?? 0, unitPrice: l.unitPrice ?? 0, lineDiscount: l.lineDiscount,
-        }) as PurchaseOrderLine),
-      ).value;
+      const value = orderTotal(awarded.map(asOrderValue)).value;
 
       plan.push({
         selection,
@@ -200,20 +262,16 @@ export class SourcingAwardService {
 
     for (const { selection, order, lines: planned } of plan) {
       /**
-       * IDEMPOTENT PER SELECTION. The key names the recommendation and the selection, so a retry
-       * after a failure part-way through a split award returns the order already raised for that
-       * supplier instead of raising a second one for the same award.
+       * Raised INSIDE this award's transaction, so a refusal on the next supplier takes this order
+       * back out with it. `recommendationSelectionId` is what the unique index keys on: one order
+       * per supplier's share of one decision, enforced by the database rather than by this loop.
        */
-      const raisedOrder = await this.orders.create(order, `sourcing-award:${recommendation.id}:${selection.id}`);
+      const raisedOrder = await this.orders.raise(tx, { ...order, recommendationSelectionId: selection.id });
       raised.push(raisedOrder);
-
-      // Same reason: an order that already carries its lines is not given them a second time.
-      const existing = await this.orderLines.listForOrder(raisedOrder.id, tenantId);
-      if (existing.length > 0) continue;
 
       let lineNo = 1;
       for (const { quoted, requirement } of planned) {
-        await this.orderLines.save(makePurchaseOrderLine({
+        await this.orderLines.saveWithClient(tx, makePurchaseOrderLine({
           tenantId,
           companyId: recommendation.companyId ?? null,
           poId: raisedOrder.id,
@@ -229,19 +287,15 @@ export class SourcingAwardService {
             model: quoted.offeredModel,
             uom: quoted.uom ?? requirement.uom,
           },
-          quantity: quoted.quantity ?? 0,
+          ...asOrderValue(quoted),
           // IN THE SUPPLIER'S CURRENCY. The GROSS per-unit figure, exactly as quoted, because that
           // is what the supplier will print on their invoice line and what a three-way match will
           // compare against. The discount travels beside it (PO-01) rather than being folded in —
           // folding it would restate a price the supplier never gave and make their invoice look
-          // wrong against our own order.
-          unitPrice: quoted.unitPrice ?? 0,
-          // The supplier's own line discount, carried across rather than retyped — AND THE KIND OF
-          // DISCOUNT IT IS, because what it is worth when half the line arrives depends on that and
-          // the order must not have to guess. Its provenance is `sourceQuoteLineId` below: the
-          // quotation line it came from, still readable.
-          lineDiscount: quoted.lineDiscount,
-          lineDiscountBasis: quoted.lineDiscountBasis,
+          // wrong against our own order. The discount travels beside it with the KIND of discount
+          // it is, because what it is worth when half the line arrives depends on that and the order
+          // must not have to guess. Its provenance is `sourceQuoteLineId` below: the quotation line
+          // it came from, still readable.
           // AGREED, not an estimate: this price was quoted by the supplier and accepted through a
           // governed recommendation that somebody with the authority to commit it approved.
           unitPriceBasis: 'agreed',
@@ -258,10 +312,24 @@ export class SourcingAwardService {
       );
     }
 
-    await this.recommendations.updateStatus({ ...recommendation, status: 'awarded' });
+    /**
+     * THE CLAIM, and the only thing that decides who won. `approved → awarded` as a conditional
+     * update: if another request got here first this returns false, and throwing rolls back every
+     * order raised above. The advisory lock means that should not happen; this is what makes it not
+     * matter if it does.
+     */
+    const claimed = await this.recommendations.claimForAward(tenantId, recommendationId, actorId, tx);
+    if (!claimed) {
+      throw new Error(
+        'this recommendation was already awarded by someone else while this award was being ' +
+        'prepared — read it again before acting, because those purchase orders exist',
+      );
+    }
 
     if (this.events) {
-      await this.events.append([makeEvent({
+      // In the same transaction as the orders it describes: an audit trail that can outlive a
+      // rolled-back award is a record of something that did not happen.
+      await this.events.appendWithClient(tx, [makeEvent({
         type: AWARD_EVENT.awarded,
         tenantId, companyId: recommendation.companyId, actorId: actorId ?? null,
         aggregateType: 'procurement.sourcing_recommendation', aggregateId: recommendation.id,

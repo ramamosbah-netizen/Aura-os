@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
 import { assertSameTenant, diffFields, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
-import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, TenantContext } from '@aura/core';
+import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxHandle, type TxRunner, TenantContext } from '@aura/core';
 import { PROCUREMENT_EVENT, type PurchaseOrder, type PurchaseOrderStatus, type NewPurchaseOrder, makePurchaseOrder } from './domain/purchase-order';
 import { requiredApproval } from './domain/approval-matrix';
 import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore } from './purchase-order-store';
@@ -71,54 +71,78 @@ export class PurchaseOrderService implements OnModuleInit {
       validate: (input) => {
         if (!input.title || !input.title.trim()) throw new Error('purchase order title is required');
       },
-      handler: async (command, tx) => {
-        const po = makePurchaseOrder(command.payload);
-        if (!po.reference) {
-          po.reference = await this.numbering.generateNextNumber(
-            po.tenantId,
-            po.companyId,
-            'procurement',
-            'purchase-order',
-            'PO',
-          );
-        }
-        const event = makeEvent({
-          type: PROCUREMENT_EVENT.poCreated,
-          tenantId: po.tenantId,
-          companyId: po.companyId,
-          actorId: po.createdBy,
-          aggregateType: 'procurement.po',
-          aggregateId: po.id,
-          payload: {
-            title: po.title,
-            status: po.status,
-            value: po.value,
-            supplier: po.supplierName,
-            project: po.projectId ? { id: po.projectId, name: po.projectName } : null,
-            cbsNodeId: po.cbsNodeId,
-            // BOQ coding → the Quantity Ledger accrues ORDERED quantity on this measured line.
-            boqItemId: po.boqItemId,
-            orderedQuantity: po.orderedQuantity,
-            unit: po.unit,
-          },
-        });
-        await this.store.createWithClient(tx, po);
-        await this.events.appendWithClient(tx, [event]);
-        this.logger.log(`PO created: ${po.title} (${po.id}) value=${po.value}`);
-        return po;
-      },
+      handler: (command, tx) => this.raise(tx, command.payload),
     });
   }
 
-  async create(input: NewPurchaseOrder, idempotencyKey?: string | null): Promise<PurchaseOrder> {
-    // Approved-vendor enforcement: a PO bound to a supplier must reference an APPROVED
-    // supplier in the master, and the snapshot name is taken from it (no free-text drift).
-    if (input.supplierId) {
-      const supplier = await this.suppliers.get(input.supplierId);
-      if (!supplier || supplier.tenantId !== input.tenantId) throw new Error(`supplier ${input.supplierId} not found`);
-      if (!isApproved(supplier)) throw new Error(`supplier ${supplier.name} is not approved (status ${supplier.status})`);
-      input = { ...input, supplierName: supplier.name };
+  /**
+   * RAISE AN ORDER INSIDE A TRANSACTION THE CALLER OWNS.
+   *
+   * Everything that makes a purchase order real happens here: the number, the row and the
+   * `po.created` event that carries the commitment to project cost and the ordered quantity to the
+   * ledger. Both ways into it — the command bus, and an award raising several orders as one act —
+   * run exactly this, so neither can drift into being a lesser kind of purchase order.
+   *
+   * It is exposed because SUP-14 cannot use `create`: that opens its OWN transaction through the
+   * command bus, and an award that raised each order in a transaction of its own could leave one
+   * supplier ordered from and the next not. The award owns one transaction and passes it in.
+   *
+   * WHAT THE CALLER TAKES ON by using this instead of `create`: the permission check and the
+   * idempotency record belong to the bus. `SourcingAwardService` answers for both — the route
+   * declares `procurement.rfq.award`, and a unique index on the recommendation selection makes a
+   * second order for the same decision impossible rather than merely unlikely (migration 0358).
+   */
+  async raise(tx: TxHandle | null, input: NewPurchaseOrder): Promise<PurchaseOrder> {
+    const checked = await this.withApprovedSupplier(input);
+    const po = makePurchaseOrder(checked);
+    if (!po.reference) {
+      po.reference = await this.numbering.generateNextNumber(
+        po.tenantId,
+        po.companyId,
+        'procurement',
+        'purchase-order',
+        'PO',
+      );
     }
+    const event = makeEvent({
+      type: PROCUREMENT_EVENT.poCreated,
+      tenantId: po.tenantId,
+      companyId: po.companyId,
+      actorId: po.createdBy,
+      aggregateType: 'procurement.po',
+      aggregateId: po.id,
+      payload: {
+        title: po.title,
+        status: po.status,
+        value: po.value,
+        supplier: po.supplierName,
+        project: po.projectId ? { id: po.projectId, name: po.projectName } : null,
+        cbsNodeId: po.cbsNodeId,
+        // BOQ coding → the Quantity Ledger accrues ORDERED quantity on this measured line.
+        boqItemId: po.boqItemId,
+        orderedQuantity: po.orderedQuantity,
+        unit: po.unit,
+      },
+    });
+    await this.store.createWithClient(tx, po);
+    await this.events.appendWithClient(tx, [event]);
+    this.logger.log(`PO created: ${po.title} (${po.id}) value=${po.value}`);
+    return po;
+  }
+
+  /**
+   * Approved-vendor enforcement: an order bound to a supplier must reference an APPROVED supplier in
+   * the master, and the snapshot name is taken from there so it cannot drift from it.
+   */
+  private async withApprovedSupplier(input: NewPurchaseOrder): Promise<NewPurchaseOrder> {
+    if (!input.supplierId) return input;
+    const supplier = await this.suppliers.get(input.supplierId);
+    if (!supplier || supplier.tenantId !== input.tenantId) throw new Error(`supplier ${input.supplierId} not found`);
+    if (!isApproved(supplier)) throw new Error(`supplier ${supplier.name} is not approved (status ${supplier.status})`);
+    return { ...input, supplierName: supplier.name };
+  }
+
+  async create(input: NewPurchaseOrder, idempotencyKey?: string | null): Promise<PurchaseOrder> {
     const po = await this.commands.execute<PurchaseOrder>({
       id: newId(),
       name: CREATE_PO,

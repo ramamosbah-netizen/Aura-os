@@ -1,3 +1,4 @@
+import type { TxHandle } from '@aura/core';
 import type { Id } from '@aura/shared';
 import type { QuotationFamily, QuotationOffer, QuotationRevision } from './domain/quotation-family';
 
@@ -31,6 +32,17 @@ export interface QuotationFamilyStore {
   listRevisions(tenantId: Id, offerId: Id): Promise<QuotationRevision[]>;
   /** The commercially effective revision, or null. Null is a real answer, not a miss. */
   findConfirmedRevision(tenantId: Id, offerId: Id): Promise<QuotationRevision | null>;
+  /**
+   * The same read, INSIDE the caller's transaction and holding the row against change.
+   *
+   * This is what closes the window between "this recommendation is not stale" and the purchase
+   * orders it authorises. Without it a supplier's revision could be confirmed in the gap, and the
+   * award would commit on terms that had stopped being current while it was working. `FOR SHARE`
+   * lets other readers through and makes a concurrent supersede WAIT for this transaction — so
+   * either the confirmation lands first and this read sees it, or it lands after and the award it
+   * would have invalidated has already committed on what was true.
+   */
+  findConfirmedRevisionForAward(tenantId: Id, offerId: Id, tx: TxHandle | null): Promise<QuotationRevision | null>;
 
   /** Replace a DRAFT revision's commercial facts. Refused by the service for anything else. */
   updateDraftRevision(revision: QuotationRevision): Promise<void>;

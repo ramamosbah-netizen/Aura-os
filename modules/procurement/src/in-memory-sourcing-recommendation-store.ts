@@ -21,6 +21,18 @@ export class InMemorySourcingRecommendationStore implements SourcingRecommendati
     this.selections.set(recommendation.id, selections.map((s) => ({ ...s })));
   }
 
+  /**
+   * The same conditional claim the database makes. There is no concurrency here to protect against,
+   * and that is exactly why it matters: a memory store that lets an already-awarded recommendation
+   * be claimed twice turns a real invariant into something only production can catch.
+   */
+  async claimForAward(tenantId: Id, id: Id, actorId: Id | null): Promise<boolean> {
+    const row = this.rows.get(id);
+    if (!row || row.tenantId !== tenantId || row.status !== 'approved') return false;
+    this.rows.set(id, { ...row, status: 'awarded', awardedBy: actorId, awardedAt: new Date().toISOString() });
+    return true;
+  }
+
   async get(tenantId: Id, id: Id): Promise<SourcingRecommendation | null> {
     const row = this.rows.get(id);
     return row && row.tenantId === tenantId ? { ...row } : null;

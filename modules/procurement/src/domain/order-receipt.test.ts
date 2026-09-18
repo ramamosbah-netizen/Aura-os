@@ -149,7 +149,7 @@ describe('exposure', () => {
 describe('a line discount, at the point of delivery', () => {
   it('values what is still outstanding at the effective unit price, not the list price', () => {
     // 10 at 250 less a 500 discount: 2,000 for the line, 200 a unit. Four arrive, six outstanding.
-    const l = line({ id: 'l1', quantity: 10, unitPrice: 250, lineDiscount: 500 });
+    const l = line({ id: 'l1', quantity: 10, unitPrice: 250, lineDiscount: 500, lineDiscountBasis: 'line_unconditional_prorata' });
     const receipt = receiptOf([l], { l1: 4 });
 
     expect(receipt.lines[0].outstanding).toBe(6);
@@ -158,7 +158,7 @@ describe('a line discount, at the point of delivery', () => {
   });
 
   it('closes at zero when the whole line arrives, discount and all', () => {
-    const l = line({ id: 'l1', quantity: 10, unitPrice: 250, lineDiscount: 500 });
+    const l = line({ id: 'l1', quantity: 10, unitPrice: 250, lineDiscount: 500, lineDiscountBasis: 'line_unconditional_prorata' });
     const receipt = receiptOf([l], { l1: 10 });
     expect(receipt.lines[0].outstandingValue).toBe(0);
     expect(receipt.fullyReceived).toBe(true);

@@ -242,7 +242,10 @@ describe('a line’s lineage is fixed when it is created', () => {
  * delivered — so every reading of that line agrees, which is the whole point.
  */
 describe('a line discount', () => {
-  const discounted = (over = {}) => line({ quantity: 10, unitPrice: 250, lineDiscount: 500, ...over });
+  // The kind is stated at every call, because the domain refuses a discount without one.
+  const discounted = (over = {}) => line({
+    quantity: 10, unitPrice: 250, lineDiscount: 500, lineDiscountBasis: 'line_unconditional_prorata', ...over,
+  });
 
   it('is kept beside the unit price, never folded into it', () => {
     const l = discounted();
@@ -289,9 +292,11 @@ describe('a line discount', () => {
  * answer, so the kind is declared on the row rather than assumed by whoever reads it next.
  */
 describe('which kind of discount', () => {
-  it('defaults to the one kind AURA records, rather than leaving it unstated', () => {
-    const l = line({ quantity: 10, unitPrice: 250, lineDiscount: 500 });
-    expect(l.lineDiscountBasis).toBe('line_unconditional_prorata');
+  it('is REQUIRED, not defaulted — a kind nobody stated is a kind nobody chose', () => {
+    expect(() => line({ quantity: 10, unitPrice: 250, lineDiscount: 500 }))
+      .toThrow(/must say which kind it is/);
+    expect(line({ quantity: 10, unitPrice: 250, lineDiscount: 500, lineDiscountBasis: 'line_unconditional_prorata' }).lineDiscountBasis)
+      .toBe('line_unconditional_prorata');
   });
 
   it('is NULL exactly when there is no discount', () => {
@@ -311,9 +316,11 @@ describe('which kind of discount', () => {
   it('refuses to value a unit when a discount does not say which kind it is', () => {
     // Only reachable by bypassing the factory — a row written before the kind existed, or a store
     // that forgot the column. It refuses rather than assuming the pro-rata rule applies.
-    const smuggled = { ...line({ quantity: 10, unitPrice: 250, lineDiscount: 500 }), lineDiscountBasis: null } as PurchaseOrderLine;
-    expect(() => domain.lineEffectiveUnitPrice(smuggled)).toThrow(/does not say which kind it is/);
-    // The LINE total is still known: every kind of discount reduces what the whole line is worth.
-    expect(domain.lineNetValue(smuggled)).toBe(2_000);
+    const withKind = line({ quantity: 10, unitPrice: 250, lineDiscount: 500, lineDiscountBasis: 'line_unconditional_prorata' });
+    const smuggled = { ...withKind, lineDiscountBasis: null } as PurchaseOrderLine;
+    // NEITHER reading guesses. "Every discount reduces the line" is not a general rule — it is what
+    // this one kind does — so a discount with no kind has no answer at either grain.
+    expect(() => domain.lineEffectiveUnitPrice(smuggled)).toThrow(/what one unit of it is worth/);
+    expect(() => domain.lineNetValue(smuggled)).toThrow(/what the line is worth/);
   });
 });

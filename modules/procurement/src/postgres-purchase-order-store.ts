@@ -29,6 +29,7 @@ interface Row {
   pr_id: string | null;
   currency: string | null;
   sourcing_recommendation_id: string | null;
+  recommendation_selection_id: string | null;
   quotation_revision_id: string | null;
   supplier_quotation_ref: string | null;
   tax_treatment: string | null;
@@ -42,7 +43,7 @@ interface Row {
 // store never selects is a term that was carried across in the domain and silently lost on the way
 // to the database (migration 0354).
 const COLS =
-  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, cbs_node_id, discipline, status, value, owner_id, created_by, created_at, boq_item_id, ordered_quantity, unit, rfq_id, pr_id, currency, sourcing_recommendation_id, quotation_revision_id, supplier_quotation_ref, tax_treatment, tax_rate_pct, freight_amount, freight_terms, payment_terms';
+  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, project_id, project_name, cbs_node_id, discipline, status, value, owner_id, created_by, created_at, boq_item_id, ordered_quantity, unit, rfq_id, pr_id, currency, sourcing_recommendation_id, recommendation_selection_id, quotation_revision_id, supplier_quotation_ref, tax_treatment, tax_rate_pct, freight_amount, freight_terms, payment_terms';
 
 function rowToPo(r: Row): PurchaseOrder {
   return {
@@ -69,6 +70,7 @@ function rowToPo(r: Row): PurchaseOrder {
     prId: r.pr_id,
     currency: r.currency,
     sourcingRecommendationId: r.sourcing_recommendation_id,
+    recommendationSelectionId: r.recommendation_selection_id,
     quotationRevisionId: r.quotation_revision_id,
     supplierQuotationRef: r.supplier_quotation_ref,
     taxTreatment: (r.tax_treatment as PurchaseOrder['taxTreatment']) ?? null,
@@ -94,8 +96,8 @@ export class PostgresPurchaseOrderStore implements PurchaseOrderStore {
 
   private insert(executor: Pool | PoolClient, p: PurchaseOrder): Promise<unknown> {
     return executor.query(
-      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)`,
-      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.cbsNodeId, p.discipline, p.status, p.value, p.ownerId, p.createdBy, p.createdAt, p.boqItemId, p.orderedQuantity, p.unit, p.rfqId, p.prId, p.currency, p.sourcingRecommendationId, p.quotationRevisionId, p.supplierQuotationRef, p.taxTreatment, p.taxRatePct, p.freightAmount, p.freightTerms, p.paymentTerms],
+      `INSERT INTO public.aura_procurement_purchase_orders (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)`,
+      [p.id, p.tenantId, p.companyId, p.reference, p.title, p.supplierId, p.supplierName, p.projectId, p.projectName, p.cbsNodeId, p.discipline, p.status, p.value, p.ownerId, p.createdBy, p.createdAt, p.boqItemId, p.orderedQuantity, p.unit, p.rfqId, p.prId, p.currency, p.sourcingRecommendationId, p.recommendationSelectionId, p.quotationRevisionId, p.supplierQuotationRef, p.taxTreatment, p.taxRatePct, p.freightAmount, p.freightTerms, p.paymentTerms],
     );
   }
 

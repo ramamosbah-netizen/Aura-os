@@ -92,6 +92,11 @@ export class InMemoryQuotationFamilyStore implements QuotationFamilyStore {
       .sort((a, b) => b.revisionNo - a.revisionNo);
   }
 
+  /** Nothing to hold in memory; the contract is the same so callers read one way. */
+  async findConfirmedRevisionForAward(tenantId: Id, offerId: Id): Promise<QuotationRevision | null> {
+    return this.findConfirmedRevision(tenantId, offerId);
+  }
+
   async findConfirmedRevision(tenantId: Id, offerId: Id): Promise<QuotationRevision | null> {
     const match = [...this.revisions.values()].find(
       (r) => r.tenantId === tenantId && r.offerId === offerId && r.status === 'confirmed',

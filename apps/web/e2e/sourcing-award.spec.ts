@@ -73,7 +73,7 @@ test.describe('The award', () => {
       for (const [i, prLineId] of prLines.entries()) {
         await post(`/procurement/quotations/revisions/${revision.id}/lines`, {
           prLineId, quantity: 10, uom: 'nr', unitPrice: unitPrices[i],
-          ...(discounts?.[i] ? { lineDiscount: discounts[i] } : {}),
+          ...(discounts?.[i] ? { lineDiscount: discounts[i], lineDiscountBasis: 'line_unconditional_prorata' } : {}),
           offeredManufacturer: `${supplierName} Industries`, offeredModel: `M-${i + 1}`,
         });
       }
@@ -261,7 +261,9 @@ test.describe('The award', () => {
       currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31', paymentTerms: '45 days net',
     });
     await post(`/procurement/quotations/revisions/${revision.id}/lines`, {
-      prLineId: prLine.id, quantity: 10, uom: 'nr', unitPrice: 500, lineDiscount: 1_000,
+      prLineId: prLine.id, quantity: 10, uom: 'nr', unitPrice: 500,
+      // The kind is stated, never defaulted — capture refuses a discount that does not say.
+      lineDiscount: 1_000, lineDiscountBasis: 'line_unconditional_prorata',
       offeredManufacturer: 'Sharjah Industries', offeredModel: 'FPP-24',
     });
     for (const status of ['received', 'confirmed']) {
@@ -361,8 +363,10 @@ test.describe('The award', () => {
       expect(lines).toHaveLength(1);
       // THE GROSS UNIT PRICE SURVIVES — it is what the supplier prints on their invoice line.
       expect(Number(lines[0].unitPrice)).toBe(500);
-      // …and the discount travels beside it rather than being folded in or dropped.
+      // …and the discount travels beside it rather than being folded in or dropped, WITH the kind
+      // it is, so what it is worth on a part delivery is read rather than assumed.
       expect(Number(lines[0].lineDiscount)).toBe(1_000);
+      expect(lines[0].lineDiscountBasis).toBe('line_unconditional_prorata');
       // Its provenance is the quotation line it came from, still readable.
       expect(lines[0].sourceQuoteLineId).toBeTruthy();
 

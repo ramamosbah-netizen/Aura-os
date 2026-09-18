@@ -83,8 +83,10 @@ describe('SUP-14 — what an award may and may not do', () => {
     for (const banned of ['ExchangeRate', 'resolveGovernedRate', 'convert', 'baseCurrency', 'comparisonCurrency * ']) {
       expect(s, `an award that can ${banned} can redenominate a supplier's contract`).not.toContain(banned);
     }
-    // The only money it writes comes from the offer.
-    expect(s).toContain('quoted.unitPrice');
+    // The only money it writes comes from the offer, through one mapping of the offer line's own
+    // facts — quantity, gross unit price, discount and the kind of discount it is.
+    expect(s).toContain('unitPrice: l.unitPrice ?? 0');
+    expect(s).toContain('asOrderValue(quoted)');
     expect(s).toContain('revision.currency');
   });
 
@@ -99,12 +101,38 @@ describe('SUP-14 — what an award may and may not do', () => {
     const s = src();
     // `create` is what numbers an order, emits `po.created` so the commitment reaches project cost,
     // writes the audit entry and refuses an unapproved supplier.
-    expect(s).toContain('this.orders.create(order');
+    expect(s).toContain('this.orders.raise(tx,');
     expect(s).not.toContain('PURCHASE_ORDER_STORE');
   });
 
-  it('is idempotent per selection, so a retry cannot raise a second order', () => {
-    expect(src()).toContain('`sourcing-award:${recommendation.id}:${selection.id}`');
+  it('cannot award the same recommendation twice, by three separate mechanisms', () => {
+    const s = src();
+    // 1. serialise: the lock is taken BEFORE anything is read, or it protects nothing.
+    expect(s).toContain('acquireLock(tx, lockKey)');
+    expect(s.indexOf('acquireLock')).toBeLessThan(s.indexOf('this.recommendations.get'));
+    // 2. decide: a conditional claim, whose row count says who won — not a read-then-write.
+    expect(s).toContain('claimForAward');
+    expect(s).toContain('if (!claimed)');
+    expect(s, 'an unconditional status write would make the claim decorative').not.toContain('updateStatus');
+    // 3. make it impossible: the order carries the selection a unique index keys on (0358).
+    expect(s).toContain('recommendationSelectionId: selection.id');
+  });
+
+  it('runs the whole award in ONE transaction, so there is no half-awarded state', () => {
+    const s = src();
+    expect(s).toContain('run.run(async (tx)');
+    // Every write takes the transaction. A write that quietly did not would commit on its own.
+    expect(s).toContain('this.orders.raise(tx,');
+    expect(s).toContain('saveWithClient(tx,');
+    expect(s).toContain('appendWithClient(tx,');
+    expect(s).toContain('claimForAward(tenantId, recommendationId, actorId, tx)');
+  });
+
+  it('holds the revisions it checked, so staleness cannot change under it', () => {
+    const s = src();
+    expect(s, 'reading without holding leaves the window this closes')
+      .toContain('findConfirmedRevisionForAward(tenantId, selection.offerId, tx)');
+    expect(s).not.toContain('findConfirmedRevision(tenantId, selection.offerId)');
   });
 
   it('never touches an order after raising it', () => {
@@ -135,16 +163,20 @@ describe('SUP-14 — what an award may and may not do', () => {
     });
 
     const build = (r: SourcingRecommendation, current: { id: string } | null = { id: 'rev-1' }) => {
-      const orders = { create: vi.fn() };
+      const orders = { raise: vi.fn() };
       const service = new SourcingAwardService(
         { get: async () => r, listSelections: async () => [selection()], updateStatus: vi.fn() } as never,
         { get: async () => ({ id: 'rfq-1', tenantId: 't1', title: 'RFQ', prId: 'pr-req' }) } as never,
         { listForRequest: async () => [] } as never,
-        { findConfirmedRevision: async () => current, getRevision: async () => null, getFamily: async () => null } as never,
+        { findConfirmedRevisionForAward: async () => current, getRevision: async () => null, getFamily: async () => null } as never,
         { listByRevision: async () => [] } as never,
         orders as never,
+        { listForOrder: async () => [], save: vi.fn(), saveWithClient: vi.fn() } as never,
         null,
-        { listForOrder: async () => [], save: vi.fn() } as never,
+        // No transaction runner and no lock service: every refusal below must hold on its own,
+        // before any of the concurrency machinery is reached.
+        null,
+        null,
         null,
       );
       return { service, orders };
@@ -153,7 +185,7 @@ describe('SUP-14 — what an award may and may not do', () => {
     it('refuses a recommendation nobody approved, before writing anything', async () => {
       const { service, orders } = build(recommendation({ status: 'draft' }));
       await expect(service.award('t1', 'rec-1', 'u1')).rejects.toThrow(/cannot be awarded/);
-      expect(orders.create, 'nothing may be written by a refused award').not.toHaveBeenCalled();
+      expect(orders.raise, 'nothing may be written by a refused award').not.toHaveBeenCalled();
     });
 
     it('refuses one that has gone stale since approval', async () => {
@@ -161,13 +193,13 @@ describe('SUP-14 — what an award may and may not do', () => {
       // would be the ones ordered on.
       const { service, orders } = build(recommendation({ status: 'approved' }), { id: 'rev-2' });
       await expect(service.award('t1', 'rec-1', 'u1')).rejects.toThrow(/out of date/);
-      expect(orders.create).not.toHaveBeenCalled();
+      expect(orders.raise).not.toHaveBeenCalled();
     });
 
     it('refuses one that was already awarded, rather than raising a second order', async () => {
       const { service, orders } = build(recommendation({ status: 'awarded' }));
       await expect(service.award('t1', 'rec-1', 'u1')).rejects.toThrow(/cannot be awarded/);
-      expect(orders.create).not.toHaveBeenCalled();
+      expect(orders.raise).not.toHaveBeenCalled();
     });
   });
 });
@@ -179,7 +211,9 @@ describe('the four acts stay four', () => {
     expect(SourcingRecommendationService.prototype).not.toHaveProperty('award');
     expect(SourcingAwardService.prototype).not.toHaveProperty('decide');
     expect(SourcingAwardService.prototype).not.toHaveProperty('prepareDraft');
+    // One public act. `awardWithin` is the body of it, running inside the transaction `award`
+    // opens — not a second way in, and nothing else may appear beside them.
     expect(Object.getOwnPropertyNames(SourcingAwardService.prototype).filter((m) => m !== 'constructor'))
-      .toEqual(['award']);
+      .toEqual(['award', 'awardWithin']);
   });
 });

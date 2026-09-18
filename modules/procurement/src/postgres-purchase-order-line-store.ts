@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+import type { TxHandle } from '@aura/core';
 import type { PurchaseOrderLineStore } from './purchase-order-line-store';
 import type { PurchaseOrderLine, PurchaseOrderLineSource, UnitPriceBasis } from './domain/purchase-order-line';
 
@@ -48,7 +49,15 @@ export class PostgresPurchaseOrderLineStore implements PurchaseOrderLineStore {
    * re-added, which is only possible while the order is a draft anyway.
    */
   async save(l: PurchaseOrderLine): Promise<void> {
-    await this.pool.query(
+    await this.write(this.pool, l);
+  }
+
+  async saveWithClient(tx: TxHandle | null, l: PurchaseOrderLine): Promise<void> {
+    await this.write((tx as PoolClient) ?? this.pool, l);
+  }
+
+  private async write(executor: Pool | PoolClient, l: PurchaseOrderLine): Promise<void> {
+    await executor.query(
       `insert into public.aura_procurement_purchase_order_lines (${COLS})
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        on conflict (id) do update set

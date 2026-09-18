@@ -90,8 +90,9 @@ describe('the legacy award stays retired', () => {
     expect(src).toContain("recommendation.status !== 'approved'");
     expect(src).toContain('staleness.stale');
     // The order is raised through the order service — which numbers it, emits `po.created` so the
-    // commitment reaches project cost, and refuses an unapproved supplier.
-    expect(src).toContain('this.orders.create(order');
+    // commitment reaches project cost, and refuses an unapproved supplier — and inside the award's
+    // own transaction, so a refusal on one supplier takes the orders already raised back with it.
+    expect(src).toContain('this.orders.raise(tx,');
     expect(SourcingAwardService.prototype).toHaveProperty('award');
   });
 

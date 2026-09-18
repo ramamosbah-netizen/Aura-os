@@ -4,6 +4,11 @@ import type { PurchaseOrderLine } from './domain/purchase-order-line';
 export class InMemoryPurchaseOrderLineStore implements PurchaseOrderLineStore {
   private readonly lines = new Map<string, PurchaseOrderLine>();
 
+  /** No transaction to join in memory: the fallback IS the write (see the port's doc). */
+  async saveWithClient(_tx: unknown, line: PurchaseOrderLine): Promise<void> {
+    await this.save(line);
+  }
+
   async save(line: PurchaseOrderLine): Promise<void> {
     this.lines.set(line.id, { ...line });
   }

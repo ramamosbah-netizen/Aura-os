@@ -113,6 +113,9 @@ export interface SourcingRecommendation {
   withdrawnBy: Id | null;
   withdrawnAt: string | null;
   withdrawalReason: string | null;
+  /** Who executed the award, and when. Set by the claim that authorises the purchase orders. */
+  awardedBy: Id | null;
+  awardedAt: string | null;
 }
 
 /**
@@ -289,6 +292,8 @@ export function makeSourcingRecommendation(input: NewSourcingRecommendation): So
     withdrawnBy: null,
     withdrawnAt: null,
     withdrawalReason: null,
+    awardedBy: null,
+    awardedAt: null,
     createdBy: input.createdBy ?? null,
     createdAt: new Date().toISOString(),
     submittedBy: null, submittedAt: null, decidedBy: null, decidedAt: null, decisionNote: null,

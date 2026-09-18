@@ -54,7 +54,7 @@ function line(over: Partial<QuotationLine> = {}): QuotationLine {
     id: 'ql1', tenantId: 't1', companyId: null, revisionId: 'rev-1', prLineId: 'pr1',
     response: 'quoted', offeredManufacturer: null, offeredModel: null,
     complianceResponse: null, deviations: null, exclusions: null,
-    quantity: 12, uom: 'nr', unitPrice: 100, lineDiscount: null,
+    quantity: 12, uom: 'nr', unitPrice: 100, lineDiscount: null, lineDiscountBasis: null,
     leadTimeDays: null, warrantyMonths: null, notes: null,
     createdBy: null, createdAt: '2026-09-01T00:00:00.000Z',
     ...over,
@@ -113,7 +113,7 @@ describe('normalising one supplier answer to one requisition line', () => {
   });
 
   it('spreads the LINE discount across that line’s own units, because the supplier put it there', () => {
-    const result = normalise({ line: line({ quantity: 12, unitPrice: 100, lineDiscount: 120 }) });
+    const result = normalise({ line: line({ quantity: 12, unitPrice: 100, lineDiscount: 120, lineDiscountBasis: 'line_unconditional_prorata' }) });
     // 1200 − 120 = 1080 over 12 units.
     expect(result.normalisedUnitPrice).toMatchObject({ status: 'comparable', unitValue: 90 });
   });
@@ -318,7 +318,7 @@ describe('the rounding authority', () => {
 
   it('applies a line discount to the source amount BEFORE converting, not after', () => {
     // 250 x 10 = 2,500, less a 500 discount = USD 2,000 -> x 3.6725 = AED 7,345.00.
-    const v = usd({ lineDiscount: 500 });
+    const v = usd({ lineDiscount: 500, lineDiscountBasis: 'line_unconditional_prorata' });
     expect(v.normalisedRequestedLineTotal).toMatchObject({ status: 'comparable', unitValue: 7_345 });
     // …and the unit price follows it down rather than being quoted gross.
     expect(v.normalisedUnitPrice).toMatchObject({ status: 'comparable', unitValue: 734.5 });

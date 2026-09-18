@@ -7,6 +7,7 @@ import { PURCHASE_ORDER_STORE, type PurchaseOrderFilter, type PurchaseOrderStore
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
 import { isApproved } from './domain/supplier';
 import { PO_LINE_STORE, type PurchaseOrderLineStore } from './purchase-order-line-store';
+import { orderCommitment } from './domain/purchase-order-line';
 import { type AcceptedByLine, receiptOf, receiptStatus, type RejectedByLine } from './domain/order-receipt';
 
 /** Optional quality gate — injected when the Quality module is loaded. */
@@ -220,9 +221,18 @@ export class PurchaseOrderService implements OnModuleInit {
       throw new Error(`PO status ${status} requires its governed submit, approve or receipt command`);
     }
 
-    // Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue.
-    if (status === 'issued' && existing.status !== 'approved' && !requiredApproval(existing.value).autoApproved) {
-      throw new Error(`PO ${existing.reference ?? id} (value ${existing.value}) requires approval before it can be issued`);
+    /**
+     * Approval gate: a PO above the auto-approve threshold must be 'approved' before it can issue —
+     * and the threshold is checked against WHAT THE ORDER COMMITS US TO, not what its lines come to.
+     * Freight is quoted for the order as a whole and lives on the header (SUP-14), so an order for
+     * 3,500 of goods plus 200 of freight commits 3,700, and checking 3,500 would let an order slip
+     * under a threshold by exactly the freight on it.
+     */
+    if (status === 'issued' && existing.status !== 'approved') {
+      const committed = orderCommitment(existing, this.lines ? await this.lines.listForOrder(existing.id, existing.tenantId) : []).exTax;
+      if (!requiredApproval(committed).autoApproved) {
+        throw new Error(`PO ${existing.reference ?? id} (value ${committed}) requires approval before it can be issued`);
+      }
     }
 
     // Quality gate: reject issuance if the supplier has rejected MARs on the same project.

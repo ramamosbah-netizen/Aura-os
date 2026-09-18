@@ -1,5 +1,5 @@
 import { moneyNumber, type Id } from '@aura/shared';
-import type { PurchaseOrderLine, PurchaseOrderLineSource } from './purchase-order-line';
+import { lineEffectiveUnitPrice, type PurchaseOrderLine, type PurchaseOrderLineSource } from './purchase-order-line';
 import type { PurchaseOrderStatus } from './purchase-order';
 
 /**
@@ -84,7 +84,9 @@ export function receiptOf(
       accepted: got,
       rejected: sentBack,
       outstanding,
-      outstandingValue: moneyNumber(outstanding * l.unitPrice),
+      // At the line's EFFECTIVE unit price, so a discounted line's outstanding value is what is
+      // actually still owed on it rather than the undiscounted list figure (PO-01).
+      outstandingValue: moneyNumber(outstanding * lineEffectiveUnitPrice(l)),
       settled: got >= l.quantity,
       overReceived: got > l.quantity,
       sourceType: l.sourceType,

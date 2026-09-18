@@ -99,6 +99,20 @@ export interface SourcingRecommendation {
   decidedBy: Id | null;
   decidedAt: string | null;
   decisionNote: string | null;
+  /**
+   * WITHDRAWAL IS A SECOND FACT, NOT A REPLACEMENT FOR THE FIRST (migration 0356).
+   *
+   * Standing a recommendation down used to be written into `decidedBy` / `decidedAt` /
+   * `decisionNote` — the fields that record who APPROVED it. So withdrawing an approved
+   * recommendation erased the approval, and afterwards the record said only that somebody had
+   * withdrawn it. The approver's act vanished from the one place it was kept.
+   *
+   * Both are kept now: "approved by X on the 10th, stood down by Y on the 14th because the supplier
+   * revised their offer" is one story, and it is the story somebody reading it back needs.
+   */
+  withdrawnBy: Id | null;
+  withdrawnAt: string | null;
+  withdrawalReason: string | null;
 }
 
 /**
@@ -272,6 +286,9 @@ export function makeSourcingRecommendation(input: NewSourcingRecommendation): So
     status: 'draft',
     reasonCode: input.reasonCode ?? null,
     reason: input.reason?.trim() || null,
+    withdrawnBy: null,
+    withdrawnAt: null,
+    withdrawalReason: null,
     createdBy: input.createdBy ?? null,
     createdAt: new Date().toISOString(),
     submittedBy: null, submittedAt: null, decidedBy: null, decidedAt: null, decisionNote: null,

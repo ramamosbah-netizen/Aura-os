@@ -93,7 +93,7 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
     rfqId = rfq.id;
 
     /** A supplier's confirmed offer, quoted in their own currency with their own terms. */
-    const quote = async (supplierName: string, currency: string, unitPrices: [number, number], terms: Record<string, unknown>) => {
+    const quote = async (supplierName: string, currency: string, unitPrices: [number, number], terms: Record<string, unknown>, discounts?: [number, number]) => {
       const { baseOffer } = await post<{ baseOffer: { id: string } }>(buyer, '/api/v1/procurement/quotations/families', {
         rfqId, supplierName, supplierQuotationRef: `${supplierName.toUpperCase()}-Q-4471`,
       });
@@ -103,6 +103,7 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
       for (const [i, prLineId] of prLineIds.entries()) {
         await post(buyer, `/api/v1/procurement/quotations/revisions/${revision.id}/lines`, {
           prLineId, quantity: 10, uom: 'nr', unitPrice: unitPrices[i],
+          ...(discounts?.[i] ? { lineDiscount: discounts[i] } : {}),
           offeredManufacturer: `${supplierName} Industries`, offeredModel: `M-${i + 1}`,
         });
       }
@@ -123,6 +124,14 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
     await quote('Dallas Systems', 'USD', [100, 250], { freightAmount: 200, freightTerms: 'DAP Dubai', paymentTerms: '30 days net' });
     // Gulf quotes AED: 400 + 950 a unit × 10 = AED 13,500. Dearer, and needs a reason to be chosen.
     await quote('Gulf Cables', 'AED', [400, 950], { paymentTerms: '60 days net' });
+    /**
+     * Sharjah quotes a LINE DISCOUNT — the case the award used to refuse outright (PO-01).
+     *   line 1  10 x AED 500 = 5,000 less 1,000 = AED 4,000
+     *   line 2  10 x AED 1,000 = 10,000 less 3,000 = AED 7,000
+     * so AED 11,000 in total, which is also the cheapest offer here — deliberately, because a
+     * refusal that only bites on offers nobody would choose proves nothing.
+     */
+    await quote('Sharjah Supply', 'AED', [500, 1_000], { paymentTerms: '45 days net' }, [1_000, 3_000]);
   }, 60_000);
 
   afterAll(async () => { await app?.close(); });
@@ -161,6 +170,18 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
         const done = await manager.post(`/api/v1/procurement/rfqs/recommendations/${r.id}/withdraw`)
           .send({ reason: 'superseded by the next case' });
         expect(done.status, JSON.stringify(done.body)).toBe(201);
+        /**
+         * A WITHDRAWAL DOES NOT ERASE THE DECISION. Standing down an APPROVED recommendation used to
+         * be written into the fields that record who approved it, so the approval disappeared from
+         * the only place it was kept. Both acts are recorded now, and this asserts it on every pass
+         * of the loop — including the ones clearing an approved recommendation.
+         */
+        expect(done.body).toMatchObject({ status: 'withdrawn', withdrawnBy: 'sup14-manager' });
+        expect(done.body.withdrawalReason).toBe('superseded by the next case');
+        if (r.status === 'approved') {
+          expect(done.body.decidedBy, 'the approver must survive the withdrawal').toBeTruthy();
+          expect(done.body.decidedAt).toBeTruthy();
+        }
       }
     }
   };
@@ -171,17 +192,24 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
     const dallas = res.body.candidates.find((c: { supplierName: string }) => c.supplierName === 'Dallas Systems');
 
     /**
-     * THE CONVERSION ROUNDS AT THE UNIT PRICE, not at the total — deliberately, so the figures a
-     * buyer reads add up to the figure underneath them:
-     *   USD 100 × 3.6725 = AED 367.25   → × 10 = AED 3,672.50
-     *   USD 250 × 3.6725 = AED 918.125  → 918.13 × 10 = AED 9,181.30
-     *   freight USD 200 × 3.6725        = AED 734.50
-     * which comes to 13,588.30 — five fils off the 13,588.25 a naive conversion of the USD total
-     * would give. Worth pinning: it is the difference between a screen whose columns add up and one
-     * that quietly does not.
+     * THE COMPARISON RECONCILES WITH THE SUPPLIER'S OWN FIGURES, to the fils:
+     *
+     *   line 1   USD 100 x 10 = 1,000                     -> x 3.6725 = AED  3,672.50
+     *   line 2   USD 250 x 10 = 2,500                     -> x 3.6725 = AED  9,181.25
+     *   freight  USD 200                                  -> x 3.6725 = AED    734.50
+     *                                                                 ───────────────
+     *   USD 3,700 x 3.6725                                           = AED 13,588.25
+     *
+     * It once read 13,588.30, because the conversion rounded the UNIT price and then multiplied:
+     * 250 x 3.6725 = 918.125 -> 918.13 -> x 10 = 9,181.30. Five fils, growing with the quantity and
+     * always favouring whichever supplier's unit price rounds up — and the wrong figure was not just
+     * displayed, it was STORED as the value the approval was given against. A recommendation is a
+     * comparison between offers, so that is a decision changed by arithmetic nobody chose.
      */
     expect(dallas.wholeOfferTotal).toMatchObject({ status: 'known', currency: 'AED', includesFreight: true });
-    expect(dallas.wholeOfferTotal.value).toBeCloseTo(13_588.30, 2);
+    expect(dallas.wholeOfferTotal.value).toBe(13_588.25);
+    // The supplier's own total, converted once, is exactly what the comparison says.
+    expect(dallas.wholeOfferTotal.value).toBe(Number((3_700 * 3.6725).toFixed(2)));
     // And the offer still says, separately, what it was actually quoted in.
     expect(dallas.currency).toBe('USD');
   });
@@ -208,7 +236,11 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
 
     it('one that has gone stale because the supplier sent a newer revision', async () => {
       await clearLive();
-      const id = await approved({ mode: 'single_supplier', selections: [{ offerId: offers['Gulf Cables'].offerId, coveredPrLineIds: prLineIds }] });
+      // Gulf is not the cheapest either, now that Sharjah quotes a discount — so this records why.
+      const id = await approved({
+        mode: 'single_supplier', reasonCode: 'lower_project_risk', reason: 'Gulf has supplied this tower before',
+        selections: [{ offerId: offers['Gulf Cables'].offerId, coveredPrLineIds: prLineIds }],
+      });
 
       // Gulf sends a revised offer AFTER approval. Nobody has reviewed it, so awarding would place
       // an order on terms that were never looked at.
@@ -294,6 +326,47 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
     const after = await manager.post(`/api/v1/procurement/rfqs/recommendations/${id}/award`);
     expect(after.status).toBe(409);
     expect(JSON.stringify(after.body)).toMatch(/an awarded recommendation cannot be awarded/);
+  });
+
+  /**
+   * PO-01 — A DISCOUNTED OFFER REACHES A PURCHASE ORDER WITH NOTHING LOST.
+   *
+   * The award used to refuse this outright, and that refusal was honest but incomplete: the
+   * quotation model captures a line discount and the comparison honours it, so a perfectly valid
+   * offer could be compared, recommended, approved — and then not awarded. The order line carries a
+   * discount of its own now, beside the gross unit price rather than folded into it, so the supplier
+   * will invoice the same per-unit figure they quoted and the three-way match still compares like
+   * with like.
+   */
+  it('awards a DISCOUNTED offer, keeping the gross price, the discount and what the line is worth', async () => {
+    await clearLive();
+    // AED 11,000 against Dallas's 13,588.25 and Gulf's 13,500 — the cheapest, so no reason is owed.
+    const id = await approved({
+      mode: 'single_supplier',
+      selections: [{ offerId: offers['Sharjah Supply'].offerId, coveredPrLineIds: prLineIds }],
+    });
+
+    const res = await manager.post(`/api/v1/procurement/rfqs/recommendations/${id}/award`);
+    expect(res.status, JSON.stringify(res.body)).toBe(201);
+    const [order] = res.body.orders as Array<Record<string, unknown>>;
+
+    // The order is worth what the lines are worth AFTER their discounts: 4,000 + 7,000.
+    expect(order.value).toBe(11_000);
+    expect(order.currency).toBe('AED');
+
+    const lines = (await manager.get(`/api/v1/procurement/purchase-orders/${order.id}/lines`).expect(200))
+      .body as Array<Record<string, unknown>>;
+    expect(lines).toHaveLength(2);
+    // THE GROSS UNIT PRICE SURVIVES — it is what the supplier prints on their invoice line.
+    expect(lines.map((l) => l.unitPrice)).toEqual([500, 1_000]);
+    // …and the discount travels beside it rather than being folded in or dropped.
+    expect(lines.map((l) => l.lineDiscount)).toEqual([1_000, 3_000]);
+    // Its provenance is the quotation line it came from, still readable.
+    expect(lines.every((l) => Boolean(l.sourceQuoteLineId))).toBe(true);
+
+    // One total, not two: the summary derived from the lines equals the header.
+    const summary = (await manager.get(`/api/v1/procurement/purchase-orders/${order.id}/lines/summary`).expect(200)).body;
+    expect(summary.total.value).toBe(11_000);
   });
 
   it('a split award produces one purchase order per supplier, each in its own currency', async () => {

@@ -369,6 +369,22 @@ const defects=[{
  remediationDependency:'None upstream. It does NOT block SUP-14: an award of an undiscounted offer is complete and proved. It bounds what SUP-14 can award, and it is why the award refuses instead of guessing.',
  acceptanceProof:'A discount on an order line is recorded, and the question it forces is ANSWERED rather than assumed: what a discounted line is worth when part of it is received, and what an invoice line must match. Every reader of a line — order total, committed cost, goods receipt valuation, three-way match — agrees on one value, proved against PostgreSQL, and a discounted offer is awarded end to end with the buyer never retyping a price.',
 },{
+ id:'FX-03',
+ title:'The comparison rounded the converted UNIT price and multiplied it up, so a recommendation could be decided by arithmetic nobody chose',
+ capabilityIds:['SUP-06','SUP-13','SUP-14'],
+ classification:'WRONG_BEHAVIOR',
+ kind:'fresh defect — found by the SUP-14 browser proof, in a figure that had already been stored and approved',
+ status:'OPEN',
+ roles:['Procurement Manager / Buyer','Commercial Manager / QS'],
+ stages:['Procurement'],
+ authority:'Procurement commercial normalisation (SUP-06)',
+ currentBehavior:'`normaliseRequirementLine` converted the supplier’s UNIT price, rounded it to two decimals, and multiplied the result by the quantity. USD 250 a unit for ten, at a governed 3.6725: 918.125 rounds to 918.13, times ten is AED 9,181.30 — against AED 9,181.25 from the supplier’s own line amount of USD 2,500 converted once. Five fils on one line, and the error is SYSTEMATIC rather than random: it grows in proportion to the quantity and always favours whichever supplier’s unit price happens to round up. It reached the whole-offer total (AED 13,588.30 against the supplier’s own USD 3,700 x 3.6725 = 13,588.25) and it did not stop at the screen: `aura_procurement_recommendation_selections.governed_total` stored 13588.3000, so the figure an approver was asked to commit to, and the figure recorded as the basis of the decision, were both the wrong one. A recommendation is a comparison BETWEEN offers, so on close bids this reorders them.',
+ expectedOperationalBehavior:'One frozen rounding authority: the source line amount (quantity x unit price, less the line discount) is taken in the supplier’s own currency, put ex-tax, converted at the governed rate with full precision retained, and rounded ONCE at the comparison-currency monetary boundary. A per-unit figure is derived for reading and is never multiplied back up.',
+ evidence:'FRESH, from the SUP-14 browser proof against PostgreSQL: the screen showed AED 13,588.30 where the supplier’s own figures came to 13,588.25, and `select governed_total from aura_procurement_recommendation_selections` returned 13588.3000 — a stored value, not a formatting artefact. Root cause in modules/procurement/src/domain/commercial-normalisation.ts (`moneyNumber(exTax.value * fx.rate)` per unit, then `unitValue * requestedQuantity`).',
+ severity:'HIGH',
+ remediationDependency:'None upstream. It BLOCKS the promotion of SUP-13 and SUP-14: both are decisions made on this figure.',
+ acceptanceProof:'The governed comparison total reconciles EXACTLY with the supplier’s own arithmetic — USD 3,700 x 3.6725 = AED 13,588.25, to the fils — proved in the domain, in the stored recommendation and on screen; the per-unit figure remains readable and carries the rule that produced it, so it cannot be mistaken for the basis of a total; a line discount is applied to the source amount BEFORE conversion; and the tax-exclusive and tax-inclusive paths agree because both are linear. Pinned by tests that fail on the old behaviour.',
+},{
  id:'BID-01',
  title:'Bid-time estimate sourcing is keyed to the legacy quote award, which no longer exists',
  capabilityIds:['SUP-14'],
@@ -385,6 +401,28 @@ const defects=[{
  remediationDependency:'None upstream. It does NOT block SUP-14 — the award is complete and proved — and it is recorded because retiring a path silently is how a working feature becomes a dead one nobody notices.',
  acceptanceProof:'Bid-time sourcing points at a quotation REVISION line rather than a legacy quote, so the link names the material it priced; a governed award then restamps each sourced component from the awarded line for that material, in the awarded currency, leaving an estimate on a tender already committed to a client frozen as it does today; and a component whose material was not awarded is reported as such rather than restamped to somebody else’s price. Proved with an estimator on screen against PostgreSQL.',
 }];
+
+
+/**
+ * FX-03 and PO-01 CLOSED. Placed AFTER the array above rather than edited into it: a promotion that
+ * sits before a later write to the same id is silently discarded, and this file has swallowed one
+ * promotion that way already.
+ */
+Object.assign(defects.find(d=>d.id==='FX-03'),{
+ classification:'COMPLETE',
+ status:'CLOSED_VERIFIED',
+ currentBehavior:'The rounding authority is frozen and stated where it is applied. The SOURCE LINE AMOUNT — quantity x unit price less the line discount — is taken in the supplier’s own currency, put ex-tax, converted at the governed rate with full precision retained, and rounded ONCE at the comparison-currency boundary. USD 250 a unit for ten at 3.6725 is now AED 9,181.25, and the whole offer reconciles to the fils with the supplier’s own USD 3,700 x 3.6725 = AED 13,588.25. The per-unit figure is still shown, derived from the same governed amount and rounded for reading, and every value carries a `roundingBasis` naming the rule that produced it — so the total and the unit price cannot be mistaken for two versions of one authority. Freight, a single amount quoted for the offer as a whole, follows the same rule with no quantity to round against.',
+ evidence:'modules/procurement/src/domain/commercial-normalisation.ts (sourceLineAmount, the frozen order of operations, roundingBasis); modules/procurement/src/domain/commercial-normalisation.test.ts (“the rounding authority” — the 9,181.25 case, the derived unit price, a discount applied before conversion, and the tax-inclusive path); apps/api/test/sourcing-award.e2e-spec.ts (the comparison reconciles with the supplier’s own total); apps/web/e2e/sourcing-award.spec.ts (AED 13,588.25 on screen, against PostgreSQL).',
+ acceptanceProof:'MET. The stored governed_total and the screen now both read 13,588.25, and the tests fail on the old behaviour rather than merely describing it.',
+});
+
+Object.assign(defects.find(d=>d.id==='PO-01'),{
+ classification:'COMPLETE',
+ status:'CLOSED_VERIFIED',
+ currentBehavior:'A purchase-order line records the discount the supplier gave, BESIDE the gross unit price rather than folded into it — so the supplier invoices the per-unit figure they quoted and a three-way match still compares like with like. The question the field forces is answered rather than assumed: a discount is a reduction of the LINE, earned pro rata with what arrives, so ten at 250 less 500 is worth 200 a unit and four delivered is 800. `lineNetValue` and `lineEffectiveUnitPrice` are the single places that arithmetic happens, and the order total, the commitment an approver is asked for and the outstanding-receipt value all read them, so a discount cannot be honoured in one reading and forgotten in another. A discount larger than its line, or a negative one, is refused rather than clamped. SUP-14 no longer refuses a discounted offer: it carries quantity, gross unit price, discount, make and model across from the offer, with the quotation line it came from still named on the order line.',
+ evidence:'infrastructure/migrations/0354 (the column) now read and written by modules/procurement/src/postgres-purchase-order-line-store.ts; modules/procurement/src/domain/purchase-order-line.ts (lineNetValue, lineEffectiveUnitPrice, the validation); modules/procurement/src/domain/order-receipt.ts (outstanding value at the effective unit price); modules/procurement/src/sourcing-award.service.ts (the discount carried, and counted in the header value); tests in purchase-order-line.test.ts and order-receipt.test.ts; apps/api/test/sourcing-award.e2e-spec.ts (a discounted offer awarded over HTTP); apps/web/e2e/sourcing-award.spec.ts + PostgreSQL (PO-2026-000006: value 4,000, unit_price 500, line_discount 1,000).',
+ acceptanceProof:'MET. Every reader of a discounted line agrees on one value, proved against PostgreSQL, and a discounted offer is awarded end to end with no price retyped.',
+});
 
 
 /**

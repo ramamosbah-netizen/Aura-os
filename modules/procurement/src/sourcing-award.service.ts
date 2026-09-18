@@ -33,6 +33,13 @@ import { aStatus, recommendationStaleness, type RecommendationSelection } from '
  * EVERY LINE IS `sourced`. The purchase-order line model already requires a sourced line to name
  * both the requisition line it answers and the quotation line it was priced from — so a price that
  * cannot be traced back to an offer cannot be written at all.
+ *
+ * NOTHING COMMERCIAL IS LEFT BEHIND. The quantity, the gross unit price, the line discount, the make
+ * and model offered, the tax treatment, freight and payment terms all cross from the offer to the
+ * order untouched. The award used to REFUSE a discounted line, because a purchase-order line could
+ * not record a discount and the alternatives were losing it or restating the unit price; PO-01 gave
+ * the line a discount of its own, so a valid quotation can now reach an order whatever terms it
+ * carries.
  */
 export const AWARD_EVENT = {
   awarded: 'procurement.sourcing.awarded',
@@ -131,30 +138,6 @@ export class SourcingAwardService {
         throw new Error(`this award cannot be raised: ${selection.supplierName}'s offer prices none of the requisition lines it was recommended for`);
       }
 
-      /**
-       * A DISCOUNT THE ORDER CANNOT RECORD IS REFUSED, NOT DROPPED.
-       *
-       * A purchase-order line has a quantity and a unit price and no discount field, and the order's
-       * governing value is `orderTotal` — the sum of quantity x unit price. So an offer line with a
-       * discount could only be awarded by losing the discount (ordering at more than was agreed) or
-       * by folding it into the unit price (restating the per-unit figure the supplier will invoice,
-       * and breaking the three-way match against their invoice). Both are wrong the same way: the
-       * order would state a price nobody agreed to.
-       *
-       * So it refuses, and says exactly what is missing. Recording a discount on an order line is a
-       * real gap — it also has to answer what a discounted line is worth when it is received and
-       * matched — and inventing that answer inside an award is not the place to do it.
-       */
-      const discounted = awarded.filter((l) => (l.lineDiscount ?? 0) !== 0);
-      if (discounted.length > 0) {
-        throw new Error(
-          `a purchase order line cannot record a discount, and ${selection.supplierName}'s offer gives one on ` +
-          `${discounted.length} line(s) — awarding it would either lose the discount or restate the unit price the ` +
-          'supplier will invoice. Ask the supplier to re-quote the net unit price, or record the discount on the ' +
-          'order once order lines can carry one.',
-        );
-      }
-
       const planned: Array<{ quoted: QuotationLine; requirement: PurchaseRequestLine }> = [];
       for (const quoted of awarded) {
         const requirement = requirementById.get(quoted.prLineId);
@@ -174,7 +157,13 @@ export class SourcingAwardService {
        * spread across the lines, which would invent a per-item cost nobody quoted.
        */
       const value = orderTotal(
-        awarded.map((l) => ({ quantity: l.quantity ?? 0, unitPrice: l.unitPrice ?? 0 }) as PurchaseOrderLine),
+        // EVERY FIELD THAT AFFECTS WHAT A LINE IS WORTH, including the discount. An earlier version
+        // mapped only quantity and unit price here, so a discounted offer produced an order whose
+        // header said the GROSS figure while its lines said the net one — two totals disagreeing
+        // inside a single order, written by the same function call.
+        awarded.map((l) => ({
+          quantity: l.quantity ?? 0, unitPrice: l.unitPrice ?? 0, lineDiscount: l.lineDiscount,
+        }) as PurchaseOrderLine),
       ).value;
 
       plan.push({
@@ -241,8 +230,15 @@ export class SourcingAwardService {
             uom: quoted.uom ?? requirement.uom,
           },
           quantity: quoted.quantity ?? 0,
-          // IN THE SUPPLIER'S CURRENCY. This is the number the supplier will invoice against.
+          // IN THE SUPPLIER'S CURRENCY. The GROSS per-unit figure, exactly as quoted, because that
+          // is what the supplier will print on their invoice line and what a three-way match will
+          // compare against. The discount travels beside it (PO-01) rather than being folded in —
+          // folding it would restate a price the supplier never gave and make their invoice look
+          // wrong against our own order.
           unitPrice: quoted.unitPrice ?? 0,
+          // The supplier's own line discount, carried across rather than retyped. Its provenance is
+          // `sourceQuoteLineId` below: the quotation line it came from, still readable.
+          lineDiscount: quoted.lineDiscount,
           // AGREED, not an estimate: this price was quoted by the supplier and accepted through a
           // governed recommendation that somebody with the authority to commit it approved.
           unitPriceBasis: 'agreed',

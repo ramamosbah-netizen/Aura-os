@@ -83,6 +83,15 @@ export type NormalisedCommercialValue =
       comparisonDate: string;
       taxBasis: TaxBasis;
       freightBasis: FreightBasis;
+      /**
+       * WHICH ROUNDING RULE PRODUCED THIS FIGURE, carried with it rather than assumed.
+       *
+       *   source-line-amount-converted-once  quantity x unit price - discount, ex-tax, converted at
+       *                                      the governed rate and rounded ONCE. The governed value.
+       *   derived-from-line-amount           the same amount expressed per unit, rounded for
+       *                                      reading. Never multiply this back up to a total.
+       */
+      roundingBasis: 'source-line-amount-converted-once' | 'derived-from-line-amount';
       fx: { source: string; effectiveDate: string | null; rateId: string | null; rate: number };
     }
   | {
@@ -156,17 +165,21 @@ const unknown = (reason: UnknownReason, missingInputs: string[]): NormalisedComm
   ({ status: 'unknown', reason, missingInputs });
 
 /**
- * The unit price with this line's own discount applied.
+ * THE SOURCE LINE AMOUNT — what this line is worth IN THE SUPPLIER'S OWN CURRENCY.
  *
- * The discount is stated on the line, so spreading it across that line's own units is arithmetic,
- * not an assumption — unlike freight, which is stated for the whole quotation and is therefore never
- * pushed down to anything.
+ *   quantity x unit price - discount
+ *
+ * This is the monetary fact the supplier stated, and it is the thing that gets converted. Rounded
+ * here because it is a money amount in the supplier's currency: it is what they would print on the
+ * line of their own quotation.
+ *
+ * The discount is stated on the line, so applying it to that line is arithmetic, not an assumption —
+ * unlike freight, which is stated for the whole quotation and is therefore never pushed down.
  */
-function discountedUnitPrice(line: QuotationLine): number | null {
+function sourceLineAmount(line: QuotationLine): number | null {
   if (line.quantity === null || line.unitPrice === null || line.quantity <= 0) return null;
   const gross = moneyNumber(line.quantity * line.unitPrice);
-  const net = moneyNumber(gross - (line.lineDiscount ?? 0));
-  return net / line.quantity;
+  return moneyNumber(gross - (line.lineDiscount ?? 0));
 }
 
 /**
@@ -269,17 +282,47 @@ export function normaliseRequirementLine(input: {
 
   if (!quote.currency) return refuse('currency_unknown', ['quotation.currency']);
 
-  const perUnit = discountedUnitPrice(line);
-  if (perUnit === null) return refuse('unit_price_unknown', ['quotationLine.unitPrice', 'quotationLine.quantity']);
+  const lineAmount = sourceLineAmount(line);
+  if (lineAmount === null) return refuse('unit_price_unknown', ['quotationLine.unitPrice', 'quotationLine.quantity']);
 
-  const exTax = toExTax(perUnit, quote);
+  const exTax = toExTax(lineAmount, quote);
   if (!exTax.ok) return refuse(exTax.reason, exTax.missing);
 
   if (fx.status !== 'governed') {
     return refuse('no_governed_rate', [`exchangeRate(${quote.currency}->${context.baseCurrency}) at ${context.comparisonDate}`]);
   }
 
-  const unitValue = moneyNumber(exTax.value * fx.rate);
+  /**
+   * THE ROUNDING AUTHORITY, FROZEN. Read this before changing anything below.
+   *
+   *   NOT:  convert the unit price -> round -> multiply by the quantity
+   *   BUT:  quantity x unit price - discount  (the source line amount, in the supplier's currency)
+   *         -> take tax out
+   *         -> apply the governed rate, KEEPING FULL PRECISION
+   *         -> round ONCE, at the comparison-currency monetary boundary
+   *
+   * The difference is not cosmetic. USD 250 a unit for 10, at 3.6725:
+   *
+   *   rounding first:  250 x 3.6725 = 918.125 -> 918.13 -> x 10 = AED 9,181.30
+   *   rounding once:   250 x 10 = 2,500 -> x 3.6725      = AED 9,181.25
+   *
+   * Five fils on one line — and a recommendation is a comparison between offers, so a rounding
+   * artefact that grows with quantity can reorder two close bids. The error is systematic, not
+   * random: it favours whichever supplier's unit price rounds up, at a size proportional to how
+   * much is being bought. That is a decision changed by arithmetic nobody chose.
+   *
+   * `roundingBasis` travels with the value so a reader can see which rule produced it rather than
+   * having to trust that this comment is still true.
+   */
+  const lineValue = moneyNumber(exTax.value * fx.rate);
+
+  /**
+   * The per-unit figure is DERIVED FOR READING, from the same governed line amount. It is rounded
+   * for display and is deliberately NOT what the total is built from — multiplying it back up is
+   * exactly the mistake above. Where the two cannot both be exact, the LINE TOTAL is the governed
+   * figure and the unit price is the presentation of it.
+   */
+  const unitValue = moneyNumber((exTax.value / line.quantity!) * fx.rate);
   const comparable: NormalisedCommercialValue = {
     status: 'comparable',
     unitValue,
@@ -287,6 +330,7 @@ export function normaliseRequirementLine(input: {
     comparisonDate: context.comparisonDate,
     taxBasis: 'ex-tax',
     freightBasis: 'excluded',
+    roundingBasis: 'derived-from-line-amount',
     fx: { source: fx.source, effectiveDate: fx.effectiveDate, rateId: fx.rateId, rate: fx.rate },
   };
 
@@ -299,7 +343,10 @@ export function normaliseRequirementLine(input: {
    */
   const total: NormalisedCommercialValue =
     quantityCompliance === 'exact' && requestedQuantity !== null
-      ? { ...comparable, unitValue: moneyNumber(unitValue * requestedQuantity) }
+      // `lineValue`, NOT `unitValue x quantity`. The quantities are equal in this branch — that is
+      // what `exact` means — so the supplier's own line amount is already the figure for the
+      // requisition line, converted once and rounded once.
+      ? { ...comparable, unitValue: lineValue, roundingBasis: 'source-line-amount-converted-once' }
       : unknown('quoted_quantity_differs', ['quotationLine.quantity']);
 
   return { ...base, normalisedUnitPrice: comparable, normalisedRequestedLineTotal: total };
@@ -363,11 +410,14 @@ export function quotationCommercialComponents(
     ...shared,
     freight: {
       status: 'comparable',
+      // One amount, quoted for the offer as a whole: converted once and rounded once, which is the
+      // same rule the line amounts follow. There is no quantity here to round against.
       unitValue: moneyNumber(exTax.value * fx.rate),
       currency: context.baseCurrency,
       comparisonDate: context.comparisonDate,
       taxBasis: 'ex-tax',
       freightBasis: 'excluded',
+      roundingBasis: 'source-line-amount-converted-once',
       fx: { source: fx.source, effectiveDate: fx.effectiveDate, rateId: fx.rateId, rate: fx.rate },
     },
   };

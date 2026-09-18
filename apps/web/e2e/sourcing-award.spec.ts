@@ -63,7 +63,7 @@ test.describe('The award', () => {
     }
     const rfq = await post<{ id: string }>('/procurement/rfqs', { title: `Cameras and cable ${run}`, prId: pr.id });
 
-    const quote = async (supplierName: string, currency: string, unitPrices: [number, number], terms: Record<string, unknown>) => {
+    const quote = async (supplierName: string, currency: string, unitPrices: [number, number], terms: Record<string, unknown>, discounts?: [number, number]) => {
       const { baseOffer } = await post<{ baseOffer: { id: string } }>('/procurement/quotations/families', {
         rfqId: rfq.id, supplierName, supplierQuotationRef: `Q-${run}-${currency}`,
       });
@@ -73,6 +73,7 @@ test.describe('The award', () => {
       for (const [i, prLineId] of prLines.entries()) {
         await post(`/procurement/quotations/revisions/${revision.id}/lines`, {
           prLineId, quantity: 10, uom: 'nr', unitPrice: unitPrices[i],
+          ...(discounts?.[i] ? { lineDiscount: discounts[i] } : {}),
           offeredManufacturer: `${supplierName} Industries`, offeredModel: `M-${i + 1}`,
         });
       }
@@ -88,8 +89,9 @@ test.describe('The award', () => {
       return { offerId: baseOffer.id, revisionId: revision.id };
     };
 
-    // Dallas: USD 100 + 250 a unit × 10 = USD 3,500, freight USD 200.
-    //   In AED at 3.6725: 367.25 × 10 + 918.13 × 10 + 734.50 freight = AED 13,588.30
+    // Dallas: USD 100 + 250 a unit × 10 = USD 3,500, freight USD 200 → USD 3,700 committed.
+    //   In AED at 3.6725: 3,672.50 + 9,181.25 + 734.50 = AED 13,588.25 — which is exactly
+    //   USD 3,700 × 3.6725, because each line amount is converted once rather than rounded per unit.
     await quote(`Dallas ${run}`, 'USD', [100, 250], { freightAmount: 200, freightTerms: 'DAP Dubai', paymentTerms: '30 days net' });
     // Gulf: AED 400 + 950 a unit × 10 = AED 13,500 — the CHEAPER comparison, and it loses anyway.
     await quote(`Gulf ${run}`, 'AED', [400, 950], { paymentTerms: '60 days net' });
@@ -135,7 +137,7 @@ test.describe('The award', () => {
       // The comparison is in AED, and it says so before any figure is read.
       await expect(buyer.page.getByTestId('sourcing-context')).toContainText('AED');
       const dallasRow = buyer.page.locator('[data-testid^="candidate-"]', { hasText: `Dallas ${run}` });
-      await expect(dallasRow).toContainText('13,588.30 AED', { timeout: 30_000 });
+      await expect(dallasRow).toContainText('13,588.25 AED', { timeout: 30_000 });
       // …while the OFFER's own currency stays visible beside it. Both facts, neither hidden.
       await expect(dallasRow).toContainText('USD');
       await expect(buyer.page.getByTestId('sourcing-no-winner')).toContainText('no offer is marked preferred');
@@ -180,7 +182,7 @@ test.describe('The award', () => {
       await expect(orderRow).toContainText('3,500.00');
       await expect(manager.page.getByTestId('award-currency-note')).toContainText('own currency');
       // The comparison figure must not appear as the order's value.
-      await expect(manager.page.getByTestId('awarded-orders')).not.toContainText('13,588.30');
+      await expect(manager.page.getByTestId('awarded-orders')).not.toContainText('13,588.25');
 
       await manager.page.screenshot({ path: 'test-results/sup-14-award.png', fullPage: true });
 
@@ -213,6 +215,160 @@ test.describe('The award', () => {
       const summary = await (await request.get(`${API}/procurement/purchase-orders/${order!.id}/lines/summary`, { headers: apiAuthHeaders() })).json();
       expect(Number(summary.total.value)).toBe(Number(persisted.value));
       expect(summary.provenance).toBe('sourced');
+
+    } finally {
+      await buyer.context.close();
+      await manager.context.close();
+    }
+  });
+
+  /**
+   * PO-01 — A DISCOUNTED OFFER REACHES A PURCHASE ORDER WITH NOTHING LOST.
+   *
+   * The award refused this outright until now. The refusal was honest — a purchase-order line had no
+   * discount field, and the alternatives were losing the discount or restating the unit price the
+   * supplier will invoice — but it was incomplete: the quotation model captures a line discount and
+   * the comparison honours it, so a valid offer could be compared, recommended, approved, and then
+   * not awarded.
+   *
+   * The line carries a discount of its own now, BESIDE the gross unit price rather than folded into
+   * it, so the supplier invoices the per-unit figure they quoted and a three-way match still
+   * compares like with like. Its own fixture, because the first test ends in an AWARDED
+   * recommendation — and an awarded one is rightly the end of that RFQ's sourcing.
+   */
+  test('awards a discounted offer, keeping the gross price, the discount and the line’s real value', async ({ browser, request }) => {
+    test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    const run = Date.now().toString().slice(-6);
+    const password = process.env.E2E_PASSWORD ?? 'e2e-password';
+    const headers = { 'content-type': 'application/json', ...apiAuthHeaders() };
+    const post = async <T>(path: string, data: unknown): Promise<T> => {
+      const res = await request.post(`${API}${path}`, { headers, data });
+      expect(res.ok(), `${path} — ${await res.text()}`).toBe(true);
+      return res.json() as Promise<T>;
+    };
+
+    const project = await post<{ id: string }>('/projects/projects', { title: `PO-01 ${run}` });
+    const material = await post<{ id: string }>('/inventory/materials', { code: `DSC-${run}`, name: 'Fibre patch panel', uom: 'nr' });
+    const pr = await post<{ id: string }>('/procurement/purchase-requests', { title: `Patch panels ${run}`, projectId: project.id, value: 0 });
+    const prLine = await post<{ id: string }>(`/procurement/purchase-requests/${pr.id}/lines`, { material: material.id, quantity: 10, estimatedUnitCost: 500 });
+    const rfq = await post<{ id: string }>('/procurement/rfqs', { title: `Patch panels ${run}`, prId: pr.id });
+
+    // 10 at AED 500, less a 1,000 discount on the line: the line is worth 4,000, not 5,000.
+    const { baseOffer } = await post<{ baseOffer: { id: string } }>('/procurement/quotations/families', {
+      rfqId: rfq.id, supplierName: `Sharjah ${run}`, supplierQuotationRef: `SQ-${run}`,
+    });
+    const revision = await post<{ id: string }>(`/procurement/quotations/offers/${baseOffer.id}/revisions`, {
+      currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, validityDate: '2026-12-31', paymentTerms: '45 days net',
+    });
+    await post(`/procurement/quotations/revisions/${revision.id}/lines`, {
+      prLineId: prLine.id, quantity: 10, uom: 'nr', unitPrice: 500, lineDiscount: 1_000,
+      offeredManufacturer: 'Sharjah Industries', offeredModel: 'FPP-24',
+    });
+    for (const status of ['received', 'confirmed']) {
+      const res = await request.patch(`${API}/procurement/quotations/revisions/${revision.id}/status`, { headers, data: { status } });
+      expect(res.ok(), await res.text()).toBe(true);
+    }
+    const qLines = await (await request.get(`${API}/procurement/quotations/revisions/${revision.id}/lines`, { headers: apiAuthHeaders() })).json() as Array<{ id: string }>;
+    for (const l of qLines) await post(`/procurement/quotation-lines/${l.id}/evaluation`, { verdict: 'compliant', rationale: 'meets the specification' });
+
+    const signedIn = async (username: string) => {
+      const context = await browser.newContext({ storageState: undefined });
+      const page = await context.newPage();
+      await page.goto('/login', { waitUntil: 'domcontentloaded' });
+      await page.getByTestId('login-username').fill(username);
+      await page.getByTestId('login-password').fill(password);
+      await page.getByTestId('login-submit').click();
+      await page.waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 30_000 });
+      return { context, page };
+    };
+    const buyer = await signedIn(process.env.E2E_BUYER_USERNAME ?? 'u-e2e-buyer');
+    const manager = await signedIn(process.env.E2E_PROCUREMENT_MANAGER_USERNAME ?? 'u-e2e-procmgr');
+
+    try {
+      await buyer.page.goto(`/procurement/rfqs/${rfq.id}/recommendation`, { waitUntil: 'domcontentloaded' });
+      await expect(buyer.page.getByTestId('candidates-table')).toBeVisible({ timeout: 40_000 });
+      await buyer.page.getByTestId('sourcing-date').fill(COMPARISON_DATE);
+
+      // The COMPARISON honours the discount: 10 x 500 - 1,000 = 4,000, not 5,000.
+      const row = buyer.page.locator('[data-testid^="candidate-"]', { hasText: `Sharjah ${run}` });
+      await expect(row).toContainText('4,000.00 AED', { timeout: 30_000 });
+
+      const offerId = (await row.getAttribute('data-testid'))!.replace('candidate-', '');
+      const recommend = async () => {
+        await buyer.page.getByTestId(`assign-${prLine.id}`).selectOption(offerId);
+        await buyer.page.getByTestId('prepare').click();
+        await expect(buyer.page.getByTestId('recommendation-status')).toHaveText('draft', { timeout: 30_000 });
+        await buyer.page.getByTestId('submit').click();
+        await expect(buyer.page.getByTestId('recommendation-status')).toHaveText('submitted', { timeout: 30_000 });
+      };
+      await manager.page.goto(`/procurement/rfqs/${rfq.id}/recommendation`, { waitUntil: 'domcontentloaded' });
+      const approve = async () => {
+        await manager.page.reload({ waitUntil: 'domcontentloaded' });
+        await expect(manager.page.getByTestId('recommendation-status')).toHaveText('submitted', { timeout: 40_000 });
+        await manager.page.getByTestId('decide-approved').click();
+        await expect(manager.page.getByTestId('recommendation-status')).toHaveText('approved', { timeout: 30_000 });
+      };
+
+      /**
+       * ── STANDING AN APPROVED RECOMMENDATION DOWN, AND KEEPING BOTH FACTS ──
+       *
+       * One live recommendation per RFQ is a real rule, and `approved` counts as live — so before
+       * withdrawal existed, an approved recommendation that must NOT be awarded had nowhere to go.
+       * SUP-14 turned that into a deadlock rather than an inconvenience: the award refuses a stale
+       * one, and it could then be neither awarded, nor decided again, nor replaced.
+       *
+       * And the withdrawal must not erase what it stands down. It was first written into the fields
+       * that hold WHO APPROVED IT, so withdrawing an approved recommendation deleted the approval
+       * from the only place it was kept. Both acts are recorded now, and this reads them back out of
+       * PostgreSQL rather than trusting the in-memory store to have the same shape.
+       */
+      await recommend();
+      await approve();
+      await manager.page.getByTestId('withdraw-reason').fill('the site changed the panel count');
+      await manager.page.getByTestId('withdraw').click();
+      await expect(manager.page.getByTestId('decision-form')).toBeVisible({ timeout: 30_000 });
+
+      const history = await (await request.get(`${API}/procurement/rfqs/${rfq.id}/recommendations`, { headers: apiAuthHeaders() })).json() as Array<Record<string, unknown>>;
+      const stoodDown = history.find((r) => r.status === 'withdrawn');
+      expect(stoodDown, 'a withdrawn recommendation stays readable').toBeTruthy();
+      expect(stoodDown!.withdrawnBy, 'and records who stood it down').toBeTruthy();
+      expect(stoodDown!.withdrawalReason).toBe('the site changed the panel count');
+      // THE APPROVAL SURVIVES IT. Two acts, two records.
+      expect(stoodDown!.decidedBy, 'the approver must survive the withdrawal').toBeTruthy();
+      expect(stoodDown!.decidedAt).toBeTruthy();
+
+      // …and the RFQ is free again, which is the point of allowing it at all.
+      await buyer.page.reload({ waitUntil: 'domcontentloaded' });
+      await expect(buyer.page.getByTestId('decision-form')).toBeVisible({ timeout: 40_000 });
+      await buyer.page.getByTestId('sourcing-date').fill(COMPARISON_DATE);
+      await expect(buyer.page.locator('[data-testid^="candidate-"]').first()).toBeVisible({ timeout: 30_000 });
+      await recommend();
+
+      await approve();
+      await manager.page.getByTestId('award').click();
+      await expect(manager.page.getByTestId('awarded-orders')).toBeVisible({ timeout: 40_000 });
+      await manager.page.screenshot({ path: 'test-results/sup-14-discounted-award.png', fullPage: true });
+
+      // ── OUT OF POSTGRES ──────────────────────────────────────────────────
+      const orders = await (await request.get(`${API}/procurement/purchase-orders`, {
+        params: { projectId: project.id }, headers: apiAuthHeaders(),
+      })).json() as Array<Record<string, unknown>>;
+      const order = orders.find((o) => String(o.supplierName ?? '').includes(`Sharjah ${run}`));
+      expect(order, 'the discounted offer must produce an order').toBeTruthy();
+      expect(Number(order!.value), 'the order is worth the line AFTER its discount').toBe(4_000);
+
+      const lines = await (await request.get(`${API}/procurement/purchase-orders/${order!.id}/lines`, { headers: apiAuthHeaders() })).json() as Array<Record<string, unknown>>;
+      expect(lines).toHaveLength(1);
+      // THE GROSS UNIT PRICE SURVIVES — it is what the supplier prints on their invoice line.
+      expect(Number(lines[0].unitPrice)).toBe(500);
+      // …and the discount travels beside it rather than being folded in or dropped.
+      expect(Number(lines[0].lineDiscount)).toBe(1_000);
+      // Its provenance is the quotation line it came from, still readable.
+      expect(lines[0].sourceQuoteLineId).toBeTruthy();
+
+      // One total, not two: the summary derived from the lines equals the header.
+      const summary = await (await request.get(`${API}/procurement/purchase-orders/${order!.id}/lines/summary`, { headers: apiAuthHeaders() })).json();
+      expect(Number(summary.total.value)).toBe(4_000);
     } finally {
       await buyer.context.close();
       await manager.context.close();

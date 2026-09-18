@@ -19,7 +19,7 @@ import type { NormalisedCommercialValue } from './commercial-normalisation';
 
 const comparable = (unitValue: number): NormalisedCommercialValue => ({
   status: 'comparable', unitValue, currency: 'AED', comparisonDate: '2026-09-17',
-  taxBasis: 'ex-tax', freightBasis: 'excluded',
+  taxBasis: 'ex-tax', freightBasis: 'excluded', roundingBasis: 'source-line-amount-converted-once',
   fx: { source: 'identity', effectiveDate: null, rateId: null, rate: 1 },
 });
 const unknown = (reason: NormalisedCommercialValue extends { status: 'unknown' } ? never : 'quoted_quantity_differs' | 'no_governed_rate'): NormalisedCommercialValue =>

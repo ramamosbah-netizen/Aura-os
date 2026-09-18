@@ -9,7 +9,7 @@ import {
 } from '@aura/shared';
 import { TenderService } from '@aura/tendering';
 import { VariationService } from '@aura/projects';
-import { PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
+import { orderCommitment, PurchaseOrderLineService, PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { InvoiceService } from '@aura/finance';
 import { SubcontractsService } from '@aura/subcontracts';
 import { HrService } from '@aura/hr';
@@ -186,6 +186,8 @@ export class InboxService {
   constructor(
     private readonly prs: PurchaseRequestService,
     private readonly pos: PurchaseOrderService,
+    // Needed to read what an order actually commits to: its lines plus the freight on the header.
+    private readonly orderLines: PurchaseOrderLineService,
     private readonly invoices: InvoiceService,
     private readonly subcontracts: SubcontractsService,
     private readonly tenders: TenderService,
@@ -259,7 +261,10 @@ export class InboxService {
         items.push({
           id: po.id, module: 'Procurement', kind: 'Purchase Order', title: po.title,
           detail: po.supplierName ? `Supplier: ${po.supplierName}` : (po.reference ?? ''),
-          action: 'Approve', href: `/procurement/purchase-orders/${po.id}`, value: po.value, createdAt: po.createdAt,
+          // The figure an approver is being asked to commit — lines plus the freight on the header
+          // (SUP-14) — not just what the lines come to.
+          action: 'Approve', href: `/procurement/purchase-orders/${po.id}`,
+          value: orderCommitment(po, await this.orderLines.listLines(po.id)).exTax, createdAt: po.createdAt,
         });
 
     for (const inv of invoices) {

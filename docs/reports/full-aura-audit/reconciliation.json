@@ -14,7 +14,7 @@
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 51,
+  "gapRecords": 52,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -70,6 +70,7 @@
     "FX-02",
     "QC-01",
     "PO-01",
+    "FX-03",
     "BID-01"
   ],
   "rolePairs": 999,

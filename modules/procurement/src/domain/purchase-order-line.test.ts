@@ -225,3 +225,56 @@ describe('a line’s lineage is fixed when it is created', () => {
     expect(direct.sourceQuoteLineId).toBeNull();
   });
 });
+
+/**
+ * PO-01 — a line discount, and the question it forces.
+ *
+ * SUP-14 used to REFUSE to award an offer whose lines carried a discount. That was the right
+ * fail-closed choice at the time: a purchase-order line had no discount field, so awarding meant
+ * either losing the discount (ordering at more than was agreed) or folding it into the unit price
+ * (restating the figure the supplier will invoice, and breaking the three-way match against their
+ * own invoice line). Both state a price nobody agreed to.
+ *
+ * Refusing is not a fix, though, because the quotation model captures a discount and SUP-06 compares
+ * it — so a perfectly valid offer could be recommended, approved, and then not awarded. The field
+ * exists now, and with it the answer to the question it forces: what is a discounted line worth when
+ * only part of it arrives? Pro rata. A discount is a reduction of the LINE, earned with the quantity
+ * delivered — so every reading of that line agrees, which is the whole point.
+ */
+describe('a line discount', () => {
+  const discounted = (over = {}) => line({ quantity: 10, unitPrice: 250, lineDiscount: 500, ...over });
+
+  it('is kept beside the unit price, never folded into it', () => {
+    const l = discounted();
+    // The GROSS unit price survives, because that is what the supplier will invoice per unit.
+    expect(l.unitPrice).toBe(250);
+    expect(l.lineDiscount).toBe(500);
+  });
+
+  it('makes the line worth quantity x price LESS the discount', () => {
+    expect(domain.lineNetValue(discounted())).toBe(2_000); // 10 x 250 - 500
+    expect(domain.lineNetValue(line({ quantity: 10, unitPrice: 250 }))).toBe(2_500); // no discount
+  });
+
+  it('is earned pro rata, so a part delivery is valued at the effective unit price', () => {
+    // 2,000 over 10 units = 200 a unit. Four delivered is 800 — not 1,000, which would credit the
+    // supplier for a discount they have not yet earned.
+    expect(domain.lineEffectiveUnitPrice(discounted())).toBe(200);
+  });
+
+  it('reaches the order total, so the header cannot disagree with the lines', () => {
+    expect(orderTotal([discounted()]).value).toBe(2_000);
+    expect(orderGoverningValue(9_999, [discounted()])).toEqual({ value: 2_000, derived: true });
+  });
+
+  it('refuses a discount larger than the line, and a negative one', () => {
+    expect(() => discounted({ lineDiscount: 2_501 }))
+      .toThrow(/cannot exceed what the line comes to/);
+    expect(() => discounted({ lineDiscount: -1 }))
+      .toThrow(/cannot be negative — a surcharge is not a discount/);
+  });
+
+  it('treats NULL as no discount rather than as zero-by-default', () => {
+    expect(line({ quantity: 10, unitPrice: 250 }).lineDiscount).toBeNull();
+  });
+});

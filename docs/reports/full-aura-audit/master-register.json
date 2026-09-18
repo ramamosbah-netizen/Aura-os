@@ -8628,9 +8628,9 @@
         "SUP-14",
         "BUY-05"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "kind": "fresh finding — discovered while building the award (SUP-14)",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Procurement Manager / Buyer",
         "Commercial Manager / QS",
@@ -8640,12 +8640,38 @@
         "Procurement"
       ],
       "authority": "Procurement purchase-order lines",
-      "currentBehavior": "A quotation line carries `lineDiscount` and QC-01 captures it; a purchase-order line has quantity and unit price and nothing else, and `orderTotal` — the value that GOVERNS an order with lines — is the sum of quantity x unit price with no discount term. So a supplier who quotes 100 a unit less 5% can be compared correctly and cannot be ordered from correctly. Migration 0354 added a `line_discount` column to `aura_procurement_purchase_order_lines` in anticipation; nothing reads or writes it, and the domain has no field for it. SUP-14 therefore REFUSES to award an offer whose lines carry a discount, naming what is missing, rather than taking either of the two available wrong answers: dropping the discount (ordering at more than was agreed) or folding it into the unit price (restating the per-unit figure the supplier will invoice, which then fails the three-way match against their invoice). The refusal is deliberate and is not the fix.",
+      "currentBehavior": "A purchase-order line records the discount the supplier gave, BESIDE the gross unit price rather than folded into it — so the supplier invoices the per-unit figure they quoted and a three-way match still compares like with like. The question the field forces is answered rather than assumed: a discount is a reduction of the LINE, earned pro rata with what arrives, so ten at 250 less 500 is worth 200 a unit and four delivered is 800. `lineNetValue` and `lineEffectiveUnitPrice` are the single places that arithmetic happens, and the order total, the commitment an approver is asked for and the outstanding-receipt value all read them, so a discount cannot be honoured in one reading and forgotten in another. A discount larger than its line, or a negative one, is refused rather than clamped. SUP-14 no longer refuses a discounted offer: it carries quantity, gross unit price, discount, make and model across from the offer, with the quotation line it came from still named on the order line.",
       "expectedOperationalBehavior": "An order line records the discount the supplier gave, and every figure derived from that line — the order total, the receipt valuation, the invoice match — reads the same discounted value.",
-      "evidence": "FRESH discovery while building SUP-14: modules/procurement/src/domain/purchase-order-line.ts orderTotal/orderGoverningValue (no discount term); modules/procurement/src/domain/quotation-line.ts lineDiscount; infrastructure/migrations/0354_award_preserves_supplier_terms.sql (column added, unread); modules/procurement/src/sourcing-award.service.ts (the refusal).",
+      "evidence": "infrastructure/migrations/0354 (the column) now read and written by modules/procurement/src/postgres-purchase-order-line-store.ts; modules/procurement/src/domain/purchase-order-line.ts (lineNetValue, lineEffectiveUnitPrice, the validation); modules/procurement/src/domain/order-receipt.ts (outstanding value at the effective unit price); modules/procurement/src/sourcing-award.service.ts (the discount carried, and counted in the header value); tests in purchase-order-line.test.ts and order-receipt.test.ts; apps/api/test/sourcing-award.e2e-spec.ts (a discounted offer awarded over HTTP); apps/web/e2e/sourcing-award.spec.ts + PostgreSQL (PO-2026-000006: value 4,000, unit_price 500, line_discount 1,000).",
       "severity": "MEDIUM",
       "remediationDependency": "None upstream. It does NOT block SUP-14: an award of an undiscounted offer is complete and proved. It bounds what SUP-14 can award, and it is why the award refuses instead of guessing.",
-      "acceptanceProof": "A discount on an order line is recorded, and the question it forces is ANSWERED rather than assumed: what a discounted line is worth when part of it is received, and what an invoice line must match. Every reader of a line — order total, committed cost, goods receipt valuation, three-way match — agrees on one value, proved against PostgreSQL, and a discounted offer is awarded end to end with the buyer never retyping a price."
+      "acceptanceProof": "MET. Every reader of a discounted line agrees on one value, proved against PostgreSQL, and a discounted offer is awarded end to end with no price retyped."
+    },
+    {
+      "id": "FX-03",
+      "title": "The comparison rounded the converted UNIT price and multiplied it up, so a recommendation could be decided by arithmetic nobody chose",
+      "capabilityIds": [
+        "SUP-06",
+        "SUP-13",
+        "SUP-14"
+      ],
+      "classification": "COMPLETE",
+      "kind": "fresh defect — found by the SUP-14 browser proof, in a figure that had already been stored and approved",
+      "status": "CLOSED_VERIFIED",
+      "roles": [
+        "Procurement Manager / Buyer",
+        "Commercial Manager / QS"
+      ],
+      "stages": [
+        "Procurement"
+      ],
+      "authority": "Procurement commercial normalisation (SUP-06)",
+      "currentBehavior": "The rounding authority is frozen and stated where it is applied. The SOURCE LINE AMOUNT — quantity x unit price less the line discount — is taken in the supplier’s own currency, put ex-tax, converted at the governed rate with full precision retained, and rounded ONCE at the comparison-currency boundary. USD 250 a unit for ten at 3.6725 is now AED 9,181.25, and the whole offer reconciles to the fils with the supplier’s own USD 3,700 x 3.6725 = AED 13,588.25. The per-unit figure is still shown, derived from the same governed amount and rounded for reading, and every value carries a `roundingBasis` naming the rule that produced it — so the total and the unit price cannot be mistaken for two versions of one authority. Freight, a single amount quoted for the offer as a whole, follows the same rule with no quantity to round against.",
+      "expectedOperationalBehavior": "One frozen rounding authority: the source line amount (quantity x unit price, less the line discount) is taken in the supplier’s own currency, put ex-tax, converted at the governed rate with full precision retained, and rounded ONCE at the comparison-currency monetary boundary. A per-unit figure is derived for reading and is never multiplied back up.",
+      "evidence": "modules/procurement/src/domain/commercial-normalisation.ts (sourceLineAmount, the frozen order of operations, roundingBasis); modules/procurement/src/domain/commercial-normalisation.test.ts (“the rounding authority” — the 9,181.25 case, the derived unit price, a discount applied before conversion, and the tax-inclusive path); apps/api/test/sourcing-award.e2e-spec.ts (the comparison reconciles with the supplier’s own total); apps/web/e2e/sourcing-award.spec.ts (AED 13,588.25 on screen, against PostgreSQL).",
+      "severity": "HIGH",
+      "remediationDependency": "None upstream. It BLOCKS the promotion of SUP-13 and SUP-14: both are decisions made on this figure.",
+      "acceptanceProof": "MET. The stored governed_total and the screen now both read 13,588.25, and the tests fail on the old behaviour rather than merely describing it."
     },
     {
       "id": "BID-01",
@@ -8689,9 +8715,9 @@
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
-    "gaps": 51,
+    "gaps": 52,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 5
+    "freshDefects": 6
   }
 }

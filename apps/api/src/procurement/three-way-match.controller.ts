@@ -1,7 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { moneyNumber } from '@aura/shared';
-import { PurchaseOrderService } from '@aura/procurement';
+import { orderCommitment, PurchaseOrderLineService, PurchaseOrderService } from '@aura/procurement';
 import { GoodsReceiptService } from '@aura/inventory';
 import { InvoiceService } from '@aura/finance';
 
@@ -31,6 +31,7 @@ export class ThreeWayMatchController {
     private readonly pos: PurchaseOrderService,
     private readonly grns: GoodsReceiptService,
     private readonly invoices: InvoiceService,
+    private readonly orderLines: PurchaseOrderLineService,
     private readonly tenant: TenantContext,
   ) {}
 
@@ -49,7 +50,13 @@ export class ThreeWayMatchController {
         const invoiced = invs
           .filter((i) => i.status !== 'cancelled')
           .reduce((s, i) => s + (i.value || 0), 0);
-        const ordered = po.value || 0;
+        /**
+         * ORDERED is what the purchase order COMMITS to, not what its lines come to: freight is
+         * quoted for the order as a whole and sits on the header (SUP-14). Reading `po.value` here
+         * would report an order as over-received the moment the supplier delivered the freight they
+         * quoted — a match failure invented by arithmetic.
+         */
+        const ordered = orderCommitment(po, await this.orderLines.listLines(po.id)).exTax;
         const billingExposure = moneyNumber(invoiced - received);
 
         let matchStatus: MatchRow['matchStatus'];

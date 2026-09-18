@@ -273,3 +273,65 @@ describe('the comparison date is explicit', () => {
     expect(commercialStatus(q, { baseCurrency: 'AED', comparisonDate: '2026-09-17' })).toBe('expired');
   });
 });
+
+/**
+ * THE ROUNDING AUTHORITY — the defect this exists to keep out.
+ *
+ * The comparison used to convert the UNIT price, round it, and multiply by the quantity. That is
+ * arithmetic nobody chose, and it is not neutral: the error grows with the quantity and always
+ * favours whichever supplier's unit price happens to round up. A recommendation is a comparison
+ * between offers, so a big enough artefact reorders two close bids — a decision changed by rounding.
+ *
+ * It was caught by a browser proof that showed AED 13,588.30 where the supplier's own figures came
+ * to AED 13,588.25, and the wrong figure was not merely displayed: it was STORED on the
+ * recommendation as the value the approval was given against.
+ */
+describe('the rounding authority', () => {
+  /** USD 250 a unit for 10, at 3.6725 — the case that exposed it. */
+  const RATE: ResolvedFx = { status: 'governed', rate: 3.6725, source: 'stored', effectiveDate: '2026-03-01', rateId: 'r-usd' };
+  const usd = (over: Partial<QuotationLine> = {}) =>
+    normalise({
+      quote: quote({ currency: 'USD', taxTreatment: 'exclusive', taxRatePct: 5 }),
+      line: line({ quantity: 10, unitPrice: 250, ...over }),
+      requestedQuantity: 10,
+      fx: RATE,
+    });
+
+  it('converts the SOURCE LINE AMOUNT once, instead of rounding the unit price and multiplying up', () => {
+    const v = usd();
+    // 250 x 10 = 2,500 -> x 3.6725 = 9,181.25.   NOT 918.13 x 10 = 9,181.30.
+    expect(v.normalisedRequestedLineTotal).toMatchObject({
+      status: 'comparable', unitValue: 9_181.25, roundingBasis: 'source-line-amount-converted-once',
+    });
+    expect(v.normalisedRequestedLineTotal.status === 'comparable' && v.normalisedRequestedLineTotal.unitValue)
+      .not.toBe(9_181.30);
+  });
+
+  it('still shows a readable unit price, marked as derived so nobody multiplies it back up', () => {
+    const v = usd();
+    // The per-unit figure rounds for reading — and says which rule made it, so the total and the
+    // unit price cannot be mistaken for two versions of the same authority.
+    expect(v.normalisedUnitPrice).toMatchObject({
+      status: 'comparable', unitValue: 918.13, roundingBasis: 'derived-from-line-amount',
+    });
+  });
+
+  it('applies a line discount to the source amount BEFORE converting, not after', () => {
+    // 250 x 10 = 2,500, less a 500 discount = USD 2,000 -> x 3.6725 = AED 7,345.00.
+    const v = usd({ lineDiscount: 500 });
+    expect(v.normalisedRequestedLineTotal).toMatchObject({ status: 'comparable', unitValue: 7_345 });
+    // …and the unit price follows it down rather than being quoted gross.
+    expect(v.normalisedUnitPrice).toMatchObject({ status: 'comparable', unitValue: 734.5 });
+  });
+
+  it('takes tax out of the line amount, and the two orders agree because both are linear', () => {
+    // Tax-inclusive: 2,500 / 1.05 = 2,380.952380... -> x 3.6725 = 8,744.047... -> AED 8,744.05.
+    const v = normalise({
+      quote: quote({ currency: 'USD', taxTreatment: 'inclusive', taxRatePct: 5 }),
+      line: line({ quantity: 10, unitPrice: 250 }),
+      requestedQuantity: 10,
+      fx: RATE,
+    });
+    expect(v.normalisedRequestedLineTotal).toMatchObject({ status: 'comparable', unitValue: 8_744.05 });
+  });
+});

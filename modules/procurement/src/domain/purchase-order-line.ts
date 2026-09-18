@@ -37,6 +37,21 @@ export interface PurchaseOrderLine {
    * never to be read as agreed.
    */
   unitPriceBasis: UnitPriceBasis | null;
+  /**
+   * THE DISCOUNT THE SUPPLIER GAVE ON THIS LINE, as they stated it (PO-01).
+   *
+   * Kept BESIDE the unit price and never folded into it. `unitPrice` stays the gross per-unit figure
+   * the supplier will print on their invoice line, so a three-way match compares like with like;
+   * folding the discount in would restate a price the supplier never quoted and make their own
+   * invoice look wrong. NULL means no discount, which is different from a discount of zero only in
+   * that nobody claimed one.
+   *
+   * What it is worth on a PARTIAL delivery is the question this field forces, and the answer is
+   * pro rata: a discount is a reduction of the LINE, earned with the quantity delivered. Receive
+   * four of ten on a line of 10 x 250 less 500 and you have received 800, not 1,000 — which is
+   * `lineEffectiveUnitPrice` x 4. Everything downstream reads that one function.
+   */
+  lineDiscount: number | null;
 
   /** How this line came to be bought. See `LINE_SOURCES`. */
   sourceType: PurchaseOrderLineSource;
@@ -111,6 +126,8 @@ export interface NewPurchaseOrderLine {
   snapshot: OrderMaterialSnapshot;
   quantity: number;
   unitPrice: number;
+  /** The supplier's own line discount, if they gave one. Never folded into `unitPrice`. */
+  lineDiscount?: number | null;
   sourceType: PurchaseOrderLineSource;
   unitPriceBasis: UnitPriceBasis;
   sourcePrLineId?: Id | null;
@@ -160,6 +177,21 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     );
   }
 
+  /**
+   * A discount that exceeds the line would make it worth less than nothing, and a negative one is a
+   * surcharge wearing the wrong name. Both are refused rather than clamped: clamping would silently
+   * change a commercial term.
+   */
+  const lineDiscount = input.lineDiscount == null ? null : Number(input.lineDiscount);
+  if (lineDiscount !== null) {
+    if (!Number.isFinite(lineDiscount) || lineDiscount < 0) {
+      throw new Error('a line discount cannot be negative — a surcharge is not a discount');
+    }
+    if (lineDiscount > moneyNumber(quantity * unitPrice)) {
+      throw new Error('a line discount cannot exceed what the line comes to before it');
+    }
+  }
+
   if (!(UNIT_PRICE_BASES as readonly string[]).includes(input.unitPriceBasis)) {
     throw new Error(
       `a purchase order line must say what kind of price it carries — ${UNIT_PRICE_BASES.join(' or ')}`,
@@ -198,6 +230,7 @@ export function makePurchaseOrderLine(input: NewPurchaseOrderLine): PurchaseOrde
     quantity,
     unitPrice: moneyNumber(unitPrice),
     unitPriceBasis: input.unitPriceBasis,
+    lineDiscount: lineDiscount === null ? null : moneyNumber(lineDiscount),
     sourceType: input.sourceType,
     sourcePrLineId,
     sourceQuoteLineId,
@@ -235,14 +268,77 @@ export function mayEditOrderLines(poStatus: string): { allowed: boolean; reason?
  */
 export interface OrderTotal {
   lineCount: number;
+  /**
+   * THE NET LINE VALUE. Quantity x unit price, summed. It is NOT the total the supplier will be
+   * owed: freight is quoted for the order as a whole and sits on the header (SUP-14), so an order
+   * with freight is worth more than its lines come to. Anything meaning "what we have committed to
+   * this supplier" must read `orderCommitment`, not this.
+   */
   value: number;
+}
+
+/**
+ * WHAT THIS ORDER COMMITS US TO, EX-TAX — lines plus the freight quoted on the header.
+ *
+ * The distinction did not exist until SUP-14, and that is exactly why it is dangerous now. Before
+ * an award could carry a supplier's own terms, no purchase order had freight, so the line total and
+ * the commitment were the same number and every reader of `value` was accidentally right. The first
+ * order raised with USD 200 of freight makes them differ by 200, and the readers that mean
+ * "commitment" — the invoice-over-PO check, the three-way match, the approval on issue — would
+ * quietly be short by the freight:
+ *
+ *   an invoice for the goods AND the freight reads as EXCEEDING the purchase order
+ *   an order needing a director's approval gets a manager's, because the figure checked is smaller
+ *
+ * Freight that is not stated is not charged. A purchase order is a complete instruction to a
+ * supplier: if it does not say freight, nothing has been committed for freight — which is also what
+ * makes every order raised before SUP-14 read exactly as it always did.
+ */
+export interface OrderCommitment {
+  /** Lines only — the same figure as `orderTotal().value`. */
+  netLineValue: number;
+  /** As quoted on the header. NULL means no freight is stated on this order. */
+  freight: number | null;
+  /** netLineValue + freight. What the supplier will invoice against, before tax. */
+  exTax: number;
+}
+
+export function orderCommitment(
+  header: { value: number; freightAmount?: number | null },
+  lines: PurchaseOrderLine[],
+): OrderCommitment {
+  const netLineValue = orderGoverningValue(header.value, lines).value;
+  const freight = header.freightAmount ?? null;
+  return { netLineValue, freight, exTax: moneyNumber(netLineValue + (freight ?? 0)) };
+}
+
+/**
+ * WHAT ONE LINE IS WORTH: quantity x unit price, less the supplier's own discount on it.
+ *
+ * The single place that arithmetic happens. Everything that values a line — the order total, a
+ * partial receipt, the commitment an approver is asked for — goes through here, so a discount
+ * cannot be honoured in one reading and forgotten in another.
+ */
+export function lineNetValue(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount'>): number {
+  return moneyNumber(moneyNumber(line.quantity * line.unitPrice) - (line.lineDiscount ?? 0));
+}
+
+/**
+ * What ONE UNIT of this line is worth after its discount — the figure a partial delivery is valued
+ * at. A discount is a reduction of the line, earned pro rata with what actually arrives; valuing a
+ * part delivery at the gross unit price would credit the supplier for a discount they have not yet
+ * fully earned, and the numbers would only come right if the last unit ever turned up.
+ */
+export function lineEffectiveUnitPrice(line: Pick<PurchaseOrderLine, 'quantity' | 'unitPrice' | 'lineDiscount'>): number {
+  if (!line.quantity) return moneyNumber(line.unitPrice);
+  return lineNetValue(line) / line.quantity;
 }
 
 export function orderTotal(lines: PurchaseOrderLine[]): OrderTotal {
   return {
     lineCount: lines.length,
     // Each line extension rounds before the sum, so the total is what the printed lines add up to.
-    value: moneyNumber(lines.reduce((sum, l) => sum + moneyNumber(l.quantity * l.unitPrice), 0)),
+    value: moneyNumber(lines.reduce((sum, l) => sum + lineNetValue(l), 0)),
   };
 }
 

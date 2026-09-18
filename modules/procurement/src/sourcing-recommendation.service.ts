@@ -442,10 +442,14 @@ export class SourcingRecommendationService {
       this.access.assert(input.actorId, { permission: 'procurement.rfq.award', orgPath });
     }
 
+    /**
+     * `decidedBy` / `decidedAt` / `decisionNote` are NOT touched. They hold who approved this and
+     * why, and a withdrawal is a later fact about that decision rather than a correction of it.
+     */
     const withdrawn: SourcingRecommendation = {
       ...recommendation, status: 'withdrawn',
-      decidedBy: input.actorId, decidedAt: new Date().toISOString(),
-      decisionNote: input.reason.trim(),
+      withdrawnBy: input.actorId, withdrawnAt: new Date().toISOString(),
+      withdrawalReason: input.reason.trim(),
     };
     await this.store.updateStatus(withdrawn);
     await this.emit(RECOMMENDATION_EVENT.decided, withdrawn, input.actorId, {

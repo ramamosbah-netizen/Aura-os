@@ -137,3 +137,30 @@ describe('exposure', () => {
     expect(receipt.lines[0].sourceType).toBe('direct');
   });
 });
+
+/**
+ * PO-01 — what a DISCOUNTED line is worth when only part of it arrives.
+ *
+ * The receipt position is where this question becomes money. A discount is a reduction of the LINE,
+ * so it is earned with the quantity delivered: value what has arrived at the gross unit price and
+ * the outstanding figure overstates what is still owed, by exactly the discount that has not been
+ * earned yet. The numbers would only come right if the very last unit turned up.
+ */
+describe('a line discount, at the point of delivery', () => {
+  it('values what is still outstanding at the effective unit price, not the list price', () => {
+    // 10 at 250 less a 500 discount: 2,000 for the line, 200 a unit. Four arrive, six outstanding.
+    const l = line({ id: 'l1', quantity: 10, unitPrice: 250, lineDiscount: 500 });
+    const receipt = receiptOf([l], { l1: 4 });
+
+    expect(receipt.lines[0].outstanding).toBe(6);
+    expect(receipt.lines[0].outstandingValue).toBe(1_200);   // 6 x 200
+    expect(receipt.lines[0].outstandingValue).not.toBe(1_500); // 6 x 250, the list price
+  });
+
+  it('closes at zero when the whole line arrives, discount and all', () => {
+    const l = line({ id: 'l1', quantity: 10, unitPrice: 250, lineDiscount: 500 });
+    const receipt = receiptOf([l], { l1: 10 });
+    expect(receipt.lines[0].outstandingValue).toBe(0);
+    expect(receipt.fullyReceived).toBe(true);
+  });
+});

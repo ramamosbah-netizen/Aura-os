@@ -1,7 +1,7 @@
 {
   "recordedAt": "2026-09-18",
-  "note": "SEC-01. Every entry is a route that manufactures a business fact under a permission name no shipped role names. This list may only SHRINK: a new one fails the build, and a fixed one must be deleted from here or the test says so. History of the number, because it moved for two different reasons: 419 recorded at stage 2 (2026-09-18); J1-07 removed 6 by declaring crm.requirement.* / crm.scope.* / crm.quotation.create on the pre-award discovery routes; then 4 MORE were ADDED here - not new debt, but debt the scan had been hiding. Mutation-testing this guard during J1-07 showed the scanner treated a handler as governed when its NEIGHBOUR declared @Permissions below its own @Post, so every earlier count was a floor. The true stage-2 number was 423, not 419. Governing-verb routes are 65 for the same reason: 66 before J1-07, less the scope approval it fixed.",
-  "governingVerbs": 65,
+  "note": "SEC-01. Every entry is a route that manufactures a business fact under a permission name no shipped role names. This list may only SHRINK: a new one fails the build, and a fixed one must be deleted from here or the test says so. History of the number, because it moved for two different reasons: 419 recorded at stage 2 (2026-09-18); J1-07 removed 6 by declaring crm.requirement.* / crm.scope.* / crm.quotation.create on the pre-award discovery routes; then 4 MORE were ADDED here - not new debt, but debt the scan had been hiding. Mutation-testing this guard during J1-07 showed the scanner treated a handler as governed when its NEIGHBOUR declared @Permissions below its own @Post, so every earlier count was a floor. The true stage-2 number was 423, not 419. Governing-verb routes: 66 before J1-07, 65 after it, 63 after the finance period close and reopen were declared.",
+  "governingVerbs": 63,
   "routes": [
     "DELETE assets/:id",
     "DELETE commissioning/records/:id/asbuilt-links/:linkId",
@@ -217,8 +217,6 @@
     "POST finance/invoices/fx-revaluation/post",
     "POST finance/journals",
     "POST finance/payments",
-    "POST finance/periods/close",
-    "POST finance/periods/reopen",
     "POST finance/petty-cash",
     "POST finance/petty-cash/:id/transactions",
     "POST finance/post-dated-cheques",

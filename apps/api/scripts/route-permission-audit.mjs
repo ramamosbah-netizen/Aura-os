@@ -137,11 +137,6 @@ export function scanRoutes() {
      * to the method signature. Nest accepts the permissions decorator on either side of the HTTP one
      * — above it, or below it and still above the method — and both are in use here.
      *
-     * (Written as prose on purpose. Spelling those two shapes out as example CODE in this comment
-     * makes vitest fail to load this file with an opaque "Invalid or unexpected token" pointing at
-     * the importing test, even though node parses it cleanly. Decorator-looking text in a .mjs
-     * comment is enough to trip it.)
-     *
      *
      * THIS USED TO SCAN THE WHOLE GAP BACK TO THE PREVIOUS HTTP DECORATOR, which swallowed the
      * PREVIOUS handler's `@Permissions` whenever it was stacked below its own `@Post` — the common

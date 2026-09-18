@@ -52,6 +52,11 @@ export function classifyDomainMessage(m: string): DomainClassification {
     // the request is well formed and the caller entitled to make it; the record is simply not at
     // the step being acted on.
     || /\bis not awaiting\b/i.test(m)
+    // "Finance period 2018-01 is not currently closed" — the endpoint exists, the period exists and
+    // the request is well formed; the record is simply not in the state the act undoes. 404 would
+    // claim the period is unknown, which it is not, and 400 would tell the caller to fix a request
+    // that has nothing wrong with it.
+    || /\bis not currently\b/i.test(m)
     // Immutability and concurrency. A signed revision, an approved baseline and a certified
     // payment certificate all refuse the same way: the record is closed to further writes, or
     // someone else moved it first. The caller must re-read and use the governed correction path.

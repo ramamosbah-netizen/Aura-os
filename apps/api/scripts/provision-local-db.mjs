@@ -253,6 +253,13 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // ships. r-procurement-manager, unmodified: `procurement.*`, no approval limit attached, because a
 // limit invented for a fixture would prove something about the fixture.
 //
+// `u-e2e-finance` and the two `u-e2e-controller-*` are the finance period-close proof. Closing the
+// books and running the department are no longer one permission: r-finance lost `finance.*` and the
+// two acts moved to r-finance-controller. ONE controller principal cannot prove the maker/checker
+// rule — the refusal is that the person who closed a period may not reopen their own close — so two
+// controllers on the SAME shipped role are the minimum, which is also the point: the separation is
+// between people, not between job titles.
+//
 // `u-e2e-presales` is the MAKER for J1-07, and `u-e2e-techmgr` doubles as its CHECKER. A solution
 // scope is written by Pre-Sales and signed off by the Technical Manager, and until J1-07 neither
 // could do their own job through the API: the routes derived `crm.opportunity.scopes`/`.approve`,
@@ -260,7 +267,9 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // author is refused the approval and a second person is allowed it. r-pre-sales, unmodified.
 for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
                                 ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
-                                ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales']]) {
+                                ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales'],
+                                ['u-e2e-finance', 'r-finance'],
+                                ['u-e2e-controller-a', 'r-finance-controller'], ['u-e2e-controller-b', 'r-finance-controller']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -282,7 +291,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) and u-e2e-presales (r-pre-sales)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) and u-e2e-controller-a/b (r-finance-controller)');
 
 
 

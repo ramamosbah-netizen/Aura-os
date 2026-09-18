@@ -20,9 +20,10 @@ import allowlist from './route-permission-allowlist.json';
  *   crm.opportunity.scopes / .approve      the author cannot author, the approver cannot approve (J1-07)
  *
  * 423 mutating routes were in that state when this guard was written — 419 was the number it recorded,
- * and the four it missed are in the allowlist now, found by mutation-testing this very test. 417 are
- * in that state today, the six that left being J1-07. Fixing them is staged work — 65 of them end in a
- * GOVERNING VERB and each needs its own maker/checker question answered, which is not a rename. What
+ * and the four it missed are in the allowlist now, found by mutation-testing this very test. 415 are
+ * in that state today: six left with J1-07 and two with the finance period close. Fixing them is
+ * staged work — 63 of them end in a GOVERNING VERB and each needs its own maker/checker question
+ * answered, which is not a rename. What
  * this test does is stop the number growing while that happens, and make every fix visible: the
  * allowlist is the debt, written down, and it may only shrink.
  *
@@ -85,8 +86,8 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     // removed when J1-07 gave those routes declared permissions — the canary going quiet was the
     // evidence the fix reached the routing layer. Replacing a fixed canary by hand is deliberate: it
     // is the moment somebody confirms the name left the derived set because the route is governed,
-    // not because the scan broke. `finance.period.close` is NOT used here on purpose — it is the next
-    // remediation, and a canary that is about to be fixed teaches nothing.
+    // not because the scan broke. `finance.period.close` was deliberately never used as one, because
+    // it was the next remediation — and it is now fixed, which is what a canary must never be.
     const derived = new Set((scanRoutes() as Array<{ derived: string }>).map((r) => r.derived));
     for (const known of ['procurement.rfq.quotes', 'subcontracts.claim.certify', 'hse.ptw.approve']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);

@@ -14,7 +14,7 @@
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 54,
+  "gapRecords": 55,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -71,6 +71,7 @@
     "QC-01",
     "PO-01",
     "FX-03",
+    "FIN-PC-01",
     "SEC-01",
     "ARCH-01",
     "BID-01"

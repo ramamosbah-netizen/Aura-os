@@ -18,6 +18,31 @@ export interface StandardElvRole extends Role {
 const STAFF_BASE = ['comms.*', 'work-items.*', 'notifications.*', 'inbox.*', 'documents.*.read'] as const;
 const PROJECT_RESPONSIBILITY_WORK = 'projects.responsibility.update';
 const readOnly = (module: string): string => `${module}.*.read`;
+/**
+ * EVERY FINANCE ENTITY EXCEPT `period` — the operational half of the module.
+ *
+ * `r-finance` carried `finance.*`, so declaring `finance.period.close` and `.reopen` on the routes
+ * would have changed nothing: a wildcard matches every name in the module, including the two acts
+ * that lock and unlock the ledger. Running the department and closing the books were the same
+ * permission, and reopening the books needed no more authority than raising an invoice.
+ *
+ * So the wildcard is spelled out, minus `period`. `finance.period.read` is granted back separately —
+ * Finance must see which periods are closed in order to work inside them; it is closing and
+ * REOPENING them that belongs to the controller.
+ *
+ * KEEPING THIS COMPLETE IS ENFORCED, not remembered: apps/api/src/finance-authority.fitness.test.ts
+ * compares this list against every finance entity the API actually routes and fails on a new one. A
+ * list like this that silently goes stale locks the Finance role out of a feature, which is how a
+ * wildcard gets put back.
+ */
+const FINANCE_ENTITIES = [
+  'account', 'bank-guarantee', 'bank-transaction', 'budget', 'cost-center', 'customer-invoice',
+  'fx', 'invoice', 'journal', 'payment', 'petty-cash', 'post-dated-cheque', 'profit-center',
+  'revenue-recognition', 'statement', 'tax-code', 'tax-summary', 'vat-return',
+] as const;
+export const FINANCE_OPERATION_ENTITIES: readonly string[] = FINANCE_ENTITIES;
+const FINANCE_OPERATIONS = FINANCE_ENTITIES.map((entity) => `finance.${entity}.*`);
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -259,8 +284,31 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Owns invoices, receipts, payments, cash, accounting and certification within approval limits.',
     assignmentScope: 'tenant',
     permissions: [
-      'finance.*', 'contracts.certificate.certify', readOnly('contracts'), readOnly('projects'),
+      // `finance.*` USED TO BE HERE, and declaring the two period permissions would have changed
+      // nothing while it was: a wildcard matches every name in the module, including the ones nobody
+      // chose to grant. Running the department and closing the books were one permission.
+      ...FINANCE_OPERATIONS,
+      'finance.period.read', // sees which periods are closed; cannot close or reopen one
+      'contracts.certificate.certify', readOnly('contracts'), readOnly('projects'),
       readOnly('procurement'), readOnly('subcontracts'), readOnly('crm'), ...STAFF_BASE,
+    ],
+  },
+  {
+    /**
+     * The authority that closes and reopens the books. ONE role, several people — maker/checker comes
+     * from the domain refusing the same person both halves, not from inventing a second job title.
+     *
+     * It holds the two acts and the operational finance reads it needs to decide whether a period is
+     * ready, and no operational finance WRITES: a controller who could also post the journals would
+     * be signing off their own work, which is the arrangement the separation exists to prevent.
+     */
+    id: 'r-finance-controller',
+    name: 'Finance Controller',
+    description: 'Closes and reopens fiscal periods. Independent of day-to-day finance operations, which post into them.',
+    assignmentScope: 'tenant',
+    permissions: [
+      'finance.period.close', 'finance.period.reopen', 'finance.period.read',
+      readOnly('finance'), readOnly('contracts'), readOnly('projects'), ...STAFF_BASE,
     ],
   },
   {

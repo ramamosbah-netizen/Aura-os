@@ -1,0 +1,35 @@
+# This repository has `core.autocrlf=true`, so git rewrites text files to CRLF in the working tree on
+# every checkout, stash pop and branch switch. That is fine almost everywhere. It is not fine for the
+# .mjs scripts, which are imported directly by vitest fitness tests:
+#
+#   apps/api/src/governed-routes.fitness.test.ts  ->  apps/api/scripts/route-permission-audit.mjs
+#   apps/api/src/finance-authority.fitness.test.ts       (same script)
+#
+# When one of those files comes back with CRLF, vitest fails to load it with
+#
+#     SyntaxError: Invalid or unexpected token
+#
+# pointing at the IMPORTING test file, while `node --check` parses the same file without complaint —
+# the transform chokes on a `#!` shebang line terminated by CRLF. Nothing in the message says "line
+# endings", and it cost two wrong diagnoses before the cause was found, so it is pinned here.
+#
+# Deliberately narrow. A repo-wide `* text=auto eol=lf` would rewrite every file in the working tree
+# on the next checkout, which is a much larger change than this problem needs.
+*.mjs   text eol=lf
+*.cjs   text eol=lf
+*.sh    text eol=lf
+
+# Never rewrite these at all.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.pdf   binary
+*.xlsx  binary
+*.xls   binary
+*.docx  binary
+*.zip   binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary

@@ -269,6 +269,7 @@ export class ProcurementController {
   // ── PURCHASE REQUESTS ────────────────────────────────────────────────────
 
   @Post('purchase-requests')
+  @Permissions('procurement.purchase-request.create')
   createPr(@Body() dto: CreatePurchaseRequestDto): Promise<PurchaseRequest> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
@@ -342,6 +343,7 @@ export class ProcurementController {
   // ── RFQ (Request for Quotation) ──────────────────────────────────────────
 
   @Post('rfqs')
+  @Permissions('procurement.rfq.create')
   createRfq(@Body() dto: CreateRfqDto): Promise<Rfq> {
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
     const ctx = this.tenant.get();
@@ -383,14 +385,21 @@ export class ProcurementController {
     return found;
   }
 
+  /**
+   * SEND the enquiry to suppliers. The Buyer was REFUSED this: the role held
+   * `procurement.*.read/create/update`, and `send` is none of those — authority defined by the shape
+   * of the verb rather than by the job.
+   */
   @Patch('rfqs/:id/send')
+  @Permissions('procurement.rfq.send')
   async sendRfq(@Param('id') id: string): Promise<Rfq> {
     const found = await this.rfqs.get(id);
     if (!found) throw new NotFoundException(`RFQ ${id} not found`);
-    return this.rfqs.send(id);
+    return this.rfqs.send(id, this.tenant.get().actorId ?? null);
   }
 
   @Post('rfqs/:id/quotes')
+  @Permissions('procurement.rfq.quotes')
   async addQuote(@Param('id') id: string, @Body() dto: AddQuoteDto): Promise<RfqQuote> {
     if (!dto?.supplierName?.trim()) throw new BadRequestException('supplierName is required');
     if (!(Number(dto.amount) > 0)) throw new BadRequestException('amount must be positive');
@@ -432,6 +441,10 @@ export class ProcurementController {
    * that anything still calling it fails loudly and traceably.
    */
   @Patch('rfqs/:id/award')
+  // Governed by a READ, deliberately. The handler manufactures nothing — it exists only to say where
+  // the award went — and a restrictive permission would replace that sentence with a bare 403 for
+  // exactly the callers who need to be told. Anyone who can see an RFQ can be told about its award.
+  @Permissions('procurement.rfq.read')
   awardRfq(): never {
     throw new BadRequestException(
       'awarding a quote directly is no longer possible — an award must come from an approved sourcing ' +
@@ -443,6 +456,7 @@ export class ProcurementController {
   // ── SUPPLIER MASTER ──────────────────────────────────────────────────────
 
   @Post('suppliers')
+  @Permissions('procurement.supplier.create')
   async createSupplier(
     @Body() dto: { code: string; name: string; category?: SupplierCategory; tradeLicense?: string; trn?: string; contactName?: string; email?: string; phone?: string },
   ): Promise<Supplier> {
@@ -490,6 +504,7 @@ export class ProcurementController {
   }
 
   @Patch('suppliers/:id/status')
+  @Permissions('procurement.supplier.status')
   async changeSupplierStatus(@Param('id') id: string, @Body() dto: { action: 'approve' | 'suspend' }): Promise<Supplier> {
     if (dto?.action !== 'approve' && dto?.action !== 'suspend') throw new BadRequestException("action must be 'approve' or 'suspend'");
     return await this.suppliers.changeStatus(id, dto.action);

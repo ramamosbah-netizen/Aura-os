@@ -10,6 +10,7 @@ import {
   recordCallOff,
   remainingValue,
   terminateAgreement,
+  activationSeparation,
 } from './domain/framework-agreement';
 import { FRAMEWORK_AGREEMENT_STORE, type FrameworkAgreementFilter, type FrameworkAgreementStore } from './framework-agreement-store';
 import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
@@ -73,12 +74,13 @@ export class FrameworkAgreementService {
     return fa;
   }
 
-  async activate(id: Id): Promise<FrameworkAgreement> {
-    return this.transition(id, activateAgreement, FRAMEWORK_EVENT.activated);
+  /** Put the ceiling in force. The actor is a parameter now; the event carried `actorId: null`. */
+  async activate(id: Id, actorId: Id | null = null): Promise<FrameworkAgreement> {
+    return this.transition(id, (fa) => activateAgreement(fa, actorId), FRAMEWORK_EVENT.activated, actorId);
   }
 
-  async terminate(id: Id): Promise<FrameworkAgreement> {
-    return this.transition(id, terminateAgreement, FRAMEWORK_EVENT.terminated);
+  async terminate(id: Id, actorId: Id | null = null): Promise<FrameworkAgreement> {
+    return this.transition(id, (fa) => terminateAgreement(fa, actorId), FRAMEWORK_EVENT.terminated, actorId);
   }
 
   /**
@@ -140,6 +142,7 @@ export class FrameworkAgreementService {
     id: Id,
     fn: (fa: FrameworkAgreement) => FrameworkAgreement,
     eventType: string,
+    actorId: Id | null = null,
   ): Promise<FrameworkAgreement> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'framework agreement', id);
     const updated = fn(existing);
@@ -149,10 +152,15 @@ export class FrameworkAgreementService {
         type: eventType,
         tenantId: updated.tenantId,
         companyId: updated.companyId,
-        actorId: null,
+        actorId,
         aggregateType: 'procurement.framework',
         aggregateId: updated.id,
-        payload: { reference: updated.reference, status: updated.status },
+        payload: {
+          reference: updated.reference, status: updated.status,
+          // Whether the creator/activator separation could be checked here. Derived from the row, so
+          // the event cannot claim a control the record does not support.
+          separation: activationSeparation(updated),
+        },
       }),
     ]);
     this.logger.log(`Framework agreement ${updated.reference} → ${updated.status}`);

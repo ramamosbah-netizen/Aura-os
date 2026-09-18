@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 // The audit itself, not a second copy of it: a guard that re-implements the scan is a guard that can
 // disagree with the report, and the disagreement surfaces as a build failing for a reason the report
@@ -20,11 +22,11 @@ import allowlist from './route-permission-allowlist.json';
  *   crm.opportunity.scopes / .approve      the author cannot author, the approver cannot approve (J1-07)
  *
  * 423 mutating routes were in that state when this guard was written — 419 was the number it recorded,
- * and the four it missed are in the allowlist now, found by mutation-testing this very test. 391 are
+ * and the four it missed are in the allowlist now, found by mutation-testing this very test. 379 are
  * in that state today: six left with J1-07, two with the finance period close, eleven with the
- * subcontracts module and thirteen with customer invoicing. Fixing them is staged work — 56 of them
- * end in a GOVERNING VERB and each needs its own maker/checker question answered, which is not a
- * rename. What
+ * subcontracts module, thirteen with customer invoicing and ten with the procurement commitments —
+ * plus two TOMBSTONES that were never debt at all. Fixing them is staged work — 53 of them end in a
+ * GOVERNING VERB and each needs its own maker/checker question answered, which is not a rename. What
  * this test does is stop the number growing while that happens, and make every fix visible: the
  * allowlist is the debt, written down, and it may only shrink.
  *
@@ -78,6 +80,17 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     expect(governing.length).toBeLessThanOrEqual(allowlist.governingVerbs);
   });
 
+  it('the tombstones are still tombstones', () => {
+    // Two routes are excluded from the scan because their handlers are declared `(): never` — they
+    // manufacture no business fact and exist only to refuse and say where the act went. That
+    // exclusion must not become a hiding place: turning either back into a working handler puts it
+    // straight back into the count, and this asserts the shape the exclusion depends on.
+    const controllers = readFileSync(
+      resolve(__dirname, 'procurement/procurement.controller.ts'), 'utf8');
+    expect(controllers).toMatch(/awardRfq\(\): never \{/);
+    expect(controllers).toMatch(/changePoStatus\(\): never \{/);
+  });
+
   it('the scan still finds the findings it was written after', () => {
     // A scan that quietly stops matching routes would report an empty list and pass every assertion
     // above. These are known to be in this state, so their absence means the scan is broken rather
@@ -87,11 +100,11 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     // removed when J1-07 gave those routes declared permissions — the canary going quiet was the
     // evidence the fix reached the routing layer. Replacing a fixed canary by hand is deliberate: it
     // is the moment somebody confirms the name left the derived set because the route is governed,
-    // not because the scan broke. `subcontracts.claim.certify` was one of these until its wave landed
-    // and has been replaced in turn. A canary is never chosen from the next remediation, for the
-    // obvious reason that it is about to stop being true.
+    // not because the scan broke. `subcontracts.claim.certify` and then `procurement.rfq.quotes` were
+    // each one of these until their wave landed, and have been replaced in turn. A canary is never
+    // chosen from the next remediation, for the obvious reason that it is about to stop being true.
     const derived = new Set((scanRoutes() as Array<{ derived: string }>).map((r) => r.derived));
-    for (const known of ['procurement.rfq.quotes', 'hse.ptw.approve', 'doccontrol.transmittal.send']) {
+    for (const known of ['hse.ptw.approve', 'doccontrol.transmittal.send', 'hr.timesheet.approve']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);
     }
   });

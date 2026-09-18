@@ -15,6 +15,8 @@ interface RfqRow {
   status: string;
   due_date: string | null;
   owner_id: string | null;
+  sent_by: string | null;
+  sent_at: Date | string | null;
   created_by: string | null;
   created_at: Date | string;
 }
@@ -41,7 +43,7 @@ interface QuoteRow {
 }
 
 const RFQ_COLS =
-  'id, tenant_id, company_id, reference, title, pr_id, pr_title, status, due_date, owner_id, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, pr_id, pr_title, status, due_date, owner_id, created_by, created_at, sent_by, sent_at';
 const QUOTE_COLS = 'id, rfq_id, tenant_id, company_id, supplier_name, supplier_id, amount, currency, tax_treatment, tax_rate_pct, freight_amount, freight_terms, payment_terms, validity_date, lead_time_days, notes, status, created_at';
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
@@ -60,6 +62,8 @@ function rowToRfq(r: RfqRow): Rfq {
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: iso(r.created_at),
+    sentBy: r.sent_by ?? null,
+    sentAt: r.sent_at ? iso(r.sent_at) : null,
   };
 }
 
@@ -92,15 +96,18 @@ export class PostgresRfqStore implements RfqStore {
 
   async create(r: Rfq): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_procurement_rfqs (${RFQ_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [r.id, r.tenantId, r.companyId, r.reference, r.title, r.prId, r.prTitle, r.status, r.dueDate, r.ownerId, r.createdBy, r.createdAt],
+      `INSERT INTO public.aura_procurement_rfqs (${RFQ_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [r.id, r.tenantId, r.companyId, r.reference, r.title, r.prId, r.prTitle, r.status, r.dueDate, r.ownerId, r.createdBy, r.createdAt,
+       r.sentBy, r.sentAt],
     );
   }
 
   async update(r: Rfq): Promise<void> {
     await this.pool.query(
-      `UPDATE public.aura_procurement_rfqs SET reference=$2, title=$3, pr_id=$4, pr_title=$5, status=$6, due_date=$7, owner_id=$8 WHERE id=$1`,
-      [r.id, r.reference, r.title, r.prId, r.prTitle, r.status, r.dueDate, r.ownerId],
+      `UPDATE public.aura_procurement_rfqs SET reference=$2, title=$3, pr_id=$4, pr_title=$5, status=$6, due_date=$7, owner_id=$8, sent_by=$9, sent_at=$10 WHERE id=$1`,
+      // `created_by` is absent on purpose, as it always has been: who raised the RFQ is fixed when it
+      // is raised.
+      [r.id, r.reference, r.title, r.prId, r.prTitle, r.status, r.dueDate, r.ownerId, r.sentBy, r.sentAt],
     );
   }
 

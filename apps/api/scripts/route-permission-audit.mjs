@@ -146,7 +146,14 @@ export function scanRoutes() {
      * the regression it exists to catch. Every count printed before this fix was a FLOOR.
      */
     const lineStart = (i) => src.lastIndexOf('\n', Math.max(0, i - 1)) + 1;
-    const isDecorator = (line) => /^\s*@/.test(line);
+    /**
+     * A decorator block may contain COMMENTS — a line explaining why a route declares the permission
+     * it does belongs inside the block, not outside it. Treating a comment as the end of the block
+     * broke this twice in one change: the `@Permissions` below a comment stopped being seen, so the
+     * route read as undeclared, and the tombstone check below started at the comment instead of at
+     * the method signature and ran past its own window. Comments are part of the run.
+     */
+    const isDecorator = (line) => /^\s*(?:@|\/\/|\/\*|\*)/.test(line);
 
     let above = lineStart(m.index);
     while (above > 0) {
@@ -167,6 +174,30 @@ export function scanRoutes() {
     const window = src.slice(above, below);
     const classLevel = /@Permissions\(/.test(src.slice(0, src.indexOf('export class')));
     if (/@Permissions\(/.test(window) || classLevel) continue;
+
+    /**
+     * TOMBSTONES ARE NOT DEBT. A handler declared `(): never` cannot return — it exists only to
+     * refuse and to tell a caller where the act went. Two of them are here on purpose:
+     *
+     *   PATCH procurement/rfqs/:id/award          the legacy award, replaced by SUP-14's
+     *                                             recommendation path
+     *   PATCH procurement/purchase-orders/:id/status   the generic transition, replaced by J3-01's
+     *                                             issue / cancel / close commands
+     *
+     * Both were kept deliberately so that anything still pointing at them fails loudly and says
+     * where to go, rather than 404-ing like a bug. They manufacture no business fact, so counting
+     * them as ungoverned debt would overstate it.
+     *
+     * Each still DECLARES a permission, and a permissive one: a READ. The guard runs before the
+     * handler, so a restrictive permission would replace the explanatory sentence with a bare 403 for
+     * exactly the callers who need to be told where the act went — which is what happened to the
+     * legacy award route until it was given `procurement.rfq.read`.
+     *
+     * The exclusion cannot be abused quietly: `governed-routes.fitness.test.ts` asserts these two
+     * are still tombstones, so turning one back into a working handler puts it back in the count.
+     */
+    const signature = src.slice(below, below + 300);
+    if (/\)\s*:\s*never\s*\{/.test(signature)) continue;
 
     const derived = derivePermissionFromRoute(method, ctrl, handlerPath);
     if (!derived) continue;

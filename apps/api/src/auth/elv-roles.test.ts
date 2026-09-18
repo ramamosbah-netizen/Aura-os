@@ -218,9 +218,17 @@ describe('ELV role matrix — segregation of duties', () => {
   it('Store receives stock but cannot approve a purchase order', () => {
     expect(can('r-store', 'POST', 'inventory/grns')).toBe(true);
     expect(roleFor('r-store').permissions.some((p) => permissionMatches(p, 'procurement.po.view'))).toBe(true);
-    expect(can('r-store', 'POST', 'procurement', 'purchase-orders/:id/approve')).toBe(false);
-    expect(can('r-procurement', 'POST', 'procurement', 'purchase-orders/:id/approve')).toBe(false);
-    expect(can('r-procurement-manager', 'POST', 'procurement', 'purchase-orders/:id/approve')).toBe(true);
+    // `can()` measures the permission the guard DERIVES from a path, which is the wrong instrument
+    // for a route that declares one: `POST purchase-orders/:id/approve` carries
+    // `@Permissions('procurement.po.approve')`, so the derived `procurement.purchase-order.approve`
+    // never governs it. This asserted the derived name and passed only because the Procurement
+    // Manager held `procurement.*` — a wildcard broad enough to satisfy both names at once, which is
+    // the thing SEC-01 exists to remove. Asserting the name the route actually asks for.
+    const holdsPermission = (roleId: string, permission: string): boolean =>
+      roleFor(roleId).permissions.some((p) => permissionMatches(p, permission));
+    expect(holdsPermission('r-store', 'procurement.po.approve')).toBe(false);
+    expect(holdsPermission('r-procurement', 'procurement.po.approve')).toBe(false);
+    expect(holdsPermission('r-procurement-manager', 'procurement.po.approve')).toBe(true);
   });
 
   it('a Site Engineer raises an inspection request; QA/QC decides it', () => {

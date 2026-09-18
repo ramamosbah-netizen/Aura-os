@@ -75,6 +75,61 @@ const FINANCE_INVOICE_CORRECTIONS = [
 export const FINANCE_OPERATION_ENTITIES: readonly string[] = FINANCE_ENTITIES;
 const FINANCE_OPERATIONS = FINANCE_ENTITIES.map((entity) => `finance.${entity}.*`);
 
+/**
+ * PROCUREMENT, split by JOB rather than by verb shape.
+ *
+ * The Buyer held `procurement.*.read`, `procurement.*.create` and `procurement.*.update`. Those are
+ * middle wildcards, and they define authority by the SHAPE OF THE VERB rather than by what the act
+ * is — so the Buyer could create anything in the module and could not perform a single act whose
+ * verb was something else. Measured against the running API: a Buyer, whose whole job is running the
+ * enquiry cycle, WAS REFUSED `PATCH procurement/rfqs/:id/send`. Sending the enquiry out is the job.
+ * Drawing down against a framework agreement was refused for the same reason.
+ *
+ * Meanwhile the Procurement Manager held `procurement.*`, which covered both the routine work and
+ * the acts that commit the business — activating a blanket agreement up to its ceiling among them.
+ *
+ * So: the Buyer gets the enquiry cycle by name, including SEND and CALL-OFF, and the Manager keeps
+ * the acts that commit or end a standing commitment. The split is the same one SUP-13/SUP-14 already
+ * made for the sourcing decision, which this deliberately does not touch — ADR-0022 fixes what each
+ * of those four acts may do, and they are closed to new scope.
+ */
+const PROCUREMENT_BUYER = [
+  // TWO VOCABULARIES FOR THE SAME ENTITIES. The routes derive `purchase-request` and `purchase-order`
+  // from their paths; the services assert `pr` and `po`. `procurement.*.create` covered both at once,
+  // so nobody had to notice. Both are listed until one of them is retired — dropping the `pr.*` names
+  // here refuses the Buyer a purchase request, which is how this was found.
+  'procurement.purchase-request.read', 'procurement.purchase-request.create', 'procurement.purchase-request.update',
+  'procurement.pr.read', 'procurement.pr.create', 'procurement.pr.update',
+  'procurement.rfq.read', 'procurement.rfq.create', 'procurement.rfq.update',
+  // THE ENQUIRY GOES OUT. Refused to the Buyer before, because `send` is not `create` or `update`.
+  'procurement.rfq.send', 'procurement.rfq.quotes',
+  'procurement.supplier.read', 'procurement.supplier.create', 'procurement.supplier.update',
+  'procurement.framework-agreement.read', 'procurement.framework-agreement.create',
+  // Drawing down against an ACTIVE agreement, inside a ceiling somebody else authorised. Routine
+  // buying, bounded by a limit the Buyer cannot raise.
+  'procurement.framework-agreement.call-offs',
+  'procurement.spend-analytic.read', 'procurement.three-way-match.read',
+] as const;
+
+/**
+ * The acts that COMMIT or END a standing commitment, or admit a supplier to the master. Held by the
+ * Procurement Manager, and not by the Buyer who negotiates the agreement — the domain then refuses
+ * the person who created one from activating it, because one manager doing both is a real and
+ * permitted arrangement that no permission can see.
+ */
+const PROCUREMENT_AUTHORITY = [
+  'procurement.framework-agreement.activate', 'procurement.framework-agreement.terminate',
+  // Admitting, suspending or blacklisting a supplier. The Buyer creates the record; whether that
+  // vendor may be traded with is somebody else's call.
+  'procurement.supplier.status',
+  // The purchase-order lifecycle (J3-01) and the requisition approval (BUY-01). These were covered by
+  // `procurement.*` and had to be written down when it was removed — enumerating a wildcard drops
+  // whatever nobody remembers, which is exactly how `finance.invoice.approve` was nearly lost.
+  'procurement.po.approve', 'procurement.po.issue', 'procurement.po.cancel', 'procurement.po.close',
+  'procurement.po.create', 'procurement.po.update', 'procurement.po.submit',
+  'procurement.pr.approve', 'procurement.config.manage',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -291,7 +346,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Prepares purchase requests, RFQs, comparisons and purchase orders without approving their own order.',
     assignmentScope: 'tenant-or-project',
     permissions: [
-      'procurement.*.read', 'procurement.*.create', 'procurement.*.update',
+      // `procurement.*.read/create/update` USED TO BE HERE. Three middle wildcards that defined the
+      // Buyer's authority by the shape of the verb, which is why sending an RFQ — the job — was
+      // refused while creating anything in the module was not.
+      ...PROCUREMENT_BUYER,
       /**
        * The Buyer PREPARES. `issue`, `cancel` and `close` are deliberately absent (J3-01): sending a
        * commitment to a supplier, undoing one, and declaring an order finished are not editing it,
@@ -308,7 +366,27 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'Procurement Manager',
     description: 'Reviews sourcing exposure and approves governed supplier awards and purchase orders.',
     assignmentScope: 'tenant',
-    permissions: ['procurement.*', readOnly('inventory'), readOnly('projects'), readOnly('finance'), ...STAFF_BASE],
+    permissions: [
+      // `procurement.*` USED TO BE HERE, covering the routine work and the acts that commit the
+      // business in one pattern. The Manager reviews and authorises; it does not need to be able to
+      // do the Buyer's job as well, and holding both made the maker/checker question unanswerable at
+      // the authority layer.
+      ...PROCUREMENT_AUTHORITY,
+      // The sourcing decision (SUP-13/SUP-14), unchanged and closed to new scope by ADR-0022. The
+      // decision and the award both declare `procurement.rfq.award`; the Buyer prepares, submits and
+      // withdraws under `procurement.rfq.create`/`.update`, which it already names.
+      'procurement.rfq.award',
+      // WITHDRAWING an approved recommendation before it is awarded is the decision-maker's, and the
+      // withdraw route declares `procurement.rfq.update` — the same name the SUBMIT route declares.
+      // One name for two acts is an imprecision worth noting: it means holding it lets a manager also
+      // submit. SUP-13's maker/checker is what keeps them apart — the submitter may not decide their
+      // own recommendation — and that rule is frozen under ADR-0022, so it is left as it stands here
+      // rather than renamed in passing.
+      'procurement.rfq.update',
+      // Reads across the module: authorising an act requires seeing what it is.
+      readOnly('procurement'), 'procurement.po.view',
+      readOnly('inventory'), readOnly('projects'), readOnly('finance'), ...STAFF_BASE,
+    ],
   },
   {
     id: 'r-store',

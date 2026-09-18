@@ -20,6 +20,8 @@ const projectId = 'p1';
 
 const rfq = (over: Partial<Rfq>): Rfq => ({
   id: 'r1',
+  sentBy: null,
+  sentAt: null,
   tenantId,
   companyId: null,
   reference: 'RFQ-001',

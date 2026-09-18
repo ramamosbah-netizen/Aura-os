@@ -21,11 +21,16 @@ interface Row {
   notes: string | null;
   created_by: string | null;
   created_at: Date | string;
+  activated_by: string | null;
+  activated_at: Date | string | null;
+  terminated_by: string | null;
+  terminated_at: Date | string | null;
 }
 
 // `date` columns read via ::text to avoid the timezone-drift hazard that bit other stores.
 const COLS =
-  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, status, valid_from::text AS valid_from, valid_to::text AS valid_to, ceiling_value, called_off_value, items, notes, created_by, created_at';
+  'id, tenant_id, company_id, reference, title, supplier_id, supplier_name, status, valid_from::text AS valid_from, valid_to::text AS valid_to, ceiling_value, called_off_value, items, notes, created_by, created_at, ' +
+  'activated_by, activated_at, terminated_by, terminated_at';
 
 function rowToAgreement(r: Row): FrameworkAgreement {
   return {
@@ -45,6 +50,10 @@ function rowToAgreement(r: Row): FrameworkAgreement {
     notes: r.notes,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    activatedBy: r.activated_by ?? null,
+    activatedAt: r.activated_at ? new Date(r.activated_at).toISOString() : null,
+    terminatedBy: r.terminated_by ?? null,
+    terminatedAt: r.terminated_at ? new Date(r.terminated_at).toISOString() : null,
   };
 }
 
@@ -56,15 +65,21 @@ export class PostgresFrameworkAgreementStore implements FrameworkAgreementStore 
     await this.pool.query(
       `INSERT INTO public.aura_procurement_framework_agreements
          (id, tenant_id, company_id, reference, title, supplier_id, supplier_name, status,
-          valid_from, valid_to, ceiling_value, called_off_value, items, notes, created_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+          valid_from, valid_to, ceiling_value, called_off_value, items, notes, created_by, created_at,
+          activated_by, activated_at, terminated_by, terminated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        ON CONFLICT (id) DO UPDATE SET
          reference = EXCLUDED.reference, title = EXCLUDED.title, status = EXCLUDED.status,
          valid_from = EXCLUDED.valid_from, valid_to = EXCLUDED.valid_to,
          ceiling_value = EXCLUDED.ceiling_value, called_off_value = EXCLUDED.called_off_value,
-         items = EXCLUDED.items, notes = EXCLUDED.notes`,
+         items = EXCLUDED.items, notes = EXCLUDED.notes,
+         activated_by = EXCLUDED.activated_by, activated_at = EXCLUDED.activated_at,
+         terminated_by = EXCLUDED.terminated_by, terminated_at = EXCLUDED.terminated_at`,
+      // `created_by` stays out of the DO UPDATE SET: who negotiated the agreement is fixed when it is
+      // written, and it is the fact the activation is refused against.
       [fa.id, fa.tenantId, fa.companyId, fa.reference, fa.title, fa.supplierId, fa.supplierName, fa.status,
-       fa.validFrom, fa.validTo, fa.ceilingValue, fa.calledOffValue, JSON.stringify(fa.items), fa.notes, fa.createdBy, fa.createdAt],
+       fa.validFrom, fa.validTo, fa.ceilingValue, fa.calledOffValue, JSON.stringify(fa.items), fa.notes, fa.createdBy, fa.createdAt,
+       fa.activatedBy, fa.activatedAt, fa.terminatedBy, fa.terminatedAt],
     );
   }
 

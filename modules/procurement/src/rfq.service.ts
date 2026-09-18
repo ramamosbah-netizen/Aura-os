@@ -8,8 +8,7 @@ import {
   type NewRfq,
   type NewRfqQuote,
   makeRfq,
-  makeRfqQuote,
-} from './domain/rfq';
+  makeRfqQuote, sendRfq } from './domain/rfq';
 import { RFQ_STORE, type RfqFilter, type RfqStore } from './rfq-store';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestStore } from './purchase-request-store';
 
@@ -64,16 +63,16 @@ export class RfqService {
     return rfq;
   }
 
-  async send(id: Id): Promise<Rfq> {
+  async send(id: Id, sentBy: Id | null = null): Promise<Rfq> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'RFQ', id);
-    const updated: Rfq = { ...existing, status: 'sent' };
+    const updated: Rfq = sendRfq(existing, sentBy);
     await this.store.update(updated);
     await this.events.append([
       makeEvent({
         type: RFQ_EVENT.rfqSent,
         tenantId: updated.tenantId,
         companyId: updated.companyId,
-        actorId: null,
+        actorId: sentBy,
         aggregateType: 'procurement.rfq',
         aggregateId: updated.id,
         payload: { title: updated.title, status: updated.status },

@@ -21,6 +21,25 @@ export interface Rfq {
   ownerId: Id | null;
   createdAt: string;
   createdBy: Id | null;
+  /**
+   * WHO SENT THE ENQUIRY to suppliers, and when. The act the Buyer could not perform — the role held
+   * `procurement.*.read/create/update` and `send` is none of those — and that nobody was recorded as
+   * performing when a manager did it instead.
+   */
+  sentBy: Id | null;
+  sentAt: string | null;
+}
+
+/**
+ * SEND the enquiry. It had no state guard at all: re-sending simply re-set the status and emitted a
+ * second `rfqSent` event, so an RFQ could be "sent" any number of times with no record of which one
+ * the suppliers answered.
+ */
+export function sendRfq(rfq: Rfq, sentBy: Id | null = null): Rfq {
+  if (rfq.status !== 'draft') {
+    throw new Error(`only a draft RFQ can be sent (status ${rfq.status})`);
+  }
+  return { ...rfq, status: 'sent', sentBy, sentAt: new Date().toISOString() };
 }
 
 export interface NewRfq {
@@ -51,6 +70,8 @@ export function makeRfq(input: NewRfq): Rfq {
     ownerId: input.ownerId ?? null,
     createdAt: new Date().toISOString(),
     createdBy: input.createdBy ?? null,
+    sentBy: null,
+    sentAt: null,
   };
 }
 

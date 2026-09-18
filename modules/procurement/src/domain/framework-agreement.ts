@@ -35,6 +35,17 @@ export interface FrameworkAgreement {
   notes: string | null;
   createdAt: string;
   createdBy: Id | null;
+  /**
+   * WHO COMMITTED THE BUSINESS to this ceiling, and when. `createdBy` existed and this did not, so
+   * the maker/checker rule could not be written: an agreement that cannot say who activated it
+   * cannot refuse the person who negotiated it. The `activated` event carried `actorId: null`
+   * because the actor never reached the service at all.
+   */
+  activatedBy: Id | null;
+  activatedAt: string | null;
+  /** Who ended it, and when. Same silence, on the act that stops future drawdown. */
+  terminatedBy: Id | null;
+  terminatedAt: string | null;
 }
 
 export interface NewFrameworkAgreement {
@@ -72,6 +83,10 @@ export function makeFrameworkAgreement(input: NewFrameworkAgreement): FrameworkA
   });
 
   return {
+    activatedBy: null,
+    activatedAt: null,
+    terminatedBy: null,
+    terminatedAt: null,
     id: newId(),
     tenantId: input.tenantId,
     companyId: input.companyId ?? null,
@@ -91,14 +106,39 @@ export function makeFrameworkAgreement(input: NewFrameworkAgreement): FrameworkA
   };
 }
 
-export function activateAgreement(fa: FrameworkAgreement): FrameworkAgreement {
+/**
+ * ACTIVATE it — the act that commits this business to the supplier up to `ceilingValue`, and the
+ * reason every call-off afterwards is merely a drawdown.
+ *
+ * THE PERSON WHO NEGOTIATED IT MAY NOT PUT IT IN FORCE. The Buyer creates the agreement and the
+ * Procurement Manager activates it, so the authority layer already separates them — but one person
+ * may legitimately hold both roles, which no permission can see. Where the creator is unknown — an
+ * agreement written before authorship was recorded — it proceeds and says the check could not run.
+ */
+export function activateAgreement(fa: FrameworkAgreement, activatedBy: Id | null = null): FrameworkAgreement {
   if (fa.status !== 'draft') throw new Error(`only a draft agreement can be activated (status ${fa.status})`);
-  return { ...fa, status: 'active' };
+  if (activatedBy && fa.createdBy && activatedBy === fa.createdBy) {
+    throw new Error(
+      'the person who created this framework agreement may not activate their own — putting a ceiling in force is a second signature',
+    );
+  }
+  return { ...fa, status: 'active', activatedBy, activatedAt: new Date().toISOString() };
 }
 
-export function terminateAgreement(fa: FrameworkAgreement): FrameworkAgreement {
+/**
+ * TERMINATE it. Deliberately NOT subject to the same separation: ending an agreement stops future
+ * drawdown, which is protective rather than a commitment, and inventing a second signature for it
+ * would be inventing a control nobody asked for. Who did it is recorded, which is what was missing.
+ */
+export function terminateAgreement(fa: FrameworkAgreement, terminatedBy: Id | null = null): FrameworkAgreement {
   if (fa.status === 'terminated') throw new Error('agreement is already terminated');
-  return { ...fa, status: 'terminated' };
+  return { ...fa, status: 'terminated', terminatedBy, terminatedAt: new Date().toISOString() };
+}
+
+/** Was the creator/activator separation actually CHECKED? Derived, never stored twice. */
+export function activationSeparation(fa: FrameworkAgreement): 'enforced' | 'unverifiable' | null {
+  if (fa.activatedAt === null) return null;
+  return fa.createdBy ? 'enforced' : 'unverifiable';
 }
 
 export function remainingValue(fa: FrameworkAgreement): number {

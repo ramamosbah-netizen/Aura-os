@@ -170,3 +170,64 @@ describe('closing', () => {
     expect(cancellationPosition(order('received'), 10_000, settled, 'a reason').allowed).toBe(false);
   });
 });
+
+/**
+ * THE ACCOUNTING INVARIANT, asserted as a property rather than on one example.
+ *
+ * A single case proving "10,000 less 4,000 received reverses 6,000" is worth less than it looks: it
+ * says the arithmetic was right once. What must hold for EVERY position is that the order's
+ * commitment is fully accounted for and never over-reversed —
+ *
+ *     committed = settled + cancellable
+ *
+ * with `cancellable` never negative. Anything else lets a sequence of receipt → invoice → cancel
+ * produce a reversal larger than what was left, and a cost line that drops below what the order ever
+ * put on it. The refusals are part of the same property: where the equation would have to break,
+ * the answer is a refusal rather than a number.
+ */
+describe('the accounting invariant', () => {
+  const COMMITTED = 10_000;
+
+  it('never reverses more than remains, and never reverses a negative', () => {
+    for (const received of [0, 1, 2_500, 4_000, 9_999, 10_000, 12_000]) {
+      for (const invoiced of [0, 1, 2_500, 4_000, 9_999, 10_000, 12_000]) {
+        const v = cancellationPosition(order('issued'), COMMITTED, position({ receivedValue: received, invoicedValue: invoiced }), 'a reason');
+        if (!v.allowed) {
+          // Every refusal is one of the two the domain declares, never an incidental failure.
+          expect(['nothing_left_to_cancel', 'invoiced_beyond_receipt', 'terminal', 'reason_required']).toContain(v.reason);
+          continue;
+        }
+        expect(v.cancellable, `${received}/${invoiced} must not reverse a negative`).toBeGreaterThan(0);
+        expect(v.cancellable, `${received}/${invoiced} must not reverse more than the commitment`).toBeLessThanOrEqual(COMMITTED);
+        // THE EQUATION. What was committed is exactly what became real plus what is being released.
+        expect(v.settled + v.cancellable, `${received}/${invoiced} must account for the whole commitment`).toBe(COMMITTED);
+      }
+    }
+  });
+
+  it('accounts for an order where nothing has happened, and one where everything has', () => {
+    const untouched = cancellationPosition(order('approved'), COMMITTED, position(), 'x');
+    expect(untouched).toMatchObject({ allowed: true, settled: 0, cancellable: COMMITTED });
+    // …and at the other end the equation cannot be satisfied by a positive number, so it refuses
+    // rather than reversing zero and calling the order cancelled.
+    const consumed = cancellationPosition(order('received'), COMMITTED, position({ receivedValue: COMMITTED }), 'x');
+    expect(consumed.allowed).toBe(false);
+    if (!consumed.allowed) expect(consumed.reason).toBe('nothing_left_to_cancel');
+  });
+
+  /**
+   * REPEATED COMMANDS REFUSE FOR A STATED REASON, deterministically — not because a balance happens
+   * to have reached zero. `terminal` is a transition verdict about the order's own state, and it is
+   * reached before any arithmetic is attempted, so the answer is the same whatever the position says.
+   */
+  it('refuses a repeated cancel on the TRANSITION, not on the arithmetic', () => {
+    for (const p of [position(), position({ receivedValue: 4_000 }), position({ receivedValue: 10_000, invoicedValue: 10_000 })]) {
+      const v = cancellationPosition(order('cancelled'), COMMITTED, p, 'again');
+      expect(v.allowed).toBe(false);
+      if (!v.allowed) {
+        expect(v.reason, 'the reason must be the state, not the numbers').toBe('terminal');
+        expect(v.detail).toMatch(/already cancelled/);
+      }
+    }
+  });
+});

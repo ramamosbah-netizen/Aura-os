@@ -7543,7 +7543,7 @@
       "expectedOperationalBehavior": "Purchase approval works with canonical inputs, governed permissions and usable handoff",
       "severity": "CRITICAL",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "MET, against the frozen contract rather than the original sentence. `draft -> issued` IMPOSSIBLE at any value; `approved -> issued` only through the issue command; an update-only actor cannot issue, cancel or close — re-run of the original probe returns 400 on every generic transition and 403 on every command. AUTO-APPROVAL creates an explicit approval fact (`approval_basis = 'automatic'`) before issuing is possible. CANCEL: governed authority, reason required, actor and timestamp recorded, and only the remaining cancellable commitment reversed — 10,000 committed with 4,000 received reverses 6,000, proved against PostgreSQL. CLOSE: separate authority and separate conditions, refused with quantity outstanding and refused with received goods unbilled. GENERIC PATCH: manufactures no lifecycle fact at all. DB-BACKED, all eight cases the contract named: partial receipt then cancel; partial invoice then cancel; concurrent cancel vs receipt; concurrent close vs invoice/receipt; double cancel; close with outstanding quantity; issue without approval; and an auto-approved small order carrying explicit approval evidence before issue. Every one verified to BITE by mutation — reversing the whole commitment fails the partial cases, and removing the row lock fails both concurrency cases. REGRESSION: procurement 362 passed; apps/api unit 557 passed; apps/api e2e 14 files / 39 tests failing, IDENTICAL to the baseline before this work; browser against PostgreSQL 6 passed. NOT CLAIMED: J1-07 is the same shape in CRM/tendering scope authoring and remains OPEN and separate, deliberately — one defect, one authority contract, one proof."
+      "acceptanceProof": "MET, against the frozen contract rather than the original sentence. `draft -> issued` IMPOSSIBLE at any value; `approved -> issued` only through the issue command; an update-only actor cannot issue, cancel or close — re-run of the original probe returns 400 on every generic transition and 403 on every command. AUTO-APPROVAL creates an explicit approval fact (`approval_basis = 'automatic'`) before issuing is possible. CANCEL: governed authority, reason required, actor and timestamp recorded, and only the remaining cancellable commitment reversed — 10,000 committed with 4,000 received reverses 6,000, proved against PostgreSQL. CLOSE: separate authority and separate conditions, refused with quantity outstanding and refused with received goods unbilled. GENERIC PATCH: manufactures no lifecycle fact at all. DB-BACKED, all eight cases the contract named: partial receipt then cancel; partial invoice then cancel; concurrent cancel vs receipt; concurrent close vs invoice/receipt; double cancel; close with outstanding quantity; issue without approval; and an auto-approved small order carrying explicit approval evidence before issue. Every one verified to BITE by mutation — reversing the whole commitment fails the partial cases, and removing the row lock fails both concurrency cases. REGRESSION, stated precisely: J3-01 is verified with NO ADDITIONAL KNOWN SUITE REGRESSIONS OVER BASELINE — which is not the same claim as “all tests pass” and must not be read as one. procurement 365 passed; apps/api unit 557 passed; browser against PostgreSQL 6 passed; apps/api e2e 14 files / 39 tests failing with 545 passing, identical to the baseline measured at HEAD before this work and independently red for reasons unrelated to this path. NOT CLAIMED: J1-07 is the same shape in CRM/tendering scope authoring and remains OPEN and separate, deliberately — one defect, one authority contract, one proof."
     },
     {
       "id": "J3-02",
@@ -8674,6 +8674,30 @@
       "acceptanceProof": "MET. The stored governed_total and the screen now both read 13,588.25, and the tests fail on the old behaviour rather than merely describing it."
     },
     {
+      "id": "ARCH-01",
+      "title": "A cross-domain port reached through ModuleRef instead of the module graph — watch, not yet a defect",
+      "capabilityIds": [
+        "BUY-04"
+      ],
+      "classification": "PARTIAL",
+      "kind": "architecture watch — recorded while closing J3-01, deliberately not treated as a blocker",
+      "status": "OPEN",
+      "roles": [
+        "Architecture"
+      ],
+      "stages": [
+        "Procurement",
+        "Finance / Collection"
+      ],
+      "authority": "Composition root (apps/api/src/wiring)",
+      "currentBehavior": "`PoPositionAdapter` reaches `InvoiceService` through `ModuleRef.get(..., { strict: false })` rather than importing `FinanceModule`, because importing it closes a module loop: ProcurementWiring imports Finance, Finance needs the global PO_MATCH_PORT that FinanceWiring provides, FinanceWiring imports Procurement, and Procurement needs the global PO_POSITION_PORT that ProcurementWiring provides. Nest resolves that loop by HANGING in `NestFactory.create` — every e2e suite timing out in a beforeAll with no error to read, which is a worse failure mode than a crash because it reads as slowness. The bridge is correct here and it is the only one of its kind, but it costs something real: the dependency is no longer visible at compile time, so a service that disappears or is renamed becomes a runtime resolution failure rather than a build error. The port answers `known: false` in that case, which is the honest behaviour, but the failure has moved from the compiler to production.",
+      "expectedOperationalBehavior": "A cross-domain dependency is a port owned by the CONSUMING domain with an adapter provided externally, visible in the module graph, and resolvable at compile time. `ModuleRef` is a bridge over a loop, not a pattern for cross-domain calls.",
+      "evidence": "apps/api/src/wiring/po-position.adapter.ts (the bridge and the loop drawn out in full); apps/api/src/wiring/procurement-wiring.module.ts; apps/api/src/wiring/finance-wiring.module.ts. Found while closing J3-01: the first wiring attempt hung every e2e suite.",
+      "severity": "LOW",
+      "remediationDependency": "None. It BLOCKS NOTHING and is recorded so it is watched rather than copied.",
+      "acceptanceProof": "THE TRIGGER IS A COUNT, not a date. One `ModuleRef` bridge over a genuine loop is a pragmatic edge; several are a composition root that needs reorganising, and the second one is the signal to stop and do that rather than add a third. Discharged either by the loop disappearing — Procurement and Finance no longer needing each other's ports at construction time — or by a deliberate restructuring of `apps/api/src/wiring` that makes every cross-domain dependency visible in the module graph again. A fitness test counting `ModuleRef.get` in the wiring layer would make the count enforce itself."
+    },
+    {
       "id": "BID-01",
       "title": "Bid-time estimate sourcing is keyed to the legacy quote award, which no longer exists",
       "capabilityIds": [
@@ -8715,9 +8739,9 @@
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
-    "gaps": 52,
+    "gaps": 53,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 6
+    "freshDefects": 7
   }
 }

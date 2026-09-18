@@ -196,15 +196,53 @@ describe('purchase order lifecycle (PostgreSQL)', () => {
     expect((await statusOf(id)).status).toBe('received');
   });
 
-  skipless('a DOUBLE cancel is refused, and does not reverse anything twice', async () => {
+  /**
+   * A REPEATED COMMAND REFUSES FOR A STATED REASON, and the reason is the point. This used to be an
+   * idempotent no-op returning success, and the refusal that replaced it must be a deliberate domain
+   * conflict — "already cancelled", a verdict about the order's state — rather than an incidental
+   * failure that happens to arise because the remaining commitment has reached zero. Those two would
+   * look identical in a status code and mean quite different things about what the system knows.
+   */
+  skipless('a DOUBLE cancel is refused BY THE TRANSITION, with the reason stated, and reverses nothing twice', async () => {
     const { svc, run } = service();
     const { id } = await seed();
     await run(() => svc.cancel(id, { actorId: 'u-mgr', reason: 'first' }));
+
+    // The position still shows a full remaining commitment, so nothing about the ARITHMETIC would
+    // refuse this. It is refused because the order is already cancelled, and the message says so.
+    position = { known: true, receivedValue: 0, invoicedValue: 0, acceptedByLine: {}, rejectedByLine: {} };
     await expect(run(() => svc.cancel(id, { actorId: 'u-mgr', reason: 'second' })))
       .rejects.toThrow(/already cancelled/);
+
     const row = await statusOf(id);
-    expect(row.cancellation_reason).toBe('first');
-    expect(Number(row.cancelled_value)).toBe(10_000);
+    expect(row.cancellation_reason, 'the first cancellation is what stands').toBe('first');
+    expect(Number(row.cancelled_value), 'and nothing is reversed a second time').toBe(10_000);
+  });
+
+  /**
+   * THE ACCOUNTING INVARIANT, on the row that the ledger reads.
+   *
+   *     committed = settled + cancelled
+   *
+   * proved through a real sequence — receive, invoice, then cancel the remainder — because the
+   * failure this guards against is not a wrong multiplication, it is a reversal that outruns what
+   * was left after everything else that happened to the order.
+   */
+  skipless('after receipt AND invoice, the reversal plus what became real equals the whole commitment', async () => {
+    const { svc, run } = service();
+    const { id } = await seed('partially_received');
+    position = { known: true, receivedValue: 4_000, invoicedValue: 3_000, acceptedByLine: {}, rejectedByLine: {} };
+
+    await run(() => svc.cancel(id, { actorId: 'u-mgr', reason: 'the balance is no longer required' }));
+
+    const row = await statusOf(id);
+    const committed = 10_000;
+    // `settled` is the GREATER of received and invoiced — 4,000 here — so 6,000 is released.
+    expect(Number(row.cancelled_value)).toBe(6_000);
+    expect(Number(row.cancelled_value) + 4_000, 'the commitment must be wholly accounted for').toBe(committed);
+    // And it can never have gone the other way: a reversal larger than the commitment, or negative.
+    expect(Number(row.cancelled_value)).toBeGreaterThan(0);
+    expect(Number(row.cancelled_value)).toBeLessThanOrEqual(committed);
   });
 
   skipless('a cancellation without a reason is refused', async () => {

@@ -30,6 +30,17 @@ export function classifyDomainMessage(m: string): DomainClassification {
   // 403 — authorization expressed as a role fact rather than as a grant check.
   if (/is not an approver\b/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
 
+  // 403 — SEPARATION OF DUTIES. "The author may not approve their own work" is neither bad input
+  // nor a state conflict: the request is well formed, the record is at the right step, and a
+  // DIFFERENT person can perform the act immediately with nothing else changing. Only the actor is
+  // wrong, which is exactly what 403 means. Without this branch `may not` falls through to the 400
+  // group below and tells the caller to fix their request — advice that cannot be followed.
+  //
+  // Deliberately a SHAPE, not one message: SEC-01 stage 3 asks the same maker/checker question of 63
+  // more governing acts, and every answer that refuses a self-act should classify here without
+  // another pattern being added.
+  if (/\bmay not\b[^.]*\b(?:their|your) own\b/i.test(m)) return { status: 403, code: 'FORBIDDEN' };
+
   // 409 — state-transition guards: the request is well-formed but the aggregate's current
   // state forbids it ("only a draft agreement can be activated", "is already disposed", …).
   if (

@@ -19,7 +19,9 @@ import allowlist from './route-permission-allowlist.json';
  *   the purchase-order lifecycle           one permission owned issue, cancel and close (J3-01)
  *   crm.opportunity.scopes / .approve      the author cannot author, the approver cannot approve (J1-07)
  *
- * 419 mutating routes are in that state today. Fixing them is staged work — 64 of them end in a
+ * 423 mutating routes were in that state when this guard was written — 419 was the number it recorded,
+ * and the four it missed are in the allowlist now, found by mutation-testing this very test. 417 are
+ * in that state today, the six that left being J1-07. Fixing them is staged work — 65 of them end in a
  * GOVERNING VERB and each needs its own maker/checker question answered, which is not a rename. What
  * this test does is stop the number growing while that happens, and make every fix visible: the
  * allowlist is the debt, written down, and it may only shrink.
@@ -52,6 +54,11 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
 
     // Without this the list would never shrink: a route could be fixed and its entry linger, and the
     // number would stop meaning anything long before it reached zero.
+    //
+    // It also guards the SCAN, which is how the list earns its keep twice. Four of these entries are
+    // routes the scanner used to miss (it read a neighbour's `@Permissions` as this route's own); if
+    // that window ever regresses they vanish from the scan and show up here as stale, naming the
+    // defect instead of quietly shrinking the total.
     expect(
       stale,
       'These are governed now — delete them from route-permission-allowlist.json. The list is the ' +
@@ -71,10 +78,17 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
 
   it('the scan still finds the findings it was written after', () => {
     // A scan that quietly stops matching routes would report an empty list and pass every assertion
-    // above. These three are known to be in this state, so their absence means the scan is broken
-    // rather than the codebase fixed.
+    // above. These are known to be in this state, so their absence means the scan is broken rather
+    // than the codebase fixed.
+    //
+    // `crm.opportunity.scopes` and `crm.opportunity.approve` USED TO BE two of these three, and were
+    // removed when J1-07 gave those routes declared permissions — the canary going quiet was the
+    // evidence the fix reached the routing layer. Replacing a fixed canary by hand is deliberate: it
+    // is the moment somebody confirms the name left the derived set because the route is governed,
+    // not because the scan broke. `finance.period.close` is NOT used here on purpose — it is the next
+    // remediation, and a canary that is about to be fixed teaches nothing.
     const derived = new Set((scanRoutes() as Array<{ derived: string }>).map((r) => r.derived));
-    for (const known of ['procurement.rfq.quotes', 'crm.opportunity.scopes', 'crm.opportunity.approve']) {
+    for (const known of ['procurement.rfq.quotes', 'subcontracts.claim.certify', 'hse.ptw.approve']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);
     }
   });

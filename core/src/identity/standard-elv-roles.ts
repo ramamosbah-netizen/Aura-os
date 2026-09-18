@@ -47,6 +47,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'tenant',
     permissions: [
       'crm.lead.*', 'crm.lead-assignment.receive', ...salesOpportunityPermissions, 'crm.activity.*', 'crm.signal.*',
+      // Captured customer requirements (J1-07). This is an AUTHORITY CHANGE, not a rename: the capture
+      // routes previously derived `crm.opportunity.requirements`, which no role named, so recording what
+      // the customer asked for was reachable only by a wildcard holder — a Sales Manager or an admin.
+      // The role whose description begins "owns enquiries, leads, opportunities, follow-ups" could not
+      // write down the enquiry. It can now.
+      'crm.requirement.create', 'crm.requirement.read', 'crm.requirement.update',
       'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.quotation.send',
       readOnly('tendering'), readOnly('contracts'), readOnly('projects'), ...STAFF_BASE,
     ],
@@ -70,6 +76,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.lead.read', 'crm.opportunity.read', 'crm.activity.*',
       'crm.study.read', 'crm.study.create', 'crm.study.update',
       'crm.scope.read', 'crm.scope.create', 'crm.scope.update',
+      // READ only. Scope Assist derives proposed scope lines from the captured requirements, so a
+      // scope author who cannot read them is writing blind; capturing them stays with Sales, who had
+      // the conversation.
+      'crm.requirement.read',
       'tendering.study.read', 'tendering.study.create', 'tendering.study.update',
       'tendering.takeoff.read', 'tendering.takeoff.create', 'tendering.takeoff.update',
       readOnly('tendering'), readOnly('doccontrol'), ...STAFF_BASE,
@@ -170,7 +180,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Independently reviews pre-award studies and governs engineering technical decisions.',
     assignmentScope: 'tenant-or-project',
     permissions: [
-      'crm.opportunity.read', 'crm.study.read', 'crm.study.approve', 'crm.scope.approve',
+      // `crm.scope.approve` was already here and `crm.scope.read` was not — this role could sign off a
+      // scope it had no permission to open. The reviewer also reads the requirements, because
+      // "does this scope answer what the customer asked for" is the review.
+      'crm.opportunity.read', 'crm.study.read', 'crm.study.approve',
+      'crm.scope.read', 'crm.scope.approve', 'crm.requirement.read',
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
       'engineering.*', 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',

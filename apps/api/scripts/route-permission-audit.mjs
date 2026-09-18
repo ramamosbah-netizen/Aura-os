@@ -132,14 +132,44 @@ export function scanRoutes() {
     const method = m[1].toUpperCase();
     const handlerPath = m[2] ?? m[3] ?? m[4] ?? '';
     /**
-     * Is this handler explicitly governed? The decorator may sit above OR below the HTTP one, so
-     * the window is the gap between the previous handler and this one, plus the lines just after.
+     * IS THIS HANDLER EXPLICITLY GOVERNED? Only its OWN decorator block counts — the run of lines
+     * starting with `@` immediately above this HTTP decorator, and the run immediately below it, up
+     * to the method signature. Nest accepts the permissions decorator on either side of the HTTP one
+     * — above it, or below it and still above the method — and both are in use here.
+     *
+     * (Written as prose on purpose. Spelling those two shapes out as example CODE in this comment
+     * makes vitest fail to load this file with an opaque "Invalid or unexpected token" pointing at
+     * the importing test, even though node parses it cleanly. Decorator-looking text in a .mjs
+     * comment is enough to trip it.)
+     *
+     *
+     * THIS USED TO SCAN THE WHOLE GAP BACK TO THE PREVIOUS HTTP DECORATOR, which swallowed the
+     * PREVIOUS handler's `@Permissions` whenever it was stacked below its own `@Post` — the common
+     * style — and marked this route governed because its neighbour was. Found by mutation-testing the
+     * stage-2 guard during J1-07: deleting a real `@Permissions` from a route whose neighbour still
+     * declared one did not bring the route back into the scan, so the guard would have missed exactly
+     * the regression it exists to catch. Every count printed before this fix was a FLOOR.
      */
-    const start = Math.max(0, src.lastIndexOf('\n', Math.max(0, m.index - 1)));
-    const prevHandler = [...src.slice(0, m.index).matchAll(HTTP)].pop();
-    const from = prevHandler ? prevHandler.index + prevHandler[0].length : 0;
-    const window = src.slice(from, m.index) + src.slice(m.index, src.indexOf('\n', src.indexOf('(', m.index + m[0].length) + 1) + 1);
-    void start;
+    const lineStart = (i) => src.lastIndexOf('\n', Math.max(0, i - 1)) + 1;
+    const isDecorator = (line) => /^\s*@/.test(line);
+
+    let above = lineStart(m.index);
+    while (above > 0) {
+      const prevStart = lineStart(above - 1);
+      if (!isDecorator(src.slice(prevStart, above - 1))) break;
+      above = prevStart;
+    }
+
+    let below = src.indexOf('\n', m.index + m[0].length);
+    if (below < 0) below = src.length;
+    for (;;) {
+      const nextEnd = src.indexOf('\n', below + 1);
+      if (nextEnd < 0) break;
+      if (!isDecorator(src.slice(below + 1, nextEnd))) break;
+      below = nextEnd;
+    }
+
+    const window = src.slice(above, below);
     const classLevel = /@Permissions\(/.test(src.slice(0, src.indexOf('export class')));
     if (/@Permissions\(/.test(window) || classLevel) continue;
 

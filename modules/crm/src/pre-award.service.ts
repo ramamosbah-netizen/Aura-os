@@ -30,7 +30,9 @@ export class PreAwardService {
 
   // ── Requirements ──
   async addRequirement(input: NewRequirement & { actorId?: Id | null }): Promise<Requirement> {
-    const r = makeRequirement(input);
+    // The actor is the author. The event already carried `actorId`; the ROW did not, and an event log
+    // is not a place a rule can read from at decision time.
+    const r = makeRequirement({ ...input, createdBy: input.createdBy ?? input.actorId ?? null });
     await this.store.saveRequirement(r);
     await this.events.append([makeEvent({
       type: PREAWARD_EVENT.requirementAdded, tenantId: r.tenantId, companyId: null,
@@ -71,7 +73,10 @@ export class PreAwardService {
 
   // ── Solution scopes ──
   async createScope(input: { tenantId: Id; opportunityId: Id; title: string; lines?: NewScopeLine[]; actorId?: Id | null }): Promise<SolutionScope> {
-    const s = makeSolutionScope(input);
+    // WHO WROTE IT, recorded on the scope itself (J1-07). Without this the approval below has nothing
+    // to compare the approver against, which is why "the author may not approve their own scope" was
+    // not a weak rule here — it was an unwritable one.
+    const s = makeSolutionScope({ ...input, createdBy: input.actorId ?? null });
     await this.store.saveScope(s);
     await this.events.append([makeEvent({
       type: PREAWARD_EVENT.scopeCreated, tenantId: s.tenantId, companyId: null,

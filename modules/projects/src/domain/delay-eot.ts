@@ -130,7 +130,14 @@ export interface EotClaim {
   justification: string | null;
   originalCompletionDate: string | null;
   revisedCompletionDate: string | null;
+  /**
+   * WHO WROTE IT AND WHO SENT IT. The table had `submitted_at` with nobody beside it and no author
+   * column at all — an extension-of-time claim is a formal contractual position that moves the
+   * completion date and carries money with it, and it was written by nobody and submitted by nobody.
+   */
+  createdBy: string | null;
   submittedAt: string | null;
+  submittedBy: string | null;
   decidedAt: string | null;
   decidedBy: string | null;
   /** IDs of linked delay events backing this claim. */
@@ -147,6 +154,7 @@ export interface NewEotClaim {
   justification?: string | null;
   originalCompletionDate?: string | null;
   delayEventIds?: Id[];
+  createdBy?: string | null;
 }
 
 export function makeEotClaim(input: NewEotClaim): EotClaim {
@@ -162,12 +170,68 @@ export function makeEotClaim(input: NewEotClaim): EotClaim {
     justification: input.justification ?? null,
     originalCompletionDate: input.originalCompletionDate ?? null,
     revisedCompletionDate: null,
+    createdBy: input.createdBy ?? null,
     submittedAt: null,
+    submittedBy: null,
     decidedAt: null,
     decidedBy: null,
     delayEventIds: input.delayEventIds ?? [],
     createdAt: new Date().toISOString(),
   };
+}
+
+/**
+ * draft → submitted. The claim goes OUT to the client, and the record says who sent it.
+ */
+export function submitEotClaim(claim: EotClaim, actorId: string | null): EotClaim {
+  if (claim.status !== 'draft') throw new Error(`EOT claim ${claim.claimNumber} is not in draft status`);
+  return { ...claim, status: 'submitted', submittedAt: new Date().toISOString(), submittedBy: actorId };
+}
+
+/**
+ * submitted → approved | partially_approved | rejected. Recording the determination that came back.
+ *
+ * TWO RULES, AND NEITHER IS AN INVENTION.
+ *
+ * A determination answers a claim that was SENT: deciding a draft would mean answering something
+ * the client never received, and the status graph already says a claim must be submitted first —
+ * this makes the service honour it rather than assume it.
+ *
+ * And THE PERSON WHO SUBMITTED THE CLAIM DOES NOT DETERMINE IT. A claim out and a determination
+ * back are the two halves of an exchange; one account doing both is a self-assessment with a status
+ * field on it. Measured before this, as one Commercial/QS principal holding `projects.eot-claim.*`:
+ * submit returned success and decide returned success on the same claim.
+ */
+export function decideEotClaim(
+  claim: EotClaim,
+  decision: { status: 'approved' | 'partially_approved' | 'rejected'; approvedDays: number; revisedCompletionDate?: string | null },
+  actorId: string | null,
+): EotClaim {
+  if (claim.status !== 'submitted' && claim.status !== 'under_review') {
+    // "can only" → 409 CONFLICT in the API error taxonomy.
+    throw new Error(`an EOT claim can only be determined once it has been submitted (this one is ${claim.status})`);
+  }
+  if (actorId && claim.submittedBy && actorId === claim.submittedBy) {
+    throw new Error('the person who submitted this EOT claim may not determine it — a claim out and a determination back are two sides of one exchange');
+  }
+  return {
+    ...claim,
+    status: decision.status,
+    approvedDays: decision.approvedDays,
+    decidedAt: new Date().toISOString(),
+    decidedBy: actorId,
+    revisedCompletionDate: decision.revisedCompletionDate ?? claim.revisedCompletionDate,
+  };
+}
+
+/**
+ * Whether the claim and its determination came from two different people. Same reporting contract
+ * as the document revision, the daily report and the handover: `null` means undetermined, so there
+ * is nothing to judge; `unverifiable` means determined before `submittedBy` existed.
+ */
+export function eotSeparation(claim: EotClaim): 'enforced' | 'unverifiable' | null {
+  if (!claim.decidedBy) return null;
+  return claim.submittedBy ? 'enforced' : 'unverifiable';
 }
 
 /** Aggregate delay analysis metrics for a project. */

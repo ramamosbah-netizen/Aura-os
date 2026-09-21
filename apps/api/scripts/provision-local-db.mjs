@@ -306,6 +306,13 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 //                 verify the fix, so the fixture proves the TRAIL, not a second pair of hands.
 //   T&C           u-e2e-tc runs the commissioning register and submits a handover; it accepts none.
 
+// `u-e2e-planner` is the wave-E proof that a named capability reaches the route behind it. The
+// Planning Engineer NAMED `projects.delay.*` and could assess no delay, because the whole delay/EOT
+// service asserted ONE permission — `projects.project.update` — which that role does not hold.
+// Commercial/QS was in the same position for `projects.eot-claim.*`: it named both sides of the
+// exchange and could exercise neither. One principal cannot show that; the claim is now submitted by
+// u-e2e-qs and determined by u-e2e-pm, and the submitter is refused their own determination.
+
 for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
                                 ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
                                 ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales'],
@@ -316,7 +323,8 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-hse', 'r-hse'], ['u-e2e-hse2', 'r-hse'],
                                 ['u-e2e-eng', 'r-technical-engineer'], ['u-e2e-doccon', 'r-document-controller'],
                                 ['u-e2e-projeng', 'r-project-engineer'], ['u-e2e-qaqc', 'r-qa-qc'],
-                                ['u-e2e-tc', 'r-commissioning-engineer'], ['u-e2e-fm', 'r-handover-fm']]) {
+                                ['u-e2e-tc', 'r-commissioning-engineer'], ['u-e2e-fm', 'r-handover-fm'],
+                                ['u-e2e-planner', 'r-planning-engineer']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -338,7 +346,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) and u-e2e-fm (r-handover-fm)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) and u-e2e-planner (r-planning-engineer)');
 
 
 

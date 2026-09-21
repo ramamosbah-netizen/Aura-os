@@ -550,13 +550,13 @@
   {
     "key": "modules/projects/src/delay-eot.service.ts#assertProjectAccess",
     "classification": "PROJECT_SCOPE_REQUIRED",
-    "resolution": "Required helper argument from the loaded drawing/revision or validated project; all helper callers are pinned separately.",
+    "resolution": "Required helper arguments: the permission for the act, and the project scope from the loaded delay or claim — never a project supplied by the caller. All six callers are pinned separately.",
     "organizationBranch": null,
     "baselineScope": "unscoped",
-    "change": "Added canonical project scope",
+    "change": "SEC-01 wave E: THE PERMISSION IS THE ACT'S OWN NOW. This helper asserted `projects.project.update` — “edit the project” — for creating a delay event, assessing it, raising an EOT claim, submitting it and DETERMINING it. Measured: r-commercial-manager NAMED `projects.eot-claim.*` and r-planning-engineer NAMED `projects.delay.*`, and neither holds `projects.project.update`, so both were refused their own module's work (403) while r-pm held `projects.*` and did all of it including submitting and determining the same claim.",
     "evidence": "delay-eot.assertProjectAccess",
     "security": {
-      "target": "{ permission: 'projects.project.update', orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }], resource: { type: 'project', id: projectId } }",
+      "target": "{ permission, orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }], resource: { type: 'project', id: projectId } }",
       "checks": [
         "this.assertProjectOwnership(projectId, tenantId)"
       ],

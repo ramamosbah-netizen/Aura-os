@@ -38,7 +38,11 @@ describe('governed Project 360 authoring boundaries', () => {
     const project = makeProject({ tenantId: 'tenant-a', title: 'Authoring project' });
     const service = new DelayEotService(new InMemoryDelayStore(), new InMemoryEotStore(), events, null, projectStore(project), access);
     await service.createDelay({ tenantId: 'tenant-a', projectId: project.id, title: 'Late permit', startDate: '2026-09-01', actorId: 'u-admin' });
-    expect(access.assert).toHaveBeenCalledWith('u-admin', expect.objectContaining({ permission: 'projects.project.update' }));
+    // THE ACT'S OWN PERMISSION. This pinned `projects.project.update` — "edit the project" — which
+    // the whole delay/EOT service asserted for every act in it, including determining a contractual
+    // time claim. The Planning Engineer NAMES `projects.delay.*` and does not hold
+    // `projects.project.update`, so raising a delay was refused for the role whose job it is.
+    expect(access.assert).toHaveBeenCalledWith('u-admin', expect.objectContaining({ permission: 'projects.delay.create' }));
     await expect(service.createDelay({ tenantId: 'tenant-b', projectId: project.id, title: 'Wrong tenant', startDate: '2026-09-01', actorId: 'u-admin' })).rejects.toThrow('not found');
   });
 });

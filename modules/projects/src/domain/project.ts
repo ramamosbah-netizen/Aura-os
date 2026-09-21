@@ -68,6 +68,13 @@ export interface Project {
   accountId: Id | null;
   accountName: string | null;
   status: ProjectStatus;
+  /**
+   * WHY IT WAS ABANDONED, on the record. `cancel` already required both an actor and a reason
+   * and put them in the event payload alone, so the project itself said `cancelled` and no more.
+   */
+  cancelledBy: Id | null;
+  cancelledAt: string | null;
+  cancellationReason: string | null;
   /** Project budget (carried from the contract value). */
   value: number;
   origin: ProjectOrigin;
@@ -158,6 +165,9 @@ export function makeProject(input: NewProject): Project {
     accountId: input.accountId ?? null,
     accountName: input.accountName ?? null,
     status: input.status ?? 'planned',
+    cancelledBy: null,
+    cancelledAt: null,
+    cancellationReason: null,
     value: Number.isFinite(input.value) ? Number(input.value) : 0,
     origin: input.origin ?? (input.handoverLockedAt ? 'commercial_handover' : 'internal'),
     handoverId: input.handoverId ?? null,

@@ -399,6 +399,31 @@ const COMMISSIONING_ACCEPTANCE = [
   'commissioning.handover.accept', 'commissioning.handover.reject', 'commissioning.handover.acknowledge',
 ] as const;
 
+/**
+ * WHAT A PROJECT MANAGER RUNS. `projects.*` sat on this role, which is how it came to hold every
+ * governing act in the module — including submitting an EOT claim and DETERMINING the same claim.
+ *
+ * The delivery acts stay. What moved out is the commercial preparation of a time claim: Commercial
+ * /QS raises and submits it, this role records the determination that comes back, and neither does
+ * both.
+ */
+const PROJECTS_DELIVERY = [
+  'projects.project.create', 'projects.project.update', 'projects.project.cancel',
+  'projects.milestone.*', 'projects.schedule.*', 'projects.task.*', 'projects.wbs.*', 'projects.wb.*',
+  'projects.cbs.*', 'projects.cb.*', 'projects.closeout.*', 'projects.issue.*', 'projects.risk.*',
+  'projects.delay.*', 'projects.delay-log.*', 'projects.resource-booking.*', 'projects.resource-pool.*',
+  'projects.resource-capacity.*', 'projects.resource-conflict.*', 'projects.responsibility.*',
+  'projects.planning-run.*', 'projects.quantity-ledger.*', 'projects.cost-ledger.*',
+  'projects.variation.*', 'projects.progress.*', 'projects.baseline.*', 'projects.eot-claim.read',
+  // Who is on the project team. Dropped by the enumeration and caught by the vocabulary guard —
+  // the SEVENTH time enumerating a module wildcard has lost a real permission, which is precisely
+  // the failure that guard exists for.
+  'projects.member.manage',
+  // DETERMINES an extension-of-time claim, and raises none. The determination moves the completion
+  // date and the programme is this role's; preparing and sending the claim is Commercial/QS's.
+  'projects.eot-claim.decide',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -582,7 +607,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Owns project delivery, risk, programme, cost control, variations and delivery approvals.',
     assignmentScope: 'project',
     permissions: [
-      'projects.*', 'contracts.certificate.create', 'contracts.certificate.update',
+      ...PROJECTS_DELIVERY, readOnly('projects'), 'contracts.certificate.create', 'contracts.certificate.update',
       // RAISES a subcontractor application and instructs a variation for work on their own project,
       // and CERTIFIES NEITHER. That separation is the point: the person who says the work was done is
       // not the person who accepts the account of it. `subcontracts.claim.certify` and
@@ -636,7 +661,15 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'tendering.internal-pricing.access',
       // `contracts.*` USED TO BE HERE.
       ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY,
-      'projects.variation.*', 'projects.eot-claim.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
+      'projects.variation.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
+      // PREPARES AND SUBMITS an extension-of-time claim, and does NOT determine it. Before this the
+      // role named `projects.eot-claim.*` — both sides of the exchange — and could exercise
+      // NEITHER, because the service asserted `projects.project.update` for every act in that file
+      // and this role does not hold it. Measured: 403 creating a claim in its own module.
+      'projects.eot-claim.create', 'projects.eot-claim.submit', 'projects.eot-claim.read',
+      // Freezes the SOLD quantity a project is measured and billed against — a valuation fact, so
+      // it follows the valuation authority rather than delivery. The PM keeps it too.
+      'projects.quantity-ledger.baseline',
       // SUBCONTRACTOR COMMERCIAL AUTHORITY. This role’s description already said it — “governs
       // estimates, quotations, contracts, variations, CLAIMS and payment applications” — and it held
       // no `subcontracts.*` permission whatsoever. The whole module was reachable only by r-admin, so

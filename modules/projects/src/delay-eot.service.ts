@@ -3,7 +3,9 @@ import { assertSameTenant, type Id, makeEvent, sameTenantOrNull, type AccessTarg
 import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   type DelayEvent, type NewDelayEvent, makeDelayEvent, assessDelay, type DelayStatus,
-  type EotClaim, type NewEotClaim, makeEotClaim, type EotStatus,
+  type EotClaim, type NewEotClaim, makeEotClaim,
+  submitEotClaim as submitEotClaimDomain,
+  decideEotClaim as decideEotClaimDomain, type EotStatus,
   calculateDelayAnalysis, type DelayAnalysisSummary,
 } from './domain/delay-eot';
 import { DELAY_STORE, EOT_STORE, type DelayFilter, type DelayStore, type EotFilter, type EotStore } from './delay-eot-store';
@@ -27,7 +29,7 @@ export class DelayEotService {
   // ── DELAY EVENTS ─────────────────────────────────────────────────────
 
   async createDelay(input: NewDelayEvent & { actorId?: Id | null }): Promise<DelayEvent> {
-    await this.assertProjectAccess(input.projectId, input.tenantId, input.actorId);
+    await this.assertProjectAccess(input.projectId, input.tenantId, input.actorId, 'projects.delay.create');
     const event = makeDelayEvent(input);
     await this.delays.create(event);
     this.logger.log(`Delay event created: ${event.title} (${event.causeCategory}, ${event.delayDays}d)`);
@@ -69,7 +71,7 @@ export class DelayEotService {
   }): Promise<DelayEvent> {
     const delay = await this.delays.get(input.delayId);
     if (!delay || delay.tenantId !== input.tenantId) throw new Error(`delay ${input.delayId} not found`);
-    await this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId);
+    await this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId, 'projects.delay.assess');
 
     const assessed = assessDelay(delay, {
       impactWorkingDays: input.impactWorkingDays, note: input.note, actorId: input.actorId,
@@ -96,7 +98,7 @@ export class DelayEotService {
   async setDelayActivities(input: { tenantId: Id; delayId: Id; taskIds: Id[]; actorId?: Id | null }): Promise<DelayEvent> {
     const delay = await this.delays.get(input.delayId);
     if (!delay || delay.tenantId !== input.tenantId) throw new Error(`delay ${input.delayId} not found`);
-    await this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId);
+    await this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId, 'projects.delay.assess');
     const updated = { ...delay, affectedTaskIds: [...new Set(input.taskIds)] };
     await this.delays.update(updated);
     return updated;
@@ -114,8 +116,9 @@ export class DelayEotService {
   // ── EOT CLAIMS ───────────────────────────────────────────────────────
 
   async createEotClaim(input: NewEotClaim & { actorId?: Id | null }): Promise<EotClaim> {
-    await this.assertProjectAccess(input.projectId, input.tenantId, input.actorId);
-    const claim = makeEotClaim(input);
+    await this.assertProjectAccess(input.projectId, input.tenantId, input.actorId, 'projects.eot-claim.create');
+    // The claim now carries its author. It had no `created_by` column at all.
+    const claim = makeEotClaim({ ...input, createdBy: input.createdBy ?? input.actorId ?? null });
     await this.eotClaims.create(claim);
     this.logger.log(`EOT Claim #${claim.claimNumber} created: ${claim.title} (${claim.submittedDays}d)`);
 
@@ -136,36 +139,32 @@ export class DelayEotService {
 
   async submitEotClaim(id: Id, actorId?: Id | null): Promise<EotClaim> {
     const existing = assertSameTenant(await this.eotClaims.get(id), this.tenant?.boundTenantId(), 'EOT Claim', id);
-    await this.assertProjectAccess(existing.projectId, existing.tenantId, actorId);
-    if (existing.status !== 'draft') throw new Error(`EOT Claim ${id} is not in draft status`);
-
-    const updated: EotClaim = {
-      ...existing,
-      status: 'submitted',
-      submittedAt: new Date().toISOString(),
-    };
+    await this.assertProjectAccess(existing.projectId, existing.tenantId, actorId, 'projects.eot-claim.submit');
+    // The transition and its rules live in the domain now; this recorded only a timestamp.
+    const updated = submitEotClaimDomain(existing, actorId ?? null);
     await this.eotClaims.update(updated);
     this.logger.log(`EOT Claim #${existing.claimNumber} submitted`);
     return updated;
   }
 
+  /**
+   * Record the client's determination.
+   *
+   * `decidedBy` IS NULLABLE NOW, and that is the point. The controller passed
+   * `ctx.actorId ?? 'system'`, so an unauthenticated determination was attributed to a principal
+   * named "system" that exists in no roster — the same fabrication wave C removed when an approval
+   * was allowed to stand in for a review that never happened. An unsigned determination is recorded
+   * as unsigned; `eotSeparation` then reports `unverifiable` rather than a clean bill of health.
+   */
   async decideEotClaim(id: Id, decision: {
     status: 'approved' | 'partially_approved' | 'rejected';
     approvedDays: number;
-    decidedBy: string;
+    decidedBy: string | null;
     revisedCompletionDate?: string | null;
   }): Promise<EotClaim> {
     const existing = assertSameTenant(await this.eotClaims.get(id), this.tenant?.boundTenantId(), 'EOT Claim', id);
-    await this.assertProjectAccess(existing.projectId, existing.tenantId, decision.decidedBy);
-
-    const updated: EotClaim = {
-      ...existing,
-      status: decision.status,
-      approvedDays: decision.approvedDays,
-      decidedAt: new Date().toISOString(),
-      decidedBy: decision.decidedBy,
-      revisedCompletionDate: decision.revisedCompletionDate ?? existing.revisedCompletionDate,
-    };
+    await this.assertProjectAccess(existing.projectId, existing.tenantId, decision.decidedBy, 'projects.eot-claim.decide');
+    const updated = decideEotClaimDomain(existing, decision, decision.decidedBy);
     await this.eotClaims.update(updated);
     this.logger.log(`EOT Claim #${existing.claimNumber} decided: ${decision.status} (${decision.approvedDays}d approved)`);
 
@@ -209,10 +208,28 @@ export class DelayEotService {
     if (!project || project.tenantId !== tenantId) throw new Error(`project ${projectId} not found`);
   }
 
-  private async assertProjectAccess(projectId: Id, tenantId: Id, actorId?: Id | null): Promise<void> {
+  /**
+   * ONE PERMISSION FOR EVERY ACT IN THIS SERVICE, AND IT WAS THE WRONG ONE.
+   *
+   * This asserted `projects.project.update` — "edit the project" — for creating a delay event,
+   * assessing it, raising an EOT claim, submitting that claim and DETERMINING it. Measured against
+   * the shipped catalogue:
+   *
+   *   r-commercial-manager  NAMES projects.eot-claim.*  holds projects.project.update? NO
+   *   r-planning-engineer   NAMES projects.delay.*      holds projects.project.update? NO
+   *   r-pm                  holds projects.*            so it did all of them
+   *
+   * The role whose job an EOT claim IS could not touch one (403 against the running API), the
+   * Planning Engineer could not assess the delay behind it, and the only role that could do either
+   * submitted a claim and determined it. That is the shape wave B removed from the permit to work,
+   * where ASKING for a permit required the authority to GRANT one.
+   *
+   * The permission is now the act's own, passed in by each caller.
+   */
+  private async assertProjectAccess(projectId: Id, tenantId: Id, actorId: Id | null | undefined, permission: string): Promise<void> {
     await this.assertProjectOwnership(projectId, tenantId);
     if (actorId && this.access) {
-      const target: AccessTarget = { permission: 'projects.project.update', orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }], resource: { type: 'project', id: projectId } };
+      const target: AccessTarget = { permission, orgPath: [{ level: 'tenant' as OrgLevel, id: tenantId }], resource: { type: 'project', id: projectId } };
       this.access.assert(actorId, target);
     }
   }

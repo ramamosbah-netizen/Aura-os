@@ -102,32 +102,32 @@
   {
     "file": "modules/projects/src/delay-eot.service.ts",
     "method": "assessDelay",
-    "call": "this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId)"
+    "call": "this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId, 'projects.delay.assess')"
   },
   {
     "file": "modules/projects/src/delay-eot.service.ts",
     "method": "createDelay",
-    "call": "this.assertProjectAccess(input.projectId, input.tenantId, input.actorId)"
+    "call": "this.assertProjectAccess(input.projectId, input.tenantId, input.actorId, 'projects.delay.create')"
   },
   {
     "file": "modules/projects/src/delay-eot.service.ts",
     "method": "createEotClaim",
-    "call": "this.assertProjectAccess(input.projectId, input.tenantId, input.actorId)"
+    "call": "this.assertProjectAccess(input.projectId, input.tenantId, input.actorId, 'projects.eot-claim.create')"
   },
   {
     "file": "modules/projects/src/delay-eot.service.ts",
     "method": "decideEotClaim",
-    "call": "this.assertProjectAccess(existing.projectId, existing.tenantId, decision.decidedBy)"
+    "call": "this.assertProjectAccess(existing.projectId, existing.tenantId, decision.decidedBy, 'projects.eot-claim.decide')"
   },
   {
     "file": "modules/projects/src/delay-eot.service.ts",
     "method": "setDelayActivities",
-    "call": "this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId)"
+    "call": "this.assertProjectAccess(delay.projectId, delay.tenantId, input.actorId, 'projects.delay.assess')"
   },
   {
     "file": "modules/projects/src/delay-eot.service.ts",
     "method": "submitEotClaim",
-    "call": "this.assertProjectAccess(existing.projectId, existing.tenantId, actorId)"
+    "call": "this.assertProjectAccess(existing.projectId, existing.tenantId, actorId, 'projects.eot-claim.submit')"
   },
   {
     "file": "modules/projects/src/project-issue.service.ts",

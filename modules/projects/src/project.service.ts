@@ -220,7 +220,19 @@ export class ProjectService implements OnModuleInit {
       throw new Error(`cannot cancel project ${command.projectId}: ${verdict.gaps.join('; ')}`);
     }
 
-    const updated: Project = { ...existing, status: 'cancelled' };
+    // ON THE RECORD, NOT ONLY IN THE EVENT. Both facts were already required and already real —
+    // the service refuses to proceed without an actor and without a reason — and both went into
+    // the event payload alone, so the PROJECT afterwards read `status = 'cancelled'` and nothing
+    // else. Anyone looking at the project rather than replaying the event store could see that it
+    // had been abandoned and not by whom or why.
+    const cancelledAt = new Date().toISOString();
+    const updated: Project = {
+      ...existing,
+      status: 'cancelled',
+      cancelledBy: command.actorId,
+      cancelledAt,
+      cancellationReason: reason,
+    };
     const event = makeEvent({
       type: PROJECT_EVENT.cancelled,
       tenantId: updated.tenantId,
@@ -239,7 +251,7 @@ export class ProjectService implements OnModuleInit {
         status: 'cancelled',
         reason,
         cancelledBy: command.actorId,
-        cancelledAt: new Date().toISOString(),
+        cancelledAt,
       },
     });
 

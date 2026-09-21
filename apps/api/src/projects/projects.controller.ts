@@ -540,6 +540,7 @@ export class ProjectsController {
    * comes from the authenticated context, and the reason has to be typed by a person.
    */
   @Patch('projects/:id/cancel')
+  @Permissions('projects.project.cancel')
   async cancelProject(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: CancelProjectDto): Promise<Project> {
     const ctx = this.tenant.get();
     if (!ctx.actorId) throw new BadRequestException('actor is required to cancel a project');
@@ -744,6 +745,7 @@ export class ProjectsController {
 
   /** Set/adjust a BOQ item's target quantity — the baseline its position is measured against. */
   @Post('quantity-ledger/baseline')
+  @Permissions('projects.quantity-ledger.baseline')
   setQuantityBaseline(
     @Body() dto: { projectId: string; boqItemId: string; quantity: number; unit?: string; cbsNodeId?: string | null },
   ) {
@@ -920,6 +922,7 @@ export class ProjectsController {
   // ── EOT CLAIMS (EXTENSION OF TIME) ───────────────────────────────────────
 
   @Post('eot-claims')
+  @Permissions('projects.eot-claim.create')
   createEotClaim(@Body() dto: CreateEotDto): Promise<EotClaim> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.title?.trim()) throw new BadRequestException('title is required');
@@ -944,6 +947,7 @@ export class ProjectsController {
   }
 
   @Post('eot-claims/:id/submit')
+  @Permissions('projects.eot-claim.submit')
   submitEotClaim(@Param('id') id: string): Promise<EotClaim> {
     return this.delayEot.submitEotClaim(id, this.tenant.get().actorId);
   }
@@ -1194,6 +1198,7 @@ export class ProjectsController {
   }
 
   @Post('eot-claims/:id/decide')
+  @Permissions('projects.eot-claim.decide')
   decideEotClaim(
     @Param('id') id: string,
     @Body() dto: { status: string; approvedDays: number; revisedCompletionDate?: string },
@@ -1203,7 +1208,10 @@ export class ProjectsController {
     return this.delayEot.decideEotClaim(id, {
       status: dto.status as any,
       approvedDays: dto.approvedDays ?? 0,
-      decidedBy: ctx.actorId ?? 'system',
+      // NEVER THE LITERAL 'system'. This wrote a principal that exists in no roster, so an
+      // unauthenticated determination read afterwards as though somebody had made it. An unsigned
+      // determination is recorded as unsigned, and `eotSeparation` reports it as unverifiable.
+      decidedBy: ctx.actorId,
       revisedCompletionDate: dto.revisedCompletionDate,
     });
   }

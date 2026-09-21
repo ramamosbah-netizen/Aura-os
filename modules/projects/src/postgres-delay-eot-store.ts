@@ -138,6 +138,8 @@ interface EotRow {
   revised_completion_date: string | null;
   submitted_at: Date | string | null;
   decided_at: Date | string | null;
+  created_by: string | null;
+  submitted_by: string | null;
   decided_by: string | null;
   created_at: Date | string;
 }
@@ -159,7 +161,9 @@ function rowToEot(r: EotRow): EotClaim {
     justification: r.justification,
     originalCompletionDate: r.original_completion_date,
     revisedCompletionDate: r.revised_completion_date,
+    createdBy: r.created_by ?? null,
     submittedAt: ts(r.submitted_at),
+    submittedBy: r.submitted_by ?? null,
     decidedAt: ts(r.decided_at),
     decidedBy: r.decided_by,
     delayEventIds: [],   // populated separately if needed
@@ -175,11 +179,11 @@ export class PostgresEotStore implements EotStore {
       `INSERT INTO public.aura_projects_eot_claims
         (id, tenant_id, project_id, claim_number, title, submitted_days, approved_days,
          status, justification, original_completion_date, revised_completion_date,
-         submitted_at, decided_at, decided_by, created_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+         created_by, submitted_at, submitted_by, decided_at, decided_by, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [c.id, c.tenantId, c.projectId, c.claimNumber, c.title, c.submittedDays,
        c.approvedDays, c.status, c.justification, c.originalCompletionDate,
-       c.revisedCompletionDate, c.submittedAt, c.decidedAt, c.decidedBy, c.createdAt],
+       c.revisedCompletionDate, c.createdBy, c.submittedAt, c.submittedBy, c.decidedAt, c.decidedBy, c.createdAt],
     );
     // link delay events
     for (const dId of c.delayEventIds) {
@@ -195,10 +199,12 @@ export class PostgresEotStore implements EotStore {
       `UPDATE public.aura_projects_eot_claims
        SET title=$2, submitted_days=$3, approved_days=$4, status=$5, justification=$6,
            original_completion_date=$7, revised_completion_date=$8,
-           submitted_at=$9, decided_at=$10, decided_by=$11
+           submitted_at=$9, submitted_by=$10, decided_at=$11, decided_by=$12
        WHERE id=$1`,
+      // `created_by` is deliberately NOT in the SET list: authorship is written once at creation and
+      // a later save does not get to restate it.
       [c.id, c.title, c.submittedDays, c.approvedDays, c.status, c.justification,
-       c.originalCompletionDate, c.revisedCompletionDate, c.submittedAt,
+       c.originalCompletionDate, c.revisedCompletionDate, c.submittedAt, c.submittedBy,
        c.decidedAt, c.decidedBy],
     );
   }

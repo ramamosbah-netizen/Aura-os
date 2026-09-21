@@ -85,8 +85,11 @@ export class PostgresAssetStore implements AssetStore {
         purchase_date = excluded.purchase_date,
         purchase_cost = excluded.purchase_cost,
         status = excluded.status,
-        completed_by = excluded.completed_by,
-        completed_at = excluded.completed_at,
+        -- completed_by / completed_at were set here by wave F and belong to the MAINTENANCE
+        -- table, not to the asset. aura_assets has no such columns, so every asset write
+        -- answered 500 with "column excluded.completed_by does not exist" - including the very
+        -- first create. Nothing caught it: the in-memory tier runs no SQL, and this module has
+        -- no pg-int test, so the only place it could surface was a browser run on Postgres.
         warranty_expiry = excluded.warranty_expiry,
         next_calibration_date = excluded.next_calibration_date,
         next_inspection_date = excluded.next_inspection_date,
@@ -273,7 +276,7 @@ export class PostgresAssetInspectionStore implements AssetInspectionStore {
     await conn.query(
       `insert into public.aura_asset_inspections (
         id, tenant_id, company_id, asset_id, date, inspector, result, notes, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       on conflict (id) do update set
         result = excluded.result,
         notes = excluded.notes,

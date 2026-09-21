@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { scoped } from './fixtures';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 test.describe('Radar isolated release proof', () => {
   // Scoped and created ONCE. A per-test fixture on a shared title stacks up a duplicate per test
@@ -54,7 +55,14 @@ test.describe('Radar isolated release proof', () => {
     await expect(page.getByRole('link', { name: 'Open Lead →' })).toBeVisible();
   });
 
-  test('permission-denied user sees access state', async ({ browser, baseURL }) => {
+  test('permission-denied user sees access state', async ({ browser, baseURL, request }) => {
+    // An authenticated-but-refused identity only exists where the tier can have one. In the
+    // in-memory tier the single lever that gives an account a password also makes it an admin,
+    // so there is no such actor to sign in as and this waited on /login until it timed out.
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
     const context = await browser.newContext();
     const page = await context.newPage();
     await page.goto('/login?next=%2Fcrm%2Fradar');

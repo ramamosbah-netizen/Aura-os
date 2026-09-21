@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
 import { MEMBER, collectPageErrors, memberPassword, scenario, signInAs } from './project-member-harness';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * REPORTS from a project member's seat, in a browser, with auth ON.
@@ -23,6 +24,10 @@ test.describe('Reports in project context', () => {
     const admin = apiAuthHeaders().Authorization;
     test.skip(!admin, 'auth is off — a member and an admin would be indistinguishable');
     test.skip(!memberPassword(), 'needs a password to sign the member in');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
 
     // Every role the report's seven sources touch, so a blank card means "no data" and never
     // "no permission" — the distinction this page would otherwise hide behind a dash.

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * `BUY-07` on screen — the next-role receipt.
@@ -141,6 +142,12 @@ test.describe('Site acknowledges a delivery at a work package', () => {
    */
   test('a Storekeeper issues and a Site Engineer receives it, each signed in as themselves', async ({ browser, request }) => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    // Unlike the test above, this one signs in AS u-e2e-storekeeper and u-e2e-site. Those are
+    // database-provisioned actors, so the in-memory tier cannot have them.
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
     const run = Date.now().toString().slice(-6);
     const password = process.env.E2E_PASSWORD ?? 'e2e-password';
     const STOREKEEPER = process.env.E2E_STOREKEEPER_USERNAME ?? 'u-e2e-storekeeper';

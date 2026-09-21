@@ -173,7 +173,7 @@ export class PostgresFuelLogStore implements FuelLogStore {
     const res = await conn.query(
       `insert into public.aura_fleet_fuel_logs (
         id, tenant_id, company_id, vehicle_id, date, liters, cost, odometer, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       on conflict (id) do update set
         liters = excluded.liters,
         cost = excluded.cost,

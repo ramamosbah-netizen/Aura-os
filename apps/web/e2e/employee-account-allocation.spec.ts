@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * PLN-07 — a resource allocation reaching the person it names.
@@ -130,23 +131,32 @@ test.describe('Employee account link carries an allocation into My Work', () => 
     // and takes it away afterwards.
     const password = process.env.E2E_PASSWORD ?? process.env.AUTH_DEV_PASSWORD;
     expect(password, 'the permission proof needs the seeded member password').toBeTruthy();
-    const hrReaderRole = `r-e2e-hr-reader-${run}`;
-    await post(request, '/admin/access/roles', {
-      id: hrReaderRole, name: `HR reader ${run}`, permissions: ['hr.employee.read'],
-    });
-    await post(request, '/admin/access/grants', { userId: 'u-e2e-viewer', roleId: hrReaderRole });
-    try {
-      const readerLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
-      expect(readerLogin.ok(), await readerLogin.text()).toBe(true);
-      const readerHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${((await readerLogin.json()) as { token: string }).token}` };
-      expect((await request.get(`${API}/hr/employees`, { headers: readerHeaders })).status(), 'HR read is granted').toBe(200);
-      const readerLink = await request.post(`${API}/hr/employees/${colleague.id}/account`, {
-        headers: readerHeaders, data: { userId: 'u-e2e-checker' },
+    // This section alone signs in as `u-e2e-viewer`, which only exists where grants are hydrated
+    // from Postgres. A `test.skip()` here would abort the WHOLE test and throw away everything
+    // above it, which the in-memory tier proves perfectly well — so the condition wraps the
+    // section instead, and the database-backed tier runs it for real.
+    const unprovisioned = await provisionedActorsUnavailable(request);
+    if (unprovisioned) {
+      test.info().annotations.push({ type: 'partially skipped', description: `HR reader refusal: ${unprovisioned}` });
+    } else {
+      const hrReaderRole = `r-e2e-hr-reader-${run}`;
+      await post(request, '/admin/access/roles', {
+        id: hrReaderRole, name: `HR reader ${run}`, permissions: ['hr.employee.read'],
       });
-      expect(readerLink.status(), 'HR read does not carry the account-link authority').toBe(403);
-    } finally {
-      // Whatever the assertions did, this identity leaves the proof exactly as it entered it.
-      await request.delete(`${API}/admin/access/grants?userId=u-e2e-viewer&roleId=${hrReaderRole}`, { headers: apiAuthHeaders() });
+      await post(request, '/admin/access/grants', { userId: 'u-e2e-viewer', roleId: hrReaderRole });
+      try {
+        const readerLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
+        expect(readerLogin.ok(), await readerLogin.text()).toBe(true);
+        const readerHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${((await readerLogin.json()) as { token: string }).token}` };
+        expect((await request.get(`${API}/hr/employees`, { headers: readerHeaders })).status(), 'HR read is granted').toBe(200);
+        const readerLink = await request.post(`${API}/hr/employees/${colleague.id}/account`, {
+          headers: readerHeaders, data: { userId: 'u-e2e-checker' },
+        });
+        expect(readerLink.status(), 'HR read does not carry the account-link authority').toBe(403);
+      } finally {
+        // Whatever the assertions did, this identity leaves the proof exactly as it entered it.
+        await request.delete(`${API}/admin/access/grants?userId=u-e2e-viewer&roleId=${hrReaderRole}`, { headers: apiAuthHeaders() });
+      }
     }
 
     // ── The plan, and the commitments made from it ────────────────────────────
@@ -296,12 +306,21 @@ test.describe('Employee account link carries an allocation into My Work', () => 
 
     // Saving a schedule REPLACES its activity list, and both existing activities back held
     // bookings. Dropping them is refused rather than silently breaking a commitment's lineage.
-    const wouldOrphan = await request.post(`${API}/projects/schedules`, {
-      headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
-      data: { projectId: project.id, tasks: [crewTask] },
-    });
-    expect(wouldOrphan.status(), 'an activity backing a held booking cannot be dropped').toBe(409);
-    expect(await wouldOrphan.text()).toContain('already has a held');
+    //
+    // THIS REFUSAL IS A DATABASE CONSTRAINT, not application logic: the booking foreign key's
+    // ON DELETE RESTRICT (migration 0290) is what raises it, and postgres-schedule-store.ts
+    // translates 23503 into the message asserted below. The in-memory store has no foreign keys
+    // and answers 201, so this assertion can only mean something against Postgres. Simulating the
+    // constraint in the fake store would be worse than skipping it — the in-memory tier would
+    // then report a guarantee the real one alone provides.
+    if (!unprovisioned) {
+      const wouldOrphan = await request.post(`${API}/projects/schedules`, {
+        headers: { 'content-type': 'application/json', ...apiAuthHeaders() },
+        data: { projectId: project.id, tasks: [crewTask] },
+      });
+      expect(wouldOrphan.status(), 'an activity backing a held booking cannot be dropped').toBe(409);
+      expect(await wouldOrphan.text()).toContain('already has a held');
+    }
 
     // Added to the plan, not posted in place of it.
     await post<ScheduleResponse>(request, '/projects/schedules', {

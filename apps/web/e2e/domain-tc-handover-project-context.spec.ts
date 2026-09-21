@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
 import { MEMBER, V1, collectPageErrors, memberPassword, proveDomain, scenario, signInAs } from './project-member-harness';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * TESTING & COMMISSIONING and HANDOVER from a project member's seat, in a browser, with auth ON.
@@ -18,8 +19,19 @@ import { MEMBER, V1, collectPageErrors, memberPassword, proveDomain, scenario, s
  *   • T&C sign-off and Handover acceptance remain different decisions.
  *   • A dossier issue remains immutable; receipt remains distinct from acceptance.
  *
- * The identity holds `r-qa-qc`, which carries `commissioning.*` — the role that actually owns this
- * work — plus `r-pm` for discovery.
+ * The identity holds `r-qa-qc` and `r-commissioning-engineer`, plus `r-pm` for discovery.
+ *
+ * THE COMMISSIONING ROLE IS NOT DECORATION. This file used to say the identity "holds `r-qa-qc`,
+ * which carries `commissioning.*` — the role that actually owns this work". That was never true:
+ * r-qa-qc has carried `readOnly('commissioning')` since before SEC-01 began, so defining a test
+ * point was always going to be refused. The premise went unnoticed because the spec never ran to
+ * that line — the in-memory tier killed it at the member's 401, and the database tier's job
+ * failed at an earlier step and never reached the browser suite at all.
+ *
+ * Defining a test point is `commissioning.record.test-items`, which wave D placed with the
+ * Commissioning Engineer. That authority is frozen and is not what this file is about, so the
+ * identity is given the role that owns the act rather than the act being given to a role that
+ * does not.
  */
 test.describe('T&C and Handover in project context', () => {
   test.setTimeout(360_000);
@@ -28,8 +40,12 @@ test.describe('T&C and Handover in project context', () => {
     const admin = apiAuthHeaders().Authorization;
     test.skip(!admin, 'auth is off — a member and an admin would be indistinguishable');
     test.skip(!memberPassword(), 'needs a password to sign the member in');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
 
-    const s = await scenario(request, admin!, ['r-qa-qc'], 'Tc');
+    const s = await scenario(request, admin!, ['r-qa-qc', 'r-commissioning-engineer'], 'Tc');
 
     const mineRef = `CX-${s.run}-MINE`;
     const theirsRef = `CX-${s.run}-THEIRS`;

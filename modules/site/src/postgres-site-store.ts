@@ -81,7 +81,7 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
     await conn.query(
       `insert into public.aura_site_plant_usage (
         id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at, resource_type, resource_id
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       on conflict (id) do update set
         hours = excluded.hours, rate = excluded.rate, cost = excluded.cost,
         notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, updated_at = excluded.updated_at,

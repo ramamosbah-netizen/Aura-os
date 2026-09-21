@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
 import { MEMBER, V1, collectPageErrors, memberPassword, proveDomain, scenario, signInAs } from './project-member-harness';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * HSE from a project member's seat, in a browser, with auth ON.
@@ -20,6 +21,10 @@ test.describe('HSE in project context', () => {
     const admin = apiAuthHeaders().Authorization;
     test.skip(!admin, 'auth is off — a member and an admin would be indistinguishable');
     test.skip(!memberPassword(), 'needs a password to sign the member in');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
 
     const s = await scenario(request, admin!, ['r-hse'], 'Hse');
 

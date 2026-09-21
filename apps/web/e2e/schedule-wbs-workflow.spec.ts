@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 const API = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
 
@@ -231,26 +232,35 @@ test.describe('WBS-linked and resourced schedule activity', () => {
     await expect(page.getByText('RELEASED', { exact: true })).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Release reason: activity resequenced after coordination')).toBeVisible();
 
-    // Auth-ON proof: scope and function are both required. A project planning grant works only on
-    // its project; a Site Engineer membership does not inherit booking functionality; the governed
-    // organisation grant remains able to inspect all projects.
-    const siteOnly = await post<{ id: string }>(request, '/projects/projects', { title: `Site-only plan ${run}`, reference: `SITE-${run}` });
-    await post(request, `/projects/${project.id}/members`, { userId: 'u-e2e-viewer', roleId: 'r-planning-engineer' });
-    await post(request, `/projects/${siteOnly.id}/members`, { userId: 'u-e2e-viewer', roleId: 'r-site-engineer' });
-    const password = process.env.E2E_PASSWORD ?? process.env.AUTH_DEV_PASSWORD;
-    expect(password, 'project-scope proof requires the seeded member password').toBeTruthy();
-    const memberLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
-    expect(memberLogin.ok(), await memberLogin.text()).toBe(true);
-    const memberToken = ((await memberLogin.json()) as { token: string }).token;
-    const memberHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${memberToken}` };
-    const memberReadStatus = async (id: string) => (await request.get(`${API}/projects/${id}/resource-bookings`, { headers: memberHeaders })).status();
-    const memberCreateStatus = async (id: string, requirementId: string) => (await request.post(`${API}/projects/${id}/resource-bookings`, { headers: memberHeaders, data: { requirementId } })).status();
-    expect(await memberReadStatus(project.id), 'correct project + planning read permission').toBe(200);
-    expect(await memberCreateStatus(project.id, poolRequirementId!), 'correct project + planning create permission').toBe(201);
-    expect(await memberReadStatus(other.id), 'wrong project').toBe(403);
-    expect(await memberCreateStatus(other.id, otherRequirementId), 'wrong project cannot be targeted by changing the URL').toBe(403);
-    expect(await memberCreateStatus(siteOnly.id, '00000000-0000-4000-8000-000000000001'), 'correct project + wrong functional permission').toBe(403);
-    const orgStatus = await request.get(`${API}/projects/${other.id}/resource-bookings`, { headers: apiAuthHeaders() });
-    expect(orgStatus.status(), 'organisation-governed projects permission remains allowed').toBe(200);
+    // THE WHOLE OF THIS SECTION signs in as `u-e2e-viewer`, a database-provisioned actor. A
+    // `test.skip()` here would abort the entire test and discard the schedule, WBS and booking
+    // proof above, which the in-memory tier runs perfectly well — so the section is conditional
+    // and the database-backed tier runs it for real.
+    const unprovisioned = await provisionedActorsUnavailable(request);
+    if (unprovisioned) {
+      test.info().annotations.push({ type: 'partially skipped', description: `project-scope refusals: ${unprovisioned}` });
+    } else {
+      // Auth-ON proof: scope and function are both required. A project planning grant works only on
+      // its project; a Site Engineer membership does not inherit booking functionality; the governed
+      // organisation grant remains able to inspect all projects.
+      const siteOnly = await post<{ id: string }>(request, '/projects/projects', { title: `Site-only plan ${run}`, reference: `SITE-${run}` });
+      await post(request, `/projects/${project.id}/members`, { userId: 'u-e2e-viewer', roleId: 'r-planning-engineer' });
+      await post(request, `/projects/${siteOnly.id}/members`, { userId: 'u-e2e-viewer', roleId: 'r-site-engineer' });
+      const password = process.env.E2E_PASSWORD ?? process.env.AUTH_DEV_PASSWORD;
+      expect(password, 'project-scope proof requires the seeded member password').toBeTruthy();
+      const memberLogin = await request.post(`${API}/auth/login`, { data: { username: 'u-e2e-viewer', password } });
+      expect(memberLogin.ok(), await memberLogin.text()).toBe(true);
+      const memberToken = ((await memberLogin.json()) as { token: string }).token;
+      const memberHeaders = { 'content-type': 'application/json', Authorization: `Bearer ${memberToken}` };
+      const memberReadStatus = async (id: string) => (await request.get(`${API}/projects/${id}/resource-bookings`, { headers: memberHeaders })).status();
+      const memberCreateStatus = async (id: string, requirementId: string) => (await request.post(`${API}/projects/${id}/resource-bookings`, { headers: memberHeaders, data: { requirementId } })).status();
+      expect(await memberReadStatus(project.id), 'correct project + planning read permission').toBe(200);
+      expect(await memberCreateStatus(project.id, poolRequirementId!), 'correct project + planning create permission').toBe(201);
+      expect(await memberReadStatus(other.id), 'wrong project').toBe(403);
+      expect(await memberCreateStatus(other.id, otherRequirementId), 'wrong project cannot be targeted by changing the URL').toBe(403);
+      expect(await memberCreateStatus(siteOnly.id, '00000000-0000-4000-8000-000000000001'), 'correct project + wrong functional permission').toBe(403);
+      const orgStatus = await request.get(`${API}/projects/${other.id}/resource-bookings`, { headers: apiAuthHeaders() });
+      expect(orgStatus.status(), 'organisation-governed projects permission remains allowed').toBe(200);
+    }
   });
 });

@@ -976,6 +976,13 @@ jobs:
           E2E_DISPOSABLE_DB: '1'
           E2E_USERNAME: u-admin
           E2E_PASSWORD: e2e-password
+          # The denied actor this job actually has. AUTH_DEV_ADMIN_USER above gives u-viewer a
+          # PASSWORD, and because a database is configured seedDevAdminGrant is skipped, so no
+          # grant comes with it — authenticated and refused, which is the state the spec asserts.
+          # Without this the spec fell back to `u-e2e-viewer`, which this job never provisions:
+          # the login never completed, waitForURL sat on /login, and the test died on its own
+          # timeout looking like a broken page.
+          E2E_VIEWER_USERNAME: u-viewer
           E2E_TEST_TIMEOUT: '120000'
           E2E_EXPECT_TIMEOUT: '30000'
       - name: API log on failure

@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * A project member's journey, in a real browser, with auth ON.
@@ -70,6 +71,10 @@ test.describe('project member journey', () => {
     const admin = apiAuthHeaders().Authorization;
     test.skip(!admin, 'auth is off for this run — a member and an admin would be indistinguishable');
     test.skip(!process.env.E2E_PASSWORD && !process.env.AUTH_DEV_PASSWORD, 'needs a password to sign the member in');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
 
     const run = Date.now().toString().slice(-6);
     const { mine, theirs, drawing, foreign } = await seed(request, admin!, run);

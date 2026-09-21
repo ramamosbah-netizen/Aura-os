@@ -1,9 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
 import { scenario, signInAs, MEMBER, V1 } from './project-member-harness';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 test('project member performs previously blocked drawing, document and handover actions in the browser', async ({browser,request,baseURL}) => {
   test.setTimeout(360_000);
+  test.skip(
+    (await provisionedActorsUnavailable(request)) !== null,
+    (await provisionedActorsUnavailable(request)) ?? '',
+  );
   const admin=apiAuthHeaders().Authorization;
   expect(admin,'Auth ON is mandatory for closure').toBeTruthy();
   const headers={Authorization:admin!};

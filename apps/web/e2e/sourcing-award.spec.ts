@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * SUP-14 in the browser, against Postgres — and the one question it exists to answer:
@@ -34,6 +35,10 @@ test.describe('The award', () => {
 
   test('turns an approved recommendation into a purchase order in the supplier’s own currency', async ({ browser, request }) => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
     const run = Date.now().toString().slice(-6);
     const password = process.env.E2E_PASSWORD ?? 'e2e-password';
     const BUYER = process.env.E2E_BUYER_USERNAME ?? 'u-e2e-buyer';
@@ -238,6 +243,10 @@ test.describe('The award', () => {
    */
   test('awards a discounted offer, keeping the gross price, the discount and the line’s real value', async ({ browser, request }) => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
     const run = Date.now().toString().slice(-6);
     const password = process.env.E2E_PASSWORD ?? 'e2e-password';
     const headers = { 'content-type': 'application/json', ...apiAuthHeaders() };

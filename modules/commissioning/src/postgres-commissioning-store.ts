@@ -155,7 +155,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
       `insert into public.aura_handover_om_items
         (id, tenant_id, company_id, project_id, commissioning_id, deliverable, required, state, document_id, notes,
          submitted_at, submitted_by, reviewed_at, reviewed_by, accepted_at, accepted_by, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        on conflict (id) do update set
          required = excluded.required, state = excluded.state, document_id = excluded.document_id, notes = excluded.notes,
          submitted_at = excluded.submitted_at, submitted_by = excluded.submitted_by,
@@ -211,7 +211,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
         (id, tenant_id, company_id, project_id, commissioning_id, description, stock_item_id, unit,
          quantity_required, quantity_handed_over, required, handed_over_at, handed_over_by,
          acknowledged_by, acknowledged_at, notes, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        on conflict (id) do update set
          stock_item_id = excluded.stock_item_id, unit = excluded.unit,
          quantity_required = excluded.quantity_required, quantity_handed_over = excluded.quantity_handed_over,

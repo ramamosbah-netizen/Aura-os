@@ -1,6 +1,7 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
 import { MEMBER, memberPassword, signInAs } from './project-member-harness';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 const API = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
 
@@ -17,6 +18,10 @@ test.describe('project responsibility handoff', () => {
 
   test('makes assigned delivery work obvious in My Work and keeps its project history', async ({ browser, request, baseURL, page: adminPage }) => {
     test.skip(!apiAuthHeaders().Authorization || !memberPassword(), 'requires the Auth-ON local API and member login');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
     const run = Date.now().toString().slice(-6);
     const project = await post<{ id: string }>(request, '/projects/projects', { title: `Responsibility ${run}`, code: `RESP-${run}` });
     await post(request, `/projects/${project.id}/members`, { userId: MEMBER, roleId: 'r-technical-engineer' });

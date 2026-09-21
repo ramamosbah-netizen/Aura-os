@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { apiAuthHeaders } from './api-auth';
+import { provisionedActorsUnavailable } from './provisioned-actors';
 
 /**
  * `SUP-01`'s OUTBOUND handoff — the technical decision reaching the role that consumes it.
@@ -31,6 +32,10 @@ test.describe('A technical verdict reaches the Buyer', () => {
 
   test('the Technical Manager decides, and the Buyer sees it in their own context', async ({ browser, request }) => {
     test.skip(!apiAuthHeaders().Authorization, 'requires the Auth-ON local API');
+    test.skip(
+      (await provisionedActorsUnavailable(request)) !== null,
+      (await provisionedActorsUnavailable(request)) ?? '',
+    );
     const run = Date.now().toString().slice(-6);
     const password = process.env.E2E_PASSWORD ?? 'e2e-password';
     const BUYER = process.env.E2E_BUYER_USERNAME ?? 'u-e2e-buyer';

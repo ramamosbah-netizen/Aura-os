@@ -79,6 +79,16 @@ export class WorkOrder {
   slaResolutionHours?: number;
   resolutionHours?: number;
   slaMet?: boolean;
+  /**
+   * WHO. `assignedTo` above is the TECHNICIAN the visit is booked to — it is not the actor who
+   * completed or cancelled the order, and the record had no such actor at all. A completed work
+   * order bills through the AMC → AR reactor, and a cancelled one ends a client's service visit;
+   * both were performed by nobody.
+   */
+  completedBy?: string | null;
+  cancelledBy?: string | null;
+  cancelledAt?: Date;
+  cancellationReason?: string | null;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -132,9 +142,10 @@ export class WorkOrder {
    * the order. That is what makes an AMC contract's core promise auditable after the fact rather
    * than a number in a dashboard that recomputes itself into compliance.
    */
-  complete(cost?: number, slaResolutionHours?: number, at: Date = new Date()): void {
+  complete(cost?: number, slaResolutionHours?: number, at: Date = new Date(), actorId: string | null = null): void {
     assertWorkOrderTransition(this.status, 'completed');
     this.status = 'completed';
+    this.completedBy = actorId;
     this.completedDate = at;
     if (cost !== undefined) this.cost = cost;
     if (slaResolutionHours !== undefined) {
@@ -146,9 +157,18 @@ export class WorkOrder {
     this.updatedAt = new Date();
   }
 
-  cancel(): void {
+  /**
+   * Cancelling ends a service visit the client is entitled to, so it says who and why. The reason
+   * is required for the same argument the project cancellation makes: an empty string in the audit
+   * trail is worse than no field, because it looks like an answer.
+   */
+  cancel(actorId: string | null = null, reason?: string): void {
     assertWorkOrderTransition(this.status, 'cancelled');
+    if (actorId && !reason?.trim()) throw new Error('cancelling a work order requires a reason');
     this.status = 'cancelled';
+    this.cancelledBy = actorId;
+    this.cancelledAt = new Date();
+    this.cancellationReason = reason?.trim() || null;
     this.updatedAt = new Date();
   }
 }

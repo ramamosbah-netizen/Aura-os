@@ -128,12 +128,31 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
       'hse.ptw.approve',                                          // wave B
       'hr.timesheet.approve', 'subcontracts.claim.certify',       // wave A
       'crm.opportunity.approve',                                  // J1-07
+      'site.daily-report.approve', 'quality.itp.close',           // wave D
+      'projects.eot-claim.decide',                                // wave E
+      'inventory.serial.issue',                                   // wave F
     ]) {
       expect([...derived], `${governed} is GOVERNED — it must no longer be derived from a path`).not.toContain(governed);
     }
+    // GOVERNED BY BEING NAMED, WHICH IS NOT THE SAME FIX. Everything above was governed by DECLARING
+    // the permission on the route, so those names left the derived set. Wave F governed four modules
+    // the other way: the routes still derive their names, and the names are now NAMED by a real role
+    // — which is exactly what this audit's "88 derive a name a role NAMES" line counts as governed.
+    // Asserting they are absent from the derived set would be asserting the wrong thing.
+    const rows = scanRoutes() as Array<{ derived: string; held: string }>;
+    for (const named of ['amc.work-order.cancel', 'amc.contract.terminate', 'assets.disposal.create',
+      'fleet.fine.pay', 'intelligence.proposal.execute']) {
+      const row = rows.find((r) => r.derived === named);
+      expect(row, `${named} must still be a route this scan sees`).toBeDefined();
+      expect(row!.held, `${named} must be NAMED by a role, not merely reached by a wildcard`).toBe('named');
+    }
+
     // And three still in this state, chosen from modules with no wave in the current plan, so they
     // are not about to stop being true.
-    for (const known of ['amc.work-order.cancel', 'fleet.maintenance.complete', 'inventory.serial.issue']) {
+    // STAGE 3 IS OVER, so there is no governing verb left to use as a canary — the last three named
+    // here were all governed by wave F. These are ordinary mutating routes that remain wildcard-only
+    // and are stage-4 work; if the scan stops seeing them it is broken, not the codebase fixed.
+    for (const known of ['inventory.stock.reorder', 'builder.form.create', 'crm.opportunity.delete']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);
     }
   });

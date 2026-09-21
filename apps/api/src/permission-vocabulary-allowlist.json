@@ -19,19 +19,5 @@
     "admin.users.manage",
     "admin.workflows.manage"
   ],
-  "orphaned": [
-    "assets.asset.create",
-    "assets.asset.custody",
-    "assets.asset.delete",
-    "assets.asset.dispose",
-    "assets.inspection.create",
-    "assets.maintenance.create",
-    "assets.maintenance.update",
-    "fleet.fine.create",
-    "fleet.fuel.create",
-    "fleet.maintenance.create",
-    "fleet.maintenance.update",
-    "fleet.vehicle.create",
-    "fleet.vehicle.delete"
-  ]
+  "orphaned": []
 }

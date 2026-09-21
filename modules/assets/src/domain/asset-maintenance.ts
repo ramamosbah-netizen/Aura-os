@@ -9,6 +9,13 @@ export interface AssetMaintenance {
   description: string;
   cost: number;
   status: 'scheduled' | 'completed';
+  /**
+   * WHO COMPLETED IT. The record carried a status and no actor at all — not even `createdBy` — and
+   * the module held no write permission on any shipped role, so the act was administrator-only and
+   * unattributable at the same time.
+   */
+  completedBy?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

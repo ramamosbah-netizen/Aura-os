@@ -85,6 +85,8 @@ export class PostgresAssetStore implements AssetStore {
         purchase_date = excluded.purchase_date,
         purchase_cost = excluded.purchase_cost,
         status = excluded.status,
+        completed_by = excluded.completed_by,
+        completed_at = excluded.completed_at,
         warranty_expiry = excluded.warranty_expiry,
         next_calibration_date = excluded.next_calibration_date,
         next_inspection_date = excluded.next_inspection_date,
@@ -195,8 +197,8 @@ export class PostgresAssetMaintenanceStore implements AssetMaintenanceStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_asset_maintenance (
-        id, tenant_id, company_id, asset_id, date, description, cost, status, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        id, tenant_id, company_id, asset_id, date, description, cost, status, completed_by, completed_at, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       on conflict (id) do update set
         cost = excluded.cost,
         status = excluded.status,
@@ -210,6 +212,8 @@ export class PostgresAssetMaintenanceStore implements AssetMaintenanceStore {
         m.description,
         m.cost,
         m.status,
+        m.completedBy ?? null,
+        m.completedAt ?? null,
         m.createdAt,
         m.updatedAt,
       ],
@@ -253,6 +257,8 @@ export class PostgresAssetMaintenanceStore implements AssetMaintenanceStore {
       description: row.description,
       cost: Number(row.cost),
       status: row.status,
+      completedBy: row.completed_by ?? null,
+      completedAt: row.completed_at ?? null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
@@ -267,7 +273,7 @@ export class PostgresAssetInspectionStore implements AssetInspectionStore {
     await conn.query(
       `insert into public.aura_asset_inspections (
         id, tenant_id, company_id, asset_id, date, inspector, result, notes, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       on conflict (id) do update set
         result = excluded.result,
         notes = excluded.notes,

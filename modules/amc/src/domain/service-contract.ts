@@ -17,6 +17,10 @@ export class ServiceContract {
   readonly value: number;
   readonly currency: string;
   status: ContractStatus;
+  /** Who ended the cover, when, and why. The record carried only the status. */
+  terminatedBy?: string | null;
+  terminatedAt?: Date;
+  terminationReason?: string | null;
   readonly slaResponseHours: number;
   readonly slaResolutionHours: number;
   readonly createdAt: Date;
@@ -56,8 +60,16 @@ export class ServiceContract {
     this.updatedAt = new Date();
   }
 
-  terminate(): void {
+  /**
+   * End the maintenance contract. It records who and why: terminating an AMC ends a client's
+   * cover, and the record said only that the status had changed.
+   */
+  terminate(actorId: string | null = null, reason?: string): void {
+    if (actorId && !reason?.trim()) throw new Error('terminating a service contract requires a reason');
     this.status = 'terminated';
+    this.terminatedBy = actorId;
+    this.terminatedAt = new Date();
+    this.terminationReason = reason?.trim() || null;
     this.updatedAt = new Date();
   }
 

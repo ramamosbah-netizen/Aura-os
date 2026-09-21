@@ -15,7 +15,20 @@ export interface StandardElvRole extends Role {
 
 // Every employee needs their own tasks, alerts, inbox, communication and authorized documents.
 // DMS still applies its document-level access resolver after this functional permission.
-const STAFF_BASE = ['comms.*', 'work-items.*', 'notifications.*', 'inbox.*', 'documents.*.read'] as const;
+/**
+ * What every member of staff can do regardless of department — and now that includes USING the AI.
+ *
+ * Asking the assistant a question, recording an insight and RAISING an autonomy proposal are tools,
+ * not authority: the control on a proposal is the decision to apply it, which is
+ * `intelligence.proposal.execute` and sits with management alone. Leaving `proposal.create` unheld
+ * would have meant the only person who could suggest a change to the business was an administrator,
+ * which is the opposite of the point — and it is what the wave-F live probe caught (403 raising a
+ * proposal as the Service Manager) after the role work looked finished.
+ */
+const STAFF_BASE = [
+  'comms.*', 'work-items.*', 'notifications.*', 'inbox.*', 'documents.*.read',
+  'intelligence.chat.create', 'intelligence.insight.create', 'intelligence.proposal.create',
+] as const;
 const PROJECT_RESPONSIBILITY_WORK = 'projects.responsibility.update';
 const readOnly = (module: string): string => `${module}.*.read`;
 /**
@@ -424,6 +437,50 @@ const PROJECTS_DELIVERY = [
   'projects.eot-claim.decide',
 ] as const;
 
+/**
+ * SERVICE AND MAINTENANCE — the AMC function, which had NO ROLE AT ALL.
+ *
+ * Measured across the 26-role catalogue excluding the administrator: fourteen mutating routes and
+ * not one write permission on any role. Terminating a maintenance contract, cancelling a work order
+ * and resolving a ticket were administrator-only — not because anyone decided they should be, but
+ * because nobody had written the role down. The same finding as document control in wave C and HR
+ * in wave A, and in this wave it is four modules at once.
+ */
+const AMC_SERVICE = [
+  'amc.contract.create', 'amc.contract.update', 'amc.contract.terminate',
+  'amc.ppm-schedule.create', 'amc.ppm-schedule.deactivate', 'amc.ppm-schedule.generate-due',
+  'amc.ticket.create', 'amc.ticket.assign', 'amc.ticket.resolve', 'amc.ticket.sla-sweep',
+  'amc.work-order.create', 'amc.work-order.assign', 'amc.work-order.start',
+  'amc.work-order.complete', 'amc.work-order.cancel',
+] as const;
+
+/**
+ * THE COMPANY ASSET REGISTER, on the role that already runs the stores. Eight mutating routes and
+ * no role held any of them, so disposing of a company asset was administrator-only. r-store already
+ * held `assets.*.read`; what it lacked was the ability to do the job it could already see.
+ */
+const ASSETS_REGISTER = [
+  'assets.asset.create', 'assets.asset.update', 'assets.asset.delete', 'assets.asset.custody',
+  'assets.asset.restore', 'assets.restore.create', 'assets.qr-tag.batch',
+  'assets.inspection.create', 'assets.maintenance.create', 'assets.maintenance.complete',
+  // DISPOSAL writes a company asset off the register. It is the governing act here.
+  'assets.disposal.create', 'assets.asset.dispose',
+] as const;
+
+/**
+ * THE FLEET, on the role that already administers staff. Sixteen mutating routes and no role held
+ * any of them. `fleet.fine.assign` is the one worth naming: a traffic fine is CHARGED TO A DRIVER,
+ * which is a deduction against a person, and neither the act nor the record said who decided it.
+ */
+const FLEET_ADMIN = [
+  'fleet.vehicle.create', 'fleet.vehicle.update', 'fleet.vehicle.delete', 'fleet.vehicle.restore',
+  'fleet.vehicle.check-expiry', 'fleet.fuel.create',
+  'fleet.maintenance.create', 'fleet.maintenance.complete',
+  'fleet.fine.create', 'fleet.fine.assign', 'fleet.fine.dispute', 'fleet.fine.resolve-dispute',
+  'fleet.fine.pay',
+  'fleet.salik.create', 'fleet.salik.allocate', 'fleet.salik.dispute',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -505,6 +562,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       'crm.opportunity.read', 'crm.study.read', 'crm.scope.read',
       'crm.estimate.create', 'crm.estimate.read', 'crm.estimate.update',
+      // FREEZES the estimate, which is not the same act as approving it — the controller says so
+      // itself. It derived `crm.opportunity.freeze`, a name no role spoke, so it was reachable only
+      // through `crm.*`. Mirrors `crm.pricing-sheet.freeze`, which this role already holds.
+      'crm.estimate.freeze',
       'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update',
       'crm.pricing-sheet.*',
       'crm.internal-pricing.access',
@@ -741,7 +802,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'Storekeeper',
     description: 'Receives, identifies, stores and issues material while retaining purchase-order context.',
     assignmentScope: 'tenant-or-project',
-    permissions: ['inventory.*', 'procurement.po.view', readOnly('procurement'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), ...STAFF_BASE],
+    permissions: [
+      // NAMED, not merely reached. `inventory.serial.issue` moves a serialised unit out of the store
+      // against a project; it was covered by `inventory.*` and named by nobody, which is the whole
+      // distinction this programme draws between "reachable" and "governed".
+      'inventory.*', 'inventory.serial.issue',
+      ...ASSETS_REGISTER, 'procurement.po.view', readOnly('procurement'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), ...STAFF_BASE],
   },
   {
     id: 'r-qa-qc',
@@ -828,6 +894,30 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     ],
   },
   {
+    /**
+     * SERVICE MANAGER — and the AMC module had NO ROLE AT ALL until this existed.
+     *
+     * Fourteen mutating routes, and across the whole 26-role catalogue not one write permission on
+     * any of them. Terminating a maintenance contract, cancelling a work order, resolving a ticket
+     * and generating the PPM visits due this month were administrator-only — not by decision, but
+     * because the department was never written down. Wave A found HR in that state and wave C found
+     * document control; this wave found four modules in it at once.
+     *
+     * AMC picks up where handover leaves off: the warranty clock starts when the client accepts the
+     * system, and this role runs the service contract that follows it. It reads the commissioning
+     * and asset records it maintains against, and writes neither.
+     */
+    id: 'r-service-manager',
+    name: 'Service / AMC Manager',
+    description: 'Runs maintenance contracts, PPM schedules, service tickets and work orders after handover.',
+    assignmentScope: 'tenant-or-project',
+    permissions: [
+      ...AMC_SERVICE, readOnly('amc'),
+      readOnly('assets'), readOnly('commissioning'), readOnly('projects'), readOnly('inventory'),
+      PROJECT_RESPONSIBILITY_WORK, ...STAFF_BASE,
+    ],
+  },
+  {
     id: 'r-handover-fm',
     name: 'Handover / FM',
     description: 'Prepares O&M, training, spares, dossier and handover readiness records for acceptance.',
@@ -899,6 +989,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // radius. The permission-vocabulary guard is what found it.
       'hr.leave.resolve', 'hr.leave.approve',
       'hr.employee.delete', 'hr.employee.restore',
+      // THE FLEET, which had no role at all. Vehicles, fuel, maintenance, Salik and traffic fines
+      // are staff administration in an ELV contractor, and a fine charged to a driver is a
+      // deduction against a person — which is already this role's territory.
+      ...FLEET_ADMIN, readOnly('fleet'),
       readOnly('hr'), readOnly('projects'), ...STAFF_BASE,
     ],
   },
@@ -930,6 +1024,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Reads portfolio, pipeline, delivery, exposure, margin and cash evidence for governed decisions.',
     assignmentScope: 'tenant',
     permissions: [
+      // APPLIES OR REFUSES AN AI PROPOSAL. Executing an autonomy proposal is the AI acting on the
+      // business, which is a management decision and not an operational one — and it was reachable
+      // by nobody but the administrator. Raising one stays unrestricted; reviewing what the machine
+      // suggests is the entire point of keeping the record.
+      'intelligence.proposal.execute', 'intelligence.proposal.reject', readOnly('intelligence'),
       readOnly('crm'), 'crm.internal-pricing.access', readOnly('tendering'), 'tendering.internal-pricing.access', readOnly('contracts'), readOnly('projects'),
       readOnly('engineering'), readOnly('procurement'), readOnly('inventory'), readOnly('site'),
       readOnly('quality'), readOnly('hse'), readOnly('finance'), readOnly('commissioning'),
@@ -972,4 +1071,5 @@ export const PROJECT_DELIVERY_ROLE_IDS = [
   'r-hse',
   'r-commissioning-engineer',
   'r-handover-fm',
+  'r-service-manager',
 ] as const satisfies readonly (typeof STANDARD_ELV_ROLE_IDS)[number][];

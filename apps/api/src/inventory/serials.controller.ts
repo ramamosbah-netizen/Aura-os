@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { type SerialUnit, SerialService } from '@aura/inventory';
 
 class RegisterSerialDto {
@@ -64,7 +64,11 @@ export class SerialsController {
     return found;
   }
 
+  // ISSUING A SERIALISED ITEM to a project moves company stock out of the store against a named
+  // unit. It derived `inventory.serial.issue` — a name no role NAMED — so it was reachable only
+  // through `inventory.*` on the Storekeeper. Declared, and named on that role.
   @Put(':id/issue')
+  @Permissions('inventory.serial.issue')
   issue(@Param('id') id: string, @Body() dto: IssueDto): Promise<SerialUnit> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     return this.service.issue(id, this.tenant.get().tenantId, { projectId: dto.projectId, projectName: dto.projectName ?? null });

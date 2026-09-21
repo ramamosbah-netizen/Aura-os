@@ -32,6 +32,8 @@ export interface AutonomyProposal {
   payload: Record<string, unknown>;
   valueAmount: number | null;
   status: ProposalStatus;
+  /** Who asked for it. The row recorded its decider and never its origin. */
+  proposedBy: string | null;
   decidedBy: string | null;
   decidedAt: Date | null;
   createdAt: Date;
@@ -108,10 +110,15 @@ export class AutonomyService {
     }
 
     const res = await this.pool.query(
+      // `proposed_by` IS NEW, AND THE ACTOR WAS ALREADY HERE. This method has always taken an
+      // `actorId` and used it only for the event; the row recorded `decided_by` and nothing about
+      // where the proposal came from. A suggested change to the business that does not say who
+      // asked for it cannot be reviewed, only obeyed.
       `INSERT INTO public.aura_autonomy_proposals
          (tenant_id, title, description, category, severity, mode,
-          target_module, target_action, target_id, payload, value_amount)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          target_module, target_action, target_id, payload, value_amount,
+          proposed_by, proposed_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
        RETURNING *`,
       [
         tenantId,
@@ -125,6 +132,7 @@ export class AutonomyService {
         input.targetId ?? null,
         JSON.stringify(input.payload ?? {}),
         input.valueAmount ?? null,
+        actorId,
       ],
     );
 
@@ -155,8 +163,47 @@ export class AutonomyService {
     return res.rows.map(mapProposal);
   }
 
-  /** Execute (approve + run) a proposal. */
+  /**
+   * The state machine this table never had, and the separation the execute path needs.
+   *
+   * `pending` is the only decidable state. `executed` and `rejected` are terminal: the first
+   * decision is the decision, and a later caller does not overwrite it.
+   */
+  private async assertDecidable(
+    tenantId: string,
+    proposalId: string,
+    actorId: string | null,
+    to: 'executed' | 'rejected',
+  ): Promise<void> {
+    const res = await this.pool.query<{ status: string; proposed_by: string | null }>(
+      'SELECT status, proposed_by FROM public.aura_autonomy_proposals WHERE id = $1 AND tenant_id = $2',
+      [proposalId, tenantId],
+    );
+    const row = res.rows[0];
+    if (!row) throw new Error(`Proposal ${proposalId} not found.`);
+    if (row.status !== 'pending') {
+      // "already" → 409 CONFLICT in the API error taxonomy.
+      throw new Error(`this proposal is already ${row.status} — a decision on it has been made and does not get remade`);
+    }
+    if (to === 'executed' && actorId && row.proposed_by && actorId === row.proposed_by) {
+      throw new Error('the person who raised this proposal may not execute it — applying a suggested change to the business is the review of it, not a second half of making it');
+    }
+  }
+
+  /**
+   * Execute (approve + run) a proposal.
+   *
+   * THIS WAS A BARE UPDATE WITH NO STATUS GUARD. `SET status = 'executed'` matched on id and tenant
+   * alone, so an already-executed proposal could be executed again and a REJECTED one could still
+   * be executed — the rejection meant nothing to the next caller. There was no state machine and no
+   * permission check in the service either; the only gate was a route name no shipped role reached.
+   *
+   * AND THE PROPOSER MAY NOT APPLY THEIR OWN PROPOSAL. An AI proposal is a suggested change to the
+   * business and a human applying it is the control on that suggestion; one account doing both
+   * removes the control and leaves the paperwork.
+   */
   async execute(tenantId: string, proposalId: string, decidedBy: string | null = null): Promise<AutonomyProposal> {
+    await this.assertDecidable(tenantId, proposalId, decidedBy, 'executed');
     const res = await this.pool.query(
       `UPDATE public.aura_autonomy_proposals
        SET status = 'executed', decided_by = $3, decided_at = now()
@@ -184,7 +231,16 @@ export class AutonomyService {
   }
 
   /** Reject a proposal. */
+  /**
+   * Reject a proposal. Same guard: a proposal already executed or rejected is finished, and the
+   * second caller does not get to restate the first one's decision.
+   *
+   * There is deliberately NO proposer/rejecter separation here. Refusing a suggestion is not acting
+   * on the business — withdrawing your own proposal is a reasonable thing to do, and forbidding it
+   * would leave a suggestion nobody can retract.
+   */
   async reject(tenantId: string, proposalId: string, decidedBy: string | null = null): Promise<AutonomyProposal> {
+    await this.assertDecidable(tenantId, proposalId, decidedBy, 'rejected');
     const res = await this.pool.query(
       `UPDATE public.aura_autonomy_proposals
        SET status = 'rejected', decided_by = $3, decided_at = now()
@@ -243,6 +299,7 @@ function mapProposal(r: any): AutonomyProposal {
     payload: typeof r.payload === 'string' ? JSON.parse(r.payload) : (r.payload ?? {}),
     valueAmount: r.value_amount != null ? Number(r.value_amount) : null,
     status: r.status,
+    proposedBy: r.proposed_by ?? null,
     decidedBy: r.decided_by,
     decidedAt: r.decided_at ? new Date(r.decided_at) : null,
     createdAt: new Date(r.created_at),

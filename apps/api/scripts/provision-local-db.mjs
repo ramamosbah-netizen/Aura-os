@@ -313,6 +313,13 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // exchange and could exercise neither. One principal cannot show that; the claim is now submitted by
 // u-e2e-qs and determined by u-e2e-pm, and the submitter is refused their own determination.
 
+// `u-e2e-service` and `u-e2e-exec` are the wave-F proof. FOUR MODULES held no write permission on
+// any shipped role — amc, assets, fleet and intelligence — so every act in them was administrator
+// -only, and a fixture run as an administrator would prove nothing about the catalogue. The Service
+// Manager is a NEW role for a department that had none; the executive is there because executing an
+// AI autonomy proposal is the machine acting on the business, and the proposer may not execute
+// their own — which needs two principals to show.
+
 for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
                                 ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
                                 ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales'],
@@ -324,7 +331,8 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-eng', 'r-technical-engineer'], ['u-e2e-doccon', 'r-document-controller'],
                                 ['u-e2e-projeng', 'r-project-engineer'], ['u-e2e-qaqc', 'r-qa-qc'],
                                 ['u-e2e-tc', 'r-commissioning-engineer'], ['u-e2e-fm', 'r-handover-fm'],
-                                ['u-e2e-planner', 'r-planning-engineer']]) {
+                                ['u-e2e-planner', 'r-planning-engineer'],
+                                ['u-e2e-service', 'r-service-manager'], ['u-e2e-exec', 'r-executive']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -346,7 +354,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) and u-e2e-planner (r-planning-engineer)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) u-e2e-planner (r-planning-engineer), u-e2e-service (r-service-manager) and u-e2e-exec (r-executive)');
 
 
 

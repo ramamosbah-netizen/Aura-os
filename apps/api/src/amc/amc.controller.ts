@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Logger, NotFoundException } from '@nestjs/common';
 import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -51,8 +51,10 @@ export class AmcController {
   }
 
   @Post('contracts/:id/terminate')
-  async terminateContract(@Param('id') id: string) {
-    return this.service.terminateContract(id);
+  async terminateContract(@Param('id') id: string, @Body('reason') reason?: string) {
+    const ctx = this.tenant.get();
+    if (ctx.actorId && !reason?.trim()) throw new BadRequestException('a reason is required to terminate a service contract');
+    return this.service.terminateContract(id, ctx.actorId, reason);
   }
 
   // ─── Support Tickets ──────────────────────────────────────────────────────
@@ -139,7 +141,7 @@ export class AmcController {
 
   @Post('tickets/:id/resolve')
   async resolveTicket(@Param('id') id: string) {
-    return this.service.resolveTicket(id);
+    return this.service.resolveTicket(id, this.tenant.get().actorId);
   }
 
   // ─── Work Orders & GIS Dispatch ───────────────────────────────────────────
@@ -204,8 +206,10 @@ export class AmcController {
   }
 
   @Post('work-orders/:id/cancel')
-  async cancelWorkOrder(@Param('id') id: string) {
-    return this.service.cancelWorkOrder(id);
+  async cancelWorkOrder(@Param('id') id: string, @Body('reason') reason?: string) {
+    const ctx = this.tenant.get();
+    if (ctx.actorId && !reason?.trim()) throw new BadRequestException('a reason is required to cancel a work order');
+    return this.service.cancelWorkOrder(id, ctx.actorId, reason);
   }
 
   /** Work Order 360 — the visit with the contract that governs its SLA. */
@@ -219,7 +223,7 @@ export class AmcController {
 
   @Post('work-orders/:id/complete')
   async completeWorkOrder(@Param('id') id: string, @Body('cost') cost?: number) {
-    return this.service.completeWorkOrder(id, cost !== undefined ? Number(cost) : undefined);
+    return this.service.completeWorkOrder(id, cost !== undefined ? Number(cost) : undefined, this.tenant.get().actorId);
   }
 
   // ─── PPM Schedules (preventive maintenance) ───────────────────────────────

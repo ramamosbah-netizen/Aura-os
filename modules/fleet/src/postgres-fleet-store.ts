@@ -51,6 +51,8 @@ export class PostgresVehicleStore implements VehicleStore {
         plate_number = excluded.plate_number,
         registration_expiry = excluded.registration_expiry,
         status = excluded.status,
+        completed_by = excluded.completed_by,
+        completed_at = excluded.completed_at,
         driver_employee_id = excluded.driver_employee_id,
         last_latitude = excluded.last_latitude,
         last_longitude = excluded.last_longitude,
@@ -171,7 +173,7 @@ export class PostgresFuelLogStore implements FuelLogStore {
     const res = await conn.query(
       `insert into public.aura_fleet_fuel_logs (
         id, tenant_id, company_id, vehicle_id, date, liters, cost, odometer, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       on conflict (id) do update set
         liters = excluded.liters,
         cost = excluded.cost,
@@ -265,8 +267,8 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
     const conn = (tx as PoolClient) || this.pool;
     const res = await conn.query(
       `insert into public.aura_fleet_maintenance (
-        id, tenant_id, company_id, vehicle_id, date, description, cost, status, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        id, tenant_id, company_id, vehicle_id, date, description, cost, status, completed_by, completed_at, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       on conflict (id) do update set
         cost = excluded.cost,
         status = excluded.status,
@@ -281,6 +283,8 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
         record.description,
         record.cost,
         record.status,
+        record.completedBy ?? null,
+        record.completedAt ?? null,
         record.createdAt,
         record.updatedAt,
       ],
@@ -346,6 +350,8 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
       description: row.description,
       cost: Number(row.cost),
       status: row.status,
+      completedBy: row.completed_by ?? null,
+      completedAt: row.completed_at ?? null,
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };

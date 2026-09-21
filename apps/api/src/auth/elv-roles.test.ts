@@ -19,10 +19,13 @@ const can = (roleId: string, method: string, ctrl: string, handler = ''): boolea
 describe('ELV role matrix — shape', () => {
   it('seeds the complete ELV/MEP operating roles with canonical unique ids', () => {
     const ids = ELV_ROLE_MATRIX.map((r) => r.id);
-    // 26: r-finance-controller (the books), r-hr and r-hr-manager, then r-document-controller.
+    // 27: r-finance-controller (the books), r-hr and r-hr-manager, r-document-controller, and now
+    // r-service-manager — the AMC module had no role at all, which is the FIFTH department this
+    // programme has found with none. The pattern is not that authority was too broad; it is that
+    // for whole departments it was never written down, so only an administrator could work.
     // Three of the four exist because the department had NO role at all — payroll, expense claims,
     // staff advances, timesheets and the whole document register were reachable only by an admin.
-    expect(ids).toHaveLength(26);
+    expect(ids).toHaveLength(27);
     expect(ids).toContain('r-finance-controller');
     expect(ids).toContain('r-hr');
     expect(ids).toContain('r-hr-manager');

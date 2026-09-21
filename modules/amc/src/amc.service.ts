@@ -76,10 +76,10 @@ export class AmcService {
     return this.store.listWorkOrdersPaged(tenantId, page, contractId);
   }
 
-  async terminateContract(id: string): Promise<ServiceContract> {
+  async terminateContract(id: string, actorId: string | null = null, reason?: string): Promise<ServiceContract> {
     const contract = await this.store.findContract(id);
     if (!contract) throw new Error(`Contract ${id} not found`);
-    contract.terminate();
+    contract.terminate(actorId, reason);
     await this.store.saveContract(contract);
     this.logger.log(`[AMC] Contract terminated: ${contract.contractNumber}`);
     return contract;
@@ -142,21 +142,21 @@ export class AmcService {
     return order;
   }
 
-  async cancelWorkOrder(id: string): Promise<WorkOrder> {
+  async cancelWorkOrder(id: string, actorId: string | null = null, reason?: string): Promise<WorkOrder> {
     const order = await this.store.findWorkOrder(id);
     if (!order) throw new Error(`Work order ${id} not found`);
-    order.cancel();
+    order.cancel(actorId, reason);
     await this.store.saveWorkOrder(order);
     this.logger.log(`[AMC] Work order ${order.orderNumber} cancelled`);
     return order;
   }
 
-  async completeWorkOrder(id: string, cost?: number): Promise<WorkOrder> {
+  async completeWorkOrder(id: string, cost?: number, actorId: string | null = null): Promise<WorkOrder> {
     const order = await this.store.findWorkOrder(id);
     if (!order) throw new Error(`Work order ${id} not found`);
     // The SLA the order is judged against is the one on its governing contract.
     const governing = order.contractId ? await this.store.findContract(order.contractId) : null;
-    order.complete(cost, governing?.slaResolutionHours);
+    order.complete(cost, governing?.slaResolutionHours, new Date(), actorId);
     await this.store.saveWorkOrder(order);
 
     // Emit on the spine so the AMC → AR reactor can bill a completed, costed visit.
@@ -166,7 +166,8 @@ export class AmcService {
         type: 'amc.workorder.completed',
         tenantId: order.tenantId,
         companyId: order.companyId ?? null,
-        actorId: null,
+        // The visit that bills through the AMC → AR reactor now names who completed it.
+        actorId,
         aggregateType: 'amc.work_order',
         aggregateId: order.id,
         payload: {
@@ -211,10 +212,10 @@ export class AmcService {
     return ticket;
   }
 
-  async resolveTicket(id: string): Promise<SupportTicket> {
+  async resolveTicket(id: string, actorId: string | null = null): Promise<SupportTicket> {
     const ticket = await this.store.findTicket(id);
     if (!ticket) throw new Error(`Ticket ${id} not found`);
-    ticket.resolve();
+    ticket.resolve(actorId);
     await this.store.saveTicket(ticket);
     this.logger.log(`[AMC] Ticket ${ticket.ticketNumber} resolved`);
     return ticket;

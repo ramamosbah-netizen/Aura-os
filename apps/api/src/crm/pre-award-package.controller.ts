@@ -579,7 +579,16 @@ export class CrmPreAwardPackageController {
     return this.packages.updateEstimateBuildUps({ tenantId, companyId, packageId, estimateId, buildUps: dto.buildUps as any, actorId: this.tenant.get().actorId });
   }
 
+  // THE NAMES BELOW ARE THE ONES THE ROLES ALREADY SPEAK, which is the J1-07 rule: nothing is
+  // invented to fit a route. These three derived `crm.opportunity.freeze` — a name no role names —
+  // so they were reachable only through `crm.*` on the Sales Manager, while `crm.pricing-sheet.freeze`
+  // already existed on the Estimator and said exactly what two of them do.
+  //
+  // NOT CLAIMED: freeze and approve are deliberately separate commands here (the controller says so
+  // a few lines up), but whether they must be separate PEOPLE is a maker/checker question this wave
+  // does not answer. The Sales Manager currently holds both.
   @Post(':id/pre-award-package/estimate/:estimateId/freeze')
+  @Permissions('crm.estimate.freeze')
   async freezeEstimate(@Param('id', ParseUuidOr404Pipe) id: string, @Param('estimateId', ParseUuidOr404Pipe) estimateId: string) {
     const { tenantId, packageId } = await this.ensurePackage(id);
     return this.packages.freezeEstimateById(tenantId, packageId, estimateId, this.tenant.get().actorId);
@@ -598,6 +607,7 @@ export class CrmPreAwardPackageController {
    * reproduced exactly. The full Pricing Workspace (Target Margin / Markup / Discount) lands in Slice 7.
    */
   @Post(':id/pre-award-package/pricing/freeze')
+  @Permissions('crm.pricing-sheet.freeze')
   async freezePricing(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: FreezePricingDto) {
     const { tenantId, companyId } = await this.ensurePackage(id);
     const ctx = this.tenant.get();
@@ -649,6 +659,7 @@ export class CrmPreAwardPackageController {
 
   /** Freeze a DRAFT pricing sheet — the commercial commitment. Refuses without a policy. */
   @Post(':id/pre-award-package/pricing/:sheetId/freeze')
+  @Permissions('crm.pricing-sheet.freeze')
   async freezePricingSheet(@Param('id', ParseUuidOr404Pipe) id: string, @Param('sheetId', ParseUuidOr404Pipe) sheetId: string) {
     const { tenantId } = await this.ensurePackage(id);
     const sheet = await this.packages.freezePricingSheetById({ tenantId, opportunityId: id, sheetId, actorId: this.tenant.get().actorId });

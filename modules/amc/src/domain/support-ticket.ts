@@ -24,6 +24,8 @@ export class SupportTicket {
   readonly slaResolutionHours: number;
   readonly slaDueAt: Date;          // Computed from contract SLA + createdAt
   resolvedAt?: Date;
+  /** Who resolved it. `assignedTo` is who it was given to, which is not the same fact. */
+  resolvedBy?: string | null;
   /** Escalation tier — bumped each time an unresolved breach is swept (0 = never escalated). */
   escalationLevel = 0;
   readonly createdAt: Date;
@@ -68,7 +70,8 @@ export class SupportTicket {
     this.updatedAt = new Date();
   }
 
-  resolve(): void {
+  resolve(actorId: string | null = null): void {
+    this.resolvedBy = actorId;
     this.status = 'resolved';
     this.resolvedAt = new Date();
     this.updatedAt = new Date();

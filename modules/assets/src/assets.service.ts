@@ -344,10 +344,17 @@ export class AssetsService {
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (record.companyId) orgPath.push({ level: 'company', id: record.companyId });
-      this.access.assert(actorId, { permission: 'assets.maintenance.update', orgPath });
+      this.access.assert(actorId, { // ONE VOCABULARY. The route derives `assets.maintenance.complete` and this asserted
+        // `assets.maintenance.update` — two names for one act, and the module wildcard that used
+        // to be absent from every role meant nobody could reach either.
+        permission: 'assets.maintenance.complete', orgPath });
     }
 
+    // WHO COMPLETED IT. The record carried a status and no actor at all — not even created_by.
+    const completedAt = new Date().toISOString();
     record.status = 'completed';
+    record.completedBy = actorId;
+    record.completedAt = completedAt;
     record.cost = actualCost;
     record.updatedAt = new Date().toISOString();
 

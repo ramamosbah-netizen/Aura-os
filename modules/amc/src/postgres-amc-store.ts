@@ -33,7 +33,9 @@ interface WorkOrderRow {
   id: string; tenant_id: string; company_id: string | null; contract_id: string | null;
   order_number: string; asset_id: string | null; description: string; priority: string;
   type: string; status: string; assigned_to: string | null; scheduled_date: string | null;
-  completed_date: string | null; location_lat: string | null; location_lng: string | null;
+  completed_date: string | null; completed_by: string | null;
+  cancelled_by: string | null; cancelled_at: string | null; cancellation_reason: string | null;
+  location_lat: string | null; location_lng: string | null;
   location_label: string | null; cost: string | null; started_date: string | null;
   sla_resolution_hours: number | null; resolution_hours: string | null; sla_met: boolean | null;
   created_at: Date; updated_at: Date;
@@ -57,6 +59,7 @@ const CONTRACT_COLS = `id, tenant_id, company_id, contract_number, client_name, 
   created_at, updated_at`;
 const WORK_ORDER_COLS = `id, tenant_id, company_id, contract_id, order_number, asset_id, description,
   priority, type, status, assigned_to, scheduled_date::text, completed_date::text,
+  completed_by, cancelled_by, cancelled_at::text, cancellation_reason,
   location_lat, location_lng, location_label, cost, started_date::text,
   sla_resolution_hours, resolution_hours, sla_met, created_at, updated_at`;
 const TICKET_COLS = `id, tenant_id, company_id, contract_id, ticket_number, title, description, category,
@@ -107,6 +110,10 @@ function rowToWorkOrder(r: WorkOrderRow): WorkOrder {
     status: r.status as WorkOrder['status'],
     assignedTo: r.assigned_to ?? undefined,
     completedDate: toDateObj(r.completed_date),
+    completedBy: r.completed_by ?? null,
+    cancelledBy: r.cancelled_by ?? null,
+    cancelledAt: toDateObj(r.cancelled_at),
+    cancellationReason: r.cancellation_reason ?? null,
     cost: r.cost == null ? undefined : Number(r.cost),
     startedDate: toDateObj(r.started_date),
     slaResolutionHours: r.sla_resolution_hours ?? undefined,
@@ -175,15 +182,20 @@ export class PostgresAmcStore implements AmcStore {
       `INSERT INTO public.aura_amc_service_contracts
          (id, tenant_id, company_id, contract_number, client_name, asset_id, service_scope,
           start_date, end_date, value, currency, status, sla_response_hours, sla_resolution_hours,
+          terminated_by, terminated_at, termination_reason,
           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, service_scope = EXCLUDED.service_scope,
+         terminated_by = EXCLUDED.terminated_by, terminated_at = EXCLUDED.terminated_at,
+         termination_reason = EXCLUDED.termination_reason,
          value = EXCLUDED.value, end_date = EXCLUDED.end_date, updated_at = EXCLUDED.updated_at`,
       [
         c.id, c.tenantId, c.companyId ?? null, c.contractNumber, c.clientName, c.assetId ?? null,
         c.serviceScope, toDate(c.startDate), toDate(c.endDate), c.value, c.currency, c.status,
-        c.slaResponseHours, c.slaResolutionHours, c.createdAt, c.updatedAt,
+        c.slaResponseHours, c.slaResolutionHours,
+        c.terminatedBy ?? null, toDate(c.terminatedAt), c.terminationReason ?? null,
+        c.createdAt, c.updatedAt,
       ],
     );
   }
@@ -207,20 +219,25 @@ export class PostgresAmcStore implements AmcStore {
       `INSERT INTO public.aura_amc_work_orders
          (id, tenant_id, company_id, contract_id, order_number, asset_id, description, priority, type,
           status, assigned_to, scheduled_date, completed_date, location_lat, location_lng, location_label,
-          cost, started_date, sla_resolution_hours, resolution_hours, sla_met, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
+          cost, started_date, sla_resolution_hours, resolution_hours, sla_met,
+          completed_by, cancelled_by, cancelled_at, cancellation_reason, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, assigned_to = EXCLUDED.assigned_to,
          completed_date = EXCLUDED.completed_date, cost = EXCLUDED.cost,
          started_date = EXCLUDED.started_date, sla_resolution_hours = EXCLUDED.sla_resolution_hours,
          resolution_hours = EXCLUDED.resolution_hours, sla_met = EXCLUDED.sla_met,
+         completed_by = EXCLUDED.completed_by, cancelled_by = EXCLUDED.cancelled_by,
+         cancelled_at = EXCLUDED.cancelled_at, cancellation_reason = EXCLUDED.cancellation_reason,
          updated_at = EXCLUDED.updated_at`,
       [
         o.id, o.tenantId, o.companyId ?? null, o.contractId ?? null, o.orderNumber, o.assetId ?? null,
         o.description, o.priority, o.type, o.status, o.assignedTo ?? null, toDate(o.scheduledDate),
         toDate(o.completedDate), o.location?.lat ?? null, o.location?.lng ?? null, o.location?.label ?? null,
         o.cost ?? null, toDate(o.startedDate), o.slaResolutionHours ?? null,
-        o.resolutionHours ?? null, o.slaMet ?? null, o.createdAt, o.updatedAt,
+        o.resolutionHours ?? null, o.slaMet ?? null,
+        o.completedBy ?? null, o.cancelledBy ?? null, toDate(o.cancelledAt), o.cancellationReason ?? null,
+        o.createdAt, o.updatedAt,
       ],
     );
   }
@@ -260,15 +277,16 @@ export class PostgresAmcStore implements AmcStore {
       `INSERT INTO public.aura_amc_tickets
          (id, tenant_id, company_id, contract_id, ticket_number, title, description, category, priority,
           status, reported_by, assigned_to, sla_response_hours, sla_resolution_hours, sla_due_at,
-          resolved_at, escalation_level, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          resolved_at, resolved_by, escalation_level, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, assigned_to = EXCLUDED.assigned_to,
-         resolved_at = EXCLUDED.resolved_at, escalation_level = EXCLUDED.escalation_level, updated_at = EXCLUDED.updated_at`,
+         resolved_at = EXCLUDED.resolved_at, resolved_by = EXCLUDED.resolved_by,
+         escalation_level = EXCLUDED.escalation_level, updated_at = EXCLUDED.updated_at`,
       [
         t.id, t.tenantId, t.companyId ?? null, t.contractId ?? null, t.ticketNumber, t.title,
         t.description, t.category, t.priority, t.status, t.reportedBy, t.assignedTo ?? null,
-        t.slaResponseHours, t.slaResolutionHours, t.slaDueAt, t.resolvedAt ?? null, t.escalationLevel, t.createdAt, t.updatedAt,
+        t.slaResponseHours, t.slaResolutionHours, t.slaDueAt, t.resolvedAt ?? null, t.resolvedBy ?? null, t.escalationLevel, t.createdAt, t.updatedAt,
       ],
     );
   }

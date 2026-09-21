@@ -5,7 +5,7 @@ import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, T
 import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr } from './domain/ncr';
 import { makeNcrVerification } from './domain/ncr-verification';
 import { type InspectionRequest, makeInspectionRequest, assertInspectionTransition } from './domain/inspection-request';
-import { type Snag, makeSnag } from './domain/snag';
+import { type Snag, makeSnag, resolveSnag, closeSnag } from './domain/snag';
 import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp, allPointsResolved } from './domain/itp';
 import {
   type MaterialApproval,
@@ -401,21 +401,37 @@ export class QualityService {
     return snag;
   }
 
+  /**
+   * Move a snag through its lifecycle.
+   *
+   * THIS USED TO ASSIGN TO THE RECORD IN PLACE — `snag.status = status` — with no transition
+   * function anywhere in the domain and one permission (`quality.snag.resolve`) covering both acts.
+   * Measured against the running API: `PUT :id/close` returned 200 and then `PUT :id/resolve`
+   * returned 200 on the same snag, walking a CLOSED defect backwards into 'resolved'. Closing set
+   * no actor and no timestamp and did not even stamp `resolved_at` on the way past.
+   *
+   * Now: the domain owns the transition and refuses an illegal one (409), each act asks for its own
+   * permission — claiming a fix and accepting one are different judgements — and both record who.
+   *
+   * NO RAISER/CLOSER SEPARATION, deliberately. On site the inspector who found the defect is the
+   * right person to verify the fix; a rule against it would block normal practice rather than
+   * control anything. What was missing was the trail, not a second pair of hands.
+   */
   async resolveSnag(tenantId: Id, actorId: Id | null, id: Id, status: 'resolved' | 'closed'): Promise<Snag> {
-    const snag = await this.snagStore.findById(id, tenantId);
-    if (!snag) throw new Error(`Snag with ID ${id} not found`);
+    const found = await this.snagStore.findById(id, tenantId);
+    if (!found) throw new Error(`Snag with ID ${id} not found`);
 
     if (actorId) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
-      if (snag.companyId) orgPath.push({ level: 'company', id: snag.companyId });
-      this.access.assert(actorId, { permission: 'quality.snag.resolve', orgPath, resource: { type: 'project', id: snag.projectId } });
+      if (found.companyId) orgPath.push({ level: 'company', id: found.companyId });
+      this.access.assert(actorId, {
+        permission: status === 'closed' ? 'quality.snag.close' : 'quality.snag.resolve',
+        orgPath,
+        resource: { type: 'project', id: found.projectId },
+      });
     }
 
-    snag.status = status;
-    if (status === 'resolved') {
-      snag.resolvedAt = new Date().toISOString();
-    }
-    snag.updatedAt = new Date().toISOString();
+    const snag = status === 'closed' ? closeSnag(found, actorId) : resolveSnag(found, actorId);
 
     await this.tx.run(async (handle) => {
       await this.snagStore.save(snag, handle);
@@ -559,12 +575,28 @@ export class QualityService {
     return itp;
   }
 
-  async activateItp(tenantId: Id, id: Id): Promise<Itp> {
+  /**
+   * Put the inspection plan in force.
+   *
+   * TOOK NO ACTOR AND ASSERTED NOTHING. An ITP says what must be inspected, witnessed and held; its
+   * only gate was the permission the guard DERIVED from the route path, reachable through
+   * `quality.*`. So the plan was written, put in force and later declared complete by one role, and
+   * none of the three acts left a name.
+   */
+  async activateItp(tenantId: Id, actorId: Id | null, id: Id): Promise<Itp> {
     const itp = await this.itpStore.findById(id, tenantId);
     if (!itp) throw new Error(`ITP ${id} not found`);
-    const updated = activateItp(itp);
+    this.assertItpPerm(actorId, tenantId, itp.companyId, 'quality.itp.activate', itp.projectId);
+    const updated = activateItp(itp, actorId);
     await this.tx.run(async (handle) => { await this.itpStore.save(updated, handle); });
     return updated;
+  }
+
+  private assertItpPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string, projectId: Id): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (companyId) orgPath.push({ level: 'company', id: companyId });
+    this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: projectId } });
   }
 
   async recordItpPoint(tenantId: Id, id: Id, pointIndex: number, result: PointResult): Promise<Itp> {
@@ -575,13 +607,15 @@ export class QualityService {
     return updated;
   }
 
-  async closeItp(tenantId: Id, id: Id): Promise<Itp> {
+  /** Declare the inspections complete, and say who declared it. */
+  async closeItp(tenantId: Id, actorId: Id | null, id: Id): Promise<Itp> {
     const itp = await this.itpStore.findById(id, tenantId);
     if (!itp) throw new Error(`ITP ${id} not found`);
-    const updated = closeItp(itp);
+    this.assertItpPerm(actorId, tenantId, itp.companyId, 'quality.itp.close', itp.projectId);
+    const updated = closeItp(itp, actorId);
     const event = makeEvent({
       type: QUALITY_EVENT.itpClosed,
-      tenantId, companyId: itp.companyId, actorId: null,
+      tenantId, companyId: itp.companyId, actorId,
       aggregateType: 'quality.itp', aggregateId: id,
       payload: { reference: itp.reference },
     });

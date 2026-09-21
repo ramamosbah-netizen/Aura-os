@@ -291,6 +291,21 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // could do their own job through the API: the routes derived `crm.opportunity.scopes`/`.approve`,
 // which no role names, so only a wildcard holder reached them. One principal cannot show that the
 // author is refused the approval and a second person is allowed it. r-pre-sales, unmodified.
+// `u-e2e-projeng`, `u-e2e-qaqc`, `u-e2e-tc` and `u-e2e-fm` are the wave-D proof, and the reason
+// each exists is a separation that one principal cannot demonstrate:
+//
+//   DAILY REPORT  u-e2e-site prepares and submits; u-e2e-projeng (and the PM) review and approve.
+//                 Measured before: one Site Engineer did all four, because `site.*` sat on the role
+//                 and `preparedBy = submittedBy = reviewedBy = approvedBy` came back from the API.
+//   HANDOVER      u-e2e-pm submits the dossier; u-e2e-fm accepts it. `commissioning.handover.*` sat
+//                 only on Handover/FM, so the party RECEIVING the handover was the only party that
+//                 could issue it — measured, the PM was refused with "no grant satisfies
+//                 commissioning.handover.submit". Submit and accept are now two hands.
+//   QUALITY       u-e2e-qaqc owns the register enumerated out of `quality.*`. NO raiser/closer
+//                 separation on a snag: the inspector who found the defect is the right person to
+//                 verify the fix, so the fixture proves the TRAIL, not a second pair of hands.
+//   T&C           u-e2e-tc runs the commissioning register and submits a handover; it accepts none.
+
 for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
                                 ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
                                 ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales'],
@@ -299,7 +314,9 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-pm', 'r-pm'],
                                 ['u-e2e-qs', 'r-commercial-manager'], ['u-e2e-qs2', 'r-commercial-manager'],
                                 ['u-e2e-hse', 'r-hse'], ['u-e2e-hse2', 'r-hse'],
-                                ['u-e2e-eng', 'r-technical-engineer'], ['u-e2e-doccon', 'r-document-controller']]) {
+                                ['u-e2e-eng', 'r-technical-engineer'], ['u-e2e-doccon', 'r-document-controller'],
+                                ['u-e2e-projeng', 'r-project-engineer'], ['u-e2e-qaqc', 'r-qa-qc'],
+                                ['u-e2e-tc', 'r-commissioning-engineer'], ['u-e2e-fm', 'r-handover-fm']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -321,7 +338,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) and u-e2e-doccon (r-document-controller)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) and u-e2e-fm (r-handover-fm)');
 
 
 

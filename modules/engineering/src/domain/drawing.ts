@@ -77,6 +77,8 @@ export interface Drawing {
   decidedAt: string | null;
   /** doccontrol transmittal that conveyed this revision (set by the transmit reactor / command). */
   transmittalRef: string | null;
+  /** Who closed it. The act that makes a revision immutable recorded only a timestamp. */
+  closedBy: Id | null;
   transmittedAt: string | null;
   closedAt: string | null;
   createdAt: string;
@@ -125,6 +127,7 @@ export function makeDrawing(input: NewDrawing): Drawing {
     decidedBy: null,
     decidedAt: null,
     transmittalRef: null,
+    closedBy: null,
     transmittedAt: null,
     closedAt: null,
     createdAt: now,
@@ -192,10 +195,16 @@ export function transmitDrawing(d: Drawing, transmittalRef: string | null): Draw
   return { ...touch(d), status: 'transmitted', transmittalRef, transmittedAt: new Date().toISOString() };
 }
 
-/** transmitted → closed. Immutable thereafter. */
-export function closeDrawing(d: Drawing): Drawing {
+/**
+ * transmitted → closed. Immutable thereafter, and it now says who made it so.
+ *
+ * The last act in a drawing's life took no actor: `closedAt` with nobody attached. Closing is what
+ * makes the revision immutable, so it is the point after which nothing about it can be corrected
+ * — exactly the kind of act that should carry a name.
+ */
+export function closeDrawing(d: Drawing, actorId: Id | null = null): Drawing {
   assertDrawingTransition(d.status, 'closed');
-  return { ...touch(d), status: 'closed', closedAt: new Date().toISOString() };
+  return { ...touch(d), status: 'closed', closedBy: actorId, closedAt: new Date().toISOString() };
 }
 
 /**

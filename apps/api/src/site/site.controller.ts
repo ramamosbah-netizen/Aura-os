@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type DailyReport,
@@ -108,6 +108,7 @@ export class SiteController {
   // ── Daily Reports ──────────────────────────────────────────────────────────
 
   @Post('daily-reports')
+  @Permissions('site.daily-report.create')
   createDailyReport(@Body() dto: CreateDailyReportDto): Promise<DailyReport> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.date?.trim()) throw new BadRequestException('date is required');
@@ -131,6 +132,7 @@ export class SiteController {
   }
 
   @Put('daily-reports/:id/submit')
+  @Permissions('site.daily-report.submit')
   submitDailyReport(@Param('id') id: string): Promise<DailyReport> {
     const ctx = this.tenant.get();
     return this.siteService.submitDailyReport(ctx.tenantId, ctx.actorId, id);
@@ -139,18 +141,21 @@ export class SiteController {
   // ── Daily-report workflow commands (state machine; POST verbs, never PATCH status) ──
 
   @Post('daily-reports/:id/start-review')
+  @Permissions('site.daily-report.review')
   startReviewReport(@Param('id') id: string): Promise<DailyReport> {
     const ctx = this.tenant.get();
     return this.siteService.startReviewReport(ctx.tenantId, ctx.actorId, id);
   }
 
   @Post('daily-reports/:id/approve')
+  @Permissions('site.daily-report.approve')
   approveReport(@Param('id') id: string): Promise<DailyReport> {
     const ctx = this.tenant.get();
     return this.siteService.approveDailyReport(ctx.tenantId, ctx.actorId, id);
   }
 
   @Post('daily-reports/:id/reject')
+  @Permissions('site.daily-report.approve')
   rejectReport(@Param('id') id: string, @Body() dto: RejectReportDto): Promise<DailyReport> {
     if (!dto?.reason?.trim()) throw new BadRequestException('a rejection reason is required');
     const ctx = this.tenant.get();
@@ -309,6 +314,7 @@ export class SiteController {
   // ── Site Instructions ──────────────────────────────────────────────────────
 
   @Post('instructions')
+  @Permissions('site.instruction.issue')
   async issueInstruction(@Body() dto: { projectId: string; projectName?: string; reference: string; issuedBy: string; date: string; instruction: string; costImplication?: boolean; timeImplication?: boolean }): Promise<SiteInstruction> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
@@ -342,13 +348,17 @@ export class SiteController {
   }
 
   @Put('instructions/:id/acknowledge')
+  @Permissions('site.instruction.acknowledge')
   async acknowledgeInstruction(@Param('id') id: string): Promise<SiteInstruction> {
-    return await this.siteService.acknowledgeSiteInstruction(this.tenant.get().tenantId, id);
+    const ctx = this.tenant.get();
+    return await this.siteService.acknowledgeSiteInstruction(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('instructions/:id/close')
+  @Permissions('site.instruction.close')
   async closeInstruction(@Param('id') id: string): Promise<SiteInstruction> {
-    return await this.siteService.closeSiteInstruction(this.tenant.get().tenantId, id);
+    const ctx = this.tenant.get();
+    return await this.siteService.closeSiteInstruction(ctx.tenantId, ctx.actorId, id);
   }
 
   // ── Labour allocation (manpower by trade) ───────────────────────────────────

@@ -326,7 +326,7 @@ export class EngineeringService {
     const drawing = await this.loadDrawing(id);
     this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.close', drawing.projectId);
 
-    const updated = applyClose(drawing); // enforces transmitted → closed
+    const updated = applyClose(drawing, actorId); // enforces transmitted → closed, and records who
     const event = makeEvent({
       type: ENGINEERING_EVENT.drawingClosed,
       tenantId,

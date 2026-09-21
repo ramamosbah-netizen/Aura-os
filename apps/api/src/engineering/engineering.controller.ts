@@ -265,6 +265,7 @@ export class EngineeringController {
   }
 
   @Post('drawings/:id/close')
+  @Permissions('engineering.drawing.close')
   closeDrawing(@Param('id') id: string): Promise<Drawing> {
     const ctx = this.tenant.get();
     return this.engineeringService.closeDrawing(ctx.tenantId, ctx.actorId, id);

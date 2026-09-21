@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type CommissioningRecord,
@@ -338,7 +338,13 @@ export class CommissioningController {
     });
   }
 
+  // The last of wave D's twelve. The RECORD was already right here — `raisedBy`, `closedBy` and
+  // `closedAt` all exist and the controller already passed the actor — so nothing needed fixing
+  // except that the act was reachable only through `commissioning.record.*` and governed by a name
+  // no role spoke. NO RAISER/CLOSER SEPARATION, for the same reason as the snag: the inspector who
+  // found the defect is the right person to verify the fix.
   @Put(':id/punch/:punchId/close')
+  @Permissions('commissioning.record.close')
   closePunch(@Param('id') id: string, @Param('punchId') punchId: string, @Body() dto: ClosePunchDto): Promise<PunchItem> {
     if (!dto?.resolution?.trim()) throw new BadRequestException('resolution is required');
     const ctx = this.tenant.get();

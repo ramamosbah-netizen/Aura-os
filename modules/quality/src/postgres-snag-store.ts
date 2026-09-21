@@ -12,11 +12,14 @@ export class PostgresSnagStore implements SnagStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_quality_snags (
-        id, tenant_id, company_id, project_id, project_name, description, location_detail, severity, status, assigned_to, resolved_at, created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        id, tenant_id, company_id, project_id, project_name, description, location_detail, severity, status, assigned_to, resolved_by, resolved_at, closed_by, closed_at, created_by, created_at, updated_at
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       on conflict (id) do update set
         status = excluded.status,
+        resolved_by = excluded.resolved_by,
         resolved_at = excluded.resolved_at,
+        closed_by = excluded.closed_by,
+        closed_at = excluded.closed_at,
         updated_at = excluded.updated_at`,
       [
         snag.id,
@@ -29,7 +32,10 @@ export class PostgresSnagStore implements SnagStore {
         snag.severity,
         snag.status,
         snag.assignedTo,
+        snag.resolvedBy,
         snag.resolvedAt,
+        snag.closedBy,
+        snag.closedAt,
         snag.createdBy,
         snag.createdAt,
         snag.updatedAt,
@@ -82,6 +88,9 @@ export class PostgresSnagStore implements SnagStore {
       locationDetail: row.location_detail,
       severity: row.severity,
       status: row.status,
+      resolvedBy: row.resolved_by ?? null,
+      closedBy: row.closed_by ?? null,
+      closedAt: row.closed_at ?? null,
       assignedTo: row.assigned_to,
       resolvedAt: row.resolved_at ? row.resolved_at.toISOString() : null,
       createdBy: row.created_by,

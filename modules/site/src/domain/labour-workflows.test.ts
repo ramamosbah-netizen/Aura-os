@@ -17,9 +17,23 @@ import { AccessService, type EventStore, type TxRunner } from '@aura/core';
 const mockEvents = { appendWithClient: async () => [] } as unknown as EventStore;
 const mockTx: TxRunner = { run: (fn) => fn(null) };
 
+/**
+ * REAL SEEDED ROLES, GRANTED. This harness used to build a bare `new AccessService()` and drive the
+ * instruction acts with no actor — which skipped every permission check in the module, because the
+ * assertions are written `if (actorId)`. Naming the two people is what makes the guard RUN, and the
+ * Site Engineer acknowledging while the Project Engineer closes is the wave-D split itself.
+ */
+const SITE = 'u-site-engineer';
+const SUPERVISOR = 'u-project-engineer';
+
 describe('Labour by trade (service workflow)', () => {
   let svc: SiteService;
   beforeEach(() => {
+    const access = new AccessService(null); // no pool → in-memory grants
+    access.seedStandardRoles();
+    const onTenant = { kind: 'org' as const, level: 'tenant' as const, id: 't1' };
+    access.grant({ userId: SITE, roleId: 'r-site-engineer', scope: onTenant });
+    access.grant({ userId: SUPERVISOR, roleId: 'r-project-engineer', scope: onTenant });
     svc = new SiteService(
       new InMemoryDailyReportStore(),
       new InMemoryDelayLogStore(),
@@ -30,7 +44,7 @@ describe('Labour by trade (service workflow)', () => {
       new InMemoryInstallationStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(), new InMemoryReportLineStore(),
       mockEvents,
       mockTx,
-      new AccessService(),
+      access,
     );
   });
 
@@ -60,10 +74,14 @@ describe('Labour by trade (service workflow)', () => {
     });
     expect(si.status).toBe('open');
 
-    const acked = await svc.acknowledgeSiteInstruction('t1', si.id);
+    // AN ACTOR ON BOTH ACTS. A site instruction carries cost and time implications, and both of
+    // these used to be performed by nobody — `acknowledgedAt` and `closedAt` with no name beside them.
+    const acked = await svc.acknowledgeSiteInstruction('t1', SITE, si.id);
     expect(acked.status).toBe('acknowledged');
+    expect(acked.acknowledgedBy).toBe(SITE);
 
-    const closed = await svc.closeSiteInstruction('t1', si.id);
+    const closed = await svc.closeSiteInstruction('t1', SUPERVISOR, si.id);
     expect(closed.status).toBe('closed');
+    expect(closed.closedBy).toBe(SUPERVISOR);
   });
 });

@@ -29,6 +29,7 @@ interface Row {
   decided_at: Date | string | null;
   transmittal_ref: string | null;
   transmitted_at: Date | string | null;
+  closed_by: string | null;
   closed_at: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
@@ -37,7 +38,7 @@ interface Row {
 const COLS =
   'id, tenant_id, company_id, code, title, revision, status, discipline, project_id, project_name, owner_id, created_by, ' +
   'previous_revision, reason_for_revision, file_url, submitted_by, submitted_at, reviewed_by, reviewed_at, decided_by, decided_at, ' +
-  'transmittal_ref, transmitted_at, closed_at, created_at, updated_at';
+  'transmittal_ref, transmitted_at, closed_by, closed_at, created_at, updated_at';
 
 const ts = (v: Date | string | null): string | null =>
   v === null ? null : v instanceof Date ? v.toISOString() : String(v);
@@ -66,6 +67,7 @@ function rowToDrawing(r: Row): Drawing {
     decidedBy: r.decided_by,
     decidedAt: ts(r.decided_at),
     transmittalRef: r.transmittal_ref,
+    closedBy: r.closed_by ?? null,
     transmittedAt: ts(r.transmitted_at),
     closedAt: ts(r.closed_at),
     createdAt: ts(r.created_at) as string,
@@ -88,11 +90,11 @@ export class PostgresDrawingStore implements DrawingStore {
   private insert(executor: Pool | PoolClient, d: Drawing): Promise<unknown> {
     return executor.query(
       `INSERT INTO public.aura_engineering_drawings (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)`,
       [
         d.id, d.tenantId, d.companyId, d.code, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName,
         d.ownerId, d.createdBy, d.previousRevision, d.reasonForRevision, d.fileUrl, d.submittedBy, d.submittedAt,
-        d.reviewedBy, d.reviewedAt, d.decidedBy, d.decidedAt, d.transmittalRef, d.transmittedAt, d.closedAt,
+        d.reviewedBy, d.reviewedAt, d.decidedBy, d.decidedAt, d.transmittalRef, d.transmittedAt, d.closedBy, d.closedAt,
         d.createdAt, d.updatedAt,
       ],
     );
@@ -113,12 +115,12 @@ export class PostgresDrawingStore implements DrawingStore {
        SET title=$2, revision=$3, status=$4, discipline=$5, project_id=$6, project_name=$7, owner_id=$8,
            previous_revision=$9, reason_for_revision=$10, file_url=$11, submitted_by=$12, submitted_at=$13,
            reviewed_by=$14, reviewed_at=$15, decided_by=$16, decided_at=$17, transmittal_ref=$18,
-           transmitted_at=$19, closed_at=$20, updated_at=now()
+           transmitted_at=$19, closed_by=$20, closed_at=$21, updated_at=now()
        WHERE id=$1`,
       [
         d.id, d.title, d.revision, d.status, d.discipline, d.projectId, d.projectName, d.ownerId,
         d.previousRevision, d.reasonForRevision, d.fileUrl, d.submittedBy, d.submittedAt, d.reviewedBy,
-        d.reviewedAt, d.decidedBy, d.decidedAt, d.transmittalRef, d.transmittedAt, d.closedAt,
+        d.reviewedAt, d.decidedBy, d.decidedAt, d.transmittalRef, d.transmittedAt, d.closedBy, d.closedAt,
       ],
     );
   }

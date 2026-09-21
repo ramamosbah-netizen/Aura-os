@@ -28,8 +28,23 @@ export interface HandoverPackage {
   title: string;
   status: HandoverStatus;
   checklist: HandoverChecklist;
+  /**
+   * WHO, not only when. This package had `submittedAt` and `acceptedAt` and no actor on either —
+   * the two ends of a contractual handover, both anonymous. Acceptance is what starts the warranty
+   * and defects-liability clock, and the only thing it recorded was a free-text
+   * `clientRepresentative`; its audit event was attributed to `createdBy`, so the CLIENT'S
+   * ACCEPTANCE WAS FILED AGAINST WHOEVER CREATED THE PACKAGE.
+   *
+   * `clientRepresentative` is kept beside `acceptedBy` and means something different: the named
+   * person on the client side, who need not be a platform user at all. The pair is the same shape
+   * as a transmittal's `sender` (a label) and `sentBy` (an actor).
+   */
+  submittedBy: Id | null;
   submittedAt: string | null;
+  acceptedBy: Id | null;
   acceptedAt: string | null;
+  rejectedBy: Id | null;
+  rejectedAt: string | null;
   clientRepresentative: string | null;
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
@@ -82,8 +97,12 @@ export function makeHandoverPackage(input: NewHandoverPackage): HandoverPackage 
     title: input.title.trim(),
     status: 'draft',
     checklist: { ...EMPTY_CHECKLIST },
+    submittedBy: null,
     submittedAt: null,
+    acceptedBy: null,
     acceptedAt: null,
+    rejectedBy: null,
+    rejectedAt: null,
     clientRepresentative: null,
     warrantyStartDate: null,
     warrantyMonths: null,
@@ -113,7 +132,11 @@ export function updateChecklist(pkg: HandoverPackage, patch: Partial<HandoverChe
  * items nobody owns yet still need their tick. The refusal names what is standing in the way,
  * because "not ready" sends a project manager hunting.
  */
-export function submit(pkg: HandoverPackage, readiness: { readyToSubmit: boolean; items: { id: string; label: string; state: string; reason: string }[] }): HandoverPackage {
+export function submit(
+  pkg: HandoverPackage,
+  readiness: { readyToSubmit: boolean; items: { id: string; label: string; state: string; reason: string }[] },
+  actorId: Id | null = null,
+): HandoverPackage {
   if (pkg.status === 'accepted') throw new Error('conflict: package is already accepted');
   if (!readiness.readyToSubmit) {
     const blocking = readiness.items.filter((i) => i.state !== 'READY');
@@ -124,6 +147,7 @@ export function submit(pkg: HandoverPackage, readiness: { readyToSubmit: boolean
   return {
     ...pkg,
     status: 'submitted',
+    submittedBy: actorId,
     submittedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -136,16 +160,25 @@ export function submit(pkg: HandoverPackage, readiness: { readyToSubmit: boolean
 export function accept(
   pkg: HandoverPackage,
   patch: { clientRepresentative: string; warrantyStartDate?: string; warrantyMonths?: number },
+  actorId: Id | null = null,
 ): HandoverPackage {
   if (pkg.status === 'accepted') throw new Error('conflict: package is already accepted');
   if (pkg.status !== 'submitted') throw new Error('only a submitted package can be accepted');
   if (!patch.clientRepresentative?.trim()) {
     throw new Error('validation: a client representative is required to accept handover');
   }
+  // SUBMIT /= ACCEPT. Issuing the handover and accepting it are the two sides of a contractual
+  // exchange, and one person holding both is not an exchange. The package was submitted by us and
+  // is accepted on the client's behalf; if the same account does both, the acceptance records
+  // nothing that the submission did not already say.
+  if (actorId && pkg.submittedBy && actorId === pkg.submittedBy) {
+    throw new Error('the person who submitted this handover may not accept it — acceptance is the client\u2019s side of the exchange, and it starts the warranty clock');
+  }
   const now = new Date().toISOString();
   return {
     ...pkg,
     status: 'accepted',
+    acceptedBy: actorId,
     acceptedAt: now,
     clientRepresentative: patch.clientRepresentative.trim(),
     warrantyStartDate: patch.warrantyStartDate ?? now.slice(0, 10),
@@ -155,13 +188,31 @@ export function accept(
 }
 
 /** Client rejects the submission — records why and returns it to draft for rework. */
-export function reject(pkg: HandoverPackage, reason: string): HandoverPackage {
+export function reject(pkg: HandoverPackage, reason: string, actorId: Id | null = null): HandoverPackage {
   if (pkg.status === 'accepted') throw new Error('conflict: package is already accepted');
   if (pkg.status !== 'submitted') throw new Error('only a submitted package can be rejected');
+  // THE REASON IS REQUIRED HERE, not only at the route. It was `reason?.trim() || pkg.remarks`, so a
+  // rejection with no reason silently kept whatever remark happened to be on the package and read
+  // afterwards as though someone had explained it. The route guarded this; the domain did not, and
+  // a domain that can be called from anywhere should not depend on one caller's manners.
+  if (!reason?.trim()) throw new Error('a reason is required to reject a handover \u2014 the package goes back for rework and the record must say what for');
+  const now = new Date().toISOString();
   return {
     ...pkg,
     status: 'rejected',
-    remarks: reason?.trim() || pkg.remarks,
-    updatedAt: new Date().toISOString(),
+    remarks: reason.trim(),
+    rejectedBy: actorId,
+    rejectedAt: now,
+    updatedAt: now,
   };
+}
+
+/**
+ * Whether the two sides of the exchange were two different people. Same reporting contract as the
+ * document revision and the daily report: `null` means it has not been accepted, so there is nothing
+ * to judge; `unverifiable` means it was accepted before these columns existed.
+ */
+export function handoverSeparation(pkg: HandoverPackage): 'enforced' | 'unverifiable' | null {
+  if (!pkg.acceptedBy) return null;
+  return pkg.submittedBy ? 'enforced' : 'unverifiable';
 }

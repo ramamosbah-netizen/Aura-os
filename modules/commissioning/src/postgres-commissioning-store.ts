@@ -155,7 +155,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
       `insert into public.aura_handover_om_items
         (id, tenant_id, company_id, project_id, commissioning_id, deliverable, required, state, document_id, notes,
          submitted_at, submitted_by, reviewed_at, reviewed_by, accepted_at, accepted_by, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        on conflict (id) do update set
          required = excluded.required, state = excluded.state, document_id = excluded.document_id, notes = excluded.notes,
          submitted_at = excluded.submitted_at, submitted_by = excluded.submitted_by,
@@ -211,7 +211,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
         (id, tenant_id, company_id, project_id, commissioning_id, description, stock_item_id, unit,
          quantity_required, quantity_handed_over, required, handed_over_at, handed_over_by,
          acknowledged_by, acknowledged_at, notes, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        on conflict (id) do update set
          stock_item_id = excluded.stock_item_id, unit = excluded.unit,
          quantity_required = excluded.quantity_required, quantity_handed_over = excluded.quantity_handed_over,
@@ -241,16 +241,17 @@ export class PostgresCommissioningStore implements CommissioningStore {
     await this.pool.query(
       `insert into public.aura_handover_training_sessions
         (id, tenant_id, company_id, project_id, commissioning_id, title, topics, trainer, session_date, duration_minutes,
-         attendees, demonstration_completed, state, acknowledged_by, acknowledged_at, material_document_id, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+         attendees, demonstration_completed, state, completed_by, acknowledged_by, acknowledged_at, material_document_id, created_by, created_at, updated_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
        on conflict (id) do update set
          title = excluded.title, topics = excluded.topics, trainer = excluded.trainer,
          session_date = excluded.session_date, duration_minutes = excluded.duration_minutes,
          attendees = excluded.attendees, demonstration_completed = excluded.demonstration_completed,
-         state = excluded.state, acknowledged_by = excluded.acknowledged_by, acknowledged_at = excluded.acknowledged_at,
+         state = excluded.state, completed_by = excluded.completed_by,
+         acknowledged_by = excluded.acknowledged_by, acknowledged_at = excluded.acknowledged_at,
          material_document_id = excluded.material_document_id, updated_at = excluded.updated_at`,
       [s.id, s.tenantId, s.companyId, s.projectId, s.commissioningId, s.title, s.topics, s.trainer, s.sessionDate, s.durationMinutes,
-       s.attendees, s.demonstrationCompleted, s.state, s.acknowledgedBy, s.acknowledgedAt, s.materialDocumentId, s.createdBy, s.createdAt, s.updatedAt],
+       s.attendees, s.demonstrationCompleted, s.state, s.completedBy, s.acknowledgedBy, s.acknowledgedAt, s.materialDocumentId, s.createdBy, s.createdAt, s.updatedAt],
     );
   }
   async findTrainingSession(id: string, tenantId: string): Promise<TrainingSession | null> {
@@ -273,16 +274,21 @@ export class PostgresCommissioningStore implements CommissioningStore {
     await this.pool.query(
       `insert into public.aura_handover_packages
          (id, tenant_id, company_id, project_id, project_name, code, title, status, checklist,
-          submitted_at, accepted_at, client_representative, warranty_start_date, warranty_months,
+          submitted_by, submitted_at, accepted_by, accepted_at, rejected_by, rejected_at,
+          client_representative, warranty_start_date, warranty_months,
           remarks, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
        on conflict (id) do update set
          project_name = excluded.project_name,
          title = excluded.title,
          status = excluded.status,
          checklist = excluded.checklist,
+         submitted_by = excluded.submitted_by,
          submitted_at = excluded.submitted_at,
+         accepted_by = excluded.accepted_by,
          accepted_at = excluded.accepted_at,
+         rejected_by = excluded.rejected_by,
+         rejected_at = excluded.rejected_at,
          client_representative = excluded.client_representative,
          warranty_start_date = excluded.warranty_start_date,
          warranty_months = excluded.warranty_months,
@@ -290,7 +296,9 @@ export class PostgresCommissioningStore implements CommissioningStore {
          updated_at = excluded.updated_at`,
       [
         p.id, p.tenantId, p.companyId, p.projectId, p.projectName, p.code, p.title, p.status,
-        JSON.stringify(p.checklist), p.submittedAt, p.acceptedAt, p.clientRepresentative,
+        JSON.stringify(p.checklist),
+        p.submittedBy, p.submittedAt, p.acceptedBy, p.acceptedAt, p.rejectedBy, p.rejectedAt,
+        p.clientRepresentative,
         p.warrantyStartDate, p.warrantyMonths, p.remarks, p.createdBy, p.createdAt, p.updatedAt,
       ],
     );
@@ -606,6 +614,7 @@ function toTraining(r: Record<string, unknown>): TrainingSession {
     durationMinutes: r.duration_minutes == null ? null : Number(r.duration_minutes),
     attendees: (r.attendees as string) ?? null,
     demonstrationCompleted: Boolean(r.demonstration_completed),
+    completedBy: (r.completed_by as string) ?? null,
     state: r.state as TrainingState,
     acknowledgedBy: (r.acknowledged_by as string) ?? null, acknowledgedAt: tsIso(r.acknowledged_at),
     materialDocumentId: (r.material_document_id as string) ?? null,
@@ -657,12 +666,17 @@ interface HandoverRow {
   warranty_months: number | null;
   remarks: string | null;
   created_by: string | null;
+  submitted_by: string | null;
+  accepted_by: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
   created_at: string;
   updated_at: string;
 }
 
 const HANDOVER_COLS = `id, tenant_id, company_id, project_id, project_name, code, title, status,
-  checklist, submitted_at, accepted_at, client_representative, warranty_start_date::text,
+  checklist, submitted_by, submitted_at, accepted_by, accepted_at, rejected_by, rejected_at,
+  client_representative, warranty_start_date::text,
   warranty_months, remarks, created_by, created_at, updated_at`;
 
 function toHandover(r: HandoverRow): HandoverPackage {
@@ -684,8 +698,12 @@ function toHandover(r: HandoverRow): HandoverPackage {
       training: !!checklist?.training,
       spares: !!checklist?.spares,
     },
+    submittedBy: r.submitted_by ?? null,
     submittedAt: r.submitted_at,
+    acceptedBy: r.accepted_by ?? null,
     acceptedAt: r.accepted_at,
+    rejectedBy: r.rejected_by ?? null,
+    rejectedAt: r.rejected_at ?? null,
     clientRepresentative: r.client_representative,
     warrantyStartDate: r.warranty_start_date,
     warrantyMonths: r.warranty_months == null ? null : Number(r.warranty_months),

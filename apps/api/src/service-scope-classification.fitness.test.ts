@@ -7,13 +7,17 @@ import lineage from './service-scope-helper-lineage.json';
 
 const root=resolve(__dirname,'../../..');
 describe('service authorization architecture — classified ownership, not a projectId spelling rule',()=>{
-  it('accounts for 62 service assertions plus the shared Projects helper, with no silent additions/removals',()=>{
+  it('accounts for 64 service assertions plus the shared Projects helper, with no silent additions/removals',()=>{
     const actual=inventory(root);
+    // 64 since wave D: putting an ITP in force and closing a site instruction each asserted NOTHING
+    // before, so the census grew by two more. THIS COUNT IS THE POINT OF THE TEST — an assertion
+    // added or removed without being declared here fails, which is how wave B's helper change and
+    // wave D's two new helpers were both forced to be stated rather than slipped in.
     // 62 since wave B: approving a risk assessment asserted NOTHING before, so the census grew by the
     // one authority that was missing rather than by a new feature.
-    expect(actual.filter(r=>r.file.endsWith('.service.ts'))).toHaveLength(62);
+    expect(actual.filter(r=>r.file.endsWith('.service.ts'))).toHaveLength(64);
     expect(actual.map(r=>r.key).sort()).toEqual(classification.map(r=>r.key).sort());
-    expect(new Set(classification.map(r=>r.key)).size).toBe(63);
+    expect(new Set(classification.map(r=>r.key)).size).toBe(65);
     expect(actual.filter(r=>r.file.startsWith('modules/commissioning/'))).toHaveLength(0);
   });
   it('pins each reviewed target and canonical validation/load source, including intentional non-project authority',()=>{

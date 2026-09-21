@@ -814,13 +814,13 @@
     "resolution": "Canonical snag.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",
     "organizationBranch": null,
     "baselineScope": "scoped",
-    "change": "Retained canonical project scope",
+    "change": "SEC-01 wave D: CLAIMING a fix and ACCEPTING one are different judgements, so the one act now asks for the permission of the transition being made. It asserted `quality.snag.resolve` for both while the guard derived `quality.snag.close` from the close route that nothing asserted — and the snag had no state machine at all, so a CLOSED defect could walk backwards into 'resolved' (measured, 200).",
     "evidence": "quality.resolveSnag",
     "security": {
-      "target": "{ permission: 'quality.snag.resolve', orgPath, resource: { type: 'project', id: snag.projectId } }",
+      "target": "{ permission: status === 'closed' ? 'quality.snag.close' : 'quality.snag.resolve', orgPath, resource: { type: 'project', id: found.projectId }, }",
       "checks": [],
       "provenance": [
-        "snag = await this.snagStore.findById(id, tenantId)"
+        "found = await this.snagStore.findById(id, tenantId)"
       ]
     }
   },
@@ -996,6 +996,34 @@
       "provenance": [
         "ra = await this.riskStore.findById(id, tenantId)"
       ]
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#assertItpPerm",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded ITP's own projectId — never a project supplied by the caller. Both callers (activateItp, closeItp) load the plan first and are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "New in SEC-01 wave D: putting an inspection plan in force and declaring its inspections complete asserted NOTHING at all. Both took no actor, so the only gate was the permission the guard derived from the route path, reachable through `quality.*`.",
+    "evidence": "quality.assertItpPerm",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: projectId } }",
+      "checks": [],
+      "provenance": []
+    }
+  },
+  {
+    "key": "modules/site/src/site.service.ts#assertInstructionPerm",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Required helper argument from the loaded site instruction's own projectId. Both callers (acknowledgeSiteInstruction, closeSiteInstruction) load the instruction first and are pinned separately.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "New in SEC-01 wave D: acknowledging and closing a site instruction asserted nothing and recorded nobody, on a record whose `issued_by` is free text — measured, the string \"Anyone I Like\" was accepted on a cost- and time-bearing instruction.",
+    "evidence": "site.assertInstructionPerm",
+    "security": {
+      "target": "{ permission, orgPath, resource: { type: 'project', id: projectId } }",
+      "checks": [],
+      "provenance": []
     }
   }
 ]

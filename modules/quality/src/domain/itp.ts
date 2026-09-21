@@ -33,6 +33,11 @@ export interface Itp {
   title: string;
   discipline: string;
   status: ItpStatus;
+  /** Who put the plan in force, and who declared its inspections complete. Both acts recorded nobody. */
+  activatedBy: string | null;
+  activatedAt: string | null;
+  closedBy: string | null;
+  closedAt: string | null;
   points: ItpPoint[];
   createdBy: string | null;
   createdAt: string;
@@ -80,6 +85,10 @@ export function makeItp(input: NewItp): Itp {
     title: input.title.trim(),
     discipline: input.discipline?.trim() || 'general',
     status: 'draft',
+    activatedBy: null,
+    activatedAt: null,
+    closedBy: null,
+    closedAt: null,
     points: input.points.map(buildPoint),
     createdBy: input.createdBy ?? null,
     createdAt: now,
@@ -87,9 +96,18 @@ export function makeItp(input: NewItp): Itp {
   };
 }
 
-export function activateItp(itp: Itp): Itp {
+/**
+ * draft → active. Putting the inspection plan in force.
+ *
+ * TAKES AN ACTOR NOW. `activateItp(itp)` took none, the service asserted no permission, and nothing
+ * was recorded: the only gate on an ITP entering force was the route name derived from its path,
+ * reachable through `quality.*`. So QA/QC wrote the plan, put it in force and later declared the
+ * inspections complete, and not one of those three acts left a name behind.
+ */
+export function activateItp(itp: Itp, actorId: string | null = null): Itp {
   if (itp.status !== 'draft') throw new Error(`cannot activate from status ${itp.status}`);
-  return { ...itp, status: 'active', updatedAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  return { ...itp, status: 'active', activatedBy: actorId, activatedAt: now, updatedAt: now };
 }
 
 /** Sign off a point (by index) as passed or failed. Only on an active ITP. */
@@ -107,10 +125,12 @@ export function allPointsResolved(itp: Itp): boolean {
   return itp.points.every((p) => p.result !== 'pending');
 }
 
-export function closeItp(itp: Itp): Itp {
+/** active → closed. Declaring the inspections complete, and saying who declared it. */
+export function closeItp(itp: Itp, actorId: string | null = null): Itp {
   if (itp.status !== 'active') throw new Error(`cannot close from status ${itp.status}`);
   if (!allPointsResolved(itp)) throw new Error('cannot close — some inspection points are still pending');
-  return { ...itp, status: 'closed', updatedAt: new Date().toISOString() };
+  const now = new Date().toISOString();
+  return { ...itp, status: 'closed', closedBy: actorId, closedAt: now, updatedAt: now };
 }
 
 export const ITP_EVENT = {

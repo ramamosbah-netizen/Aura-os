@@ -134,7 +134,7 @@ export class SiteService {
     createdBy?: string;
   }): Promise<DailyReport> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
-    this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create', input.projectId);
+    this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily-report.create', input.projectId);
     await this.assertNoReportForDate(input.tenantId, input.projectId, input.date);
     const report = makeDailyReport(input);
     const event = makeEvent({
@@ -238,28 +238,28 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
   /** draft → submitted (kept name for the existing BFF/UI; now enforced). */
   async submitDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.submit', report.projectId);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.submit', report.projectId);
     return this.saveReportWithEvent(submitReport(report, actorId), actorId, SITE_REPORT_EVENT.submitted);
   }
 
   /** submitted → under_review. */
   async startReviewReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.review', report.projectId);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.review', report.projectId);
     return this.saveReportWithEvent(startReviewReport(report, actorId), actorId, SITE_REPORT_EVENT.reviewStarted);
   }
 
   /** under_review → approved (immutable thereafter). */
   async approveDailyReport(tenantId: Id, actorId: Id | null, id: Id): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.approve', report.projectId);
     return this.saveReportWithEvent(approveReport(report, actorId), actorId, SITE_REPORT_EVENT.approved);
   }
 
   /** under_review → rejected (reason mandatory) then auto-reopened to draft for correction. */
   async rejectDailyReport(tenantId: Id, actorId: Id | null, id: Id, reason: string): Promise<DailyReport> {
     const report = await this.loadReport(tenantId, id);
-    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId);
+    this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.approve', report.projectId);
     const rejected = rejectReport(report, actorId, reason);
     // record the rejection, then reopen to draft so the site team can correct and resubmit.
     await this.saveReportWithEvent(rejected, actorId, SITE_REPORT_EVENT.rejected);
@@ -280,31 +280,31 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
   }
 
   addReportLabour(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteLabourEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteLabourEntry> {
-    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+    return this.addLine(tenantId, reportId, 'site.daily-report.update',
       (r) => makeSiteLabourEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
       (l, h) => this.reportLabourStore.save(l, h), actorId);
   }
 
   addReportPlant(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSitePlantEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SitePlantEntry> {
-    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+    return this.addLine(tenantId, reportId, 'site.daily-report.update',
       (r) => makeSitePlantEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
       (l, h) => this.reportPlantStore.save(l, h), actorId);
   }
 
   addReportProgress(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteProgressEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteProgressEntry> {
-    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+    return this.addLine(tenantId, reportId, 'site.daily-report.update',
       (r) => makeSiteProgressEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
       (l, h) => this.reportProgressStore.save(l, h), actorId);
   }
 
   addReportDelay(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteDelayEntry, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteDelayEntry> {
-    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+    return this.addLine(tenantId, reportId, 'site.daily-report.update',
       (r) => makeSiteDelayEntry({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
       (l, h) => this.reportDelayStore.save(l, h), actorId);
   }
 
   addReportEvidence(tenantId: Id, actorId: Id | null, reportId: Id, input: Omit<NewSiteEvidence, 'tenantId' | 'companyId' | 'dailyReportId' | 'projectId' | 'createdBy'>): Promise<SiteEvidence> {
-    return this.addLine(tenantId, reportId, 'site.daily_report.update',
+    return this.addLine(tenantId, reportId, 'site.daily-report.update',
       (r) => makeSiteEvidence({ ...input, tenantId, companyId: r.companyId, dailyReportId: r.id, projectId: r.projectId, createdBy: actorId }),
       (l, h) => this.reportEvidenceStore.save(l, h), actorId);
   }
@@ -455,23 +455,41 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     return si;
   }
 
-  async acknowledgeSiteInstruction(tenantId: Id, id: Id): Promise<SiteInstruction> {
+  /**
+   * Acknowledge an instruction — the contractor's word that it was received.
+   *
+   * Both this and the close below took no actor and asserted no permission: a site instruction
+   * carrying cost and time implications was acknowledged and closed by nobody, and its `issuedBy`
+   * is FREE TEXT (measured — the string "Anyone I Like" was accepted). The label is kept, because
+   * an instruction can genuinely come from a consultant who is not a platform user; what it now has
+   * beside it is the account that acted.
+   */
+  async acknowledgeSiteInstruction(tenantId: Id, actorId: Id | null, id: Id): Promise<SiteInstruction> {
     const si = await this.siteInstructionStore.findById(id, tenantId);
     if (!si) throw new Error(`site instruction ${id} not found`);
-    const updated = acknowledgeInstruction(si);
+    this.assertInstructionPerm(actorId, tenantId, si.companyId, 'site.instruction.acknowledge', si.projectId);
+    const updated = acknowledgeInstruction(si, actorId);
     await this.tx.run(async (handle) => {
       await this.siteInstructionStore.save(updated, handle);
     });
     return updated;
   }
 
-  async closeSiteInstruction(tenantId: Id, id: Id): Promise<SiteInstruction> {
+  private assertInstructionPerm(actorId: Id | null, tenantId: Id, companyId: string | null, permission: string, projectId: Id): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (companyId) orgPath.push({ level: 'company', id: companyId });
+    this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: projectId } });
+  }
+
+  async closeSiteInstruction(tenantId: Id, actorId: Id | null, id: Id): Promise<SiteInstruction> {
     const si = await this.siteInstructionStore.findById(id, tenantId);
     if (!si) throw new Error(`site instruction ${id} not found`);
-    const updated = closeInstruction(si);
+    this.assertInstructionPerm(actorId, tenantId, si.companyId, 'site.instruction.close', si.projectId);
+    const updated = closeInstruction(si, actorId);
     const event = makeEvent({
       type: SITE_EVENT.instructionClosed,
-      tenantId, companyId: si.companyId, actorId: null,
+      tenantId, companyId: si.companyId, actorId,
       aggregateType: 'site.instruction', aggregateId: id,
       payload: { reference: si.reference },
     });

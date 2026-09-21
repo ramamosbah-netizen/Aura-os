@@ -139,17 +139,52 @@ export function startReviewReport(r: DailyReport, reviewerId: string | null): Da
   return { ...touch(r), status: 'under_review', reviewedBy: reviewerId, reviewedAt: new Date().toISOString() };
 }
 
-/** under_review → approved (immutable thereafter). */
+/**
+ * under_review → approved (immutable thereafter).
+ *
+ * THE PERSON WHO WROTE THE DAY DOES NOT SIGN IT OFF. This record was BUILT for that check —
+ * `preparedBy`, `submittedBy`, `reviewedBy` and `approvedBy` are four separate columns with four
+ * separate timestamps — and nothing connected them. Measured against the running API as one Site
+ * Engineer, every step returned success and all four columns came back with the same name.
+ *
+ * A daily report is the contemporaneous record of what happened on site: it is what a delay claim,
+ * a variation and a payment dispute are later argued from. A day written and signed off by one
+ * person is a note to self with a status field on it.
+ */
 export function approveReport(r: DailyReport, actorId: string | null): DailyReport {
   assertReportTransition(r.status, 'approved');
+  if (actorId && (actorId === r.preparedBy || actorId === r.submittedBy)) {
+    throw new Error('the person who prepared or submitted this daily report may not approve their own — the day is the record a claim is argued from');
+  }
   return { ...touch(r), status: 'approved', approvedBy: actorId, approvedAt: new Date().toISOString() };
 }
 
-/** under_review → rejected (reason mandatory). */
+/**
+ * under_review → rejected (reason mandatory).
+ *
+ * IT NO LONGER REWRITES `reviewedBy`. The line was `reviewedBy: actorId ?? r.reviewedBy`, so the
+ * person rejecting REPLACED whoever actually performed the review, and the record of who looked at
+ * the day was overwritten by the record of who turned it down. That is the same fabrication wave C
+ * removed from `approveDocument`, and it is the same answer: the review already recorded its own
+ * actor in `startReviewReport`, and a later act does not get to restate it.
+ */
 export function rejectReport(r: DailyReport, actorId: string | null, reason: string): DailyReport {
   if (!reason?.trim()) throw new Error('a rejection reason is required');
   assertReportTransition(r.status, 'rejected');
-  return { ...touch(r), status: 'rejected', reviewedBy: actorId ?? r.reviewedBy, rejectionReason: reason.trim() };
+  if (actorId && (actorId === r.preparedBy || actorId === r.submittedBy)) {
+    throw new Error('the person who prepared or submitted this daily report may not reject their own — withdrawing it is a resubmission, not a review');
+  }
+  return { ...touch(r), status: 'rejected', rejectionReason: reason.trim() };
+}
+
+/**
+ * Whether the day was written and signed off by two different people, reported rather than assumed.
+ * `null` = not approved yet, so there is no pair to judge; `unverifiable` = approved before the
+ * authorship columns were filled, which is a fact about the record and not a clean bill of health.
+ */
+export function reportSeparation(r: DailyReport): 'enforced' | 'unverifiable' | null {
+  if (!r.approvedBy) return null;
+  return r.preparedBy || r.submittedBy ? 'enforced' : 'unverifiable';
 }
 
 /** rejected → draft (re-open to correct and resubmit). */

@@ -35,6 +35,8 @@ export interface TrainingSession {
   /** Recorded separately from the session itself, because a demonstration is not a talk. */
   demonstrationCompleted: boolean;
   state: TrainingState;
+  /** Who recorded the session as delivered. `trainer` beside it is a name, not an account. */
+  completedBy: string | null;
   acknowledgedBy: string | null;
   acknowledgedAt: string | null;
   materialDocumentId: string | null;
@@ -77,6 +79,7 @@ export function makeTrainingSession(input: NewTrainingSession): TrainingSession 
     attendees: null,
     demonstrationCompleted: false,
     state: 'planned',
+    completedBy: null,
     acknowledgedBy: null,
     acknowledgedAt: null,
     materialDocumentId: input.materialDocumentId?.trim() || null,
@@ -95,12 +98,14 @@ export function makeTrainingSession(input: NewTrainingSession): TrainingSession 
 export function completeTraining(
   session: TrainingSession,
   input: { attendees: string; trainer?: string | null; demonstrationCompleted?: boolean; sessionDate?: string | null },
+  actorId: string | null = null,
 ): TrainingSession {
   if (session.state !== 'planned') throw new Error(`only a planned session can be completed (this one is ${session.state})`);
   if (!input.attendees?.trim()) throw new Error('validation: the client attendees are required to complete a session');
   return {
     ...session,
     state: 'completed',
+    completedBy: actorId,
     attendees: input.attendees.trim(),
     trainer: input.trainer?.trim() || session.trainer,
     demonstrationCompleted: input.demonstrationCompleted ?? session.demonstrationCompleted,

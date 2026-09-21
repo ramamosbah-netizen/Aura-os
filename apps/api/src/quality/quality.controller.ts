@@ -262,6 +262,7 @@ export class QualityController {
   // ── Snagging / Punch List ──────────────────────────────────────────────────
 
   @Post('snags')
+  @Permissions('quality.snag.create')
   logSnag(@Body() dto: LogSnagDto): Promise<Snag> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.description?.trim()) throw new BadRequestException('description is required');
@@ -288,12 +289,17 @@ export class QualityController {
   }
 
   @Put('snags/:id/resolve')
+  @Permissions('quality.snag.resolve')
   resolveSnag(@Param('id') id: string): Promise<Snag> {
     const ctx = this.tenant.get();
     return this.qualityService.resolveSnag(ctx.tenantId, ctx.actorId, id, 'resolved');
   }
 
+  // CLOSING IS NOT RESOLVING. Claiming a fix and accepting one are different judgements, and the
+  // service used to assert `quality.snag.resolve` for both while the guard derived
+  // `quality.snag.close` from this path that nothing asserted.
   @Put('snags/:id/close')
+  @Permissions('quality.snag.close')
   closeSnag(@Param('id') id: string): Promise<Snag> {
     const ctx = this.tenant.get();
     return this.qualityService.resolveSnag(ctx.tenantId, ctx.actorId, id, 'closed');
@@ -313,6 +319,7 @@ export class QualityController {
   // ── Inspection & Test Plans (ITP) ──────────────────────────────────────────
 
   @Post('itps')
+  @Permissions('quality.itp.create')
   async createItp(@Body() dto: { projectId: string; projectName?: string; reference: string; title: string; discipline?: string; points: NewItpPoint[] }): Promise<Itp> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.reference?.trim()) throw new BadRequestException('reference is required');
@@ -343,8 +350,10 @@ export class QualityController {
   }
 
   @Put('itps/:id/activate')
+  @Permissions('quality.itp.activate')
   async activateItp(@Param('id') id: string): Promise<Itp> {
-    return await this.qualityService.activateItp(this.tenant.get().tenantId, id);
+    const ctx = this.tenant.get();
+    return await this.qualityService.activateItp(ctx.tenantId, ctx.actorId, id);
   }
 
   @Put('itps/:id/points/:index')
@@ -354,8 +363,10 @@ export class QualityController {
   }
 
   @Put('itps/:id/close')
+  @Permissions('quality.itp.close')
   async closeItp(@Param('id') id: string): Promise<Itp> {
-    return await this.qualityService.closeItp(this.tenant.get().tenantId, id);
+    const ctx = this.tenant.get();
+    return await this.qualityService.closeItp(ctx.tenantId, ctx.actorId, id);
   }
 
   // ── Material Approval Requests (MAR) ───────────────────────────────────────

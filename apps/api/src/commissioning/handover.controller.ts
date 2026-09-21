@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { Permissions, TenantContext } from '@aura/core';
 import { HandoverService, type HandoverView } from '@aura/commissioning';
 
 class CreateHandoverDto {
@@ -190,14 +190,16 @@ export class HandoverController {
   }
 
   @Put('training/:id/complete')
+  @Permissions('commissioning.handover.complete')
   completeTraining(@Param('id') id: string, @Body() dto: { attendees?: string; trainer?: string; demonstrationCompleted?: boolean; sessionDate?: string }) {
     if (!dto?.attendees?.trim()) throw new BadRequestException('attendees is required');
-    return this.service.completeTraining(id, this.tenant.get().tenantId, {
+    const ctx = this.tenant.get();
+    return this.service.completeTraining(id, ctx.tenantId, {
       attendees: dto.attendees,
       trainer: dto.trainer ?? null,
       demonstrationCompleted: dto.demonstrationCompleted,
       sessionDate: dto.sessionDate ?? null,
-    });
+    }, ctx.actorId);
   }
 
   @Put('training/:id/acknowledge')
@@ -207,6 +209,7 @@ export class HandoverController {
   }
 
   @Post()
+  @Permissions('commissioning.handover.create')
   create(@Body() dto: CreateHandoverDto): Promise<HandoverView> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.code?.trim()) throw new BadRequestException('code is required');
@@ -255,6 +258,7 @@ export class HandoverController {
   }
 
   @Put(':id/submit')
+  @Permissions('commissioning.handover.submit')
   submit(@Param('id') id: string): Promise<HandoverView> {
     const ctx = this.tenant.get();
     // The actor is stamped on the dossier manifest: "issued by" is part of what was sent.
@@ -262,18 +266,22 @@ export class HandoverController {
   }
 
   @Put(':id/accept')
+  @Permissions('commissioning.handover.accept')
   accept(@Param('id') id: string, @Body() dto: AcceptDto): Promise<HandoverView> {
     if (!dto?.clientRepresentative?.trim()) throw new BadRequestException('clientRepresentative is required');
-    return this.service.accept(id, this.tenant.get().tenantId, {
+    const ctx = this.tenant.get();
+    return this.service.accept(id, ctx.tenantId, {
       clientRepresentative: dto.clientRepresentative,
       warrantyStartDate: dto.warrantyStartDate,
       warrantyMonths: dto.warrantyMonths,
-    });
+    }, ctx.actorId);
   }
 
   @Put(':id/reject')
+  @Permissions('commissioning.handover.reject')
   reject(@Param('id') id: string, @Body() dto: RejectDto): Promise<HandoverView> {
     if (!dto?.reason?.trim()) throw new BadRequestException('reason is required');
-    return this.service.reject(id, this.tenant.get().tenantId, dto.reason);
+    const ctx = this.tenant.get();
+    return this.service.reject(id, ctx.tenantId, dto.reason, ctx.actorId);
   }
 }

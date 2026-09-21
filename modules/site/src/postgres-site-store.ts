@@ -81,7 +81,7 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
     await conn.query(
       `insert into public.aura_site_plant_usage (
         id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at, resource_type, resource_id
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       on conflict (id) do update set
         hours = excluded.hours, rate = excluded.rate, cost = excluded.cost,
         notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, updated_at = excluded.updated_at,
@@ -466,7 +466,7 @@ export class PostgresMaterialConsumptionStore implements MaterialConsumptionStor
 }
 
 const SI_COLS =
-  'id, tenant_id, company_id, project_id, project_name, reference, issued_by, date::text AS date, instruction, cost_implication, time_implication, status, acknowledged_at, closed_at, created_by, created_at, updated_at';
+  'id, tenant_id, company_id, project_id, project_name, reference, issued_by, issued_by_user_id, date::text AS date, instruction, cost_implication, time_implication, status, acknowledged_by, acknowledged_at, closed_by, closed_at, created_by, created_at, updated_at';
 
 export class PostgresSiteInstructionStore implements SiteInstructionStore {
   constructor(private readonly pool: Pool) {}
@@ -475,11 +475,11 @@ export class PostgresSiteInstructionStore implements SiteInstructionStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_site_instructions (
-        id, tenant_id, company_id, project_id, project_name, reference, issued_by, date, instruction, cost_implication, time_implication, status, acknowledged_at, closed_at, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        id, tenant_id, company_id, project_id, project_name, reference, issued_by, issued_by_user_id, date, instruction, cost_implication, time_implication, status, acknowledged_by, acknowledged_at, closed_by, closed_at, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
       on conflict (id) do update set
-        status = excluded.status, acknowledged_at = excluded.acknowledged_at, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
-      [si.id, si.tenantId, si.companyId, si.projectId, si.projectName, si.reference, si.issuedBy, si.date, si.instruction, si.costImplication, si.timeImplication, si.status, si.acknowledgedAt, si.closedAt, si.createdBy, si.createdAt, si.updatedAt],
+        status = excluded.status, acknowledged_by = excluded.acknowledged_by, acknowledged_at = excluded.acknowledged_at, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
+      [si.id, si.tenantId, si.companyId, si.projectId, si.projectName, si.reference, si.issuedBy, si.issuedByUserId, si.date, si.instruction, si.costImplication, si.timeImplication, si.status, si.acknowledgedBy, si.acknowledgedAt, si.closedBy, si.closedAt, si.createdBy, si.createdAt, si.updatedAt],
     );
   }
 
@@ -512,6 +512,9 @@ export class PostgresSiteInstructionStore implements SiteInstructionStore {
       costImplication: row.cost_implication,
       timeImplication: row.time_implication,
       status: row.status,
+      issuedByUserId: row.issued_by_user_id ?? null,
+      acknowledgedBy: row.acknowledged_by ?? null,
+      closedBy: row.closed_by ?? null,
       acknowledgedAt: row.acknowledged_at ? row.acknowledged_at.toISOString() : null,
       closedAt: row.closed_at ? row.closed_at.toISOString() : null,
       createdBy: row.created_by,

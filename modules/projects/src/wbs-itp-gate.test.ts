@@ -28,7 +28,14 @@ const projectId = 'proj-1';
 
 const mockEvents = { appendWithClient: async () => [] } as unknown as EventStore;
 const mockTx: TxRunner = { run: (fn) => fn(null) };
-const access = new AccessService();
+/**
+ * A REAL SEEDED QA/QC, because putting an ITP in force now asserts `quality.itp.activate`. This gate
+ * test is about WBS completion, not authority — but it drives the quality service, and that service
+ * used to check nothing on this path at all.
+ */
+const access = new AccessService(null); // no pool → in-memory grants
+access.seedStandardRoles();
+access.grant({ userId: 'u-qaqc', roleId: 'r-qa-qc', scope: { kind: 'org', level: 'tenant', id: tenantId } });
 
 function buildQuality(): QualityService {
   return new QualityService(
@@ -67,7 +74,8 @@ describe('WBS completion — ITP release gate', () => {
       title: 'Concrete works',
       points: [{ activity: 'Rebar inspection', pointType: 'hold' }],
     });
-    return quality.activateItp(tenantId, itp.id);
+    // The actor is a parameter now: putting an inspection plan in force used to record nobody.
+    return quality.activateItp(tenantId, 'u-qaqc', itp.id);
   }
 
   it('blocks completion while an active ITP has pending points', async () => {
@@ -106,7 +114,7 @@ describe('WBS completion — ITP release gate', () => {
       reference: 'ITP-OTHER', title: 'Other job',
       points: [{ activity: 'Y', pointType: 'hold' }],
     });
-    await quality.activateItp(tenantId, other.id);
+    await quality.activateItp(tenantId, 'u-qaqc', other.id);
 
     const done = await wbs.updateProgress(node.id, 100);
     expect(done.status).toBe('completed');

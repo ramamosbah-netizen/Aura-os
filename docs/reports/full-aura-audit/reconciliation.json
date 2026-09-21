@@ -14,7 +14,7 @@
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 62,
+  "gapRecords": 63,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -79,6 +79,7 @@
     "HR-APR-01",
     "HSE-RA-01",
     "DC-REL-01",
+    "DEL-EVID-01",
     "SEC-01",
     "ARCH-01",
     "BID-01"

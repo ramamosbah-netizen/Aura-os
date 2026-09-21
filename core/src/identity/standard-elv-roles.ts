@@ -293,6 +293,112 @@ const DOCCONTROL_RELEASE_AUTHORITY = [
   'doccontrol.submittal.create',
 ] as const;
 
+/**
+ * WHAT A SITE ENGINEER DOES: records the day and the work in it. `site.*` used to sit on this role,
+ * which meant the person who prepared and submitted the daily report also reviewed and approved it.
+ * Measured against the running API as one principal, every step returned success and
+ * `preparedBy = submittedBy = reviewedBy = approvedBy`.
+ */
+const SITE_EXECUTION = [
+  'site.daily-report.create', 'site.daily-report.submit', 'site.daily-report.update',
+  // The line items that make up a day. Each is a separate route and all are draft-only.
+  'site.daily-report.labour', 'site.daily-report.plant', 'site.daily-report.progress',
+  'site.daily-report.delays', 'site.daily-report.evidence',
+  'site.labour.log', 'site.labour.create', 'site.plant.create', 'site.installation.create',
+  'site.material-consumption.create', 'site.consumption.log',
+  'site.delay.log', 'site.delay-log.create', 'site.survey.create',
+  // ACKNOWLEDGES an instruction — the contractor's word that it was received — and neither issues
+  // nor closes one. Issuing carries cost and time; closing says it was carried out.
+  'site.instruction.acknowledge',
+] as const;
+
+/**
+ * THE SECOND PAIR OF EYES ON SITE. Reviewing and approving the day, issuing and closing an
+ * instruction, and resolving a delay: the acts that judge the work rather than perform it.
+ * `site.daily-report.approve` covers reject as well — they are one decision with two outcomes, as
+ * in document control.
+ */
+const SITE_SUPERVISION = [
+  'site.daily-report.review', 'site.daily-report.approve',
+  'site.instruction.issue', 'site.instruction.close',
+  'site.delay.resolve', 'site.delay-log.resolve',
+] as const;
+
+/**
+ * THE QUALITY REGISTER, enumerated out of `quality.*`.
+ *
+ * QA/QC genuinely owns nearly all of this, so the narrowing is not about taking work away — it is
+ * that a wildcard cannot say which acts exist, and two of them turned out not to work properly
+ * behind it: a snag had no state machine at all (measured: closed → resolved went BACKWARDS) and an
+ * ITP was activated and closed with no actor and no service-side check.
+ */
+const QUALITY_REGISTER = [
+  'quality.ir.create', 'quality.ir.request', 'quality.ir.start-inspection', 'quality.ir.resolve',
+  'quality.ir.approve', 'quality.ir.raise-ncr',
+  'quality.ncr.create', 'quality.ncr.plan', 'quality.ncr.correct', 'quality.ncr.verify', 'quality.ncr.close',
+  'quality.snag.create', 'quality.snag.resolve', 'quality.snag.close',
+  'quality.itp.create', 'quality.itp.activate', 'quality.itp.points', 'quality.itp.close',
+  'quality.audit.create', 'quality.audit.checklist', 'quality.audit.ncr',
+  'quality.calibration.create',
+  // The register itself is QA/QC's; the DECISION on a material approval is the Technical Manager's
+  // (ENG-04) and is listed on that role. QA/QC reviewing one is existing behaviour, kept — along
+  // with raising and revising one, which it also had under `quality.*`.
+  'quality.material-approval.create', 'quality.material-approval.submit',
+  'quality.material-approval.revise', 'quality.material-approval.review', 'quality.material-approval.read',
+  // TWO NAMES FOR ONE REGISTER. The routes live at `quality/irs/*` and derive `quality.ir.*`, while
+  // the role vocabulary and some callers say `inspection-request`. Both are listed rather than
+  // renamed, as with `doccontrol.transmittal.update` — and the alias is not cosmetic: the Site
+  // Engineer NAMED `quality.inspection-request.create` and the route derives `quality.ir.create`,
+  // so the one capability that role was given in this module did not reach the route behind it.
+  'quality.inspection-request.create', 'quality.inspection-request.approve',
+] as const;
+
+/**
+ * DELIVERING A HANDOVER versus ACCEPTING ONE. `commissioning.handover.*` sat on Handover/FM alone,
+ * so the party that receives the handover was also the only party that could submit it — measured,
+ * the PROJECT MANAGER was refused with "no grant satisfies commissioning.handover.submit".
+ *
+ * Submitting is ours: assembling the dossier and issuing it. Accepting is the client's side, which
+ * Handover/FM records on their behalf, and it starts the warranty clock.
+ */
+/**
+ * THE T&C REGISTER, enumerated out of `commissioning.record.*` for the same reason the quality one
+ * was: a wildcard cannot say which acts exist, and one of these — closing a punch item — is a
+ * governing act that no role NAMED.
+ */
+const COMMISSIONING_RECORD = [
+  'commissioning.record.create', 'commissioning.record.delete',
+  'commissioning.record.test', 'commissioning.record.test-items', 'commissioning.record.runs',
+  'commissioning.record.result', 'commissioning.record.fail', 'commissioning.record.commission',
+  'commissioning.record.punch', 'commissioning.record.close', 'commissioning.record.escalate',
+  'commissioning.record.itp-links', 'commissioning.record.asbuilt-links', 'commissioning.record.certificate-link',
+] as const;
+
+/**
+ * ASSEMBLING THE DOSSIER. O&M manuals, spares, training records, the checklist — the evidence a
+ * handover is made of. Handover/FM prepares this (it is the role's whole description) and so do the
+ * PM and the T&C engineer; none of it is the act of issuing anything, so it is shared.
+ */
+const COMMISSIONING_DOSSIER = [
+  'commissioning.handover.create', 'commissioning.handover.checklist',
+  'commissioning.handover.om-items', 'commissioning.handover.seed', 'commissioning.handover.required',
+  'commissioning.handover.spares', 'commissioning.handover.hand-over', 'commissioning.handover.state',
+  'commissioning.handover.training', 'commissioning.handover.complete',
+] as const;
+
+/** ISSUING IT TO THE CLIENT. One act, and it is not the same hands that accept it. */
+const COMMISSIONING_DELIVERY = [...COMMISSIONING_DOSSIER, 'commissioning.handover.submit'] as const;
+
+/**
+ * ACCEPTING IT. The client's side of the exchange, recorded by Handover/FM on their behalf, and it
+ * starts the warranty clock. Handover/FM also prepares the dossier — what it does NOT do any more
+ * is submit, because the party receiving a handover cannot also be the party issuing it.
+ */
+const COMMISSIONING_ACCEPTANCE = [
+  ...COMMISSIONING_DOSSIER,
+  'commissioning.handover.accept', 'commissioning.handover.reject', 'commissioning.handover.acknowledge',
+] as const;
+
 const salesOpportunityPermissions = [
   'crm.opportunity.read',
   'crm.opportunity.create',
@@ -422,7 +528,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Records site execution, labour, plant, progress and inspection requests for an assigned project.',
     assignmentScope: 'project',
     permissions: [
-      'site.*', 'quality.inspection-request.create', readOnly('quality'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK,
+      ...SITE_EXECUTION,
+      // RAISES an inspection request and decides none. Both spellings, because the role named
+      // `inspection-request` while the route derives `ir` — so this capability did not work.
+      'quality.inspection-request.create', 'quality.ir.create', 'quality.ir.request',
+      readOnly('site'),
+      readOnly('quality'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK,
       // Raises an incident and REQUESTS a permit for the work it has to do. Authorises neither —
       // which is what turns the permit's two-person rule from a separation between HSE officers into
       // a separation between the worker and the authoriser.
@@ -457,6 +568,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'engineering.*.read', 'engineering.rfi.*', 'engineering.tq.close', 'site.*.read', 'quality.*.read',
       // Also on the proposing side of a material approval; decides none.
       'quality.material-approval.create', 'quality.material-approval.submit', 'quality.material-approval.revise',
+      // THE SECOND PAIR OF EYES ON THE DAY. The Site Engineer writes and submits the daily report and
+      // no longer approves it; this role and the PM do. A daily report is what a delay claim, a
+      // variation and a payment dispute are later argued from, and it was written and signed off by
+      // one person. Also issues and closes a site instruction, and resolves a delay log.
+      ...SITE_SUPERVISION,
       'procurement.*.read', 'commissioning.*.read', ...STAFF_BASE,
     ],
   },
@@ -473,6 +589,15 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // `subcontracts.variation.approve` are deliberately absent — both belong to Commercial / QS.
       'subcontracts.subcontract.read', 'subcontracts.claim.create', 'subcontracts.claim.read',
       'subcontracts.variation.create', 'subcontracts.variation.read',
+      // Approves the day alongside the Project Engineer. TWO roles hold this on purpose: an approval
+      // only one person in the world can give is as broken as one anybody can, and a project does
+      // not stop because somebody is on leave.
+      ...SITE_SUPERVISION,
+      // DELIVERS THE HANDOVER and does not accept it. Assembling the dossier and issuing it to the
+      // client is project delivery; accepting it is the client's side, recorded by Handover/FM.
+      // Measured before this: the PM was refused its own project's handover submission with
+      // "no grant satisfies commissioning.handover.submit".
+      ...COMMISSIONING_DELIVERY,
       readOnly('contracts'), readOnly('site'), readOnly('engineering'), readOnly('procurement'),
       readOnly('quality'), readOnly('commissioning'), readOnly('finance'), ...STAFF_BASE,
     ],
@@ -590,7 +715,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'QA / QC',
     description: 'Owns inspections, ITP evidence, material approvals, NCRs and quality closeout.',
     assignmentScope: 'project',
-    permissions: ['quality.*', readOnly('commissioning'), readOnly('engineering'), readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, ...STAFF_BASE],
+    permissions: [
+      ...QUALITY_REGISTER, readOnly('quality'),
+      readOnly('commissioning'), readOnly('engineering'), readOnly('site'), readOnly('projects'),
+      PROJECT_RESPONSIBILITY_WORK, ...STAFF_BASE,
+    ],
   },
   {
     id: 'r-hse',
@@ -657,14 +786,32 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'T&C Engineer',
     description: 'Executes system-specific pre-commissioning, tests, defects, retests and evidence capture.',
     assignmentScope: 'project',
-    permissions: ['commissioning.record.*', readOnly('quality'), readOnly('engineering'), readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE],
+    permissions: [
+      ...COMMISSIONING_RECORD, readOnly('commissioning'),
+      // Assembles and submits the handover dossier — the delivery side — and accepts nothing.
+      ...COMMISSIONING_DELIVERY,
+      readOnly('quality'), readOnly('engineering'), readOnly('site'), readOnly('projects'),
+      PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
+    ],
   },
   {
     id: 'r-handover-fm',
     name: 'Handover / FM',
     description: 'Prepares O&M, training, spares, dossier and handover readiness records for acceptance.',
     assignmentScope: 'project',
-    permissions: ['commissioning.handover.*', readOnly('commissioning'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), readOnly('amc'), readOnly('doccontrol'), ...STAFF_BASE],
+    permissions: [
+      // ACCEPTS, AND NO LONGER SUBMITS. `commissioning.handover.*` gave this role both ends of the
+      // exchange — the party receiving the handover was the only party that could issue it, which is
+      // not an exchange at all, and it is why the PROJECT MANAGER was refused their own project's
+      // handover (measured: "no grant satisfies commissioning.handover.submit").
+      //
+      // `acceptedBy` is recorded beside the free-text `clientRepresentative`: the account that
+      // performed the acceptance, and the person on the client side it was accepted by. Acceptance
+      // starts the warranty and defects-liability clock, and it used to record neither.
+      ...COMMISSIONING_ACCEPTANCE,
+      readOnly('commissioning'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK,
+      readOnly('assets'), readOnly('amc'), readOnly('doccontrol'), ...STAFF_BASE,
+    ],
   },
   {
     /**

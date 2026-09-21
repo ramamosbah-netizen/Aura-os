@@ -12,11 +12,11 @@ export class PostgresItpStore implements ItpStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_quality_itps (
-        id, tenant_id, company_id, project_id, project_name, reference, title, discipline, status, points, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        id, tenant_id, company_id, project_id, project_name, reference, title, discipline, status, points, activated_by, activated_at, closed_by, closed_at, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
       on conflict (id) do update set
-        status = excluded.status, points = excluded.points, updated_at = excluded.updated_at`,
-      [itp.id, itp.tenantId, itp.companyId, itp.projectId, itp.projectName, itp.reference, itp.title, itp.discipline, itp.status, JSON.stringify(itp.points), itp.createdBy, itp.createdAt, itp.updatedAt],
+        status = excluded.status, points = excluded.points, activated_by = excluded.activated_by, activated_at = excluded.activated_at, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
+      [itp.id, itp.tenantId, itp.companyId, itp.projectId, itp.projectName, itp.reference, itp.title, itp.discipline, itp.status, JSON.stringify(itp.points), itp.activatedBy, itp.activatedAt, itp.closedBy, itp.closedAt, itp.createdBy, itp.createdAt, itp.updatedAt],
     );
   }
 
@@ -55,6 +55,10 @@ export class PostgresItpStore implements ItpStore {
       title: row.title,
       discipline: row.discipline,
       status: row.status,
+      activatedBy: row.activated_by ?? null,
+      activatedAt: row.activated_at ?? null,
+      closedBy: row.closed_by ?? null,
+      closedAt: row.closed_at ?? null,
       points: (typeof row.points === 'string' ? JSON.parse(row.points) : row.points) as ItpPoint[],
       createdBy: row.created_by,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),

@@ -15,13 +15,23 @@ export interface SiteInstruction {
   projectId: string;
   projectName: string | null;
   reference: string;
+  /**
+   * The NAMED REPRESENTATIVE who issued it — free text, and deliberately kept, because an instruction
+   * genuinely can come from a consultant or client engineer who is not a platform user. What it is
+   * not is an actor: measured, the string "Anyone I Like" was accepted on a cost- and time-bearing
+   * instruction. `issuedByUserId` beside it is the acting user, exactly as a transmittal keeps both
+   * `sender` (an addressee label) and `sentBy` (the person who released it).
+   */
   issuedBy: string;
+  issuedByUserId: string | null;
   date: string; // YYYY-MM-DD
   instruction: string;
   costImplication: boolean;
   timeImplication: boolean;
   status: SiteInstructionStatus;
+  acknowledgedBy: string | null;
   acknowledgedAt: string | null;
+  closedBy: string | null;
   closedAt: string | null;
   createdBy: string | null;
   createdAt: string;
@@ -35,6 +45,7 @@ export interface NewSiteInstruction {
   projectName?: string | null;
   reference: string;
   issuedBy: string;
+  issuedByUserId?: string | null;
   date: string;
   instruction: string;
   costImplication?: boolean;
@@ -57,11 +68,14 @@ export function makeSiteInstruction(input: NewSiteInstruction): SiteInstruction 
     projectName: input.projectName ?? null,
     reference: input.reference.trim(),
     issuedBy: input.issuedBy.trim(),
+    issuedByUserId: input.issuedByUserId ?? null,
     date: input.date,
     instruction: input.instruction.trim(),
     costImplication: input.costImplication ?? false,
     timeImplication: input.timeImplication ?? false,
     status: 'open',
+    acknowledgedBy: null,
+    closedBy: null,
     acknowledgedAt: null,
     closedAt: null,
     createdBy: input.createdBy ?? null,
@@ -71,17 +85,17 @@ export function makeSiteInstruction(input: NewSiteInstruction): SiteInstruction 
 }
 
 /** Contractor acknowledges receipt — open → acknowledged. */
-export function acknowledgeInstruction(si: SiteInstruction): SiteInstruction {
+export function acknowledgeInstruction(si: SiteInstruction, actorId: string | null = null): SiteInstruction {
   if (si.status !== 'open') throw new Error(`cannot acknowledge from status ${si.status}`);
   const now = new Date().toISOString();
-  return { ...si, status: 'acknowledged', acknowledgedAt: now, updatedAt: now };
+  return { ...si, status: 'acknowledged', acknowledgedBy: actorId, acknowledgedAt: now, updatedAt: now };
 }
 
 /** Instruction actioned & closed out — from open or acknowledged. */
-export function closeInstruction(si: SiteInstruction): SiteInstruction {
+export function closeInstruction(si: SiteInstruction, actorId: string | null = null): SiteInstruction {
   if (si.status === 'closed') throw new Error('site instruction already closed');
   const now = new Date().toISOString();
-  return { ...si, status: 'closed', closedAt: now, updatedAt: now };
+  return { ...si, status: 'closed', closedBy: actorId, closedAt: now, updatedAt: now };
 }
 
 export const SITE_INSTRUCTION_EVENT = {

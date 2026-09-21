@@ -189,6 +189,20 @@ export class HandoverService {
         actorId,
       });
     } catch (error) {
+      // A CONVEYANCE THAT CANNOT BE OPENED BECAUSE THE ACTOR LACKS THE AUTHORITY IS NOT A WARNING.
+      //
+      // This catch returned null for ANY failure, so a handover dossier could be issued to the
+      // client with a 200 response and no conveyance record at all, the only trace being a line in
+      // the server log. Wave C gave document control a release authority precisely so that a
+      // document leaving the business is recorded and signed; swallowing an AccessDeniedError here
+      // routes around that rule and reports success.
+      //
+      // An authorization failure now propagates: the submitter is told they cannot open the
+      // conveyance, rather than discovering later that none exists. Everything else — doccontrol
+      // being absent, a transient store failure — keeps the soft behaviour, because those are
+      // genuinely "the dossier went out and the register can catch up", not "a control was skipped".
+      const message = error instanceof Error ? error.message : String(error);
+      if (/access denied/i.test(message)) throw error;
       this.logger.warn(`[Handover] transmittal could not be opened for ${pkg.code}: ${error}`);
       return null;
     }
@@ -380,7 +394,10 @@ export class HandoverService {
     // Assess first, then gate on the assessment: the commissioning and as-built items are derived,
     // so a tick cannot buy a submission the evidence does not support.
     const { readiness } = await this.withStats(pkg);
-    const next = submit(pkg, readiness);
+    // THE ACTOR GOES ON THE PACKAGE, not only onto the dossier manifest and the transmittal it
+    // opens. `submittedAt` had no `submittedBy` beside it, so the issuing end of a contractual
+    // handover was a timestamp with nobody attached.
+    const next = submit(pkg, readiness, actorId ?? null);
 
     const existing = await this.store.listDossierItems(pkg.id, tenantId);
     const issueNo = existing.reduce((max, i) => Math.max(max, i.issueNo), 0) + 1;
@@ -402,12 +419,26 @@ export class HandoverService {
     return this.withStats(next);
   }
 
+  /**
+   * Client acceptance — the contractual close.
+   *
+   * IT TOOK NO ACTOR AT ALL. The only thing recorded was the free-text `clientRepresentative`, and
+   * the audit event below was attributed to `next.createdBy`, so THE CLIENT'S ACCEPTANCE WAS FILED
+   * AGAINST WHOEVER CREATED THE PACKAGE — the same class of fabrication as an approval back-filling
+   * the reviewer. This act starts the warranty and defects-liability clock; it is the single most
+   * consequential fact in the module and it named the wrong person.
+   *
+   * Both are kept, because they answer different questions: `acceptedBy` is the account that
+   * performed it, `clientRepresentative` is the person on the client side it was accepted by, who
+   * need not be a platform user.
+   */
   async accept(
     id: string,
     tenantId: string,
     patch: { clientRepresentative: string; warrantyStartDate?: string; warrantyMonths?: number },
+    actorId?: string | null,
   ): Promise<HandoverView> {
-    const next = accept(await this.mustFind(id, tenantId), patch);
+    const next = accept(await this.mustFind(id, tenantId), patch, actorId ?? null);
     await this.store.saveHandover(next);
     // Client acceptance closes delivery and starts the warranty/DLP clock — the trigger for AMC.
     // A reactor turns this into a service contract (deliver → maintain).
@@ -416,7 +447,9 @@ export class HandoverService {
         type: 'commissioning.handover.accepted',
         tenantId: next.tenantId,
         companyId: next.companyId,
-        actorId: next.createdBy,
+        // WHOEVER ACCEPTED IT. This said `next.createdBy` — the audit trail recorded the client's
+        // acceptance as an act of the person who first created the package.
+        actorId: next.acceptedBy,
         aggregateType: 'commissioning.handover',
         aggregateId: next.id,
         payload: {
@@ -432,8 +465,8 @@ export class HandoverService {
     return this.withStats(next);
   }
 
-  async reject(id: string, tenantId: string, reason: string): Promise<HandoverView> {
-    const next = reject(await this.mustFind(id, tenantId), reason);
+  async reject(id: string, tenantId: string, reason: string, actorId?: string | null): Promise<HandoverView> {
+    const next = reject(await this.mustFind(id, tenantId), reason, actorId ?? null);
     await this.store.saveHandover(next);
     return this.withStats(next);
   }
@@ -663,10 +696,13 @@ export class HandoverService {
     id: string,
     tenantId: string,
     input: { attendees: string; trainer?: string | null; demonstrationCompleted?: boolean; sessionDate?: string | null },
+    actorId?: string | null,
   ): Promise<TrainingSession> {
     const session = await this.store.findTrainingSession(id, tenantId);
     if (!session) throw new Error(`not found: training session ${id}`);
-    const next = completeTraining(session, input);
+    // `trainer` is a NAME; `completedBy` is the account that recorded the session as delivered.
+    // Client training is part of the handover evidence, and it was signed off by nobody.
+    const next = completeTraining(session, input, actorId ?? null);
     await this.store.saveTrainingSession(next);
     return next;
   }

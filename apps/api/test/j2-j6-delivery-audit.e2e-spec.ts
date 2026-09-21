@@ -37,6 +37,18 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
       if (response.status !== 201) throw new Error(`POST ${path} failed ${response.status}: ${JSON.stringify(response.body)}`);
       return response.body;
     };
+    /**
+     * The SECOND person. This spec already minted a `delivery-checker` and never used it for the
+     * daily report, so the whole day — prepared, submitted, reviewed and approved — was one actor.
+     * SEC-01 wave D refuses that: a daily report is what a delay claim is later argued from, and it
+     * is now signed by two people. The fixture had the second person all along.
+     */
+    const postAsChecker = async (path: string, body: unknown = {}) => {
+      const response = await checker.post(`/api/v1${path}`).send(body);
+      if (response.status !== 201) throw new Error(`POST(checker) ${path} failed ${response.status}: ${JSON.stringify(response.body)}`);
+      return response.body;
+    };
+    const putAsChecker = async (path: string, body: unknown = {}) => (await checker.put(`/api/v1${path}`).send(body).expect(200)).body;
     const get = async (path: string) => (await http.get(`/api/v1${path}`).expect(200)).body;
     const put = async (path: string, body: unknown = {}) => (await http.put(`/api/v1${path}`).send(body).expect(200)).body;
     const patch = async (path: string, body: unknown) => (await http.patch(`/api/v1${path}`).send(body).expect(200)).body;
@@ -111,8 +123,9 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     await post('/site/installations', { projectId, boqItemId: item.id, date: '2026-09-14', description: 'Installed CCTV cameras', quantity: 10, unit: 'no' });
     const report = await post('/site/daily-reports', { projectId, date: '2026-09-14', workDescription: 'CCTV installation' });
     await put(`/site/daily-reports/${report.id}/submit`);
-    await post(`/site/daily-reports/${report.id}/start-review`);
-    await post(`/site/daily-reports/${report.id}/approve`);
+    await postAsChecker(`/site/daily-reports/${report.id}/start-review`);
+    const approvedDay = await postAsChecker(`/site/daily-reports/${report.id}/approve`);
+    expect(approvedDay.submittedBy).not.toBe(approvedDay.approvedBy);
 
     // J5: certified, billed and paid remain separate. This audits the handoff
     // into AR; it does not simulate bank settlement or PostgreSQL persistence.
@@ -165,8 +178,12 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     await put(`${ho}/spares/${spare.id}/hand-over`, { quantity: 1 });
     await put(`${ho}/spares/${spare.id}/acknowledge`, { acknowledgedBy: 'Fictional client representative' });
     await put(`${ho}/${pkg.id}/submit`);
-    const accepted = await put(`${ho}/${pkg.id}/accept`, { clientRepresentative: 'Fictional client representative', warrantyStartDate: '2026-09-14', warrantyMonths: 12 });
+    // ACCEPTED BY THE OTHER SIDE. Submitting a handover and accepting it are the two halves of a
+    // contractual exchange, and one account doing both is not an exchange — so the checker accepts,
+    // and the package records `acceptedBy` beside the free-text client representative.
+    const accepted = await putAsChecker(`${ho}/${pkg.id}/accept`, { clientRepresentative: 'Fictional client representative', warrantyStartDate: '2026-09-14', warrantyMonths: 12 });
     expect(accepted.status).toBe('accepted');
+    expect(accepted.submittedBy).not.toBe(accepted.acceptedBy);
     const dossier = await get(`${ho}/${pkg.id}/dossier`);
     const amcs = await eventually(() => get('/amc/contracts'), rows => rows.some((r: any) => r.contractNumber === `AMC-${pkg.id.slice(0, 8)}`));
     const amc = amcs.find((r: any) => r.contractNumber === `AMC-${pkg.id.slice(0, 8)}`);

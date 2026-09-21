@@ -202,26 +202,26 @@
   {
     "file": "modules/site/src/site.service.ts",
     "method": "approveDailyReport",
-    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId)"
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.approve', report.projectId)"
   },
   {
     "file": "modules/site/src/site.service.ts",
     "method": "createDailyReport",
-    "call": "this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily_report.create', input.projectId)"
+    "call": "this.assertReportPerm(input.createdBy ?? null, input.tenantId, input.companyId ?? null, 'site.daily-report.create', input.projectId)"
   },
   {
     "file": "modules/site/src/site.service.ts",
     "method": "rejectDailyReport",
-    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.approve', report.projectId)"
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.approve', report.projectId)"
   },
   {
     "file": "modules/site/src/site.service.ts",
     "method": "startReviewReport",
-    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.review', report.projectId)"
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.review', report.projectId)"
   },
   {
     "file": "modules/site/src/site.service.ts",
     "method": "submitDailyReport",
-    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily_report.submit', report.projectId)"
+    "call": "this.assertReportPerm(actorId, tenantId, report.companyId, 'site.daily-report.submit', report.projectId)"
   }
 ]

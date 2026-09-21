@@ -1,15 +1,8 @@
 // Split from postgres-hr-store.ts — one file per entity store.
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
-import type { Employee } from './domain/employee';
-import type { Leave } from './domain/leave';
-import type { PayrollRun } from './domain/payroll-run';
-import type { TimesheetEntry } from './domain/timesheet';
-import type { ExpenseClaim } from './domain/expense-claim';
-import type { StaffAdvance } from './domain/staff-advance';
 import type { AttendanceRecord } from './domain/attendance';
-import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeScopedFilter } from './store.interface';
+import type { AttendanceStore, EmployeeScopedFilter } from './store.interface';
 import { type Page, type PageParams } from '@aura/shared';
 import { pagePostgres, scopedWhere } from './paged-query';
 

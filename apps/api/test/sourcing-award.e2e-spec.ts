@@ -34,7 +34,7 @@ describe('the award: an approved recommendation becomes purchase orders (HTTP, A
   let manager: ReturnType<typeof request.agent>;
   let seeder: ReturnType<typeof request.agent>;
   let rfqId: string;
-  let prLineIds: string[] = [];
+  const prLineIds: string[] = [];
   const offers: Record<string, { offerId: string; revisionId: string }> = {};
 
   const post = async <T>(a: ReturnType<typeof request.agent>, path: string, data?: unknown): Promise<T> => {

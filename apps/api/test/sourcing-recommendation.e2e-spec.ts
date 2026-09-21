@@ -26,8 +26,8 @@ describe('the governed sourcing recommendation (HTTP, Auth-ON)', () => {
   let smallManager: ReturnType<typeof request.agent>;
   let seeder: ReturnType<typeof request.agent>;
   let rfqId: string;
-  let prLines: string[] = [];
-  let offers: Record<string, string> = {};
+  const prLines: string[] = [];
+  const offers: Record<string, string> = {};
 
   beforeAll(async () => {
     process.env.AUTH_JWT_SECRET = 'sup13-e2e-only';

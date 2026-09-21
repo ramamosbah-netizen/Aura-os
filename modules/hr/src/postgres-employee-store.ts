@@ -2,14 +2,7 @@
 import type { Pool, PoolClient, QueryResultRow } from 'pg';
 import type { TxHandle } from '@aura/core';
 import type { Employee } from './domain/employee';
-import type { Leave } from './domain/leave';
-import type { PayrollRun } from './domain/payroll-run';
-import type { TimesheetEntry } from './domain/timesheet';
-import type { ExpenseClaim } from './domain/expense-claim';
-import type { StaffAdvance } from './domain/staff-advance';
-import type { AttendanceRecord } from './domain/attendance';
-import type { PerformanceAppraisal, AppraisalCriterion } from './domain/appraisal';
-import type { EmployeeStore, LeaveStore, PayrollRunStore, TimesheetStore, ExpenseClaimStore, StaffAdvanceStore, AttendanceStore, AppraisalStore, EmployeeFilter } from './store.interface';
+import type { EmployeeStore, EmployeeFilter } from './store.interface';
 import { type Page, type PageParams, decryptField, encryptField } from '@aura/shared';
 import { pagePostgres } from './paged-query';
 

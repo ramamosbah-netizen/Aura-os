@@ -73,10 +73,8 @@ const { rows: [legacy] } = await pool.query(
     WHERE table_schema = 'public' AND table_name = 'aura_procurement_quotation_lines'
       AND column_name = 'quotation_id'`);
 if (legacy.present === 0) {
-  console.log('
-   quotation_id has been retired (migration 0352). Every line belongs to a revision;');
-  console.log('   there is nothing left to backfill.
-');
+  console.log('\n   quotation_id has been retired (migration 0352). Every line belongs to a revision;');
+  console.log('   there is nothing left to backfill.\n');
   await pool.end();
   process.exit(0);
 }

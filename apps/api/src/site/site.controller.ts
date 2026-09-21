@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { Permissions, TenantContext } from '@aura/core';
+import { DmsService, Permissions, TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type DailyReport,
@@ -79,6 +80,14 @@ class EvidenceDto {
   @IsOptional() @IsString() hash?: string;
 }
 
+/** The multipart fields beside the file. No `fileId`: this route creates the file. */
+class UploadEvidenceDto {
+  @IsOptional() @IsString() capturedAt?: string;
+  @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() category?: EvidenceCategory;
+}
+
 class CreateDelayLogDto {
   @IsString() projectId!: string;
   @IsOptional() @IsString() projectName?: string;
@@ -103,6 +112,7 @@ export class SiteController {
   constructor(
     private readonly siteService: SiteService,
     private readonly tenant: TenantContext,
+    private readonly dms: DmsService,
   ) {}
 
   // ── Daily Reports ──────────────────────────────────────────────────────────
@@ -197,6 +207,70 @@ export class SiteController {
     if (!dto?.fileId?.trim()) throw new BadRequestException('fileId is required');
     const ctx = this.tenant.get();
     return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, dto);
+  }
+
+  /**
+   * THE DOOR SITE DID NOT HAVE.
+   *
+   * `addEvidence` above takes a `fileId` and there was no site route that could produce one:
+   * every multipart upload in AURA lived in CRM and Tendering, and the generic `/documents`
+   * route is inline text by its own description. So a site engineer could photograph a riser
+   * and had nowhere to put the photograph — which is the whole of finding J4-01, "the daily
+   * report displays photos/signature without saving them with the record".
+   *
+   * Upload and attach are ONE act. Two calls would allow a stored photo attached to nothing and
+   * an evidence row pointing at a file that was never stored; the register would then be unable
+   * to say whether the day's evidence exists.
+   *
+   * `@Permissions` is DECLARED rather than derived, and names the permission the sibling route
+   * already uses. The derived name for this path would be `site.daily-report.upload`, which no
+   * role holds — the route would exist and be reachable by nobody. Attaching evidence is one
+   * act whichever door it comes through, so it takes one permission: SEC-01's authority is
+   * unchanged by this.
+   */
+  @Post('daily-reports/:id/evidence/upload')
+  @Permissions('site.daily-report.evidence')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024, files: 1 } }))
+  async uploadEvidence(
+    @Param('id') id: string,
+    @Body() dto: UploadEvidenceDto,
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ): Promise<SiteEvidence> {
+    if (!file?.buffer?.length) throw new BadRequestException('a file is required');
+    const ctx = this.tenant.get();
+    const report = await this.siteService.getDailyReport(ctx.tenantId, id);
+    if (!report) throw new NotFoundException('Daily report not found');
+
+    // Stored under the `evidence` category, so the file-type policy holds it to images and PDFs:
+    // a day's evidence is what a phone or a scanner produced, not a spreadsheet or an archive.
+    const stored = await this.dms.createDocument(
+      {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        kind: 'evidence',
+        title: dto?.description?.trim() || file.originalname,
+        aggregateType: 'site.daily-report',
+        aggregateId: id,
+        createdBy: ctx.actorId ?? null,
+      },
+      {
+        fileName: file.originalname.split(/[\\/]/).pop() || 'evidence',
+        contentType: file.mimetype || 'application/octet-stream',
+        data: file.buffer,
+      },
+    );
+
+    return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, {
+      fileId: stored.document.id,
+      category: dto?.category,
+      description: dto?.description,
+      location: dto?.location,
+      capturedAt: dto?.capturedAt,
+      // COMPUTED HERE, never accepted from the caller. The hash is the tamper-evidence on the
+      // photograph; one supplied by whoever uploaded the file attests to nothing. The sibling
+      // route still takes a client hash for the pre-existing flow, and this one does not.
+      hash: stored.versions[0].checksum,
+    });
   }
 
   @Get('daily-reports/paged')

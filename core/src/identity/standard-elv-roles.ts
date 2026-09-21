@@ -28,6 +28,13 @@ export interface StandardElvRole extends Role {
 const STAFF_BASE = [
   'comms.*', 'work-items.*', 'notifications.*', 'inbox.*', 'documents.*.read',
   'intelligence.chat.create', 'intelligence.insight.create', 'intelligence.proposal.create',
+  // …and the list of what has been proposed. Wave F granted `proposal.create` and stopped there,
+  // so 24 roles could raise a proposal and were then refused the register it lands in — the same
+  // omission as wave A's contracts reads and wave B's HSE reads, caught this time by the guard in
+  // register-read-parity.fitness.test.ts rather than by a CI failure six waves later.
+  // READ ONLY: deciding a proposal is `intelligence.proposal.execute`/`.reject`, which stays with
+  // management. Seeing what the machine suggested is the reviewable record, not the decision.
+  'intelligence.proposal.read',
 ] as const;
 const PROJECT_RESPONSIBILITY_WORK = 'projects.responsibility.update';
 const readOnly = (module: string): string => `${module}.*.read`;
@@ -220,6 +227,23 @@ const CONTRACTS_AUTHORITY = [
 ] as const;
 
 /**
+ * The contract registers — the same omission as HSE, from wave A.
+ *
+ * `contracts.*` on r-commercial-manager became the two blocks above, and the reads went with the
+ * wildcard. The Commercial Manager could create, amend, sign, dispatch, complete and CANCEL a
+ * contract and could not open the contract register, the clause library, the obligations list,
+ * the certificates or the bonds. Each name is the one the guard demanded in its own 403, across
+ * the eleven collection GETs the module publishes.
+ *
+ * `contracts.ipc.*` deliberately gets no read: it is the service-side spelling of the payment
+ * certificate, and the module publishes no route that derives it.
+ */
+const CONTRACTS_REGISTER_READ = [
+  'contracts.contract.read', 'contracts.clause.read', 'contracts.obligation.read',
+  'contracts.certificate.read', 'contracts.bond.read',
+] as const;
+
+/**
  * HSE, split by who does the work and who authorises it.
  *
  * `hse.*` on r-hse covered everything: raising an incident, writing a risk assessment AND approving
@@ -259,6 +283,31 @@ const HSE_AUTHORITY = [
   // `leave.resolve`) and contracts (`ipc`/`certificate`): a permission rename is its own change with
   // its own blast radius. The permission-vocabulary guard is what found all four.
   'hse.capa.raise', 'hse.toolbox.record', 'hse.training.record', 'hse.risk_assessment.create',
+] as const;
+
+/**
+ * THE REGISTERS THE HSE FUNCTION WORKS FROM — and the half of `hse.*` that enumerating it dropped.
+ *
+ * Wave B replaced `hse.*` on r-hse with the two blocks above. A wildcard carries reads as well as
+ * writes, and only the writes were written back out. The result stood for five waves: the HSE
+ * officer could raise an incident, request a permit, APPROVE it, expire it and close it — and
+ * could not list a single one of them. `hse.ptw.read`, `hse.incident.read`, `hse.capa.read`,
+ * `hse.risk-assessment.read`, `hse.toolbox-talk.read` and `hse.training.read` were held by nobody
+ * but the administrator, while the same role read site, projects, engineering, hr and documents
+ * without trouble: every module's register except its own.
+ *
+ * Measured against the running API, not inferred — each name below is the one the guard asked for
+ * in its own refusal (403 on the eight collection GETs the module publishes, while POST /hse/ptws
+ * answered 400, so the write authority was live and only the read was missing).
+ *
+ * Enumerated, not `readOnly('hse')`: restoring the wildcard is what the waves exist to undo, and a
+ * future HSE entity should have to be named here rather than arrive with a read nobody granted.
+ * `hse.toolbox.record` and `hse.risk_assessment.create` above get no read — they are the service-side
+ * spellings of entities already covered, and no route derives them.
+ */
+const HSE_REGISTER_READ = [
+  'hse.ptw.read', 'hse.incident.read', 'hse.capa.read',
+  'hse.risk-assessment.read', 'hse.toolbox-talk.read', 'hse.training.read',
 ] as const;
 
 /**
@@ -744,7 +793,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.estimate.read', 'crm.estimate.approve', 'crm.quotation.*', 'crm.internal-pricing.access',
       'tendering.internal-pricing.access',
       // `contracts.*` USED TO BE HERE.
-      ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY,
+      ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY, ...CONTRACTS_REGISTER_READ,
       'projects.variation.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
       // PREPARES AND SUBMITS an extension-of-time claim, and does NOT determine it. Before this the
       // role named `projects.eot-claim.*` — both sides of the exchange — and could exercise
@@ -851,7 +900,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     permissions: [
       // `hse.*` USED TO BE HERE, covering raising, writing, requesting, authorising and closing
       // alike — and covering every HSE act added to the module in future.
-      ...HSE_SITE_PARTICIPATION, ...HSE_AUTHORITY,
+      ...HSE_SITE_PARTICIPATION, ...HSE_AUTHORITY, ...HSE_REGISTER_READ,
       readOnly('site'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('engineering'), readOnly('hr'), ...STAFF_BASE,
     ],
   },

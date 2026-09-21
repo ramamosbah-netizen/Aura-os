@@ -65,7 +65,21 @@ function tsFiles(dir: string): string[] {
  * asserted in a service with `{ permission: '…' }`. Both forms matter — the second is the one no
  * route audit can see, and it is where `finance.invoice.approve` was nearly lost.
  */
+/**
+ * MEMOISED, because this walks every .ts file in apps/api and all 22 modules and three separate
+ * tests called it. Wave C added a third regex to the scan (permissions passed POSITIONALLY to an
+ * assert helper) and that pushed one run past vitest's 5s default under parallel turbo load —
+ * 8095ms, a TIMEOUT rather than an assertion failure. A guard that goes red on machine load is
+ * worse than a slow one: it trains the reader to re-run instead of to look.
+ */
+let scanned: Map<string, Set<string>> | null = null;
 function demandedPermissions(): Map<string, Set<string>> {
+  if (scanned) return scanned;
+  scanned = scanDemandedPermissions();
+  return scanned;
+}
+
+function scanDemandedPermissions(): Map<string, Set<string>> {
   const roots = [join(REPO, 'apps', 'api', 'src')];
   for (const name of readdirSync(join(REPO, 'modules'))) roots.push(join(REPO, 'modules', name, 'src'));
 

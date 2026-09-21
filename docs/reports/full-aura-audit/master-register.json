@@ -7017,13 +7017,13 @@
   "gaps": [
     {
       "id": "J1-01",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "BLOCKER",
-      "currentBehavior": "MEASURED LIVE, Auth ON, as a real seeded r-sales principal — AND THE RECORDED CONSEQUENCE IS FALSE. The finding read: “r-sales cannot create/qualify/convert a Lead because of a service assertion for `crm.account.create` that the role does not hold.” All three acts work: `201 POST crm/leads`, `200 PATCH :id/qualification` (which records BANT evidence and deliberately never moves status — “the engine recommends, it never changes status; qualifying stays a human act”), `200 PATCH :id { status: qualified }`, and `201 POST :id/convert`, WHICH CREATED AN ACCOUNT, an opportunity and a contact in one governed act. The conversion reaches the account STORE directly under the `crm.lead.convert` guard, so it never touches the service that asserts `crm.account.create` — which is why the diagnosis was right about the permission and wrong about what it blocks. WHAT REMAINS TRUE AND IS NARROWER: `403 POST crm/accounts` as Sales — “no grant satisfies crm.account.create”. r-sales holds `crm.lead.*` and eighteen `crm.opportunity.*` names and NOT ONE `crm.account.*` or `crm.contact.*` permission, so a rep can bring a customer into the system by converting a qualified lead and cannot create an account or add a contact directly. ADJACENT, AND NOT PART OF THE ORIGINAL FINDING: `crm.account.create`, `crm.account.update` and `crm.contact.create` are reachable by exactly one non-admin role, r-sales-manager, and only through the `crm.*` MODULE WILDCARD — no role NAMES any of them and no comment records a decision. Whether a Sales rep should create accounts and contacts directly is therefore an authority question nobody has answered, not a defect anybody chose.",
-      "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-01 | SETTLED by live probe against a restarted API with a seeded r-sales principal (u-e2e-sales): create 201, qualify 200, convert 201 with account+opportunity+contact created; POST crm/accounts 403. Role reading: core/src/identity/standard-elv-roles.ts.",
+      "currentBehavior": "دور `r-sales` يعجز عن create/qualify/convert Lead بسبب service assertion لـ`crm.account.create` غير موجودة في الدور.",
+      "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-01",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "INT-04"
       ],
@@ -7034,10 +7034,10 @@
         "Sales"
       ],
       "authority": "CRM",
-      "expectedOperationalBehavior": "A Sales rep creates, qualifies and converts a lead within their tenant — which they can. Whether the same rep may create an account or a contact OUTSIDE a conversion is a decision that should be made and named on the role, rather than left to a module wildcard on the Sales Manager.",
-      "severity": "MEDIUM",
+      "expectedOperationalBehavior": "Qualification and disqualification works with canonical inputs, governed permissions and usable handoff",
+      "severity": "CRITICAL",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "The journey is proved working and the record corrected. What is left open is the narrower authority question: name `crm.account.create`/`crm.contact.create` on the role that should hold them, or record that conversion is deliberately the only route by which a customer enters the system."
+      "acceptanceProof": "DISPROVED, NOT REMEDIATED — and the distinction matters, because no code was changed to close this. The finding read: ‘r-sales cannot create/qualify/convert a Lead because of a service assertion for `crm.account.create` that the role does not hold.’ Measured live, Auth ON, against a restarted API as a real seeded r-sales principal (u-e2e-sales): `201 POST crm/leads`; `200 PATCH :id/qualification`, which records the BANT evidence and deliberately never moves status — ‘the engine recommends, it never changes status; qualifying stays a human act’; `200 PATCH :id { status: qualified }`; and `201 POST :id/convert`, WHICH CREATED AN ACCOUNT, AN OPPORTUNITY AND A CONTACT in one governed act. The whole funnel works. The diagnosis was right about the permission and wrong about what it blocked: the conversion reaches the account STORE directly under the `crm.lead.convert` guard, so it never touches the service that asserts `crm.account.create`. WHAT THIS CLOSURE DOES NOT CLAIM: that a Sales rep can create an Account or Contact outside a conversion — they could not, and that is CRM-CUST-01, a different capability with its own authority question. SETTLING THIS EXPOSED A HOLE IN THE HARNESS ITSELF: the catalogue held 23 e2e principals and NO SALES ACTOR, so the first journey in the business had never been driven by the role that performs it. u-e2e-sales exists now."
     },
     {
       "id": "J1-02",
@@ -8955,6 +8955,31 @@
       "acceptanceProof": "MET. AUTHORITY, AND IN THIS WAVE THAT MEANT WRITING IT DOWN FOR THE FIRST TIME: r-service-manager is a NEW role for AMC — the fifth department this programme has found with none — the asset register goes to r-store, which already held `assets.*.read` and could not act on what it could see, the fleet goes to r-hr-manager because a fine charged to a driver is a deduction against a person, and the AI decision goes to r-executive. PROVENANCE: a work order records who completed and who cancelled it and why; a service contract records who terminated it and why; a ticket records who resolved it; asset and fleet maintenance record who completed them; and the autonomy proposal records its origin. STATE: the autonomy proposal has the state machine it never had — `pending` is the only decidable state, and `executed` and `rejected` are terminal. LIVE, against a restarted API on the built bundle, 16 of 16: the Service Manager raises a work order (NOBODY could before), the Site Engineer cannot cancel it (403), cancelling with no reason is refused (400), cancelling with one records `cancelledBy`; completing records `completedBy` on a visit that bills through AR and used to bill anonymously; a proposal records `proposedBy`; the Service Manager CANNOT execute it (403) and the executive can; proposer and executor come back as two different names; executing a second time is refused (409, RETURNED SUCCESS BEFORE) and so is rejecting an executed one; and the executive may not execute their OWN proposal (403) but may reject it, because withdrawing a suggestion is not acting on the business. TWO DEFECTS FOUND WHILE PROVING IT, BOTH BY THE LIVE PROBE AFTER THE ROLE WORK LOOKED FINISHED: assets and fleet asserted `*.maintenance.update` while their routes derived `*.maintenance.complete` — the two-name split again, now the fourth module pair to have it — and NOBODY HELD `intelligence.proposal.create`, so after carefully placing the decision with management the only person who could RAISE a proposal was an administrator. The second is the more instructive: the role work, the vocabulary guard and the route audit all read as finished, and it took running the thing to find that the door was locked from the inside. Raising a proposal, asking the assistant a question and recording an insight are now in STAFF_BASE, because they are tools and the control is the decision to apply one. NOT CLAIMED: this wave gave four modules an authority model and provenance on their governing acts; it did not ask the maker/checker question of every act in them — whether a fine should be disputed by someone other than the person who assigned it, for instance, is untouched. REGRESSION: verified with NO ADDITIONAL KNOWN SUITE REGRESSIONS OVER BASELINE. `pnpm test`: 51 of 51 turbo tasks green, apps/api 692 passed / 4 skipped across 87 files. apps/api e2e: 14 files and 39 tests failing with 567 passing, IDENTICAL to the baseline and the same files."
     },
     {
+      "id": "CRM-CUST-01",
+      "title": "A Sales rep could not create a customer or a contact — conversion was the only door, and the acts were reachable by one role through a module wildcard nobody had decided",
+      "capabilityIds": [
+        "INT-04"
+      ],
+      "classification": "COMPLETE",
+      "kind": "fresh defect — split out of J1-01 when that finding was disproved; a different capability with its own authority question",
+      "status": "CLOSED_VERIFIED",
+      "roles": [
+        "Sales",
+        "Sales Manager"
+      ],
+      "stages": [
+        "Sales",
+        "Pre-Sales"
+      ],
+      "authority": "core/src/identity/standard-elv-roles.ts; apps/api/src/crm/crm-accounts.controller.ts; apps/api/src/crm/crm-contacts.controller.ts; modules/crm/src/account.service.ts",
+      "currentBehavior": "Measured live as a real seeded r-sales principal: `403 POST crm/accounts` — “Access denied: no grant satisfies crm.account.create”. The role holds `crm.lead.*` and eighteen `crm.opportunity.*` names and NOT ONE `crm.account.*` OR `crm.contact.*` permission, so the only way a rep could bring a customer into the system was by converting a qualified lead. That excludes the cases a sales desk actually meets: a customer already known to the business, a referral, A NEW CONTACT AT AN EXISTING CUSTOMER, a tender or enquiry arriving in the company’s name with no lead behind it, and capturing customer details before any formal Lead exists. AND THE AUTHORITY WAS NEVER DECIDED: `crm.account.create`, `crm.account.update` and `crm.contact.create` were reachable by exactly one non-admin role — r-sales-manager — and only through the `crm.*` MODULE WILDCARD. No role NAMED any of them and no comment recorded a choice, so the restriction was an accident of scope rather than a control anybody put there.",
+      "expectedOperationalBehavior": "A Sales rep creates and maintains Accounts and Contacts directly, through act-specific permissions named on the role. Destructive and structural acts stay elsewhere: deleting an account, editing the parent/subsidiary relationship graph that drives exposure aggregation, and maintaining the installed-base estate are not operational rep work.",
+      "evidence": "Live probe against a restarted API with the u-e2e-sales principal, before and after; core/src/identity/standard-elv-roles.ts (four named acts on r-sales, no wildcard); apps/api/src/crm/crm-accounts.controller.ts; apps/api/src/crm/crm-contacts.controller.ts.",
+      "severity": "HIGH",
+      "remediationDependency": "None upstream. Split from J1-01 after that finding was disproved.",
+      "acceptanceProof": "MET, and the authority was decided before a single permission was written. THE BUSINESS DECISION: lead conversion is not the only door a customer comes through, because a rep meets five ordinary cases that have no lead behind them — a customer already known to the business, a referral, a new contact at an existing customer, a tender or enquiry in the company’s name, and capturing details before a formal Lead exists. THE GRANT IS FOUR NAMED ACTS AND NO WILDCARD: `crm.account.create`, `crm.account.update`, `crm.contact.create`, `crm.contact.update` on r-sales. DELIBERATELY WITHHELD, and stated on the role itself: `crm.account.delete` (destructive), `crm.account.relationships` (the parent/subsidiary graph drives exposure aggregation, so it is a commercial decision), and `crm.account.installed-base` with its growth scan (asset truth about the customer’s estate). LIVE, against a restarted API as u-e2e-sales: creating an account returns 201 where it returned 403, a contact is created against it, both update, and the three withheld acts stay refused. NOT CLAIMED: `crm.*` is still on r-sales-manager, so those same acts remain reachable by that role through a module wildcard. Naming them there, and flattening the last CRM wildcard, is stage-4 work and is not what this record fixed."
+    },
+    {
       "id": "SEC-01",
       "title": "64 governing acts — approve, award, certify, issue, close — are governed by permission names no role names",
       "capabilityIds": [
@@ -9057,9 +9082,9 @@
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0
     },
-    "gaps": 65,
+    "gaps": 66,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 19
+    "freshDefects": 20
   }
 }

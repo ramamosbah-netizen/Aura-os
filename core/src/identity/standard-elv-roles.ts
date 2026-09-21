@@ -515,6 +515,25 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // the customer asked for was reachable only by a wildcard holder — a Sales Manager or an admin.
       // The role whose description begins "owns enquiries, leads, opportunities, follow-ups" could not
       // write down the enquiry. It can now.
+      // DIRECT CUSTOMER MAINTENANCE — a frozen business decision, not an inference.
+      //
+      // Lead conversion is NOT the only door a customer comes through. A rep needs to create an
+      // Account or a Contact outright in cases that happen constantly: a customer already known to
+      // the business, a referral, a NEW CONTACT at an existing customer, a tender or enquiry that
+      // arrives in the company's name with no lead behind it, and capturing customer details
+      // before any formal Lead exists.
+      //
+      // Before this the role held NOT ONE `crm.account.*` or `crm.contact.*` permission, and those
+      // acts were reachable by exactly one non-admin role — the Sales Manager — and only through
+      // the `crm.*` MODULE WILDCARD. Nobody had named them, so nobody had decided them.
+      //
+      // FOUR ACTS, NAMED, AND NO WILDCARD. What is deliberately NOT here: `crm.account.delete`
+      // (destructive), `crm.account.relationships` (the parent/subsidiary graph drives exposure
+      // aggregation, so it is a commercial decision), and `crm.account.installed-base` with its
+      // scan (asset truth about the customer's estate). Those stay where they are; this grant is
+      // the operational work the rep actually needs and nothing beyond it.
+      'crm.account.create', 'crm.account.update',
+      'crm.contact.create', 'crm.contact.update',
       'crm.requirement.create', 'crm.requirement.read', 'crm.requirement.update',
       'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.quotation.send',
       readOnly('tendering'), readOnly('contracts'), readOnly('projects'), ...STAFF_BASE,

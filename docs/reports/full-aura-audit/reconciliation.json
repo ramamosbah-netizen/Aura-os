@@ -14,7 +14,7 @@
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 65,
+  "gapRecords": 66,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -82,6 +82,7 @@
     "DEL-EVID-01",
     "EOT-AUTH-01",
     "DEPT-AUTH-01",
+    "CRM-CUST-01",
     "SEC-01",
     "ARCH-01",
     "BID-01"

@@ -7019,8 +7019,8 @@
       "id": "J1-01",
       "classification": "WRONG_BEHAVIOR",
       "originalClassification": "BLOCKER",
-      "currentBehavior": "دور `r-sales` يعجز عن create/qualify/convert Lead بسبب service assertion لـ`crm.account.create` غير موجودة في الدور.",
-      "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-01",
+      "currentBehavior": "MEASURED LIVE, Auth ON, as a real seeded r-sales principal — AND THE RECORDED CONSEQUENCE IS FALSE. The finding read: “r-sales cannot create/qualify/convert a Lead because of a service assertion for `crm.account.create` that the role does not hold.” All three acts work: `201 POST crm/leads`, `200 PATCH :id/qualification` (which records BANT evidence and deliberately never moves status — “the engine recommends, it never changes status; qualifying stays a human act”), `200 PATCH :id { status: qualified }`, and `201 POST :id/convert`, WHICH CREATED AN ACCOUNT, an opportunity and a contact in one governed act. The conversion reaches the account STORE directly under the `crm.lead.convert` guard, so it never touches the service that asserts `crm.account.create` — which is why the diagnosis was right about the permission and wrong about what it blocks. WHAT REMAINS TRUE AND IS NARROWER: `403 POST crm/accounts` as Sales — “no grant satisfies crm.account.create”. r-sales holds `crm.lead.*` and eighteen `crm.opportunity.*` names and NOT ONE `crm.account.*` or `crm.contact.*` permission, so a rep can bring a customer into the system by converting a qualified lead and cannot create an account or add a contact directly. ADJACENT, AND NOT PART OF THE ORIGINAL FINDING: `crm.account.create`, `crm.account.update` and `crm.contact.create` are reachable by exactly one non-admin role, r-sales-manager, and only through the `crm.*` MODULE WILDCARD — no role NAMES any of them and no comment records a decision. Whether a Sales rep should create accounts and contacts directly is therefore an authority question nobody has answered, not a defect anybody chose.",
+      "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-01 | SETTLED by live probe against a restarted API with a seeded r-sales principal (u-e2e-sales): create 201, qualify 200, convert 201 with account+opportunity+contact created; POST crm/accounts 403. Role reading: core/src/identity/standard-elv-roles.ts.",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
       "status": "OPEN",
@@ -7034,10 +7034,10 @@
         "Sales"
       ],
       "authority": "CRM",
-      "expectedOperationalBehavior": "Qualification and disqualification works with canonical inputs, governed permissions and usable handoff",
-      "severity": "CRITICAL",
+      "expectedOperationalBehavior": "A Sales rep creates, qualifies and converts a lead within their tenant — which they can. Whether the same rep may create an account or a contact OUTSIDE a conversion is a decision that should be made and named on the role, rather than left to a module wildcard on the Sales Manager.",
+      "severity": "MEDIUM",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Sales role creates, qualifies and converts within tenant; wrong permission denied."
+      "acceptanceProof": "The journey is proved working and the record corrected. What is left open is the narrower authority question: name `crm.account.create`/`crm.contact.create` on the role that should hold them, or record that conversion is deliberately the only route by which a customer enters the system."
     },
     {
       "id": "J1-02",

@@ -320,6 +320,13 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 // AI autonomy proposal is the machine acting on the business, and the proposer may not execute
 // their own — which needs two principals to show.
 
+// `u-e2e-sales` settles J1-01, which the register carries as CRITICAL and OPEN: the claim is that
+// r-sales cannot create, qualify or convert a lead because the code asserts `crm.account.create`,
+// which that role does not hold. Reading the catalogue confirms the role holds NO `crm.account.*`
+// permission at all — but the conversion path calls the account STORE directly under a
+// `crm.lead.convert` guard, so the claim may be stale in part. A real seeded Sales principal is the
+// only thing that settles which.
+
 for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site', 'r-site-engineer'],
                                 ['u-e2e-buyer', 'r-procurement'], ['u-e2e-techmgr', 'r-technical-manager'],
                                 ['u-e2e-procmgr', 'r-procurement-manager'], ['u-e2e-presales', 'r-pre-sales'],
@@ -332,7 +339,8 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-projeng', 'r-project-engineer'], ['u-e2e-qaqc', 'r-qa-qc'],
                                 ['u-e2e-tc', 'r-commissioning-engineer'], ['u-e2e-fm', 'r-handover-fm'],
                                 ['u-e2e-planner', 'r-planning-engineer'],
-                                ['u-e2e-service', 'r-service-manager'], ['u-e2e-exec', 'r-executive']]) {
+                                ['u-e2e-service', 'r-service-manager'], ['u-e2e-exec', 'r-executive'],
+                                ['u-e2e-sales', 'r-sales']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -354,7 +362,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) u-e2e-planner (r-planning-engineer), u-e2e-service (r-service-manager) and u-e2e-exec (r-executive)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) u-e2e-planner (r-planning-engineer), u-e2e-service (r-service-manager) u-e2e-exec (r-executive) and u-e2e-sales (r-sales)');
 
 
 

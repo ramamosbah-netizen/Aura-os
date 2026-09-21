@@ -659,7 +659,7 @@ jobs:
           # wrong reason. No shipped role carries these permissions, so the roles are seeded here
           # rather than widening an ELV one; roles hydrate from aura_access_roles at boot.
           #
-          #   u-e2e-checker  hse + e2e-chat-reader
+          #   u-e2e-checker  r-hse + e2e-chat-reader
           #     Segregation of duties needs a requester who is not the approver. It also needs
           #     comms.channel.read: without it PermissionsGuard refuses before any channel lookup,
           #     so the DM privacy spec sees 403 for a real channel and an invented id alike — safe,
@@ -672,7 +672,7 @@ jobs:
           #     viewer while it separately holds a wildcard grant — an identity that reads as
           #     restricted on one axis and unrestricted on another. This one is restricted on both.
           psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_roles (id, name, permissions, updated_at) VALUES ('e2e-chat-reader', 'E2E chat reader', '[\"comms.channel.read\"]'::jsonb, now()), ('e2e-viewer', 'E2E viewer', '[\"workspace.me.read\"]'::jsonb, now()) ON CONFLICT (id) DO UPDATE SET permissions = excluded.permissions, updated_at = now();"
-          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at) VALUES ('u-e2e-checker', 'hse', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-checker', 'e2e-chat-reader', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-viewer', 'e2e-viewer', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()) ON CONFLICT (user_id, role_id, scope_key) DO NOTHING;"
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at) VALUES ('u-e2e-checker', 'r-hse', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-checker', 'e2e-chat-reader', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()), ('u-e2e-viewer', 'e2e-viewer', 'org:tenant:dev-tenant', '{\"kind\":\"org\",\"level\":\"tenant\",\"id\":\"dev-tenant\"}'::jsonb, now()) ON CONFLICT (user_id, role_id, scope_key) DO NOTHING;"
 
       - name: Build workspace dependencies
         run: pnpm --filter @aura/web^... build
@@ -752,7 +752,7 @@ jobs:
           # refuses self-authorisation - not because the requester lacks the approver's rights.
           grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-checker';" | tr -d '[:space:]')
           echo "grants held by u-e2e-checker: '$grants'"
-          test "$grants" = "e2e-chat-reader,hse" || { echo "::error::u-e2e-checker should hold exactly e2e-chat-reader + hse, holds '$grants'"; exit 1; }
+          test "$grants" = "e2e-chat-reader,r-hse" || { echo "::error::u-e2e-checker should hold exactly e2e-chat-reader + r-hse, holds '$grants'"; exit 1; }
 
           viewer_grants=$(psql "$OWNER_URL" -tAc "SELECT string_agg(role_id, ',' ORDER BY role_id) FROM public.aura_access_grants WHERE user_id = 'u-e2e-viewer';" | tr -d '[:space:]')
           echo "grants held by u-e2e-viewer: '$viewer_grants'"

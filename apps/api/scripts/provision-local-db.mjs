@@ -202,13 +202,17 @@ await actors.query(`
 `);
 await actors.query(`
   INSERT INTO public.aura_access_grants (user_id, role_id, scope_key, scope, updated_at) VALUES
-    ('u-e2e-checker', 'hse',             'org:tenant:dev-tenant', '{"kind":"org","level":"tenant","id":"dev-tenant"}'::jsonb, now()),
+    -- 'r-hse', NOT 'hse'. The shipped catalogue has never contained a role with the bare id
+    -- 'hse' — it is 'r-hse', like every other one. A grant naming a role that does not exist
+    -- resolves to no permissions at all, so this actor could not read its own HSE domain (or
+    -- even workspace.me), and the CI step that asserts it CAN was failing on that.
+    ('u-e2e-checker', 'r-hse',           'org:tenant:dev-tenant', '{"kind":"org","level":"tenant","id":"dev-tenant"}'::jsonb, now()),
     ('u-e2e-checker', 'e2e-chat-reader', 'org:tenant:dev-tenant', '{"kind":"org","level":"tenant","id":"dev-tenant"}'::jsonb, now()),
     ('u-e2e-viewer',  'e2e-viewer',      'org:tenant:dev-tenant', '{"kind":"org","level":"tenant","id":"dev-tenant"}'::jsonb, now())
   ON CONFLICT (user_id, role_id, scope_key) DO NOTHING;
 `);
 await actors.end();
-console.log('✓ seeded u-e2e-checker (hse + e2e-chat-reader) and u-e2e-viewer (e2e-viewer)');
+console.log('✓ seeded u-e2e-checker (r-hse + e2e-chat-reader) and u-e2e-viewer (e2e-viewer)');
 // ── 8b. The two principals BUY-07's handoff needs, with the roles AURA already ships.
 //
 // A next-role receipt cannot be proved by one person: the material is issued by a Storekeeper and

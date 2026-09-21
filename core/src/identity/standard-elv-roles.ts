@@ -532,8 +532,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // aggregation, so it is a commercial decision), and `crm.account.installed-base` with its
       // scan (asset truth about the customer's estate). Those stay where they are; this grant is
       // the operational work the rep actually needs and nothing beyond it.
-      'crm.account.create', 'crm.account.update',
-      'crm.contact.create', 'crm.contact.update',
+      // `.read` alongside, because a create you cannot open again is not the capability that was
+      // asked for: the rep records the customer and is then refused the record. Every neighbouring
+      // entity here (requirement, quotation) already names create/read/update together; account
+      // and contact shipped without the read, and the rep could not see what they had just made.
+      'crm.account.create', 'crm.account.read', 'crm.account.update',
+      'crm.contact.create', 'crm.contact.read', 'crm.contact.update',
       'crm.requirement.create', 'crm.requirement.read', 'crm.requirement.update',
       'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update', 'crm.quotation.send',
       readOnly('tendering'), readOnly('contracts'), readOnly('projects'), ...STAFF_BASE,
@@ -1047,7 +1051,9 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // business, which is a management decision and not an operational one — and it was reachable
       // by nobody but the administrator. Raising one stays unrestricted; reviewing what the machine
       // suggests is the entire point of keeping the record.
-      'intelligence.proposal.execute', 'intelligence.proposal.reject', readOnly('intelligence'),
+      // The read was already here as a literal further down; wave F must not add it twice, or the
+      // role catalogue renders two children with the same key.
+      'intelligence.proposal.execute', 'intelligence.proposal.reject',
       readOnly('crm'), 'crm.internal-pricing.access', readOnly('tendering'), 'tendering.internal-pricing.access', readOnly('contracts'), readOnly('projects'),
       readOnly('engineering'), readOnly('procurement'), readOnly('inventory'), readOnly('site'),
       readOnly('quality'), readOnly('hse'), readOnly('finance'), readOnly('commissioning'),

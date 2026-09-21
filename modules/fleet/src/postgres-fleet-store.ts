@@ -51,8 +51,9 @@ export class PostgresVehicleStore implements VehicleStore {
         plate_number = excluded.plate_number,
         registration_expiry = excluded.registration_expiry,
         status = excluded.status,
-        completed_by = excluded.completed_by,
-        completed_at = excluded.completed_at,
+        -- completed_by / completed_at belong to fleet MAINTENANCE, not to the vehicle. Wave F
+        -- pasted them here as well as into aura_assets, and a vehicle has neither column, so
+        -- every vehicle write answered 500 on "column excluded.completed_by does not exist".
         driver_employee_id = excluded.driver_employee_id,
         last_latitude = excluded.last_latitude,
         last_longitude = excluded.last_longitude,

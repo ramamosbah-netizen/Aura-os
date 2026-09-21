@@ -43,6 +43,17 @@ function tsFiles(dir: string, out: string[] = []): string[] {
 
 const INSERT = /insert\s+into\s+[\w."]+\s*\(\s*([^)]*?)\)\s*values\s*\(\s*(\$\d+(?:\s*,\s*\$\d+)*)\s*\)/gis;
 
+/**
+ * …and the same statement's `ON CONFLICT DO UPDATE SET x = excluded.y`.
+ *
+ * `excluded` is the row the statement TRIED to insert, so naming a column the insert does not
+ * supply is never meaningful — and when the table has no such column Postgres refuses the whole
+ * statement, so every write through that path fails. Wave F pasted maintenance provenance
+ * (completed_by / completed_at) into two tables that have neither, and both `aura_assets` and
+ * `aura_fleet_vehicles` answered 500 on their very first create.
+ */
+const CONFLICT = /insert\s+into\s+([\w."]+)\s*\(\s*([^)]*?)\)\s*values\s*\([^)]*\)\s*(on\s+conflict[\s\S]*?)(?=`)/gi;
+
 interface Mismatch { file: string; line: number; detail: string }
 
 function scan(): { mismatches: Mismatch[]; statements: number } {
@@ -83,6 +94,36 @@ function scan(): { mismatches: Mismatch[]; statements: number } {
   return { mismatches, statements };
 }
 
+function scanExcluded(): Mismatch[] {
+  const bad: Mismatch[] = [];
+  for (const root of ROOTS) {
+    for (const file of tsFiles(root)) {
+      const src = readFileSync(file, 'utf8');
+      if (!src.includes('excluded.')) continue;
+      for (const m of src.matchAll(CONFLICT)) {
+        const colsRaw = m[2].replace(/--[^\n]*/g, '');
+        if (colsRaw.includes('${')) continue;
+        const cols = new Set(
+          colsRaw.split(',').map((c) => c.trim().replace(/"/g, '').toLowerCase()).filter(Boolean),
+        );
+        const conflict = m[3].replace(/--[^\n]*/g, '');
+        const refs = new Set([...conflict.matchAll(/excluded\.(\w+)/gi)].map((r) => r[1].toLowerCase()));
+        for (const ref of refs) {
+          if (!cols.has(ref)) {
+            const line = src.slice(0, m.index).split('\n').length;
+            bad.push({
+              file: file.slice(repo.length + 1).replace(/\\/g, '/'),
+              line,
+              detail: `${m[1]} sets from excluded.${ref}, a column this INSERT does not supply`,
+            });
+          }
+        }
+      }
+    }
+  }
+  return bad;
+}
+
 describe('hand-written INSERT statements', () => {
   const { mismatches, statements } = scan();
 
@@ -95,5 +136,10 @@ describe('hand-written INSERT statements', () => {
   it('target as many columns as they supply values', () => {
     const report = mismatches.map((m) => `${m.file}:${m.line} — ${m.detail}`);
     expect(report, `an INSERT cannot run at all when these disagree:\n  ${report.join('\n  ')}`).toEqual([]);
+  });
+
+  it('only read `excluded` columns they actually insert', () => {
+    const report = scanExcluded().map((m) => `${m.file}:${m.line} — ${m.detail}`);
+    expect(report, `Postgres refuses the whole statement when this is wrong:\n  ${report.join('\n  ')}`).toEqual([]);
   });
 });

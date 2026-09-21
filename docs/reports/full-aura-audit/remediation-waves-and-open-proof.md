@@ -29,3 +29,54 @@ Cross-cutting outputs, communication, assignments and UI are acceptance criteria
 The initial `aura_app` password mismatch was resolved by provisioning the existing local PostgreSQL container as the repository's marked **e2e-disposable** environment. All 307 migrations applied, RLS verification passed and the test identities were seeded. The API now answers health on localhost:4000 and the web application runs on localhost:3000. No production/shared environment was used.
 
 This removed the environment blocker and enabled the live evidence recorded above. The frozen register has 55 UNVERIFIED and zero NOT_AUDITED capability leaves. Those 55 are pinned acceptance tasks, and the 181 page templates without fresh browser execution stay visible in the page matrix. No AURA functional-completeness, Business Journeys CLOSED/VERIFIED or Production Ready claim is made.
+
+## Unresolved browser evidence, 22 September
+
+Two pieces of browser evidence are **open and undecided**. They are recorded here rather than
+closed, and they are deliberately NOT treated as blockers for the whole system: each names a
+bounded surface, and nothing about them licenses a claim over capabilities they never touched.
+
+### The TIER-2 in-memory browser run
+
+A full local run of the in-memory browser suite reached test 199 of 231 with **151 passed and
+these eight failed**, at which point the run was stopped by hand. Everything the log shows after
+that point is an artefact of stopping it — the API and web servers were killed mid-run, so the
+tail failed for want of a server and is not a measurement of anything.
+
+| Spec | What it drives |
+| --- | --- |
+| `document-workflow.spec.ts:10` | document register → 360 → reject → new revision → approve → issue |
+| `fx-governed-booking.spec.ts:89` | an invoice in a currency with no governed rate |
+| `journey-signal-to-close.spec.ts:60` | the pre-award spine: radar signal → qualified opportunity → contract |
+| `journey-signal-to-close.spec.ts:108` | the direct-sale middle: a quotation clearing SoD |
+| `journey-tc-handover-closure.spec.ts:37` | the whole chain, engineering through acceptance |
+| `permit-workflow.spec.ts:20` | permit register → 360 → approve → close |
+| `permit-workflow.spec.ts:153` | a permit cannot be approved by the person who requested it |
+| `project-authoring-parity.spec.ts:5` | Project 360 exposes governed WBS/CBS and Delay/EOT authoring |
+
+**What is NOT claimed.** These eight are not diagnosed. Each may be a product defect, a stale
+spec expectation, or a tier mismatch of the kind already found elsewhere in this run — a spec
+asking the in-memory tier for a guarantee only PostgreSQL provides. Until each is read
+individually, none of the three may be assumed, and no capability leaf is promoted or demoted
+because of them.
+
+**Why they are not system-wide blockers.** A browser failure bounds the surface it drives and
+nothing else. Treating eight unread failures as a gate over 180 capability leaves would state
+something the evidence does not support, in the same way that calling them harmless would. They
+stay visible and unresolved, and they gate their own capabilities when a capability is proposed
+for promotion — not the programme.
+
+### The CRM Radar release-proof job
+
+Its browser step fell back to an actor the job never provisions, so the sign-in never completed
+and the test died on its own timeout looking like a broken page. The job now names the denied
+actor it actually has (`u-viewer`, which that boot gives a password and no grant). That change is
+**reasoned from the job's own configuration and proved locally against an equivalent boot, but it
+has not been observed passing in CI**. It is a corrected configuration awaiting confirmation, not
+a closed finding.
+
+### What this section does not do
+
+It does not change any capability classification, does not close any gap record, and does not
+assert that the surfaces above work. The register's evidence matrix stays a truthful description
+of what has actually been proved.

@@ -22,6 +22,7 @@ import {
 import { EVENT_STORE, type EventStore } from '../events/event-store';
 import { DOCUMENT_STORE, type DocumentFilter, type DocumentStore, type DocumentWithVersions } from './document-store';
 import { DOCUMENT_STORAGE, type DocumentStorage } from './document-storage';
+import { checkFileType } from './file-type-policy';
 import { DOCUMENT_PERMISSION_STORE, type DocumentPermissionStore } from './document-permission-store';
 import {
   DocumentAccessResolver,
@@ -104,7 +105,32 @@ export class DmsService {
     ]);
   }
 
+  /**
+   * Refuse bytes that may not be stored under this category, judged from the CONTENT.
+   *
+   * The filename and the declared content type both arrive in the multipart body, so an
+   * allow-list checked against either is checked against something the uploader writes. The
+   * magic bytes are the one part that has to be real for the file to work at all.
+   */
+  private assertStorableType(kind: string | null | undefined, file: DocumentFileInput): void {
+    const verdict = checkFileType({
+      category: kind,
+      fileName: file.fileName,
+      declaredContentType: file.contentType,
+      data: file.data,
+    });
+    if (!verdict.ok) {
+      this.logger.warn(`Refused ${verdict.detected} as "${file.fileName}" under kind "${kind ?? '(none)'}": ${verdict.reason}`);
+      throw new Error(verdict.reason);
+    }
+  }
+
   async createDocument(input: NewDocument, file: DocumentFileInput): Promise<DocumentWithVersions> {
+    // ENFORCED HERE, not in the controllers. Every route that stores bytes — tender study files
+    // and their versions, lead attachments, pre-award package files, the documents API — reaches
+    // storage through this method, so a rule placed here cannot be bypassed by a new upload route
+    // that forgets to call it. `input.kind` carries the business category the file was filed under.
+    this.assertStorableType(input.kind, file);
     const doc = makeDocument(input);
     const key = storageKeyFor(doc, 1, file.fileName);
     const stored = await this.storage.put(key, file.data, file.contentType);
@@ -148,6 +174,9 @@ export class DmsService {
   ): Promise<DocumentVersion> {
     // Uploading over someone's document is an edit, not a read.
     const existing = await this.assertCan(documentId, actor, 'EDIT');
+    // A revision is judged by the same rule as the original: the category is the document's, so
+    // an executable cannot arrive as "version 2" of an approved drawing.
+    this.assertStorableType(existing.document.kind, file);
     const v = nextVersionNumber(existing.document);
     const key = storageKeyFor(existing.document, v, file.fileName);
     const stored = await this.storage.put(key, file.data, file.contentType);

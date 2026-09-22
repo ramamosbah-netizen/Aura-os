@@ -22,7 +22,7 @@
 // defect chain, and "fail → defect → retest → pass" is the path a real commissioning actually takes.
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
-import { apiAuthHeaders } from './api-auth';
+import { altApiAuthHeaders, apiAuthHeaders } from './api-auth';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
@@ -147,6 +147,62 @@ test('the whole chain: engineering through acceptance, closeout and the service 
       discipline: 'elv', docType: 'document', currentRevision: 'A', status: 'approved',
     },
   });
+  // THE MANUAL ITSELF, not just its number. The register held no content until DOC-CONTENT-01,
+  // so this chain walked every deliverable against a document that did not exist as a file. A
+  // handover pack whose O&M manual is a reference to nothing is what the dossier used to deliver.
+  const packRev = (await (await req.get(`${DC}/register`, { headers: H() })).json() as Array<{ id: string; documentNumber: string }>)
+    .find((e) => e.documentNumber === packDoc);
+  expect(packRev, 'the handover pack document must be in the register').toBeTruthy();
+  const packRevisions = await (await req.get(`${DC}/register/${packRev!.id}/revisions`, { headers: H() })).json() as Array<{ id: string }>;
+  const packRevId = packRevisions[0].id;
+
+  const manual = Buffer.concat([
+    Buffer.from('%PDF-1.7\n', 'latin1'),
+    Buffer.from(`Tower A O&M manual ${run}`),
+    Buffer.from(Array.from({ length: 2200 }, (_, i) => (i * 23) % 251)),
+    Buffer.from('\n%%EOF\n'),
+  ]);
+  const uploaded = await req.post(`${DC}/revisions/${packRevId}/content`, {
+    headers: H(),
+    multipart: { file: { name: `${packDoc}.pdf`, mimeType: 'application/pdf', buffer: manual } },
+  });
+  expect(uploaded.ok(), `the author supplies the manual — ${await uploaded.text()}`).toBe(true);
+
+  // …and it is RELEASED, by the people wave C separated. The author submits; somebody else
+  // reviews, approves and issues — "a second pair of eyes is what review means". Only an ISSUED
+  // revision is offered for download: an approved-but-unissued drawing has not been let out, and
+  // a handover pack must not hand over what document control has not released.
+  const reviewer = altApiAuthHeaders();
+  expect(reviewer, 'a second actor is required: an author cannot approve their own revision').toBeTruthy();
+  const altUser = process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker';
+  // Only the APPROVAL is delegated here. `r-document-controller` is a tenant role and project
+  // membership takes delivery roles only, which is itself correct: releasing a document outside
+  // the company is not a project-team act.
+  const grantTm = await req.post(`${API}/api/v1/projects/${projectId}/members`, {
+    headers: H(), data: { userId: altUser, roleId: 'r-technical-manager' },
+  });
+  expect([200, 201, 409].includes(grantTm.status()), `granting r-technical-manager: ${await grantTm.text()}`).toBe(true);
+
+  const submitStep = await req.post(`${DC}/revisions/${packRevId}/submit`, { headers: H(), data: {} });
+  expect(submitStep.ok(), `the author submits the manual — ${await submitStep.text()}`).toBe(true);
+
+  const selfApprove = await req.post(`${DC}/revisions/${packRevId}/start-review`, { headers: H(), data: {} });
+  expect(selfApprove.ok(), 'starting a review is not the decision, so the author may do it').toBe(true);
+  const refusedApproval = await req.post(`${DC}/revisions/${packRevId}/approve`, { headers: H(), data: {} });
+  expect(refusedApproval.status(), 'the author must not approve their own revision').toBe(403);
+
+  const approved = await req.post(`${DC}/revisions/${packRevId}/approve`, { headers: reviewer!, data: {} });
+  expect(approved.ok(), `the reviewer approves the manual — ${await approved.text()}`).toBe(true);
+
+  // A THIRD separation, and the reason issuing is not done by the approver: "approving it
+  // internally and releasing it outside are two acts". The author may issue what somebody else
+  // approved; the approver may not.
+  const selfIssue = await req.post(`${DC}/revisions/${packRevId}/issue`, { headers: reviewer!, data: {} });
+  expect(selfIssue.status(), 'the approver must not also release it').toBe(403);
+
+  const issuedDoc = await req.post(`${DC}/revisions/${packRevId}/issue`, { headers: H(), data: {} });
+  expect(issuedDoc.ok(), `the manual is released — ${await issuedDoc.text()}`).toBe(true);
+
   const omItems = (await (await req.get(`${HO}/om-items?projectId=${projectId}`, { headers: H() })).json()) as { id: string }[];
   expect(omItems.length, 'seeding must produce the deliverables the pack owes').toBeGreaterThan(0);
   for (const item of omItems) {
@@ -180,12 +236,97 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   const submitted = await req.put(`${HO}/${pkg.id}/submit`, { headers: H(), data: {} });
   expect(submitted.ok(), `every gate is READY, so the package must submit — ${await submitted.text()}`).toBe(true);
 
-  const accepted = await req.put(`${HO}/${pkg.id}/accept`, {
+  // ACCEPTANCE IS SOMEBODY ELSE'S. The domain refuses it to whoever submitted —
+  // "acceptance is the client's side of the exchange, and it starts the warranty clock" — and the
+  // catalogue agrees: `commissioning.handover.submit` is the PM's and the Commissioning
+  // Engineer's, `commissioning.handover.accept` is Handover/FM's. This spec used to do both as one
+  // identity and failed on the 403, which read as a broken chain and was the rule working.
+  const selfAccept = await req.put(`${HO}/${pkg.id}/accept`, {
     headers: H(),
+    data: { clientRepresentative: 'Client Rep', warrantyStartDate: new Date().toISOString().slice(0, 10), warrantyMonths: 12 },
+  });
+  expect(selfAccept.status(), 'the submitter must not accept their own handover').toBe(403);
+  expect(await selfAccept.text()).toContain('may not accept it');
+
+  const alt = altApiAuthHeaders();
+  expect(alt, 'a second actor is required: acceptance cannot be exercised by the submitter').toBeTruthy();
+  // The authority is granted by the ADMIN on the project, before the other actor uses it —
+  // nobody awards themselves the right to accept a handover.
+  const grant = await req.post(`${API}/api/v1/projects/${projectId}/members`, {
+    headers: H(), data: { userId: process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker', roleId: 'r-handover-fm' },
+  });
+  expect([200, 201, 409].includes(grant.status()), `granting the acceptor r-handover-fm: ${await grant.text()}`).toBe(true);
+
+  const accepted = await req.put(`${HO}/${pkg.id}/accept`, {
+    headers: alt!,
     data: { clientRepresentative: 'Client Rep', warrantyStartDate: new Date().toISOString().slice(0, 10), warrantyMonths: 12 },
   });
   expect(accepted.ok(), `an accepted package is the client's word — ${await accepted.text()}`).toBe(true);
   expect((await accepted.json()).status).toBe('accepted');
+
+  // ── 10b. DOWNLOADABLE ARTIFACTS — the clause HO-01, HO-02 and HO-07 all carry ───────────────
+  //
+  // "issue and deliver the complete real project dossier WITH DOWNLOADABLE ARTIFACTS". A dossier
+  // that names a document number the client cannot open has delivered a list, not a dossier. The
+  // artifact is the ISSUED controlled document itself — Handover consumes it, DocControl governs
+  // it, DMS holds the bytes — so this also asserts it is not a copy taken at issue time.
+  const dossier = await (await req.get(`${HO}/${pkg.id}/dossier`, { headers: H() })).json();
+  const lines = (dossier.view?.sections ?? []).flatMap((sec: { entries: unknown[] }) => sec.entries) as Array<{
+    kind: string; reference: string | null; included: boolean; artifact: string | null;
+  }>;
+  const withArtifact = lines.filter((l) => l.included && l.artifact);
+  expect(withArtifact.length, 'an issued dossier must offer at least one downloadable artifact').toBeGreaterThan(0);
+
+  for (const l of withArtifact) {
+    const file = await req.get(`${API}/api/v1/documents/${l.artifact}/content`, { headers: H() });
+    expect(file.status(), `the recipient must be able to open ${l.reference}`).toBe(200);
+    expect((await file.body()).length, `${l.reference} must not be an empty file`).toBeGreaterThan(0);
+  }
+
+  // ── 10c. DELIVERED, AND ACKNOWLEDGED BY THE RECIPIENT ───────────────────────────────────────
+  //
+  // Submitting the pack opens a CONTROLLED transmittal: the dossier cites documents Handover does
+  // not own, so the conveyance belongs to document control. "Issue and deliver … with recipient
+  // acknowledgement" is not met by a status field — it needs a named recipient, a send, and the
+  // recipient's own word coming back and being kept.
+  const issues = (dossier.issues ?? []) as Array<{ transmittal: { id: string } | null }>;
+  const transmittalId = issues.find((i) => i.transmittal)?.transmittal?.id;
+  expect(transmittalId, 'issuing the dossier must open a controlled transmittal to convey it').toBeTruthy();
+
+  // A recipient is a USER the system knows, not a free-text name — which is what makes a receipt
+  // attributable rather than a label somebody typed.
+  //
+  // A LIMIT, RECORDED RATHER THAN HIDDEN: two rules meet here and leave a gap between them.
+  // The domain allows only a NAMED RECIPIENT to acknowledge ("this transmittal was not sent to
+  // <x>; only a named recipient can acknowledge it"), while the route demands
+  // `doccontrol.transmittal.acknowledge`, held by r-document-controller alone — a tenant role
+  // that project membership cannot grant. So the only identity that can acknowledge is a
+  // Document Controller who is also on the distribution. An external client, which is who a
+  // handover dossier actually goes to, cannot acknowledge at all. This spec therefore proves an
+  // INTERNAL acknowledgement and says so; it is not evidence that a client can sign for a pack.
+  const namedRecipient = await req.post(`${DC}/transmittals/${transmittalId}/recipients`, {
+    headers: H(), data: { userId: process.env.E2E_USERNAME ?? 'u-admin', party: 'Client' },
+  });
+  expect(namedRecipient.ok(), `a conveyance must say who it is for — ${await namedRecipient.text()}`).toBe(true);
+
+  const sent = await req.post(`${DC}/transmittals/${transmittalId}/send`, { headers: H(), data: {} });
+  expect(sent.ok(), `the transmittal is sent — ${await sent.text()}`).toBe(true);
+
+  // ONLY A NAMED RECIPIENT. Somebody not on the distribution is refused, which is what makes
+  // the receipt mean something.
+  const strangerAck = await req.put(`${DC}/transmittals/${transmittalId}/acknowledge`, {
+    headers: reviewer!, data: { acknowledgedBy: 'Not on the distribution', note: 'should be refused' },
+  });
+  expect(strangerAck.ok(), 'somebody who was not sent it must not acknowledge it').toBe(false);
+
+  const ack = await req.put(`${DC}/transmittals/${transmittalId}/acknowledge`, {
+    headers: H(), data: { acknowledgedBy: 'Client Rep', note: 'dossier received' },
+  });
+  expect(ack.ok(), `the recipient acknowledges receipt — ${await ack.text()}`).toBe(true);
+
+  // Retained, not merely accepted: a receipt nobody can read afterwards is not a receipt.
+  const acks = await (await req.get(`${DC}/transmittals/${transmittalId}/acknowledgements`, { headers: H() })).json();
+  expect(Array.isArray(acks) && acks.length > 0, 'the acknowledgement must be kept against the conveyance').toBe(true);
 
   // ── 11. DELIVER → MAINTAIN: acceptance starts the service relationship ───────────────────────
   //

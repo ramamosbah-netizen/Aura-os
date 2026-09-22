@@ -5,6 +5,13 @@ import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, T
 import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr } from './domain/ncr';
 import { makeNcrVerification } from './domain/ncr-verification';
 import { type InspectionRequest, makeInspectionRequest, assertInspectionTransition } from './domain/inspection-request';
+import {
+  type IrEvidence,
+  inspectionResultHash,
+  makeIrEvidence,
+  resolveInspectionSignature,
+  signedInspectionResult,
+} from './domain/ir-evidence';
 import { type Snag, makeSnag, resolveSnag, closeSnag } from './domain/snag';
 import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp, allPointsResolved } from './domain/itp';
 import {
@@ -304,6 +311,75 @@ export class QualityService {
     return ir;
   }
 
+  /**
+   * A PHOTOGRAPH OF WHAT WAS INSPECTED.
+   *
+   * Separate from the signature on purpose: photographs are gathered DURING the inspection and a
+   * signature is given when it is decided. Filing them through one act would force an inspector
+   * to sign before they had finished looking.
+   *
+   * The file is already stored and hashed by the controller, which is where every other upload in
+   * this repository puts the DMS call — so the bytes are judged by the file-type policy and
+   * governed by the document access engine before they reach here.
+   */
+  async addInspectionEvidence(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { fileId: string; hash?: string | null; description?: string | null; location?: string | null; capturedAt?: string | null },
+  ): Promise<IrEvidence> {
+    const ir = await this.irStore.findById(id, tenantId);
+    if (!ir) throw new Error(`Inspection Request with ID ${id} not found`);
+    // The same authority that decides the inspection attaches its evidence. The route DECLARES
+    // this rather than deriving `quality.ir.upload`, which no role holds — a route that exists,
+    // looks governed and is reachable by nobody is the shape SIT-04 found in site.
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (ir.companyId) orgPath.push({ level: 'company', id: ir.companyId });
+      this.access.assert(actorId, { permission: 'quality.ir.resolve', orgPath, resource: { type: 'project', id: ir.projectId } });
+    }
+    const evidence = makeIrEvidence({
+      tenantId: ir.tenantId,
+      companyId: ir.companyId,
+      inspectionId: ir.id,
+      projectId: ir.projectId,
+      fileId: input.fileId,
+      category: 'photo',
+      description: input.description,
+      location: input.location,
+      capturedAt: input.capturedAt,
+      capturedBy: actorId,
+      hash: input.hash,
+    });
+    await this.tx.run(async (handle) => {
+      await this.irStore.saveEvidence(evidence, handle);
+    });
+    this.logger.log(`Inspection ${ir.irNumber} evidence attached by ${actorId ?? 'an unidentified user'}`);
+    return evidence;
+  }
+
+  /**
+   * THE INSPECTION AND WHAT IT PRODUCED, with the signature already judged against the result.
+   *
+   * `coverage` is resolved HERE and not by the printable sheet: that page cannot import this
+   * module, and a second copy of the result hash out there would drift from this one in silence.
+   */
+  async readInspection(tenantId: Id, id: Id): Promise<{
+    inspection: InspectionRequest;
+    evidence: IrEvidence[];
+    signature: (IrEvidence & { coverage: 'current' | 'superseded' | 'unverifiable' }) | null;
+  } | null> {
+    const inspection = await this.irStore.findById(id, tenantId);
+    if (!inspection) return null;
+    const evidence = await this.irStore.listEvidence(id, tenantId);
+    const resolved = resolveInspectionSignature(evidence, signedInspectionResult(inspection));
+    return {
+      inspection,
+      evidence,
+      signature: resolved ? { ...resolved.evidence, coverage: resolved.coverage } : null,
+    };
+  }
+
   /** requested → in_progress. Optional "inspection started" step before a pass/fail decision. */
   async startInspection(tenantId: Id, actorId: Id | null, id: Id): Promise<InspectionRequest> {
     const ir = await this.irStore.findById(id, tenantId);
@@ -324,7 +400,24 @@ export class QualityService {
     return ir;
   }
 
-  async resolveInspection(tenantId: Id, actorId: Id | null, id: Id, status: 'approved' | 'rejected', comments?: string): Promise<InspectionRequest> {
+  /**
+   * RESOLVE AN INSPECTION — and keep the signature that decided it.
+   *
+   * The screen has shown an "Inspector / Witness Signature" pad since it existed, bound to state
+   * the submit payload never read, so the record of a passed inspection was a status and a name.
+   *
+   * The signature belongs to THIS act and not to a later one: uploaded beforehand it would cover
+   * a `requested` inspection and be superseded the instant the decision landed, and attached
+   * afterwards it could be added by somebody else to a decision already made.
+   */
+  async resolveInspection(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    status: 'approved' | 'rejected',
+    comments?: string,
+    signature?: { signedBy: string; fileId: string; hash: string } | null,
+  ): Promise<InspectionRequest> {
     const ir = await this.irStore.findById(id, tenantId);
     if (!ir) throw new Error(`Inspection Request with ID ${id} not found`);
 
@@ -342,6 +435,33 @@ export class QualityService {
 
     await this.tx.run(async (handle) => {
       await this.irStore.save(ir, handle);
+
+      /**
+       * WHAT THE SIGNATURE COVERS is computed from the inspection AS RESOLVED, inside the same
+       * transaction. A witness puts their name to the OUTCOME — this IR, this location, this
+       * decision, this measured quantity — so taking the hash before the status changed would
+       * bind it to an inspection that had not been decided yet.
+       */
+      if (signature) {
+        await this.irStore.saveEvidence(makeIrEvidence({
+          tenantId: ir.tenantId,
+          companyId: ir.companyId,
+          inspectionId: ir.id,
+          projectId: ir.projectId,
+          fileId: signature.fileId,
+          category: 'signature',
+          description: `Inspection ${status} — signed`,
+          // WHO SIGNED, and separately WHO RECORDED IT. `inspectedBy` above is the AURA user who
+          // resolved the inspection; this is whoever actually signed, and on a witnessed
+          // inspection that is a consultant with no account here.
+          signedBy: signature.signedBy,
+          capturedBy: actorId,
+          hash: signature.hash,
+          signedContentHash: inspectionResultHash(signedInspectionResult(ir)),
+          capturedAt: ir.updatedAt,
+        }), handle);
+      }
+
       if (status === 'approved') {
         const event = makeEvent({
           type: QUALITY_EVENT.irApproved,

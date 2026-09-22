@@ -8,6 +8,7 @@ import type { Calibration } from './domain/calibration';
 import type { AuditSchedule } from './domain/audit-schedule';
 import { type Page, type PageParams, paginate } from '@aura/shared';
 import type { NcrStore, NcrVerificationStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { IrEvidence } from './domain/ir-evidence';
 
 export class InMemoryNcrVerificationStore implements NcrVerificationStore {
   private readonly items = new Map<string, NcrVerification>();
@@ -81,6 +82,18 @@ export class InMemoryNcrStore implements NcrStore {
 }
 
 export class InMemoryInspectionRequestStore implements InspectionRequestStore {
+  private readonly evidence: IrEvidence[] = [];
+
+  async saveEvidence(evidence: IrEvidence): Promise<void> {
+    this.evidence.push(evidence);
+  }
+
+  async listEvidence(inspectionId: string, tenantId: string): Promise<IrEvidence[]> {
+    return this.evidence
+      .filter((e) => e.inspectionId === inspectionId && e.tenantId === tenantId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
+
   private readonly items = new Map<string, InspectionRequest>();
 
   async save(ir: InspectionRequest): Promise<void> {

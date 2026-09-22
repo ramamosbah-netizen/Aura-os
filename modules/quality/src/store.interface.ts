@@ -3,6 +3,7 @@ import type { Page, PageParams } from '@aura/shared';
 import type { Ncr } from './domain/ncr';
 import type { NcrVerification } from './domain/ncr-verification';
 import type { InspectionRequest } from './domain/inspection-request';
+import type { IrEvidence } from './domain/ir-evidence';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
 import type { MaterialApproval } from './domain/material-approval';
@@ -35,6 +36,14 @@ export interface InspectionRequestStore {
   findByProject(projectId: string, tenantId: string): Promise<InspectionRequest[]>;
   findAll(tenantId: string): Promise<InspectionRequest[]>;
   listPaged(tenantId: string, page: PageParams): Promise<Page<InspectionRequest>>;
+
+  /**
+   * The photographs and the signature an inspection produced. Append-only: an inspection
+   * re-signed after being re-measured keeps the earlier row, which is the record that it was
+   * signed once and then changed.
+   */
+  saveEvidence(evidence: IrEvidence, tx?: TxHandle): Promise<void>;
+  listEvidence(inspectionId: string, tenantId: string): Promise<IrEvidence[]>;
 }
 
 export interface SnagStore {

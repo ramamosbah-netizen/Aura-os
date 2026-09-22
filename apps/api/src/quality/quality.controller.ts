@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
-import { Permissions, TenantContext } from '@aura/core';
+import { DmsService, Permissions, TenantContext } from '@aura/core';
 import { parsePageParams, DISCIPLINES } from '@aura/shared';
 import {
   type Ncr,
@@ -66,9 +67,54 @@ class RequestInspectionDto {
   @IsOptional() @IsString() unit?: string | null;
 }
 
+/**
+ * A pad produces `data:image/png;base64,…`. Turn that into bytes we can store.
+ *
+ * The media type decides only the file name's extension and what we declare to storage; whether
+ * the bytes may be kept under `signature` is decided by DmsService from the CONTENT, so a caller
+ * relabelling a spreadsheet as `image/png` changes the extension and nothing that matters.
+ */
+const INSPECTION_SIGNATURE_MAX_BYTES = 1_200_000;
+const INSPECTION_DATA_URL = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)?(;charset=[a-z0-9-]+)?;base64,([a-z0-9+/=\s]+)$/i;
+
+function decodeInspectionSignature(value: string): { data: Buffer; contentType: string; extension: string } {
+  const match = INSPECTION_DATA_URL.exec((value ?? '').trim());
+  if (!match) {
+    throw new BadRequestException('the inspection signature must be a base64 `data:` URL, which is what a signature pad produces');
+  }
+  const contentType = (match[1] || 'application/octet-stream').toLowerCase();
+  const data = Buffer.from(match[3].replace(/\s+/g, ''), 'base64');
+  if (!data.length) throw new BadRequestException('the inspection signature is empty \u2014 nothing was drawn');
+  if (data.length > INSPECTION_SIGNATURE_MAX_BYTES) {
+    throw new BadRequestException(`the inspection signature is ${Math.round(data.length / 1024)}KB; the limit is ${Math.round(INSPECTION_SIGNATURE_MAX_BYTES / 1024)}KB`);
+  }
+  const subtype = contentType.split('/')[1] ?? 'bin';
+  const extension = subtype === 'jpeg' ? 'jpg' : subtype.replace(/[^a-z0-9]/g, '') || 'bin';
+  return { data, contentType, extension };
+}
+
 class ResolveInspectionDto {
   @IsIn(['approved', 'rejected']) status!: 'approved' | 'rejected';
   @IsOptional() @IsString() comments?: string;
+  /**
+   * WHO SIGNED. A label — an inspection is witnessed by a consultant who holds no AURA account,
+   * and `inspectedBy` on the record is already the internal user who resolved it. The two are
+   * different people whenever the inspection is witnessed, and neither may stand in for the other.
+   */
+  @IsOptional() @IsString() signedBy?: string;
+  /**
+   * The signature itself, as the `data:` URL the pad produces. Travels with the decision because
+   * that is the act it evidences; the API's JSON body limit is 2MB, so the decoded image is
+   * capped below it with a message that explains itself.
+   */
+  @IsOptional() @IsString() signature?: string;
+}
+
+/** The multipart fields beside an inspection photograph. No `fileId`: this route creates it. */
+class UploadInspectionEvidenceDto {
+  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() location?: string;
+  @IsOptional() @IsString() capturedAt?: string;
 }
 
 class LogSnagDto {
@@ -85,6 +131,9 @@ export class QualityController {
   constructor(
     private readonly qualityService: QualityService,
     private readonly tenant: TenantContext,
+    // Quality's first file door. The bytes go where every other file goes: judged by the
+    // file-type policy, governed by the document access engine, never into a business column.
+    private readonly dms: DmsService,
   ) {}
 
   // ── NCR (Non-Conformance Reports) ──────────────────────────────────────────
@@ -226,8 +275,21 @@ export class QualityController {
     });
   }
 
+  /**
+   * RESOLVE AN INSPECTION — and keep the signature that decided it.
+   *
+   * The screen has offered an "Inspector / Witness Signature" pad since it existed, wired to
+   * state the submit payload never read. So a passed inspection recorded a status and an actor
+   * and nothing from whoever put their name to it.
+   *
+   * The signature is stored BEFORE the decision is recorded, so an inspection never reaches
+   * `approved` citing a document the file-type policy refused. If the resolve then fails its own
+   * guards — a terminal IR that cannot be re-resolved — an orphan document is left behind,
+   * which is the safe direction: a stored file nothing references is inert, whereas a reference
+   * to nothing is a record that looks like evidence.
+   */
   @Put('irs/:id/resolve')
-  resolveInspection(
+  async resolveInspection(
     @Param('id') id: string,
     @Body() dto: ResolveInspectionDto,
   ): Promise<InspectionRequest> {
@@ -239,13 +301,125 @@ export class QualityController {
     }
 
     const ctx = this.tenant.get();
+
+    // THE SIGNATURE AND ITS SIGNATORY MOVE TOGETHER. A signature with nobody's name on it would
+    // fall back to the uploading account and the printed IR would resume reading "Signed by
+    // <whoever pressed the button>"; a name with no signature is a claim about proof that does
+    // not exist.
+    const hasInk = Boolean(dto.signature?.trim());
+    const hasName = Boolean(dto.signedBy?.trim());
+    if (hasInk !== hasName) {
+      throw new BadRequestException(
+        hasInk
+          ? 'name the person who signed this inspection \u2014 whoever records it is not therefore its signatory'
+          : 'a signatory was named but no signature was supplied',
+      );
+    }
+
+    let signature: { signedBy: string; fileId: string; hash: string } | null = null;
+    if (hasInk && hasName) {
+      const found = await this.qualityService.readInspection(ctx.tenantId, id);
+      if (!found) throw new NotFoundException(`Inspection Request with ID ${id} not found`);
+      const decoded = decodeInspectionSignature(dto.signature!);
+      const stored = await this.dms.createDocument(
+        {
+          tenantId: ctx.tenantId,
+          companyId: ctx.companyId,
+          // Held to the `signature` allow-list — images and PDFs, judged from the magic bytes
+          // and never from the declared type or the file name.
+          kind: 'signature',
+          title: `Inspection ${found.inspection.irNumber} \u2014 signed by ${dto.signedBy!.trim()}`,
+          aggregateType: 'quality.inspection-request',
+          aggregateId: id,
+          createdBy: ctx.actorId ?? null,
+        },
+        {
+          fileName: `inspection-signature-${found.inspection.irNumber}.${decoded.extension}`,
+          contentType: decoded.contentType,
+          data: decoded.data,
+        },
+      );
+      // COMPUTED BY DMS, never taken from the caller: a hash supplied by whoever sent the image
+      // attests to nothing.
+      const checksum = stored.versions[0]?.checksum;
+      if (!checksum) throw new BadRequestException('the signature was stored without a checksum, so the inspection cannot attest to it');
+      signature = { signedBy: dto.signedBy!.trim(), fileId: stored.document.id, hash: checksum };
+    }
+
     return this.qualityService.resolveInspection(
       ctx.tenantId,
       ctx.actorId,
       id,
       dto.status,
       dto.comments,
+      signature,
     );
+  }
+
+  /**
+   * THE DOOR QUALITY DID NOT HAVE.
+   *
+   * Every multipart upload route in AURA was in CRM, Tendering, DocControl and Site. Quality had
+   * none, so an inspection request — the record that says a thing was looked at and passed —
+   * could carry no photograph of what was looked at.
+   *
+   * Upload and attach are ONE act, as in site: two calls would allow a stored photo attached to
+   * nothing, and an evidence row pointing at a file that was never stored.
+   *
+   * THE PERMISSION IS DECLARED, not derived. The derived name for this path would be
+   * `quality.ir.upload`, which no role holds — the route would exist, look governed, and be
+   * reachable by nobody. `quality.ir.resolve` is the authority that decides the inspection, and
+   * whoever decides it attaches its evidence.
+   */
+  @Post('irs/:id/evidence/upload')
+  @Permissions('quality.ir.resolve')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024, files: 1 } }))
+  async uploadInspectionEvidence(
+    @Param('id') id: string,
+    @Body() dto: UploadInspectionEvidenceDto,
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException('a file is required');
+    const ctx = this.tenant.get();
+    const found = await this.qualityService.readInspection(ctx.tenantId, id);
+    if (!found) throw new NotFoundException(`Inspection Request with ID ${id} not found`);
+
+    const stored = await this.dms.createDocument(
+      {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        // `evidence` holds images and PDFs: what a phone or a scanner produced on an inspection,
+        // never a spreadsheet or an archive.
+        kind: 'evidence',
+        title: dto?.description?.trim() || file.originalname,
+        aggregateType: 'quality.inspection-request',
+        aggregateId: id,
+        createdBy: ctx.actorId ?? null,
+      },
+      {
+        fileName: file.originalname.split(/[\\/]/).pop() || 'evidence',
+        contentType: file.mimetype || 'application/octet-stream',
+        data: file.buffer,
+      },
+    );
+
+    return this.qualityService.addInspectionEvidence(ctx.tenantId, ctx.actorId, id, {
+      fileId: stored.document.id,
+      description: dto?.description,
+      location: dto?.location,
+      capturedAt: dto?.capturedAt,
+      // COMPUTED HERE, never accepted from the caller. The hash is the tamper-evidence on the
+      // photograph; one supplied by whoever uploaded the file attests to nothing.
+      hash: stored.versions[0].checksum,
+    });
+  }
+
+  /** The inspection with its photographs and its signature, the signature already judged. */
+  @Get('irs/:id/detail')
+  async inspectionDetail(@Param('id') id: string) {
+    const found = await this.qualityService.readInspection(this.tenant.get().tenantId, id);
+    if (!found) throw new NotFoundException(`Inspection Request with ID ${id} not found`);
+    return found;
   }
 
   @Get('irs')

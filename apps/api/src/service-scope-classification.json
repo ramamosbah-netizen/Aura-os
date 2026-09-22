@@ -809,6 +809,22 @@
     }
   },
   {
+    "key": "modules/quality/src/quality.service.ts#addInspectionEvidence",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical ir.projectId loaded from the owning store, never an authorization override from URL/query/body. Attaching a photograph to an inspection is governed by the authority that DECIDES the inspection: the route declares quality.ir.resolve rather than deriving quality.ir.upload, which no role holds and which would leave the door reachable by nobody.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "New authority — quality had no upload route at all, so inspection evidence had no door and therefore no check",
+    "evidence": "quality.addInspectionEvidence",
+    "security": {
+      "target": "{ permission: 'quality.ir.resolve', orgPath, resource: { type: 'project', id: ir.projectId } }",
+      "checks": [],
+      "provenance": [
+        "ir = await this.irStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
     "key": "modules/quality/src/quality.service.ts#resolveSnag",
     "classification": "PROJECT_SCOPE_REQUIRED",
     "resolution": "Canonical snag.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",

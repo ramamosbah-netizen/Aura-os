@@ -36,6 +36,15 @@ export interface LabourAllocation {
   notes: string | null;
 }
 
+/** An evidence row as the API returns it — the proof the bytes were stored, not just picked. */
+export interface SavedEvidence {
+  id: string;
+  fileId: string;
+  description: string | null;
+  capturedBy: string | null;
+  hash: string | null;
+}
+
 const today = () => businessDateInputValue();
 
 export default function DailyReportClient({ reports, labour, initialProjectId = '', projects, projectsUnavailable = false }: { reports: DailyReport[]; labour: LabourAllocation[]; initialProjectId?: string; projects?: PickerProject[]; projectsUnavailable?: boolean }) {
@@ -55,6 +64,34 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
     submitted: rows.filter((r) => r.status === 'submitted').length,
     manHours: Math.round(lab.reduce((s, l) => s + l.manHours, 0)),
   }), [rows, lab]);
+
+  // Evidence already saved against each report, keyed by report id, so the row can say what
+  // came back rather than what was picked.
+  const [saved, setSaved] = useState<Record<string, SavedEvidence[]>>({});
+
+  /**
+   * Send one picked item to storage and attach it to the report, in one call.
+   *
+   * THE FILE IS NAMED FOR WHAT IT ACTUALLY IS. FileAttachmentZone re-encodes images to JPEG to
+   * keep a site upload small, so a picked `riser.png` is JPEG bytes by the time it gets here.
+   * The server judges the type from the CONTENT and refuses a file whose name disagrees with it,
+   * so keeping the original extension would have every compressed photo rejected as
+   * misrepresenting itself. The extension is taken from the data URL's own media type.
+   */
+  const uploadEvidence = async (reportId: string, dataUrl: string, baseName: string, description: string): Promise<SavedEvidence> => {
+    const mediaType = /^data:([^;,]+)/.exec(dataUrl)?.[1] || 'application/octet-stream';
+    const bytes = await (await fetch(dataUrl)).blob();
+    const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/png' ? 'png' : (mediaType.split('/')[1] || 'bin');
+    const stem = baseName.replace(/\.[^.]+$/, '') || 'evidence';
+    const form = new FormData();
+    form.append('file', bytes, `${stem}.${ext}`);
+    form.append('category', 'progress');
+    form.append('description', description);
+    const res = await fetch(`/api/site/daily-reports/${reportId}/evidence/upload`, { method: 'POST', body: form });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.message || body?.error || `evidence upload failed (${res.status})`);
+    return body as SavedEvidence;
+  };
 
   const setD = (k: keyof typeof dr, v: string) => setDr((p) => ({ ...p, [k]: v }));
   const setL = (k: keyof typeof lr, v: string) => setLr((p) => ({ ...p, [k]: v }));
@@ -88,6 +125,39 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
       } else if (result.data) {
         setRows((p) => [result.data!, ...p]);
       }
+
+      // THE PART THAT WAS MISSING. The photos and the signature were held in React state, shown
+      // back to the user as thumbnails, and never sent: `payload` above has no field for them.
+      // Finding J4-01 — "the daily report displays photos/signature without saving them with the
+      // record" — was this line not existing.
+      //
+      // Only for a report that really exists: an offline placeholder has no server id to attach
+      // to, so its evidence waits with it rather than being uploaded against a made-up id.
+      const reportId = !result.offline && result.data ? result.data.id : null;
+      if (reportId) {
+        const stored: SavedEvidence[] = [];
+        const failed: string[] = [];
+        for (const [i, a] of attachments.entries()) {
+          if (!a.dataUrl) continue;
+          try {
+            stored.push(await uploadEvidence(reportId, a.dataUrl, a.name, `Site progress photo ${i + 1}`));
+          } catch (e) { failed.push(`${a.name}: ${(e as Error).message}`); }
+        }
+        if (signature) {
+          try {
+            stored.push(await uploadEvidence(reportId, signature, 'supervisor-signature', 'Supervisor sign-off'));
+          } catch (e) { failed.push(`signature: ${(e as Error).message}`); }
+        }
+        if (stored.length) setSaved((p) => ({ ...p, [reportId]: stored }));
+        // Say so rather than clearing the pickers and letting the screen imply it was saved —
+        // the silent discard is the whole defect being fixed here.
+        if (failed.length) {
+          setError(`The report was saved. ${failed.length} attachment(s) were not: ${failed.join('; ')}`);
+          return;
+        }
+      }
+      setAttachments([]);
+      setSignature(null);
       setDr({ projectId: dr.projectId, date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -196,6 +266,23 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
                 <Td align="right">{r.equipmentCount}</Td>
                 <Td><Badge tone={r.status === 'submitted' ? 'good' : r.id.startsWith('offline-') || r.id.startsWith('client-') ? 'info' : 'warn'}>{r.id.startsWith('offline-') || r.id.startsWith('client-') ? '📡 Queued' : r.status}</Badge></Td>
                 <Td>
+                  {/* THE RETURN LEG. Evidence is only proved when the person who attached it can
+                      open it again, so each stored file is a link that fetches the real bytes
+                      back through the governed download route — not a thumbnail of what was
+                      picked, which is what the screen used to show. */}
+                  {(saved[r.id] ?? []).map((e, i) => (
+                    <a
+                      key={e.id}
+                      href={`/api/documents/${e.fileId}/content`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`evidence-link-${r.id}`}
+                      title={`${e.description ?? 'Evidence'} — captured by ${e.capturedBy ?? 'unknown'}`}
+                      style={{ marginRight: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
+                    >
+                      📎{i + 1}
+                    </a>
+                  ))}
                   {r.status === 'draft' && <Button size="sm" tone="neutral" onClick={() => submit(r.id)}>Submit</Button>}
                   <a href={`/site/daily-reports/${r.id}/print`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="Print Daily Report (PDF)">🖨</a>
                 </Td>

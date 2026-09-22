@@ -30,9 +30,9 @@ The initial `aura_app` password mismatch was resolved by provisioning the existi
 
 This removed the environment blocker and enabled the live evidence recorded above. The frozen register has 55 UNVERIFIED and zero NOT_AUDITED capability leaves. Those 55 are pinned acceptance tasks, and the 181 page templates without fresh browser execution stay visible in the page matrix. No AURA functional-completeness, Business Journeys CLOSED/VERIFIED or Production Ready claim is made.
 
-## Unresolved browser evidence, 22 September
+## Diagnosed unresolved test debt, 22 September
 
-Two pieces of browser evidence are **open and undecided**. They are recorded here rather than
+These are **diagnosed and still failing** — test debt with a known cause, not evidence awaiting diagnosis, and NOT passing. Each carries a verdict below; none is repaired. They are recorded here rather than
 closed, and they are deliberately NOT treated as blockers for the whole system: each names a
 bounded surface, and nothing about them licenses a claim over capabilities they never touched.
 

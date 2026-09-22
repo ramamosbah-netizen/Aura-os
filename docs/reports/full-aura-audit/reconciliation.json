@@ -1,7 +1,7 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 24,
+    "COMPLETE": 25,
     "PARTIAL": 87,
     "BACKEND_ONLY": 4,
     "UI_ONLY": 0,
@@ -9,7 +9,7 @@
     "DUPLICATED": 0,
     "WRONG_AUTHORITY": 0,
     "DISCONNECTED": 8,
-    "WRONG_BEHAVIOR": 11,
+    "WRONG_BEHAVIOR": 10,
     "UNREACHABLE": 0,
     "UNVERIFIED": 46,
     "NOT_AUDITED": 0

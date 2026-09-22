@@ -462,7 +462,7 @@
 | Site | SIT-01 | UNVERIFIED |
 | Site | SIT-02 | PARTIAL |
 | Site | SIT-03 | PARTIAL |
-| Site | SIT-04 | WRONG_BEHAVIOR |
+| Site | SIT-04 | COMPLETE |
 | Site | SIT-05 | PARTIAL |
 | Site | SIT-06 | UNVERIFIED |
 | Site | OUT-01 | PARTIAL |
@@ -563,7 +563,7 @@
 | Progress | SIT-01 | UNVERIFIED |
 | Progress | SIT-02 | PARTIAL |
 | Progress | SIT-03 | PARTIAL |
-| Progress | SIT-04 | WRONG_BEHAVIOR |
+| Progress | SIT-04 | COMPLETE |
 | Progress | SIT-05 | PARTIAL |
 | Progress | SIT-06 | UNVERIFIED |
 | Progress | OUT-01 | PARTIAL |

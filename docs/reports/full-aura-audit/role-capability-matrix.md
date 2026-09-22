@@ -170,7 +170,7 @@
 | Site Engineer | SIT-01 | UNVERIFIED | UNVERIFIED |
 | Site Engineer | SIT-02 | PARTIAL | UNVERIFIED |
 | Site Engineer | SIT-03 | PARTIAL | UNVERIFIED |
-| Site Engineer | SIT-04 | WRONG_BEHAVIOR | UNVERIFIED |
+| Site Engineer | SIT-04 | COMPLETE | UNVERIFIED |
 | Site Engineer | SIT-05 | PARTIAL | UNVERIFIED |
 | Site Engineer | SIT-06 | UNVERIFIED | UNVERIFIED |
 | Site Engineer | QHS-01 | UNVERIFIED | UNVERIFIED |
@@ -273,7 +273,7 @@
 | Project Engineer | SIT-01 | UNVERIFIED | UNVERIFIED |
 | Project Engineer | SIT-02 | PARTIAL | UNVERIFIED |
 | Project Engineer | SIT-03 | PARTIAL | UNVERIFIED |
-| Project Engineer | SIT-04 | WRONG_BEHAVIOR | UNVERIFIED |
+| Project Engineer | SIT-04 | COMPLETE | UNVERIFIED |
 | Project Engineer | SIT-05 | PARTIAL | UNVERIFIED |
 | Project Engineer | SIT-06 | UNVERIFIED | UNVERIFIED |
 | Project Engineer | OUT-01 | PARTIAL | UNVERIFIED |

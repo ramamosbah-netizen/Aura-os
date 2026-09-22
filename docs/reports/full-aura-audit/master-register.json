@@ -2868,7 +2868,7 @@
         "Site",
         "Progress"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "authority": "Site",
       "evidence": [
         "R-J26"
@@ -2876,17 +2876,17 @@
       "source": "apps/web/components/daily-report-client.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "PARTIAL",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Reused J4-01: displayed attachments/signature omitted from save payload.",
-      "acceptanceProof": "Save, reload and download evidence under allowed/denied roles."
+      "currentBehavior": "A photograph taken on site now reaches storage and comes back to the people who need it. THE FINDING WAS STRUCTURAL, NOT A BUG IN A HANDLER: every multipart upload route in AURA was in CRM or Tendering — site, quality, HSE, commissioning, engineering, projects and inventory had none between them — `POST site/daily-reports/:id/evidence` took a `fileId` that no site route could produce, and the generic `/documents` route stores inline text by its own description. The screen held picked photos and the signature in React state, drew them back as thumbnails, and `createReport`'s payload had no field for either, so they were discarded and the pickers were not even cleared — the day looked saved. Site now has its own door: upload and attach are ONE act, so there is no stored photo attached to nothing and no evidence row pointing at a file that was never stored; the tamper-evidence hash is the checksum computed over the RECEIVED bytes rather than one the caller supplies, which attests to nothing; and the permission is DECLARED as the sibling route's `site.daily-report.evidence`, because the derived name for the new path would be `site.daily-report.upload`, which no role holds — the route would have existed, looked governed, and been reachable by nobody. A SECOND DEFECT WAS FOUND BY ASKING THE HANDOFF QUESTION PROPERLY: the round trip passed as one identity, and a daily report is reviewed by somebody other than its author. Measured with the site engineer as author, the PM WHO REVIEWS AND APPROVES THAT REPORT got 403, as did QA/QC and the administrator — all of them could see the evidence row and none could open the photograph it named, because DMS access is decided by the document's own engine and a document created with no shares has only its uploader. `SiteEvidenceDocumentAccessProvider` inherits it from the record: whoever may READ the daily report may open its evidence, VIEW and DOWNLOAD only, on the same permission the report's own route is governed by.",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Save, reload and download evidence under allowed/denied roles” — proved in a BROWSER against the migrated PostgreSQL database with auth ON, because the finding was only ever visible there: an API-level proof passes against the broken screen. SAVE: a real PNG picked in the daily-report form and a signature drawn on the canvas, both stored — 761 bytes JPEG (the picker re-encodes photos) and 4248 bytes PNG. RELOAD: the evidence rows are on the reloaded record carrying capturedBy, location and a hash equal to the sha256 of the bytes actually received. DOWNLOAD: both fetched back through the governed route, 200, non-empty, and verified to be real images by their leading bytes rather than by status alone. ALLOWED/DENIED, asked of five identities: author 200, PM 200, QA/QC 200, administrator 200, and Finance — which holds no site authority — 403 with no storage key, filename or checksum in the refusal. HANDOFF: the reviewer opens the file from the report 360, which listed the description as plain text before and is now a link, because evidence nobody downstream can open has not been handed over. TYPE RULE: an executable renamed .png is refused on this door with 400 and leaves NO evidence row behind. Regression: site-evidence-round-trip.spec.ts (browser), evidence-upload-authority.security.test.ts (the declared permission, and that it is the sibling's), site-evidence-document-access.provider.test.ts (8 tests: the non-author grant, the refusal, the exact permission name, the absence of EDIT, silence on non-site documents, and tenant/missing record refused BEFORE the permission is consulted). ACCEPTED LIMITS, stated rather than implied: this closes SIT-04 and NOT the record it shares. J4-01 also carries QHS-07 and XOP-12 and both stay open — quality still has no upload route at all, and XOP-12 additionally asks for the signature to be included in CONTROLLED OUTPUT, which the printable report has not been shown to do. The other six delivery modules still have no upload route, so nothing here speaks for them."
     },
     {
       "id": "SIT-05",
@@ -7701,7 +7701,7 @@
       "expectedOperationalBehavior": "Photos and signature persistence works with canonical inputs, governed permissions and usable handoff; Inspection evidence and signature works with canonical inputs, governed permissions and usable handoff; Signature evidence works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Save, reload and download evidence under allowed/denied roles.; Representative QA/QC, HSE, Site Engineer role executes Inspection evidence and signature in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved.; Capture attributable electronic signature/evidence, persist and reload it, include it in controlled output and deny tampering/download by unauthorized roles."
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Save, reload and download evidence under allowed/denied roles” — proved in a BROWSER against the migrated PostgreSQL database with auth ON, because the finding was only ever visible there: an API-level proof passes against the broken screen. SAVE: a real PNG picked in the daily-report form and a signature drawn on the canvas, both stored — 761 bytes JPEG (the picker re-encodes photos) and 4248 bytes PNG. RELOAD: the evidence rows are on the reloaded record carrying capturedBy, location and a hash equal to the sha256 of the bytes actually received. DOWNLOAD: both fetched back through the governed route, 200, non-empty, and verified to be real images by their leading bytes rather than by status alone. ALLOWED/DENIED, asked of five identities: author 200, PM 200, QA/QC 200, administrator 200, and Finance — which holds no site authority — 403 with no storage key, filename or checksum in the refusal. HANDOFF: the reviewer opens the file from the report 360, which listed the description as plain text before and is now a link, because evidence nobody downstream can open has not been handed over. TYPE RULE: an executable renamed .png is refused on this door with 400 and leaves NO evidence row behind. Regression: site-evidence-round-trip.spec.ts (browser), evidence-upload-authority.security.test.ts (the declared permission, and that it is the sibling's), site-evidence-document-access.provider.test.ts (8 tests: the non-author grant, the refusal, the exact permission name, the absence of EDIT, silence on non-site documents, and tenant/missing record refused BEFORE the permission is consulted). ACCEPTED LIMITS, stated rather than implied: this closes SIT-04 and NOT the record it shares. J4-01 also carries QHS-07 and XOP-12 and both stay open — quality still has no upload route at all, and XOP-12 additionally asks for the signature to be included in CONTROLLED OUTPUT, which the printable report has not been shown to do. The other six delivery modules still have no upload route, so nothing here speaks for them.; Representative QA/QC, HSE, Site Engineer role executes Inspection evidence and signature in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved.; Capture attributable electronic signature/evidence, persist and reload it, include it in controlled output and deny tampering/download by unauthorized roles."
     },
     {
       "id": "J4-02",
@@ -9069,7 +9069,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 24,
+      "COMPLETE": 25,
       "PARTIAL": 87,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -9077,7 +9077,7 @@
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 8,
-      "WRONG_BEHAVIOR": 11,
+      "WRONG_BEHAVIOR": 10,
       "UNREACHABLE": 0,
       "UNVERIFIED": 46,
       "NOT_AUDITED": 0

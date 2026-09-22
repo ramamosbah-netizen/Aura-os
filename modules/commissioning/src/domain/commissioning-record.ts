@@ -34,9 +34,20 @@ export interface CommissioningRecord {
   testDate: string | null;
   remarks: string | null;
   commissionedAt: string | null;
+  /** The engineer who signed off. A LABEL, like `witnessedBy` — not the AURA user. */
   commissionedBy: string | null;
   /** The consultant/client representative who witnessed sign-off. */
   witnessedBy: string | null;
+  /**
+   * WHO RECORDED THE SIGN-OFF in AURA.
+   *
+   * The commission route took no actor at all, so the act that closes a system's testing was
+   * performed by nobody as far as the record knew — while two free-text names sat beside it
+   * looking like attribution. `commissionedBy` and `witnessedBy` name the people who SIGNED, and
+   * a consultant's witness holds no AURA account; this is the user who entered it, and no
+   * certificate may present one as the other.
+   */
+  commissionRecordedBy: string | null;
   createdBy: Id | null;
   createdAt: string;
   updatedAt: string;
@@ -79,6 +90,7 @@ export function makeCommissioningRecord(input: NewCommissioningRecord): Commissi
     commissionedAt: null,
     commissionedBy: null,
     witnessedBy: null,
+    commissionRecordedBy: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,
@@ -117,6 +129,7 @@ export function recordTest(
 export function commission(
   rec: CommissioningRecord,
   patch: { commissionedBy: string; witnessedBy: string },
+  recordedBy: string | null = null,
 ): CommissioningRecord {
   if (rec.status === 'commissioned') {
     throw new Error('conflict: record is already commissioned');
@@ -133,6 +146,7 @@ export function commission(
     status: 'commissioned',
     commissionedBy: patch.commissionedBy.trim(),
     witnessedBy: patch.witnessedBy.trim(),
+    commissionRecordedBy: recordedBy,
     commissionedAt: now,
     updatedAt: now,
   };

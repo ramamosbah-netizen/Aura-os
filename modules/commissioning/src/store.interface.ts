@@ -10,6 +10,7 @@ import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
 import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
+import type { SignoffEvidence } from './domain/signoff-evidence';
 import type { HandoverPackage } from './domain/handover';
 
 export const COMMISSIONING_STORE = Symbol('COMMISSIONING_STORE');
@@ -36,6 +37,14 @@ export interface CommissioningStore {
   savePunchItem(item: PunchItem): Promise<void>;
   findPunchItem(id: string, tenantId: string): Promise<PunchItem | null>;
   listPunchItems(commissioningId: string, tenantId: string): Promise<PunchItem[]>;
+
+  /**
+   * The witnessed sign-off's evidence — one row per party. `save` is an upsert on
+   * (tenant, record, party): a second signature for the same party is a CORRECTION, never a
+   * second opinion, and two rows would leave every reader choosing between them.
+   */
+  saveSignoffEvidence(evidence: SignoffEvidence): Promise<void>;
+  listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]>;
 
   // Workspace-wide reads. The T&C surfaces answer questions about a PROJECT ("what is stopping this
   // project being commissioned?"), not about one record, and doing that by looping the records would

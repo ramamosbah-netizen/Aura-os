@@ -12,6 +12,7 @@ import type { DossierItem } from './domain/dossier';
 import type { TrainingSession } from './domain/client-training';
 import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
+import type { SignoffEvidence } from './domain/signoff-evidence';
 import type { HandoverPackage } from './domain/handover';
 
 /** Dev/test adapter — in-memory, non-persistent. Mirrors the Postgres adapter's ordering. */
@@ -59,6 +60,24 @@ export class InMemoryCommissioningStore implements CommissioningStore {
     return [...this.testItems.values()]
       .filter((i) => i.commissioningId === commissioningId && i.tenantId === tenantId)
       .sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+  }
+
+  private readonly signoffEvidence: SignoffEvidence[] = [];
+
+  async saveSignoffEvidence(evidence: SignoffEvidence): Promise<void> {
+    // Upsert on the party, matching the unique index in Postgres: the two tiers must agree about
+    // what a second signature for the same party means.
+    const at = this.signoffEvidence.findIndex(
+      (e) => e.tenantId === evidence.tenantId && e.commissioningId === evidence.commissioningId && e.party === evidence.party,
+    );
+    if (at >= 0) this.signoffEvidence[at] = evidence;
+    else this.signoffEvidence.push(evidence);
+  }
+
+  async listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]> {
+    return this.signoffEvidence
+      .filter((e) => e.commissioningId === commissioningId && e.tenantId === tenantId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   }
 
   async savePunchItem(item: PunchItem): Promise<void> {

@@ -10,6 +10,10 @@ import {
   commission,
   fail,
 } from './domain/commissioning-record';
+import {
+  type SignoffEvidence, type SignoffMethod, type SignoffParty,
+  commissioningResultHash, makeSignoffEvidence, signoffCoversResult,
+} from './domain/signoff-evidence';
 import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './domain/commissioning-test-item';
 import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
@@ -360,7 +364,29 @@ export class CommissioningService {
   async commission(
     id: string,
     tenantId: string,
-    patch: { commissionedBy: string; witnessedBy: string },
+    patch: {
+      commissionedBy: string;
+      witnessedBy: string;
+      /**
+       * EVIDENCE OF THE SIGN-OFF, one entry per party, already stored and hashed by DMS.
+       *
+       * Part of the SAME act. A sign-off that could be recorded first and evidenced afterwards
+       * would let a system be commissioned on nobody's signature and have one attached later by
+       * somebody else — which is the shape the closeout wizard was caught in.
+       *
+       * Optional, because a witnessed sign-off recorded from a wet-ink test sheet that has not
+       * been scanned yet is still a real record; what is refused is a document CLAIMING a
+       * signature it does not hold, and the certificate is what enforces that.
+       */
+      evidence?: Array<{
+        party: SignoffParty;
+        signedBy: string;
+        method: SignoffMethod;
+        documentId: string;
+        documentHash: string;
+      }>;
+    },
+    recordedBy: string | null = null,
   ): Promise<CommissioningRecord> {
     const rec = await this.mustFind(id, tenantId);
     // Retest gate: a system with open defects on its punch list cannot be signed off.
@@ -386,8 +412,36 @@ export class CommissioningService {
       }
     }
 
-    const next = commission(rec, patch);
+    const next = commission(rec, patch, recordedBy);
     await this.store.save(next);
+
+    /**
+     * WHAT THE SIGNATURES COVER is computed from the record AS COMMISSIONED, not from the request.
+     *
+     * A witness puts their name to a RESULT — this system, tested on this date, every point
+     * passed — and binding the signature to the record id alone would let the test sheet be
+     * reworked afterwards while the certificate went on printing their signature beneath the new
+     * figures. Taken from `next` rather than `rec` so the hash covers the commissioned state
+     * including its test date, which `commission` may set.
+     */
+    const contentHash = commissioningResultHash(next);
+    for (const e of patch.evidence ?? []) {
+      await this.store.saveSignoffEvidence(makeSignoffEvidence({
+        tenantId: next.tenantId,
+        companyId: next.companyId,
+        commissioningId: next.id,
+        projectId: next.projectId,
+        party: e.party,
+        signedBy: e.signedBy,
+        method: e.method,
+        documentId: e.documentId,
+        documentHash: e.documentHash,
+        signedContentHash: contentHash,
+        // WHO ENTERED IT, never the signatory. `signedBy` is the person who signed and holds no
+        // AURA account in the witness's case.
+        recordedBy,
+      }));
+    }
     // A commissioned system is a step toward project handover; a reactor watches for the last one
     // on a project and opens the handover package (commission → handover).
     await this.events.append([
@@ -395,13 +449,23 @@ export class CommissioningService {
         type: 'commissioning.record.commissioned',
         tenantId: next.tenantId,
         companyId: next.companyId,
-        actorId: next.createdBy,
+        // WHOEVER RECORDED THE SIGN-OFF. This said `next.createdBy`, so the audit trail filed
+        // the act that closes a system's testing against whoever first created the record.
+        actorId: next.commissionRecordedBy ?? next.createdBy,
         aggregateType: 'commissioning.record',
         aggregateId: next.id,
-        payload: { projectId: next.projectId, projectName: next.projectName, system: next.system },
+        payload: {
+          projectId: next.projectId,
+          projectName: next.projectName,
+          system: next.system,
+          // The methods, never the images: an event is replayed and exported, and a base64
+          // signature in a payload is a copy of the document outside the one place that governs
+          // who may open it.
+          signoffEvidence: (patch.evidence ?? []).map((e) => ({ party: e.party, method: e.method, signedBy: e.signedBy })),
+        },
       }),
     ]);
-    this.logger.log(`[Commissioning] ${rec.code} commissioned by ${patch.commissionedBy}, witnessed by ${patch.witnessedBy}`);
+    this.logger.log(`[Commissioning] ${rec.code} commissioned by ${patch.commissionedBy}, witnessed by ${patch.witnessedBy} (${(patch.evidence ?? []).length} signature(s) on file, recorded by ${recordedBy ?? 'an unidentified user'})`);
     return next;
   }
 
@@ -582,17 +646,35 @@ export class CommissioningService {
     punchItems: PunchItem[];
     /** The controlled document this pack is registered as, resolved now (TC-GATE-10). */
     certificate: LinkedCertificate | null;
+    /**
+     * THE WITNESSED SIGN-OFF'S EVIDENCE, one entry per party, each already judged against the
+     * result as it now stands.
+     *
+     * `coverage` is resolved HERE and not by the sheet. The evidence pack lives in apps/web,
+     * which cannot import this module, and a second copy of the result hash out there would
+     * drift from this one in silence — the same reason the daily report's signature coverage is
+     * resolved in the site domain.
+     */
+    signoffEvidence: Array<SignoffEvidence & { coverage: 'current' | 'superseded' | 'unverifiable' }>;
   } | null> {
     const record = await this.store.find(id, tenantId);
     if (!record) return null;
-    const [testItems, testRuns, punchItems, link] = await Promise.all([
+    const [testItems, testRuns, punchItems, link, signoff] = await Promise.all([
       this.store.listTestItems(id, tenantId),
       this.store.listTestRuns(id, tenantId),
       this.store.listPunchItems(id, tenantId),
       this.store.findCertificateLink(id, tenantId),
+      this.store.listSignoffEvidence(id, tenantId),
     ]);
     const documents = link ? await this.readDocuments(tenantId, record.projectId) : null;
-    return { record, testItems, testRuns, punchItems, certificate: link ? resolveCertificate(link, documents) : null };
+    return {
+      record,
+      testItems,
+      testRuns,
+      punchItems,
+      certificate: link ? resolveCertificate(link, documents) : null,
+      signoffEvidence: signoff.map((e) => ({ ...e, coverage: signoffCoversResult(e.signedContentHash, record) })),
+    };
   }
 
   // ── The workspace read model (TC-GATE-2) ─────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import type { DossierItem, DossierKind } from './domain/dossier';
 import type { TrainingSession, TrainingState } from './domain/client-training';
 import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
+import type { SignoffEvidence } from './domain/signoff-evidence';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
 // Postgres adapter for Commissioning. The domain is a plain interface (no class rehydration),
@@ -37,6 +38,7 @@ interface Row {
   commissioned_at: string | null;
   commissioned_by: string | null;
   witnessed_by: string | null;
+  commission_recorded_by: string | null;
   created_by: string | null;
   created_at: string;
   updated_at: string;
@@ -45,11 +47,11 @@ interface Row {
 // SELECT list: date read via ::text to avoid timezone drift.
 const COLS = `id, tenant_id, company_id, project_id, project_name, code, title, system, location,
   status, points_total, points_passed, test_date::text, remarks,
-  commissioned_at, commissioned_by, witnessed_by, created_by, created_at, updated_at`;
+  commissioned_at, commissioned_by, witnessed_by, commission_recorded_by, created_by, created_at, updated_at`;
 // INSERT list: same columns, no casts (a cast is invalid in a column list).
 const INSERT_COLS = `id, tenant_id, company_id, project_id, project_name, code, title, system, location,
   status, points_total, points_passed, test_date, remarks,
-  commissioned_at, commissioned_by, witnessed_by, created_by, created_at, updated_at`;
+  commissioned_at, commissioned_by, witnessed_by, commission_recorded_by, created_by, created_at, updated_at`;
 
 function toRecord(r: Row): CommissioningRecord {
   return {
@@ -69,6 +71,7 @@ function toRecord(r: Row): CommissioningRecord {
     remarks: r.remarks,
     commissionedAt: r.commissioned_at,
     commissionedBy: r.commissioned_by,
+    commissionRecordedBy: r.commission_recorded_by ?? null,
     witnessedBy: r.witnessed_by,
     createdBy: r.created_by,
     createdAt: typeof r.created_at === 'string' ? r.created_at : new Date(r.created_at).toISOString(),
@@ -82,7 +85,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
   async save(rec: CommissioningRecord): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_records (${INSERT_COLS})
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        on conflict (id) do update set
          project_name = excluded.project_name,
          title = excluded.title,
@@ -96,11 +99,12 @@ export class PostgresCommissioningStore implements CommissioningStore {
          commissioned_at = excluded.commissioned_at,
          commissioned_by = excluded.commissioned_by,
          witnessed_by = excluded.witnessed_by,
+         commission_recorded_by = excluded.commission_recorded_by,
          updated_at = excluded.updated_at`,
       [
         rec.id, rec.tenantId, rec.companyId, rec.projectId, rec.projectName, rec.code, rec.title,
         rec.system, rec.location, rec.status, rec.pointsTotal, rec.pointsPassed, rec.testDate,
-        rec.remarks, rec.commissionedAt, rec.commissionedBy, rec.witnessedBy, rec.createdBy,
+        rec.remarks, rec.commissionedAt, rec.commissionedBy, rec.witnessedBy, rec.commissionRecordedBy, rec.createdBy,
         rec.createdAt, rec.updatedAt,
       ],
     );
@@ -380,6 +384,34 @@ export class PostgresCommissioningStore implements CommissioningStore {
 
   // ── Punch list ───────────────────────────────────────────────────────────────
 
+  async saveSignoffEvidence(e: SignoffEvidence): Promise<void> {
+    await this.pool.query(
+      `insert into public.aura_commissioning_signoff_evidence
+        (id, tenant_id, company_id, commissioning_id, project_id, party, signed_by, method,
+         document_id, document_hash, signed_content_hash, recorded_by, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       on conflict (tenant_id, commissioning_id, party) do update set
+         signed_by = excluded.signed_by,
+         method = excluded.method,
+         document_id = excluded.document_id,
+         document_hash = excluded.document_hash,
+         signed_content_hash = excluded.signed_content_hash,
+         recorded_by = excluded.recorded_by,
+         created_at = excluded.created_at`,
+      [e.id, e.tenantId, e.companyId, e.commissioningId, e.projectId, e.party, e.signedBy, e.method,
+       e.documentId, e.documentHash, e.signedContentHash, e.recordedBy, e.createdAt],
+    );
+  }
+
+  async listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_signoff_evidence
+        where commissioning_id = $1 and tenant_id = $2 order by created_at asc`,
+      [commissioningId, tenantId],
+    );
+    return res.rows.map(toSignoffEvidence);
+  }
+
   async savePunchItem(i: PunchItem): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_punch_items
@@ -636,6 +668,31 @@ function toItpLink(r: Record<string, unknown>): CommissioningItpLink {
     testItemId: (r.test_item_id as string) ?? null,
     linkedBy: (r.linked_by as string) ?? null,
     createdAt: tsIso(r.created_at) as string,
+  };
+}
+
+interface SignoffEvidenceRow {
+  id: string; tenant_id: string; company_id: string | null; commissioning_id: string;
+  project_id: string; party: string; signed_by: string; method: string;
+  document_id: string; document_hash: string; signed_content_hash: string;
+  recorded_by: string | null; created_at: string | Date;
+}
+
+function toSignoffEvidence(r: SignoffEvidenceRow): SignoffEvidence {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    companyId: r.company_id,
+    commissioningId: r.commissioning_id,
+    projectId: r.project_id,
+    party: r.party as SignoffEvidence['party'],
+    signedBy: r.signed_by,
+    method: r.method as SignoffEvidence['method'],
+    documentId: r.document_id,
+    documentHash: r.document_hash,
+    signedContentHash: r.signed_content_hash,
+    recordedBy: r.recorded_by ?? null,
+    createdAt: typeof r.created_at === 'string' ? r.created_at : new Date(r.created_at).toISOString(),
   };
 }
 

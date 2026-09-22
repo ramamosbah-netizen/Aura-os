@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { Permissions, TenantContext } from '@aura/core';
+import { IsArray, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { DmsService, Permissions, TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type CommissioningRecord,
@@ -9,6 +10,10 @@ import {
   type PunchItem,
   type PunchSeverity,
   type ElvSystem,
+  type SignoffMethod,
+  type SignoffParty,
+  ACCEPTANCE_METHODS,
+  SIGNOFF_PARTIES,
   CommissioningService,
 } from '@aura/commissioning';
 
@@ -29,9 +34,61 @@ class TestDto {
   @IsOptional() @IsString() remarks?: string;
 }
 
+/** One party's signature, as the `data:` URL a pad or a scan produces. */
+/**
+ * A pad produces `data:image/png;base64,…` and a scan read in the browser produces the same
+ * shape. Turn either into bytes we can store.
+ *
+ * The media type here decides the file name's extension and what we declare to storage. Whether
+ * the bytes may be kept under the chosen category is decided by DmsService from the CONTENT, so a
+ * caller relabelling a spreadsheet as `image/png` changes the extension and nothing that matters.
+ *
+ * Capped below the API's own 2MB JSON body limit, and a sign-off may carry two of these, so each
+ * one gets half the room — refused by a message that explains itself rather than dying in the
+ * body parser.
+ */
+const SIGNOFF_EVIDENCE_MAX_BYTES = 600_000;
+const SIGNOFF_DATA_URL = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)?(;charset=[a-z0-9-]+)?;base64,([a-z0-9+/=\s]+)$/i;
+
+function decodeSignoffEvidence(value: string): { data: Buffer; contentType: string; extension: string } {
+  const match = SIGNOFF_DATA_URL.exec((value ?? '').trim());
+  if (!match) {
+    throw new BadRequestException('sign-off evidence must be a base64 `data:` URL \u2014 what a signature pad produces, or a scan read as one');
+  }
+  const contentType = (match[1] || 'application/octet-stream').toLowerCase();
+  const data = Buffer.from(match[3].replace(/\s+/g, ''), 'base64');
+  if (!data.length) throw new BadRequestException('the sign-off evidence is empty \u2014 there is nothing to file');
+  if (data.length > SIGNOFF_EVIDENCE_MAX_BYTES) {
+    throw new BadRequestException(`the sign-off evidence is ${Math.round(data.length / 1024)}KB; the limit is ${Math.round(SIGNOFF_EVIDENCE_MAX_BYTES / 1024)}KB per signature`);
+  }
+  const subtype = contentType.split('/')[1] ?? 'bin';
+  const extension = subtype === 'jpeg' ? 'jpg' : subtype.replace(/[^a-z0-9]/g, '') || 'bin';
+  return { data, contentType, extension };
+}
+
+/** One party's signature, as the `data:` URL a pad or a scan produces. */
+class SignoffEvidenceDto {
+  @IsString() party!: SignoffParty;
+  /** WHO SIGNED. A label — a consultant's witness holds no AURA account. */
+  @IsString() signedBy!: string;
+  @IsString() method!: SignoffMethod;
+  @IsString() evidence!: string;
+}
+
 class CommissionDto {
   @IsString() commissionedBy!: string;
   @IsString() witnessedBy!: string;
+  /**
+   * The signatures for this sign-off, at most one per party.
+   *
+   * Part of the SAME request, because a sign-off that could be recorded first and evidenced
+   * afterwards would let a system be commissioned on nobody's signature and have one attached
+   * later by somebody else. Absent means a sign-off with no signature on file — a real record,
+   * which the evidence pack then describes as exactly that rather than printing a ruled line
+   * under a note claiming the sign-off was witnessed.
+   */
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SignoffEvidenceDto)
+  signoffEvidence?: SignoffEvidenceDto[];
 }
 
 class FailDto {
@@ -80,6 +137,9 @@ export class CommissioningController {
   constructor(
     private readonly service: CommissioningService,
     private readonly tenant: TenantContext,
+    // A signature is a file like any other, so it goes where every other file goes: judged by the
+    // file-type policy, governed by the document access engine, never into a business column.
+    private readonly dms: DmsService,
   ) {}
 
   @Post()
@@ -168,15 +228,86 @@ export class CommissioningController {
     });
   }
 
+  /**
+   * WITNESSED SIGN-OFF — and the evidence that makes it witnessed.
+   *
+   * `commissionedBy` and `witnessedBy` have been required here since the record existed, and both
+   * are free text typed by whoever was at the keyboard. The evidence pack printed two blank ruled
+   * lines beneath a note describing "the witnessed sign-off", so the document asserted a
+   * witnessed sign-off and held nothing whatsoever from the witness.
+   *
+   * Each party's signature is stored BEFORE the sign-off is recorded, so a record never reaches
+   * `commissioned` citing a document that was refused. If the sign-off then fails its own guards
+   * — an open punch item, a point that never passed — an orphan document is left behind, which
+   * is the safe direction: a stored file nothing references is inert, whereas a reference to
+   * nothing is a record that looks like evidence.
+   */
   @Put(':id/commission')
-  commission(@Param('id') id: string, @Body() dto: CommissionDto): Promise<CommissioningRecord> {
+  async commission(@Param('id') id: string, @Body() dto: CommissionDto): Promise<CommissioningRecord> {
     if (!dto?.commissionedBy?.trim() || !dto?.witnessedBy?.trim()) {
       throw new BadRequestException('commissionedBy and witnessedBy are required');
     }
-    return this.service.commission(id, this.tenant.get().tenantId, {
+    const ctx = this.tenant.get();
+    const rec = await this.service.get(id, ctx.tenantId);
+    if (!rec) throw new NotFoundException(`commissioning record ${id} not found`);
+
+    const supplied = dto.signoffEvidence ?? [];
+    // ONE SIGNATURE PER PARTY. Two would leave the evidence pack choosing between them, and the
+    // store's unique index would silently keep only the last.
+    const parties = supplied.map((e) => e.party);
+    if (new Set(parties).size !== parties.length) {
+      throw new BadRequestException('each party may sign a sign-off once; send one entry per party');
+    }
+
+    const evidence: Array<{ party: SignoffParty; signedBy: string; method: SignoffMethod; documentId: string; documentHash: string }> = [];
+    for (const item of supplied) {
+      if (!SIGNOFF_PARTIES.includes(item.party)) {
+        throw new BadRequestException(`a sign-off party must be one of ${SIGNOFF_PARTIES.join(', ')}`);
+      }
+      if (!ACCEPTANCE_METHODS.includes(item.method)) {
+        throw new BadRequestException(`a sign-off method must be one of ${ACCEPTANCE_METHODS.join(', ')}`);
+      }
+      if (!item.signedBy?.trim()) {
+        throw new BadRequestException('name the person who signed \u2014 whoever records a sign-off is not therefore its signatory');
+      }
+      const decoded = decodeSignoffEvidence(item.evidence);
+      const stored = await this.dms.createDocument(
+        {
+          tenantId: ctx.tenantId,
+          companyId: ctx.companyId,
+          // The category follows the method, so the file-type policy holds each to what it is: a
+          // signature is an image or a PDF, an emailed confirmation is correspondence. Filing a
+          // message as a signature is the first step towards printing it as one.
+          kind: item.method === 'email' ? 'correspondence' : 'signature',
+          title: `${rec.code} sign-off \u2014 ${item.party.replace(/_/g, ' ')} (${item.method})`,
+          aggregateType: 'commissioning.record',
+          aggregateId: id,
+          createdBy: ctx.actorId ?? null,
+        },
+        {
+          fileName: `signoff-${item.party}-${rec.code}.${decoded.extension}`,
+          contentType: decoded.contentType,
+          data: decoded.data,
+        },
+      );
+      // COMPUTED BY DMS, never taken from the caller: a hash supplied by whoever sent the image
+      // attests to nothing.
+      const checksum = stored.versions[0]?.checksum;
+      if (!checksum) throw new BadRequestException('the signature was stored without a checksum, so the sign-off cannot attest to it');
+      evidence.push({
+        party: item.party,
+        signedBy: item.signedBy,
+        method: item.method,
+        documentId: stored.document.id,
+        documentHash: checksum,
+      });
+    }
+
+    return this.service.commission(id, ctx.tenantId, {
       commissionedBy: dto.commissionedBy,
       witnessedBy: dto.witnessedBy,
-    });
+      evidence,
+    }, ctx.actorId);
   }
 
   @Put(':id/fail')

@@ -179,11 +179,119 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     headers: H(),
     data: { result: 'pass', actual: 'Image on VMS' },
   });
+  // ── 6a. A WITNESSED SIGN-OFF THAT HOLDS SOMETHING FROM THE WITNESS ──────────────────────────
+  //
+  // `commissionedBy` and `witnessedBy` have been required since the record existed and are free
+  // text typed by whoever is at the keyboard. The evidence pack printed two blank ruled lines
+  // beneath a note describing "the witnessed sign-off", so the document asserted a witnessed
+  // sign-off and held nothing at all from the witness.
+  //
+  // Refused first: a signature that does not name its signatory would fall back to the recording
+  // account and the pack would resume printing "Signed by <whoever was at the keyboard>".
+  const unnamedSignatory = await req.put(`${CX}/${system.id}/commission`, {
+    headers: H(),
+    data: {
+      commissionedBy: 'Engineer', witnessedBy: 'Consultant',
+      signoffEvidence: [{ party: 'witness', signedBy: '  ', method: 'electronic', evidence: SIGNATURE_DATA_URL }],
+    },
+  });
+  expect(unnamedSignatory.status(), 'a signature must name the person who signed it').toBe(400);
+
+  // …and a party cannot sign twice, because the pack would have to choose between the two.
+  const signedTwice = await req.put(`${CX}/${system.id}/commission`, {
+    headers: H(),
+    data: {
+      commissionedBy: 'Engineer', witnessedBy: 'Consultant',
+      signoffEvidence: [
+        { party: 'witness', signedBy: 'R. Consultant', method: 'electronic', evidence: SIGNATURE_DATA_URL },
+        { party: 'witness', signedBy: 'Someone Else', method: 'electronic', evidence: SIGNATURE_DATA_URL },
+      ],
+    },
+  });
+  expect(signedTwice.status(), 'each party signs a sign-off once').toBe(400);
+
+  const engineerSignatory = 'A. Engineer';
+  const witnessSignatory = 'R. Consultant';
   const commissioned = await req.put(`${CX}/${system.id}/commission`, {
     headers: H(),
-    data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' },
+    data: {
+      commissionedBy: engineerSignatory,
+      witnessedBy: witnessSignatory,
+      // BOTH PARTIES, in the SAME act. A sign-off recorded first and evidenced afterwards would
+      // let a system be commissioned on nobody's signature and have one attached later.
+      signoffEvidence: [
+        { party: 'commissioning_engineer', signedBy: engineerSignatory, method: 'electronic', evidence: SIGNATURE_DATA_URL },
+        { party: 'witness', signedBy: witnessSignatory, method: 'electronic', evidence: SIGNATURE_DATA_URL },
+      ],
+    },
   });
   expect(commissioned.ok(), `the retested system must commission — ${await commissioned.text()}`).toBe(true);
+
+  // ── 6b. THE EVIDENCE IS KEPT, ATTRIBUTED, AND GOVERNED ──────────────────────────────────────
+  const cxDetail = await (await req.get(`${CX}/${system.id}/detail`, { headers: H() })).json() as {
+    record: { commissionRecordedBy: string | null; commissionedBy: string; witnessedBy: string };
+    signoffEvidence: Array<{
+      party: string; signedBy: string; method: string; documentId: string;
+      recordedBy: string | null; coverage: string;
+    }>;
+  };
+
+  expect(cxDetail.signoffEvidence, 'both parties must be on the record').toHaveLength(2);
+  const witnessEvidence = cxDetail.signoffEvidence.find((e) => e.party === 'witness')!;
+  expect(witnessEvidence, 'the witness is the party the blank line used to hide').toBeTruthy();
+
+  // WHO SIGNED is not WHO RECORDED IT. The session user recorded this; the witness is a
+  // consultant who holds no AURA account, and the record must not credit one with the other.
+  expect(witnessEvidence.signedBy).toBe(witnessSignatory);
+  expect(witnessEvidence.recordedBy, 'the recorder is the AURA user, never the signatory')
+    .not.toBe(witnessSignatory);
+  expect(witnessEvidence.recordedBy, 'and the record knows who performed the sign-off').toBeTruthy();
+  expect(cxDetail.record.commissionRecordedBy, 'the sign-off itself has an actor now').toBeTruthy();
+
+  // BOUND TO THE RESULT, not to the record id: what the witness put their name to is this system
+  // with these points passed, and the pack must be able to say so.
+  expect(witnessEvidence.coverage, 'the signature covers the result as it stands').toBe('current');
+
+  // BYTE-IDENTICAL, and governed. A route returning A file for that id would satisfy a naive
+  // 200-and-non-empty check.
+  const witnessFile = await req.get(`${API}/api/v1/documents/${witnessEvidence.documentId}/content`, { headers: H() });
+  expect(witnessFile.status(), 'whoever may read the system may open what witnessed it').toBe(200);
+  expect(Buffer.from(await witnessFile.body()).equals(SIGNATURE_BYTES),
+    'the stored signature must be the stroke that was given, unchanged').toBe(true);
+
+  // …and refused to somebody who may not read the commissioning record. Skipped rather than
+  // faked where the tier cannot hold the actor — a denial proved against an identity that does
+  // not exist proves the opposite of what it claims.
+  const cxOutsider =
+    (await mintToken(req, process.env.E2E_VIEWER_USERNAME ?? 'u-e2e-viewer')) ??
+    (await mintToken(req, process.env.E2E_STOREKEEPER_USERNAME ?? 'u-e2e-storekeeper'));
+  if (cxOutsider) {
+    const refused = await req.get(`${API}/api/v1/documents/${witnessEvidence.documentId}/content`, { headers: cxOutsider });
+    expect(refused.status(), 'somebody who cannot read the system must not open its witness signature').toBe(403);
+  }
+
+  // ── 6c. ON THE EVIDENCE PACK, which is the controlled output XOP-12 asks about ───────────────
+  await page.goto(`/commissioning/${system.id}/certificate`, { waitUntil: 'domcontentloaded' });
+  const packBody = page.locator('body');
+  await expect(packBody, 'the evidence pack must render').toContainText('TESTING & COMMISSIONING EVIDENCE PACK', { timeout: 30_000 });
+
+  // The two blank ruled lines are gone: each party shows the signature it gave.
+  const witnessImage = page.getByAltText('Signature — Witness (Consultant / Client)');
+  await expect(witnessImage, 'the witness signature must appear on the pack').toBeVisible({ timeout: 30_000 });
+  expect(
+    await witnessImage.evaluate((img) => (img as HTMLImageElement).naturalWidth > 0),
+    'and it must render, not 404 behind the alt text',
+  ).toBe(true);
+  await expect(page.getByAltText('Signature — Commissioning Engineer'),
+    'the engineer signed too, and the pack shows both').toBeVisible({ timeout: 15_000 });
+
+  // WHO SIGNED and WHO RECORDED IT are separate clauses on the document.
+  await expect(packBody, 'the pack names the signatory').toContainText(`Signed by ${witnessSignatory}`);
+  await expect(packBody, 'and names the recorder as the recorder').toContainText('recorded in AURA by');
+  // The note no longer asserts a witnessed sign-off unconditionally — it states what is held.
+  await expect(packBody).toContainText("The witness's signature is held against this record");
+  await expect(packBody, 'nothing may claim the pack is unwitnessed when it is not')
+    .not.toContainText('NO WITNESS EVIDENCE IS HELD');
 
   // ── 7. CONTROLLED EVIDENCE: the certificate, and the as-built that documents what was built ──
   const certNumber = `ELV-CERT-J${run}`;

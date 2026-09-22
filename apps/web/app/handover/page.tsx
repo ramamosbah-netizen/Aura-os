@@ -27,7 +27,8 @@ interface HandoverPackage {
   submittedAt: string | null;
   acceptedAt: string | null;
   clientRepresentative: string | null;
-  acceptanceSignatureDocumentId: string | null;
+  acceptanceMethod: 'electronic' | 'paper' | 'email' | null;
+  acceptanceEvidenceDocumentId: string | null;
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
   remarks: string | null;

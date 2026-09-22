@@ -8,6 +8,34 @@ import { type Id, newId } from '@aura/shared';
 
 export type HandoverStatus = 'draft' | 'submitted' | 'accepted' | 'rejected';
 
+/**
+ * HOW THE CLIENT ACCEPTED — and therefore what has to be on file.
+ *
+ * An electronic signature is not mandatory. An acceptance signed on paper at a walk-down, or
+ * confirmed by email, is a real acceptance and refusing it would push people into recording a
+ * fiction. What is mandatory is that the METHOD IS DECLARED and the evidence for it is kept:
+ *
+ *   electronic   the signature the client gave on the pad
+ *   paper        a copy of the signed acceptance document
+ *   email        the message, or the document, that proves the acceptance
+ *
+ * The absence of a method is the fourth case and is deliberately NOT a member of this type: a
+ * `name-only` acceptance is recorded against the representative's name with no evidencing
+ * document. Those are kept as they are. What they may never do is produce a claim that somebody
+ * signed — which is why `acceptanceEvidence` below reports them as their own answer rather than
+ * as a weaker kind of signature.
+ */
+export type AcceptanceMethod = 'electronic' | 'paper' | 'email';
+
+export const ACCEPTANCE_METHODS: readonly AcceptanceMethod[] = ['electronic', 'paper', 'email'];
+
+/** What each method's evidence IS, in the words a certificate can print. */
+export const ACCEPTANCE_METHOD_EVIDENCE: Record<AcceptanceMethod, string> = {
+  electronic: 'the signature the client gave',
+  paper: 'the signed acceptance document',
+  email: 'the message confirming acceptance',
+};
+
 /** The close-out deliverables an ELV client expects before signing acceptance. */
 export interface HandoverChecklist {
   omManuals: boolean;
@@ -62,8 +90,9 @@ export interface HandoverPackage {
    * rather than imply one. It is not a refusal: an acceptance signed on paper is still an
    * acceptance, and the record's job is to be honest about which kind it was.
    */
-  acceptanceSignatureDocumentId: Id | null;
-  acceptanceSignatureHash: string | null;
+  acceptanceMethod: AcceptanceMethod | null;
+  acceptanceEvidenceDocumentId: Id | null;
+  acceptanceEvidenceHash: string | null;
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
   remarks: string | null;
@@ -122,8 +151,9 @@ export function makeHandoverPackage(input: NewHandoverPackage): HandoverPackage 
     rejectedBy: null,
     rejectedAt: null,
     clientRepresentative: null,
-    acceptanceSignatureDocumentId: null,
-    acceptanceSignatureHash: null,
+    acceptanceMethod: null,
+    acceptanceEvidenceDocumentId: null,
+    acceptanceEvidenceHash: null,
     warrantyStartDate: null,
     warrantyMonths: null,
     remarks: null,
@@ -184,11 +214,17 @@ export function accept(
     warrantyStartDate?: string;
     warrantyMonths?: number;
     /**
-     * The stored signature, if one was captured. Both or neither: a reference with no hash cannot
-     * be checked against the bytes, and a hash with no reference names nothing — either alone
-     * would be a record that looks like evidence and is not.
+     * HOW they accepted and WHAT proves it — together or not at all.
+     *
+     * A method with no document is a claim; a document with no method is a file nobody can
+     * describe. And a reference with no hash cannot be checked against the bytes while a hash
+     * with no reference names nothing. All four move as one, so no surface can ever read a
+     * half-record as evidence.
+     *
+     * Omitted entirely means the legacy `name-only` acceptance, which stays valid and stays
+     * distinguishable.
      */
-    signature?: { documentId: Id; hash: string } | null;
+    evidence?: { method: AcceptanceMethod; documentId: Id; hash: string } | null;
   },
   actorId: Id | null = null,
 ): HandoverPackage {
@@ -204,10 +240,17 @@ export function accept(
   if (actorId && pkg.submittedBy && actorId === pkg.submittedBy) {
     throw new Error('the person who submitted this handover may not accept it — acceptance is the client\u2019s side of the exchange, and it starts the warranty clock');
   }
-  // A REFERENCE WITHOUT ITS HASH IS NOT EVIDENCE. The pair is written together or not at all, so
-  // no acceptance can end up pointing at a document nothing attests to.
-  if (patch.signature && !(patch.signature.documentId?.trim() && patch.signature.hash?.trim())) {
-    throw new Error('validation: an acceptance signature requires both the stored document and its checksum — one without the other attests to nothing');
+  // A REFERENCE WITHOUT ITS HASH IS NOT EVIDENCE, and neither is a method without a document.
+  // Written together or not at all, so no acceptance can point at something nothing attests to
+  // or describe a proof it does not hold.
+  if (patch.evidence) {
+    const { method, documentId, hash } = patch.evidence;
+    if (!ACCEPTANCE_METHODS.includes(method)) {
+      throw new Error(`validation: an acceptance method must be one of ${ACCEPTANCE_METHODS.join(', ')}`);
+    }
+    if (!(documentId?.trim() && hash?.trim())) {
+      throw new Error('validation: an acceptance method requires both the stored evidence and its checksum \u2014 one without the other attests to nothing');
+    }
   }
   const now = new Date().toISOString();
   return {
@@ -216,8 +259,9 @@ export function accept(
     acceptedBy: actorId,
     acceptedAt: now,
     clientRepresentative: patch.clientRepresentative.trim(),
-    acceptanceSignatureDocumentId: patch.signature?.documentId ?? null,
-    acceptanceSignatureHash: patch.signature?.hash ?? null,
+    acceptanceMethod: patch.evidence?.method ?? null,
+    acceptanceEvidenceDocumentId: patch.evidence?.documentId ?? null,
+    acceptanceEvidenceHash: patch.evidence?.hash ?? null,
     warrantyStartDate: patch.warrantyStartDate ?? now.slice(0, 10),
     warrantyMonths: patch.warrantyMonths ?? 12,
     updatedAt: now,
@@ -255,16 +299,41 @@ export function handoverSeparation(pkg: HandoverPackage): 'enforced' | 'unverifi
 }
 
 /**
- * WHAT THE ACCEPTANCE IS EVIDENCED BY — so a surface can never imply a signature it does not have.
+ * WHAT THE ACCEPTANCE IS EVIDENCED BY — so no surface can imply a proof it does not hold.
  *
  * Same reporting contract as `handoverSeparation`: `null` means it has not been accepted, so there
- * is nothing to describe. `signed` means the client's signature is held in DMS and the reference
- * resolves. `name-only` means the acceptance carries the representative's name and nothing else,
- * which is a real and valid way to record one — a walk-down signed on paper, a confirmation by
- * email — and is exactly what the certificate must SAY instead of printing an empty rule under a
- * sentence claiming the handover was signed.
+ * is nothing to describe.
+ *
+ * The three methods each return themselves, because they are NOT interchangeable on a document: a
+ * captured signature can be shown, a scanned signed page can be named, and an emailed
+ * confirmation is neither and must not be printed as though somebody had signed.
+ *
+ * `recorded-without-evidence` is the legacy `name-only` acceptance. It is a real acceptance and it
+ * is kept — but it is its own answer, never a weaker kind of signature, so a certificate reading
+ * this value cannot render it as one.
+ *
+ * A method with no document, or a document with no method, is impossible by construction in
+ * `accept`. If one is ever seen it is reported as `recorded-without-evidence` rather than trusted:
+ * a half-record is not proof, and the safe direction is to claim less.
  */
-export function acceptanceEvidence(pkg: HandoverPackage): 'signed' | 'name-only' | null {
+export function acceptanceEvidence(
+  pkg: HandoverPackage,
+): AcceptanceMethod | 'recorded-without-evidence' | null {
   if (pkg.status !== 'accepted') return null;
-  return pkg.acceptanceSignatureDocumentId ? 'signed' : 'name-only';
+  if (!pkg.acceptanceMethod || !pkg.acceptanceEvidenceDocumentId) return 'recorded-without-evidence';
+  return pkg.acceptanceMethod;
+}
+
+/**
+ * May this acceptance be described as SIGNED?
+ *
+ * Only two of the four can: an electronic signature and a scanned signed document. An email
+ * confirmation proves acceptance and proves nothing about a signature, and a name-only record
+ * proves neither. Certificates ask this rather than testing for the presence of a file, because
+ * “has a document” and “was signed” are different questions and conflating them is how an email
+ * becomes a signature on a printed page.
+ */
+export function acceptanceIsSigned(pkg: HandoverPackage): boolean {
+  const evidence = acceptanceEvidence(pkg);
+  return evidence === 'electronic' || evidence === 'paper';
 }

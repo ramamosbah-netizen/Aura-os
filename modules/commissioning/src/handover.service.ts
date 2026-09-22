@@ -9,6 +9,7 @@ import {
   updateChecklist,
   submit,
   accept,
+  type AcceptanceMethod,
   reject,
 } from './domain/handover';
 import { assessHandoverReadiness, type HandoverReadiness } from './domain/handover-readiness';
@@ -439,10 +440,10 @@ export class HandoverService {
       clientRepresentative: string;
       warrantyStartDate?: string;
       warrantyMonths?: number;
-      // The signature the client gave, already stored and hashed by DMS. The controller does the
-      // storing, exactly as the site evidence route does, so the bytes are judged by the
-      // file-type policy and governed by the document access engine before they reach here.
-      signature?: { documentId: string; hash: string } | null;
+      // HOW they accepted and what proves it, already stored and hashed by DMS. The controller
+      // does the storing, exactly as the site evidence route does, so the bytes are judged by
+      // the file-type policy and governed by the document access engine before they reach here.
+      evidence?: { method: AcceptanceMethod; documentId: string; hash: string } | null;
     },
     actorId?: string | null,
   ): Promise<HandoverView> {
@@ -464,17 +465,18 @@ export class HandoverService {
           projectId: next.projectId,
           projectName: next.projectName,
           clientRepresentative: next.clientRepresentative,
-          // The reference and its checksum, never the image: an audit event is replayed and
-          // exported, and a base64 signature in a payload is a copy of the document outside the
-          // one place that governs who may open it.
-          acceptanceSignatureDocumentId: next.acceptanceSignatureDocumentId,
-          acceptanceSignatureHash: next.acceptanceSignatureHash,
+          // The method, the reference and its checksum — never the image. An audit event is
+          // replayed and exported, and a base64 signature in a payload is a copy of the
+          // document outside the one place that governs who may open it.
+          acceptanceMethod: next.acceptanceMethod,
+          acceptanceEvidenceDocumentId: next.acceptanceEvidenceDocumentId,
+          acceptanceEvidenceHash: next.acceptanceEvidenceHash,
           warrantyStartDate: next.warrantyStartDate,
           warrantyMonths: next.warrantyMonths,
         },
       }),
     ]);
-    this.logger.log(`[Handover] ${next.code} accepted by ${patch.clientRepresentative} (${next.acceptanceSignatureDocumentId ? 'signature captured' : 'no signature captured'}) — warranty starts ${next.warrantyStartDate}`);
+    this.logger.log(`[Handover] ${next.code} accepted by ${patch.clientRepresentative} (${next.acceptanceMethod ?? 'recorded without an evidencing document'}) — warranty starts ${next.warrantyStartDate}`);
     return this.withStats(next);
   }
 

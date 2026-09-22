@@ -10,6 +10,28 @@ import NextBestActionBanner from './ui/next-best-action-banner';
 import SaveViewButton from './save-view-button';
 import SignatureCanvas from './ui/signature-canvas';
 import DocumentFileLink from './document-file-link';
+
+/**
+ * HOW THE CLIENT ACCEPTED. An electronic signature is not mandatory — a walk-down signed on
+ * paper or a confirmation by email is a real acceptance — but the method is DECLARED and its
+ * evidence is kept. `none` is the legacy record: accepted, with nothing evidencing it, and it is
+ * offered explicitly so that choosing it is a decision rather than an omission.
+ */
+type AcceptMethod = 'electronic' | 'paper' | 'email' | 'none';
+
+const METHOD_LABEL: Record<AcceptMethod, string> = {
+  electronic: 'Signed here (electronic)',
+  paper: 'Signed on paper',
+  email: 'Confirmed by email',
+  none: 'No evidencing document',
+};
+
+/** What the accepted record may say. An email proves acceptance and says nothing about a signature. */
+const EVIDENCE_LABEL: Record<'electronic' | 'paper' | 'email', string> = {
+  electronic: 'signed electronically',
+  paper: 'signed on paper',
+  email: 'confirmed by email',
+};
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Project { id: string; title: string }
@@ -44,11 +66,12 @@ interface HandoverPackage {
   acceptedAt: string | null;
   clientRepresentative: string | null;
   /**
-   * The signature the client gave, as a reference to the governed document holding it. Null means
-   * none was captured — which this screen SAYS, because an acceptance recorded from a paper
-   * walk-down is a real acceptance and pretending otherwise is the defect one step along.
+   * HOW the client accepted and the governed document that proves it. A null method is the legacy
+   * `name-only` record — a real acceptance with nothing evidencing it, which this screen SAYS
+   * rather than dressing as a signature.
    */
-  acceptanceSignatureDocumentId: string | null;
+  acceptanceMethod: 'electronic' | 'paper' | 'email' | null;
+  acceptanceEvidenceDocumentId: string | null;
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
   remarks: string | null;
@@ -88,6 +111,9 @@ export default function HandoverClient({
   // The ink, per package, until it is sent with the acceptance. Held here rather than inside
   // SignatureCanvas because the accept request has to be able to read it.
   const [signatures, setSignatures] = useState<Record<string, string | null>>({});
+  // The declared method, and the file for the two methods that are not a drawn signature.
+  const [methods, setMethods] = useState<Record<string, AcceptMethod>>({});
+  const [uploads, setUploads] = useState<Record<string, string | null>>({});
   // One package open at a time. A card carries a checklist note, an action row and a signature pad,
   // so several open at once is the wall this was meant to remove. The caret is dead until React has
   // attached, because a click that only navigates would look like a toggle that does nothing.
@@ -145,16 +171,29 @@ export default function HandoverClient({
     const rep = clientRep[p.id];
     if (!rep?.trim()) { setError('A client representative is required to accept handover.'); return; }
     const months = warrantyMonths[p.id] ? Number(warrantyMonths[p.id]) : undefined;
+    // THE METHOD IS DECLARED, never inferred from what happens to be attached. An emailed
+    // confirmation and a drawn signature are both evidence and only one of them is a signature,
+    // so the record has to be told which it is holding.
+    const method = methods[p.id] ?? 'electronic';
+    const evidence = method === 'electronic' ? (signatures[p.id] ?? null) : (uploads[p.id] ?? null);
+    if (method !== 'none' && !evidence) {
+      setError(method === 'electronic'
+        ? 'Capture the client representative\'s signature, or record the acceptance another way.'
+        : `Attach ${method === 'paper' ? 'the signed acceptance document' : 'the message confirming acceptance'}.`);
+      return;
+    }
     const updated = await call(`/api/commissioning/handovers/${p.id}/accept`, 'PUT', {
       clientRepresentative: rep,
       warrantyMonths: months,
-      signature: signatures[p.id] ?? undefined,
+      acceptanceMethod: method === 'none' ? undefined : method,
+      acceptanceEvidence: method === 'none' ? undefined : evidence,
     });
     if (updated) {
       patch(updated);
-      // Drop the ink once it is stored, so a second package on the same screen cannot inherit the
-      // signature a different client just gave.
+      // Drop the evidence once it is stored, so a second package on the same screen cannot
+      // inherit what a different client just gave.
       setSignatures((prev) => { const next = { ...prev }; delete next[p.id]; return next; });
+      setUploads((prev) => { const next = { ...prev }; delete next[p.id]; return next; });
     }
   }
   async function reject(p: HandoverPackage) {
@@ -358,17 +397,17 @@ export default function HandoverClient({
                           words. The alternative — showing the same line either way — is how a
                           name somebody typed comes to read as a signature somebody gave.
                         */}
-                        {p.acceptanceSignatureDocumentId ? (
+                        {p.acceptanceMethod && p.acceptanceEvidenceDocumentId ? (
                           <span data-testid={`handover-accepted-signature-${p.code}`}>
-                            signed:{' '}
+                            {EVIDENCE_LABEL[p.acceptanceMethod]}:{' '}
                             <DocumentFileLink
-                              documentId={p.acceptanceSignatureDocumentId}
-                              title={`Client acceptance signature — ${p.code}`}
-                              label="Open signature"
+                              documentId={p.acceptanceEvidenceDocumentId}
+                              title={`Client acceptance (${p.acceptanceMethod}) — ${p.code}`}
+                              label={p.acceptanceMethod === 'email' ? 'Open message' : 'Open signature'}
                             />
                           </span>
                         ) : (
-                          <span data-testid={`handover-accepted-unsigned-${p.code}`}>recorded without a captured signature</span>
+                          <span data-testid={`handover-accepted-unsigned-${p.code}`}>recorded without an evidencing document</span>
                         )}
                       </p>
                     ) : (
@@ -393,12 +432,56 @@ export default function HandoverClient({
                               <button onClick={() => reject(p)} style={st.btnSmDanger}>Reject</button>
                             </div>
                             <div style={{ marginTop: 8 }} data-testid={`handover-signature-${p.code}`}>
-                              <SignatureCanvas
-                                label="Client Representative Acceptance Signature"
-                                value={signatures[p.id] ?? null}
-                                onChange={(dataUrl) => setSignatures((prev) => ({ ...prev, [p.id]: dataUrl }))}
-                                height={110}
-                              />
+                              {/* THE METHOD IS CHOSEN, not inferred from what is attached. */}
+                              <label style={{ display: 'block', fontSize: 13, marginBottom: 6 }}>
+                                How did the client accept?{' '}
+                                <select
+                                  value={methods[p.id] ?? 'electronic'}
+                                  onChange={(e) => setMethods({ ...methods, [p.id]: e.target.value as AcceptMethod })}
+                                  data-testid={`handover-method-${p.code}`}
+                                  style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--panel-2)', color: 'var(--text)' }}
+                                >
+                                  {(['electronic', 'paper', 'email', 'none'] as AcceptMethod[]).map((m) => (
+                                    <option key={m} value={m}>{METHOD_LABEL[m]}</option>
+                                  ))}
+                                </select>
+                              </label>
+
+                              {(methods[p.id] ?? 'electronic') === 'electronic' ? (
+                                <SignatureCanvas
+                                  label="Client Representative Acceptance Signature"
+                                  value={signatures[p.id] ?? null}
+                                  onChange={(dataUrl) => setSignatures((prev) => ({ ...prev, [p.id]: dataUrl }))}
+                                  height={110}
+                                />
+                              ) : (methods[p.id] === 'paper' || methods[p.id] === 'email') ? (
+                                <label style={{ display: 'block', fontSize: 13 }}>
+                                  {methods[p.id] === 'paper' ? 'Signed acceptance document' : 'Message confirming acceptance'}
+                                  <input
+                                    type="file"
+                                    accept={methods[p.id] === 'paper' ? 'image/*,application/pdf' : 'image/*,application/pdf,text/plain'}
+                                    data-testid={`handover-evidence-file-${p.code}`}
+                                    onChange={async (e) => {
+                                      const file = e.target.files?.[0];
+                                      if (!file) return;
+                                      // Read as a data URL because the accept route takes one: the
+                                      // acceptance is ONE act and the evidence travels with it.
+                                      const reader = new FileReader();
+                                      reader.onload = () => setUploads((prev) => ({ ...prev, [p.id]: String(reader.result) }));
+                                      reader.readAsDataURL(file);
+                                    }}
+                                    style={{ display: 'block', marginTop: 6 }}
+                                  />
+                                </label>
+                              ) : (
+                                /* Said out loud rather than left as an empty panel: this records an
+                                   acceptance that nothing in AURA evidences, and the certificate
+                                   will say exactly that. */
+                                <p style={{ fontSize: 13, color: 'var(--muted)', margin: 0 }} data-testid={`handover-no-evidence-note-${p.code}`}>
+                                  The acceptance will be recorded against the representative&rsquo;s name with no evidencing
+                                  document. The certificate will say so and will not describe it as signed.
+                                </p>
+                              )}
                             </div>
                           </>
                         )}

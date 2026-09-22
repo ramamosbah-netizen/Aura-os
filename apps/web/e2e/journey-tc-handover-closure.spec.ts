@@ -320,10 +320,25 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     headers: alt!,
     data: {
       clientRepresentative: 'Client Rep',
-      signature: `data:image/png;base64,${Buffer.from('PK\u0003\u0004 not an image at all').toString('base64')}`,
+      acceptanceMethod: 'electronic',
+      acceptanceEvidence: `data:image/png;base64,${Buffer.from('PK\u0003\u0004 not an image at all').toString('base64')}`,
     },
   });
   expect(notASignature.status(), 'the file-type policy judges the BYTES, not the declared type').toBe(400);
+
+  // A METHOD AND ITS EVIDENCE MOVE TOGETHER, refused before anything is stored. A method with no
+  // document is a claim about proof that does not exist; a document with no method is a file
+  // nobody can describe, and a certificate reading it would have to guess whether anyone signed.
+  const methodWithoutProof = await req.put(`${HO}/${pkg.id}/accept`, {
+    headers: alt!, data: { clientRepresentative: 'Client Rep', acceptanceMethod: 'paper' },
+  });
+  expect(methodWithoutProof.status(), 'a declared method must carry its evidence').toBe(400);
+  expect(await methodWithoutProof.text()).toContain('signed acceptance document');
+
+  const proofWithoutMethod = await req.put(`${HO}/${pkg.id}/accept`, {
+    headers: alt!, data: { clientRepresentative: 'Client Rep', acceptanceEvidence: SIGNATURE_DATA_URL },
+  });
+  expect(proofWithoutMethod.status(), 'evidence must say what it is').toBe(400);
 
   const accepted = await req.put(`${HO}/${pkg.id}/accept`, {
     headers: alt!,
@@ -331,17 +346,19 @@ test('the whole chain: engineering through acceptance, closeout and the service 
       clientRepresentative: 'Client Rep',
       warrantyStartDate: new Date().toISOString().slice(0, 10),
       warrantyMonths: 12,
-      // WHAT THE PAD PRODUCES. The acceptance screen has shown a "Client Representative
-      // Acceptance Signature" canvas since this package existed, wired to a handler that
-      // discarded the stroke — so the whole evidence of the act that starts the warranty clock
-      // was a name one of OUR users typed into a text box.
-      signature: SIGNATURE_DATA_URL,
+      // WHAT THE PAD PRODUCES, and the METHOD that says what it proves. The acceptance screen has
+      // shown a "Client Representative Acceptance Signature" canvas since this package existed,
+      // wired to a handler that discarded the stroke — so the whole evidence of the act that
+      // starts the warranty clock was a name one of OUR users typed into a text box.
+      acceptanceMethod: 'electronic',
+      acceptanceEvidence: SIGNATURE_DATA_URL,
     },
   });
   expect(accepted.ok(), `an accepted package is the client's word — ${await accepted.text()}`).toBe(true);
   const acceptedPkg = await accepted.json() as {
     status: string; acceptedBy: string | null; clientRepresentative: string | null;
-    acceptanceSignatureDocumentId: string | null; acceptanceSignatureHash: string | null;
+    acceptanceMethod: string | null;
+    acceptanceEvidenceDocumentId: string | null; acceptanceEvidenceHash: string | null;
   };
   expect(acceptedPkg.status).toBe('accepted');
 
@@ -356,12 +373,14 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker',
   );
 
-  // THE PAIR, or nothing. A reference with no checksum cannot be checked against the bytes; a
-  // checksum with no reference names nothing.
-  expect(acceptedPkg.acceptanceSignatureDocumentId, 'the signature must be kept, not discarded').toBeTruthy();
-  expect(acceptedPkg.acceptanceSignatureHash, 'and the acceptance carries its own tamper-evidence').toBeTruthy();
+  // THE METHOD AND THE PAIR. A reference with no checksum cannot be checked against the bytes, a
+  // checksum with no reference names nothing, and a document nobody has described leaves a
+  // certificate guessing whether an email is a signature.
+  expect(acceptedPkg.acceptanceMethod, 'the record must say HOW the client accepted').toBe('electronic');
+  expect(acceptedPkg.acceptanceEvidenceDocumentId, 'the signature must be kept, not discarded').toBeTruthy();
+  expect(acceptedPkg.acceptanceEvidenceHash, 'and the acceptance carries its own tamper-evidence').toBeTruthy();
 
-  const signatureId = acceptedPkg.acceptanceSignatureDocumentId!;
+  const signatureId = acceptedPkg.acceptanceEvidenceDocumentId!;
 
   // BYTE-IDENTICAL, which is the only version of "the signature was kept" that means anything.
   // A route that returns *a* file for this id would satisfy a 200-and-non-empty assertion.

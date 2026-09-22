@@ -59,6 +59,26 @@ export default function ProjectCloseoutWizard({ projects = [] }: { projects: Pro
 
   const coreDeliverablesReady = checklist.omManuals && checklist.asBuilts && checklist.testCertificates;
 
+  /**
+   * CLIENT ACCEPTANCE, THROUGH THE ACT THAT GOVERNS IT.
+   *
+   * This screen demanded a signature — "Digital signature capture is required for final handover
+   * acceptance" — and then POSTed it to `/commissioning/handovers`, the CREATE route, whose DTO
+   * declares four fields. Under the API's `whitelist: true` validation pipe the signature, the
+   * client representative, the warranty term and the checklist were all stripped before any
+   * handler saw them. What the route did was make a DRAFT package. The wizard then set
+   * `completed` and told the user the project was formally accepted and the DLP clock running.
+   *
+   * Three things were wrong at once: the signature was discarded, the acceptance never happened,
+   * and the screen reported success for both.
+   *
+   * Acceptance is a governed act with its own rules — the package must be SUBMITTED, its
+   * readiness gates satisfied, the actor must hold `commissioning.handover.accept`, and the
+   * person who submitted it may not accept it. A wizard may not be a second path around any of
+   * that, so this one finds the project's submitted package and accepts it. Where there is none,
+   * it says so and sends the user to the workspace that can create one, instead of inventing a
+   * package to accept.
+   */
   const handleFinalHandover = async () => {
     if (!activeProject) return;
     setError('');
@@ -72,24 +92,45 @@ export default function ProjectCloseoutWizard({ projects = [] }: { projects: Pro
     }
     setBusy(true);
     try {
-      const res = await fetch(`/api/commissioning/handovers`, {
-        method: 'POST',
+      const listed = await fetch(`/api/commissioning/handovers?projectId=${encodeURIComponent(activeProject.id)}`, { cache: 'no-store' });
+      if (!listed.ok) throw new Error('Could not read this project\'s handover packages.');
+      const packages = await listed.json() as Array<{ id: string; code: string; status: string }>;
+
+      const accepted = packages.find((p) => p.status === 'accepted');
+      if (accepted) throw new Error(`${accepted.code} has already been accepted for this project.`);
+
+      const submittedPkg = packages.find((p) => p.status === 'submitted');
+      if (!submittedPkg) {
+        // NAMED PRECISELY, because "failed" would send somebody looking in the wrong place. The
+        // package has to be compiled and issued to the client first, by the people who do that.
+        throw new Error(
+          packages.length
+            ? 'This project\'s handover package has not been submitted to the client yet. Submit it from the Handover workspace, then record acceptance here.'
+            : 'This project has no handover package yet. Compile and submit one from the Handover workspace before recording client acceptance.',
+        );
+      }
+
+      const res = await fetch(`/api/commissioning/handovers/${submittedPkg.id}/accept`, {
+        method: 'PUT',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          projectId: activeProject.id,
-          projectName: activeProject.title,
-          code: `HO-${activeProject.id.slice(0, 6).toUpperCase()}`,
-          title: `${activeProject.title} — Final Handover & Closeout`,
           clientRepresentative: clientRep,
           warrantyMonths: Number(warrantyMonths) || 12,
-          signatureDataUrl: signature,
-          checklist,
+          // DECLARED. The pad produces an electronic signature, and the record says so rather
+          // than leaving a certificate to guess what the attached file proves.
+          acceptanceMethod: 'electronic',
+          acceptanceEvidence: signature,
         }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.message || d.error || 'Failed to complete project closeout');
+        // The API's own refusal, surfaced verbatim: a 403 here means the separation rule caught
+        // the submitter trying to accept their own handover, and paraphrasing it as "failed"
+        // would hide a working control behind a broken-looking screen.
+        throw new Error(d.message || d.error || 'The handover could not be accepted.');
       }
+      // ONLY NOW. `completed` drives the banner that says the project is formally accepted and
+      // the DLP clock is running, and it used to be set after a call that did neither.
       setCompleted(true);
     } catch (e: any) {
       setError(e.message || 'Failed to complete project closeout');

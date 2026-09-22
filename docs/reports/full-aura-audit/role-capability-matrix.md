@@ -335,7 +335,7 @@
 | Project Manager | COM-08 | BACKEND_ONLY | UNVERIFIED |
 | Project Manager | COM-09 | BACKEND_ONLY | UNVERIFIED |
 | Project Manager | COM-10 | UNVERIFIED | UNVERIFIED |
-| Project Manager | HO-01 | PARTIAL | UNVERIFIED |
+| Project Manager | HO-01 | COMPLETE | UNVERIFIED |
 | Project Manager | HO-02 | COMPLETE | UNVERIFIED |
 | Project Manager | HO-03 | PARTIAL | UNVERIFIED |
 | Project Manager | HO-04 | PARTIAL | UNVERIFIED |
@@ -837,7 +837,7 @@
 | T&C Engineer | TC-09 | PARTIAL | UNVERIFIED |
 | T&C Engineer | TC-10 | UNVERIFIED | UNVERIFIED |
 | T&C Engineer | TC-11 | PARTIAL | UNVERIFIED |
-| T&C Engineer | HO-01 | PARTIAL | UNVERIFIED |
+| T&C Engineer | HO-01 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-02 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-03 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-04 | PARTIAL | UNVERIFIED |
@@ -874,7 +874,7 @@
 | T&C Engineer | XOP-15 | PARTIAL | UNVERIFIED |
 | T&C Engineer | XOP-16 | WRONG_BEHAVIOR | UNVERIFIED |
 | T&C Engineer | XOP-17 | PARTIAL | UNVERIFIED |
-| Handover / FM | HO-01 | PARTIAL | UNVERIFIED |
+| Handover / FM | HO-01 | COMPLETE | UNVERIFIED |
 | Handover / FM | HO-02 | COMPLETE | UNVERIFIED |
 | Handover / FM | HO-03 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-04 | PARTIAL | UNVERIFIED |

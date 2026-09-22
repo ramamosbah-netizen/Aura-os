@@ -47,7 +47,7 @@ import { CORRESPONDENCE_STORE, type CorrespondenceStore } from './store.interfac
 import { type Submittal, type ReviewCode, makeSubmittal, submitForReview, returnWithCode } from './domain/submittal';
 import { SUBMITTAL_STORE, type SubmittalStore } from './store.interface';
 
-import { type DrawingRegisterEntry, type NewDrawingRegisterEntry, type RegisterStatus, makeDrawingRegisterEntry, reviseRegisterEntry } from './domain/drawing-register';
+import { type DrawingRegisterEntry, type NewDrawingRegisterEntry, type RegisterStatus, makeDrawingRegisterEntry, reviseRegisterEntry, statusAfterIssue } from './domain/drawing-register';
 import { DRAWING_REGISTER_STORE, type DrawingRegisterStore } from './store.interface';
 
 import { type RevisionHistoryRow, type TransmittalItem, type TransmittalPurpose, makeTransmittalItem } from './domain/transmittal-item';
@@ -758,8 +758,13 @@ export class DocControlService {
   }
 
   /**
-   * approved → issued. Updates the register header to this revision (status for_construction) and
-   * supersedes the previously-issued revision of the same document (kept immutable in history).
+   * approved → issued. Updates the register header to this revision and supersedes the
+   * previously-issued revision of the same document (kept immutable in history).
+   *
+   * The header's status comes from `statusAfterIssue`, not a constant: releasing a drawing
+   * normally makes it the one to build from, but an as-built is the terminal record of what was
+   * built and being released is what makes it that. Hard-coding `for_construction` said "build
+   * from this" of an as-built and left it unable to pass Handover's as-built gate.
    */
   async issueDocument(tenantId: Id, actorId: Id | null, revisionId: Id): Promise<DocumentRevision> {
     const rev = await this.loadRevision(tenantId, revisionId);
@@ -781,7 +786,7 @@ export class DocControlService {
       if (priorIssued) await this.revisionStore.save(supersedeDocument(priorIssued), handle);
       if (entry) {
         await this.registerStore.save(
-          { ...entry, currentRevision: issued.revision, status: 'for_construction', revisionDate: new Date().toISOString().slice(0, 10), updatedAt: new Date().toISOString() },
+          { ...entry, currentRevision: issued.revision, status: statusAfterIssue(entry.status), revisionDate: new Date().toISOString().slice(0, 10), updatedAt: new Date().toISOString() },
           handle,
         );
       }

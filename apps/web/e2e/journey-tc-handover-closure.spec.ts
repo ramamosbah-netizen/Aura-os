@@ -174,19 +174,13 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   const abLinked = await req.post(`${CX}/${system.id}/asbuilt-links`, { headers: H(), data: { documentId: asBuiltNumber } });
   expect(abLinked.ok(), `the as-built must link to the system it documents — ${await abLinked.text()}`).toBe(true);
 
-  // THE AS-BUILT HAS NO FILE BEHIND IT HERE, and that is a finding rather than an omission.
+  // THE DRAWING ITSELF. HO-01 is the AS-BUILT dossier, and an as-built reference the client
+  // cannot open is the reference, not the as-built.
   //
-  // Releasing a revision hard-codes the register entry to `for_construction`:
-  //
-  //     { ...entry, currentRevision: issued.revision, status: 'for_construction', ... }
-  //
-  // So a drawing registered `as_built` and then put through controlled release comes out
-  // labelled "for construction", and the handover's as-built gate correctly refuses it —
-  // nobody builds from an as-built. Until that status is settled, an as-built drawing can
-  // either BE the as-built record or be released, not both, so this chain leaves it as a
-  // reference and HO-01 stays open. The O&M manual below is released and downloadable.
-
-  // The reviewer the controlled releases need — an author cannot approve their own revision.
+  // This leg was impossible until issuing stopped hard-coding `for_construction`: a drawing
+  // registered `as_built` came out of its own release labelled "build from this", and the
+  // handover gate correctly refused it. `statusAfterIssue` keeps the one terminal status, so an
+  // as-built can now be released AND remain an as-built — which is what it has to be.
   const abReviewer = altApiAuthHeaders();
   expect(abReviewer, 'a second actor is required: an author cannot approve their own revision').toBeTruthy();
   const abAltUser = process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker';
@@ -194,6 +188,19 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     headers: H(), data: { userId: abAltUser, roleId: 'r-technical-manager' },
   });
   expect([200, 201, 409].includes(abGrant.status()), `granting r-technical-manager: ${await abGrant.text()}`).toBe(true);
+
+  const abEntry = (await (await req.get(`${DC}/register`, { headers: H() })).json() as Array<{ id: string; documentNumber: string }>)
+    .find((e) => e.documentNumber === asBuiltNumber);
+  expect(abEntry, 'the as-built must be in the register').toBeTruthy();
+  await releaseControlledDocument(req, {
+    dc: DC, registerEntryId: abEntry!.id, fileName: `${asBuiltNumber}.pdf`,
+    body: `CCTV layout as-built ${run}`, author: H(), reviewer: abReviewer!,
+  });
+
+  // AND IT IS STILL AN AS-BUILT. The whole point of the fix: releasing it did not relabel it.
+  const abAfter = (await (await req.get(`${DC}/register`, { headers: H() })).json() as Array<{ documentNumber: string; status: string }>)
+    .find((e) => e.documentNumber === asBuiltNumber);
+  expect(abAfter?.status, 'releasing an as-built must not turn it into a construction drawing').toBe('as_built');
 
   // ── 8. The handover package, and what the client is owed ─────────────────────────────────────
   const pkgCode = `HO-J${run}`;
@@ -292,6 +299,17 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   }>;
   const withArtifact = lines.filter((l) => l.included && l.artifact);
   expect(withArtifact.length, 'an issued dossier must offer at least one downloadable artifact').toBeGreaterThan(0);
+
+  // BY SECTION, not merely somewhere. HO-01 is the as-built dossier and HO-02 the O&M manuals;
+  // "one line has a file" would let either be claimed on the other's evidence.
+  for (const kind of ['as_built_document', 'om_deliverable']) {
+    const inKind = lines.filter((l) => l.kind === kind && l.included);
+    expect(inKind.length, `the dossier must include at least one ${kind}`).toBeGreaterThan(0);
+    expect(
+      inKind.some((l) => l.artifact),
+      `a ${kind} line must offer the document itself, not only its number`,
+    ).toBe(true);
+  }
 
   for (const l of withArtifact) {
     const file = await req.get(`${API}/api/v1/documents/${l.artifact}/content`, { headers: H() });

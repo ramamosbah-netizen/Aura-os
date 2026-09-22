@@ -71,6 +71,25 @@ export function makeDrawingRegisterEntry(input: NewDrawingRegisterEntry): Drawin
   };
 }
 
+/**
+ * What a register entry's status becomes when a revision of it is ISSUED.
+ *
+ * Releasing a drawing normally makes it the one to build from, so `for_construction` is right
+ * for almost everything. `as_built` is not one of those: it is the terminal record of what was
+ * actually built, and an as-built IS released — being released is what makes it the record.
+ *
+ * Issuing used to hard-code `for_construction`, which said "build from this" of a drawing nobody
+ * builds from, and Handover's as-built gate then correctly refused the result. The effect was
+ * that a drawing could either BE the as-built record or have been released, never both — so an
+ * as-built dossier could not carry a released as-built at all.
+ *
+ * Only `as_built` survives. A `superseded` entry receiving a newly issued revision becomes
+ * `for_construction` like any other, because the new revision is now the current one.
+ */
+export function statusAfterIssue(current: RegisterStatus): RegisterStatus {
+  return current === 'as_built' ? 'as_built' : 'for_construction';
+}
+
 /** Issue a new revision — bumps the revision label + status, keeps the register row (history is by transmittal). */
 export function reviseRegisterEntry(entry: DrawingRegisterEntry, revision: string, status: RegisterStatus, revisionDate?: string): DrawingRegisterEntry {
   return {

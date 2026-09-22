@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { STANDARD_ELV_ROLES } from '@aura/core';
@@ -114,6 +114,18 @@ const heldByANonAdminRole = (permission: string): boolean =>
   STANDARD_ELV_ROLES.some((r) => r.id !== ADMIN && r.permissions.some((p) => permissionMatches(p, permission)));
 
 describe('permission vocabulary — nothing the code demands belongs to nobody', () => {
+  /**
+   * The scan is SETUP, not an assertion, and it is charged here so it stops being charged to
+   * whichever test happens to run first.
+   *
+   * Reading every source file in the monorepo took this over vitest's 5s default under turbo's
+   * parallel load — a TIMEOUT rather than a failed expectation, which reads as a regression and
+   * is not one. Memoising already stopped it happening more than once per run; what remained was
+   * that the one run was billed to `it`. The assertions keep the default budget, because that is
+   * the budget that should stay tight; only the file walk gets room.
+   */
+  beforeAll(() => { demandedPermissions(); }, 60_000);
+
   it('finds the permissions the code actually asks for', () => {
     // A scan that quietly stopped matching would pass every assertion below by finding nothing.
     const demanded = demandedPermissions();

@@ -37,7 +37,11 @@ interface Detail {
    * not here: this page cannot import `@aura/quality`, and recomputing the result hash in the web
    * app would be a second answer to one question, drifting from the first in silence.
    */
-  signature: (IrEvidence & { coverage: 'current' | 'superseded' | 'unverifiable' }) | null;
+  signature: (IrEvidence & {
+    coverage: 'current' | 'superseded' | 'unverifiable';
+    /** Whether the stored file still carries the bytes this inspection committed to. */
+    integrity?: 'verified' | 'mismatch' | 'unavailable';
+  }) | null;
 }
 
 /**
@@ -127,6 +131,8 @@ export default async function InspectionRequestPrint({ params }: { params: Promi
                   : signature.coverage === 'unverifiable'
                     ? 'signed before this record captured what a signature covers'
                     : null,
+                // Never printed as sound when the bytes have moved underneath it.
+                signature.integrity === 'mismatch' ? 'THE STORED FILE IS NOT THE ONE THAT WAS SIGNED — its checksum does not match what this record committed to' : null,
               ].filter(Boolean).join(' · '),
             }
           : {

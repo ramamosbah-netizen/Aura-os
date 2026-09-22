@@ -254,10 +254,56 @@ test('the whole chain: engineering through acceptance, closeout and the service 
 
   // BYTE-IDENTICAL, and governed. A route returning A file for that id would satisfy a naive
   // 200-and-non-empty check.
+  //
+  // THIS ACTOR RECORDED THE SIGN-OFF, so a 200 here is explained by OWNERSHIP and says nothing
+  // about inheritance. It is asserted as exactly that, and the inheritance claim is made below by
+  // an identity that did not create, upload or record any of it.
   const witnessFile = await req.get(`${API}/api/v1/documents/${witnessEvidence.documentId}/content`, { headers: H() });
-  expect(witnessFile.status(), 'whoever may read the system may open what witnessed it').toBe(200);
-  expect(Buffer.from(await witnessFile.body()).equals(SIGNATURE_BYTES),
+  expect(witnessFile.status(), 'the recorder, who owns the document, can open it').toBe(200);
+  const committedBytes = Buffer.from(await witnessFile.body());
+  expect(committedBytes.equals(SIGNATURE_BYTES),
     'the stored signature must be the stroke that was given, unchanged').toBe(true);
+
+  // ── 6b-i. A SECOND AUTHORIZED READER, who touched none of it ────────────────────────────────
+  //
+  // The defect the context provider fixes: a document DmsService creates has no shares, so the
+  // T&C engineer who recorded the sign-off would be its ONLY reader — while the QA/QC manager
+  // checking the pack and the PM answering a defects claim can both see THAT a system was
+  // witnessed. `u-e2e-pm` holds `commissioning.*.read` and did not create, upload or record any
+  // part of this.
+  const cxReader = await mintToken(req, process.env.E2E_PM_USERNAME ?? 'u-e2e-pm');
+  if (cxReader) {
+    const asReader = await req.get(`${API}/api/v1/documents/${witnessEvidence.documentId}/content`, { headers: cxReader });
+    expect(asReader.status(), 'a second authorized reader inherits the record\'s reachability').toBe(200);
+    expect(Buffer.from(await asReader.body()).equals(committedBytes),
+      'and receives the exact committed bytes, not some other version').toBe(true);
+  }
+
+  // ── 6b-ii. THE COMMITTED BYTES CANNOT BE REPLACED ───────────────────────────────────────────
+  //
+  // `DEFAULT_OWNER_POLICY` gives a document's creator EDIT, and `createdBy` here is the person who
+  // RECORDED the sign-off — so the generic policy handed the recorder EDIT on the very signature
+  // that constrains them. Driven against the GENERIC DMS version route, which is the door that
+  // existed, not against a disabled button.
+  const overwrite = await req.post(`${API}/api/v1/documents/${witnessEvidence.documentId}/versions`, {
+    headers: H(),
+    data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature that was given' },
+  });
+  expect(overwrite.ok(), 'the recorder must not be able to replace committed evidence').toBe(false);
+  expect(await overwrite.text(), 'and the refusal must name the act that relies on it, not just deny')
+    .toMatch(/witnessed sign-off|cannot be replaced/i);
+
+  // The bytes are still the ones that were signed, checked rather than assumed.
+  const afterAttempt = await req.get(`${API}/api/v1/documents/${witnessEvidence.documentId}/content`, { headers: H() });
+  expect(Buffer.from(await afterAttempt.body()).equals(committedBytes),
+    'the committed bytes survive a refused overwrite').toBe(true);
+
+  // THE CONTROLLED OUTPUT CHECKS THE CHECKSUM rather than trusting the reference.
+  const verified = await (await req.get(`${CX}/${system.id}/detail`, { headers: H() })).json() as {
+    signoffEvidence: Array<{ party: string; integrity: string }>;
+  };
+  expect(verified.signoffEvidence.find((e) => e.party === 'witness')?.integrity,
+    'the pack resolves the committed version and verifies it').toBe('verified');
 
   // …and refused to somebody who may not read the commissioning record. Skipped rather than
   // faked where the tier cannot hold the actor — a denial proved against an identity that does
@@ -268,6 +314,12 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   if (cxOutsider) {
     const refused = await req.get(`${API}/api/v1/documents/${witnessEvidence.documentId}/content`, { headers: cxOutsider });
     expect(refused.status(), 'somebody who cannot read the system must not open its witness signature').toBe(403);
+    // …nor modify them. Read and write are separate doors and both have to be shut.
+    const refusedWrite = await req.post(`${API}/api/v1/documents/${witnessEvidence.documentId}/versions`, {
+      headers: cxOutsider,
+      data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature that was given' },
+    });
+    expect(refusedWrite.ok(), 'an unauthorized identity must not replace committed evidence either').toBe(false);
   }
 
   // ── 6c. ON THE EVIDENCE PACK, which is the controlled output XOP-12 asks about ───────────────
@@ -503,6 +555,28 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   // THAT it was accepted, could not open what was signed. A warranty claim turns on this file.
   const asSubmitter = await req.get(`${API}/api/v1/documents/${signatureId}/content`, { headers: H() });
   expect(asSubmitter.status(), 'the PM who submitted the handover must be able to open its signature').toBe(200);
+
+  // …AND THE ACCEPTANCE EVIDENCE IS SEALED TOO, at BOTH doors.
+  //
+  // The recorder owns the document and so would hold EDIT under the generic owner policy — but
+  // they do not hold `documents.version.create`, so the route turns them away first. That is a
+  // real refusal and it is asserted as exactly what it is: the ROUTE, not the seal.
+  const asRecorder = await req.post(`${API}/api/v1/documents/${signatureId}/versions`, {
+    headers: alt!,
+    data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature the client gave' },
+  });
+  expect(asRecorder.status(), 'the recorder does not hold the generic version permission').toBe(403);
+
+  // The seal itself is proved by an identity that DOES hold that permission: an administrator
+  // reaches the handler and is refused by name, because no grant fixes this. An accepted handover
+  // is contractually closed, so unlike the other surfaces there is no correcting act at all —
+  // which the refusal says rather than implying one.
+  const asAdmin = await req.post(`${API}/api/v1/documents/${signatureId}/versions`, {
+    headers: H(),
+    data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature the client gave' },
+  });
+  expect(asAdmin.ok(), 'client acceptance evidence must not be replaceable, permission or not').toBe(false);
+  expect(await asAdmin.text()).toMatch(/cannot be replaced|closed and has no re-acceptance/i);
 
   // AND REFUSED TO SOMEBODY WHO MAY NOT READ THE PACKAGE.
   //

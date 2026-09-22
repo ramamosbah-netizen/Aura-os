@@ -39,9 +39,9 @@ export interface CommissioningStore {
   listPunchItems(commissioningId: string, tenantId: string): Promise<PunchItem[]>;
 
   /**
-   * The witnessed sign-off's evidence — one row per party. `save` is an upsert on
-   * (tenant, record, party): a second signature for the same party is a CORRECTION, never a
-   * second opinion, and two rows would leave every reader choosing between them.
+   * The witnessed sign-off's evidence. APPEND-ONLY: a second signature for the same party is a
+   * CORRECTION, and it keeps the one it corrects — that a sign-off was signed and then re-signed
+   * is part of the record. Readers resolve the LATEST row per party (`evidenceForParty`).
    */
   saveSignoffEvidence(evidence: SignoffEvidence): Promise<void>;
   listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]>;

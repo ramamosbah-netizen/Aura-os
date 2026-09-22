@@ -3,6 +3,7 @@
 import { useState, type CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
+import SignatureCanvas from './ui/signature-canvas';
 
 interface OpenPunch { id: string; description: string; severity: string }
 
@@ -30,6 +31,20 @@ export default function CommissioningActions({
   const [error, setError] = useState<string | null>(null);
   const [by, setBy] = useState('');
   const [witness, setWitness] = useState('');
+  /**
+   * THE SIGNATURES THE SCREEN COULD NOT TAKE.
+   *
+   * The API, the store and the evidence pack have carried a witnessed sign-off's signatures since
+   * XOP-12 step 3 — and no screen offered a pad, so the only way to sign one was to call the API
+   * directly. The pack printed "Recorded for … with no signature on file" for every sign-off made
+   * through the product, truthfully and uselessly.
+   *
+   * `by` and `witness` are the SIGNATORIES' names: `commissionedBy` and `witnessedBy` are labels
+   * for the people who sign, not AURA accounts, so each pad is paired with the name already being
+   * captured beside it rather than asking for it twice.
+   */
+  const [engineerInk, setEngineerInk] = useState<string | null>(null);
+  const [witnessInk, setWitnessInk] = useState<string | null>(null);
 
   async function call(path: string, body: Record<string, unknown>): Promise<void> {
     setBusy(true);
@@ -51,6 +66,34 @@ export default function CommissioningActions({
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * SIGN OFF, with whatever was actually signed.
+   *
+   * The names are REQUIRED rather than defaulted. This used to send `by || 'Engineer'` and
+   * `witness || 'Consultant'`, so a sign-off made without typing anything recorded two people
+   * called "Engineer" and "Consultant" as having signed it — a record asserting names nobody
+   * gave, which is the same defect as the pad that discarded the stroke.
+   *
+   * A pad with ink on it must have a name beside it, because the signature is filed AGAINST that
+   * name; the domain refuses it too, and this is the message that can point at the field.
+   */
+  async function commission(): Promise<void> {
+    if (!by.trim() || !witness.trim()) {
+      setError('Name the engineer signing off and the witness. A sign-off records who signed it.');
+      return;
+    }
+    const evidence: Array<{ party: string; signedBy: string; method: string; evidence: string }> = [];
+    if (engineerInk) evidence.push({ party: 'commissioning_engineer', signedBy: by.trim(), method: 'electronic', evidence: engineerInk });
+    if (witnessInk) evidence.push({ party: 'witness', signedBy: witness.trim(), method: 'electronic', evidence: witnessInk });
+
+    await call('commission', {
+      commissionedBy: by.trim(),
+      witnessedBy: witness.trim(),
+      // Omitted entirely when nothing was signed, so the record carries no empty evidence.
+      ...(evidence.length ? { signoffEvidence: evidence } : {}),
+    });
   }
 
   if (status === 'commissioned') {
@@ -78,10 +121,28 @@ export default function CommissioningActions({
           style={{ ...st.primary, ...(allPassed && openPunch.length === 0 ? {} : st.primaryDim) }}
           disabled={locked}
           data-testid="btn-commission"
-          onClick={() => call('commission', { commissionedBy: by || 'Engineer', witnessedBy: witness || 'Consultant' })}
+          onClick={() => void commission()}
         >
           Commission (sign off)
         </button>
+      </div>
+
+      {/* A PAD PER PARTY. Each signs beside their own name, and a sign-off with neither is still
+          valid — the evidence pack then says exactly that instead of printing a ruled line under
+          a note claiming the sign-off was witnessed. */}
+      <div style={st.signGrid} data-testid="cx-signatures">
+        <SignatureCanvas
+          label="Commissioning Engineer signature"
+          value={engineerInk}
+          onChange={setEngineerInk}
+          height={100}
+        />
+        <SignatureCanvas
+          label="Witness signature (consultant / client)"
+          value={witnessInk}
+          onChange={setWitnessInk}
+          height={100}
+        />
       </div>
       {!allPassed && <span style={st.hint}>All test points must pass before sign-off.</span>}
       {error && <span style={st.error} data-testid="cx-error">{error}</span>}
@@ -95,6 +156,7 @@ const st = {
   input: { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', fontSize: 13, background: 'var(--bg, #fff)', color: 'inherit', minWidth: 180 } as CSSProperties,
   primary: { padding: '8px 14px', borderRadius: 8, border: 'none', background: 'var(--good)', color: 'var(--accent-ink)', fontWeight: 600, fontSize: 13, cursor: 'pointer' } as CSSProperties,
   primaryDim: { background: 'var(--muted)' } as CSSProperties,
+  signGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 } as CSSProperties,
   punchGate: { fontSize: 13, color: 'var(--warn)', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
   closeBtn: { padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', background: 'var(--bg, #fff)', color: 'inherit', fontSize: 12, cursor: 'pointer' } as CSSProperties,
   locked: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,

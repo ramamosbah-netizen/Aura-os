@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { projectFixtureId } from './fixtures';
+import { apiAuthHeaders as apiHeaders } from './api-auth';
 
 /**
  * QHS-07 / XOP-12 — AN INSPECTION REQUEST THAT KEEPS WHAT IT WAS APPROVED ON.
@@ -136,15 +137,60 @@ test.describe('inspection evidence, end to end', () => {
     expect(detail.signature!.coverage).toBe('current');
 
     // ── THE BYTES COME BACK, THROUGH THE GOVERNED ROUTE ──────────────────────────────────────
+    //
+    // THIS SESSION RAISED AND RESOLVED THE INSPECTION, so a 200 here is explained by OWNERSHIP
+    // and says nothing about inheritance. Asserted as exactly that; the inheritance claim is made
+    // below by an identity that touched none of it.
     for (const e of detail.evidence) {
       const file = await page.request.get(`${baseURL}/api/documents/${e.fileId}/content`);
-      expect(file.status(), `${e.category} must open for somebody who may read the inspection`).toBe(200);
+      expect(file.status(), `the uploader, who owns the ${e.category}, can open it`).toBe(200);
       const got = Buffer.from(await file.body());
       expect(got.length, 'an empty body would pass a naive status check').toBeGreaterThan(0);
       const isPng = got.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
       const isJpeg = got[0] === 0xff && got[1] === 0xd8 && got[2] === 0xff;
       expect(isPng || isJpeg, `${e.category} is not an image (first bytes: ${got.subarray(0, 8).toString('hex')})`).toBe(true);
     }
+
+    const committedSignature = Buffer.from(
+      await (await page.request.get(`${baseURL}/api/documents/${detail.signature!.fileId}/content`)).body(),
+    );
+
+    // ── A SECOND AUTHORIZED READER, who touched none of it ───────────────────────────────────
+    //
+    // The defect the context provider fixes. An approved IR accrues a measured quantity on the
+    // Quantity Ledger, so the PM answering for that quantity reads this record — and without
+    // inheritance could not open the photograph or the signature the approval rests on.
+    // `u-e2e-pm` holds `quality.*.read` and did not raise, upload to, or resolve this inspection.
+    const reader = await mintToken(page.request, process.env.E2E_PM_USERNAME ?? 'u-e2e-pm');
+    if (reader) {
+      const asReader = await page.request.get(`${API}/api/v1/documents/${detail.signature!.fileId}/content`, { headers: reader });
+      expect(asReader.status(), 'a second authorized reader inherits the inspection\'s reachability').toBe(200);
+      expect(Buffer.from(await asReader.body()).equals(committedSignature),
+        'and receives the exact committed bytes, not some other version').toBe(true);
+    }
+
+    // ── THE COMMITTED BYTES CANNOT BE REPLACED, INCLUDING BY THEIR OWNER ─────────────────────
+    //
+    // `DEFAULT_OWNER_POLICY` gives a creator EDIT, and the creator here is the account that
+    // recorded the inspection — so the generic policy handed the recorder EDIT on the signature
+    // that constrains them. Driven against the GENERIC DMS version route, the door that exists.
+    const overwrite = await page.request.post(`${API}/api/v1/documents/${detail.signature!.fileId}/versions`, {
+      headers: apiHeaders(),
+      data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature that was given' },
+    });
+    expect(overwrite.ok(), 'the recorder must not be able to replace committed evidence').toBe(false);
+    expect(await overwrite.text(), 'and the refusal must name the act that relies on it')
+      .toMatch(/cannot be replaced|was resolved on/i);
+
+    const afterAttempt = await page.request.get(`${baseURL}/api/documents/${detail.signature!.fileId}/content`);
+    expect(Buffer.from(await afterAttempt.body()).equals(committedSignature),
+      'the committed bytes survive a refused overwrite').toBe(true);
+
+    // THE CONTROLLED OUTPUT VERIFIES THE CHECKSUM rather than trusting the reference.
+    const verified = await (await page.request.get(`${baseURL}/api/quality/irs/${irId}/detail`)).json() as {
+      signature: { integrity: string } | null;
+    };
+    expect(verified.signature?.integrity, 'the sheet resolves the committed version and verifies it').toBe('verified');
 
     // …AND ARE REFUSED to somebody who may not read the inspection. An approved IR accrues a
     // measured quantity, so who can open what it rests on is not a detail.
@@ -154,6 +200,12 @@ test.describe('inspection evidence, end to end', () => {
     if (outsider) {
       const refused = await page.request.get(`${API}/api/v1/documents/${detail.signature!.fileId}/content`, { headers: outsider });
       expect(refused.status(), 'somebody who cannot read the inspection must not open its signature').toBe(403);
+      // …nor modify them. Read and write are separate doors and both have to be shut.
+      const refusedWrite = await page.request.post(`${API}/api/v1/documents/${detail.signature!.fileId}/versions`, {
+        headers: outsider,
+        data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature that was given' },
+      });
+      expect(refusedWrite.ok(), 'an unauthorized identity must not replace committed evidence either').toBe(false);
       const body = await refused.text();
       for (const leak of ['storageKey', 'storage_key', 'checksum', 'inspection-signature']) {
         expect(body, `a refusal must not disclose ${leak}`).not.toContain(leak);

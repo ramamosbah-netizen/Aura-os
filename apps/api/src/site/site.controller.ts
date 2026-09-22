@@ -345,7 +345,24 @@ export class SiteController {
     const ctx = this.tenant.get();
     const detail = await this.siteService.getDailyReportDetail(ctx.tenantId, id);
     if (!detail) throw new Error(`daily report ${id} not found`); // taxonomy → 404
-    return detail;
+    /**
+     * THE CONTROLLED OUTPUT RESOLVES THE COMMITTED VERSION AND CHECKS IT.
+     *
+     * A record keeps the checksum it was handed when the act happened, and nothing compared the
+     * two — so tamper-EVIDENCE existed and tamper-DETECTION did not. Replacing a version is now
+     * refused outright, but a document store is shared infrastructure and a seal is a rule rather
+     * than a law of physics; a sheet that prints a signature is the last place that can still
+     * say "these are not the bytes that were signed".
+     *
+     * Three answers, rendered differently downstream: `verified`, `mismatch`, `unavailable`.
+     */
+    const signature = detail.signature
+      ? {
+          ...detail.signature,
+          integrity: await this.dms.verifyCommittedChecksum(detail.signature.evidence.fileId, detail.signature.evidence.hash),
+        }
+      : null;
+    return { ...detail, signature };
   }
 
   // ── Delay Logs ─────────────────────────────────────────────────────────────

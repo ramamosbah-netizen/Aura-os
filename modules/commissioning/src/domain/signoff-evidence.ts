@@ -158,10 +158,18 @@ export function signoffIsSigned(evidence: SignoffEvidence): boolean {
   return evidence.method === 'electronic' || evidence.method === 'paper';
 }
 
-/** The row for one party, or null — so a surface reads one shape for "present" and "absent". */
+/**
+ * The row for one party, or null — so a surface reads one shape for "present" and "absent".
+ *
+ * THE LATEST WINS, and the earlier rows stay. A party signing again is a correction, and 0383
+ * removed the unique index that used to make it an overwrite: that a sign-off was signed once and
+ * then signed again is exactly what an auditor needs, and exactly what replacing the row erased.
+ * The same rule the site daily report and the inspection request already follow.
+ */
 export function evidenceForParty(
   evidence: readonly SignoffEvidence[],
   party: SignoffParty,
 ): SignoffEvidence | null {
-  return evidence.find((e) => e.party === party) ?? null;
+  const mine = evidence.filter((e) => e.party === party);
+  return mine.length ? mine[mine.length - 1] : null;
 }

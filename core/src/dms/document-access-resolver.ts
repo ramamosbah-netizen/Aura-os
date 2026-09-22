@@ -11,6 +11,7 @@ import {
   type Id,
 } from '@aura/shared';
 import { DOCUMENT_PERMISSION_STORE, type DocumentPermissionStore, type SubjectRef } from './document-permission-store';
+import { type CommittedEvidenceProvider, type CommittedEvidenceVerdict, NOT_COMMITTED, SEALED_LEVELS } from './committed-evidence';
 import { DOCUMENT_STORE, type DocumentStore } from './document-store';
 
 /**
@@ -54,6 +55,12 @@ export interface AccessDecision {
   effective: EffectivePermission[];
   /** Which policy generation decided this — see POLICY_VERSION. */
   policyVersion: number;
+  /**
+   * Present only when a completed governing act has relied on this document, and carrying the
+   * reason a refusal should print. Its presence is what removed EDIT and SHARE from `permissions`
+   * above, whatever source granted them.
+   */
+  committedEvidence?: CommittedEvidenceVerdict;
 }
 
 /**
@@ -61,7 +68,12 @@ export interface AccessDecision {
  * defaults, or how sources are derived. Audit records carry the version they were decided
  * under, so a five-year-old access record is never silently reinterpreted against today's rules.
  */
-export const POLICY_VERSION = 1;
+/**
+ * 2 since committed evidence: a decision can now WITHHOLD a level that a source really granted.
+ * Before this, `permissions` was exactly the union of what the sources gave, and an auditor
+ * replaying a version-1 record must keep reading it that way — which is what this number is for.
+ */
+export const POLICY_VERSION = 2;
 
 /**
  * A decision frozen at the moment it was acted on, for the audit trail.
@@ -156,6 +168,12 @@ export class DocumentAccessResolver {
   // runtime token for Nest to inject and would fail at boot. A tenant overrides them through
   // configure() rather than through DI.
   private ownerPolicy: DocumentOwnerPolicy = DEFAULT_OWNER_POLICY;
+  /**
+   * Modules that can say whether a document has already been relied upon by a completed act.
+   * Registered the same way context providers are, and for the same reason: only the owning
+   * module knows, and core cannot import it.
+   */
+  private committedEvidenceProviders: CommittedEvidenceProvider[] = [];
   private delegationPolicy: DocumentDelegationPolicy = DEFAULT_DELEGATION_POLICY;
 
   configure(policies: { owner?: DocumentOwnerPolicy; delegation?: DocumentDelegationPolicy }): void {
@@ -183,6 +201,28 @@ export class DocumentAccessResolver {
    * DELETE, RESTORE or EXPORT later means adding a level, not another method here and another
    * copy of the policy at every call site.
    */
+  registerCommittedEvidenceProvider(provider: CommittedEvidenceProvider): void {
+    this.committedEvidenceProviders.push(provider);
+  }
+
+  /**
+   * Has a completed governing act relied on these bytes?
+   *
+   * A provider that throws is treated as "cannot say" rather than as "sealed": an unavailable
+   * module must not turn every write in the system into a refusal, and the ordinary permission
+   * check still stands behind this.
+   */
+  async committedVerdict(document: Document): Promise<CommittedEvidenceVerdict> {
+    for (const provider of this.committedEvidenceProviders) {
+      if (provider.entity !== document.aggregateType) continue;
+      try {
+        const verdict = await provider.isCommitted(document);
+        if (verdict.committed) return verdict;
+      } catch { /* cannot say — see above */ }
+    }
+    return NOT_COMMITTED;
+  }
+
   async authorize(document: Document, actor: DocumentActor, preloaded?: DocumentPermission[]): Promise<AccessDecision> {
     const empty: AccessDecision = { allowed: false, permissions: [], effective: [], policyVersion: POLICY_VERSION };
     if (document.tenantId !== actor.tenantId) return empty;
@@ -223,12 +263,28 @@ export class DocumentAccessResolver {
       if (levels.length > 0) grant(levels, { type: 'context', entity: provider.entity });
     }
 
-    const permissions = ORDER.filter((l) => bySource.has(l));
+    /**
+     * THE SEAL, applied last and to every source alike.
+     *
+     * A document a completed act has relied on keeps its readers and loses its writers. Placed
+     * here rather than in the command handlers because this is the one place where owner, share,
+     * team, role, company and context grants have all been gathered — a rule applied anywhere
+     * else would cover the path it was written for and miss the next one.
+     *
+     * The owner is not exempt. `createdBy` on a signature is the person who RECORDED the act, so
+     * the generic owner policy was handing the recorder EDIT on the very signature that
+     * constrains them.
+     */
+    const sealed = await this.committedVerdict(document);
+    const withheld = sealed.committed ? new Set<DocumentPermissionLevel>(SEALED_LEVELS) : new Set<DocumentPermissionLevel>();
+
+    const permissions = ORDER.filter((l) => bySource.has(l) && !withheld.has(l));
     return {
       allowed: permissions.length > 0,
       permissions,
       effective: permissions.map((permission) => ({ permission, sources: bySource.get(permission) ?? [] })),
       policyVersion: POLICY_VERSION,
+      ...(sealed.committed ? { committedEvidence: sealed } : {}),
     };
   }
 

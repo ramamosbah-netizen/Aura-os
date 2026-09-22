@@ -27,6 +27,8 @@ interface SignoffEvidence {
   documentId: string;
   recordedBy: string | null;
   coverage: 'current' | 'superseded' | 'unverifiable';
+  /** Whether the stored file still carries the bytes this sign-off committed to. */
+  integrity?: 'verified' | 'mismatch' | 'unavailable';
 }
 interface Detail { record: Record_; testItems: TestItem[]; testRuns: TestRun[]; punchItems: Punch[]; certificate: Certificate | null; signoffEvidence?: SignoffEvidence[] }
 
@@ -88,6 +90,8 @@ export default async function CommissioningCertificate({ params }: { params: Pro
           : e.coverage === 'unverifiable'
             ? 'signed before this record captured what a signature covers'
             : null,
+        // Never printed as sound when the bytes have moved underneath it.
+        e.integrity === 'mismatch' ? 'THE STORED FILE IS NOT THE ONE THAT WAS SIGNED — its checksum does not match what this record committed to' : null,
       ].filter(Boolean).join(' \u00b7 '),
     };
   };

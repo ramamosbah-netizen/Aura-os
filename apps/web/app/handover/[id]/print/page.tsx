@@ -26,6 +26,8 @@ interface HandoverPackage {
   clientRepresentative: string | null;
   acceptanceMethod: 'electronic' | 'paper' | 'email' | null;
   acceptanceEvidenceDocumentId: string | null;
+  /** Whether the stored evidence still carries the bytes this acceptance committed to. */
+  acceptanceEvidenceIntegrity?: 'verified' | 'mismatch' | 'unavailable';
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
   remarks: string | null;
@@ -138,6 +140,7 @@ export default async function HandoverPrint({ params }: { params: Promise<{ id: 
                 pkg.acceptanceMethod === 'paper' ? 'on paper; the signed document is on file' : null,
                 pkg.acceptedAt ? `on ${pkg.acceptedAt.slice(0, 10)}` : null,
                 recorder,
+                pkg.acceptanceEvidenceIntegrity === 'mismatch' ? 'THE STORED FILE IS NOT THE ONE THAT WAS SIGNED — its checksum does not match what this record committed to' : null,
               ].filter(Boolean).join(' \u00b7 '),
             }
           : {

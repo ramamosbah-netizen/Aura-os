@@ -172,6 +172,27 @@ export class DmsService {
     actor: DocumentActor,
     note?: string,
   ): Promise<DocumentVersion> {
+    /**
+     * COMMITTED EVIDENCE IS REFUSED BY NAME, BEFORE THE PERMISSION CHECK.
+     *
+     * The seal in `DocumentAccessResolver` already withholds EDIT from a document a completed act
+     * has relied on, so `assertCan` below would refuse this anyway — with "access denied", which
+     * sends somebody looking for a permission to grant themselves. The permission is not the
+     * problem and no grant will fix it: the bytes are cited by a finished act.
+     *
+     * Checked HERE rather than only in the controller because this is the one method in the
+     * system that writes over existing bytes; a rule placed at a route could be bypassed by the
+     * next route that forgets it, exactly as the file-type policy would have been.
+     */
+    const target = await this.store.get(documentId);
+    if (target) {
+      const committed = await this.access_.committedVerdict(target.document);
+      if (committed.committed) {
+        this.logger.warn(`Refused a new version of committed evidence ${documentId}: ${committed.reason ?? 'relied upon by a completed act'}`);
+        throw new Error(committed.reason ?? 'this document is evidence a completed act relied on and cannot be replaced');
+      }
+    }
+
     // Uploading over someone's document is an edit, not a read.
     const existing = await this.assertCan(documentId, actor, 'EDIT');
     // A revision is judged by the same rule as the original: the category is the document's, so
@@ -214,6 +235,32 @@ export class DmsService {
   }
 
   /** Metadata for one document, if the actor may see it. */
+  /**
+   * DOES THE STORED DOCUMENT STILL CARRY THE BYTES THE RECORD COMMITTED TO?
+   *
+   * A business record keeps the checksum it was handed when the act happened. Nothing compared
+   * the two, so tamper-EVIDENCE existed and tamper-DETECTION did not: a replaced version would
+   * have left the record pointing at a checksum that no longer described the file, silently.
+   *
+   * Three answers, and a surface must render them differently:
+   *
+   *   verified     the current version's checksum is the one the act committed to
+   *   mismatch     it is not — say so loudly; never print the evidence as though it were sound
+   *   unavailable  the document or its checksum cannot be read, which is not the same as either
+   *
+   * Reads the CURRENT version deliberately: that is what a download returns, so that is what has
+   * to be checked. Takes no actor — it answers about bytes, not about who may see them, and every
+   * caller has already authorised its own read.
+   */
+  async verifyCommittedChecksum(documentId: Id, expected: string | null | undefined): Promise<'verified' | 'mismatch' | 'unavailable'> {
+    if (!expected?.trim()) return 'unavailable';
+    const found = await this.store.get(documentId);
+    if (!found) return 'unavailable';
+    const current = found.versions.find((v) => v.version === found.document.currentVersion) ?? found.versions[found.versions.length - 1];
+    if (!current?.checksum) return 'unavailable';
+    return current.checksum === expected ? 'verified' : 'mismatch';
+  }
+
   async getFor(id: Id, actor: DocumentActor): Promise<DocumentWithVersions> {
     return this.assertCan(id, actor, 'VIEW');
   }

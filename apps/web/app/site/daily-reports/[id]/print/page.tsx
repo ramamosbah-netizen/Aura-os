@@ -47,6 +47,12 @@ interface DailyReportDetail {
   signature?: {
     evidence: Evidence;
     coverage: 'current' | 'superseded' | 'unverifiable';
+    /**
+     * Whether the stored file still carries the bytes this record committed to. Checked on every
+     * read, because a sheet that prints a signature is the last place that can still say "these
+     * are not the bytes that were signed".
+     */
+    integrity?: 'verified' | 'mismatch' | 'unavailable';
   } | null;
 }
 
@@ -123,6 +129,8 @@ export default async function DailyReportPrint({ params }: { params: Promise<{ i
                   : signed?.coverage === 'unverifiable'
                     ? 'signed before this report recorded what a signature covers'
                     : null,
+                // Never printed as sound when the bytes have moved underneath it.
+                signed?.integrity === 'mismatch' ? 'THE STORED FILE IS NOT THE ONE THAT WAS SIGNED — its checksum does not match what this record committed to' : null,
               ].filter(Boolean).join(' · '),
             }
           : 'Foreman / Site Engineer',

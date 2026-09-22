@@ -45,6 +45,7 @@ export * from './dms/file-type-policy';
 export * from './dms/in-memory-document-store';
 export * from './dms/postgres-document-store';
 export * from './dms/document-permission-store';
+export * from './dms/committed-evidence';
 export * from './dms/document-access-resolver';
 export * from './dms/document-requirement-store';
 export * from './dms/in-memory-document-requirement-store';

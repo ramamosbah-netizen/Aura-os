@@ -65,13 +65,9 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   private readonly signoffEvidence: SignoffEvidence[] = [];
 
   async saveSignoffEvidence(evidence: SignoffEvidence): Promise<void> {
-    // Upsert on the party, matching the unique index in Postgres: the two tiers must agree about
-    // what a second signature for the same party means.
-    const at = this.signoffEvidence.findIndex(
-      (e) => e.tenantId === evidence.tenantId && e.commissioningId === evidence.commissioningId && e.party === evidence.party,
-    );
-    if (at >= 0) this.signoffEvidence[at] = evidence;
-    else this.signoffEvidence.push(evidence);
+    // APPEND, matching Postgres since 0383: a party signing again is a correction that keeps the
+    // earlier row, and the two tiers must agree about what that means.
+    this.signoffEvidence.push(evidence);
   }
 
   async listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]> {

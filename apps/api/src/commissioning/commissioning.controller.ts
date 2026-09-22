@@ -321,7 +321,24 @@ export class CommissioningController {
   async detail(@Param('id') id: string) {
     const found = await this.service.getDetail(id, this.tenant.get().tenantId);
     if (!found) throw new NotFoundException(`commissioning record ${id} not found`);
-    return found;
+    /**
+     * THE CONTROLLED OUTPUT RESOLVES THE COMMITTED VERSION AND CHECKS IT.
+     *
+     * A record keeps the checksum it was handed when the act happened, and nothing compared the
+     * two — so tamper-EVIDENCE existed and tamper-DETECTION did not. Replacing a version is now
+     * refused outright, but a document store is shared infrastructure and a seal is a rule rather
+     * than a law of physics; a sheet that prints a signature is the last place that can still
+     * say "these are not the bytes that were signed".
+     *
+     * Three answers, rendered differently downstream: `verified`, `mismatch`, `unavailable`.
+     */
+    const signoffEvidence = await Promise.all(
+      found.signoffEvidence.map(async (e) => ({
+        ...e,
+        integrity: await this.dms.verifyCommittedChecksum(e.documentId, e.documentHash),
+      })),
+    );
+    return { ...found, signoffEvidence };
   }
 
   // ── Test sheet ───────────────────────────────────────────────────────────────

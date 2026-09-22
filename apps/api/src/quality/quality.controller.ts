@@ -419,7 +419,21 @@ export class QualityController {
   async inspectionDetail(@Param('id') id: string) {
     const found = await this.qualityService.readInspection(this.tenant.get().tenantId, id);
     if (!found) throw new NotFoundException(`Inspection Request with ID ${id} not found`);
-    return found;
+    /**
+     * THE CONTROLLED OUTPUT RESOLVES THE COMMITTED VERSION AND CHECKS IT.
+     *
+     * A record keeps the checksum it was handed when the act happened, and nothing compared the
+     * two — so tamper-EVIDENCE existed and tamper-DETECTION did not. Replacing a version is now
+     * refused outright, but a document store is shared infrastructure and a seal is a rule rather
+     * than a law of physics; a sheet that prints a signature is the last place that can still
+     * say "these are not the bytes that were signed".
+     *
+     * Three answers, rendered differently downstream: `verified`, `mismatch`, `unavailable`.
+     */
+    const signature = found.signature
+      ? { ...found.signature, integrity: await this.dms.verifyCommittedChecksum(found.signature.fileId, found.signature.hash) }
+      : null;
+    return { ...found, signature };
   }
 
   @Get('irs')

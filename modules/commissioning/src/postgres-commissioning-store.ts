@@ -384,20 +384,17 @@ export class PostgresCommissioningStore implements CommissioningStore {
 
   // ── Punch list ───────────────────────────────────────────────────────────────
 
+  /**
+   * APPEND-ONLY (0383). A party signing again is a CORRECTION that keeps the earlier row — the
+   * upsert this used to do destroyed the fact that the sign-off had been signed once and then
+   * signed again, which is the thing an auditor needs. Readers resolve the latest per party.
+   */
   async saveSignoffEvidence(e: SignoffEvidence): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_signoff_evidence
         (id, tenant_id, company_id, commissioning_id, project_id, party, signed_by, method,
          document_id, document_hash, signed_content_hash, recorded_by, created_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-       on conflict (tenant_id, commissioning_id, party) do update set
-         signed_by = excluded.signed_by,
-         method = excluded.method,
-         document_id = excluded.document_id,
-         document_hash = excluded.document_hash,
-         signed_content_hash = excluded.signed_content_hash,
-         recorded_by = excluded.recorded_by,
-         created_at = excluded.created_at`,
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
       [e.id, e.tenantId, e.companyId, e.commissioningId, e.projectId, e.party, e.signedBy, e.method,
        e.documentId, e.documentHash, e.signedContentHash, e.recordedBy, e.createdAt],
     );

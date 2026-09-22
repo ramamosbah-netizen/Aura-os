@@ -9,6 +9,8 @@ export async function PUT(
   const body = (await request.json().catch(() => ({}))) as {
     commissionedBy?: string;
     witnessedBy?: string;
+    // The per-party signatures, forwarded untouched. The API decides what a sign-off may carry.
+    signoffEvidence?: Array<{ party: string; signedBy: string; method: string; evidence: string }>;
   };
 
   if (!body.commissionedBy || !body.witnessedBy) {

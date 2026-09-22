@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { expect, test } from '@playwright/test';
 import { projectFixtureId } from './fixtures';
+import { apiAuthHeaders } from './api-auth';
 
 /**
  * SIT-04 / J4-01 — a photograph goes from the person to storage and back to the person.
@@ -23,6 +24,21 @@ import { projectFixtureId } from './fixtures';
 // A small but genuine PNG (1x1, white). Decoded in the page so the browser uploads real bytes.
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
+const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
+
+/** A token for a named test actor, or null when this tier cannot hold them. */
+async function mintToken(
+  req: import('@playwright/test').APIRequestContext,
+  username: string,
+): Promise<Record<string, string> | null> {
+  const res = await req
+    .post(`${API}/api/v1/auth/login`, { data: { username, password: process.env.E2E_PASSWORD ?? 'e2e-password' } })
+    .catch(() => null);
+  if (!res?.ok()) return null;
+  const token = ((await res.json()) as { token?: string }).token;
+  return token ? { Authorization: `Bearer ${token}` } : null;
+}
 
 test.describe('site evidence, end to end', () => {
   test('a photograph picked on the daily report reaches storage and comes back', async ({ page, baseURL }) => {
@@ -226,5 +242,84 @@ test.describe('site evidence, end to end', () => {
     // …and the decoy is rendered as what it is: a photograph row.
     await expect(page.locator('body'), 'the decoy belongs in the evidence rows')
       .toContainText('Riser sign-off point, level 3');
+
+    // ── THE COMMITTED SIGNATURE CANNOT BE REWRITTEN ──────────────────────────────────────────
+    //
+    // `DEFAULT_OWNER_POLICY` gives a document's creator EDIT, and the creator here is the account
+    // that recorded the day — so the generic policy handed the recorder EDIT on the supervisor's
+    // own signature. Driven against the GENERIC DMS version route, which is the door that exists.
+    const committed = Buffer.from(
+      await (await page.request.get(`${baseURL}/api/documents/${realSignatureFileId}/content`)).body(),
+    );
+    const overwrite = await page.request.post(
+      `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1/documents/${realSignatureFileId}/versions`,
+      {
+        headers: apiAuthHeaders(),
+        data: { fileName: 'replacement.png', contentType: 'image/png', content: 'not the signature that was given' },
+      },
+    );
+    expect(overwrite.ok(), 'the recorder must not be able to replace a committed signature').toBe(false);
+    expect(await overwrite.text(), 'and the refusal must name the record that relies on it')
+      .toMatch(/cannot be replaced|daily report/i);
+    expect(
+      Buffer.from(await (await page.request.get(`${baseURL}/api/documents/${realSignatureFileId}/content`)).body()).equals(committed),
+      'the committed bytes survive a refused overwrite',
+    ).toBe(true);
+
+    // ── A LEGITIMATE CORRECTION IS A SEPARATE GOVERNED ACT THAT KEEPS THE ORIGINAL ───────────
+    //
+    // Sealing the bytes must not make a mistake uncorrectable, or people work around the system
+    // rather than through it. The day goes back for correction the way the product already does
+    // it — submit, review, reject with a reason, which reopens it to draft — and is signed
+    // again. The FIRST signature is not touched: that the day was signed, changed and re-signed
+    // is exactly what somebody checking a progress claim needs to see.
+    const API_BASE = process.env.AURA_API_URL ?? 'http://localhost:4000';
+    for (const [step, body] of [['submit', {}], ['start-review', {}]] as const) {
+      const method = step === 'submit' ? 'put' : 'post';
+      const res = await page.request[method](`${API_BASE}/api/v1/site/daily-reports/${reportId}/${step}`, { headers: apiAuthHeaders(), data: body });
+      expect(res.ok(), `${step} — ${await res.text()}`).toBe(true);
+    }
+
+    // THE CORRECTION IS SENT BACK BY SOMEBODY ELSE. The author cannot reject their own day —
+    // "withdrawing it is a resubmission, not a review" — so the governed path to a correction
+    // runs through a second authority, which is the point rather than an obstacle to it. Skipped
+    // where the tier cannot hold the reviewer, because a correction proved by the author alone
+    // would not be the governed act this claims.
+    const reviewer = await mintToken(page.request, process.env.E2E_PM_USERNAME ?? 'u-e2e-pm');
+    test.skip(!reviewer, 'the reviewer identity is not seeded in this tier, and the author may not reject their own report');
+
+    const rejected = await page.request.post(`${API_BASE}/api/v1/site/daily-reports/${reportId}/reject`, {
+      headers: reviewer!,
+      data: { reason: 'Manpower count corrected after the walk-round' },
+    });
+    expect(rejected.ok(), `a reviewer rejecting reopens the day for correction — ${await rejected.text()}`).toBe(true);
+
+    const secondSignatory = `B. Supervisor ${Date.now().toString().slice(-4)}`;
+    const resigned = await page.request.post(`${API_BASE}/api/v1/site/daily-reports/${reportId}/evidence/upload`, {
+      headers: apiAuthHeaders(),
+      multipart: {
+        file: { name: 'supervisor-signature-2.png', mimeType: 'image/png', buffer: Buffer.from(PNG_BASE64, 'base64') },
+        category: 'signature',
+        description: 'Supervisor sign-off (corrected day)',
+        signedBy: secondSignatory,
+      },
+    });
+    expect(resigned.ok(), `the corrected day is signed again — ${await resigned.text()}`).toBe(true);
+
+    const after = await (await page.request.get(`${baseURL}/api/site/daily-reports/${reportId}`)).json() as {
+      evidence: Array<{ category: string; fileId: string; signedBy: string | null }>;
+      signature: { evidence: { signedBy: string | null; fileId: string } } | null;
+    };
+    const signatures = after.evidence.filter((e) => e.category === 'signature');
+    expect(signatures.length, 'the correction ADDS a signature rather than replacing one').toBe(2);
+    expect(signatures.some((e) => e.fileId === realSignatureFileId),
+      'and the original row is still there, naming the original document').toBe(true);
+    expect(after.signature?.evidence.signedBy, 'the sheet resolves the LATEST signature').toBe(secondSignatory);
+
+    // The superseded original is still openable — preserved, not merely remembered.
+    const original = await page.request.get(`${baseURL}/api/documents/${realSignatureFileId}/content`);
+    expect(original.status(), 'the original signature remains readable after the correction').toBe(200);
+    expect(Buffer.from(await original.body()).equals(committed),
+      'and still carries the bytes it was committed with').toBe(true);
   });
 });

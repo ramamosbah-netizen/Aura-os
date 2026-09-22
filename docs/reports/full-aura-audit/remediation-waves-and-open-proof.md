@@ -43,22 +43,27 @@ these eight failed**, at which point the run was stopped by hand. Everything the
 that point is an artefact of stopping it — the API and web servers were killed mid-run, so the
 tail failed for want of a server and is not a measurement of anything.
 
-| Spec | What it drives |
-| --- | --- |
-| `document-workflow.spec.ts:10` | document register → 360 → reject → new revision → approve → issue |
-| `fx-governed-booking.spec.ts:89` | an invoice in a currency with no governed rate |
-| `journey-signal-to-close.spec.ts:60` | the pre-award spine: radar signal → qualified opportunity → contract |
-| `journey-signal-to-close.spec.ts:108` | the direct-sale middle: a quotation clearing SoD |
-| `journey-tc-handover-closure.spec.ts:37` | the whole chain, engineering through acceptance |
-| `permit-workflow.spec.ts:20` | permit register → 360 → approve → close |
-| `permit-workflow.spec.ts:153` | a permit cannot be approved by the person who requested it |
-| `project-authoring-parity.spec.ts:5` | Project 360 exposes governed WBS/CBS and Delay/EOT authoring |
+| Spec | Verdict | What decided it |
+| --- | --- | --- |
+| `document-workflow.spec.ts:10` | **stale spec** | `rejectDocument` refuses the submitter — "the person who submitted this revision may not reject their own — withdrawing it is a revision, not a decision". The 360 showed "Under Review" because the reject was refused. |
+| `fx-governed-booking.spec.ts:89` | **tier mismatch** | PASSES against PostgreSQL. It failed only on the in-memory tier. The mechanism was not isolated — what is measured is that the backend decides it. |
+| `journey-signal-to-close.spec.ts:60` | **stale spec** | `convert-to-quotation` answers 400: "only a deal that meets the quotation gate can be quoted — approve the scope revision before quoting; complete and approve the estimate revision before quoting; freeze the pricing revision before quoting". The spec quotes straight from a qualified opportunity. |
+| `journey-signal-to-close.spec.ts:108` | **stale spec** | The same gate, on the same call. |
+| `journey-tc-handover-closure.spec.ts:37` | **stale spec** | 403 — "the person who submitted this handover may not accept it — acceptance is the client's". |
+| `permit-workflow.spec.ts:20` | **stale spec** | Both permit tests die on the same setup line, `PUT /hse/risk-assessments/:id/approve`: "the person who wrote this risk assessment may not approve their own — it is what authorises a permit to work". |
+| `permit-workflow.spec.ts:153` | **stale spec** | The same line, in the test whose NAME is "a permit cannot be approved by the person who requested it" — it was refused by exactly the rule it exists to check, one step earlier than it expected. |
+| `project-authoring-parity.spec.ts:5` | **stale spec** | The EOT table reads "submitted" with Approve/Reject still offered: "the person who submitted this EOT claim may not determine it — a claim out and a determination back are two sides of one exchange". |
 
-**What is NOT claimed.** These eight are not diagnosed. Each may be a product defect, a stale
-spec expectation, or a tier mismatch of the kind already found elsewhere in this run — a spec
-asking the in-memory tier for a guarantee only PostgreSQL provides. Until each is read
-individually, none of the three may be assumed, and no capability leaf is promoted or demoted
-because of them.
+**Seven stale specs, one tier mismatch, ZERO product defects.**
+
+And they are one finding, not eight. SEC-01 put maker/checker across the system — a document revision, a risk assessment, a handover acceptance, an EOT determination, a daily report — and the browser suite was written before those rules existed, driving each journey as a single identity. Every one of these failures is the product refusing something it is right to refuse. The eighth, the quotation gate, is the same shape: a deliberate readiness rule the spec predates.
+
+Diagnosed against the migrated PostgreSQL database with auth ON. Each verdict comes from
+reproducing the call and reading the refusal, not from inspecting the spec and inferring.
+
+**NONE OF THEM IS FIXED.** Repairing a stale spec means driving it as the two people the rule is
+about, as `site-execution.spec.ts` now does — that is real work per spec and it is not done here.
+Until it is, these eight stay red, and they gate their own capabilities at promotion time.
 
 **Why they are not system-wide blockers.** A browser failure bounds the surface it drives and
 nothing else. Treating eight unread failures as a gate over 180 capability leaves would state

@@ -33,7 +33,14 @@ export interface DocumentSheetProps {
   rows?: Array<Record<string, string | number>>;
   totals?: DocTotal[];
   notes?: string;
-  signatures?: string[];
+  /**
+   * A signature block per entry. A STRING is a ruled line for a wet signature, which is what
+   * every page passed before and still may. An object with `src` renders the signature that was
+   * actually captured and stored — XOP-12 asks for attributable electronic signatures to be
+   * "included in controlled output", and a blank line beside a stored signature is the document
+   * failing to say what it knows.
+   */
+  signatures?: Array<string | { label: string; src?: string; attribution?: string }>;
 }
 
 /**
@@ -111,9 +118,21 @@ export default function DocumentSheet(props: DocumentSheetProps) {
 
         {signatures && signatures.length > 0 && (
           <section style={s.signs}>
-            {signatures.map((label) => (
-              <div key={label} style={s.sign}><div style={s.signLine} /><div style={s.signLabel}>{label}</div></div>
-            ))}
+            {signatures.map((entry) => {
+              const sig = typeof entry === 'string' ? { label: entry } : entry;
+              return (
+                <div key={sig.label} style={s.sign}>
+                  {'src' in sig && sig.src ? (
+                    <img src={sig.src} alt={`Signature — ${sig.label}`} style={s.signImage} />
+                  ) : null}
+                  <div style={s.signLine} />
+                  <div style={s.signLabel}>{sig.label}</div>
+                  {'attribution' in sig && sig.attribution ? (
+                    <div style={s.signAttribution}>{sig.attribution}</div>
+                  ) : null}
+                </div>
+              );
+            })}
           </section>
         )}
 
@@ -174,6 +193,18 @@ const s = {
   notes: { marginTop: 16, fontSize: 12, color: '#444', borderTop: '1px solid #eee', paddingTop: 10 } as CSSProperties,
   signs: { display: 'flex', gap: 40, marginTop: 40 } as CSSProperties,
   sign: { flex: 1 } as CSSProperties,
+  signImage: {
+    display: 'block',
+    maxHeight: 54,
+    maxWidth: '100%',
+    objectFit: 'contain',
+    marginBottom: 2,
+  } as CSSProperties,
+  signAttribution: {
+    fontSize: 9,
+    color: '#666',
+    marginTop: 2,
+  } as CSSProperties,
   signLine: { borderTop: '1px solid #111', marginBottom: 4 } as CSSProperties,
   signLabel: { fontSize: 11, color: '#666' } as CSSProperties,
   footer: { marginTop: 28, paddingTop: 10, borderTop: '1px solid #eee', fontSize: 10, color: '#999', textAlign: 'center' } as CSSProperties,

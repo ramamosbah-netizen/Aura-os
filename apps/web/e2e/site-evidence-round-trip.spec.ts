@@ -138,5 +138,30 @@ test.describe('site evidence, end to end', () => {
     expect(reviewerFetch.status(), 'the reviewer opens the real file').toBe(200);
     expect(Buffer.from(await reviewerFetch.body()).length).toBeGreaterThan(0);
 
+    // ── CONTROLLED OUTPUT: the printable report a client or consultant is given ──────────────
+    // XOP-12 asks for the signature to be "included in controlled output", and the daily report
+    // page describes itself as backing "progress claims, delay evidence, and client site
+    // diaries". So the printable sheet has to carry the day it reports on.
+    await page.goto(`/site/daily-reports/${reportId}/print`, { waitUntil: 'domcontentloaded' });
+    const sheet = page.locator('body');
+    await expect(sheet, 'the printable report must render at all').toContainText('DAILY SITE REPORT', { timeout: 30_000 });
+    await expect(sheet, 'it must carry the work it reports on, not an empty template').toContainText(marker);
+
+    // The CAPTURED signature, not a ruled line beside a signature AURA already holds.
+    const printedSignature = page.getByAltText(/^Signature — /);
+    await expect(printedSignature, 'the stored signature must appear on the sheet').toBeVisible({ timeout: 15_000 });
+    const sigSrc = await printedSignature.getAttribute('src');
+    expect(sigSrc, 'it must be the stored file, not a data URL re-sent from the browser')
+      .toMatch(/^\/api\/documents\/[0-9a-f-]{36}\/content$/);
+    // …and it renders: a broken <img> has naturalWidth 0, which toBeVisible does not catch.
+    await expect
+      .poll(async () => printedSignature.evaluate((el) => (el as HTMLImageElement).naturalWidth), { timeout: 15_000 })
+      .toBeGreaterThan(0);
+
+    // The photograph is NAMED on the sheet with who captured it. "3 photos" is not evidence
+    // anybody can check a progress claim against.
+    await expect(sheet, 'each photograph must be named on the printed diary').toContainText('Evidence —');
+    await expect(sheet).toContainText('captured by');
+
   });
 });

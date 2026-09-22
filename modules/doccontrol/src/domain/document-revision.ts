@@ -58,6 +58,19 @@ export interface DocumentRevision {
   decisionComments: string | null;
   issuedBy: string | null;
   issuedAt: string | null;
+  /**
+   * THE DOCUMENT ITSELF — a DMS document id, where the bytes live.
+   *
+   * This register recorded twenty-two columns of lifecycle provenance and had nowhere to put the
+   * thing being governed: a revision could be submitted, reviewed, approved and ISSUED with no
+   * content behind it, and everything downstream that "references a controlled document" — the
+   * as-built dossier, the O&M pack, a transmittal — referenced a number with nothing under it.
+   *
+   * A REFERENCE, not a copy. DocControl owns the lifecycle; DMS owns the bytes, their versions
+   * and who may download them. Storing the file here as well would give the same document two
+   * homes and two answers about who may read it.
+   */
+  dmsDocumentId: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -98,6 +111,7 @@ export function makeDocumentRevision(input: NewDocumentRevision): DocumentRevisi
     decisionComments: null,
     issuedBy: null,
     issuedAt: null,
+    dmsDocumentId: null,
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,
@@ -247,4 +261,26 @@ export function createNextRevision(
     reasonForRevision: input.reason.trim(),
     createdBy: input.actorId ?? source.createdBy,
   });
+}
+
+/**
+ * Attach (or replace) the content of a revision that is still the author's.
+ *
+ * ONLY WHILE IT IS A DRAFT. The moment a revision is submitted it is somebody else's to judge,
+ * and a reviewer who approves a drawing must be approving the drawing they were shown. Swapping
+ * the file under a review — or under an ISSUED revision, which the register already promises is
+ * immutable — would make the approval a signature on nothing. The forward move from either is a
+ * NEW revision, which is exactly what the lifecycle already says.
+ *
+ * Replacing it while still a draft is allowed and deliberate: an author who attached the wrong
+ * file has not yet asked anyone to look at it.
+ */
+export function attachRevisionContent(r: DocumentRevision, dmsDocumentId: string): DocumentRevision {
+  if (!dmsDocumentId?.trim()) throw new Error('a document id is required');
+  if (r.status !== 'draft') {
+    throw new Error(
+      `this revision is ${r.status} and its content cannot be replaced — a reviewer approves the document they were shown, so the way forward is a new revision`,
+    );
+  }
+  return { ...r, dmsDocumentId: dmsDocumentId.trim(), updatedAt: new Date().toISOString() };
 }

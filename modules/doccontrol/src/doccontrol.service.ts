@@ -35,6 +35,7 @@ import {
   issueDocument,
   supersedeDocument,
   createNextRevision,
+  attachRevisionContent,
 } from './domain/document-revision';
 import { DOCUMENT_REVISION_STORE, type DocumentRevisionStore } from './store.interface';
 
@@ -67,6 +68,7 @@ export const DOCCONTROL_EVENT = {
   documentRejected: 'doccontrol.document.rejected',
   documentIssued: 'doccontrol.document.issued',
   documentRevised: 'doccontrol.document.revised',
+  documentContentAttached: 'doccontrol.document.content_attached',
 };
 
 @Injectable()
@@ -672,6 +674,30 @@ export class DocControlService {
     });
     this.logger.log(`Document ${rev.documentNumber} rev ${rev.revision} → ${rev.status}`);
     return rev;
+  }
+
+  /**
+   * Attach the document this revision is a revision OF.
+   *
+   * The register tracked a lifecycle with no content under it: a revision could be submitted,
+   * reviewed, approved and ISSUED to a client with nothing behind the number. Everything
+   * downstream — the O&M pack, the as-built dossier, a transmittal — resolves that number and
+   * was resolving it to nothing.
+   *
+   * `doccontrol.revision.submit`, the AUTHOR's permission, because supplying the document is
+   * part of authoring it. Wave C's split is untouched: the author submits, the technical
+   * authority approves, the controller issues. A reviewer who could swap the file would be
+   * approving something other than what they were shown, which is why the domain refuses it
+   * once the revision leaves draft.
+   */
+  async attachRevisionContent(tenantId: Id, actorId: Id | null, revisionId: Id, dmsDocumentId: Id): Promise<DocumentRevision> {
+    const rev = await this.loadRevision(tenantId, revisionId);
+    this.assertDocPerm(actorId, rev.tenantId, rev.companyId, 'doccontrol.revision.submit', rev.projectId);
+    return this.saveRevisionWithEvent(
+      attachRevisionContent(rev, dmsDocumentId),
+      actorId,
+      DOCCONTROL_EVENT.documentContentAttached,
+    );
   }
 
   /** draft → submitted. */

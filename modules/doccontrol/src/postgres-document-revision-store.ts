@@ -16,8 +16,8 @@ export class PostgresDocumentRevisionStore implements DocumentRevisionStore {
       `insert into public.aura_doccontrol_document_revisions (
         id, tenant_id, company_id, register_entry_id, document_number, project_id, revision, status,
         previous_revision, reason_for_revision, submitted_by, submitted_at, reviewed_by, reviewed_at,
-        decided_by, decided_at, decision_comments, issued_by, issued_at, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+        decided_by, decided_at, decision_comments, issued_by, issued_at, dms_document_id, created_by, created_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
       on conflict (id) do update set
         status = excluded.status,
         submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
@@ -25,11 +25,12 @@ export class PostgresDocumentRevisionStore implements DocumentRevisionStore {
         decided_by = excluded.decided_by, decided_at = excluded.decided_at,
         decision_comments = excluded.decision_comments,
         issued_by = excluded.issued_by, issued_at = excluded.issued_at,
+        dms_document_id = excluded.dms_document_id,
         updated_at = excluded.updated_at`,
       [
         r.id, r.tenantId, r.companyId, r.registerEntryId, r.documentNumber, r.projectId, r.revision, r.status,
         r.previousRevision, r.reasonForRevision, r.submittedBy, r.submittedAt, r.reviewedBy, r.reviewedAt,
-        r.decidedBy, r.decidedAt, r.decisionComments, r.issuedBy, r.issuedAt, r.createdBy, r.createdAt, r.updatedAt,
+        r.decidedBy, r.decidedAt, r.decisionComments, r.issuedBy, r.issuedAt, r.dmsDocumentId ?? null, r.createdBy, r.createdAt, r.updatedAt,
       ],
     );
   }
@@ -71,6 +72,7 @@ export class PostgresDocumentRevisionStore implements DocumentRevisionStore {
       decidedAt: iso(row.decided_at),
       decisionComments: row.decision_comments,
       issuedBy: row.issued_by,
+      dmsDocumentId: row.dms_document_id ?? null,
       issuedAt: iso(row.issued_at),
       createdBy: row.created_by,
       createdAt: iso(row.created_at) as string,

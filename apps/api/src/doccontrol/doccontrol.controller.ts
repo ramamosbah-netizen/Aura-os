@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IsOptional, IsString } from 'class-validator';
-import { TenantContext, Permissions } from '@aura/core';
+import { DmsService, TenantContext, Permissions } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import {
   type Transmittal,
@@ -60,6 +61,7 @@ export class DocControlController {
   constructor(
     private readonly docControlService: DocControlService,
     private readonly tenant: TenantContext,
+    private readonly dms: DmsService,
   ) {}
 
   // ── Transmittals ──────────────────────────────────────────────────────────
@@ -340,6 +342,55 @@ export class DocControlController {
   @Get('revisions/:revId')
   getRevision(@Param('revId') revId: string): Promise<DocumentRevision | null> {
     return this.docControlService.getDocumentRevision(this.tenant.get().tenantId, revId);
+  }
+
+  /**
+   * THE DOCUMENT THE REGISTER IS A REGISTER OF.
+   *
+   * `aura_doccontrol_document_revisions` recorded twenty-two columns of lifecycle provenance and
+   * had nowhere to put the drawing: a revision was submitted, reviewed, approved and ISSUED to a
+   * client with nothing behind the number. The O&M pack, the as-built dossier and the transmittal
+   * all resolve that number and were resolving it to nothing.
+   *
+   * Upload and attach in ONE act, as site evidence does, so there is no stored file belonging to
+   * no revision and no revision pointing at a file that was never stored. Filed under the DMS
+   * kind the register entry declares, so the file-type policy judges a drawing as a drawing.
+   *
+   * `@Permissions` is DECLARED as `doccontrol.revision.submit` — the author's. Supplying the
+   * document is part of authoring it, and wave C's split stands: author submits, technical
+   * authority approves, controller issues. The derived name for this path would be
+   * `doccontrol.revision.content`, which no role holds.
+   */
+  @Post('revisions/:revId/content')
+  @Permissions('doccontrol.revision.submit')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024, files: 1 } }))
+  async attachRevisionContent(
+    @Param('revId') revId: string,
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ): Promise<DocumentRevision> {
+    if (!file?.buffer?.length) throw new BadRequestException('a file is required');
+    const ctx = this.tenant.get();
+    const rev = await this.docControlService.getDocumentRevision(ctx.tenantId, revId);
+    if (!rev) throw new NotFoundException('Revision not found');
+
+    const stored = await this.dms.createDocument(
+      {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        kind: 'drawing',
+        title: `${rev.documentNumber} Rev ${rev.revision}`,
+        aggregateType: 'doccontrol.revision',
+        aggregateId: rev.id,
+        createdBy: ctx.actorId ?? null,
+      },
+      {
+        fileName: file.originalname.split(/[\\/]/).pop() || 'document',
+        contentType: file.mimetype || 'application/octet-stream',
+        data: file.buffer,
+      },
+    );
+
+    return this.docControlService.attachRevisionContent(ctx.tenantId, ctx.actorId, revId, stored.document.id);
   }
 
   @Post('revisions/:revId/submit')

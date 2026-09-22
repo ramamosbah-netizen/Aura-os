@@ -23,6 +23,7 @@ interface HandoverPackage {
   submittedAt: string | null;
   acceptedAt: string | null;
   clientRepresentative: string | null;
+  acceptanceSignatureDocumentId: string | null;
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
   remarks: string | null;
@@ -63,7 +64,34 @@ export default async function HandoverPrint({ params }: { params: Promise<{ id: 
         { deliverable: 'Spares & Consumables Handover', status: checkStatus(pkg.checklist.spares) },
       ]}
       notes={pkg.remarks || 'Project handover acceptance certificate. Signed acceptance signifies official system handover and activates the Defects Liability Period (DLP) warranty clock.'}
-      signatures={['Project Manager', 'Client Representative Acceptance']}
+      /**
+       * THE CERTIFICATE SHOWS WHAT WAS SIGNED, OR SAYS THAT NOTHING WAS.
+       *
+       * This printed two ruled lines regardless, under a note asserting that "signed acceptance
+       * signifies official system handover" — a document claiming a signature it had no way to
+       * hold, because the pad on the acceptance screen discarded every stroke. Now the client's
+       * block carries the stored signature when there is one, and names the representative who
+       * gave it; with no captured signature it stays a ruled line and says so, which is the
+       * honest rendering of an acceptance recorded from a paper walk-down.
+       *
+       * The image is fetched by the BROWSER from the governed document route, so a reader who may
+       * not open the signature does not get it printed for them by the server.
+       */
+      signatures={[
+        'Project Manager',
+        pkg.acceptanceSignatureDocumentId
+          ? {
+              label: 'Client Representative Acceptance',
+              src: `/api/documents/${encodeURIComponent(pkg.acceptanceSignatureDocumentId)}/content`,
+              attribution: `Signed by ${pkg.clientRepresentative || 'the client representative'}${pkg.acceptedAt ? ` on ${pkg.acceptedAt.slice(0, 10)}` : ''}`,
+            }
+          : {
+              label: 'Client Representative Acceptance',
+              attribution: pkg.status === 'accepted'
+                ? `Recorded for ${pkg.clientRepresentative || 'the client representative'} without a captured signature`
+                : 'Not yet accepted',
+            },
+      ]}
     />
   );
 }

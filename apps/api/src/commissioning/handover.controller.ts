@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsBoolean, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { Permissions, TenantContext } from '@aura/core';
+import { DmsService, Permissions, TenantContext } from '@aura/core';
 import { HandoverService, type HandoverView } from '@aura/commissioning';
 
 class CreateHandoverDto {
@@ -23,10 +23,51 @@ class AcceptDto {
   @IsString() clientRepresentative!: string;
   @IsOptional() @IsString() warrantyStartDate?: string;
   @IsOptional() @IsInt() @Min(0) warrantyMonths?: number;
+  /**
+   * The client representative's signature, as the `data:` URL the signature pad produces.
+   *
+   * A STRING RATHER THAN A MULTIPART FILE, deliberately. Acceptance is one act — the client signs
+   * and the handover closes — and splitting it into "upload, then accept" would let a package be
+   * accepted with no signature and have one bolted on afterwards by somebody else. The bytes are
+   * decoded and stored server-side, so what is governed is the same as for any other upload; only
+   * the transport differs, and it matches what a canvas natively produces.
+   */
+  @IsOptional() @IsString() signature?: string;
 }
 
 class RejectDto {
   @IsString() reason!: string;
+}
+
+/**
+ * A signature pad produces `data:image/png;base64,…`. Turn that into bytes we can store.
+ *
+ * The media type here decides only the FILE NAME'S EXTENSION and what we declare to storage.
+ * Whether the bytes may be kept under `signature` is decided by DmsService from the content
+ * itself, so a caller relabelling a spreadsheet as `image/png` changes the extension and nothing
+ * that matters.
+ *
+ * The cap is on the DECODED length. A signature is a few kilobytes of ink; the limit exists so a
+ * JSON body cannot be used to push a large file through a route that is not an upload route, and
+ * it is generous enough for a scanned page.
+ */
+const SIGNATURE_MAX_BYTES = 2 * 1024 * 1024;
+const DATA_URL = /^data:([a-z0-9.+-]+\/[a-z0-9.+-]+)?(;charset=[a-z0-9-]+)?;base64,([a-z0-9+/=\s]+)$/i;
+
+function decodeDataUrl(value: string): { data: Buffer; contentType: string; extension: string } {
+  const match = DATA_URL.exec(value.trim());
+  if (!match) {
+    throw new BadRequestException('the signature must be a base64 `data:` URL, which is what a signature pad produces');
+  }
+  const contentType = (match[1] || 'application/octet-stream').toLowerCase();
+  const data = Buffer.from(match[3].replace(/\s+/g, ''), 'base64');
+  if (!data.length) throw new BadRequestException('the signature is empty — nothing was drawn');
+  if (data.length > SIGNATURE_MAX_BYTES) {
+    throw new BadRequestException(`the signature is ${Math.round(data.length / 1024)}KB; the limit is ${SIGNATURE_MAX_BYTES / 1024}KB`);
+  }
+  const subtype = contentType.split('/')[1] ?? 'bin';
+  const extension = subtype === 'jpeg' ? 'jpg' : subtype.replace(/[^a-z0-9]/g, '') || 'bin';
+  return { data, contentType, extension };
 }
 
 /**
@@ -40,6 +81,9 @@ export class HandoverController {
   constructor(
     private readonly service: HandoverService,
     private readonly tenant: TenantContext,
+    // The signature is a file like any other, so it goes where every other file goes: judged by
+    // the file-type policy, governed by the document access engine, never into a business column.
+    private readonly dms: DmsService,
   ) {}
 
   // ── O&M deliverables (TC-GATE-5) ─────────────────────────────────────────────────────────────
@@ -265,15 +309,68 @@ export class HandoverController {
     return this.service.submit(id, ctx.tenantId, ctx.actorId);
   }
 
+  /**
+   * CLIENT ACCEPTANCE — and the signature that makes it one.
+   *
+   * The screen has offered a "Client Representative Acceptance Signature" pad since this package
+   * existed, wired to a handler that did nothing with the stroke. So the evidence of the act that
+   * starts the warranty and defects-liability clock was a free-text name, typed by one of OUR
+   * users, naming somebody on the client's side.
+   *
+   * The signature is stored BEFORE the acceptance is recorded and the acceptance references it, so
+   * a package never reaches `accepted` pointing at a document that was refused. If the acceptance
+   * then fails its own guards — wrong status, or the submitter trying to accept their own
+   * handover — an orphan signature document is left behind, which is the safe direction: a stored
+   * file nothing references is inert, whereas a reference to nothing is a record that looks like
+   * evidence.
+   */
   @Put(':id/accept')
   @Permissions('commissioning.handover.accept')
-  accept(@Param('id') id: string, @Body() dto: AcceptDto): Promise<HandoverView> {
+  async accept(@Param('id') id: string, @Body() dto: AcceptDto): Promise<HandoverView> {
     if (!dto?.clientRepresentative?.trim()) throw new BadRequestException('clientRepresentative is required');
     const ctx = this.tenant.get();
+
+    // 404 BEFORE ANYTHING IS STORED. Without this, a signature for a package that does not exist
+    // would be written to storage and then thrown away by the service's own lookup.
+    const pkg = await this.service.get(id, ctx.tenantId);
+    if (!pkg) throw new NotFoundException(`handover package ${id} not found`);
+
+    let signature: { documentId: string; hash: string } | null = null;
+    if (dto.signature?.trim()) {
+      const decoded = decodeDataUrl(dto.signature);
+      const stored = await this.dms.createDocument(
+        {
+          tenantId: ctx.tenantId,
+          companyId: ctx.companyId,
+          // The category the file-type policy judges it by: images and PDFs, from the magic bytes,
+          // never from the name or the declared type. A pad produces a PNG; a scanned wet-ink
+          // acceptance arrives as a PDF; anything else is refused here rather than filed as a
+          // signature.
+          kind: 'signature',
+          title: `Client acceptance signature — ${pkg.code}`,
+          aggregateType: 'commissioning.handover',
+          aggregateId: id,
+          createdBy: ctx.actorId ?? null,
+        },
+        { fileName: `acceptance-signature-${pkg.code}.${decoded.extension}`, contentType: decoded.contentType, data: decoded.data },
+      );
+      // COMPUTED BY DMS, never taken from the caller — the same rule the site evidence route
+      // follows. A hash supplied by whoever sent the image attests to nothing.
+      //
+      // A version with no checksum is refused rather than stored half-evidenced: the pair is what
+      // makes this a record, and a reference nothing attests to would read as one without being
+      // one. In practice storage always computes it; this is the branch that must never become a
+      // silent `?? ''`.
+      const checksum = stored.versions[0]?.checksum;
+      if (!checksum) throw new BadRequestException('the signature was stored without a checksum, so the acceptance cannot attest to it');
+      signature = { documentId: stored.document.id, hash: checksum };
+    }
+
     return this.service.accept(id, ctx.tenantId, {
       clientRepresentative: dto.clientRepresentative,
       warrantyStartDate: dto.warrantyStartDate,
       warrantyMonths: dto.warrantyMonths,
+      signature,
     }, ctx.actorId);
   }
 

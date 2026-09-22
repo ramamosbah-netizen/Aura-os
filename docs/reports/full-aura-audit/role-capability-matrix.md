@@ -340,7 +340,7 @@
 | Project Manager | HO-03 | PARTIAL | UNVERIFIED |
 | Project Manager | HO-04 | PARTIAL | UNVERIFIED |
 | Project Manager | HO-05 | UNVERIFIED | UNVERIFIED |
-| Project Manager | HO-06 | PARTIAL | UNVERIFIED |
+| Project Manager | HO-06 | COMPLETE | UNVERIFIED |
 | Project Manager | HO-07 | COMPLETE | UNVERIFIED |
 | Project Manager | HO-08 | DISCONNECTED | UNVERIFIED |
 | Project Manager | HO-09 | PARTIAL | UNVERIFIED |
@@ -842,7 +842,7 @@
 | T&C Engineer | HO-03 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-04 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-05 | UNVERIFIED | UNVERIFIED |
-| T&C Engineer | HO-06 | PARTIAL | UNVERIFIED |
+| T&C Engineer | HO-06 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-07 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-08 | DISCONNECTED | UNVERIFIED |
 | T&C Engineer | HO-09 | PARTIAL | UNVERIFIED |
@@ -879,7 +879,7 @@
 | Handover / FM | HO-03 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-04 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-05 | UNVERIFIED | UNVERIFIED |
-| Handover / FM | HO-06 | PARTIAL | UNVERIFIED |
+| Handover / FM | HO-06 | COMPLETE | UNVERIFIED |
 | Handover / FM | HO-07 | COMPLETE | UNVERIFIED |
 | Handover / FM | HO-08 | DISCONNECTED | UNVERIFIED |
 | Handover / FM | HO-09 | PARTIAL | UNVERIFIED |

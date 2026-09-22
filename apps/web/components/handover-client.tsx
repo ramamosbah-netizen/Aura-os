@@ -9,6 +9,7 @@ import ExportButton from './export-button';
 import NextBestActionBanner from './ui/next-best-action-banner';
 import SaveViewButton from './save-view-button';
 import SignatureCanvas from './ui/signature-canvas';
+import DocumentFileLink from './document-file-link';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 interface Project { id: string; title: string }
@@ -42,6 +43,12 @@ interface HandoverPackage {
   submittedAt: string | null;
   acceptedAt: string | null;
   clientRepresentative: string | null;
+  /**
+   * The signature the client gave, as a reference to the governed document holding it. Null means
+   * none was captured — which this screen SAYS, because an acceptance recorded from a paper
+   * walk-down is a real acceptance and pretending otherwise is the defect one step along.
+   */
+  acceptanceSignatureDocumentId: string | null;
   warrantyStartDate: string | null;
   warrantyMonths: number | null;
   remarks: string | null;
@@ -78,6 +85,9 @@ export default function HandoverClient({
   const [title, setTitle] = useState('');
   const [clientRep, setClientRep] = useState<Record<string, string>>({});
   const [warrantyMonths, setWarrantyMonths] = useState<Record<string, string>>({});
+  // The ink, per package, until it is sent with the acceptance. Held here rather than inside
+  // SignatureCanvas because the accept request has to be able to read it.
+  const [signatures, setSignatures] = useState<Record<string, string | null>>({});
   // One package open at a time. A card carries a checklist note, an action row and a signature pad,
   // so several open at once is the wall this was meant to remove. The caret is dead until React has
   // attached, because a click that only navigates would look like a toggle that does nothing.
@@ -118,12 +128,34 @@ export default function HandoverClient({
     const updated = await call(`/api/commissioning/handovers/${p.id}/submit`, 'PUT', {});
     if (updated) patch(updated);
   }
+  /**
+   * THE SIGNATURE IS SENT WITH THE ACCEPTANCE.
+   *
+   * The pad below has been on this screen since the package existed, wired to a handler that
+   * discarded the stroke: the client signed, saw their signature drawn back, and nothing left the
+   * browser. All that was recorded of the act that starts the warranty clock was a name one of OUR
+   * users typed into a text box.
+   *
+   * One request, not upload-then-accept: acceptance is a single act, and splitting it would let a
+   * package reach `accepted` with nothing signed and have a signature attached afterwards by
+   * somebody else. The server decodes it, judges the bytes, stores them in DMS and records the
+   * reference — the pad is a way of producing a file, not a second kind of storage.
+   */
   async function accept(p: HandoverPackage) {
     const rep = clientRep[p.id];
     if (!rep?.trim()) { setError('A client representative is required to accept handover.'); return; }
     const months = warrantyMonths[p.id] ? Number(warrantyMonths[p.id]) : undefined;
-    const updated = await call(`/api/commissioning/handovers/${p.id}/accept`, 'PUT', { clientRepresentative: rep, warrantyMonths: months });
-    if (updated) patch(updated);
+    const updated = await call(`/api/commissioning/handovers/${p.id}/accept`, 'PUT', {
+      clientRepresentative: rep,
+      warrantyMonths: months,
+      signature: signatures[p.id] ?? undefined,
+    });
+    if (updated) {
+      patch(updated);
+      // Drop the ink once it is stored, so a second package on the same screen cannot inherit the
+      // signature a different client just gave.
+      setSignatures((prev) => { const next = { ...prev }; delete next[p.id]; return next; });
+    }
   }
   async function reject(p: HandoverPackage) {
     const reason = window.prompt(`Reason ${p.code} was rejected:`);
@@ -319,6 +351,25 @@ export default function HandoverClient({
                       <p style={st.signoff}>
                         ✓ Accepted {p.acceptedAt ? new Date(p.acceptedAt).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : ''} by <strong>{p.clientRepresentative}</strong>
                         {p.warrantyStartDate ? ` — warranty: ${p.warrantyMonths ?? 12} months from ${p.warrantyStartDate}` : ''}
+                        {' — '}
+                        {/*
+                          WHAT IT IS EVIDENCED BY, never left to inference. A signed acceptance
+                          offers the signature; one recorded from paper or email says so in those
+                          words. The alternative — showing the same line either way — is how a
+                          name somebody typed comes to read as a signature somebody gave.
+                        */}
+                        {p.acceptanceSignatureDocumentId ? (
+                          <span data-testid={`handover-accepted-signature-${p.code}`}>
+                            signed:{' '}
+                            <DocumentFileLink
+                              documentId={p.acceptanceSignatureDocumentId}
+                              title={`Client acceptance signature — ${p.code}`}
+                              label="Open signature"
+                            />
+                          </span>
+                        ) : (
+                          <span data-testid={`handover-accepted-unsigned-${p.code}`}>recorded without a captured signature</span>
+                        )}
                       </p>
                     ) : (
                       <div style={st.actions}>
@@ -341,8 +392,13 @@ export default function HandoverClient({
                               <button onClick={() => accept(p)} style={st.btnSmGood}>Accept ✓</button>
                               <button onClick={() => reject(p)} style={st.btnSmDanger}>Reject</button>
                             </div>
-                            <div style={{ marginTop: 8 }}>
-                              <SignatureCanvas label="Client Representative Acceptance Signature" onChange={() => {}} height={110} />
+                            <div style={{ marginTop: 8 }} data-testid={`handover-signature-${p.code}`}>
+                              <SignatureCanvas
+                                label="Client Representative Acceptance Signature"
+                                value={signatures[p.id] ?? null}
+                                onChange={(dataUrl) => setSignatures((prev) => ({ ...prev, [p.id]: dataUrl }))}
+                                height={110}
+                              />
                             </div>
                           </>
                         )}

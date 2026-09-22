@@ -32,6 +32,40 @@ const H = () => apiAuthHeaders();
 const stamp = () => Date.now().toString().slice(-6);
 
 /**
+ * A REAL PNG, because the file-type policy judges the magic bytes and not the name.
+ *
+ * `signature` is a declared category holding images and PDFs, so this is the shape a pad
+ * produces: the eight-byte PNG signature and a minimal valid body. The spec asserts the download
+ * comes back byte-identical, so this constant is also the expected result.
+ */
+const SIGNATURE_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+  'base64',
+);
+const SIGNATURE_DATA_URL = `data:image/png;base64,${SIGNATURE_BYTES.toString('base64')}`;
+
+/**
+ * A token for a named test actor, or null when this environment cannot hold them.
+ *
+ * Global setup mints the session, alt and viewer identities and no others. A denial is only worth
+ * asserting against an identity that really exists with really restricted grants, so this returns
+ * null rather than throwing and the caller SKIPS that assertion \u2014 which is visible \u2014 instead of
+ * proving a refusal against an account the tier never created, which would pass for the wrong
+ * reason.
+ */
+async function mintToken(
+  req: import('@playwright/test').APIRequestContext,
+  username: string,
+): Promise<Record<string, string> | null> {
+  const res = await req
+    .post(`${API}/api/v1/auth/login`, { data: { username, password: process.env.E2E_PASSWORD ?? 'e2e-password' } })
+    .catch(() => null);
+  if (!res?.ok()) return null;
+  const token = ((await res.json()) as { token?: string }).token;
+  return token ? { Authorization: `Bearer ${token}` } : null;
+}
+
+/**
  * Put the real document behind a register entry and RELEASE it, as the three people who do it.
  *
  * The register held no content until DOC-CONTENT-01, so this chain walked its whole length
@@ -280,12 +314,91 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   });
   expect([200, 201, 409].includes(grant.status()), `granting the acceptor r-handover-fm: ${await grant.text()}`).toBe(true);
 
+  // A SIGNATURE THAT IS NOT AN IMAGE IS NOT A SIGNATURE. Refused before the acceptance is
+  // recorded, so the package cannot reach `accepted` pointing at something the policy rejected.
+  const notASignature = await req.put(`${HO}/${pkg.id}/accept`, {
+    headers: alt!,
+    data: {
+      clientRepresentative: 'Client Rep',
+      signature: `data:image/png;base64,${Buffer.from('PK\u0003\u0004 not an image at all').toString('base64')}`,
+    },
+  });
+  expect(notASignature.status(), 'the file-type policy judges the BYTES, not the declared type').toBe(400);
+
   const accepted = await req.put(`${HO}/${pkg.id}/accept`, {
     headers: alt!,
-    data: { clientRepresentative: 'Client Rep', warrantyStartDate: new Date().toISOString().slice(0, 10), warrantyMonths: 12 },
+    data: {
+      clientRepresentative: 'Client Rep',
+      warrantyStartDate: new Date().toISOString().slice(0, 10),
+      warrantyMonths: 12,
+      // WHAT THE PAD PRODUCES. The acceptance screen has shown a "Client Representative
+      // Acceptance Signature" canvas since this package existed, wired to a handler that
+      // discarded the stroke — so the whole evidence of the act that starts the warranty clock
+      // was a name one of OUR users typed into a text box.
+      signature: SIGNATURE_DATA_URL,
+    },
   });
   expect(accepted.ok(), `an accepted package is the client's word — ${await accepted.text()}`).toBe(true);
-  expect((await accepted.json()).status).toBe('accepted');
+  const acceptedPkg = await accepted.json() as {
+    status: string; acceptedBy: string | null; clientRepresentative: string | null;
+    acceptanceSignatureDocumentId: string | null; acceptanceSignatureHash: string | null;
+  };
+  expect(acceptedPkg.status).toBe('accepted');
+
+  // ── 10a. HO-06 — CLIENT ACCEPTANCE, AND WHAT IT IS EVIDENCED BY ─────────────────────────────
+  //
+  // Both names, kept apart. `clientRepresentative` is the person on the CLIENT's side, who holds
+  // no AURA account; `acceptedBy` is the Handover/FM user who recorded it. Asserting them
+  // separately is what stops an internal user being credited with the client's decision — the
+  // same shape ENG-04 settled for an external approval and HO-ACK-01 for a transmittal receipt.
+  expect(acceptedPkg.clientRepresentative).toBe('Client Rep');
+  expect(acceptedPkg.acceptedBy, 'the recorder is the second actor, never the submitter').toBe(
+    process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker',
+  );
+
+  // THE PAIR, or nothing. A reference with no checksum cannot be checked against the bytes; a
+  // checksum with no reference names nothing.
+  expect(acceptedPkg.acceptanceSignatureDocumentId, 'the signature must be kept, not discarded').toBeTruthy();
+  expect(acceptedPkg.acceptanceSignatureHash, 'and the acceptance carries its own tamper-evidence').toBeTruthy();
+
+  const signatureId = acceptedPkg.acceptanceSignatureDocumentId!;
+
+  // BYTE-IDENTICAL, which is the only version of "the signature was kept" that means anything.
+  // A route that returns *a* file for this id would satisfy a 200-and-non-empty assertion.
+  const signatureFile = await req.get(`${API}/api/v1/documents/${signatureId}/content`, { headers: alt! });
+  expect(signatureFile.status(), 'whoever may read the package may open what was signed').toBe(200);
+  expect(Buffer.from(await signatureFile.body()).equals(SIGNATURE_BYTES),
+    'the stored signature must be the stroke the client gave, unchanged').toBe(true);
+
+  // INHERITED FROM THE PACKAGE, not owned by the recorder. DMS creates the document with no
+  // shares, so without the context provider the Handover/FM user who recorded the acceptance is
+  // its ONLY reader — while the PM, the T&C engineer and the commercial team, who can all see
+  // THAT it was accepted, could not open what was signed. A warranty claim turns on this file.
+  const asSubmitter = await req.get(`${API}/api/v1/documents/${signatureId}/content`, { headers: H() });
+  expect(asSubmitter.status(), 'the PM who submitted the handover must be able to open its signature').toBe(200);
+
+  // AND REFUSED TO SOMEBODY WHO MAY NOT READ THE PACKAGE.
+  //
+  // The viewer identity holds `workspace.me.read` and nothing else, so inheritance gives it
+  // nothing here — which makes it the cleanest denial in the suite: not "a role with the wrong
+  // permissions" but a role with almost none. The Storekeeper (`inventory.*`) is the fallback
+  // where the viewer is not seeded.
+  //
+  // SKIPPED rather than faked when neither can sign in. A refusal proved against an account the
+  // environment never created is a 403 for the wrong reason, and it would report the access rule
+  // as working on evidence that says nothing about it.
+  const outsider =
+    (await mintToken(req, process.env.E2E_VIEWER_USERNAME ?? 'u-e2e-viewer')) ??
+    (await mintToken(req, process.env.E2E_STOREKEEPER_USERNAME ?? 'u-e2e-storekeeper'));
+  if (outsider) {
+    const refused = await req.get(`${API}/api/v1/documents/${signatureId}/content`, { headers: outsider });
+    expect(refused.status(), 'somebody who cannot read the handover must not open what closed it').toBe(403);
+    const body = await refused.text();
+    // The refusal must not describe the thing it is refusing.
+    for (const leak of ['storageKey', 'storage_key', 'checksum', 'acceptance-signature']) {
+      expect(body, `a refusal must not disclose ${leak}`).not.toContain(leak);
+    }
+  }
 
   // ── 10b. DOWNLOADABLE ARTIFACTS — the clause HO-01, HO-02 and HO-07 all carry ───────────────
   //
@@ -335,6 +448,39 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   const fromScreen = await page.request.get(`${baseURL}${href}`);
   expect(fromScreen.status(), 'what the screen offers must actually open').toBe(200);
   expect((await fromScreen.body()).length).toBeGreaterThan(0);
+
+  // ── 10b-ii. HO-06 ON THE SCREEN, AND ON THE CERTIFICATE ─────────────────────────────────────
+  //
+  // An API-level proof passes against a screen that shows a tick nobody can look behind. The
+  // accepted record has to OFFER the signature, and the certificate the client is handed has to
+  // show it — this sheet printed two ruled lines under a note asserting that "signed acceptance
+  // signifies official system handover", which was a document claiming a signature the system had
+  // no way to hold.
+  await page.goto(`/handover?project=${projectId}`, { waitUntil: 'domcontentloaded' });
+  // A package is a disclosure and starts closed, so a person opens it before they can read what
+  // the acceptance was evidenced by. The button stays inert until React attaches.
+  const openPkg = page.getByTestId(`handover-open-${pkgCode}`);
+  await expect(openPkg).toBeEnabled({ timeout: 30_000 });
+  await openPkg.click();
+
+  const signedOnScreen = page.getByTestId(`handover-accepted-signature-${pkgCode}`);
+  await expect(signedOnScreen, 'an accepted package must offer the signature it was accepted on')
+    .toBeVisible({ timeout: 30_000 });
+  // And it must say which of the two kinds of acceptance this is. Rendering the same line either
+  // way is how a name somebody typed comes to read as a signature somebody gave.
+  await expect(page.getByTestId(`handover-accepted-unsigned-${pkgCode}`)).toHaveCount(0);
+
+  await page.goto(`/handover/${pkg.id}/print`, { waitUntil: 'domcontentloaded' });
+  const printedSignature = page.getByAltText('Signature — Client Representative Acceptance');
+  await expect(printedSignature, 'the certificate must print what was signed').toBeVisible({ timeout: 30_000 });
+  expect(await printedSignature.getAttribute('src'), 'and fetch it through the governed route')
+    .toContain(`/api/documents/${signatureId}/content`);
+  // The image has to actually load for the reader — a broken <img> on a printed certificate is
+  // the same failure as the blank line it replaced.
+  expect(
+    await printedSignature.evaluate((img) => (img as HTMLImageElement).naturalWidth > 0),
+    'the signature on the certificate must render, not 404 behind the alt text',
+  ).toBe(true);
 
   // ── 10c. DELIVERED, AND ACKNOWLEDGED BY THE RECIPIENT ───────────────────────────────────────
   //

@@ -435,7 +435,15 @@ export class HandoverService {
   async accept(
     id: string,
     tenantId: string,
-    patch: { clientRepresentative: string; warrantyStartDate?: string; warrantyMonths?: number },
+    patch: {
+      clientRepresentative: string;
+      warrantyStartDate?: string;
+      warrantyMonths?: number;
+      // The signature the client gave, already stored and hashed by DMS. The controller does the
+      // storing, exactly as the site evidence route does, so the bytes are judged by the
+      // file-type policy and governed by the document access engine before they reach here.
+      signature?: { documentId: string; hash: string } | null;
+    },
     actorId?: string | null,
   ): Promise<HandoverView> {
     const next = accept(await this.mustFind(id, tenantId), patch, actorId ?? null);
@@ -456,12 +464,17 @@ export class HandoverService {
           projectId: next.projectId,
           projectName: next.projectName,
           clientRepresentative: next.clientRepresentative,
+          // The reference and its checksum, never the image: an audit event is replayed and
+          // exported, and a base64 signature in a payload is a copy of the document outside the
+          // one place that governs who may open it.
+          acceptanceSignatureDocumentId: next.acceptanceSignatureDocumentId,
+          acceptanceSignatureHash: next.acceptanceSignatureHash,
           warrantyStartDate: next.warrantyStartDate,
           warrantyMonths: next.warrantyMonths,
         },
       }),
     ]);
-    this.logger.log(`[Handover] ${next.code} accepted by ${patch.clientRepresentative} — warranty starts ${next.warrantyStartDate}`);
+    this.logger.log(`[Handover] ${next.code} accepted by ${patch.clientRepresentative} (${next.acceptanceSignatureDocumentId ? 'signature captured' : 'no signature captured'}) — warranty starts ${next.warrantyStartDate}`);
     return this.withStats(next);
   }
 

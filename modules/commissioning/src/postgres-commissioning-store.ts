@@ -275,9 +275,10 @@ export class PostgresCommissioningStore implements CommissioningStore {
       `insert into public.aura_handover_packages
          (id, tenant_id, company_id, project_id, project_name, code, title, status, checklist,
           submitted_by, submitted_at, accepted_by, accepted_at, rejected_by, rejected_at,
-          client_representative, warranty_start_date, warranty_months,
+          client_representative, acceptance_signature_document_id, acceptance_signature_hash,
+          warranty_start_date, warranty_months,
           remarks, created_by, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        on conflict (id) do update set
          project_name = excluded.project_name,
          title = excluded.title,
@@ -290,6 +291,8 @@ export class PostgresCommissioningStore implements CommissioningStore {
          rejected_by = excluded.rejected_by,
          rejected_at = excluded.rejected_at,
          client_representative = excluded.client_representative,
+         acceptance_signature_document_id = excluded.acceptance_signature_document_id,
+         acceptance_signature_hash = excluded.acceptance_signature_hash,
          warranty_start_date = excluded.warranty_start_date,
          warranty_months = excluded.warranty_months,
          remarks = excluded.remarks,
@@ -298,7 +301,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
         p.id, p.tenantId, p.companyId, p.projectId, p.projectName, p.code, p.title, p.status,
         JSON.stringify(p.checklist),
         p.submittedBy, p.submittedAt, p.acceptedBy, p.acceptedAt, p.rejectedBy, p.rejectedAt,
-        p.clientRepresentative,
+        p.clientRepresentative, p.acceptanceSignatureDocumentId, p.acceptanceSignatureHash,
         p.warrantyStartDate, p.warrantyMonths, p.remarks, p.createdBy, p.createdAt, p.updatedAt,
       ],
     );
@@ -662,6 +665,8 @@ interface HandoverRow {
   submitted_at: string | null;
   accepted_at: string | null;
   client_representative: string | null;
+  acceptance_signature_document_id: string | null;
+  acceptance_signature_hash: string | null;
   warranty_start_date: string | null;
   warranty_months: number | null;
   remarks: string | null;
@@ -676,7 +681,8 @@ interface HandoverRow {
 
 const HANDOVER_COLS = `id, tenant_id, company_id, project_id, project_name, code, title, status,
   checklist, submitted_by, submitted_at, accepted_by, accepted_at, rejected_by, rejected_at,
-  client_representative, warranty_start_date::text,
+  client_representative, acceptance_signature_document_id, acceptance_signature_hash,
+  warranty_start_date::text,
   warranty_months, remarks, created_by, created_at, updated_at`;
 
 function toHandover(r: HandoverRow): HandoverPackage {
@@ -705,6 +711,8 @@ function toHandover(r: HandoverRow): HandoverPackage {
     rejectedBy: r.rejected_by ?? null,
     rejectedAt: r.rejected_at ?? null,
     clientRepresentative: r.client_representative,
+    acceptanceSignatureDocumentId: r.acceptance_signature_document_id ?? null,
+    acceptanceSignatureHash: r.acceptance_signature_hash ?? null,
     warrantyStartDate: r.warranty_start_date,
     warrantyMonths: r.warranty_months == null ? null : Number(r.warranty_months),
     remarks: r.remarks,

@@ -787,12 +787,12 @@
 | T&C | XOP-16 | WRONG_BEHAVIOR |
 | T&C | XOP-17 | PARTIAL |
 | Handover | HO-01 | PARTIAL |
-| Handover | HO-02 | PARTIAL |
+| Handover | HO-02 | COMPLETE |
 | Handover | HO-03 | PARTIAL |
 | Handover | HO-04 | PARTIAL |
 | Handover | HO-05 | UNVERIFIED |
 | Handover | HO-06 | PARTIAL |
-| Handover | HO-07 | PARTIAL |
+| Handover | HO-07 | COMPLETE |
 | Handover | HO-08 | DISCONNECTED |
 | Handover | HO-09 | PARTIAL |
 | Handover | HO-10 | UNVERIFIED |
@@ -834,12 +834,12 @@
 | Handover | XOP-16 | WRONG_BEHAVIOR |
 | Handover | XOP-17 | PARTIAL |
 | Warranty / Service | HO-01 | PARTIAL |
-| Warranty / Service | HO-02 | PARTIAL |
+| Warranty / Service | HO-02 | COMPLETE |
 | Warranty / Service | HO-03 | PARTIAL |
 | Warranty / Service | HO-04 | PARTIAL |
 | Warranty / Service | HO-05 | UNVERIFIED |
 | Warranty / Service | HO-06 | PARTIAL |
-| Warranty / Service | HO-07 | PARTIAL |
+| Warranty / Service | HO-07 | COMPLETE |
 | Warranty / Service | HO-08 | DISCONNECTED |
 | Warranty / Service | HO-09 | PARTIAL |
 | Warranty / Service | HO-10 | UNVERIFIED |
@@ -881,12 +881,12 @@
 | Warranty / Service | XOP-16 | WRONG_BEHAVIOR |
 | Warranty / Service | XOP-17 | PARTIAL |
 | Closeout | HO-01 | PARTIAL |
-| Closeout | HO-02 | PARTIAL |
+| Closeout | HO-02 | COMPLETE |
 | Closeout | HO-03 | PARTIAL |
 | Closeout | HO-04 | PARTIAL |
 | Closeout | HO-05 | UNVERIFIED |
 | Closeout | HO-06 | PARTIAL |
-| Closeout | HO-07 | PARTIAL |
+| Closeout | HO-07 | COMPLETE |
 | Closeout | HO-08 | DISCONNECTED |
 | Closeout | HO-09 | PARTIAL |
 | Closeout | HO-10 | UNVERIFIED |

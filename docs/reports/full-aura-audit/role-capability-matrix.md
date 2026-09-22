@@ -336,12 +336,12 @@
 | Project Manager | COM-09 | BACKEND_ONLY | UNVERIFIED |
 | Project Manager | COM-10 | UNVERIFIED | UNVERIFIED |
 | Project Manager | HO-01 | PARTIAL | UNVERIFIED |
-| Project Manager | HO-02 | PARTIAL | UNVERIFIED |
+| Project Manager | HO-02 | COMPLETE | UNVERIFIED |
 | Project Manager | HO-03 | PARTIAL | UNVERIFIED |
 | Project Manager | HO-04 | PARTIAL | UNVERIFIED |
 | Project Manager | HO-05 | UNVERIFIED | UNVERIFIED |
 | Project Manager | HO-06 | PARTIAL | UNVERIFIED |
-| Project Manager | HO-07 | PARTIAL | UNVERIFIED |
+| Project Manager | HO-07 | COMPLETE | UNVERIFIED |
 | Project Manager | HO-08 | DISCONNECTED | UNVERIFIED |
 | Project Manager | HO-09 | PARTIAL | UNVERIFIED |
 | Project Manager | HO-10 | UNVERIFIED | UNVERIFIED |
@@ -838,12 +838,12 @@
 | T&C Engineer | TC-10 | UNVERIFIED | UNVERIFIED |
 | T&C Engineer | TC-11 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-01 | PARTIAL | UNVERIFIED |
-| T&C Engineer | HO-02 | PARTIAL | UNVERIFIED |
+| T&C Engineer | HO-02 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-03 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-04 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-05 | UNVERIFIED | UNVERIFIED |
 | T&C Engineer | HO-06 | PARTIAL | UNVERIFIED |
-| T&C Engineer | HO-07 | PARTIAL | UNVERIFIED |
+| T&C Engineer | HO-07 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-08 | DISCONNECTED | UNVERIFIED |
 | T&C Engineer | HO-09 | PARTIAL | UNVERIFIED |
 | T&C Engineer | HO-10 | UNVERIFIED | UNVERIFIED |
@@ -875,12 +875,12 @@
 | T&C Engineer | XOP-16 | WRONG_BEHAVIOR | UNVERIFIED |
 | T&C Engineer | XOP-17 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-01 | PARTIAL | UNVERIFIED |
-| Handover / FM | HO-02 | PARTIAL | UNVERIFIED |
+| Handover / FM | HO-02 | COMPLETE | UNVERIFIED |
 | Handover / FM | HO-03 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-04 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-05 | UNVERIFIED | UNVERIFIED |
 | Handover / FM | HO-06 | PARTIAL | UNVERIFIED |
-| Handover / FM | HO-07 | PARTIAL | UNVERIFIED |
+| Handover / FM | HO-07 | COMPLETE | UNVERIFIED |
 | Handover / FM | HO-08 | DISCONNECTED | UNVERIFIED |
 | Handover / FM | HO-09 | PARTIAL | UNVERIFIED |
 | Handover / FM | HO-10 | UNVERIFIED | UNVERIFIED |

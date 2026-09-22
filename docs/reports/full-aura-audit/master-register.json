@@ -3907,7 +3907,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Handover / DocControl / AMC / Projects",
       "evidence": [
         "R-J26"
@@ -3915,17 +3915,17 @@
       "source": "modules/commissioning/src/handover.service.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "PARTIAL",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh live dossier proof assembled commissioning certificate, as-built, O&M and training authorities, opened a controlled transmittal, retained acknowledgement and kept the issued revision after a later superseding revision.",
-      "acceptanceProof": "Representative Handover/DocControl roles issue and deliver the complete real project dossier with downloadable artifacts and recipient acknowledgement."
+      "currentBehavior": "A handover pack now hands over the manual, not its number. The O&M deliverable resolves a controlled document that HAS CONTENT: the author uploads the manual to the revision, a second person approves it, a third releases it, and the dossier line the client reads is a link to that issued document rather than a reference to nothing. Before migration 0376 the register held twenty-two columns of lifecycle provenance and no file, so every O&M deliverable in the product was walked to `accepted` against a document number with nothing underneath it. The artifact is offered only when the reference is sound AND the line is going out — a download beside a line the dossier is withholding would hand over what it just said it would not.",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Representative Handover/DocControl roles issue and deliver the complete real project dossier with downloadable artifacts and recipient acknowledgement” — proved in ONE browser run against the migrated PostgreSQL database with auth ON (journey-tc-handover-closure.spec.ts). REPRESENTATIVE ROLES, each separation asserted by its own refusal rather than assumed: the author is refused approving their own revision (403, “a second pair of eyes is what review means”), the approver is refused issuing what they approved (403, “approving it internally and releasing it outside are two acts”), and the submitter is refused accepting their own handover (403, “acceptance is the client’s side of the exchange”). THE COMPLETE DOSSIER: engineering release → equipment → test points → FAIL → defect → retest PASS → commissioned → certificate → as-built linked → O&M accepted → training acknowledged → spares acknowledged, with all seven readiness gates READY on the screen a person reads before submission is possible. DOWNLOADABLE ARTIFACTS, which is the clause that could not be met before migration 0376 gave a controlled revision anywhere to keep its content: the O&M manual is uploaded by its author, approved by a second person, released by a third, and every included dossier line carrying an artifact answers 200 with a non-empty body. The artifact IS the issued controlled document — asserted by identity against the revision’s own dmsDocumentId — not a copy taken at issue time: DMS owns the bytes and who may download them, DocControl owns the lifecycle, Handover consumes the issued document. ON SCREEN, not only over HTTP: the dossier section is opened, the pack’s disclosure expanded, and the document number is followed as a link to the governed download, because an API-level proof passes against a screen that shows a number nobody can open. DELIVERY AND RECEIPT: submitting opens a controlled transmittal, a recipient is named, it is sent, a receipt cannot be recorded for somebody it was never sent to, and the Document Controller RECORDS the client’s acknowledgement — the ENG-04 shape, frozen deliberately, because a client holds no AURA account and cannot hold `doccontrol.transmittal.acknowledge`. `acknowledgedBy` is the client and `recordedBy` is the controller, asserted separately, so no internal user is credited with the client’s word. DENIAL: the Storekeeper, who holds no document-control read, is refused the artifact (403) with no storage key, filename or checksum in the refusal. ACCEPTED LIMITS, stated rather than implied: HO-01 is NOT promoted with these two. Giving the as-built drawing a real file turned its handover gate BLOCKED, because issuing a revision hard-codes the register entry to `status: 'for_construction'` — so a drawing can either BE the as-built record or have been released, not both, and an as-built that was never released is not one. HO-06 is untouched. The other six delivery modules still have no upload route, so nothing here speaks for them."
     },
     {
       "id": "HO-03",
@@ -4076,7 +4076,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Handover / DocControl / AMC / Projects",
       "evidence": [
         "R-J26"
@@ -4084,17 +4084,17 @@
       "source": "modules/commissioning/src/handover.service.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "PARTIAL",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh live dossier proof assembled commissioning certificate, as-built, O&M and training authorities, opened a controlled transmittal, retained acknowledgement and kept the issued revision after a later superseding revision.",
-      "acceptanceProof": "Representative Handover/DocControl roles issue and deliver the complete real project dossier with downloadable artifacts and recipient acknowledgement."
+      "currentBehavior": "The manifest is issued and its delivery is answerable. Submitting the pack opens a CONTROLLED transmittal — the dossier cites documents Handover does not own, so the conveyance belongs to document control — which names its recipients, is sent, and carries a receipt back. A receipt cannot be recorded for somebody the transmittal was never sent to, and partial receipt is still not receipt: the conveyance reaches `acknowledged` only once every named recipient has answered. The receipt keeps two names apart, WHOSE it is and WHO ENTERED IT, so a Document Controller recording a client’s confirmation is never credited with having given it.",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Representative Handover/DocControl roles issue and deliver the complete real project dossier with downloadable artifacts and recipient acknowledgement” — proved in ONE browser run against the migrated PostgreSQL database with auth ON (journey-tc-handover-closure.spec.ts). REPRESENTATIVE ROLES, each separation asserted by its own refusal rather than assumed: the author is refused approving their own revision (403, “a second pair of eyes is what review means”), the approver is refused issuing what they approved (403, “approving it internally and releasing it outside are two acts”), and the submitter is refused accepting their own handover (403, “acceptance is the client’s side of the exchange”). THE COMPLETE DOSSIER: engineering release → equipment → test points → FAIL → defect → retest PASS → commissioned → certificate → as-built linked → O&M accepted → training acknowledged → spares acknowledged, with all seven readiness gates READY on the screen a person reads before submission is possible. DOWNLOADABLE ARTIFACTS, which is the clause that could not be met before migration 0376 gave a controlled revision anywhere to keep its content: the O&M manual is uploaded by its author, approved by a second person, released by a third, and every included dossier line carrying an artifact answers 200 with a non-empty body. The artifact IS the issued controlled document — asserted by identity against the revision’s own dmsDocumentId — not a copy taken at issue time: DMS owns the bytes and who may download them, DocControl owns the lifecycle, Handover consumes the issued document. ON SCREEN, not only over HTTP: the dossier section is opened, the pack’s disclosure expanded, and the document number is followed as a link to the governed download, because an API-level proof passes against a screen that shows a number nobody can open. DELIVERY AND RECEIPT: submitting opens a controlled transmittal, a recipient is named, it is sent, a receipt cannot be recorded for somebody it was never sent to, and the Document Controller RECORDS the client’s acknowledgement — the ENG-04 shape, frozen deliberately, because a client holds no AURA account and cannot hold `doccontrol.transmittal.acknowledge`. `acknowledgedBy` is the client and `recordedBy` is the controller, asserted separately, so no internal user is credited with the client’s word. DENIAL: the Storekeeper, who holds no document-control read, is refused the artifact (403) with no storage key, filename or checksum in the refusal. ACCEPTED LIMITS, stated rather than implied: HO-01 is NOT promoted with these two. Giving the as-built drawing a real file turned its handover gate BLOCKED, because issuing a revision hard-codes the register entry to `status: 'for_construction'` — so a drawing can either BE the as-built record or have been released, not both, and an as-built that was never released is not one. HO-06 is untouched. The other six delivery modules still have no upload route, so nothing here speaks for them."
     },
     {
       "id": "HO-08",
@@ -9069,8 +9069,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 25,
-      "PARTIAL": 87,
+      "COMPLETE": 27,
+      "PARTIAL": 85,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

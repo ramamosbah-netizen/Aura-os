@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 25 |
-| PARTIAL | 87 |
+| COMPLETE | 27 |
+| PARTIAL | 85 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -140,12 +140,12 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 | TC-10 | Controlled certificate | UNVERIFIED | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-11 | Readiness rollup | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | HO-01 | As-built dossier | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
-| HO-02 | O&M manuals | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
+| HO-02 | O&M manuals | COMPLETE | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-03 | Training acknowledgement | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-04 | Spares acknowledgement | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-05 | Warranty certificates | UNVERIFIED | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-06 | Client acceptance | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
-| HO-07 | Issued manifest and transmittal delivery | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
+| HO-07 | Issued manifest and transmittal delivery | COMPLETE | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-08 | AMC project and client lineage | DISCONNECTED | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-09 | PPM and service calls | PARTIAL | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-10 | Defect liability | UNVERIFIED | Handover / DocControl / AMC / Projects | R-J26 |

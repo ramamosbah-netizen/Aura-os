@@ -840,8 +840,13 @@ export class DocControlService {
   async readProjectDocuments(
     tenantId: Id,
     projectId: Id,
-  ): Promise<Array<{ id: string; documentNumber: string; title: string; revision: string; status: string; discipline: string; docType: string }>> {
+  ): Promise<Array<{ id: string; documentNumber: string; title: string; revision: string; status: string; discipline: string; docType: string; contentDocumentId: string | null }>> {
     const register = await this.listRegisterByProject(tenantId, projectId);
+    // Which of these have a released file behind them. ISSUED only: a drawing that is approved
+    // but not issued has not been let out, and a handover pack offering it for download would be
+    // handing over something document control has not released.
+    const issued = await this.revisionStore.listIssuedContentByProject(projectId, tenantId);
+    const contentFor = new Map(issued.map((r) => [`${r.registerEntryId}::${r.revision}`, r.dmsDocumentId]));
     return register.map((entry) => ({
       id: entry.id,
       documentNumber: entry.documentNumber,
@@ -850,6 +855,9 @@ export class DocControlService {
       status: entry.status as string,
       discipline: entry.discipline as string,
       docType: entry.docType as string,
+      // Matched on the CURRENT revision, so a superseded revision's file is never offered as
+      // though it were the document. Null means no released content, which the dossier says.
+      contentDocumentId: contentFor.get(`${entry.id}::${entry.currentRevision}`) ?? null,
     }));
   }
 

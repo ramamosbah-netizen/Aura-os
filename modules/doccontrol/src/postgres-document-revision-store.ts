@@ -35,6 +35,24 @@ export class PostgresDocumentRevisionStore implements DocumentRevisionStore {
     );
   }
 
+  async listIssuedContentByProject(
+    projectId: string,
+    tenantId: string,
+  ): Promise<Array<{ registerEntryId: string; revision: string; dmsDocumentId: string }>> {
+    const res = await this.pool.query<{ register_entry_id: string; revision: string; dms_document_id: string }>(
+      `select register_entry_id, revision, dms_document_id
+         from public.aura_doccontrol_document_revisions
+        where tenant_id = $1 and project_id = $2
+          and status = 'issued' and dms_document_id is not null`,
+      [tenantId, projectId],
+    );
+    return res.rows.map((r) => ({
+      registerEntryId: r.register_entry_id,
+      revision: r.revision,
+      dmsDocumentId: r.dms_document_id,
+    }));
+  }
+
   async findById(id: string, tenantId: string): Promise<DocumentRevision | null> {
     const res = await this.pool.query(
       `select * from public.aura_doccontrol_document_revisions where id = $1 and tenant_id = $2`,

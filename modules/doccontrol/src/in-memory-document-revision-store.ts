@@ -20,6 +20,17 @@ export class InMemoryDocumentRevisionStore implements DocumentRevisionStore {
       .map((r) => ({ ...r }))
       .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }
+
+  async listIssuedContentByProject(
+    projectId: string,
+    tenantId: string,
+  ): Promise<Array<{ registerEntryId: string; revision: string; dmsDocumentId: string }>> {
+    // The same question the SQL asks, so the two tiers cannot answer differently: issued, in this
+    // project and tenant, and carrying content.
+    return [...this.items.values()]
+      .filter((r) => r.tenantId === tenantId && r.projectId === projectId && r.status === 'issued' && r.dmsDocumentId)
+      .map((r) => ({ registerEntryId: r.registerEntryId, revision: r.revision, dmsDocumentId: r.dmsDocumentId! }));
+  }
 }
 
 export class InMemoryTransmittalAcknowledgementStore implements TransmittalAcknowledgementStore {

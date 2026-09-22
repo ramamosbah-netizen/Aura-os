@@ -31,6 +31,15 @@ export interface ControlledDocumentFact {
   discipline: string;
   /** `RegisterDocType`: drawing | specification | document | bod | calculation */
   docType: string;
+  /**
+   * The DMS document holding this revision's content, when document control has ISSUED one.
+   *
+   * Null is not a failure — it is the honest answer for a document number with no released file
+   * behind it, and the dossier says so on the line rather than offering a link to nothing.
+   * Optional so that a caller which does not supply it (an older fixture, another port) is not
+   * silently treated as "no content".
+   */
+  contentDocumentId?: string | null;
 }
 
 /**

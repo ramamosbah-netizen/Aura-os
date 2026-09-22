@@ -169,6 +169,7 @@ export interface TransmittalFact {
 }
 
 export interface DocControlPort {
+  /** Register entries with, where document control has issued one, the content behind them. */
   readProjectDocuments(tenantId: string, projectId: string): Promise<ControlledDocumentFact[]>;
   /** One call per project, like the register read beside it: a project has few transmittals. */
   readProjectTransmittals(tenantId: string, projectId: string): Promise<TransmittalFact[]>;

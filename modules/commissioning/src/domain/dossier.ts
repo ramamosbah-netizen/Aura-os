@@ -76,6 +76,15 @@ export interface DossierEntry {
   included: boolean;
   /** Why it is not, in words a reader can act on. Null when it is included. */
   note: string | null;
+  /**
+   * The DMS document a recipient can actually download, when document control has ISSUED one.
+   *
+   * NOT A COPY, and not the dossier's own file: it is the controlled document's content, reached
+   * through the register. Handover consumes the issued controlled document; DMS owns the bytes
+   * and decides who may download them. Null where no released file stands behind the reference,
+   * which the line's own `note` already explains.
+   */
+  artifact: string | null;
 }
 
 export interface DossierSection {
@@ -136,7 +145,8 @@ const entry = (
   state: string | null,
   included: boolean,
   note: string | null = null,
-): DossierEntry => ({ kind, sourceId, reference, label, state, included, note });
+  artifact: string | null = null,
+): DossierEntry => ({ kind, sourceId, reference, label, state, included, note, artifact });
 
 export function assembleDossier(facts: DossierFacts): DossierView {
   const codeById = facts.systemCodeById ?? Object.fromEntries(facts.systems.map((s) => [s.id, s.code]));
@@ -195,6 +205,10 @@ export function assembleDossier(facts: DossierFacts): DossierView {
                 : resolved.missing
                   ? `No document "${resolved.reference}" is in the project register.`
                   : 'The register has superseded the revision this points at.',
+        // Offered only when the reference is SOUND and the pack line is actually going out. A
+        // download beside a line the dossier is withholding would hand over what it just said
+        // it would not.
+        accepted && sound ? resolved?.document?.contentDocumentId ?? null : null,
       );
     });
 

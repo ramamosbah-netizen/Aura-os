@@ -51,6 +51,21 @@ export interface DocumentRevisionStore {
   findById(id: string, tenantId: string): Promise<DocumentRevision | null>;
   /** All revisions of a register entry, newest first (the immutable revision history). */
   listByRegisterEntry(registerEntryId: string, tenantId: string): Promise<DocumentRevision[]>;
+  /**
+   * Every ISSUED revision in a project that has content behind it.
+   *
+   * One query rather than a revision read per register entry: a dossier asks about a whole
+   * project's documents at once, and the answer it needs is narrow — which document number,
+   * at which revision, has a file the client can actually be given.
+   *
+   * ISSUED only. A drawing that is approved but not issued has not been released, and a
+   * handover pack that offered it for download would be handing over something document
+   * control has not let out.
+   */
+  listIssuedContentByProject(
+    projectId: string,
+    tenantId: string,
+  ): Promise<Array<{ registerEntryId: string; revision: string; dmsDocumentId: string }>>;
 }
 
 export interface TransmittalAcknowledgementStore {

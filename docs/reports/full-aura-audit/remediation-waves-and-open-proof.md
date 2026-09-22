@@ -30,6 +30,35 @@ The initial `aura_app` password mismatch was resolved by provisioning the existi
 
 This removed the environment blocker and enabled the live evidence recorded above. The frozen register has 55 UNVERIFIED and zero NOT_AUDITED capability leaves. Those 55 are pinned acceptance tasks, and the 181 page templates without fresh browser execution stay visible in the page matrix. No AURA functional-completeness, Business Journeys CLOSED/VERIFIED or Production Ready claim is made.
 
+## The one clause holding HO-01, HO-02 and HO-07, 22 September
+
+All three share an acceptance: *"Representative Handover/DocControl roles issue and deliver the
+complete real project dossier with downloadable artifacts and recipient acknowledgement."*
+
+Proved in one run by `journey-tc-handover-closure.spec.ts`, against the migrated database with
+auth ON: representative roles with each separation asserted by its own refusal (author ≠
+approver ≠ issuer, submitter ≠ accepter); the pack issued and the transmittal sent to a named
+recipient; **downloadable artifacts** — every included dossier line's artifact opens 200 with a
+non-empty body, and it is the ISSUED controlled document rather than a copy.
+
+**What is not proved: recipient acknowledgement, by the recipient.** Two rules meet and leave
+nothing between them:
+
+| | |
+| --- | --- |
+| the domain | only a NAMED RECIPIENT may acknowledge — "this transmittal was not sent to `<x>`; only a named recipient can acknowledge it" |
+| the route | `doccontrol.transmittal.acknowledge` is held by **r-document-controller alone** — a tenant role, which project membership cannot grant, and correctly so: releasing documents outside the company is not a project-team act |
+
+So the only identity that can acknowledge is a Document Controller who is also on the
+distribution. **An external client cannot acknowledge at all**, and a handover dossier goes to a
+client. The spec proves an INTERNAL acknowledgement and says so in place.
+
+This is an AUTHORITY question, not a defect to be patched: either a transmittal recipient
+acknowledges in their own right (which needs a permission a recipient can hold), or the Document
+Controller RECORDS a receipt that arrived by other means (which is the `ENG-04` shape — "decision
+recorded by" — and would make the domain's "only a named recipient" message wrong). It is not
+mine to choose, so HO-01, HO-02 and HO-07 stay PARTIAL and 25/180 stands.
+
 ## Diagnosed unresolved test debt, 22 September
 
 These are **diagnosed and still failing** — test debt with a known cause, not evidence awaiting diagnosis, and NOT passing. Each carries a verdict below; none is repaired. They are recorded here rather than

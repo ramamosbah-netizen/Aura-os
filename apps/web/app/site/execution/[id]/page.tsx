@@ -105,7 +105,25 @@ export default async function SiteReport360({ params }: { params: Promise<{ id: 
       <Section title={`Evidence (${evidence.length})`} testid="tab-evidence">
         {evidence.length === 0 ? <p style={st.paraMuted}>No photos attached.</p> : (
           <ul style={st.evidence}>
-            {evidence.map((e) => <li key={e.id}>📷 {e.description ?? e.fileId} <span style={st.evCat}>[{e.category}]</span>{e.location ? ` · ${e.location}` : ''}</li>)}
+            {/* THE HANDOFF. This listed the description as plain text, so the reviewer could see
+                that a photograph existed and could not open it — a mention is not evidence. The
+                download goes through the same governed route the site engineer's own row uses,
+                so the reviewer's access is decided by the document's ACL and not by this page. */}
+            {evidence.map((e) => (
+              <li key={e.id}>
+                📷{' '}
+                <a
+                  href={`/api/documents/${e.fileId}/content`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-testid={`evidence-open-${e.id}`}
+                  style={{ color: 'var(--accent)', fontWeight: 600 }}
+                >
+                  {e.description ?? e.fileId}
+                </a>{' '}
+                <span style={st.evCat}>[{e.category}]</span>{e.location ? ` · ${e.location}` : ''}
+              </li>
+            ))}
           </ul>
         )}
       </Section>

@@ -53,32 +53,90 @@ test.describe('site evidence, end to end', () => {
     // The screen shows it as picked. That much always worked — and was the whole problem.
     await expect(page.getByText('riser-progress.png')).toBeVisible({ timeout: 15_000 });
 
+    // ── and the SIGNATURE, which is the other half of the finding ────────────────────────────
+    // SIT-04 is "photos AND signature persistence". The canvas emits a PNG data URL and was
+    // dropped by the same missing call, so proving only the photo would leave half the record
+    // unproven while reading as if it were closed.
+    const canvas = page.locator('canvas');
+    await expect(canvas, 'exactly one canvas — the signature pad').toHaveCount(1, { timeout: 15_000 });
+    const box = await canvas.boundingBox();
+    expect(box, 'the signature canvas must be laid out before it can be signed').toBeTruthy();
+    // Events are dispatched ON the element rather than by moving the pointer. React attaches at
+    // the root and reads the native event, so a dispatched MouseEvent with real clientX/clientY
+    // drives the handlers exactly as a person's hand does — without depending on where the pad
+    // happens to sit in the viewport, or on a burst of CDP moves outrunning React's re-render
+    // between `setIsDrawing(true)` and the first `draw`.
+    const at = (dx: number, dy: number) => ({
+      bubbles: true,
+      clientX: Math.round(box!.x + dx),
+      clientY: Math.round(box!.y + box!.height / 2 + dy),
+    });
+    await canvas.dispatchEvent('mousedown', at(24, 0));
+    for (const [dx, dy] of [[48, -14], [72, 14], [96, -14], [120, 14], [144, 0]] as const) {
+      await canvas.dispatchEvent('mousemove', at(dx, dy));
+    }
+    await canvas.dispatchEvent('mouseup', at(144, 0));
+    // The control itself says whether the ink registered: "Clear Signature" only renders once the
+    // canvas is non-empty. Asserting it here separates "the signature was never captured" from
+    // "the signature was captured and not stored" — two different defects that both end as one
+    // missing link on the row.
+    await expect(
+      page.getByRole('button', { name: /Clear Signature/ }),
+      'the canvas must register the ink before anything can be saved',
+    ).toBeVisible({ timeout: 15_000 });
+
     await page.getByRole('button', { name: 'Add report' }).click();
 
-    // ── the record now carries the evidence, and the link is the proof it was STORED ──────────
-    const link = page.getByTestId(/^evidence-link-/).first();
-    await expect(link, 'the saved report must offer the stored evidence back').toBeVisible({ timeout: 45_000 });
-
-    const href = await link.getAttribute('href');
-    expect(href, 'the link must point at the governed download route').toMatch(/^\/api\/documents\/[0-9a-f-]{36}\/content$/);
+    // ── the record now carries the evidence, and the links are the proof it was STORED ────────
+    const links = page.getByTestId(/^evidence-link-/);
+    await expect(links.first(), 'the saved report must offer the stored evidence back').toBeVisible({ timeout: 45_000 });
+    // TWO: the photograph and the signature. One would mean half the record silently dropped,
+    // which is indistinguishable from the defect unless the count is asserted.
+    await expect(links, 'both the photograph and the signature must be stored').toHaveCount(2, { timeout: 30_000 });
 
     // ── and the bytes really come back, through the same route the link uses ─────────────────
-    const download = await page.request.get(`${baseURL}${href}`);
-    expect(download.status(), 'downloading the stored evidence').toBe(200);
-    const got = Buffer.from(await download.body());
-    expect(got.length, 'an empty body would pass a naive status check').toBeGreaterThan(0);
+    for (let i = 0; i < 2; i++) {
+      const href = await links.nth(i).getAttribute('href');
+      expect(href, 'the link must point at the governed download route').toMatch(/^\/api\/documents\/[0-9a-f-]{36}\/content$/);
 
-    // It is a real image, not an error page or a placeholder: PNG or JPEG, because the picker
-    // re-encodes images to JPEG to keep a site upload small.
-    const isPng = got.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
-    const isJpeg = got[0] === 0xff && got[1] === 0xd8 && got[2] === 0xff;
-    expect(isPng || isJpeg, `what came back is not an image (first bytes: ${got.subarray(0, 8).toString('hex')})`).toBe(true);
+      const download = await page.request.get(`${baseURL}${href}`);
+      expect(download.status(), `downloading stored evidence ${i + 1}`).toBe(200);
+      const got = Buffer.from(await download.body());
+      expect(got.length, 'an empty body would pass a naive status check').toBeGreaterThan(0);
+
+      // A real image, not an error page or a placeholder: PNG or JPEG, because the picker
+      // re-encodes photos to JPEG while the signature canvas emits PNG.
+      const isPng = got.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+      const isJpeg = got[0] === 0xff && got[1] === 0xd8 && got[2] === 0xff;
+      expect(isPng || isJpeg, `evidence ${i + 1} is not an image (first bytes: ${got.subarray(0, 8).toString('hex')})`).toBe(true);
+      // eslint-disable-next-line no-console
+      console.log(`  evidence ${i + 1}: ${got.length} bytes, ${isPng ? 'PNG' : 'JPEG'}, sha256 ${createHash('sha256').update(got).digest('hex').slice(0, 16)}…`);
+    }
 
     // The screen no longer holds the picked file: it was saved, so the picker is cleared rather
     // than left showing a thumbnail of something that never left the browser.
     await expect(page.getByText('riser-progress.png')).toBeHidden({ timeout: 15_000 });
 
-    // eslint-disable-next-line no-console
-    console.log(`  stored evidence: ${got.length} bytes, sha256 ${createHash('sha256').update(got).digest('hex').slice(0, 16)}…`);
+    // ── HANDOFF: the next role receives the evidence, not a mention of it ────────────────────
+    // A daily report is submitted, reviewed and approved by someone other than its author, and
+    // the 360 is where they read it. It used to print the description as plain text: the
+    // reviewer could see that a photograph existed and had no way to open it. Evidence nobody
+    // downstream can open has not been handed over.
+    const reportRow = page.locator('tr', { hasText: marker }).first();
+    await expect(reportRow).toBeVisible({ timeout: 15_000 });
+    const reportId = (await links.first().getAttribute('data-testid'))!.replace('evidence-link-', '');
+
+    await page.goto(`/site/execution/${reportId}`, { waitUntil: 'domcontentloaded' });
+    const section = page.getByTestId('tab-evidence');
+    await expect(section, 'the 360 must carry the evidence section').toBeVisible({ timeout: 30_000 });
+    await expect(section, 'both items must reach the reviewer').toContainText('Evidence (2)');
+
+    const openable = section.getByTestId(/^evidence-open-/);
+    await expect(openable, 'each item must be openable by the reviewer').toHaveCount(2, { timeout: 15_000 });
+    const reviewerHref = await openable.first().getAttribute('href');
+    const reviewerFetch = await page.request.get(`${baseURL}${reviewerHref}`);
+    expect(reviewerFetch.status(), 'the reviewer opens the real file').toBe(200);
+    expect(Buffer.from(await reviewerFetch.body()).length).toBeGreaterThan(0);
+
   });
 });

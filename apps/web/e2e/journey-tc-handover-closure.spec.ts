@@ -31,6 +31,47 @@ const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
 const stamp = () => Date.now().toString().slice(-6);
 
+/**
+ * Put the real document behind a register entry and RELEASE it, as the three people who do it.
+ *
+ * The register held no content until DOC-CONTENT-01, so this chain walked its whole length
+ * against document numbers with nothing underneath them. Both the O&M manual and the as-built
+ * drawing need the same four acts, and each asserts the separation it must not lose: the author
+ * submits, somebody else approves, and a third party releases.
+ */
+async function releaseControlledDocument(
+  req: import('@playwright/test').APIRequestContext,
+  opts: { dc: string; registerEntryId: string; fileName: string; body: string; author: Record<string, string>; reviewer: Record<string, string> },
+): Promise<string> {
+  const revisions = await (await req.get(`${opts.dc}/register/${opts.registerEntryId}/revisions`, { headers: opts.author })).json() as Array<{ id: string }>;
+  const revId = revisions[0].id;
+
+  const bytes = Buffer.concat([
+    Buffer.from('%PDF-1.7\n', 'latin1'),
+    Buffer.from(opts.body),
+    Buffer.from(Array.from({ length: 2200 }, (_, i) => (i * 23) % 251)),
+    Buffer.from('\n%%EOF\n'),
+  ]);
+  const uploaded = await req.post(`${opts.dc}/revisions/${revId}/content`, {
+    headers: opts.author,
+    multipart: { file: { name: opts.fileName, mimeType: 'application/pdf', buffer: bytes } },
+  });
+  expect(uploaded.ok(), `the author supplies ${opts.fileName} — ${await uploaded.text()}`).toBe(true);
+
+  expect((await req.post(`${opts.dc}/revisions/${revId}/submit`, { headers: opts.author, data: {} })).ok()).toBe(true);
+  expect((await req.post(`${opts.dc}/revisions/${revId}/start-review`, { headers: opts.author, data: {} })).ok()).toBe(true);
+
+  const selfApprove = await req.post(`${opts.dc}/revisions/${revId}/approve`, { headers: opts.author, data: {} });
+  expect(selfApprove.status(), 'the author must not approve their own revision').toBe(403);
+  expect((await req.post(`${opts.dc}/revisions/${revId}/approve`, { headers: opts.reviewer, data: {} })).ok()).toBe(true);
+
+  const selfIssue = await req.post(`${opts.dc}/revisions/${revId}/issue`, { headers: opts.reviewer, data: {} });
+  expect(selfIssue.status(), 'the approver must not also release it').toBe(403);
+  expect((await req.post(`${opts.dc}/revisions/${revId}/issue`, { headers: opts.author, data: {} })).ok()).toBe(true);
+
+  return revId;
+}
+
 /** Long by nature: five domains, one pass, and the claim is about the chain. */
 test.setTimeout(300_000);
 
@@ -133,6 +174,27 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   const abLinked = await req.post(`${CX}/${system.id}/asbuilt-links`, { headers: H(), data: { documentId: asBuiltNumber } });
   expect(abLinked.ok(), `the as-built must link to the system it documents — ${await abLinked.text()}`).toBe(true);
 
+  // THE AS-BUILT HAS NO FILE BEHIND IT HERE, and that is a finding rather than an omission.
+  //
+  // Releasing a revision hard-codes the register entry to `for_construction`:
+  //
+  //     { ...entry, currentRevision: issued.revision, status: 'for_construction', ... }
+  //
+  // So a drawing registered `as_built` and then put through controlled release comes out
+  // labelled "for construction", and the handover's as-built gate correctly refuses it —
+  // nobody builds from an as-built. Until that status is settled, an as-built drawing can
+  // either BE the as-built record or be released, not both, so this chain leaves it as a
+  // reference and HO-01 stays open. The O&M manual below is released and downloadable.
+
+  // The reviewer the controlled releases need — an author cannot approve their own revision.
+  const abReviewer = altApiAuthHeaders();
+  expect(abReviewer, 'a second actor is required: an author cannot approve their own revision').toBeTruthy();
+  const abAltUser = process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker';
+  const abGrant = await req.post(`${API}/api/v1/projects/${projectId}/members`, {
+    headers: H(), data: { userId: abAltUser, roleId: 'r-technical-manager' },
+  });
+  expect([200, 201, 409].includes(abGrant.status()), `granting r-technical-manager: ${await abGrant.text()}`).toBe(true);
+
   // ── 8. The handover package, and what the client is owed ─────────────────────────────────────
   const pkgCode = `HO-J${run}`;
   const pkg = await (await req.post(HO, { headers: H(), data: { projectId, code: pkgCode, title: 'Tower A handover' } })).json();
@@ -147,61 +209,15 @@ test('the whole chain: engineering through acceptance, closeout and the service 
       discipline: 'elv', docType: 'document', currentRevision: 'A', status: 'approved',
     },
   });
-  // THE MANUAL ITSELF, not just its number. The register held no content until DOC-CONTENT-01,
-  // so this chain walked every deliverable against a document that did not exist as a file. A
-  // handover pack whose O&M manual is a reference to nothing is what the dossier used to deliver.
-  const packRev = (await (await req.get(`${DC}/register`, { headers: H() })).json() as Array<{ id: string; documentNumber: string }>)
+  // THE MANUAL ITSELF, not just its number — the same four acts, through the same helper, so
+  // the two releases cannot drift apart.
+  const packEntry = (await (await req.get(`${DC}/register`, { headers: H() })).json() as Array<{ id: string; documentNumber: string }>)
     .find((e) => e.documentNumber === packDoc);
-  expect(packRev, 'the handover pack document must be in the register').toBeTruthy();
-  const packRevisions = await (await req.get(`${DC}/register/${packRev!.id}/revisions`, { headers: H() })).json() as Array<{ id: string }>;
-  const packRevId = packRevisions[0].id;
-
-  const manual = Buffer.concat([
-    Buffer.from('%PDF-1.7\n', 'latin1'),
-    Buffer.from(`Tower A O&M manual ${run}`),
-    Buffer.from(Array.from({ length: 2200 }, (_, i) => (i * 23) % 251)),
-    Buffer.from('\n%%EOF\n'),
-  ]);
-  const uploaded = await req.post(`${DC}/revisions/${packRevId}/content`, {
-    headers: H(),
-    multipart: { file: { name: `${packDoc}.pdf`, mimeType: 'application/pdf', buffer: manual } },
+  expect(packEntry, 'the handover pack document must be in the register').toBeTruthy();
+  await releaseControlledDocument(req, {
+    dc: DC, registerEntryId: packEntry!.id, fileName: `${packDoc}.pdf`,
+    body: `Tower A O&M manual ${run}`, author: H(), reviewer: abReviewer!,
   });
-  expect(uploaded.ok(), `the author supplies the manual — ${await uploaded.text()}`).toBe(true);
-
-  // …and it is RELEASED, by the people wave C separated. The author submits; somebody else
-  // reviews, approves and issues — "a second pair of eyes is what review means". Only an ISSUED
-  // revision is offered for download: an approved-but-unissued drawing has not been let out, and
-  // a handover pack must not hand over what document control has not released.
-  const reviewer = altApiAuthHeaders();
-  expect(reviewer, 'a second actor is required: an author cannot approve their own revision').toBeTruthy();
-  const altUser = process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker';
-  // Only the APPROVAL is delegated here. `r-document-controller` is a tenant role and project
-  // membership takes delivery roles only, which is itself correct: releasing a document outside
-  // the company is not a project-team act.
-  const grantTm = await req.post(`${API}/api/v1/projects/${projectId}/members`, {
-    headers: H(), data: { userId: altUser, roleId: 'r-technical-manager' },
-  });
-  expect([200, 201, 409].includes(grantTm.status()), `granting r-technical-manager: ${await grantTm.text()}`).toBe(true);
-
-  const submitStep = await req.post(`${DC}/revisions/${packRevId}/submit`, { headers: H(), data: {} });
-  expect(submitStep.ok(), `the author submits the manual — ${await submitStep.text()}`).toBe(true);
-
-  const selfApprove = await req.post(`${DC}/revisions/${packRevId}/start-review`, { headers: H(), data: {} });
-  expect(selfApprove.ok(), 'starting a review is not the decision, so the author may do it').toBe(true);
-  const refusedApproval = await req.post(`${DC}/revisions/${packRevId}/approve`, { headers: H(), data: {} });
-  expect(refusedApproval.status(), 'the author must not approve their own revision').toBe(403);
-
-  const approved = await req.post(`${DC}/revisions/${packRevId}/approve`, { headers: reviewer!, data: {} });
-  expect(approved.ok(), `the reviewer approves the manual — ${await approved.text()}`).toBe(true);
-
-  // A THIRD separation, and the reason issuing is not done by the approver: "approving it
-  // internally and releasing it outside are two acts". The author may issue what somebody else
-  // approved; the approver may not.
-  const selfIssue = await req.post(`${DC}/revisions/${packRevId}/issue`, { headers: reviewer!, data: {} });
-  expect(selfIssue.status(), 'the approver must not also release it').toBe(403);
-
-  const issuedDoc = await req.post(`${DC}/revisions/${packRevId}/issue`, { headers: H(), data: {} });
-  expect(issuedDoc.ok(), `the manual is released — ${await issuedDoc.text()}`).toBe(true);
 
   const omItems = (await (await req.get(`${HO}/om-items?projectId=${projectId}`, { headers: H() })).json()) as { id: string }[];
   expect(omItems.length, 'seeding must produce the deliverables the pack owes').toBeGreaterThan(0);
@@ -282,6 +298,25 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     expect(file.status(), `the recipient must be able to open ${l.reference}`).toBe(200);
     expect((await file.body()).length, `${l.reference} must not be an empty file`).toBeGreaterThan(0);
   }
+
+  // ON THE SCREEN a person actually reads, not only over HTTP. The dossier used to print the
+  // document number as text, so the pack named a manual the reader had no way to open.
+  // `section=dossier` — the handover workspace is section-addressable, and the pack's contents
+  // live on their own tab rather than the landing one.
+  await page.goto(`/handover?project=${projectId}&section=dossier`, { waitUntil: 'domcontentloaded' });
+  // The dossier is a disclosure and starts closed, so a person opens it before they can read
+  // what is in the pack. The button stays inert until React attaches.
+  const disclosure = page.getByTestId(`dossier-open-${pkgCode}`);
+  await expect(disclosure).toBeEnabled({ timeout: 30_000 });
+  await disclosure.click();
+
+  const artifactLink = page.getByTestId(/^dossier-artifact-/).first();
+  await expect(artifactLink, 'the dossier must offer the document on screen').toBeVisible({ timeout: 30_000 });
+  const href = await artifactLink.getAttribute('href');
+  expect(href, 'and it must be the governed download route').toMatch(/^\/api\/documents\/[0-9a-f-]{36}\/content$/);
+  const fromScreen = await page.request.get(`${baseURL}${href}`);
+  expect(fromScreen.status(), 'what the screen offers must actually open').toBe(200);
+  expect((await fromScreen.body()).length).toBeGreaterThan(0);
 
   // ── 10c. DELIVERED, AND ACKNOWLEDGED BY THE RECIPIENT ───────────────────────────────────────
   //

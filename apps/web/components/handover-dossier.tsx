@@ -29,6 +29,13 @@ export interface DossierEntryRow {
   state: string | null;
   included: boolean;
   note: string | null;
+  /**
+   * The issued controlled document behind this line, when there is one.
+   *
+   * Null is the honest answer for a reference with no released file — the line's own `note`
+   * already says why — and the dossier shows the reference without pretending it can be opened.
+   */
+  artifact?: string | null;
 }
 
 export interface DossierSectionRow {
@@ -151,7 +158,22 @@ function DossierCard({ data }: { data: DossierData }) {
                   <li key={`${e.kind}-${e.sourceId}`} style={st.row} data-testid={`dossier-entry-${e.sourceId}`}>
                     <span aria-hidden style={e.included ? st.markGood : st.markWarn}>{e.included ? '✓' : '—'}</span>
                     <span style={st.grow}>
-                      {e.reference && <strong style={st.ref}>{e.reference}</strong>} {e.label}
+                      {/* A dossier that names a document the client cannot open has delivered a
+                          list, not a dossier. The link is the governed download of the ISSUED
+                          controlled document itself — DMS decides who may have it. */}
+                      {e.reference && (e.artifact ? (
+                        <a
+                          href={`/api/documents/${e.artifact}/content`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          data-testid={`dossier-artifact-${e.sourceId}`}
+                          style={st.ref}
+                        >
+                          {e.reference}
+                        </a>
+                      ) : (
+                        <strong style={st.ref}>{e.reference}</strong>
+                      ))} {e.label}
                       {e.note && <small style={st.note}> {e.note}</small>}
                     </span>
                     {e.state && <small style={st.muted}>{e.state}</small>}

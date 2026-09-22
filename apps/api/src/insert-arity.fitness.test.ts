@@ -31,6 +31,24 @@ const ROOTS = ['modules', 'core', 'intelligence', join('apps', 'api', 'src')].ma
 
 const SKIP_DIR = new Set(['node_modules', 'dist', '.turbo', '.next']);
 
+/**
+ * ONE walk of the repository, shared.
+ *
+ * Both checks below read every store in the monorepo. Walking twice put this file over vitest's
+ * 5s default under turbo's parallel load — a TIMEOUT, not an assertion, which is the failure
+ * shape that reads as a regression and is not one. The permission-vocabulary guard was memoised
+ * for the same reason; this follows it rather than raising a timeout, because a budget raised to
+ * fit the slowest run stops being a budget.
+ */
+let cachedSources: Array<{ file: string; src: string }> | null = null;
+function sources(): Array<{ file: string; src: string }> {
+  if (cachedSources) return cachedSources;
+  cachedSources = ROOTS.flatMap((root) => tsFiles(root))
+    .map((file) => ({ file, src: readFileSync(file, 'utf8') }))
+    .filter(({ src }) => /insert\s+into/i.test(src));
+  return cachedSources;
+}
+
 function tsFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (SKIP_DIR.has(entry)) continue;
@@ -59,11 +77,8 @@ interface Mismatch { file: string; line: number; detail: string }
 function scan(): { mismatches: Mismatch[]; statements: number } {
   const mismatches: Mismatch[] = [];
   let statements = 0;
-  for (const root of ROOTS) {
-    for (const file of tsFiles(root)) {
-      const src = readFileSync(file, 'utf8');
-      if (!/insert\s+into/i.test(src)) continue;
-      for (const m of src.matchAll(INSERT)) {
+  for (const { file, src } of sources()) {
+    for (const m of src.matchAll(INSERT)) {
         // `${COLS}` means the column list lives in one shared constant — the pattern that cannot
         // drift, and one this text scan has no way to count. Left to the stores that use it.
         const colsRaw = m[1].replace(/--[^\n]*/g, '');
@@ -88,7 +103,6 @@ function scan(): { mismatches: Mismatch[]; statements: number } {
             detail: `placeholders are not the set $1..$${nums.length} (saw ${nums.map((n) => `$${n}`).join(',')})`,
           });
         }
-      }
     }
   }
   return { mismatches, statements };
@@ -96,11 +110,9 @@ function scan(): { mismatches: Mismatch[]; statements: number } {
 
 function scanExcluded(): Mismatch[] {
   const bad: Mismatch[] = [];
-  for (const root of ROOTS) {
-    for (const file of tsFiles(root)) {
-      const src = readFileSync(file, 'utf8');
-      if (!src.includes('excluded.')) continue;
-      for (const m of src.matchAll(CONFLICT)) {
+  for (const { file, src } of sources()) {
+    if (!src.includes('excluded.')) continue;
+    for (const m of src.matchAll(CONFLICT)) {
         const colsRaw = m[2].replace(/--[^\n]*/g, '');
         if (colsRaw.includes('${')) continue;
         const cols = new Set(
@@ -118,7 +130,6 @@ function scanExcluded(): Mismatch[] {
             });
           }
         }
-      }
     }
   }
   return bad;

@@ -253,6 +253,10 @@ export function assembleDossier(facts: DossierFacts): DossierView {
               : resolved.superseded
                 ? 'The register has superseded the revision this points at.'
                 : `The linked drawing is '${doc!.status}', not an as-built.`,
+        // The drawing itself, where document control has issued one. Offered only when the line
+        // is going out: a download beside a drawing the dossier is withholding — superseded, or
+        // not an as-built — would hand over what it just declined to.
+        current ? doc?.contentDocumentId ?? null : null,
       );
     });
   });

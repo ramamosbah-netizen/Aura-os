@@ -47,7 +47,7 @@
 | Sales | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Sales | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Sales | XOP-11 | PARTIAL | UNVERIFIED |
-| Sales | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Sales | XOP-12 | COMPLETE | UNVERIFIED |
 | Sales | XOP-13 | PARTIAL | UNVERIFIED |
 | Sales | XOP-14 | PARTIAL | UNVERIFIED |
 | Sales | XOP-15 | PARTIAL | UNVERIFIED |
@@ -110,7 +110,7 @@
 | Pre-Sales / Estimator | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-11 | PARTIAL | UNVERIFIED |
-| Pre-Sales / Estimator | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Pre-Sales / Estimator | XOP-12 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-13 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-14 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-15 | PARTIAL | UNVERIFIED |
@@ -161,7 +161,7 @@
 | Design / Technical Engineer | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Design / Technical Engineer | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Design / Technical Engineer | XOP-11 | PARTIAL | UNVERIFIED |
-| Design / Technical Engineer | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Design / Technical Engineer | XOP-12 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | XOP-13 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | XOP-14 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | XOP-15 | PARTIAL | UNVERIFIED |
@@ -200,7 +200,7 @@
 | Site Engineer | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Site Engineer | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Site Engineer | XOP-11 | PARTIAL | UNVERIFIED |
-| Site Engineer | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Site Engineer | XOP-12 | COMPLETE | UNVERIFIED |
 | Site Engineer | XOP-13 | PARTIAL | UNVERIFIED |
 | Site Engineer | XOP-14 | PARTIAL | UNVERIFIED |
 | Site Engineer | XOP-15 | PARTIAL | UNVERIFIED |
@@ -242,7 +242,7 @@
 | Planning Engineer | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Planning Engineer | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Planning Engineer | XOP-11 | PARTIAL | UNVERIFIED |
-| Planning Engineer | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Planning Engineer | XOP-12 | COMPLETE | UNVERIFIED |
 | Planning Engineer | XOP-13 | PARTIAL | UNVERIFIED |
 | Planning Engineer | XOP-14 | PARTIAL | UNVERIFIED |
 | Planning Engineer | XOP-15 | PARTIAL | UNVERIFIED |
@@ -296,7 +296,7 @@
 | Project Engineer | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Project Engineer | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Project Engineer | XOP-11 | PARTIAL | UNVERIFIED |
-| Project Engineer | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Project Engineer | XOP-12 | COMPLETE | UNVERIFIED |
 | Project Engineer | XOP-13 | PARTIAL | UNVERIFIED |
 | Project Engineer | XOP-14 | PARTIAL | UNVERIFIED |
 | Project Engineer | XOP-15 | PARTIAL | UNVERIFIED |
@@ -376,7 +376,7 @@
 | Project Manager | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Project Manager | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Project Manager | XOP-11 | PARTIAL | UNVERIFIED |
-| Project Manager | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Project Manager | XOP-12 | COMPLETE | UNVERIFIED |
 | Project Manager | XOP-13 | PARTIAL | UNVERIFIED |
 | Project Manager | XOP-14 | PARTIAL | UNVERIFIED |
 | Project Manager | XOP-15 | PARTIAL | UNVERIFIED |
@@ -474,7 +474,7 @@
 | Technical Manager | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Technical Manager | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | XOP-11 | PARTIAL | UNVERIFIED |
-| Technical Manager | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Technical Manager | XOP-12 | COMPLETE | UNVERIFIED |
 | Technical Manager | XOP-13 | PARTIAL | UNVERIFIED |
 | Technical Manager | XOP-14 | PARTIAL | UNVERIFIED |
 | Technical Manager | XOP-15 | PARTIAL | UNVERIFIED |
@@ -575,7 +575,7 @@
 | Commercial Manager / QS | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Commercial Manager / QS | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | XOP-11 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Commercial Manager / QS | XOP-12 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | XOP-13 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | XOP-14 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | XOP-15 | PARTIAL | UNVERIFIED |
@@ -648,7 +648,7 @@
 | Procurement Manager / Buyer | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-11 | PARTIAL | UNVERIFIED |
-| Procurement Manager / Buyer | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Procurement Manager / Buyer | XOP-12 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-13 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-14 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-15 | PARTIAL | UNVERIFIED |
@@ -697,7 +697,7 @@
 | Storekeeper | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Storekeeper | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Storekeeper | XOP-11 | PARTIAL | UNVERIFIED |
-| Storekeeper | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Storekeeper | XOP-12 | COMPLETE | UNVERIFIED |
 | Storekeeper | XOP-13 | PARTIAL | UNVERIFIED |
 | Storekeeper | XOP-14 | PARTIAL | UNVERIFIED |
 | Storekeeper | XOP-15 | PARTIAL | UNVERIFIED |
@@ -741,7 +741,7 @@
 | QA/QC | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | QA/QC | XOP-10 | UNVERIFIED | UNVERIFIED |
 | QA/QC | XOP-11 | PARTIAL | UNVERIFIED |
-| QA/QC | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| QA/QC | XOP-12 | COMPLETE | UNVERIFIED |
 | QA/QC | XOP-13 | PARTIAL | UNVERIFIED |
 | QA/QC | XOP-14 | PARTIAL | UNVERIFIED |
 | QA/QC | XOP-15 | PARTIAL | UNVERIFIED |
@@ -774,7 +774,7 @@
 | HSE | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | HSE | XOP-10 | UNVERIFIED | UNVERIFIED |
 | HSE | XOP-11 | PARTIAL | UNVERIFIED |
-| HSE | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| HSE | XOP-12 | COMPLETE | UNVERIFIED |
 | HSE | XOP-13 | PARTIAL | UNVERIFIED |
 | HSE | XOP-14 | PARTIAL | UNVERIFIED |
 | HSE | XOP-15 | PARTIAL | UNVERIFIED |
@@ -820,7 +820,7 @@
 | Finance | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Finance | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Finance | XOP-11 | PARTIAL | UNVERIFIED |
-| Finance | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Finance | XOP-12 | COMPLETE | UNVERIFIED |
 | Finance | XOP-13 | PARTIAL | UNVERIFIED |
 | Finance | XOP-14 | PARTIAL | UNVERIFIED |
 | Finance | XOP-15 | PARTIAL | UNVERIFIED |
@@ -868,7 +868,7 @@
 | T&C Engineer | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | T&C Engineer | XOP-10 | UNVERIFIED | UNVERIFIED |
 | T&C Engineer | XOP-11 | PARTIAL | UNVERIFIED |
-| T&C Engineer | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| T&C Engineer | XOP-12 | COMPLETE | UNVERIFIED |
 | T&C Engineer | XOP-13 | PARTIAL | UNVERIFIED |
 | T&C Engineer | XOP-14 | PARTIAL | UNVERIFIED |
 | T&C Engineer | XOP-15 | PARTIAL | UNVERIFIED |
@@ -915,7 +915,7 @@
 | Handover / FM | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Handover / FM | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Handover / FM | XOP-11 | PARTIAL | UNVERIFIED |
-| Handover / FM | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Handover / FM | XOP-12 | COMPLETE | UNVERIFIED |
 | Handover / FM | XOP-13 | PARTIAL | UNVERIFIED |
 | Handover / FM | XOP-14 | PARTIAL | UNVERIFIED |
 | Handover / FM | XOP-15 | PARTIAL | UNVERIFIED |
@@ -941,7 +941,7 @@
 | Senior Management | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | Senior Management | XOP-10 | UNVERIFIED | UNVERIFIED |
 | Senior Management | XOP-11 | PARTIAL | UNVERIFIED |
-| Senior Management | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| Senior Management | XOP-12 | COMPLETE | UNVERIFIED |
 | Senior Management | XOP-13 | PARTIAL | UNVERIFIED |
 | Senior Management | XOP-14 | PARTIAL | UNVERIFIED |
 | Senior Management | XOP-15 | PARTIAL | UNVERIFIED |
@@ -982,7 +982,7 @@
 | CEO | XOP-09 | WRONG_BEHAVIOR | UNVERIFIED |
 | CEO | XOP-10 | UNVERIFIED | UNVERIFIED |
 | CEO | XOP-11 | PARTIAL | UNVERIFIED |
-| CEO | XOP-12 | WRONG_BEHAVIOR | UNVERIFIED |
+| CEO | XOP-12 | COMPLETE | UNVERIFIED |
 | CEO | XOP-13 | PARTIAL | UNVERIFIED |
 | CEO | XOP-14 | PARTIAL | UNVERIFIED |
 | CEO | XOP-15 | PARTIAL | UNVERIFIED |

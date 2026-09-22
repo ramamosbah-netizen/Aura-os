@@ -66,6 +66,32 @@ something the evidence does not support, in the same way that calling them harml
 stay visible and unresolved, and they gate their own capabilities when a capability is proposed
 for promotion — not the programme.
 
+### A separate failure, diagnosed and closed: `site-execution.spec.ts`
+
+**Not one of the eight above.** It failed in the earlier complete TIER-2 run and again when the
+site cluster was re-run; it is recorded here because it was read to the end, and because an
+earlier note in this session wrongly described it as one of the eight. The eight are untouched.
+
+**Stale spec, correct product.** The spec prepared, submitted, reviewed, rejected and approved a
+daily report as ONE identity and expected "Draft" after the rejection. It got "Under Review", and
+the cause was not the UI: the reject answered 403.
+
+> the person who prepared or submitted this daily report may not reject their own — withdrawing
+> it is a resubmission, not a review
+
+`approveReport` carries the same rule, and `site-report-actions` refreshes the 360 only on
+success, so the page correctly kept showing the status the report still had. The shipped role
+catalogue already separates the halves — `site.daily-report.create`/`.submit` on r-site-engineer,
+`.review`/`.approve` on r-project-engineer and r-pm — so the product was right and the spec was
+written before the rule.
+
+Repaired by driving it as the two people the rule is about rather than by weakening the rule. It
+now proves the segregation in a browser: the author submits, is REFUSED their own rejection (403,
+asserted), and a reviewer signed in as themselves rejects and later approves.
+
+What this shows about the eight: nothing. It shows that at least one pre-existing browser failure
+in this area was a stale expectation. Each of the eight still has to be read on its own.
+
 ### The CRM Radar release-proof job
 
 Its browser step fell back to an actor the job never provisions, so the sign-in never completed

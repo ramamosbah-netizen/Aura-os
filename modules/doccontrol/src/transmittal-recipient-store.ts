@@ -59,10 +59,11 @@ const toRecipient = (row: QueryResultRow): TransmittalRecipient => ({
   acknowledgedAt: row.acknowledged_at instanceof Date ? row.acknowledged_at.toISOString()
     : (row.acknowledged_at ? String(row.acknowledged_at) : null),
   acknowledgedNote: row.acknowledged_note ?? null,
+  acknowledgementRecordedBy: row.acknowledgement_recorded_by ?? null,
   createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
 });
 
-const COLS = 'id, tenant_id, company_id, project_id, transmittal_id, user_id, party, acknowledged_at, acknowledged_note, created_at';
+const COLS = 'id, tenant_id, company_id, project_id, transmittal_id, user_id, party, acknowledged_at, acknowledged_note, acknowledgement_recorded_by, created_at';
 
 export class PostgresTransmittalRecipientStore implements TransmittalRecipientStore {
   constructor(private readonly pool: Pool) {}
@@ -71,12 +72,14 @@ export class PostgresTransmittalRecipientStore implements TransmittalRecipientSt
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_transmittal_recipients (${COLS})
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
        on conflict (id) do update set
          acknowledged_at = excluded.acknowledged_at,
-         acknowledged_note = excluded.acknowledged_note`,
+         acknowledged_note = excluded.acknowledged_note,
+         acknowledgement_recorded_by = excluded.acknowledgement_recorded_by`,
       [recipient.id, recipient.tenantId, recipient.companyId, recipient.projectId, recipient.transmittalId,
-       recipient.userId, recipient.party, recipient.acknowledgedAt, recipient.acknowledgedNote, recipient.createdAt],
+       recipient.userId, recipient.party, recipient.acknowledgedAt, recipient.acknowledgedNote,
+       recipient.acknowledgementRecordedBy, recipient.createdAt],
     );
   }
 

@@ -15,6 +15,16 @@ import { randomUUID } from 'node:crypto';
  *   checked a permission and recorded the actor, so any holder could acknowledge a conveyance
  *   addressed to someone else — and the document controller would read it as delivered.
  *
+ *   THAT CONCERN IS UNCHANGED; WHAT ANSWERS IT HAS MOVED. Requiring the ACTOR to be the recipient
+ *   made the receipt unreachable for the party a handover dossier actually goes to: an external
+ *   client holds no AURA account and cannot hold `doccontrol.transmittal.acknowledge`, which is
+ *   the Document Controller's. So a receipt is now RECORDED — the ENG-04 shape, where a material
+ *   approval decided by an external consultant is entered by the AURA user who received it and
+ *   the screen says "recorded by" rather than "decided by". `userId` stays whose receipt it is;
+ *   `acknowledgementRecordedBy` is who entered it; and the two are never conflated, so no
+ *   internal user is credited with an acknowledgement they did not give. A receipt still cannot
+ *   be recorded for somebody who was never sent the document.
+ *
  * PARTIAL RECEIPT IS NOT RECEIPT. Three named recipients and one acknowledgement is one person
  * confirming, not three. The conveyance reaches `acknowledged` only when every named recipient has
  * answered, and until then "the Buyer has it, Site has not" stays readable per person — which is
@@ -44,6 +54,14 @@ export interface TransmittalRecipient {
   party: TransmittalParty;
   acknowledgedAt: string | null;
   acknowledgedNote: string | null;
+  /**
+   * The AURA user who ENTERED this receipt, when it arrived by other means — email, a signed
+   * copy, a return transmittal. Null means the recipient answered in AURA themselves.
+   *
+   * Never the same field as `userId`. Whose receipt it is and who wrote it down are two facts,
+   * and collapsing them is what lets an internal user be credited with a client's word.
+   */
+  acknowledgementRecordedBy: string | null;
   createdAt: string;
 }
 
@@ -74,6 +92,7 @@ export function makeTransmittalRecipient(input: NewTransmittalRecipient): Transm
     userId: input.userId.trim(),
     party: toTransmittalParty(input.party),
     acknowledgedAt: null,
+    acknowledgementRecordedBy: null,
     acknowledgedNote: null,
     createdAt: new Date().toISOString(),
   };
@@ -85,9 +104,17 @@ export function makeTransmittalRecipient(input: NewTransmittalRecipient): Transm
  * Refuses a second acknowledgement rather than overwriting the first: a receipt is a thing that
  * happened at a time, and re-signing it would move the date somebody is relying on.
  */
+/**
+ * Record this recipient's receipt.
+ *
+ * `recordedBy` is who entered it, and is left null when the recipient answered in AURA
+ * themselves. It is deliberately not defaulted to the actor: a null recorder says "this person
+ * acknowledged it here", and stamping the actor into it would turn every self-acknowledgement
+ * into one somebody else wrote down.
+ */
 export function acknowledgeAsRecipient(
   recipient: TransmittalRecipient,
-  input: { at?: string; note?: string | null } = {},
+  input: { at?: string; note?: string | null; recordedBy?: string | null } = {},
 ): TransmittalRecipient {
   if (recipient.acknowledgedAt) {
     throw new Error(`${recipient.userId} has already acknowledged this transmittal on ${recipient.acknowledgedAt}`);
@@ -96,6 +123,7 @@ export function acknowledgeAsRecipient(
     ...recipient,
     acknowledgedAt: input.at ?? new Date().toISOString(),
     acknowledgedNote: input.note?.trim() || null,
+    acknowledgementRecordedBy: input.recordedBy?.trim() || null,
   };
 }
 

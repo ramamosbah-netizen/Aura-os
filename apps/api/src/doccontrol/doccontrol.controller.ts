@@ -41,6 +41,12 @@ class CreateCorrespondenceDto {
 
 class AckTransmittalDto {
   @IsOptional() @IsString() note?: string;
+  /**
+   * WHOSE receipt this is, when the Document Controller is recording one that arrived by other
+   * means — email, a signed copy, a return transmittal. Omitted when the caller is answering for
+   * themselves. The named person must be on the distribution either way.
+   */
+  @IsOptional() @IsString() recipientUserId?: string;
 }
 
 class ApproveDocumentDto {
@@ -102,11 +108,18 @@ export class DocControlController {
     return this.docControlService.receiveTransmittal(ctx.tenantId, ctx.actorId, id);
   }
 
+  /**
+   * Record a receipt. `recipientUserId` says whose it is; the caller is who wrote it down.
+   *
+   * A transmittal goes to clients and consultants, who hold no AURA account and cannot hold this
+   * permission — so a receipt from them is RECORDED by the Document Controller, the ENG-04 shape.
+   * Leaving `recipientUserId` out means the caller is answering for themselves.
+   */
   @Put('transmittals/:id/acknowledge')
   @Permissions('doccontrol.transmittal.acknowledge')
   acknowledgeTransmittal(@Param('id') id: string, @Body() dto?: AckTransmittalDto): Promise<Transmittal> {
     const ctx = this.tenant.get();
-    return this.docControlService.acknowledgeTransmittal(ctx.tenantId, ctx.actorId, id, dto?.note);
+    return this.docControlService.acknowledgeTransmittal(ctx.tenantId, ctx.actorId, id, dto?.note, dto?.recipientUserId);
   }
 
   /**

@@ -296,37 +296,41 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   // A recipient is a USER the system knows, not a free-text name — which is what makes a receipt
   // attributable rather than a label somebody typed.
   //
-  // A LIMIT, RECORDED RATHER THAN HIDDEN: two rules meet here and leave a gap between them.
-  // The domain allows only a NAMED RECIPIENT to acknowledge ("this transmittal was not sent to
-  // <x>; only a named recipient can acknowledge it"), while the route demands
-  // `doccontrol.transmittal.acknowledge`, held by r-document-controller alone — a tenant role
-  // that project membership cannot grant. So the only identity that can acknowledge is a
-  // Document Controller who is also on the distribution. An external client, which is who a
-  // handover dossier actually goes to, cannot acknowledge at all. This spec therefore proves an
-  // INTERNAL acknowledgement and says so; it is not evidence that a client can sign for a pack.
+  // THE CLIENT IS THE RECIPIENT, and the client does not hold this permission. A receipt from
+  // them is RECORDED by the Document Controller — the ENG-04 shape — so the distribution names
+  // the client and the entry says who wrote it down.
+  const clientUser = process.env.E2E_ALT_USERNAME ?? 'u-e2e-checker';
   const namedRecipient = await req.post(`${DC}/transmittals/${transmittalId}/recipients`, {
-    headers: H(), data: { userId: process.env.E2E_USERNAME ?? 'u-admin', party: 'Client' },
+    headers: H(), data: { userId: clientUser, party: 'Client' },
   });
   expect(namedRecipient.ok(), `a conveyance must say who it is for — ${await namedRecipient.text()}`).toBe(true);
 
   const sent = await req.post(`${DC}/transmittals/${transmittalId}/send`, { headers: H(), data: {} });
   expect(sent.ok(), `the transmittal is sent — ${await sent.text()}`).toBe(true);
 
-  // ONLY A NAMED RECIPIENT. Somebody not on the distribution is refused, which is what makes
-  // the receipt mean something.
-  const strangerAck = await req.put(`${DC}/transmittals/${transmittalId}/acknowledge`, {
-    headers: reviewer!, data: { acknowledgedBy: 'Not on the distribution', note: 'should be refused' },
+  // A RECEIPT STILL CANNOT BE INVENTED. Recording one for somebody who was never sent the
+  // document is refused — §22's concern, unchanged by who holds the pen.
+  const notSent = await req.put(`${DC}/transmittals/${transmittalId}/acknowledge`, {
+    headers: H(), data: { recipientUserId: 'u-e2e-storekeeper', note: 'was never sent this' },
   });
-  expect(strangerAck.ok(), 'somebody who was not sent it must not acknowledge it').toBe(false);
+  expect(notSent.ok(), 'a receipt cannot be recorded for somebody it was not sent to').toBe(false);
+  expect(await notSent.text()).toContain('only be recorded for somebody it was sent to');
 
+  // The Document Controller records the client's receipt.
   const ack = await req.put(`${DC}/transmittals/${transmittalId}/acknowledge`, {
-    headers: H(), data: { acknowledgedBy: 'Client Rep', note: 'dossier received' },
+    headers: H(), data: { recipientUserId: clientUser, note: 'dossier received — signed copy returned' },
   });
-  expect(ack.ok(), `the recipient acknowledges receipt — ${await ack.text()}`).toBe(true);
+  expect(ack.ok(), `the controller records the client's receipt — ${await ack.text()}`).toBe(true);
 
   // Retained, not merely accepted: a receipt nobody can read afterwards is not a receipt.
-  const acks = await (await req.get(`${DC}/transmittals/${transmittalId}/acknowledgements`, { headers: H() })).json();
-  expect(Array.isArray(acks) && acks.length > 0, 'the acknowledgement must be kept against the conveyance').toBe(true);
+  // And the two names are kept APART — the client's receipt, the controller's pen. One field
+  // would credit an internal user with the client's word.
+  const acks = await (await req.get(`${DC}/transmittals/${transmittalId}/acknowledgements`, { headers: H() })).json() as Array<{
+    acknowledgedBy: string | null; recordedBy: string | null;
+  }>;
+  expect(acks.length, 'the acknowledgement must be kept against the conveyance').toBeGreaterThan(0);
+  expect(acks[0].acknowledgedBy, 'the receipt belongs to the client').toBe(clientUser);
+  expect(acks[0].recordedBy, 'and the controller is credited only with recording it').toBe(process.env.E2E_USERNAME ?? 'u-admin');
 
   // ── 11. DELIVER → MAINTAIN: acceptance starts the service relationship ───────────────────────
   //

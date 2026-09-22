@@ -106,9 +106,10 @@ export class PostgresTransmittalAcknowledgementStore implements TransmittalAckno
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_doccontrol_transmittal_acks (
-        id, tenant_id, company_id, transmittal_id, transmittal_code, acknowledged_by, acknowledged_at, note
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [a.id, a.tenantId, a.companyId, a.transmittalId, a.transmittalCode, a.acknowledgedBy, a.acknowledgedAt, a.note],
+        id, tenant_id, company_id, transmittal_id, transmittal_code, acknowledged_by, recorded_by, acknowledged_at, note
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [a.id, a.tenantId, a.companyId, a.transmittalId, a.transmittalCode, a.acknowledgedBy, a.recordedBy ?? null,
+       a.acknowledgedAt, a.note],
     );
   }
 
@@ -125,6 +126,7 @@ export class PostgresTransmittalAcknowledgementStore implements TransmittalAckno
       transmittalId: row.transmittal_id,
       transmittalCode: row.transmittal_code,
       acknowledgedBy: row.acknowledged_by,
+      recordedBy: row.recorded_by ?? null,
       acknowledgedAt: iso(row.acknowledged_at) as string,
       note: row.note,
     }));

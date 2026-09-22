@@ -271,12 +271,22 @@ export class DocControlService {
   }
 
   /**
-   * Acknowledge receipt — as YOURSELF, for a conveyance that was sent to you.
+   * RECORD a receipt — whose it is, and who entered it.
    *
-   * TWO conditions, and only one of them used to exist. The permission says you are the kind of
-   * person who acknowledges conveyances; being ON the distribution says this one was sent to you.
-   * Without the second, any holder could sign for a document addressed to somebody else and the
-   * register would read as delivered.
+   * A transmittal goes to a client, a consultant, a site engineer. The first two hold no AURA
+   * account and could never hold `doccontrol.transmittal.acknowledge`, which is the Document
+   * Controller's — so requiring the ACTOR to be the recipient made a client's receipt impossible
+   * to record at all, and a handover dossier goes to a client.
+   *
+   * This is the ENG-04 shape. There, a material approval decided by an external consultant is
+   * entered by the AURA user who received it, `reviewedBy` means "recorded by", and no internal
+   * user is credited with an external decision. Here the same two facts are kept apart:
+   * `recipientUserId` is WHOSE receipt this is, `actorId` is WHO WROTE IT DOWN.
+   *
+   * §22's rule is refined rather than dropped. A receipt still cannot be recorded for somebody
+   * who was never sent the document — the recipient must be on the distribution — so "a receipt
+   * signed by somebody who was never sent it" remains impossible. What changed is that the
+   * person holding the pen no longer has to be the person who received it.
    *
    * PARTIAL RECEIPT IS NOT RECEIPT. The transmittal advances to `acknowledged` only once EVERY
    * named recipient has answered; until then it stays where it is, and the per-person receipts are
@@ -286,7 +296,13 @@ export class DocControlService {
    * decides: historical records carry no distribution to check against, and refusing them all would
    * rewrite the past rather than govern the present.
    */
-  async acknowledgeTransmittal(tenantId: Id, actorId: Id | null, id: Id, note?: string): Promise<Transmittal> {
+  async acknowledgeTransmittal(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    note?: string,
+    recipientUserId?: Id | null,
+  ): Promise<Transmittal> {
     const transmittal = await this.transmittalStore.findById(id, tenantId);
     if (!transmittal) throw new Error(`Transmittal with ID ${id} not found`);
     if (actorId) {
@@ -298,13 +314,20 @@ export class DocControlService {
     const named = await this.transmittalRecipientStore.listByTransmittal(transmittal.id, tenantId);
     let mine: TransmittalRecipient | null = null;
     if (named.length > 0) {
-      const found = recipientFor(named, actorId);
+      // Whose receipt is being recorded. Named explicitly when somebody records another party's
+      // answer; otherwise the caller is answering for themselves.
+      const subject = recipientUserId?.trim() || actorId;
+      const found = recipientFor(named, subject);
       if (!found) {
         throw new Error(
-          `this transmittal was not sent to ${actorId ?? 'an unidentified caller'}; only a named recipient can acknowledge it`,
+          `this transmittal was not sent to ${subject ?? 'an unidentified party'}; a receipt can only be recorded for somebody it was sent to`,
         );
       }
-      mine = acknowledgeAsRecipient(found, { note });
+      // The recorder is stamped only when it is somebody OTHER than the recipient. Null keeps its
+      // meaning — "they answered here themselves" — instead of every self-acknowledgement
+      // reading as one a third party wrote down.
+      const recordedBy = found.userId === actorId ? null : actorId;
+      mine = acknowledgeAsRecipient(found, { note, recordedBy });
     }
 
     const after = named.map((r) => (mine && r.id === mine.id ? mine : r));
@@ -314,7 +337,12 @@ export class DocControlService {
 
     const ack = makeTransmittalAcknowledgement({
       tenantId, companyId: transmittal.companyId, transmittalId: transmittal.id,
-      transmittalCode: transmittal.code, acknowledgedBy: actorId, note,
+      transmittalCode: transmittal.code,
+      // WHOSE receipt, not who typed it. `mine` is null only for a conveyance with no
+      // distribution at all, where the actor is the only name there is.
+      acknowledgedBy: mine?.userId ?? actorId,
+      recordedBy: mine && mine.userId !== actorId ? actorId : null,
+      note,
     });
     const event = makeEvent({
       type: DOCCONTROL_EVENT.transmittalAcknowledged,
@@ -335,7 +363,8 @@ export class DocControlService {
       await this.events.appendWithClient(handle, [event]);
     });
     this.logger.log(
-      `Transmittal acknowledged by ${actorId ?? 'unknown'}: ${transmittal.code} (${receipt.acknowledgedCount}/${receipt.recipients.length})`,
+      `Transmittal acknowledged by ${ack.acknowledgedBy ?? 'unknown'}${ack.recordedBy ? `, recorded by ${ack.recordedBy}` : ''}: ` +
+        `${transmittal.code} (${receipt.acknowledgedCount}/${receipt.recipients.length})`,
     );
     return updated;
   }

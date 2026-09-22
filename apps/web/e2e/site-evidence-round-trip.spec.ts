@@ -85,6 +85,21 @@ test.describe('site evidence, end to end', () => {
       'the canvas must register the ink before anything can be saved',
     ).toBeVisible({ timeout: 15_000 });
 
+    // ── XOP-12: WHO SIGNED, which is not whoever is holding the tablet ───────────────────────
+    // The pad says "Supervisor Sign-off" and the person filling this form is the site engineer.
+    // Until now the sheet printed `Signed by ${capturedBy}` — the uploading ACCOUNT — so a
+    // controlled document credited the recorder with the supervisor's act. The name is deliberately
+    // one that is not an AURA account: a foreman signing a site diary need not be a user at all.
+    const signedBy = `A. Foreman ${Date.now().toString().slice(-4)}`;
+    const signatory = page.getByTestId('daily-report-signed-by');
+    await expect(signatory, 'the form must ask who signed').toBeVisible({ timeout: 15_000 });
+
+    // Refused before it is sent: a signature recorded against its uploader is not attributable.
+    await page.getByRole('button', { name: 'Add report' }).click();
+    await expect(page.getByText(/Name the person who signed/i),
+      'a signature with nobody\'s name on it must be refused').toBeVisible({ timeout: 15_000 });
+
+    await signatory.fill(signedBy);
     await page.getByRole('button', { name: 'Add report' }).click();
 
     // ── the record now carries the evidence, and the links are the proof it was STORED ────────
@@ -112,6 +127,12 @@ test.describe('site evidence, end to end', () => {
       // eslint-disable-next-line no-console
       console.log(`  evidence ${i + 1}: ${got.length} bytes, ${isPng ? 'PNG' : 'JPEG'}, sha256 ${createHash('sha256').update(got).digest('hex').slice(0, 16)}…`);
     }
+
+    // The signature's own document id, so the decoy below can reuse a real stored file rather
+    // than inventing one — what is being tested is the SELECTION rule, not the upload.
+    const signatureLink = page.getByTestId(/^evidence-link-/).last();
+    const realSignatureFileId = (await signatureLink.getAttribute('href'))!
+      .replace('/api/documents/', '').replace('/content', '');
 
     // The screen no longer holds the picked file: it was saved, so the picker is cleared rather
     // than left showing a thumbnail of something that never left the browser.
@@ -158,10 +179,52 @@ test.describe('site evidence, end to end', () => {
       .poll(async () => printedSignature.evaluate((el) => (el as HTMLImageElement).naturalWidth), { timeout: 15_000 })
       .toBeGreaterThan(0);
 
-    // The photograph is NAMED on the sheet with who captured it. "3 photos" is not evidence
+    // The photograph is NAMED on the sheet with who recorded it. "3 photos" is not evidence
     // anybody can check a progress claim against.
     await expect(sheet, 'each photograph must be named on the printed diary').toContainText('Evidence —');
-    await expect(sheet).toContainText('captured by');
+    await expect(sheet).toContainText('recorded by');
 
+    // ── XOP-12: THE SIGNATORY AND THE RECORDER ARE TWO DIFFERENT NAMES ON THE DOCUMENT ───────
+    //
+    // This is the assertion the defect could not have passed: the sheet printed one name, taken
+    // from the uploading account, under the word "Signed".
+    const attribution = page.getByText(/Signed by /).first();
+    await expect(attribution, 'the sheet must say who signed').toBeVisible({ timeout: 15_000 });
+    const attributionText = (await attribution.innerText()).trim();
+    expect(attributionText, 'the signatory is the person named on the form').toContain(`Signed by ${signedBy}`);
+    expect(attributionText, 'and the recorder is shown AS the recorder, not as the signatory')
+      .toMatch(/recorded by /);
+    // Named separately, so neither can be read as the other.
+    expect(attributionText.replace(`Signed by ${signedBy}`, ''), 'the uploading account must not be presented as the signatory')
+      .toMatch(/recorded by \S+/);
+
+    // The signature is CURRENT: given for exactly the text on this sheet. Neither caveat may
+    // appear, because printing one over a signature that does cover the content would be the
+    // mirror of the defect — a document doubting evidence it holds.
+    expect(attributionText, 'a signature covering this text must not be marked superseded')
+      .not.toMatch(/EARLIER VERSION/i);
+    expect(attributionText, 'nor unverifiable, since this one recorded what it covers')
+      .not.toMatch(/before this report recorded/i);
+
+    // ── …AND THE SIGNATURE IS CHOSEN BY WHAT IT IS, NOT BY WHAT SOMEBODY CALLED IT ───────────
+    //
+    // The sheet used to pick the signature with `/signature|sign-off/i` over the uploader's own
+    // free-text description. A progress photograph described this way was printed AS THE
+    // SIGNATURE on a controlled document, and the real one dropped into the photo rows. So a
+    // decoy is filed deliberately and the sheet must still show the real signature.
+    const decoy = await page.request.post(`${baseURL}/api/site/daily-reports/${reportId}/evidence`, {
+      data: { fileId: realSignatureFileId, category: 'progress', description: 'Riser sign-off point, level 3' },
+    });
+    expect(decoy.ok(), `filing the decoy: ${await decoy.text()}`).toBe(true);
+
+    await page.goto(`/site/daily-reports/${reportId}/print`, { waitUntil: 'domcontentloaded' });
+    const afterDecoy = page.getByText(/Signed by /).first();
+    await expect(afterDecoy).toBeVisible({ timeout: 30_000 });
+    expect((await afterDecoy.innerText()).trim(),
+      'a photograph described as a sign-off must never be printed as the signature')
+      .toContain(`Signed by ${signedBy}`);
+    // …and the decoy is rendered as what it is: a photograph row.
+    await expect(page.locator('body'), 'the decoy belongs in the evidence rows')
+      .toContainText('Riser sign-off point, level 3');
   });
 });

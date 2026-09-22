@@ -21,6 +21,7 @@ import {
   type PlantUsage,
   type InstallationRecord,
   SiteService,
+  dailyReportContentHash,
 } from '@aura/site';
 
 class CreateDailyReportDto {
@@ -78,6 +79,8 @@ class EvidenceDto {
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() category?: EvidenceCategory;
   @IsOptional() @IsString() hash?: string;
+  /** WHO SIGNED — required by the domain for a signature, refused on anything else. */
+  @IsOptional() @IsString() signedBy?: string;
 }
 
 /** The multipart fields beside the file. No `fileId`: this route creates the file. */
@@ -86,6 +89,16 @@ class UploadEvidenceDto {
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsString() description?: string;
   @IsOptional() @IsString() category?: EvidenceCategory;
+  /**
+   * WHO SIGNED, when this upload is a signature. A label, not a user id — the foreman or witness
+   * signing a site diary need not hold an AURA account. Required by the domain for a signature
+   * and refused on anything else, so the caller cannot quietly leave it out and have the sheet
+   * fall back to whoever uploaded the file, which is the defect this closes.
+   *
+   * There is deliberately NO `signedContentHash` here: what the signature covers is read from the
+   * persisted report, for the same reason the file checksum is computed rather than accepted.
+   */
+  @IsOptional() @IsString() signedBy?: string;
 }
 
 class CreateDelayLogDto {
@@ -203,10 +216,27 @@ export class SiteController {
   }
 
   @Post('daily-reports/:id/evidence')
-  addEvidence(@Param('id') id: string, @Body() dto: EvidenceDto): Promise<SiteEvidence> {
+  async addEvidence(@Param('id') id: string, @Body() dto: EvidenceDto): Promise<SiteEvidence> {
     if (!dto?.fileId?.trim()) throw new BadRequestException('fileId is required');
     const ctx = this.tenant.get();
-    return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, dto);
+    /**
+     * A SIGNATURE FILED THROUGH THIS DOOR CARRIES ITS COVERAGE TOO.
+     *
+     * This is the older route: it takes a `fileId` somebody else produced. Leaving the content
+     * hash off here would make it the way to file a signature that covers nothing — the printed
+     * sheet would call it `unverifiable`, which is meant for rows written before the column
+     * existed, and a caller could reach that state deliberately. Computed from the persisted
+     * report, exactly as the upload route does, and never accepted from the caller.
+     */
+    if (dto.category !== 'signature') {
+      return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, dto);
+    }
+    const report = await this.siteService.getDailyReport(ctx.tenantId, id);
+    if (!report) throw new NotFoundException('Daily report not found');
+    return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, {
+      ...dto,
+      signedContentHash: dailyReportContentHash(report),
+    });
   }
 
   /**
@@ -241,13 +271,21 @@ export class SiteController {
     const report = await this.siteService.getDailyReport(ctx.tenantId, id);
     if (!report) throw new NotFoundException('Daily report not found');
 
-    // Stored under the `evidence` category, so the file-type policy holds it to images and PDFs:
-    // a day's evidence is what a phone or a scanner produced, not a spreadsheet or an archive.
+    // WHAT THIS FILE IS, asked once and used everywhere after. The printable report used to pick
+    // the signature out of the evidence rows with a regex over the uploader's own free-text
+    // description, while the form filed photographs and signatures alike under `progress` — so a
+    // photo described “riser sign-off” was printed AS THE SIGNATURE on a controlled document.
+    const category = dto?.category;
+    const isSignature = category === 'signature';
+
+    // Stored under its own DMS kind when it is a signature, so the file-type policy holds it to
+    // the `signature` allow-list rather than the broader `evidence` one; otherwise `evidence`,
+    // which is what a phone or a scanner produced — not a spreadsheet or an archive.
     const stored = await this.dms.createDocument(
       {
         tenantId: ctx.tenantId,
         companyId: ctx.companyId,
-        kind: 'evidence',
+        kind: isSignature ? 'signature' : 'evidence',
         title: dto?.description?.trim() || file.originalname,
         aggregateType: 'site.daily-report',
         aggregateId: id,
@@ -262,10 +300,19 @@ export class SiteController {
 
     return this.siteService.addReportEvidence(ctx.tenantId, ctx.actorId, id, {
       fileId: stored.document.id,
-      category: dto?.category,
+      category,
       description: dto?.description,
       location: dto?.location,
       capturedAt: dto?.capturedAt,
+      // THE SIGNATORY IS THE CALLER'S TO NAME AND THE SERVER'S TO KEEP SEPARATE. `capturedBy`
+      // still resolves to the uploading account below; this is the other name, and nothing
+      // derives one from the other. The domain refuses a signature that does not carry it.
+      signedBy: dto?.signedBy,
+      // WHAT IT COVERS, computed HERE from the report as persisted — never from the caller, for
+      // the same reason the checksum is not. Only for a signature: a photograph does not attest
+      // to a narrative, so giving it a content hash would invite a surface to treat it as though
+      // it did.
+      signedContentHash: isSignature ? dailyReportContentHash(report) : undefined,
       // COMPUTED HERE, never accepted from the caller. The hash is the tamper-evidence on the
       // photograph; one supplied by whoever uploaded the file attests to nothing. The sibling
       // route still takes a client hash for the pre-existing flow, and this one does not.

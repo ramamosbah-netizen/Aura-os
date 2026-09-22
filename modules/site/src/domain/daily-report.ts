@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 /**
  * Site Daily Report (G-34) — the governed, unified site-execution record for one project-day. It is
@@ -51,6 +51,73 @@ export interface DailyReport {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * THE CONTENT A SIGNATURE ON THIS REPORT ACTUALLY COVERS.
+ *
+ * A supervisor signs a DAY, not a row in a table. Storing the signature against the report id
+ * alone binds it to the record and not to what the record said: `rejected` returns a report to
+ * `draft`, the work description and the counts can then be changed, and the signature given for
+ * the earlier text stays attached and keeps printing on the controlled sheet as though the
+ * supervisor had agreed to the new one.
+ *
+ * So the signature carries a hash of the content it was given for, and any surface that shows it
+ * can ask whether that is still the content. The answer is never repaired silently — the old
+ * signature is kept WITH its version, and the lifecycle asks for a new one.
+ *
+ * SCOPE, stated rather than left to be inferred: the four fields the form shows beside the pad
+ * and the sheet prints — the date, the narrative and the two counts. The child line-items are
+ * deliberately NOT included: labour and plant are logged after the report is created, so a hash
+ * over them would be stale the moment the first row was added, and a check that always fails
+ * tells a reader nothing. Widening it is a lifecycle decision, not a hashing one.
+ */
+export interface SignedReportContent {
+  date: string;
+  workDescription: string;
+  manpowerCount: number;
+  equipmentCount: number;
+}
+
+export function signedReportContent(report: SignedReportContent): SignedReportContent {
+  return {
+    date: report.date,
+    workDescription: report.workDescription,
+    manpowerCount: Number(report.manpowerCount) || 0,
+    equipmentCount: Number(report.equipmentCount) || 0,
+  };
+}
+
+/**
+ * Canonical and field-labelled, so two different reports cannot collide and a value moving
+ * between fields changes the hash. Key order is fixed here rather than sorted, because the shape
+ * is four declared fields and not arbitrary JSON.
+ */
+export function dailyReportContentHash(report: SignedReportContent): string {
+  const c = signedReportContent(report);
+  const canonical = [
+    `date=${c.date}`,
+    `work=${c.workDescription}`,
+    `manpower=${c.manpowerCount}`,
+    `equipment=${c.equipmentCount}`,
+  ].join(String.fromCharCode(10));
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+/**
+ * Whether a signature still covers what the report now says.
+ *
+ * `unverifiable` rather than `false` for a signature taken before this hash existed: those rows
+ * are real signatures and saying they do not match would accuse them of something no one checked.
+ * A surface must render the three answers differently — collapsing `unverifiable` into either
+ * one is how a record starts asserting more than it knows.
+ */
+export function signatureCoversContent(
+  signedContentHash: string | null | undefined,
+  report: SignedReportContent,
+): 'current' | 'superseded' | 'unverifiable' {
+  if (!signedContentHash?.trim()) return 'unverifiable';
+  return signedContentHash === dailyReportContentHash(report) ? 'current' : 'superseded';
 }
 
 export interface NewDailyReport {

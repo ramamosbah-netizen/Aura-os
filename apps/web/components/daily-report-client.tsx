@@ -55,6 +55,7 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
   const [dr, setDr] = useState({ projectId: initialProjectId, date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
+  const [signedBy, setSignedBy] = useState('');
   const [lr, setLr] = useState({ projectId: initialProjectId, date: today(), trade: '', headcount: '', hours: '', subcontractorName: '' });
   const reportProjectSelected = dr.projectId.trim().length > 0;
   const labourProjectSelected = lr.projectId.trim().length > 0;
@@ -78,14 +79,25 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
    * so keeping the original extension would have every compressed photo rejected as
    * misrepresenting itself. The extension is taken from the data URL's own media type.
    */
-  const uploadEvidence = async (reportId: string, dataUrl: string, baseName: string, description: string): Promise<SavedEvidence> => {
+  const uploadEvidence = async (
+    reportId: string,
+    dataUrl: string,
+    baseName: string,
+    description: string,
+    // WHAT THIS FILE IS. Photographs and the signature were both filed as `progress`, so the
+    // printable report had to guess which was which from the description text — and a photo
+    // described "riser sign-off" was printed as the signature on a controlled document.
+    // `signedBy` is required by the domain for a signature and refused on anything else.
+    filing: { category: 'progress' | 'signature'; signedBy?: string } = { category: 'progress' },
+  ): Promise<SavedEvidence> => {
     const mediaType = /^data:([^;,]+)/.exec(dataUrl)?.[1] || 'application/octet-stream';
     const bytes = await (await fetch(dataUrl)).blob();
     const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/png' ? 'png' : (mediaType.split('/')[1] || 'bin');
     const stem = baseName.replace(/\.[^.]+$/, '') || 'evidence';
     const form = new FormData();
     form.append('file', bytes, `${stem}.${ext}`);
-    form.append('category', 'progress');
+    form.append('category', filing.category);
+    if (filing.signedBy) form.append('signedBy', filing.signedBy);
     form.append('description', description);
     const res = await fetch(`/api/site/daily-reports/${reportId}/evidence/upload`, { method: 'POST', body: form });
     const body = await res.json().catch(() => ({}));
@@ -100,6 +112,9 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
     setError('');
     if (!reportProjectSelected) return setError('Select a project before creating a daily report.');
     if (!dr.date.trim() || !dr.workDescription.trim()) return setError('Date and work description are required');
+    // Asked here so the person is still looking at the pad. The domain refuses it too — this is
+    // the message that can name the field rather than a 400 from a background upload.
+    if (signature && !signedBy.trim()) return setError('Name the person who signed. A signature recorded against whoever uploaded it is not attributable to them.');
     setBusy(true);
     try {
       const payload = { projectId: dr.projectId, date: dr.date, workDescription: dr.workDescription, manpowerCount: Number(dr.manpowerCount) || 0, equipmentCount: Number(dr.equipmentCount) || 0 };
@@ -145,7 +160,13 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
         }
         if (signature) {
           try {
-            stored.push(await uploadEvidence(reportId, signature, 'supervisor-signature', 'Supervisor sign-off'));
+            // WHO SIGNED, carried with the stroke. Without it the printed sheet falls back to the
+            // uploading account and reads "Signed by <whoever held the tablet>" over a signature
+            // the supervisor gave — the recorder credited with somebody else's act.
+            stored.push(await uploadEvidence(
+              reportId, signature, 'supervisor-signature', 'Supervisor sign-off',
+              { category: 'signature', signedBy: signedBy.trim() },
+            ));
           } catch (e) { failed.push(`signature: ${(e as Error).message}`); }
         }
         if (stored.length) setSaved((p) => ({ ...p, [reportId]: stored }));
@@ -158,6 +179,7 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
       }
       setAttachments([]);
       setSignature(null);
+      setSignedBy('');
       setDr({ projectId: dr.projectId, date: today(), workDescription: '', manpowerCount: '', equipmentCount: '' });
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
@@ -242,7 +264,20 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
         {projectsUnavailable && <div role="alert" style={st.err}>Project list is unavailable. The report form is locked until projects can be loaded.</div>}
         {reportProjectSelected && <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
           <FileAttachmentZone label="Site Progress Photos" attachments={attachments} onChange={setAttachments} />
-          <SignatureCanvas label="Supervisor Sign-off" value={signature} onChange={setSignature} />
+          <div>
+            <SignatureCanvas label="Supervisor Sign-off" value={signature} onChange={setSignature} />
+            {/* WHO SIGNED — a name, not an account. The supervisor or foreman signing a site
+                diary need not be an AURA user at all, and the person holding the tablet is the
+                recorder rather than the signatory. */}
+            <input
+              aria-label="Name of the person who signed"
+              placeholder="Name of the person who signed"
+              value={signedBy}
+              onChange={(e) => setSignedBy(e.target.value)}
+              data-testid="daily-report-signed-by"
+              style={{ marginTop: 8, width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--panel-2)', color: 'var(--text)' }}
+            />
+          </div>
         </div>}
 
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -277,7 +312,7 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
                       target="_blank"
                       rel="noopener noreferrer"
                       data-testid={`evidence-link-${r.id}`}
-                      title={`${e.description ?? 'Evidence'} — captured by ${e.capturedBy ?? 'unknown'}`}
+                      title={`${e.description ?? 'Evidence'} — recorded by ${e.capturedBy ?? 'unknown'}`}
                       style={{ marginRight: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}
                     >
                       📎{i + 1}

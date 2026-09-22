@@ -19,6 +19,7 @@ import {
   type SiteProgressEntry, type NewSiteProgressEntry, makeSiteProgressEntry,
   type SiteDelayEntry, type NewSiteDelayEntry, makeSiteDelayEntry,
   type SiteEvidence, type NewSiteEvidence, makeSiteEvidence,
+  type ResolvedReportSignature, resolveReportSignature,
 } from './domain/daily-report-lines';
 import { type DelayLog, makeDelayLog } from './domain/delay-log';
 import { type MaterialConsumption, makeMaterialConsumption } from './domain/material-consumption';
@@ -313,6 +314,12 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
   async getDailyReportDetail(tenantId: Id, id: Id): Promise<{
     report: DailyReport; labour: SiteLabourEntry[]; plant: SitePlantEntry[];
     progress: SiteProgressEntry[]; delays: SiteDelayEntry[]; evidence: SiteEvidence[];
+    /**
+     * WHICH signature the day carries and whether it still covers the text — resolved HERE, not
+     * by each surface. The controlled sheet cannot import this module, and a second copy of the
+     * selection rule and the content hash out there would drift from this one silently.
+     */
+    signature: ResolvedReportSignature | null;
   } | null> {
     const report = await this.dailyReportStore.findById(id, tenantId);
     if (!report) return null;
@@ -323,7 +330,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
       this.reportDelayStore.listByReport(id, tenantId),
       this.reportEvidenceStore.listByReport(id, tenantId),
     ]);
-    return { report, labour, plant, progress, delays, evidence };
+    return { report, labour, plant, progress, delays, evidence, signature: resolveReportSignature(evidence, report) };
   }
 
   getDailyReport(tenantId: Id, id: Id): Promise<DailyReport | null> {

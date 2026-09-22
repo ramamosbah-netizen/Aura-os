@@ -88,7 +88,7 @@ export const makePostgresDelayStore = (pool: Pool): ReportLineStore<SiteDelayEnt
 export const makePostgresEvidenceStore = (pool: Pool): ReportLineStore<SiteEvidence> =>
   new PostgresReportLineStore<SiteEvidence>(pool, {
     table: 'aura_site_report_evidence',
-    extraCols: ['file_id', 'captured_at', 'captured_by', 'location', 'description', 'category', 'hash'],
-    toExtraParams: (l) => [l.fileId, l.capturedAt, l.capturedBy, l.location, l.description, l.category, l.hash],
-    fromRow: (r, b) => ({ ...b, fileId: r.file_id, capturedAt: r.captured_at ? iso(r.captured_at) : null, capturedBy: r.captured_by, location: r.location, description: r.description, category: r.category, hash: r.hash }),
+    extraCols: ['file_id', 'captured_at', 'captured_by', 'location', 'description', 'category', 'hash', 'signed_by', 'signed_content_hash'],
+    toExtraParams: (l) => [l.fileId, l.capturedAt, l.capturedBy, l.location, l.description, l.category, l.hash, l.signedBy, l.signedContentHash],
+    fromRow: (r, b) => ({ ...b, fileId: r.file_id, capturedAt: r.captured_at ? iso(r.captured_at) : null, capturedBy: r.captured_by, location: r.location, description: r.description, category: r.category, hash: r.hash, signedBy: r.signed_by ?? null, signedContentHash: r.signed_content_hash ?? null }),
   });

@@ -7,8 +7,12 @@ import lineage from './service-scope-helper-lineage.json';
 
 const root=resolve(__dirname,'../../..');
 describe('service authorization architecture — classified ownership, not a projectId spelling rule',()=>{
-  it('accounts for 65 service assertions plus the shared Projects helper, with no silent additions/removals',()=>{
+  it('accounts for 67 service assertions plus the shared Projects helper, with no silent additions/removals',()=>{
     const actual=inventory(root);
+    // 67 since QHS-03: an NCR gained a door for its evidence and a due date it could be late
+    // against. Neither asserted anything before because neither existed — nothing could be
+    // overdue without a date, so there was nothing to escalate. Two new authorities for two new
+    // acts, not two rules relaxed.
     // 65 since QHS-07: attaching evidence to an inspection request asserted nothing because there
     // was nothing to assert — quality had no upload route at all, and every multipart door in AURA
     // was in CRM, Tendering, DocControl and Site. The census grew by the authority a new door
@@ -19,9 +23,9 @@ describe('service authorization architecture — classified ownership, not a pro
     // wave D's two new helpers were both forced to be stated rather than slipped in.
     // 62 since wave B: approving a risk assessment asserted NOTHING before, so the census grew by the
     // one authority that was missing rather than by a new feature.
-    expect(actual.filter(r=>r.file.endsWith('.service.ts'))).toHaveLength(65);
+    expect(actual.filter(r=>r.file.endsWith('.service.ts'))).toHaveLength(67);
     expect(actual.map(r=>r.key).sort()).toEqual(classification.map(r=>r.key).sort());
-    expect(new Set(classification.map(r=>r.key)).size).toBe(66);
+    expect(new Set(classification.map(r=>r.key)).size).toBe(68);
     expect(actual.filter(r=>r.file.startsWith('modules/commissioning/'))).toHaveLength(0);
   });
   it('pins each reviewed target and canonical validation/load source, including intentional non-project authority',()=>{

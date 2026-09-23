@@ -169,3 +169,37 @@ export class InspectionEvidenceCommittedProvider implements CommittedEvidencePro
     return NOT_COMMITTED;
   }
 }
+
+@Injectable()
+export class NcrEvidenceCommittedProvider implements CommittedEvidenceProvider, OnModuleInit {
+  readonly entity = 'quality.ncr';
+
+  constructor(private readonly resolver: DocumentAccessResolver, private readonly quality: QualityService) {}
+
+  onModuleInit(): void {
+    this.resolver.registerCommittedEvidenceProvider(this);
+  }
+
+  async isCommitted(document: Document): Promise<CommittedEvidenceVerdict> {
+    const found = await this.quality.readNcr(document.tenantId, document.aggregateId);
+    if (!found) return NOT_COMMITTED;
+    const row = found.evidence.find((e) => e.fileId === document.id);
+    if (!row) return NOT_COMMITTED;
+
+    if (row.category === 'signature') {
+      return {
+        committed: true,
+        reason: `this is a signature on NCR ${found.ncr.ncrNumber} and cannot be replaced — ${CORRECTION}`,
+      };
+    }
+    // A photograph on an open NCR is working material; the same photograph on a CLOSED one is
+    // part of what the independent verifier accepted the correction against.
+    if (found.ncr.status === 'closed') {
+      return {
+        committed: true,
+        reason: `NCR ${found.ncr.ncrNumber} has been closed, so the evidence its verification rested on can no longer be replaced — attach a further one instead`,
+      };
+    }
+    return NOT_COMMITTED;
+  }
+}

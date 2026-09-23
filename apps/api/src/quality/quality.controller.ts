@@ -33,6 +33,11 @@ class RaiseNcrDto {
    */
   @IsOptional() @IsString() system?: string;
   @IsOptional() @IsString() assignedTo?: string;
+  /**
+   * When the correction is due. Optional: an NCR nobody dated is a real one — it simply
+   * cannot be overdue, and saying it is would invent a fact.
+   */
+  @IsOptional() @IsString() dueAt?: string;
   @IsOptional() @IsString() sourceIrId?: string;
   @IsOptional() @IsString() sourceIrNumber?: string;
 }
@@ -117,6 +122,19 @@ class UploadInspectionEvidenceDto {
   @IsOptional() @IsString() capturedAt?: string;
 }
 
+/** The multipart fields beside NCR evidence. `stage` is which side of the NCR it evidences. */
+class UploadNcrEvidenceDto {
+  @IsOptional() @IsString() stage?: 'raised' | 'corrected';
+  @IsOptional() @IsString() category?: 'photo' | 'signature' | 'other';
+  @IsOptional() @IsString() description?: string;
+  /** WHO SIGNED, for a signature. A label — a subcontractor's foreman holds no AURA account. */
+  @IsOptional() @IsString() signedBy?: string;
+}
+
+class EscalateNcrDto {
+  @IsString() reason!: string;
+}
+
 class LogSnagDto {
   @IsString() projectId!: string;
   @IsOptional() @IsString() projectName?: string;
@@ -164,6 +182,7 @@ export class QualityController {
       assignedTo: dto.assignedTo,
       sourceIrId: dto.sourceIrId,
       sourceIrNumber: dto.sourceIrNumber,
+      dueAt: dto.dueAt,
       raisedBy: ctx.actorId || undefined,
     });
   }
@@ -412,6 +431,78 @@ export class QualityController {
       // photograph; one supplied by whoever uploaded the file attests to nothing.
       hash: stored.versions[0].checksum,
     });
+  }
+
+  /**
+   * EVIDENCE FOR AN NCR, on whichever side of it the file belongs to.
+   *
+   * The screen has shown a "QA / Inspector Sign-off" pad since it existed, bound to React state
+   * the submit payload never read, and there was no attachment route at all — so a
+   * non-conformance could carry no photograph of the thing that was wrong.
+   *
+   * THE PERMISSION IS DECLARED: the derived name would be `quality.ncr.evidence`, which no role
+   * holds. `quality.ncr.correct` is the authority that works the NCR, and evidencing it belongs
+   * with that.
+   */
+  @Post('ncrs/:id/evidence/upload')
+  @Permissions('quality.ncr.correct')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024, files: 1 } }))
+  async uploadNcrEvidence(
+    @Param('id') id: string,
+    @Body() dto: UploadNcrEvidenceDto,
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException('a file is required');
+    const ctx = this.tenant.get();
+    const found = await this.qualityService.readNcr(ctx.tenantId, id);
+    if (!found) throw new NotFoundException(`NCR with ID ${id} not found`);
+
+    const isSignature = dto?.category === 'signature';
+    const stored = await this.dms.createDocument(
+      {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        kind: isSignature ? 'signature' : 'evidence',
+        title: dto?.description?.trim() || file.originalname,
+        aggregateType: 'quality.ncr',
+        aggregateId: id,
+        createdBy: ctx.actorId ?? null,
+      },
+      {
+        fileName: file.originalname.split(/[\\/]/).pop() || 'evidence',
+        contentType: file.mimetype || 'application/octet-stream',
+        data: file.buffer,
+      },
+    );
+
+    return this.qualityService.addNcrEvidence(ctx.tenantId, ctx.actorId, id, {
+      fileId: stored.document.id,
+      stage: dto?.stage,
+      category: dto?.category,
+      description: dto?.description,
+      signedBy: dto?.signedBy,
+      // COMPUTED HERE, never accepted from the caller.
+      hash: stored.versions[0].checksum,
+    });
+  }
+
+  /**
+   * ESCALATE AN OVERDUE CORRECTION. The domain refuses one that is not actually late.
+   */
+  @Post('ncrs/:id/escalate')
+  @Permissions('quality.ncr.verify')
+  escalateNcr(@Param('id') id: string, @Body() dto: EscalateNcrDto) {
+    if (!dto?.reason?.trim()) throw new BadRequestException('a reason is required to escalate an NCR');
+    const ctx = this.tenant.get();
+    return this.qualityService.escalateNcr(ctx.tenantId, ctx.actorId, id, dto.reason);
+  }
+
+  /** The NCR with its evidence, which half is evidenced, and whether it is late. */
+  @Get('ncrs/:id/detail')
+  async ncrDetail(@Param('id') id: string) {
+    const found = await this.qualityService.readNcr(this.tenant.get().tenantId, id);
+    if (!found) throw new NotFoundException(`NCR with ID ${id} not found`);
+    return found;
   }
 
   /** The inspection with its photographs and its signature, the signature already judged. */

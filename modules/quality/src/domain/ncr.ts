@@ -55,12 +55,27 @@ export interface Ncr {
   verifiedBy: string | null;
   verifiedAt: string | null;
   closedAt: string | null;
+  /**
+   * When the correction is due. NULL means UNDATED, which is not the same as "not overdue" — an
+   * NCR nobody put a date on cannot be late, and saying it is would invent a fact.
+   */
+  dueAt: string | null;
+  /**
+   * That it WAS escalated, recorded rather than derived. A computed "is it late right now"
+   * disappears the moment somebody extends the deadline, and an escalation that vanishes when the
+   * date moves is not an audit trail.
+   */
+  escalatedAt: string | null;
+  escalatedBy: string | null;
+  escalationReason: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface NewNcr {
   tenantId: string;
+  /** When the correction is due. Optional: an undated NCR is a real one. */
+  dueAt?: string | null;
   companyId?: string | null;
   projectId: string;
   projectName?: string | null;
@@ -102,6 +117,11 @@ export function makeNcr(input: NewNcr): Ncr {
     verifiedBy: null,
     verifiedAt: null,
     closedAt: null,
+    // Undated until somebody says when the correction is due. Not overdue; not on time.
+    dueAt: input.dueAt ?? null,
+    escalatedAt: null,
+    escalatedBy: null,
+    escalationReason: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -152,6 +172,47 @@ export function markNcrCorrected(ncr: Ncr, actorId: string | null): Ncr {
 }
 
 /**
+ * IS THIS NCR LATE? A question with three answers, not two.
+ *
+ * `undated` is its own answer and not a quiet "no": an NCR nobody gave a date to cannot be
+ * overdue, and a screen that shows it as on-time is making a claim nobody made. A closed NCR is
+ * not overdue either — it is finished, whatever date it finished after.
+ */
+export function ncrOverdue(ncr: Ncr, now = new Date()): 'overdue' | 'on-time' | 'undated' | 'closed' {
+  if (ncr.status === 'closed') return 'closed';
+  if (!ncr.dueAt) return 'undated';
+  return new Date(ncr.dueAt).getTime() < now.getTime() ? 'overdue' : 'on-time';
+}
+
+/**
+ * ESCALATE AN OVERDUE CORRECTION.
+ *
+ * Refused unless it really is overdue, because an escalation raised against something that is not
+ * late is noise, and a register full of noise is one nobody reads. Refused on a closed NCR for the
+ * same reason. Recorded once — escalating twice says nothing the first did not.
+ */
+export function escalateNcr(ncr: Ncr, actorId: string | null, reason: string, now = new Date()): Ncr {
+  const state = ncrOverdue(ncr, now);
+  if (state !== 'overdue') {
+    throw new Error(
+      state === 'undated'
+        ? 'only an NCR with a due date can be overdue \u2014 set when the correction is due before escalating it'
+        : `only an overdue NCR can be escalated; this one is ${state}`,
+    );
+  }
+  if (ncr.escalatedAt) throw new Error('conflict: this NCR has already been escalated');
+  if (!reason?.trim()) {
+    throw new Error('validation: an escalation requires a reason \u2014 the record has to say what it was escalated for');
+  }
+  return {
+    ...touch(ncr),
+    escalatedAt: now.toISOString(),
+    escalatedBy: actorId,
+    escalationReason: reason.trim(),
+  };
+}
+
+/**
  * verify close-out from `corrected`:
  *  - accepted → closed (immutable)
  *  - rejected → action_planned (correction inadequate; must be re-done)
@@ -159,6 +220,21 @@ export function markNcrCorrected(ncr: Ncr, actorId: string | null): Ncr {
 export function verifyNcr(ncr: Ncr, accepted: boolean, actorId: string | null): Ncr {
   const to: NcrStatus = accepted ? 'closed' : 'action_planned';
   assertNcrTransition(ncr.status, to);
+  /**
+   * THE VERIFIER IS NOT THE PERSON WHO DID THE REPAIR.
+   *
+   * "Independent verifier accepts/rejects" is the whole point of the step, and nothing enforced
+   * it: one account could raise a non-conformance, mark it corrected and close it, and the record
+   * would read as though three people had been involved.
+   *
+   * Independent OF THE CORRECTION, deliberately — not of the raiser. The QA/QC engineer who
+   * raised an NCR is normally the right person to verify the fix, and barring them would push the
+   * sign-off onto somebody with less reason to look. What cannot happen is the person who did the
+   * work signing it off.
+   */
+  if (actorId && ncr.correctedBy && actorId === ncr.correctedBy) {
+    throw new Error('the person who corrected this NCR may not verify it \u2014 somebody signing off their own repair is not verification');
+  }
   const now = new Date().toISOString();
   return {
     ...touch(ncr),

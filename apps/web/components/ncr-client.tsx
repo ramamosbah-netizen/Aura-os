@@ -33,6 +33,16 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
   const [f, setF] = useState({ projectId: initialProjectId, ncrNumber: '', description: '', severity: 'minor', system: '', assignedTo: '', rootCause: '', proposedCorrection: '' });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   const [signature, setSignature] = useState<string | null>(null);
+  /**
+   * WHO SIGNED the raise, and WHEN THE CORRECTION IS DUE.
+   *
+   * The pad has been on this screen since it existed, bound to a handler whose value the payload
+   * never read — so a non-conformance carried no photograph of the thing that was wrong and no
+   * signature from whoever found it. And with no due date nothing could be late, so nothing could
+   * be escalated: "overdue escalation" had nothing to be overdue against.
+   */
+  const [signedBy, setSignedBy] = useState('');
+  const [dueAt, setDueAt] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -42,10 +52,41 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
     closed: rows.filter((r) => r.status === 'closed').length,
   }), [rows]);
 
+  /**
+   * Send one item to storage and attach it to the NCR, in one call.
+   *
+   * The extension is taken from the data URL's own media type: the picker re-encodes images, so a
+   * picked `defect.png` may be JPEG bytes by the time it gets here and the server judges the type
+   * from the CONTENT.
+   */
+  const uploadNcrEvidence = async (
+    ncrId: string,
+    dataUrl: string,
+    baseName: string,
+    description: string,
+    filing: { category?: 'photo' | 'signature'; signedBy?: string },
+  ): Promise<void> => {
+    const mediaType = /^data:([^;,]+)/.exec(dataUrl)?.[1] || 'application/octet-stream';
+    const bytes = await (await fetch(dataUrl)).blob();
+    const ext = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/png' ? 'png' : (mediaType.split('/')[1] || 'bin');
+    const stem = baseName.replace(/\.[^.]+$/, '') || 'evidence';
+    const form = new FormData();
+    form.append('file', bytes, `${stem}.${ext}`);
+    form.append('stage', 'raised');
+    form.append('category', filing.category ?? 'photo');
+    form.append('description', description);
+    if (filing.signedBy) form.append('signedBy', filing.signedBy);
+    const res = await fetch(`/api/quality/ncrs/${ncrId}/evidence/upload`, { method: 'POST', body: form });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body?.message || body?.error || `evidence upload failed (${res.status})`);
+  };
+
   const set = (k: keyof typeof f, v: string) => setF((p) => ({ ...p, [k]: v }));
 
   const raise = async () => {
     setError('');
+    // Asked while the person is still looking at the pad; the domain refuses it too.
+    if (signature && !signedBy.trim()) return setError('Name the person who signed this NCR. A signature recorded against whoever entered it is not attributable to them.');
     if (!f.projectId.trim() || !f.ncrNumber.trim() || !f.description.trim()) return setError('Project, NCR number and description are required');
     setBusy(true);
     try {
@@ -55,12 +96,44 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
           projectId: f.projectId, ncrNumber: f.ncrNumber, description: f.description,
           severity: f.severity, system: f.system || undefined, assignedTo: f.assignedTo || undefined,
           rootCause: f.rootCause || undefined, proposedCorrection: f.proposedCorrection || undefined,
+          dueAt: dueAt ? new Date(dueAt).toISOString() : undefined,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
+      /**
+       * THE PART THAT WAS MISSING. The picked photographs and the signature were held in React
+       * state, drawn back to the person who supplied them, and never sent — the payload above has
+       * no field for either, and until now quality had no NCR attachment route to send them to.
+       * Filed at the `raised` stage, because a photograph of the defect and a photograph of the
+       * repair are not interchangeable.
+       */
+      const failed: string[] = [];
+      for (const [i, a] of attachments.entries()) {
+        if (!a.dataUrl) continue;
+        try {
+          await uploadNcrEvidence(data.id, a.dataUrl, a.name, `Non-conformance photo ${i + 1}`, {});
+        } catch (e) { failed.push(`${a.name}: ${(e as Error).message}`); }
+      }
+      if (signature) {
+        try {
+          await uploadNcrEvidence(data.id, signature, 'ncr-signature', 'QA / Inspector sign-off', {
+            category: 'signature', signedBy: signedBy.trim(),
+          });
+        } catch (e) { failed.push(`signature: ${(e as Error).message}`); }
+      }
+
       setRows((p) => [data, ...p]);
       setF({ projectId: f.projectId, ncrNumber: '', description: '', severity: 'minor', system: '', assignedTo: '', rootCause: '', proposedCorrection: '' });
+      if (failed.length) {
+        // Said out loud rather than clearing the pickers and letting the screen imply it saved.
+        setError(`The NCR was raised. ${failed.length} item(s) were not attached: ${failed.join('; ')}`);
+        return;
+      }
+      setAttachments([]);
+      setSignature(null);
+      setSignedBy('');
+      setDueAt('');
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   };
 
@@ -100,7 +173,27 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 14 }}>
           <FileAttachmentZone label="Defect Photo Evidence" attachments={attachments} onChange={setAttachments} />
-          <SignatureCanvas label="QA / Inspector Sign-off" value={signature} onChange={setSignature} />
+          <div>
+            <SignatureCanvas label="QA / Inspector Sign-off" value={signature} onChange={setSignature} />
+            {/* WHO SIGNED — a name, not an account. A subcontractor's foreman signing off a
+                repair holds no AURA user, and the person entering it is the recorder. */}
+            <input
+              aria-label="Name of the person who signed"
+              placeholder="Name of the person who signed"
+              value={signedBy}
+              onChange={(e) => setSignedBy(e.target.value)}
+              data-testid="ncr-signed-by"
+              style={{ marginTop: 8, width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--panel-2)', color: 'var(--text)' }}
+            />
+            <input
+              type="date"
+              aria-label="Correction due by"
+              value={dueAt}
+              onChange={(e) => setDueAt(e.target.value)}
+              data-testid="ncr-due-at"
+              style={{ marginTop: 8, width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--line)', background: 'var(--panel-2)', color: 'var(--text)' }}
+            />
+          </div>
         </div>
 
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>

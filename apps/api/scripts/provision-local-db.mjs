@@ -310,6 +310,19 @@ const devPassword = process.env.AUTH_DEV_PASSWORD?.trim() || 'e2e-password';
 //                 verify the fix, so the fixture proves the TRAIL, not a second pair of hands.
 //   T&C           u-e2e-tc runs the commissioning register and submits a handover; it accepts none.
 
+// `u-e2e-qaqc` and `u-e2e-qaqc2` are the QHS-03 proof, and the reason is the same one that gave
+// HSE, the QS and the finance controller a pair. An NCR refuses the person who CORRECTED it their
+// own verification — "somebody signing off their own repair is not verification" — and that rule
+// can only be DEMONSTRATED with two people on the same shipped role.
+//
+// Two of the SAME role on purpose. `quality.ncr.correct` and `quality.ncr.verify` both sit on
+// r-qa-qc, which is correct: independence here is between two PEOPLE, not two job titles, and
+// widening another role to make the test pass would be changing authorization to suit a fixture.
+//
+// Worth recording rather than fixing here: `r-site-engineer` — the responsible owner who
+// actually does the remedial work — holds neither permission, so the person who carried out a
+// correction cannot record that they did. That is a question about the role catalogue, not about
+// this script.
 // `u-e2e-planner` is the wave-E proof that a named capability reaches the route behind it. The
 // Planning Engineer NAMED `projects.delay.*` and could assess no delay, because the whole delay/EOT
 // service asserted ONE permission — `projects.project.update` — which that role does not hold.
@@ -340,7 +353,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 ['u-e2e-qs', 'r-commercial-manager'], ['u-e2e-qs2', 'r-commercial-manager'],
                                 ['u-e2e-hse', 'r-hse'], ['u-e2e-hse2', 'r-hse'],
                                 ['u-e2e-eng', 'r-technical-engineer'], ['u-e2e-doccon', 'r-document-controller'],
-                                ['u-e2e-projeng', 'r-project-engineer'], ['u-e2e-qaqc', 'r-qa-qc'],
+                                ['u-e2e-projeng', 'r-project-engineer'], ['u-e2e-qaqc', 'r-qa-qc'], ['u-e2e-qaqc2', 'r-qa-qc'],
                                 ['u-e2e-tc', 'r-commissioning-engineer'], ['u-e2e-fm', 'r-handover-fm'],
                                 ['u-e2e-planner', 'r-planning-engineer'],
                                 ['u-e2e-service', 'r-service-manager'], ['u-e2e-exec', 'r-executive'],

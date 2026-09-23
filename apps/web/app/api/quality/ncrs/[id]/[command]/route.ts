@@ -2,7 +2,9 @@ import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
 // NCR workflow-command forwarder. The backend enforces the state transition; this whitelists the
 // verb and forwards the body.
-const COMMANDS = new Set(['plan', 'correct', 'verify']);
+// `escalate` joins them: an overdue correction is a governed act like the other three, and the
+// allow-list is the whole point — it does not grow by accident.
+const COMMANDS = new Set(['plan', 'correct', 'verify', 'escalate']);
 
 export async function POST(
   request: Request,

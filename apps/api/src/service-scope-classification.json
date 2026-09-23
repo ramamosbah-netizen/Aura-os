@@ -825,6 +825,38 @@
     }
   },
   {
+    "key": "modules/quality/src/quality.service.ts#escalateNcr",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical ncr.projectId loaded from the owning store, never an authorization override from URL/query/body. Escalating an overdue correction is a VERIFICATION-side act — it is the independent side of the NCR telling the organisation the repair has not happened — so it is gated on quality.ncr.verify rather than on the correcting authority, which is the party being escalated about.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "New authority — nothing could be overdue before 0385 gave the NCR a due date, so there was nothing to escalate and no check to make",
+    "evidence": "quality.escalateNcr",
+    "security": {
+      "target": "{ permission: 'quality.ncr.verify', orgPath, resource: { type: 'project', id: ncr.projectId } }",
+      "checks": [],
+      "provenance": [
+        "ncr = await this.ncrStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#addNcrEvidence",
+    "classification": "PROJECT_SCOPE_REQUIRED",
+    "resolution": "Canonical ncr.projectId loaded from the owning store, never an authorization override from URL/query/body. Evidencing an NCR is gated on quality.ncr.correct: the route DECLARES it rather than deriving quality.ncr.evidence, which no role holds and which would leave the door reachable by nobody.",
+    "organizationBranch": null,
+    "baselineScope": "scoped",
+    "change": "New authority — quality had no NCR attachment route, so a non-conformance could carry no photograph and there was no check to make",
+    "evidence": "quality.addNcrEvidence",
+    "security": {
+      "target": "{ permission: 'quality.ncr.correct', orgPath, resource: { type: 'project', id: ncr.projectId } }",
+      "checks": [],
+      "provenance": [
+        "ncr = await this.ncrStore.findById(id, tenantId)"
+      ]
+    }
+  },
+  {
     "key": "modules/quality/src/quality.service.ts#resolveSnag",
     "classification": "PROJECT_SCOPE_REQUIRED",
     "resolution": "Canonical snag.projectId loaded from the owning store (or validated frozen delivery mapping), never an authorization override from URL/query/body.",

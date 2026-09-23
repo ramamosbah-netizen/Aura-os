@@ -2,6 +2,7 @@ export * from './domain/ncr';
 export * from './domain/ncr-verification';
 export * from './domain/inspection-request';
 export * from './domain/ir-evidence';
+export * from './domain/ncr-evidence';
 export * from './domain/snag';
 export * from './domain/itp';
 export * from './domain/material-approval';

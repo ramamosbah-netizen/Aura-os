@@ -4,6 +4,7 @@ import type { Ncr } from './domain/ncr';
 import type { NcrVerification } from './domain/ncr-verification';
 import type { InspectionRequest } from './domain/inspection-request';
 import type { IrEvidence } from './domain/ir-evidence';
+import type { NcrEvidence } from './domain/ncr-evidence';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
 import type { MaterialApproval } from './domain/material-approval';
@@ -23,6 +24,10 @@ export interface NcrStore {
   findByProject(projectId: string, tenantId: string): Promise<Ncr[]>;
   findAll(tenantId: string): Promise<Ncr[]>;
   listPaged(tenantId: string, page: PageParams): Promise<Page<Ncr>>;
+
+  /** The non-conformance and the repair, each evidenced on its own side. Append-only. */
+  saveEvidence(evidence: NcrEvidence, tx?: TxHandle): Promise<void>;
+  listEvidence(ncrId: string, tenantId: string): Promise<NcrEvidence[]>;
 }
 
 export interface NcrVerificationStore {

@@ -2,7 +2,11 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type HealthSignal, type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
-import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr } from './domain/ncr';
+import { type Ncr, makeNcr, planNcrAction, markNcrCorrected, verifyNcr, escalateNcr, ncrOverdue } from './domain/ncr';
+import {
+  type NcrEvidence, type NcrEvidenceCategory, type NcrEvidenceStage,
+  makeNcrEvidence, ncrEvidenceCoverage,
+} from './domain/ncr-evidence';
 import { makeNcrVerification } from './domain/ncr-verification';
 import { type InspectionRequest, makeInspectionRequest, assertInspectionTransition } from './domain/inspection-request';
 import {
@@ -101,6 +105,8 @@ export class QualityService {
     assignedTo?: string;
     sourceIrId?: string;
     sourceIrNumber?: string;
+    /** When the correction is due. Optional — an undated NCR cannot be overdue. */
+    dueAt?: string | null;
   }): Promise<Ncr> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
     if (input.raisedBy) {
@@ -191,6 +197,84 @@ export class QualityService {
   }
 
   /** action_planned → corrected. The owner marks the corrective action implemented. */
+  /**
+   * ESCALATE AN OVERDUE CORRECTION.
+   *
+   * Refused unless the NCR really is overdue — an escalation raised against something that is
+   * not late is noise, and a register full of noise is one nobody reads. The domain owns that
+   * judgement; this adds the authority check and the audit event.
+   */
+  async escalateNcr(tenantId: Id, actorId: Id | null, id: Id, reason: string): Promise<Ncr> {
+    const ncr = await this.ncrStore.findById(id, tenantId);
+    if (!ncr) throw new Error(`NCR with ID ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (ncr.companyId) orgPath.push({ level: 'company', id: ncr.companyId });
+      this.access.assert(actorId, { permission: 'quality.ncr.verify', orgPath, resource: { type: 'project', id: ncr.projectId } });
+    }
+    const escalated = escalateNcr(ncr, actorId, reason);
+    this.logger.log(`NCR ${ncr.ncrNumber} escalated by ${actorId ?? 'an unidentified user'}: ${escalated.escalationReason}`);
+    return this.saveNcrWithEvent(escalated, actorId, QUALITY_EVENT.ncrCorrected);
+  }
+
+  /**
+   * EVIDENCE, ON WHICHEVER SIDE OF THE NCR IT BELONGS TO.
+   *
+   * The controller stores the file, as every other upload in this repository does, so the bytes
+   * are judged by the file-type policy and governed by the document access engine before they
+   * reach here. `stage` is what keeps a photograph of the defect and a photograph of the repair
+   * from being read as the same thing.
+   */
+  async addNcrEvidence(
+    tenantId: Id,
+    actorId: Id | null,
+    id: Id,
+    input: { fileId: string; stage?: NcrEvidenceStage; category?: NcrEvidenceCategory; description?: string | null; hash?: string | null; signedBy?: string | null },
+  ): Promise<NcrEvidence> {
+    const ncr = await this.ncrStore.findById(id, tenantId);
+    if (!ncr) throw new Error(`NCR with ID ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (ncr.companyId) orgPath.push({ level: 'company', id: ncr.companyId });
+      this.access.assert(actorId, { permission: 'quality.ncr.correct', orgPath, resource: { type: 'project', id: ncr.projectId } });
+    }
+    const evidence = makeNcrEvidence({
+      tenantId: ncr.tenantId,
+      companyId: ncr.companyId,
+      ncrId: ncr.id,
+      projectId: ncr.projectId,
+      fileId: input.fileId,
+      stage: input.stage,
+      category: input.category,
+      description: input.description,
+      capturedBy: actorId,
+      hash: input.hash,
+      signedBy: input.signedBy,
+    });
+    await this.ncrStore.saveEvidence(evidence);
+    this.logger.log(`NCR ${ncr.ncrNumber} evidence (${evidence.stage}/${evidence.category}) recorded by ${actorId ?? 'an unidentified user'}`);
+    return evidence;
+  }
+
+  /**
+   * THE NCR WITH ITS EVIDENCE AND WHETHER IT IS LATE.
+   *
+   * `overdue` is resolved here and not by each surface: “is it late” has three answers, and a
+   * screen re-deriving them would sooner or later render `undated` as on-time — which is a claim
+   * nobody made.
+   */
+  async readNcr(tenantId: Id, id: Id): Promise<{
+    ncr: Ncr;
+    evidence: NcrEvidence[];
+    evidenced: { raised: boolean; corrected: boolean };
+    overdue: 'overdue' | 'on-time' | 'undated' | 'closed';
+  } | null> {
+    const ncr = await this.ncrStore.findById(id, tenantId);
+    if (!ncr) return null;
+    const evidence = await this.ncrStore.listEvidence(id, tenantId);
+    return { ncr, evidence, evidenced: ncrEvidenceCoverage(evidence), overdue: ncrOverdue(ncr) };
+  }
+
   async markNcrCorrected(tenantId: Id, actorId: Id | null, id: Id): Promise<Ncr> {
     const ncr = await this.loadNcr(tenantId, id);
     this.assertNcrPerm(actorId, tenantId, ncr.companyId, 'quality.ncr.correct', ncr.projectId);

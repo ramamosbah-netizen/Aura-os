@@ -1,4 +1,5 @@
-import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, Post, Put, Query, UploadedFile, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { IsArray, IsInt, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { DmsService, Permissions, TenantContext } from '@aura/core';
@@ -10,8 +11,12 @@ import {
   type PunchItem,
   type PunchSeverity,
   type ElvSystem,
+  type AttachmentCategory,
+  type SignatoryAuthority,
   type SignoffMethod,
   type SignoffParty,
+  ATTACHMENT_CATEGORIES,
+  SIGNATORY_AUTHORITIES,
   ACCEPTANCE_METHODS,
   SIGNOFF_PARTIES,
   CommissioningService,
@@ -72,7 +77,19 @@ class SignoffEvidenceDto {
   /** WHO SIGNED. A label — a consultant's witness holds no AURA account. */
   @IsString() signedBy!: string;
   @IsString() method!: SignoffMethod;
+  /**
+   * WHOSE witness they were: contractor, consultant, client or authority. `party` says which side
+   * signed; this says whose standing it was, and TC-06 asks for both. Required for a witness; the
+   * engineer signs for the contractor by definition and the domain defaults it.
+   */
+  @IsOptional() @IsString() authority?: SignatoryAuthority;
   @IsString() evidence!: string;
+}
+
+/** The multipart fields beside a test attachment. No `fileId`: this route creates it. */
+class UploadAttachmentDto {
+  @IsOptional() @IsString() category?: AttachmentCategory;
+  @IsOptional() @IsString() description?: string;
 }
 
 class CommissionDto {
@@ -242,6 +259,69 @@ export class CommissioningController {
    * is the safe direction: a stored file nothing references is inert, whereas a reference to
    * nothing is a record that looks like evidence.
    */
+  /**
+   * THE DOOR COMMISSIONING DID NOT HAVE.
+   *
+   * Every multipart upload route in AURA was in CRM, Tendering, DocControl, Site and Quality.
+   * Commissioning had none, so a witnessed test could carry no instrument printout, no photograph
+   * of the installed device and no calibration certificate — the evidence a test actually
+   * produces had nowhere to go, which is the half of TC-07 the signature did not cover.
+   *
+   * Upload and attach are ONE act, as everywhere else: two calls would allow a stored file
+   * attached to nothing, and an attachment row pointing at a file that was never stored.
+   *
+   * THE PERMISSION IS DECLARED, not derived. The derived name would be
+   * `commissioning.record.attachments`, which no role holds — the route would exist, look
+   * governed and be reachable by nobody, which is the shape SIT-04 found in site.
+   * `commissioning.record.test` is the authority that records what a test produced, and attaching
+   * its evidence belongs with it.
+   */
+  @Post(':id/attachments')
+  @Permissions('commissioning.record.test')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 25 * 1024 * 1024, files: 1 } }))
+  async uploadAttachment(
+    @Param('id') id: string,
+    @Body() dto: UploadAttachmentDto,
+    @UploadedFile() file?: { buffer: Buffer; originalname: string; mimetype: string },
+  ) {
+    if (!file?.buffer?.length) throw new BadRequestException('a file is required');
+    const category = dto?.category ?? 'photo';
+    if (!ATTACHMENT_CATEGORIES.includes(category)) {
+      throw new BadRequestException(`an attachment category must be one of ${ATTACHMENT_CATEGORIES.join(', ')}`);
+    }
+    const ctx = this.tenant.get();
+    const rec = await this.service.get(id, ctx.tenantId);
+    if (!rec) throw new NotFoundException(`commissioning record ${id} not found`);
+
+    const stored = await this.dms.createDocument(
+      {
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId,
+        // A calibration certificate is a PDF and the policy holds it to that; everything else a
+        // test produces is what a phone, a scanner or an instrument printed.
+        kind: category === 'certificate' ? 'certificate' : 'evidence',
+        title: dto?.description?.trim() || file.originalname,
+        aggregateType: 'commissioning.record',
+        aggregateId: id,
+        createdBy: ctx.actorId ?? null,
+      },
+      {
+        fileName: file.originalname.split(/[\\/]/).pop() || 'attachment',
+        contentType: file.mimetype || 'application/octet-stream',
+        data: file.buffer,
+      },
+    );
+
+    return this.service.addAttachment(ctx.tenantId, ctx.actorId, id, {
+      fileId: stored.document.id,
+      category,
+      description: dto?.description,
+      // COMPUTED HERE, never accepted from the caller: a hash supplied by whoever uploaded the
+      // file attests to nothing.
+      hash: stored.versions[0].checksum,
+    });
+  }
+
   @Put(':id/commission')
   async commission(@Param('id') id: string, @Body() dto: CommissionDto): Promise<CommissioningRecord> {
     if (!dto?.commissionedBy?.trim() || !dto?.witnessedBy?.trim()) {
@@ -259,7 +339,7 @@ export class CommissioningController {
       throw new BadRequestException('each party may sign a sign-off once; send one entry per party');
     }
 
-    const evidence: Array<{ party: SignoffParty; signedBy: string; method: SignoffMethod; documentId: string; documentHash: string }> = [];
+    const evidence: Array<{ party: SignoffParty; signedBy: string; method: SignoffMethod; authority?: SignatoryAuthority; documentId: string; documentHash: string }> = [];
     for (const item of supplied) {
       if (!SIGNOFF_PARTIES.includes(item.party)) {
         throw new BadRequestException(`a sign-off party must be one of ${SIGNOFF_PARTIES.join(', ')}`);
@@ -269,6 +349,14 @@ export class CommissioningController {
       }
       if (!item.signedBy?.trim()) {
         throw new BadRequestException('name the person who signed \u2014 whoever records a sign-off is not therefore its signatory');
+      }
+      // WHOSE WITNESS. Checked here so the message can name the field; the domain refuses it too,
+      // and defaults the engineer to `contractor` rather than asking a question with one answer.
+      if (item.authority && !SIGNATORY_AUTHORITIES.includes(item.authority)) {
+        throw new BadRequestException(`a signatory authority must be one of ${SIGNATORY_AUTHORITIES.join(', ')}`);
+      }
+      if (item.party === 'witness' && !item.authority) {
+        throw new BadRequestException('a witness signature must record whose witness it is \u2014 a consultant, the client and an authority inspector are three different standings on a certificate');
       }
       const decoded = decodeSignoffEvidence(item.evidence);
       const stored = await this.dms.createDocument(
@@ -298,6 +386,7 @@ export class CommissioningController {
         party: item.party,
         signedBy: item.signedBy,
         method: item.method,
+        authority: item.authority,
         documentId: stored.document.id,
         documentHash: checksum,
       });

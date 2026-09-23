@@ -13,6 +13,7 @@ export * from './ports';
 export * from './domain/punch-item';
 export * from './domain/handover';
 export * from './domain/signoff-evidence';
+export * from './domain/commissioning-attachment';
 export * from './store.interface';
 export * from './in-memory-commissioning-store';
 export * from './postgres-commissioning-store';

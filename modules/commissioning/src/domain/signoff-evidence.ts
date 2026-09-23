@@ -25,6 +25,26 @@ export const SIGNOFF_PARTY_LABEL: Record<SignoffParty, string> = {
 };
 
 /**
+ * ON WHOSE BEHALF A PARTY SIGNED — which is not the same question as which side they are.
+ *
+ * `party` says which side of the sign-off signed. This says whose standing it was, and on a UAE
+ * ELV project the difference is not decorative: a consultant's witness, the client's own
+ * representative and an authority inspector (Civil Defence, SIRA) are three different things, and
+ * a certificate recording “witnessed by R. Consultant” without saying which of them signed is a
+ * certificate nobody can rely on a year later.
+ */
+export type SignatoryAuthority = 'contractor' | 'consultant' | 'client' | 'authority';
+
+export const SIGNATORY_AUTHORITIES: readonly SignatoryAuthority[] = ['contractor', 'consultant', 'client', 'authority'];
+
+export const SIGNATORY_AUTHORITY_LABEL: Record<SignatoryAuthority, string> = {
+  contractor: 'for the contractor',
+  consultant: 'for the consultant',
+  client: 'for the client',
+  authority: 'for the authority having jurisdiction',
+};
+
+/**
  * The same three methods the handover acceptance declares, and for the same reason: an emailed
  * confirmation proves the witness accepted and proves nothing about a signature, so a document
  * that cannot say which it holds will print the wrong one.
@@ -41,6 +61,12 @@ export interface SignoffEvidence {
   /** WHO SIGNED — a label, because a consultant's witness holds no AURA account. */
   signedBy: string;
   method: SignoffMethod;
+  /**
+   * WHOSE standing the signatory had. Required for a witness — “witnessed by” with no party
+   * behind it is the gap TC-06 names — and `contractor` for the engineer, who signs for the
+   * contractor by definition.
+   */
+  authority: SignatoryAuthority;
   /** The DMS document. Two parties may name the SAME one when a single sheet carries both. */
   documentId: string;
   documentHash: string;
@@ -59,6 +85,7 @@ export interface NewSignoffEvidence {
   party: SignoffParty;
   signedBy: string;
   method: SignoffMethod;
+  authority?: SignatoryAuthority;
   documentId: string;
   documentHash: string;
   signedContentHash: string;
@@ -80,6 +107,20 @@ export function makeSignoffEvidence(input: NewSignoffEvidence): SignoffEvidence 
   if (!input.signedContentHash?.trim()) {
     throw new Error('validation: sign-off evidence must record what was signed — a signature bound to a record rather than to its result cannot be checked against anything');
   }
+  /**
+   * A WITNESS MUST SAY WHOSE WITNESS THEY ARE.
+   *
+   * The engineer signs for the contractor by definition, so that one is defaulted rather than
+   * asked. A witness is the whole point of the question: refusing here is what makes the
+   * certificate able to say “for the consultant” instead of leaving a reader to assume it.
+   */
+  const authority = input.authority ?? (input.party === 'commissioning_engineer' ? 'contractor' : undefined);
+  if (!authority) {
+    throw new Error('validation: a witness signature must record whose witness it is — a consultant, the client and an authority inspector are three different standings on a certificate');
+  }
+  if (!SIGNATORY_AUTHORITIES.includes(authority)) {
+    throw new Error(`validation: a signatory authority must be one of ${SIGNATORY_AUTHORITIES.join(', ')}`);
+  }
   return {
     id: randomUUID(),
     tenantId: input.tenantId,
@@ -89,6 +130,7 @@ export function makeSignoffEvidence(input: NewSignoffEvidence): SignoffEvidence 
     party: input.party,
     signedBy: input.signedBy.trim(),
     method: input.method,
+    authority,
     documentId: input.documentId.trim(),
     documentHash: input.documentHash.trim(),
     signedContentHash: input.signedContentHash.trim(),

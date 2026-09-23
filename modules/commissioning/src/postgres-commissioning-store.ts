@@ -14,6 +14,7 @@ import type { TrainingSession, TrainingState } from './domain/client-training';
 import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
 import type { SignoffEvidence } from './domain/signoff-evidence';
+import type { CommissioningAttachment } from './domain/commissioning-attachment';
 import type { HandoverPackage, HandoverStatus, HandoverChecklist } from './domain/handover';
 
 // Postgres adapter for Commissioning. The domain is a plain interface (no class rehydration),
@@ -393,11 +394,32 @@ export class PostgresCommissioningStore implements CommissioningStore {
     await this.pool.query(
       `insert into public.aura_commissioning_signoff_evidence
         (id, tenant_id, company_id, commissioning_id, project_id, party, signed_by, method,
-         document_id, document_hash, signed_content_hash, recorded_by, created_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+         signatory_authority, document_id, document_hash, signed_content_hash, recorded_by, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
       [e.id, e.tenantId, e.companyId, e.commissioningId, e.projectId, e.party, e.signedBy, e.method,
-       e.documentId, e.documentHash, e.signedContentHash, e.recordedBy, e.createdAt],
+       e.authority, e.documentId, e.documentHash, e.signedContentHash, e.recordedBy, e.createdAt],
     );
+  }
+
+  /** APPEND-ONLY, like every other evidence table: what a test produced is not edited in place. */
+  async saveAttachment(a: CommissioningAttachment): Promise<void> {
+    await this.pool.query(
+      `insert into public.aura_commissioning_attachments
+        (id, tenant_id, company_id, commissioning_id, project_id, file_id, category, description,
+         captured_by, hash, created_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [a.id, a.tenantId, a.companyId, a.commissioningId, a.projectId, a.fileId, a.category,
+       a.description, a.capturedBy, a.hash, a.createdAt],
+    );
+  }
+
+  async listAttachments(commissioningId: string, tenantId: string): Promise<CommissioningAttachment[]> {
+    const res = await this.pool.query(
+      `select * from public.aura_commissioning_attachments
+        where commissioning_id = $1 and tenant_id = $2 order by created_at asc`,
+      [commissioningId, tenantId],
+    );
+    return res.rows.map(toAttachment);
   }
 
   async listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]> {
@@ -668,9 +690,32 @@ function toItpLink(r: Record<string, unknown>): CommissioningItpLink {
   };
 }
 
+interface AttachmentRow {
+  id: string; tenant_id: string; company_id: string | null; commissioning_id: string;
+  project_id: string; file_id: string; category: string; description: string | null;
+  captured_by: string | null; hash: string | null; created_at: string | Date;
+}
+
+function toAttachment(r: AttachmentRow): CommissioningAttachment {
+  return {
+    id: r.id,
+    tenantId: r.tenant_id,
+    companyId: r.company_id,
+    commissioningId: r.commissioning_id,
+    projectId: r.project_id,
+    fileId: r.file_id,
+    category: r.category as CommissioningAttachment['category'],
+    description: r.description,
+    capturedBy: r.captured_by,
+    hash: r.hash,
+    createdAt: typeof r.created_at === 'string' ? r.created_at : new Date(r.created_at).toISOString(),
+  };
+}
+
 interface SignoffEvidenceRow {
   id: string; tenant_id: string; company_id: string | null; commissioning_id: string;
   project_id: string; party: string; signed_by: string; method: string;
+  signatory_authority: string | null;
   document_id: string; document_hash: string; signed_content_hash: string;
   recorded_by: string | null; created_at: string | Date;
 }
@@ -685,6 +730,10 @@ function toSignoffEvidence(r: SignoffEvidenceRow): SignoffEvidence {
     party: r.party as SignoffEvidence['party'],
     signedBy: r.signed_by,
     method: r.method as SignoffEvidence['method'],
+    // `contractor` for a row written before 0384 existed: the engineer signs for the
+    // contractor by definition, and 0384 backfilled exactly those. A witness row without one
+    // is left as it was written rather than guessed at.
+    authority: (r.signatory_authority as SignoffEvidence['authority']) ?? 'contractor',
     documentId: r.document_id,
     documentHash: r.document_hash,
     signedContentHash: r.signed_content_hash,

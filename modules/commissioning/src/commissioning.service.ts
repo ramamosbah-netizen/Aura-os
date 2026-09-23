@@ -12,8 +12,14 @@ import {
 } from './domain/commissioning-record';
 import {
   type SignoffEvidence, type SignoffMethod, type SignoffParty,
+  type SignatoryAuthority,
   commissioningResultHash, makeSignoffEvidence, signoffCoversResult,
 } from './domain/signoff-evidence';
+import {
+  type AttachmentCategory,
+  type CommissioningAttachment,
+  makeCommissioningAttachment,
+} from './domain/commissioning-attachment';
 import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './domain/commissioning-test-item';
 import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
@@ -361,6 +367,42 @@ export class CommissioningService {
     return next;
   }
 
+  /**
+   * WHAT THE TEST PRODUCED.
+   *
+   * Commissioning had no door for a file at all: every multipart route in AURA was in CRM,
+   * Tendering, DocControl, Site and Quality, so a witnessed test could carry no instrument
+   * printout, no photograph of the installed device and no calibration certificate.
+   *
+   * Separate from the signature, because they are gathered at different moments: attachments
+   * accumulate while the test is run, and the signature is given when it is decided. The
+   * controller does the DMS call, as every other upload in this repository does, so the bytes are
+   * judged by the file-type policy and governed by the document access engine before they get
+   * here.
+   */
+  async addAttachment(
+    tenantId: string,
+    actorId: string | null,
+    id: string,
+    input: { fileId: string; category?: AttachmentCategory; description?: string | null; hash?: string | null },
+  ): Promise<CommissioningAttachment> {
+    const rec = await this.mustFind(id, tenantId);
+    const attachment = makeCommissioningAttachment({
+      tenantId: rec.tenantId,
+      companyId: rec.companyId,
+      commissioningId: rec.id,
+      projectId: rec.projectId,
+      fileId: input.fileId,
+      category: input.category,
+      description: input.description,
+      capturedBy: actorId,
+      hash: input.hash,
+    });
+    await this.store.saveAttachment(attachment);
+    this.logger.log(`[Commissioning] ${rec.code} attachment (${attachment.category}) recorded by ${actorId ?? 'an unidentified user'}`);
+    return attachment;
+  }
+
   async commission(
     id: string,
     tenantId: string,
@@ -382,6 +424,8 @@ export class CommissioningService {
         party: SignoffParty;
         signedBy: string;
         method: SignoffMethod;
+        /** Whose witness they were. Required for a witness; the engineer signs for the contractor. */
+        authority?: SignatoryAuthority;
         documentId: string;
         documentHash: string;
       }>;
@@ -434,6 +478,7 @@ export class CommissioningService {
         party: e.party,
         signedBy: e.signedBy,
         method: e.method,
+        authority: e.authority,
         documentId: e.documentId,
         documentHash: e.documentHash,
         signedContentHash: contentHash,
@@ -461,7 +506,7 @@ export class CommissioningService {
           // The methods, never the images: an event is replayed and exported, and a base64
           // signature in a payload is a copy of the document outside the one place that governs
           // who may open it.
-          signoffEvidence: (patch.evidence ?? []).map((e) => ({ party: e.party, method: e.method, signedBy: e.signedBy })),
+          signoffEvidence: (patch.evidence ?? []).map((e) => ({ party: e.party, method: e.method, signedBy: e.signedBy, authority: e.authority })),
         },
       }),
     ]);
@@ -656,15 +701,18 @@ export class CommissioningService {
      * resolved in the site domain.
      */
     signoffEvidence: Array<SignoffEvidence & { coverage: 'current' | 'superseded' | 'unverifiable' }>;
+    /** What the test produced: instrument printouts, photographs, calibration certificates. */
+    attachments: CommissioningAttachment[];
   } | null> {
     const record = await this.store.find(id, tenantId);
     if (!record) return null;
-    const [testItems, testRuns, punchItems, link, signoff] = await Promise.all([
+    const [testItems, testRuns, punchItems, link, signoff, attachments] = await Promise.all([
       this.store.listTestItems(id, tenantId),
       this.store.listTestRuns(id, tenantId),
       this.store.listPunchItems(id, tenantId),
       this.store.findCertificateLink(id, tenantId),
       this.store.listSignoffEvidence(id, tenantId),
+      this.store.listAttachments(id, tenantId),
     ]);
     const documents = link ? await this.readDocuments(tenantId, record.projectId) : null;
     return {
@@ -674,6 +722,7 @@ export class CommissioningService {
       punchItems,
       certificate: link ? resolveCertificate(link, documents) : null,
       signoffEvidence: signoff.map((e) => ({ ...e, coverage: signoffCoversResult(e.signedContentHash, record) })),
+      attachments,
     };
   }
 

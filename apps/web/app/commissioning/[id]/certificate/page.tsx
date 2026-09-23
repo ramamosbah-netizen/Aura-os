@@ -24,13 +24,23 @@ interface SignoffEvidence {
   party: 'commissioning_engineer' | 'witness';
   signedBy: string;
   method: 'electronic' | 'paper' | 'email';
+  /** WHOSE standing the signatory had. `party` says which side; this says on whose behalf. */
+  authority?: 'contractor' | 'consultant' | 'client' | 'authority';
   documentId: string;
   recordedBy: string | null;
   coverage: 'current' | 'superseded' | 'unverifiable';
   /** Whether the stored file still carries the bytes this sign-off committed to. */
   integrity?: 'verified' | 'mismatch' | 'unavailable';
 }
-interface Detail { record: Record_; testItems: TestItem[]; testRuns: TestRun[]; punchItems: Punch[]; certificate: Certificate | null; signoffEvidence?: SignoffEvidence[] }
+/** What the test produced. Commissioning had no door for a file until TC-07. */
+interface Attachment {
+  id: string;
+  fileId: string;
+  category: 'photo' | 'instrument' | 'certificate' | 'other';
+  description: string | null;
+  capturedBy: string | null;
+}
+interface Detail { record: Record_; testItems: TestItem[]; testRuns: TestRun[]; punchItems: Punch[]; certificate: Certificate | null; signoffEvidence?: SignoffEvidence[]; attachments?: Attachment[] }
 
 /**
  * The commissioning EVIDENCE PACK for one system (TC-GATE-3).
@@ -52,6 +62,19 @@ export default async function CommissioningCertificate({ params }: { params: Pro
 
   const { record, testItems, testRuns, punchItems, certificate } = detail;
   const signoff = detail.signoffEvidence ?? [];
+  const attachments = detail.attachments ?? [];
+
+  /**
+   * ON WHOSE BEHALF, in the words a certificate prints. Identity without authority is what TC-06
+   * named: "witnessed by R. Consultant" does not say whether a consultant, the client or an
+   * authority inspector signed, and a year later nobody can tell.
+   */
+  const AUTHORITY: Record<string, string> = {
+    contractor: 'for the contractor',
+    consultant: 'for the consultant',
+    client: 'for the client',
+    authority: 'for the authority having jurisdiction',
+  };
   const forParty = (party: SignoffEvidence['party']) => signoff.find((e) => e.party === party) ?? null;
 
   /**
@@ -83,6 +106,7 @@ export default async function CommissioningCertificate({ params }: { params: Pro
       src: e.method === 'electronic' ? `/api/documents/${encodeURIComponent(e.documentId)}/content` : undefined,
       attribution: [
         isSigned ? `Signed by ${e.signedBy}` : `Confirmed by ${e.signedBy} in writing \u2014 no signature was given`,
+        e.authority ? AUTHORITY[e.authority] ?? null : null,
         e.method === 'paper' ? 'on paper; the signed sheet is on file' : null,
         e.recordedBy ? `recorded in AURA by ${e.recordedBy}` : null,
         e.coverage === 'superseded'
@@ -148,6 +172,12 @@ export default async function CommissioningCertificate({ params }: { params: Pro
         };
       })}
       notes={
+        // WHAT THE TEST PRODUCED, named on the sheet. "3 attachments" is not evidence anybody can
+        // check a measured value against.
+        (attachments.length === 0
+          ? 'No instrument output, photograph or calibration certificate is attached to this system. '
+          : `${attachments.length} attachment(s) are held against this system: ` +
+            attachments.map((a) => `${a.description ?? a.fileId} (${a.category}${a.capturedBy ? `, recorded by ${a.capturedBy}` : ''})`).join('; ') + '. ') +
         `This pack states the technical evidence held by Testing & Commissioning: the test sheet, the measured values, ` +
         `the number of attempts each point took, and the sign-off. Failed runs are retained in full on the ` +
         // CONDITIONED, because it used to say "the witnessed sign-off" on every pack including

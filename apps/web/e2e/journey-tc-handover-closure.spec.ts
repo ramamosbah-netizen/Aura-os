@@ -192,7 +192,7 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     headers: H(),
     data: {
       commissionedBy: 'Engineer', witnessedBy: 'Consultant',
-      signoffEvidence: [{ party: 'witness', signedBy: '  ', method: 'electronic', evidence: SIGNATURE_DATA_URL }],
+      signoffEvidence: [{ party: 'witness', signedBy: '  ', method: 'electronic', authority: 'consultant', evidence: SIGNATURE_DATA_URL }],
     },
   });
   expect(unnamedSignatory.status(), 'a signature must name the person who signed it').toBe(400);
@@ -203,8 +203,8 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     data: {
       commissionedBy: 'Engineer', witnessedBy: 'Consultant',
       signoffEvidence: [
-        { party: 'witness', signedBy: 'R. Consultant', method: 'electronic', evidence: SIGNATURE_DATA_URL },
-        { party: 'witness', signedBy: 'Someone Else', method: 'electronic', evidence: SIGNATURE_DATA_URL },
+        { party: 'witness', signedBy: 'R. Consultant', method: 'electronic', authority: 'consultant', evidence: SIGNATURE_DATA_URL },
+        { party: 'witness', signedBy: 'Someone Else', method: 'electronic', authority: 'consultant', evidence: SIGNATURE_DATA_URL },
       ],
     },
   });
@@ -221,7 +221,9 @@ test('the whole chain: engineering through acceptance, closeout and the service 
       // let a system be commissioned on nobody's signature and have one attached later.
       signoffEvidence: [
         { party: 'commissioning_engineer', signedBy: engineerSignatory, method: 'electronic', evidence: SIGNATURE_DATA_URL },
-        { party: 'witness', signedBy: witnessSignatory, method: 'electronic', evidence: SIGNATURE_DATA_URL },
+        // WHOSE witness. TC-06 asks for identity AND authority: "witnessed by R. Consultant"
+        // does not say whether a consultant, the client or an authority inspector signed.
+        { party: 'witness', signedBy: witnessSignatory, method: 'electronic', authority: 'consultant', evidence: SIGNATURE_DATA_URL },
       ],
     },
   });
@@ -231,7 +233,7 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   const cxDetail = await (await req.get(`${CX}/${system.id}/detail`, { headers: H() })).json() as {
     record: { commissionRecordedBy: string | null; commissionedBy: string; witnessedBy: string };
     signoffEvidence: Array<{
-      party: string; signedBy: string; method: string; documentId: string;
+      party: string; signedBy: string; method: string; authority: string; documentId: string;
       recordedBy: string | null; coverage: string;
     }>;
   };
@@ -251,6 +253,8 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   // BOUND TO THE RESULT, not to the record id: what the witness put their name to is this system
   // with these points passed, and the pack must be able to say so.
   expect(witnessEvidence.coverage, 'the signature covers the result as it stands').toBe('current');
+  // TC-06: identity AND authority. The party says which side signed; this says whose standing.
+  expect(witnessEvidence.authority, 'and the record says whose witness they were').toBe('consultant');
 
   // BYTE-IDENTICAL, and governed. A route returning A file for that id would satisfy a naive
   // 200-and-non-empty check.

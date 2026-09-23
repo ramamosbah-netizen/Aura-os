@@ -13,6 +13,7 @@ import type { TrainingSession } from './domain/client-training';
 import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
 import type { SignoffEvidence } from './domain/signoff-evidence';
+import type { CommissioningAttachment } from './domain/commissioning-attachment';
 import type { HandoverPackage } from './domain/handover';
 
 /** Dev/test adapter — in-memory, non-persistent. Mirrors the Postgres adapter's ordering. */
@@ -63,6 +64,18 @@ export class InMemoryCommissioningStore implements CommissioningStore {
   }
 
   private readonly signoffEvidence: SignoffEvidence[] = [];
+
+  private readonly attachments: CommissioningAttachment[] = [];
+
+  async saveAttachment(attachment: CommissioningAttachment): Promise<void> {
+    this.attachments.push(attachment);
+  }
+
+  async listAttachments(commissioningId: string, tenantId: string): Promise<CommissioningAttachment[]> {
+    return this.attachments
+      .filter((a) => a.commissioningId === commissioningId && a.tenantId === tenantId)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }
 
   async saveSignoffEvidence(evidence: SignoffEvidence): Promise<void> {
     // APPEND, matching Postgres since 0383: a party signing again is a correction that keeps the

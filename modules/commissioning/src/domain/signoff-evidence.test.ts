@@ -43,7 +43,7 @@ describe('who signed is not who recorded it', () => {
   it('keeps the signatory and the recorder apart', () => {
     const e = makeSignoffEvidence({
       ...base, party: 'witness', method: 'electronic',
-      signedBy: 'R. Consultant', recordedBy: 'u-e2e-tc',
+      signedBy: 'R. Consultant', authority: 'consultant', recordedBy: 'u-e2e-tc',
     });
     expect(e.signedBy).toBe('R. Consultant');
     expect(e.recordedBy).toBe('u-e2e-tc');
@@ -52,7 +52,7 @@ describe('who signed is not who recorded it', () => {
   it('refuses evidence that does not name its signatory', () => {
     // No fallback to the recording user. A fallback is the defect, not a milder version of it:
     // the certificate would resume printing "Signed by <whoever was at the keyboard>".
-    expect(() => makeSignoffEvidence({ ...base, party: 'witness', method: 'electronic', signedBy: '  ', recordedBy: 'u-e2e-tc' }))
+    expect(() => makeSignoffEvidence({ ...base, party: 'witness', method: 'electronic', signedBy: '  ', authority: 'consultant', recordedBy: 'u-e2e-tc' }))
       .toThrow(/requires the name of the person who signed/i);
   });
 
@@ -63,9 +63,9 @@ describe('who signed is not who recorded it', () => {
   });
 
   it('refuses a reference with no checksum, and evidence that says nothing about what it covers', () => {
-    expect(() => makeSignoffEvidence({ ...base, documentHash: '', party: 'witness', method: 'electronic', signedBy: 'X' }))
+    expect(() => makeSignoffEvidence({ ...base, documentHash: '', party: 'witness', method: 'electronic', signedBy: 'X', authority: 'consultant' }))
       .toThrow(/both the stored document and its checksum/i);
-    expect(() => makeSignoffEvidence({ ...base, signedContentHash: '', party: 'witness', method: 'electronic', signedBy: 'X' }))
+    expect(() => makeSignoffEvidence({ ...base, signedContentHash: '', party: 'witness', method: 'electronic', signedBy: 'X', authority: 'consultant' }))
       .toThrow(/must record what was signed/i);
   });
 });
@@ -97,7 +97,7 @@ describe('what a sign-off signature covers', () => {
 
 describe('what the evidence pack may say about each party', () => {
   const sign = (party: SignoffEvidence['party'], method: SignoffEvidence['method']) =>
-    makeSignoffEvidence({ ...base, party, method, signedBy: `${party} signatory`, recordedBy: 'u-e2e-tc' });
+    makeSignoffEvidence({ ...base, party, method, signedBy: `${party} signatory`, authority: party === 'witness' ? 'consultant' : 'contractor', recordedBy: 'u-e2e-tc' });
 
   it('calls only an electronic or paper signature SIGNED', () => {
     // An emailed confirmation from a consultant proves they accepted the result and proves they

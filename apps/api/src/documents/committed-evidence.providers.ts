@@ -87,12 +87,29 @@ export class CommissioningSignoffCommittedProvider implements CommittedEvidenceP
   async isCommitted(document: Document): Promise<CommittedEvidenceVerdict> {
     const detail = await this.commissioning.getDetail(document.aggregateId, document.tenantId);
     if (!detail) return NOT_COMMITTED;
+
     const row = detail.signoffEvidence.find((e) => e.documentId === document.id);
-    if (!row) return NOT_COMMITTED;
-    return {
-      committed: true,
-      reason: `this is the ${row.party.replace(/_/g, ' ')} signature on the witnessed sign-off of ${detail.record.code} and cannot be replaced — ${CORRECTION}`,
-    };
+    if (row) {
+      return {
+        committed: true,
+        reason: `this is the ${row.party.replace(/_/g, ' ')} signature on the witnessed sign-off of ${detail.record.code} and cannot be replaced — ${CORRECTION}`,
+      };
+    }
+
+    /**
+     * ATTACHMENTS SHARE THIS AGGREGATE TYPE, and they are sealed by the SIGN-OFF rather than by
+     * their own existence: an instrument printout on a system still under test is working
+     * material, and the same printout on a commissioned system is part of what the witness signed
+     * against. Leaving them out would have made the attachment route the way around the seal.
+     */
+    const attachment = detail.attachments.find((a) => a.fileId === document.id);
+    if (attachment && detail.record.status === 'commissioned') {
+      return {
+        committed: true,
+        reason: `${detail.record.code} has been commissioned, so the ${attachment.category} the witness signed against can no longer be replaced — attach a further one instead`,
+      };
+    }
+    return NOT_COMMITTED;
   }
 }
 

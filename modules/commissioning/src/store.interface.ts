@@ -11,6 +11,7 @@ import type { TrainingSession } from './domain/client-training';
 import type { SpareItem } from './domain/spares';
 import type { PunchItem } from './domain/punch-item';
 import type { SignoffEvidence } from './domain/signoff-evidence';
+import type { CommissioningAttachment } from './domain/commissioning-attachment';
 import type { HandoverPackage } from './domain/handover';
 
 export const COMMISSIONING_STORE = Symbol('COMMISSIONING_STORE');
@@ -45,6 +46,10 @@ export interface CommissioningStore {
    */
   saveSignoffEvidence(evidence: SignoffEvidence): Promise<void>;
   listSignoffEvidence(commissioningId: string, tenantId: string): Promise<SignoffEvidence[]>;
+
+  /** What the test produced — instrument printouts, photographs, certificates. Append-only. */
+  saveAttachment(attachment: CommissioningAttachment): Promise<void>;
+  listAttachments(commissioningId: string, tenantId: string): Promise<CommissioningAttachment[]>;
 
   // Workspace-wide reads. The T&C surfaces answer questions about a PROJECT ("what is stopping this
   // project being commissioned?"), not about one record, and doing that by looping the records would

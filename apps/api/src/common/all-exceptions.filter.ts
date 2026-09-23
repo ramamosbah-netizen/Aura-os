@@ -81,6 +81,17 @@ export function classifyDomainMessage(m: string): DomainClassification {
     // "…has changed since this proposal was produced" (§22 governed acceptance) is the same shape:
     // the schedule moved after the proposal was cut, so the stale proposal cannot be promoted.
     || /\bis immutable\b|changed concurrently|changed since\b|^conflicting\b|dedupe conflict/i.test(m)
+    // COMMITTED EVIDENCE belongs here and not in the 400 group below. A witness's signature, or a
+    // photograph a witness signed against, is refused because a COMPLETED ACT relies on those
+    // bytes — the request is well formed, the caller is entitled to make it, and no correction to
+    // the request will help. It reads as 409 for the same reason an immutable revision does, and
+    // the remedy is a further governed act rather than a retry.
+    //
+    // A SHAPE rather than one message: four modules phrase this refusal in their own words
+    // ("cannot be replaced", "can no longer be replaced"), and three of them escaped to 500 until
+    // this line existed — a deliberate refusal reported to the caller as a server fault, which is
+    // how a working control looks like a broken system.
+    || /\b(?:cannot|can no longer) be replaced\b/i.test(m)
     // Ownership boundaries between ledgers. "CBS actual cost is Cost Ledger-owned; post a
     // canonical CostTransaction" is not bad input — it is a write aimed at the wrong authority.
     || /-owned;|is not allowed for\b/i.test(m)

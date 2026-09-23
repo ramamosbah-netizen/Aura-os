@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 31 |
-| PARTIAL | 83 |
+| COMPLETE | 33 |
+| PARTIAL | 82 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -14,7 +14,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 | DISCONNECTED | 8 |
 | WRONG_BEHAVIOR | 9 |
 | UNREACHABLE | 0 |
-| UNVERIFIED | 45 |
+| UNVERIFIED | 44 |
 | NOT_AUDITED | 0 |
 
 ## Capabilities
@@ -133,8 +133,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 | TC-03 | Test points and criteria | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-04 | Measured readings | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-05 | PASS FAIL evidence | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
-| TC-06 | Witness identity | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
-| TC-07 | Witness signature and attachments | UNVERIFIED | Commissioning / Quality / DocControl | N-TC; R-J26 |
+| TC-06 | Witness identity | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
+| TC-07 | Witness signature and attachments | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-08 | Defect and corrective action | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-09 | Retest history | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-10 | Controlled certificate | UNVERIFIED | Commissioning / Quality / DocControl | N-TC; R-J26 |

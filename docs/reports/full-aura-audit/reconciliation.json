@@ -1,8 +1,8 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 31,
-    "PARTIAL": 83,
+    "COMPLETE": 33,
+    "PARTIAL": 82,
     "BACKEND_ONLY": 4,
     "UI_ONLY": 0,
     "ABSENT": 0,
@@ -11,7 +11,7 @@
     "DISCONNECTED": 8,
     "WRONG_BEHAVIOR": 9,
     "UNREACHABLE": 0,
-    "UNVERIFIED": 45,
+    "UNVERIFIED": 44,
     "NOT_AUDITED": 0
   },
   "gapRecords": 66,

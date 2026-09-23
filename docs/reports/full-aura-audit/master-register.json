@@ -3676,7 +3676,7 @@
       "stages": [
         "T&C"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Commissioning / Quality / DocControl",
       "evidence": [
         "N-TC",
@@ -3685,17 +3685,17 @@
       "source": "modules/commissioning/src/domain/commissioning-test-run.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Commissioning controller requires commissionedBy and witnessedBy; per-test signature evidence is not established.",
-      "acceptanceProof": "Witness identity and authority persist on real system test/certificate; signed evidence remains downloadable."
+      "currentBehavior": "WITNESS IDENTITY AND AUTHORITY BOTH PERSIST. The sign-off recorded a name and which SIDE of the sign-off it belonged to — WHO, with WHOSE left unanswered. On a UAE ELV project a consultant's witness, the client's own representative and an authority inspector are three different standings, and “witnessed by R. Consultant” does not tell a reader a year later which of them signed. `signatory_authority` is required for a witness and defaulted to `contractor` for the engineer, who signs for the contractor by definition; 0384 backfills only the engineer rows, because that is a fact about them, and leaves a pre-existing witness row NULL rather than guessing. Both names persist on the real system test and on the certificate, and the signed evidence remains downloadable to whoever may read the record and refused to everyone else.",
+      "acceptanceProof": "PROVED IN ONE BROWSER RUN against the migrated PostgreSQL database with auth ON (commissioning-witness-role.spec.ts), executed by `u-e2e-tc` under the shipped `r-commissioning-engineer` role — a REPRESENTATIVE T&C Engineer, which is what TC-07's criterion requires and what the existing signature spec could not give: that one runs as `u-admin`, an administrator holding every permission in the system, and a capability proved only by an administrator has had its permissions proved by nobody. NOTHING WAS GRANTED TO MAKE IT PASS: the role's own `commissioning.record.test`/`commission` and `documents.*.read` carried it, and project membership was granted BY THE ADMIN beforehand because a commissioning record belongs to a project. Read back from PostgreSQL: `commissioning_engineer | A. Engineer 713880 | contractor | u-e2e-tc` and `witness | R. Consultant 713880 | consultant | u-e2e-tc`, with `photo | fluke-output.png | u-e2e-tc` beside them — the sign-off recorded against the T&C engineer rather than an administrator, the witness named AND their standing recorded, and the recorder separate from both. SAVE AND RELOAD: the attachment reaches storage through commissioning's first upload door and comes back on the record; the signatures are bound to the commissioned RESULT by a hash computed server-side and report `coverage: current` and `integrity: verified` — the committed version resolved and its checksum checked rather than the reference trusted. PERMISSION DENIALS: a Storekeeper, who holds `inventory.*` and no commissioning authority, is refused the witness signature (403). IMMUTABILITY: once the system is commissioned, the attachment the witness signed against is refused replacement through the GENERIC DMS version route (409), driven as an administrator who holds the permission and is still refused — an attachment on a system under test is working material, the same file on a commissioned system is part of what was signed against. ACTUAL OUTPUT: the evidence pack prints “Signed by R. Consultant · for the consultant · recorded in AURA by u-e2e-tc” and names the attachment; with nothing attached it says so instead. NEXT-ROLE RECEIPT: `u-e2e-pm`, who did not test, attach or sign, opens the witness signature. ACCEPTED LIMITS, stated rather than implied: the criterion names T&C Engineer, QA/QC and Design / Technical Engineer, and a REPRESENTATIVE role was driven — the T&C Engineer, the canonical owner of a commissioning record. The other two are not separately exercised. `authority` is a declared vocabulary of four (contractor, consultant, client, authority having jurisdiction); it records WHOSE standing the signatory had and does NOT verify it — nothing here checks that the person named really holds that office, which would need an external register this system does not have."
     },
     {
       "id": "TC-07",
@@ -3709,7 +3709,7 @@
       "stages": [
         "T&C"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Commissioning / Quality / DocControl",
       "evidence": [
         "N-TC",
@@ -3718,16 +3718,17 @@
       "source": "modules/commissioning/src/domain/commissioning-test-run.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative T&C Engineer, QA/QC, Design / Technical Engineer role executes Witness signature and attachments in the canonical Commissioning / Quality / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "THE WITNESS SIGNATURE AND WHAT THE TEST PRODUCED. Commissioning had no door for a file at all — every multipart route in AURA was in CRM, Tendering, DocControl, Site and Quality — so a witnessed test could carry no instrument printout, no photograph of the installed device and no calibration certificate. Attachments are their own table and not folded into the sign-off evidence: a signature belongs to a PARTY and carries a method, a signatory, an authority and the result it covers, while an attachment belongs to the RECORD and carries none of those, and folding them would give every attachment a nullable party and every signature a nullable description. They are sealed by the SIGN-OFF rather than by their own existence, so the attachment route cannot become the way around the seal.",
+      "acceptanceProof": "PROVED IN ONE BROWSER RUN against the migrated PostgreSQL database with auth ON (commissioning-witness-role.spec.ts), executed by `u-e2e-tc` under the shipped `r-commissioning-engineer` role — a REPRESENTATIVE T&C Engineer, which is what TC-07's criterion requires and what the existing signature spec could not give: that one runs as `u-admin`, an administrator holding every permission in the system, and a capability proved only by an administrator has had its permissions proved by nobody. NOTHING WAS GRANTED TO MAKE IT PASS: the role's own `commissioning.record.test`/`commission` and `documents.*.read` carried it, and project membership was granted BY THE ADMIN beforehand because a commissioning record belongs to a project. Read back from PostgreSQL: `commissioning_engineer | A. Engineer 713880 | contractor | u-e2e-tc` and `witness | R. Consultant 713880 | consultant | u-e2e-tc`, with `photo | fluke-output.png | u-e2e-tc` beside them — the sign-off recorded against the T&C engineer rather than an administrator, the witness named AND their standing recorded, and the recorder separate from both. SAVE AND RELOAD: the attachment reaches storage through commissioning's first upload door and comes back on the record; the signatures are bound to the commissioned RESULT by a hash computed server-side and report `coverage: current` and `integrity: verified` — the committed version resolved and its checksum checked rather than the reference trusted. PERMISSION DENIALS: a Storekeeper, who holds `inventory.*` and no commissioning authority, is refused the witness signature (403). IMMUTABILITY: once the system is commissioned, the attachment the witness signed against is refused replacement through the GENERIC DMS version route (409), driven as an administrator who holds the permission and is still refused — an attachment on a system under test is working material, the same file on a commissioned system is part of what was signed against. ACTUAL OUTPUT: the evidence pack prints “Signed by R. Consultant · for the consultant · recorded in AURA by u-e2e-tc” and names the attachment; with nothing attached it says so instead. NEXT-ROLE RECEIPT: `u-e2e-pm`, who did not test, attach or sign, opens the witness signature. ACCEPTED LIMITS, stated rather than implied: the criterion names T&C Engineer, QA/QC and Design / Technical Engineer, and a REPRESENTATIVE role was driven — the T&C Engineer, the canonical owner of a commissioning record. The other two are not separately exercised. `authority` is a declared vocabulary of four (contractor, consultant, client, authority having jurisdiction); it records WHOSE standing the signatory had and does NOT verify it — nothing here checks that the person named really holds that office, which would need an external register this system does not have."
     },
     {
       "id": "TC-08",
@@ -9070,8 +9071,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 31,
-      "PARTIAL": 83,
+      "COMPLETE": 33,
+      "PARTIAL": 82,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9080,7 +9081,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 9,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 45,
+      "UNVERIFIED": 44,
       "NOT_AUDITED": 0
     },
     "gaps": 66,

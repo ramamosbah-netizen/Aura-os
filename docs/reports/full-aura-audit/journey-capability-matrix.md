@@ -744,8 +744,8 @@
 | T&C | TC-03 | PARTIAL |
 | T&C | TC-04 | PARTIAL |
 | T&C | TC-05 | PARTIAL |
-| T&C | TC-06 | PARTIAL |
-| T&C | TC-07 | UNVERIFIED |
+| T&C | TC-06 | COMPLETE |
+| T&C | TC-07 | COMPLETE |
 | T&C | TC-08 | PARTIAL |
 | T&C | TC-09 | PARTIAL |
 | T&C | TC-10 | UNVERIFIED |

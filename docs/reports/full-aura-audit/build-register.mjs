@@ -681,6 +681,22 @@ const defects=[{
  severity:'MEDIUM',
  remediationDependency:'None upstream. It does NOT block SUP-14 — the award is complete and proved — and it is recorded because retiring a path silently is how a working feature becomes a dead one nobody notices.',
  acceptanceProof:'Bid-time sourcing points at a quotation REVISION line rather than a legacy quote, so the link names the material it priced; a governed award then restamps each sourced component from the awarded line for that material, in the awarded currency, leaving an estimate on a tender already committed to a client frozen as it does today; and a component whose material was not awarded is reported as such rather than restamped to somebody else’s price. Proved with an estimator on screen against PostgreSQL.',
+},{
+ id:'NCR-SOD-01',
+ title:'The role that carries out a correction cannot record it, and two people on one role is not separation of duties',
+ capabilityIds:['QHS-03'],
+ classification:'PARTIAL',
+ kind:'fresh finding — recorded while closing QHS-03, deliberately left unfixed',
+ status:'OPEN',
+ roles:['Site Engineer','QA / QC','Project Manager'],
+ stages:['Site','QA/QC & HSE'],
+ authority:'Quality NCR corrective loop (QHS-03) and the shipped role catalogue',
+ currentBehavior:'QHS-03 separates the three acts of an NCR — raise, correct, verify — and the domain now REFUSES the person who marked a correction complete from verifying it, because somebody signing off their own repair is not verification. That rule is proved and stands. What it rests on is narrower than it reads. `quality.ncr.correct` and `quality.ncr.verify` BOTH sit on `r-qa-qc` and on no other shipped role, so the proof of independence was necessarily built from TWO IDENTITIES ON THE SAME ROLE (`u-e2e-qaqc` and `u-e2e-qaqc2`, following the pattern the repo already uses for HSE, the QS and the finance controller). That establishes IDENTITY independence — two different people were required — and it establishes nothing about FUNCTIONAL separation, because both people hold the same authority and either could have played either part. Separately and worse: `r-site-engineer` — the responsible owner who actually does the remedial work on site — holds NEITHER permission, so the person who carried out a correction cannot record that they did. The correction is therefore recorded by somebody in QA/QC on their behalf, which makes `correctedBy` a statement about who typed it rather than who did the work — the exact conflation between acting and recording that XOP-12 spent four surfaces separating.',
+ expectedOperationalBehavior:'Raiser → Corrector → Independent Verifier held apart by AUTHORITY and not only by identity. The role that performs remedial work can record that it performed it, and cannot verify or close the NCR arising from it; the verifying authority is distinct from the correcting authority in the catalogue, so the separation survives a tenant assigning one person to one role. A correction recorded on somebody else’s behalf, where that remains legitimate, names the person who did the work separately from the account that entered it.',
+ evidence:'FRESH, measured while building QHS-03: `r-site-engineer` holds neither `quality.ncr.correct` nor `quality.ncr.verify` (403 measured against the running API with auth ON, core/src/identity/standard-elv-roles.ts); both permissions sit together on `r-qa-qc`; apps/web/e2e/ncr-independent-verification.spec.ts demonstrates the refusal with `u-e2e-qaqc2` correcting and `u-e2e-qaqc` verifying — two identities, one role. modules/quality/src/domain/ncr.ts carries the domain refusal.',
+ severity:'MEDIUM',
+ remediationDependency:'None upstream, and it does NOT reopen QHS-03 — the capability is proved as built, and this records what that proof does and does not establish. It is a question about the ROLE CATALOGUE rather than about the NCR loop, and answering it by widening a shipped role to suit a fixture is the change this refuses to make.',
+ acceptanceProof:'The correcting authority and the verifying authority are held by DIFFERENT shipped roles, proved by driving the loop with one identity per role rather than two per role; the role that does remedial work records its own correction under its own authority and is refused the verification; and a tenant that assigns a single person to both roles is still refused the self-verification by the domain rule, so the separation does not depend on how the tenant staffs it.'
 }];
 
 

@@ -187,6 +187,67 @@ test('a QA/QC engineer raises, evidences, signs and resolves an inspection under
       expect(Buffer.from(await received.body()).equals(Buffer.from(await file.body())),
         'and receives the exact committed bytes').toBe(true);
     }
+    // ── THE OTHER RESULT ─────────────────────────────────────────────────────────────────────
+    //
+    // QHS-01 is "Inspection request AND RESULT", and an inspection has two. A rejection is the
+    // one with consequences — it is what an NCR is raised from — so proving only the approval
+    // would leave the half of the capability that costs money unexercised.
+    const failedIr = `IR-Q${run}F`;
+    await qaqc.goto('/quality/inspection-requests', { waitUntil: 'domcontentloaded' });
+    const picker2 = qaqc.getByTestId('project-picker').or(qaqc.locator('select').first());
+    await expect(picker2).toBeVisible({ timeout: 30_000 });
+    await picker2.selectOption(projectId).catch(() => undefined);
+    await qaqc.getByPlaceholder('IR-001').fill(failedIr);
+    await qaqc.getByPlaceholder('L3 riser, grid C4').fill(`L4 riser \u2014 ${run}`);
+    await qaqc.locator('input[type="date"]').first().fill('2026-09-23');
+    await qaqc.getByRole('button', { name: 'Request' }).click();
+
+    const failedCell = qaqc.getByTestId(`ir-resolve-${failedIr}`);
+    await expect(failedCell, 'the second inspection must be raised').toBeVisible({ timeout: 45_000 });
+    await failedCell.locator('input[placeholder="comments"]').fill('Tray supports at 1.5m; specification requires 1.2m');
+    // Rejected WITHOUT a signature: an inspection that failed is recorded by the engineer who
+    // failed it, and there is nobody to counter-sign a refusal. The record must be honest about
+    // that rather than requiring a signature it has no reason to hold.
+    await failedCell.getByRole('button', { name: 'Reject' }).click();
+
+    const failedPrint = qaqc.getByTestId(`ir-print-${failedIr}`);
+    await expect(failedPrint, 'a rejected inspection is resolved too, and offers its document')
+      .toBeVisible({ timeout: 30_000 });
+    const failedId = (await failedPrint.getAttribute('href'))!.replace('/quality/irs/', '').replace('/print', '');
+
+    const failedDetail = await (await qaqc.request.get(`${baseURL}/api/quality/irs/${failedId}/detail`)).json() as {
+      inspection: { status: string; comments: string | null; inspectedBy: string | null };
+      signature: unknown | null;
+    };
+    expect(failedDetail.inspection.status, 'the rejection persists as the result').toBe('rejected');
+    expect(failedDetail.inspection.comments, 'and carries the reason it failed').toContain('1.2m');
+    expect(failedDetail.inspection.inspectedBy, 'recorded against the QA/QC engineer').toBe(QAQC);
+    expect(failedDetail.signature, 'nothing was signed, and the record says so rather than implying one').toBeNull();
+
+    // THE CONTROLLED OUTPUT TELLS THE TRUTH ABOUT A FAILURE, which is the case a document is most
+    // tempted to soften.
+    await qaqc.goto(`/quality/irs/${failedId}/print`, { waitUntil: 'domcontentloaded' });
+    const failedSheet = qaqc.locator('body');
+    await expect(failedSheet).toContainText('INSPECTION REQUEST', { timeout: 30_000 });
+    await expect(failedSheet, 'the decision is printed as what it was').toContainText('rejected');
+    await expect(failedSheet, 'the reason is on the document').toContainText('1.2m');
+    await expect(failedSheet, 'and it does not claim a signature it never had')
+      .toContainText('NO SIGNATURE IS HELD');
+
+    // ── NEXT-ROLE RECEIPT FOR A FAILURE: the NCR it is raised from ──────────────────────────
+    //
+    // A rejected inspection is where quality's corrective chain begins. The handoff is not a
+    // notification — it is a record the next role acts on, carrying the inspection it came from.
+    const ncr = await qaqc.request.post(`${baseURL}/api/quality/irs/${failedId}/raise-ncr`, {
+      data: {
+        ncrNumber: `NCR-Q${run}`,
+        description: 'Tray support spacing does not meet specification',
+        severity: 'major',
+      },
+    });
+    expect(ncr.ok(), `a rejected inspection must be able to raise an NCR \u2014 ${await ncr.text()}`).toBe(true);
+    const raised = await ncr.json() as { ncrNumber: string; description: string };
+    expect(raised.ncrNumber).toBe(`NCR-Q${run}`);
   } finally {
     await context.close();
   }

@@ -2963,7 +2963,7 @@
       "stages": [
         "QA/QC & HSE"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Quality / HSE",
       "evidence": [
         "R-J26"
@@ -2971,16 +2971,17 @@
       "source": "apps/web/components/inspection-request-client.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative QA/QC, HSE, Site Engineer role executes Inspection request and result in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "AN INSPECTION IS REQUESTED AND RESOLVED BY THE ENGINEER WHO DOES IT, AND BOTH RESULTS ARE REAL. An inspection request has two outcomes and only one of them is comfortable: an approval accrues a measured quantity on the Quantity Ledger, and a rejection is where quality's corrective chain begins. The register raises it, carries the trade, the location and the date, resolves it with the reason it failed when it failed, and hands a rejection onward as an NCR that names the inspection it came from. The printable inspection request — which did not exist before QHS-07 — prints the decision as what it was, including when that decision is a refusal, and says plainly when nothing was signed rather than softening it.",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Representative QA/QC, HSE, Site Engineer role executes Inspection request and result in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved” — in ONE browser run against the migrated PostgreSQL database with auth ON (inspection-qaqc-role.spec.ts). THE ROLE CLAUSE IS READ LITERALLY, as it was for QHS-07: the run signs in AS `u-e2e-qaqc` holding the shipped `r-qa-qc` role and nothing else, because a capability proved only by an administrator has had its permissions proved by nobody. Nothing was granted to make it pass; project membership was granted by the admin beforehand because a quality authority is project-scoped. BOTH RESULTS, which is what “request AND RESULT” means: one inspection is raised and APPROVED, a second is raised and REJECTED with the reason it failed. Read back from PostgreSQL: `IR-Q412370 | approved | u-e2e-qaqc` and `IR-Q412370F | rejected | u-e2e-qaqc | Tray supports at 1.5m; specification requires 1.2m` — both recorded against the QA/QC engineer rather than an administrator. SAVE AND RELOAD: the decision, its reason and its evidence come back on the record. APPLICABLE PERMISSION DENIALS: a Storekeeper, holding `inventory.*` and no quality authority, is refused the inspection's evidence (403) and refused to replace it. ACTUAL OUTPUT, including the case a document is most tempted to soften: the rejected inspection prints as `rejected`, carries the reason on the sheet, and states “NO SIGNATURE IS HELD” rather than implying one — an inspection that failed is recorded by the engineer who failed it and there is nobody to counter-sign a refusal, which the record says instead of requiring a signature it has no reason to hold. NEXT-ROLE RECEIPT on BOTH paths: `u-e2e-pm`, who did not raise, evidence or resolve it, receives the approved inspection's evidence byte-for-byte; and the rejection raises `NCR-Q412370` naming the inspection it came from, because the handoff for a failure is a record the next role acts on rather than a notification. ACCEPTED LIMITS, stated rather than implied: the criterion names QA/QC, HSE and Site Engineer, and a REPRESENTATIVE role was driven — QA/QC, the canonical owner of an inspection request; the other two are not separately exercised. The APPROVED QUANTITY that an approved inspection accrues on the Quantity Ledger is not set or asserted here: this criterion is about the request and its result, and the quantity authority is measured elsewhere. The NCR is raised and named; its own lifecycle — correction, independent verification, overdue escalation — is QHS-03 and stays open."
     },
     {
       "id": "QHS-02",
@@ -7755,7 +7756,7 @@
       "expectedOperationalBehavior": "Inspection request and result works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Representative QA/QC, HSE, Site Engineer role executes Inspection request and result in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "PROMOTED against the frozen criterion — “Representative QA/QC, HSE, Site Engineer role executes Inspection request and result in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved” — in ONE browser run against the migrated PostgreSQL database with auth ON (inspection-qaqc-role.spec.ts). THE ROLE CLAUSE IS READ LITERALLY, as it was for QHS-07: the run signs in AS `u-e2e-qaqc` holding the shipped `r-qa-qc` role and nothing else, because a capability proved only by an administrator has had its permissions proved by nobody. Nothing was granted to make it pass; project membership was granted by the admin beforehand because a quality authority is project-scoped. BOTH RESULTS, which is what “request AND RESULT” means: one inspection is raised and APPROVED, a second is raised and REJECTED with the reason it failed. Read back from PostgreSQL: `IR-Q412370 | approved | u-e2e-qaqc` and `IR-Q412370F | rejected | u-e2e-qaqc | Tray supports at 1.5m; specification requires 1.2m` — both recorded against the QA/QC engineer rather than an administrator. SAVE AND RELOAD: the decision, its reason and its evidence come back on the record. APPLICABLE PERMISSION DENIALS: a Storekeeper, holding `inventory.*` and no quality authority, is refused the inspection's evidence (403) and refused to replace it. ACTUAL OUTPUT, including the case a document is most tempted to soften: the rejected inspection prints as `rejected`, carries the reason on the sheet, and states “NO SIGNATURE IS HELD” rather than implying one — an inspection that failed is recorded by the engineer who failed it and there is nobody to counter-sign a refusal, which the record says instead of requiring a signature it has no reason to hold. NEXT-ROLE RECEIPT on BOTH paths: `u-e2e-pm`, who did not raise, evidence or resolve it, receives the approved inspection's evidence byte-for-byte; and the rejection raises `NCR-Q412370` naming the inspection it came from, because the handoff for a failure is a record the next role acts on rather than a notification. ACCEPTED LIMITS, stated rather than implied: the criterion names QA/QC, HSE and Site Engineer, and a REPRESENTATIVE role was driven — QA/QC, the canonical owner of an inspection request; the other two are not separately exercised. The APPROVED QUANTITY that an approved inspection accrues on the Quantity Ledger is not set or asserted here: this criterion is about the request and its result, and the quantity authority is measured elsewhere. The NCR is raised and named; its own lifecycle — correction, independent verification, overdue escalation — is QHS-03 and stays open."
     },
     {
       "id": "J4-04",
@@ -9071,7 +9072,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 33,
+      "COMPLETE": 34,
       "PARTIAL": 82,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -9081,7 +9082,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 9,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 44,
+      "UNVERIFIED": 43,
       "NOT_AUDITED": 0
     },
     "gaps": 66,

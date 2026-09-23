@@ -1,6 +1,6 @@
 # Pinned verification queue
 
-44 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
+43 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
 
 ## Closure updates
 
@@ -33,7 +33,6 @@ Wave 3 is **CLOSED / VERIFIED** for its bounded journey, proved iteration by ite
 | BUY-03 | RFQ dispatch | Procurement Manager / Buyer; Storekeeper | Procurement | Procurement / Inventory | R-J26 | Representative Procurement Manager / Buyer, Storekeeper role executes RFQ dispatch in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SIT-01 | Daily work allocation | Site Engineer; Project Engineer | Site; Progress | Site | R-J26 | Representative Site Engineer, Project Engineer role executes Daily work allocation in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SIT-06 | Site report print | Site Engineer; Project Engineer | Site; Progress | Site | R-J26 | Representative Site Engineer, Project Engineer role executes Site report print in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
-| QHS-01 | Inspection request and result | QA/QC; HSE; Site Engineer | QA/QC & HSE | Quality / HSE | R-J26 | Representative QA/QC, HSE, Site Engineer role executes Inspection request and result in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | QHS-02 | ITP hold and witness points | QA/QC; HSE; Site Engineer | QA/QC & HSE | Quality / HSE | R-J26 | Representative QA/QC, HSE, Site Engineer role executes ITP hold and witness points in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | QHS-06 | Incident and escalation | QA/QC; HSE; Site Engineer | QA/QC & HSE | Quality / HSE | R-J26 | Representative QA/QC, HSE, Site Engineer role executes Incident and escalation in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | COM-02 | Claims and notices | Commercial Manager / QS; Finance; Project Manager | Commercial / Certification; Finance / Collection | Contracts / Finance / Projects changes | R-J26 | Representative Commercial Manager / QS, Finance, Project Manager role executes Claims and notices in the canonical Contracts / Finance / Projects changes context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |

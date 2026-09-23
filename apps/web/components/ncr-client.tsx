@@ -198,7 +198,7 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
 
         <div style={{ marginTop: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
           <button style={st.btn} onClick={raise} disabled={busy}>{busy ? 'Raising…' : 'Raise NCR'}</button>
-          {error && <span style={st.err}>{error}</span>}
+          {error && <span style={st.err} data-testid="ncr-error">{error}</span>}
         </div>
       </div>
 
@@ -218,7 +218,10 @@ export default function NcrClient({ initial, initialProjectId = '' }: { initial:
                 <td style={st.td}>{r.assignedTo || '—'}</td>
                 <td style={{ ...st.td, color: statusColor[r.status] ?? 'var(--muted)', fontWeight: 600 }}>{r.status}</td>
                 <td style={st.td}>
-                  <a href={`/quality/ncrs/${r.id}`} style={st.sm}>Manage workflow →</a>
+                  <a href={`/quality/ncrs/${r.id}`} style={st.sm} data-testid={`ncr-manage-${r.ncrNumber}`}>Manage workflow →</a>
+                  {/* The NCR is issued OUTWARD — to the subcontractor who has to correct the work.
+                      A record reachable only inside AURA cannot be issued to anybody. */}
+                  <a href={`/quality/ncrs/${r.id}/print`} style={{ ...st.sm, marginLeft: 12 }} data-testid={`ncr-print-${r.ncrNumber}`}>NCR →</a>
                 </td>
               </tr>
             ))}

@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 34 |
-| PARTIAL | 82 |
+| COMPLETE | 35 |
+| PARTIAL | 81 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -113,7 +113,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 66 gap records (34 reused + 12 ne
 | SIT-06 | Site report print | UNVERIFIED | Site | R-J26 |
 | QHS-01 | Inspection request and result | COMPLETE | Quality / HSE | R-J26 |
 | QHS-02 | ITP hold and witness points | UNVERIFIED | Quality / HSE | R-J26 |
-| QHS-03 | NCR and correction | PARTIAL | Quality / HSE | R-J26 |
+| QHS-03 | NCR and correction | COMPLETE | Quality / HSE | R-J26 |
 | QHS-04 | Method statement and risk assessment | PARTIAL | Quality / HSE | R-J26 |
 | QHS-05 | Permit issue and expiry | PARTIAL | Quality / HSE | R-J26 |
 | QHS-06 | Incident and escalation | UNVERIFIED | Quality / HSE | R-J26 |

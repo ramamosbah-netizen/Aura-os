@@ -215,4 +215,35 @@ test('an NCR is evidenced when raised, corrected by its owner and verified by so
   });
   expect(overwrite.ok(), 'evidence a closed NCR rested on must not be replaceable').toBe(false);
   expect(await overwrite.text()).toMatch(/cannot be replaced|has been closed/i);
+
+  // ── AND THE CLOSED NCR ISSUES AS A DOCUMENT ──────────────────────────────────────────────
+  //
+  // The other half of the sheet. ncr-evidence-screen.spec.ts renders it OPEN, uncorrected and
+  // unverified, and asserts it says so; this renders the same document at the other end of the
+  // life of an NCR, where a controlled record is most tempted to round its own story up.
+  await page.goto(`/quality/ncrs/${ncr.id}/print`, { waitUntil: 'domcontentloaded' });
+  const sheet = page.locator('body');
+  await expect(page.getByText('NON-CONFORMANCE REPORT')).toBeVisible({ timeout: 30_000 });
+
+  // BOTH SIDES EVIDENCED, and the sheet names each item on the side it evidences — a photograph
+  // of the defect is not a photograph of the fix, and a reader who cannot tell them apart is
+  // looking at a closed NCR with no way to check what closed it.
+  await expect(sheet, 'the defect is evidenced').toContainText(/Evidence of the non-conformance is held/i);
+  await expect(sheet, 'and so is the repair').toContainText(/Evidence of the correction is held/i);
+  await expect(sheet).toContainText(/Evidence \(the non-conformance\)/i);
+  await expect(sheet).toContainText(/Evidence \(the correction\)/i);
+
+  // THE CLAUSE ITSELF, printed: verified by somebody other than the person who did the repair.
+  await expect(sheet, 'the independence is stated on the document, not only enforced in the domain')
+    .toContainText(/verified by somebody other than the person who carried it out/i);
+  await expect(sheet).toContainText(`${OWNER}`);
+  await expect(sheet).toContainText(/not the person who carried out the correction/i);
+
+  // The escalation survives onto the sheet with its reason — recorded rather than derived, so
+  // closing the NCR afterwards does not erase that it went past its date.
+  await expect(sheet, 'the escalation is on the issued document').toContainText(/Escalated — Past the agreed date/i);
+
+  // The signature names the FOREMAN and the QA/QC engineer as separate clauses.
+  await expect(sheet).toContainText(`Signed by A. Foreman ${run}`);
+  await expect(sheet).toContainText(`recorded in AURA by ${QAQC}`);
 });

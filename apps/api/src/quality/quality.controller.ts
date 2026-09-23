@@ -502,7 +502,20 @@ export class QualityController {
   async ncrDetail(@Param('id') id: string) {
     const found = await this.qualityService.readNcr(this.tenant.get().tenantId, id);
     if (!found) throw new NotFoundException(`NCR with ID ${id} not found`);
-    return found;
+    /**
+     * EVERY SIGNATURE IS CHECKED AGAINST THE BYTES IT WAS COMMITTED WITH, as the inspection
+     * request's does. An NCR can hold TWO — the foreman shown the defect and whoever signed off
+     * the repair — and they are checked independently, because one sound signature says nothing
+     * about the other.
+     */
+    const evidence = await Promise.all(
+      found.evidence.map(async (e) =>
+        e.category === 'signature'
+          ? { ...e, integrity: await this.dms.verifyCommittedChecksum(e.fileId, e.hash) }
+          : e,
+      ),
+    );
+    return { ...found, evidence };
   }
 
   /** The inspection with its photographs and its signature, the signature already judged. */

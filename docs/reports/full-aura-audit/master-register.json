@@ -3026,7 +3026,7 @@
       "stages": [
         "QA/QC & HSE"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Quality / HSE",
       "evidence": [
         "R-J26"
@@ -3034,17 +3034,17 @@
       "source": "apps/web/components/inspection-request-client.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "PARTIAL",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh browser proof drove an NCR through Raised → Action Planned → Corrected → verified/Closed and retained the verification outcome. Evidence attachments, role separation and project denial were not exercised.",
-      "acceptanceProof": "QA/QC raises an evidenced NCR; responsible owner corrects; independent verifier accepts/rejects; overdue escalation and source work linkage persist."
+      "currentBehavior": "AN NCR THAT CARRIES EVIDENCE, HAS A DATE IT IS DUE, AND IS VERIFIED BY SOMEBODY ELSE. The clause has four parts and only the last of them was true. NOTHING ENFORCED THE INDEPENDENCE: `markNcrCorrected` and `verifyNcr` took any actor, so ONE account could raise a non-conformance, mark it corrected and close it — and the record would read as though three people had been involved. The verifier is now refused if they are the person who marked it corrected, because somebody signing off their own repair is not verification; the rule lives in the DOMAIN rather than only in a permission, so a principal holding both authorities is still refused. Independent OF THE CORRECTION, not of the raiser — the QA/QC engineer who raised an NCR is normally the right person to verify the fix, and barring them would push the sign-off onto somebody with less reason to look. AN NCR WITH NOTHING ATTACHED IS AN ASSERTION: the “QA / Inspector Sign-off” pad has been on the screen since it existed, bound to React state the submit payload never read, and quality had no NCR attachment route at all — so a non-conformance could carry no photograph of the thing that was wrong. Evidence here has a STAGE, which is what makes one table right where the inspection request needed a flat list: a photograph of the defect and a photograph of the repair are both evidence of the same NCR and are not interchangeable, and closing an NCR on a picture of the original fault is exactly the confusion the column prevents. Coverage is reported as TWO independent facts, because an NCR evidenced on one side is in a different state from one evidenced on neither and a boolean cannot say which half is missing. AND “OVERDUE” NEEDED A DATE TO BE OVERDUE AGAINST: nothing said when the correction was due, so nothing could be late and there was nothing to escalate. `dueAt` is nullable and `undated` is its own answer — an NCR nobody dated cannot be late, and a screen showing it as on-time makes a claim nobody made. Escalation is RECORDED rather than derived, so it survives the due date being changed afterwards and the NCR being closed later.",
+      "acceptanceProof": "PROMOTED against the frozen criterion — “QA/QC raises an evidenced NCR; responsible owner corrects; independent verifier accepts/rejects; overdue escalation and source work linkage persist” — in TWO browser runs against the migrated PostgreSQL database with auth ON: ncr-independent-verification.spec.ts and ncr-evidence-screen.spec.ts, run with the other six evidence proofs (8 passed). THREE DISTINCT PEOPLE, read back from PostgreSQL: `NCR-V001205 | closed | raised u-e2e-qaqc | corrected u-e2e-qaqc2 | verified u-e2e-qaqc | escalated u-e2e-qaqc | “Past the agreed date; correction outstanding”`, with `raised | photo`, `raised | signature | A. Foreman 001205 | u-e2e-qaqc` and `corrected | photo | u-e2e-qaqc2` beneath it. The corrector is refused their own sign-off, on the REJECTION as well as the acceptance — a rejection is still a verification decision, and letting the corrector make it would let them cycle their own work indefinitely with nobody independent looking. A FIXTURE ACTOR, NOT A WIDENED ROLE: `quality.ncr.correct` and `quality.ncr.verify` both sit on `r-qa-qc`, and that is right — the independence is between two PEOPLE, not two job titles — but only one identity held it, so the rule had nowhere to land. `u-e2e-qaqc2` joins `u-e2e-hse2`, `u-e2e-qs2` and `u-e2e-controller-b` for the same reason the repo already gives those pairs. ON THE SHIPPED SCREEN, UNDER THE ROLE THE CLAUSE NAMES, which is the half an HTTP run can never reach: an API test sends its own bytes, so it passes against a pad that throws the stroke away — and this pad did. ncr-evidence-screen.spec.ts signs in as `u-e2e-qaqc` holding `r-qa-qc` and nothing else, picks a photograph, draws on the pad, is REFUSED for not naming the signatory (the refusal is shown on the screen, in front of the person still looking at the pad, rather than the signature being accepted and silently attributed to whoever was signed in), names the foreman, sets the due date and raises it. Read back from PostgreSQL: `NCR-UI900019 | raised | 2020-01-01 | u-e2e-qaqc | raised | photo` and `| signature | A. Foreman 900019 | u-e2e-qaqc` — the foreman as signatory, the engineer as recorder, the photograph carrying neither, and the committed version resolved and its checksum `verified`. Nothing was granted to make it pass; project membership was granted by the admin beforehand because a quality authority is project-scoped. ACTUAL OUTPUT, which did not exist: there was no printable NCR at all, so the record lived only as a table row inside AURA — and an NCR is issued OUTWARD, to the subcontractor who has to correct the work. Both ends of its life are rendered. OPEN: “No evidence of the correction has been attached yet”, “The correction has not been carried out”, “Not yet verified”, and a past date stated as PAST ITS AGREED DATE rather than softened. CLOSED: both sides evidenced and each item named on the side it evidences, the escalation with its reason, the signature rendered with `naturalWidth > 0` asserted, “Signed by A. Foreman” and “recorded in AURA by u-e2e-qaqc” as two separate clauses, and the clause itself printed — “verified by somebody other than the person who carried it out”. A closed NCR resting on NO evidence of the repair says so on its face. Reached from the register the way a person reaches it, because a document nobody can navigate to is a document that does not exist. GOVERNED AND SEALED: the responsible owner who did not upload the QA/QC signature can still open it (200) — somebody asked to correct a defect they cannot look at is not being asked to correct anything — a Storekeeper holding `inventory.*` and no quality authority is refused (403), and once the NCR is closed the evidence its verification rested on cannot be replaced, refused at the DMS boundary by XOP-12’s committed-evidence seal. PERMISSIONS DECLARED RATHER THAN DERIVED: the upload route would derive `quality.ncr.evidence`, which no role holds and which would leave the door reachable by nobody, so it declares `quality.ncr.correct`; escalation is the VERIFICATION side telling the organisation the repair has not happened, so it is gated on `quality.ncr.verify` rather than on the authority being escalated about. ACCEPTED LIMITS, stated rather than implied: `r-site-engineer` — the responsible owner who actually does the remedial work — holds NEITHER `quality.ncr.correct` nor `quality.ncr.verify`, so the person who carried out a correction cannot record that they did; that is a question about the role catalogue and is left as one rather than answered by widening a shipped role. SOURCE WORK LINKAGE already existed and was not rebuilt: `sourceIrId`/`sourceIrNumber` are proved by QHS-01’s run, where a rejected inspection raises `NCR-Q412370` naming the inspection it came from, and nothing here adds to that. The independence is demonstrated with two people on the same role, so what is proved is that TWO IDENTITIES are required — not that two job titles are. `escalate` was declared `@Put` while plan, correct and verify are all `@Post`, and was corrected to match its siblings. The service-scope guard caught both new authorities and was made to state them: the census goes 65 → 67 because two new acts need two checks, not because a rule relaxed."
     },
     {
       "id": "QHS-04",
@@ -9072,8 +9072,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 34,
-      "PARTIAL": 82,
+      "COMPLETE": 35,
+      "PARTIAL": 81,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

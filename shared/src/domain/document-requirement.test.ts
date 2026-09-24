@@ -50,7 +50,7 @@ describe('DocumentRequirement — evidence, not files', () => {
   });
 
   it('refuses evidence on a not-applicable requirement', () => {
-    expect(() => addEvidence(setNotApplicable(req()), ref('x'))).toThrow(/not-applicable/);
+    expect(() => addEvidence(setNotApplicable(req(), 'u-qs2', 'retrofit, no new devices'), ref('x'))).toThrow(/not-applicable/);
   });
 
   it('records who waived and why — an unattributed waiver is not a control', () => {
@@ -63,6 +63,51 @@ describe('DocumentRequirement — evidence, not files', () => {
 
   it('will not waive without a reason', () => {
     expect(() => waiveRequirement(req(), 'u-admin', '  ')).toThrow(/reason/);
+  });
+
+  /**
+   * THE PREPARER MAY NOT EXCUSE THEIR OWN EVIDENCE. A requirement exists so a decision is not
+   * taken on the preparer's word alone, so their excusing it is the one exclusion that defeats it.
+   */
+  it('refuses the preparer waiving evidence on their own decision', () => {
+    expect(() => waiveRequirement(req({ type: 'VENDOR_QUOTE' }), 'u-qs', 'only two suppliers quoted', new Date(), { preparedBy: 'u-qs' }))
+      .toThrow(/access denied: the person who prepared this decision may not waive/i);
+  });
+
+  it('lets somebody other than the preparer waive it, and records who and why', () => {
+    const r = waiveRequirement(req({ type: 'VENDOR_QUOTE' }), 'u-qs2', 'only two suppliers quoted', new Date(), { preparedBy: 'u-qs' });
+    expect(r.status).toBe('WAIVED');
+    expect(r.evidence.at(-1)?.checkedBy).toBe('u-qs2');
+  });
+
+  it('applies no preparer check where the record names no preparer', () => {
+    // Stated rather than implied: an entity type with no preparer rule is not refused by one.
+    expect(waiveRequirement(req(), 'u-qs', 'reason', new Date(), { preparedBy: null }).status).toBe('WAIVED');
+  });
+});
+
+describe('"not applicable" costs what a waiver costs', () => {
+  /**
+   * It took no actor and no reason. MEASURED on the live checklist: the offer's own preparer
+   * excused VENDOR_QUOTE with an empty body, got 201, and the verdict went NOT_READY → READY with
+   * `note: null` and `evidence: []` — nothing on the record said the decision was ever taken.
+   */
+  it('requires a reason', () => {
+    expect(() => setNotApplicable(req(), 'u-qs2', '   ')).toThrow(/needs a reason/i);
+  });
+
+  it('records who excluded it and why, as evidence', () => {
+    const r = setNotApplicable(req({ type: 'DATASHEET' }), 'u-qs2', 'client supplied their own spec');
+    expect(r.status).toBe('NOT_APPLICABLE');
+    expect(r.note).toBe('client supplied their own spec');
+    expect(r.evidence.at(-1)?.checkedBy).toBe('u-qs2');
+    expect(r.evidence.at(-1)?.reference).toMatch(/^not applicable:/);
+  });
+
+  it('refuses the preparer excluding their own evidence this way either', () => {
+    // The route that had no guard is the one a preparer refused a waiver would reach for next.
+    expect(() => setNotApplicable(req({ type: 'VENDOR_QUOTE' }), 'u-qs', 'single source', new Date(), { preparedBy: 'u-qs' }))
+      .toThrow(/access denied: the person who prepared this decision may not exclude/i);
   });
 });
 
@@ -100,7 +145,7 @@ describe('decisionReadiness', () => {
 
   it('excludes NOT_APPLICABLE from BOTH sides of the score', () => {
     const list = template();
-    list[3] = setNotApplicable(list[3]);
+    list[3] = setNotApplicable(list[3], 'u-qs2', 'not applicable to retrofit scope');
     const r = decisionReadiness(list);
     expect(r.applicable).toBe(3);
     expect(r.score).toBe(0);
@@ -157,7 +202,7 @@ describe('decisionReadiness', () => {
     // is no evidence behind the decision either way.
     const na = setNotApplicable(makeDocumentRequirement({
       tenantId: 't1', entityType: 'crm.quotation', entityId: 'q1', type: 'VENDOR_QUOTE', requiredCount: 3,
-    }));
+    }), 'u-qs2', 'single-source proprietary system');
     expect(decisionReadiness([na]).verdict).toBe('UNCONFIGURED');
   });
 });

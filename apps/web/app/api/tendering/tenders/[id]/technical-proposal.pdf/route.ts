@@ -16,7 +16,15 @@ interface TechnicalProposalSource {
     assumptions: string[]; exclusions: string[];
     evidence: Array<{ title: string; kind: string; revision: string }>;
   };
-  commercialReference: { quotationId: string; quoteNumber: string; revision: number };
+  /**
+   * NULL until the offer this proposal accompanies is internally approved. The proposal rests on
+   * the approved STUDY and carries no price, so it may be issued first — and the cover must then
+   * say it has no offer to cite rather than cite one that does not exist.
+   */
+  commercialReference: { quotationId: string; quoteNumber: string; revision: number } | null;
+  commercialOfferApproved: boolean;
+  /** The issuing company, resolved from the tender itself — not borrowed through an offer. */
+  documentIdentity: DocumentIdentity;
 }
 
 interface DocumentIdentity {
@@ -37,14 +45,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     return Response.json(await sourceResponse.json().catch(() => ({ message: 'Technical proposal unavailable' })), { status: sourceResponse.status });
   }
   const source = await sourceResponse.json() as TechnicalProposalSource;
-  const identityResponse = await apiFetch(
-    `${apiBase()}/api/v1/crm/quotations/${encodeURIComponent(source.commercialReference.quotationId)}/document-identity`,
-    { headers, cache: 'no-store' },
-  );
-  if (!identityResponse.ok) {
-    return Response.json(await identityResponse.json().catch(() => ({ message: 'Company identity unavailable' })), { status: identityResponse.status });
-  }
-  const identity = await identityResponse.json() as DocumentIdentity;
+  // This used to fetch identity through `source.commercialReference.quotationId`. Once the proposal
+  // could be issued before its offer was approved, that reference is null and this line threw —
+  // the document failed with a 500 on exactly the case the change was made to allow.
+  const identity = source.documentIdentity;
+  // What the cover cites. Stated plainly when there is nothing to cite yet.
+  const commercialCite = source.commercialReference
+    ? `${source.commercialReference.quoteNumber} · Rev ${source.commercialReference.revision}`
+    : 'Commercial offer not yet issued';
   if (!identity.configured) {
     return Response.json({ message: 'Configure the legal company name before generating customer documents.' }, { status: 409 });
   }
@@ -105,14 +113,14 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   line('TECHNICAL PROPOSAL', right, { size: 13, bold: true, right: true, color: [22, 78, 99] });
   y += 6;
   line([identity.address, identity.trn ? `TRN ${identity.trn}` : '', identity.email, identity.phone].filter(Boolean).join(' | '), left, { size: 7.5 });
-  line(`${source.commercialReference.quoteNumber} · Rev ${source.commercialReference.revision}`, right, { size: 8, bold: true, right: true });
+  line(commercialCite, right, { size: 8, bold: true, right: true });
   y += 5; pdf.setDrawColor(40, 48, 58); pdf.line(left, y, right, y); y += 7;
 
   record(source.tender.title, [
     ['Client', source.tender.accountName || '-'],
     ['Tender reference', source.tender.reference || '-'],
     ['Technical study', `${source.study.title} · S-${String(source.study.revisionNo).padStart(3, '0')} · input ${source.study.inputRevision}`],
-    ['Commercial reference', `${source.commercialReference.quoteNumber} · Rev ${source.commercialReference.revision}`],
+    ['Commercial reference', commercialCite],
     ['Approved', source.study.reviewedAt ? source.study.reviewedAt.slice(0, 10) : '-'],
   ]);
 
@@ -153,7 +161,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   else for (const evidence of source.study.evidence) record(evidence.title, [['Type', label(evidence.kind)], ['Revision', evidence.revision || '-']]);
 
   ensure(14); y += 4;
-  paragraph(`Commercial prices and conditions are issued separately under ${source.commercialReference.quoteNumber} Rev ${source.commercialReference.revision}.`);
+  paragraph(source.commercialReference
+    ? `Commercial prices and conditions are issued separately under ${source.commercialReference.quoteNumber} Rev ${source.commercialReference.revision}.`
+    : 'Commercial prices and conditions will be issued separately in an approved commercial offer. This technical proposal carries no price.');
 
   const pages = pdf.getNumberOfPages();
   for (let current = 1; current <= pages; current += 1) {

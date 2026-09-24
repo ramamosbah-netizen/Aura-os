@@ -132,9 +132,39 @@ export function addEvidence(
   };
 }
 
+/**
+ * WHO MAY EXCUSE EVIDENCE, as distinct from who may supply it.
+ *
+ * A requirement exists so that a decision is not taken on the preparer's word alone. The preparer
+ * excusing their own missing evidence is therefore the one exclusion that defeats the purpose of
+ * the requirement — whether they call it a waiver or call it "not applicable". Stated in the
+ * domain rather than only in a permission, so somebody holding both the preparing and the waiving
+ * authority is still refused: the same shape as the preparer who may not approve their own offer.
+ */
+export interface ExclusionAuthority {
+  /** Who prepared the decision this requirement belongs to. `null` when the record has none. */
+  preparedBy?: string | null;
+}
+
+function assertNotPreparer(by: string | null, authority: ExclusionAuthority, act: string): void {
+  if (by && authority.preparedBy && by === authority.preparedBy) {
+    throw new Error(
+      `access denied: the person who prepared this decision may not ${act} its evidence — ` +
+        'excusing a requirement is for whoever answers for the decision, not whoever assembled it',
+    );
+  }
+}
+
 /** Waiving is a decision, so it records who made it — an unattributed waiver is not a control. */
-export function waiveRequirement(r: DocumentRequirement, by: string | null, reason: string, now = new Date()): DocumentRequirement {
+export function waiveRequirement(
+  r: DocumentRequirement,
+  by: string | null,
+  reason: string,
+  now = new Date(),
+  authority: ExclusionAuthority = {},
+): DocumentRequirement {
   if (!reason?.trim()) throw new Error('a waiver needs a reason');
+  assertNotPreparer(by, authority, 'waive');
   return {
     ...r,
     status: 'WAIVED',
@@ -147,8 +177,39 @@ export function waiveRequirement(r: DocumentRequirement, by: string | null, reas
   };
 }
 
-export function setNotApplicable(r: DocumentRequirement, now = new Date()): DocumentRequirement {
-  return { ...r, status: 'NOT_APPLICABLE', updatedAt: now.toISOString() };
+/**
+ * "This requirement does not apply to this decision." It removes the requirement from the score
+ * entirely — which is a WAIVER by another name, and it was the unguarded one.
+ *
+ * It took no actor and no reason, so a requirement could be excluded by nobody, for nothing, and
+ * the record could not say otherwise. MEASURED against the live commercial checklist, with the
+ * other three requirements evidenced: the offer's own PREPARER marked VENDOR_QUOTE not-applicable
+ * with an empty body, got 201, and the verdict went NOT_READY → READY — leaving `note: null` and
+ * `evidence: []` behind, so nothing on the record says a decision to proceed on no supplier quotes
+ * was ever taken, let alone by whom.
+ *
+ * It now costs what a waiver costs — a named person and a reason, recorded as evidence — and the
+ * preparer may not do it to their own decision.
+ */
+export function setNotApplicable(
+  r: DocumentRequirement,
+  by: string | null,
+  reason: string,
+  now = new Date(),
+  authority: ExclusionAuthority = {},
+): DocumentRequirement {
+  if (!reason?.trim()) throw new Error('marking a requirement not applicable needs a reason');
+  assertNotPreparer(by, authority, 'exclude');
+  return {
+    ...r,
+    status: 'NOT_APPLICABLE',
+    note: reason.trim(),
+    evidence: [
+      ...r.evidence,
+      { type: 'MANUAL_CONFIRMATION', reference: `not applicable: ${reason.trim()}`, checkedBy: by, checkedAt: now.toISOString() },
+    ],
+    updatedAt: now.toISOString(),
+  };
 }
 
 /**

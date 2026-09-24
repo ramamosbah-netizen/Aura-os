@@ -26,6 +26,13 @@ const source = {
     evidence: [{ title: 'Client specification', kind: 'client_specification', revision: '3' }],
   },
   commercialReference: { quotationId: 'q-1', quoteNumber: 'QUO-001', revision: 1 },
+  commercialOfferApproved: true,
+  // Carried by the proposal itself now, resolved from the tender's company — see
+  // apps/api/src/common/document-identity.ts. It used to be fetched through the quotation.
+  documentIdentity: {
+    companyId: null, configured: true, name: 'AURA MEP', legalName: 'AURA MEP L.L.C.', trn: '100000000000000',
+    address: 'Dubai, UAE', phone: '+971 4 000 0000', email: 'offers@example.invalid', website: '', currency: 'AED',
+  },
 };
 
 const call = () => GET(new Request('http://localhost/api/tendering/tenders/t-1/technical-proposal.pdf'), {
@@ -36,12 +43,7 @@ describe('Tender technical proposal PDF BFF', () => {
   afterEach(() => apiFetchMock.mockReset());
 
   it('generates a separate customer technical document from governed study data', async () => {
-    apiFetchMock
-      .mockResolvedValueOnce(Response.json(source))
-      .mockResolvedValueOnce(Response.json({
-        configured: true, name: 'AURA MEP', legalName: 'AURA MEP L.L.C.', trn: '100000000000000',
-        address: 'Dubai, UAE', phone: '+971 4 000 0000', email: 'offers@example.invalid', website: '',
-      }));
+    apiFetchMock.mockResolvedValueOnce(Response.json(source));
 
     const response = await call();
     expect(response.status).toBe(200);
@@ -56,9 +58,32 @@ describe('Tender technical proposal PDF BFF', () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(1, 'http://api.test/api/v1/tendering/tenders/t-1/technical-proposal', {
       headers: { authorization: 'Bearer session-token' }, cache: 'no-store',
     });
-    expect(apiFetchMock).toHaveBeenNthCalledWith(2, 'http://api.test/api/v1/crm/quotations/q-1/document-identity', {
-      headers: { authorization: 'Bearer session-token' }, cache: 'no-store',
-    });
+    // ONE upstream call. Identity no longer travels through a quotation.
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  /**
+   * THE CASE THAT WAS BROKEN. Step 2 let the proposal be issued before its commercial offer is
+   * approved — that was the whole point, it broke a loop that made the journey unfinishable — and
+   * the API returns `commercialReference: null` in that case. This route still dereferenced
+   * `source.commercialReference.quotationId` to fetch the company identity, so it threw and the
+   * user got a 500 on exactly the case the change existed to allow. The JSON endpoint was proved;
+   * the document built from it was not.
+   */
+  it('issues the proposal BEFORE the offer is approved, and says it has no offer to cite', async () => {
+    apiFetchMock.mockResolvedValueOnce(Response.json({ ...source, commercialReference: null, commercialOfferApproved: false }));
+    const response = await call();
+    expect(response.status, 'an unapproved offer must not break the technical document').toBe(200);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+    expect(apiFetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses to issue a customer document when the company identity is not configured', async () => {
+    apiFetchMock.mockResolvedValueOnce(Response.json({ ...source, documentIdentity: { ...source.documentIdentity, configured: false } }));
+    const response = await call();
+    expect(response.status).toBe(409);
+    expect(Buffer.from(await response.arrayBuffer()).subarray(0, 5).toString('ascii')).not.toBe('%PDF-');
   });
 
   it.each([403, 404])('preserves an upstream %s refusal and emits no PDF', async (status) => {

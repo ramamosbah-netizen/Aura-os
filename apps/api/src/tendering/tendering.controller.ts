@@ -2,11 +2,12 @@ import { BadRequestException, Body, ConflictException, Controller, Delete, Get, 
 import { IsArray, IsNumber, IsOptional, IsString, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AccessService, DmsService, Permissions, TenantContext, ParseUuidOr404Pipe, UsersService } from '@aura/core';
+import { AccessService, CompaniesService, DmsService, Permissions, SettingsService, TenantContext, ParseUuidOr404Pipe, UsersService } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
 import { AccountService, PreAwardPackageService, QuotationService, type TechnicalStudyContent } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
+import { resolveDocumentIdentity } from '../common/document-identity';
 import * as xlsx from 'xlsx';
 import { CreateTechnicalStudyDto, StudyChangesDto, StudyReviewDto, UpdateTechnicalStudyDto, toTechnicalStudyContent } from '../crm/pre-award-package.controller';
 
@@ -103,6 +104,10 @@ export class TenderingController {
     private readonly packages: PreAwardPackageService,
     private readonly users: UsersService,
     private readonly access: AccessService,
+    // Who is issuing the proposal. Resolved from the tender's own company rather than borrowed
+    // through a quotation, because the proposal may now be issued before any offer is approved.
+    private readonly companies: CompaniesService,
+    private readonly settings: SettingsService,
   ) {}
 
   private documentActor() {
@@ -276,6 +281,8 @@ export class TenderingController {
         submissionDeadline: tender.submissionDeadline,
       },
       study,
+      /** The issuing company, independent of any offer. */
+      documentIdentity: await resolveDocumentIdentity(this.companies, this.settings, tender.tenantId, tender.companyId ?? null),
       /** Whether the offer this proposal accompanies has been internally approved yet. */
       commercialOfferApproved: readiness.commercialOfferApproved,
       commercialReference: readiness.commercialQuotationId

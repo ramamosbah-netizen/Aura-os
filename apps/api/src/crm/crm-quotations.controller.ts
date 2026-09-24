@@ -1,6 +1,7 @@
 import { BadRequestException, Body, Controller, Get, Header, NotFoundException, Param, Patch, Post, Query, Req, Res, StreamableFile } from '@nestjs/common';
 import { IsArray, IsOptional, IsString } from 'class-validator';
 import { AccessService, AiService, CompaniesService, FormCustomValuesService, FormOverridesService, NumberingService, Permissions, SettingsService, TenantContext } from '@aura/core';
+import { resolveDocumentIdentity } from '../common/document-identity';
 import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldValues, quotationFormSchema, toCsv } from '@aura/shared';
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
@@ -354,27 +355,8 @@ export class CrmQuotationsController {
   async documentIdentity(@Param('id') id: string) {
     const quotation = await this.quotations.get(id);
     if (!quotation) throw new NotFoundException(`quotation ${id} not found`);
-    const tenantId = this.tenant.get().tenantId;
-    const companies = await this.companies.list(tenantId);
-    const company = quotation.companyId ? companies.find((entry) => entry.id === quotation.companyId) ?? null : null;
-    const setting = async (key: string): Promise<string> => (await this.settings.get(tenantId, key).catch(() => null))?.trim() ?? '';
-    const [profileName, legalName, profileTrn, address, phone, email, website, currency] = await Promise.all([
-      setting('company.name'), setting('company.legalName'), setting('company.trn'), setting('company.address'),
-      setting('company.phone'), setting('company.email'), setting('company.website'), setting('finance.defaultCurrency'),
-    ]);
-    const name = company?.name || legalName || profileName;
-    return {
-      companyId: quotation.companyId,
-      name: name || 'Company identity not configured',
-      configured: Boolean(name),
-      legalName: legalName || name || '',
-      trn: company?.trn || profileTrn,
-      address,
-      phone,
-      email,
-      website,
-      currency: company?.baseCurrency || currency || 'AED',
-    };
+    // One resolution, shared with the technical proposal — see common/document-identity.ts.
+    return resolveDocumentIdentity(this.companies, this.settings, this.tenant.get().tenantId, quotation.companyId);
   }
 
   /**

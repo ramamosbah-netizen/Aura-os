@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Inject, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Query } from '@nestjs/common';
 import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import {
   COMMERCIAL_EVIDENCE_TEMPLATE,
@@ -14,6 +14,7 @@ import {
   type DocumentRequirementType,
 } from '@aura/shared';
 import { DOCUMENT_REQUIREMENT_STORE, ParseUuidOr404Pipe, Permissions, TenantContext, type DocumentRequirementStore } from '@aura/core';
+import { QuotationService } from '@aura/crm';
 
 const EVIDENCE_TYPES = ['DOCUMENT_ID', 'EXTERNAL_REFERENCE', 'TRANSMITTAL', 'MANUAL_CONFIRMATION'];
 
@@ -74,6 +75,15 @@ export class DocumentRequirementsController {
   constructor(
     @Inject(DOCUMENT_REQUIREMENT_STORE) private readonly store: DocumentRequirementStore,
     private readonly tenant: TenantContext,
+    // To learn who PREPARED a quotation, so they cannot excuse its evidence.
+    //
+    // THE EXPLICIT @Inject IS LOAD-BEARING. Without it, `QuotationService | null` is reflected as
+    // `Object`, Nest cannot resolve the token, and @Optional() turns that failure into a silent
+    // null — so `preparedBy` returned null, the domain applied no preparer check, and a live run
+    // measured the offer's own preparer waiving (201) and excluding (201) their own supplier
+    // evidence while every unit test passed. The same shape as quotation.service.ts's own
+    // optional dependencies, which inject by explicit token for exactly this reason.
+    @Optional() @Inject(QuotationService) private readonly quotations: QuotationService | null = null,
   ) {}
 
   /** Requirements on one record, plus the computed readiness the UI renders. */
@@ -160,6 +170,29 @@ export class DocumentRequirementsController {
     return updated;
   }
 
+  /**
+   * Who prepared the decision a requirement belongs to — the one person who may not excuse its
+   * evidence. Resolved from the record itself, never from the request.
+   *
+   * Only `crm.quotation` has a preparer rule today, and that is stated rather than implied: every
+   * other entity type returns null, which means the domain applies no preparer check to it. When
+   * another decision type gains one, it is added here, next to this one, where it can be seen.
+   */
+  private async preparedBy(requirement: DocumentRequirement): Promise<string | null> {
+    if (requirement.entityType === 'crm.quotation' && this.quotations) {
+      const quotation = await this.quotations.get(requirement.entityId);
+      return quotation?.createdBy ?? null;
+    }
+    return null;
+  }
+
+  /** The preparer refusal is an AUTHORIZATION failure and says so; anything else is bad input. */
+  private asHttp(err: unknown, fallback: string): never {
+    const message = err instanceof Error ? err.message : fallback;
+    if (/^access denied/i.test(message)) throw new ForbiddenException(message);
+    throw new BadRequestException(message);
+  }
+
   /** Waive a requirement. The domain rejects a waiver with no reason — an unattributed one is not a control. */
   @Permissions('documents.requirement.waive')
   @Post(':id/waive')
@@ -167,19 +200,32 @@ export class DocumentRequirementsController {
     const found = await this.require(id);
     let updated: DocumentRequirement;
     try {
-      updated = waiveRequirement(found, this.tenant.get().actorId ?? null, dto.reason);
+      updated = waiveRequirement(found, this.tenant.get().actorId ?? null, dto?.reason, new Date(), {
+        preparedBy: await this.preparedBy(found),
+      });
     } catch (err) {
-      throw new BadRequestException(err instanceof Error ? err.message : 'invalid waiver');
+      this.asHttp(err, 'invalid waiver');
     }
     await this.store.upsert(updated);
     return updated;
   }
 
-  /** Mark a requirement as not applying to this deal — excluded from the score entirely. */
+  /**
+   * Mark a requirement as not applying to this decision — excluded from the score entirely, which
+   * makes it a waiver by another name. It used to take no body at all: see `setNotApplicable`.
+   */
   @Permissions('documents.requirement.waive')
   @Post(':id/not-applicable')
-  async notApplicable(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DocumentRequirement> {
-    const updated = setNotApplicable(await this.require(id));
+  async notApplicable(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: WaiveDto): Promise<DocumentRequirement> {
+    const found = await this.require(id);
+    let updated: DocumentRequirement;
+    try {
+      updated = setNotApplicable(found, this.tenant.get().actorId ?? null, dto?.reason, new Date(), {
+        preparedBy: await this.preparedBy(found),
+      });
+    } catch (err) {
+      this.asHttp(err, 'invalid exclusion');
+    }
     await this.store.upsert(updated);
     return updated;
   }

@@ -11,9 +11,16 @@ interface Row {
   buildup_id: string;
   boq_item_id: string;
   component_id: string;
-  rfq_id: string;
-  quote_id: string;
+  rfq_id: string | null;
+  quote_id: string | null;
   supplier_name: string;
+  quotation_revision_id: string | null;
+  quotation_line_id: string | null;
+  pr_line_id: string | null;
+  material_id: string | null;
+  currency: string | null;
+  technical_verdict: string | null;
+  comparison_date: Date | string | null;
   sourced_unit_cost: string | number;
   previous_unit_cost: string | number;
   sourced_at: Date | string;
@@ -21,7 +28,11 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, tender_id, buildup_id, boq_item_id, component_id, rfq_id, quote_id, supplier_name, sourced_unit_cost, previous_unit_cost, sourced_at, created_by';
+  'id, tenant_id, company_id, tender_id, buildup_id, boq_item_id, component_id, rfq_id, quote_id, supplier_name, sourced_unit_cost, previous_unit_cost, sourced_at, created_by, ' +
+  'quotation_revision_id, quotation_line_id, pr_line_id, material_id, currency, technical_verdict, comparison_date';
+
+const dateOnly = (v: Date | string | null): string | null =>
+  v === null ? null : v instanceof Date ? v.toISOString().slice(0, 10) : String(v).slice(0, 10);
 
 function toSource(r: Row): EstimateSource {
   return {
@@ -34,6 +45,18 @@ function toSource(r: Row): EstimateSource {
     componentId: r.component_id,
     rfqId: r.rfq_id,
     quoteId: r.quote_id,
+    // The governed lineage is whole or absent — migration 0387 forbids a half-written one.
+    governed: r.quotation_line_id
+      ? {
+          quotationRevisionId: r.quotation_revision_id as string,
+          quotationLineId: r.quotation_line_id,
+          prLineId: r.pr_line_id as string,
+          materialId: r.material_id as string,
+          currency: r.currency as string,
+          technicalVerdict: r.technical_verdict as 'compliant' | 'compliant_with_deviation',
+          comparisonDate: dateOnly(r.comparison_date) as string,
+        }
+      : null,
     supplierName: r.supplier_name,
     sourcedUnitCost: Number(r.sourced_unit_cost),
     previousUnitCost: Number(r.previous_unit_cost),
@@ -49,12 +72,19 @@ export class PostgresEstimateSourceStore implements EstimateSourceStore {
   async upsert(s: EstimateSource): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_tendering_estimate_sources (${COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
        ON CONFLICT (buildup_id, component_id) DO UPDATE SET
          rfq_id = EXCLUDED.rfq_id, quote_id = EXCLUDED.quote_id, supplier_name = EXCLUDED.supplier_name,
          sourced_unit_cost = EXCLUDED.sourced_unit_cost, previous_unit_cost = EXCLUDED.previous_unit_cost,
-         sourced_at = EXCLUDED.sourced_at`,
-      [s.id, s.tenantId, s.companyId, s.tenderId, s.buildUpId, s.boqItemId, s.componentId, s.rfqId, s.quoteId, s.supplierName, s.sourcedUnitCost, s.previousUnitCost, s.sourcedAt, s.createdBy],
+         sourced_at = EXCLUDED.sourced_at,
+         -- Re-sourcing REPLACES the lineage whole. Updating only the legacy columns would leave a
+         -- row naming a quote header and a governed line at once, which 0387 refuses.
+         quotation_revision_id = EXCLUDED.quotation_revision_id, quotation_line_id = EXCLUDED.quotation_line_id,
+         pr_line_id = EXCLUDED.pr_line_id, material_id = EXCLUDED.material_id, currency = EXCLUDED.currency,
+         technical_verdict = EXCLUDED.technical_verdict, comparison_date = EXCLUDED.comparison_date`,
+      [s.id, s.tenantId, s.companyId, s.tenderId, s.buildUpId, s.boqItemId, s.componentId, s.rfqId, s.quoteId, s.supplierName, s.sourcedUnitCost, s.previousUnitCost, s.sourcedAt, s.createdBy,
+       s.governed?.quotationRevisionId ?? null, s.governed?.quotationLineId ?? null, s.governed?.prLineId ?? null,
+       s.governed?.materialId ?? null, s.governed?.currency ?? null, s.governed?.technicalVerdict ?? null, s.governed?.comparisonDate ?? null],
     );
   }
 

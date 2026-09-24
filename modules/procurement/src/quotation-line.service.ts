@@ -183,6 +183,12 @@ export class QuotationLineService {
     return this.lines.listByRequirement(tenantId, prLineId);
   }
 
+  /** One supplier's answer, by id — never another tenant's. */
+  async get(tenantId: Id, id: Id): Promise<QuotationLine | null> {
+    const line = await this.lines.get(id);
+    return line && line.tenantId === tenantId ? line : null;
+  }
+
   async remove(tenantId: Id, id: Id): Promise<void> {
     const line = await this.lines.get(id);
     if (!line || line.tenantId !== tenantId) throw new Error(`quotation line ${id} not found`);

@@ -78,3 +78,44 @@ describe('estimate-source domain', () => {
     expect(isSourceStale(s, null)).toBe(true);
   });
 });
+
+/**
+ * BID-01 ON THE PRICING PATH: a source names a governed supplier quotation LINE — or it is the
+ * legacy quote header — and never both, never neither, never a line judged non-compliant.
+ */
+describe('a governed estimate source', () => {
+  const base = { tenantId: 't1', tenderId: 'tnd1', buildUpId: 'bu1', boqItemId: 'boq1', componentId: 'c1', supplierName: 'Gulf Security Systems', sourcedUnitCost: 395, previousUnitCost: 420 };
+  const governed = {
+    quotationRevisionId: 'rev-1', quotationLineId: 'ql-1', prLineId: 'prl-1', materialId: 'mat-1',
+    currency: 'aed', technicalVerdict: 'compliant' as const, comparisonDate: '2026-09-24',
+  };
+
+  it('records the whole lineage, and no quote header beside it', () => {
+    const s = makeEstimateSource({ ...base, governed });
+    expect(s.governed).toMatchObject({ quotationLineId: 'ql-1', quotationRevisionId: 'rev-1', currency: 'AED', technicalVerdict: 'compliant' });
+    expect(s.quoteId).toBeNull();
+  });
+
+  it('refuses a source claiming BOTH lineages', () => {
+    expect(() => makeEstimateSource({ ...base, governed, rfqId: 'rfq-1', quoteId: 'q-1' })).toThrow(/never both/);
+  });
+
+  it('refuses a source with NEITHER', () => {
+    expect(() => makeEstimateSource({ ...base })).toThrow(/rfqId and quoteId are required/);
+  });
+
+  it('refuses a governed source missing any part of its origin', () => {
+    expect(() => makeEstimateSource({ ...base, governed: { ...governed, quotationRevisionId: '' } })).toThrow(/missing quotationRevisionId/);
+    expect(() => makeEstimateSource({ ...base, governed: { ...governed, comparisonDate: '' } })).toThrow(/missing comparisonDate/);
+  });
+
+  it('refuses a line the technical authority judged non-compliant, whatever its price', () => {
+    expect(() => makeEstimateSource({ ...base, governed: { ...governed, technicalVerdict: 'non_compliant' as unknown as 'compliant' } }))
+      .toThrow(/only a technically eligible quotation line/);
+  });
+
+  it('accepts compliant-with-deviation — a deviation the Technical Manager accepted is still eligible', () => {
+    expect(makeEstimateSource({ ...base, governed: { ...governed, technicalVerdict: 'compliant_with_deviation' } }).governed?.technicalVerdict)
+      .toBe('compliant_with_deviation');
+  });
+});

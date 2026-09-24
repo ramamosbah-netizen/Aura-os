@@ -279,6 +279,11 @@ export class PurchaseRequestLineService {
     return this.lines.listForRequest(prId, this.tenantId() ?? '');
   }
 
+  /** One requisition line, by id, in the caller's tenant. */
+  getLine(id: Id): Promise<PurchaseRequestLine | null> {
+    return this.lines.find(id, this.tenantId() ?? '');
+  }
+
   /** What the requisition adds up to, and whether that sum is the whole story. */
   async total(prId: Id): Promise<RequisitionTotal> {
     return requisitionTotal(await this.lines.listForRequest(prId, this.tenantId() ?? ''));

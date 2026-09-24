@@ -2,7 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { TENDER_ESTIMATE_EVENT, withComponentUnitCost } from './domain/estimate';
-import { type EstimateSource, makeEstimateSource } from './domain/estimate-source';
+import { type GovernedSourceLineage, type EstimateSource, makeEstimateSource } from './domain/estimate-source';
 import { ESTIMATE_STORE, type EstimateStore } from './estimate-store';
 import { ESTIMATE_SOURCE_STORE, type EstimateSourceStore } from './estimate-source-store';
 
@@ -11,10 +11,13 @@ export interface SourceComponentInput {
   companyId?: Id | null;
   buildUpId: Id;
   componentId: Id;
-  rfqId: Id;
-  quoteId: Id;
+  rfqId?: Id | null;
+  /** LEGACY: the whole-quote header. Absent when `governed` is given. */
+  quoteId?: Id | null;
+  /** GOVERNED: the supplier revision line this price came from, and why it was eligible. */
+  governed?: GovernedSourceLineage | null;
   supplierName: string;
-  /** The supplier quote's unit cost — becomes the component's cost. */
+  /** The unit cost that becomes the component's cost — for a governed line, its normalised price. */
   quoteAmount: number;
   actorId?: Id | null;
 }
@@ -54,8 +57,9 @@ export class EstimateSourcingService {
       buildUpId: buildUp.id,
       boqItemId: buildUp.boqItemId,
       componentId: input.componentId,
-      rfqId: input.rfqId,
-      quoteId: input.quoteId,
+      rfqId: input.rfqId ?? null,
+      quoteId: input.quoteId ?? null,
+      governed: input.governed ?? null,
       supplierName: input.supplierName,
       sourcedUnitCost: input.quoteAmount,
       previousUnitCost,
@@ -67,12 +71,15 @@ export class EstimateSourcingService {
       tenderId: buildUp.tenderId,
       boqItemId: buildUp.boqItemId,
       componentId: input.componentId,
-      rfqId: input.rfqId,
-      quoteId: input.quoteId,
+      rfqId: input.rfqId ?? null,
+      quoteId: input.quoteId ?? null,
+      quotationLineId: input.governed?.quotationLineId ?? null,
+      quotationRevisionId: input.governed?.quotationRevisionId ?? null,
+      lineage: input.governed ? 'governed' : 'legacy',
       unitCost: input.quoteAmount,
       sellingRate: updated.sellingRate,
     });
-    this.logger.log(`Sourced component ${input.componentId} from quote ${input.quoteId} @ ${input.quoteAmount} → selling ${updated.sellingRate}`);
+    this.logger.log(`Sourced component ${input.componentId} from ${input.governed ? `quotation line ${input.governed.quotationLineId}` : `quote ${input.quoteId}`} @ ${input.quoteAmount} → selling ${updated.sellingRate}`);
     return { buildUp: updated, source };
   }
 
@@ -127,6 +134,11 @@ export class EstimateSourcingService {
       // Frozen costing: leave the estimate and the link untouched, so the sheet keeps showing the
       // price it was committed at. The live-quote drift shows up as `stale` on the sources view.
       if (args.isTenderCommitted && (await args.isTenderCommitted(buildUp.tenderId))) continue;
+      // A GOVERNED link is never restamped from a quote header. Writing a `quoteId` onto it would give
+      // one row two origins, which migration 0387 refuses — and a whole-offer header amount is exactly
+      // the wrong thing to put on a component priced from one material's line (BID-01). Unreachable
+      // today, because a tender-pricing RFQ cannot be awarded; skipped here so it stays that way.
+      if (link.governed) continue;
       if (Math.abs(component.unitCost - args.amount) > 1e-9 || link.quoteId !== args.quoteId) {
         const updated = withComponentUnitCost(buildUp, link.componentId, args.amount);
         await this.estimates.save(updated);

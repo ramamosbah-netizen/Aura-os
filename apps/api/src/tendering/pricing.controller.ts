@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, Inject, NotFoundException, Param, Post, StreamableFile } from '@nestjs/common';
 import { DOCUMENT_REQUIREMENT_STORE, NumberingService, ParseUuidOr404Pipe, Permissions, SettingsService, TenantContext, type DocumentRequirementStore } from '@aura/core';
-import { COMMERCIAL_EVIDENCE_TEMPLATE, makeDocumentRequirement, toCsv } from '@aura/shared';
+import { COMMERCIAL_EVIDENCE_TEMPLATE, admitCurrency, makeDocumentRequirement, toCsv } from '@aura/shared';
 import {
   EstimateService,
   EstimateSourcingService,
@@ -18,7 +18,10 @@ import {
   type Tender,
 } from '@aura/tendering';
 import { PreAwardPackageService, QuotationService, isQuotationCommitted, type NewQuotationLine, type Quotation } from '@aura/crm';
-import { PurchaseRequestLineService, PurchaseRequestService, RfqService, type PurchaseRequest, type PurchaseRequestLine } from '@aura/procurement';
+import {
+  CommercialComparisonService, PurchaseRequestLineService, PurchaseRequestService, QuotationLineEvaluationService,
+  QuotationLineService, RfqService, isTenderPricing, type PurchaseRequest, type PurchaseRequestLine,
+} from '@aura/procurement';
 import { MaterialService } from '@aura/inventory';
 import { ArrayNotEmpty, IsArray, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -92,6 +95,11 @@ export class TenderPricingController {
     private readonly prs: PurchaseRequestService,
     private readonly prLines: PurchaseRequestLineService,
     private readonly materials: MaterialService,
+    // A governed price basis: the supplier's line, its technical eligibility, and the commercial
+    // comparison that normalised it — procurement's own authorities, read and never re-implemented.
+    private readonly quotationLines: QuotationLineService,
+    private readonly evaluations: QuotationLineEvaluationService,
+    private readonly comparison: CommercialComparisonService,
   ) {}
 
   private async tenderOr404(id: string): Promise<Tender> {
@@ -570,11 +578,29 @@ export class TenderPricingController {
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('buildUpId', ParseUuidOr404Pipe) buildUpId: string,
     @Param('componentId', ParseUuidOr404Pipe) componentId: string,
-    @Body() dto: { rfqId?: string; quoteId?: string },
+    @Body() dto: { rfqId?: string; quoteId?: string; quotationLineId?: string; comparisonDate?: string },
   ): Promise<RateBuildUp> {
     await this.governedPricingContext(id);
     await this.assertEstimateNotCommitted(id);
     const ctx = this.tenant.get();
+
+    if (dto?.quotationLineId) {
+      return this.sourceFromGovernedLine(id, buildUpId, componentId, dto.quotationLineId, dto.comparisonDate);
+    }
+
+    /**
+     * THE LEGACY HEADER, REFUSED WHERE THE GOVERNED PATH EXISTS. A tender whose supply scope has been
+     * put to suppliers through a pricing requisition has real lines, technical verdicts and a governed
+     * comparison. Pricing it instead from a whole-quote header amount — no material, no line, no
+     * judgement — would be choosing the weaker evidence when the stronger one is there (BID-01).
+     */
+    const pricingRequisitions = await this.prs.list({ tenantId: ctx.tenantId, sourceTenderId: id, purpose: 'tender_pricing', limit: 1 });
+    if (pricingRequisitions.length > 0) {
+      throw new ConflictException(
+        'this tender prices its supply from governed supplier quotations — source the component from a quotation line, ' +
+          'not from a quote header, which names no material and carries no technical verdict',
+      );
+    }
     if (!dto?.rfqId || !dto?.quoteId) throw new BadRequestException('rfqId and quoteId are required');
     const quote = await this.resolveQuote(dto.rfqId, dto.quoteId);
     try {
@@ -619,16 +645,128 @@ export class TenderPricingController {
     await this.governedPricingContext(id);
     const ctx = this.tenant.get();
     const links = await this.estimateSourcing.listByTender(ctx.tenantId, id);
-    // Resolve live quote amounts once per RFQ.
+    // LEGACY links: resolve live quote-header amounts once per RFQ.
     const liveByQuote = new Map<string, number | null>();
-    for (const rfqId of new Set(links.map((l) => l.rfqId))) {
+    for (const rfqId of new Set(links.filter((l) => l.quoteId && l.rfqId).map((l) => l.rfqId as string))) {
       const withQuotes = await this.rfqs.getWithQuotes(rfqId);
       for (const q of withQuotes?.quotes ?? []) liveByQuote.set(q.id, q.amount);
     }
-    return links.map((l) => {
-      const liveQuoteAmount = liveByQuote.has(l.quoteId) ? (liveByQuote.get(l.quoteId) ?? null) : null;
-      return { ...l, liveQuoteAmount, stale: isSourceStale(l, liveQuoteAmount) };
-    });
+    const out: Array<EstimateSource & { liveQuoteAmount: number | null; stale: boolean }> = [];
+    for (const l of links) {
+      if (l.governed) {
+        /**
+         * A GOVERNED link is re-read on the SAME comparison date it was taken on, so the only thing
+         * that can move it is the supplier's offer — a new revision, a withdrawal, a changed price —
+         * and never the exchange rate drifting underneath. Its line gone from the comparison is stale.
+         */
+        const compared = await this.comparison.compareRequirement(ctx.tenantId, l.governed.prLineId, {
+          baseCurrency: l.governed.currency, comparisonDate: l.governed.comparisonDate,
+        }).catch(() => null);
+        const row = compared?.offers.find((o) => o.quotationLineId === l.governed?.quotationLineId);
+        const liveQuoteAmount = row && row.normalisedUnitPrice.status === 'comparable' ? row.normalisedUnitPrice.unitValue : null;
+        out.push({ ...l, liveQuoteAmount, stale: isSourceStale(l, liveQuoteAmount) });
+        continue;
+      }
+      const liveQuoteAmount = l.quoteId && liveByQuote.has(l.quoteId) ? (liveByQuote.get(l.quoteId) ?? null) : null;
+      out.push({ ...l, liveQuoteAmount, stale: isSourceStale(l, liveQuoteAmount) });
+    }
+    return out;
+  }
+
+  /**
+   * SOURCE A COMPONENT FROM A GOVERNED SUPPLIER QUOTATION LINE — the only way a tender with a
+   * pricing requisition may take a supplier price.
+   *
+   * Every one of these is checked, and each names what it protects:
+   *
+   *   * the line answers a requisition line of THIS tender's pricing requisition — not another bid's;
+   *   * that requisition line prices THIS component's BOQ item — a camera is not priced from a cable
+   *     quote, however the ids are passed;
+   *   * the component is a MATERIAL component — a supply price does not price labour;
+   *   * the Technical Manager has judged the line ELIGIBLE — compliant, or compliant with deviation —
+   *     through procurement's own `eligibilityFor`, not a verdict re-derived here;
+   *   * the governed commercial comparison, read on a stated date, includes this exact line as
+   *     COMPARABLE and LIVE — so the figure taken is the normalised one, in the tender's currency.
+   *
+   * The unit cost written is the comparison's normalised unit price, never the raw line price: the
+   * comparison is where currency, tax basis and validity are made comparable, and pricing a bid from
+   * anything else would be a second comparison engine with no governance.
+   */
+  private async sourceFromGovernedLine(
+    tenderId: string, buildUpId: string, componentId: string, quotationLineId: string, comparisonDate?: string,
+  ): Promise<RateBuildUp> {
+    const ctx = this.tenant.get();
+    const quoted = await this.quotationLines.get(ctx.tenantId, quotationLineId);
+    if (!quoted) throw new NotFoundException(`quotation line ${quotationLineId} not found`);
+    const requirement = await this.prLines.getLine(quoted.prLineId);
+    const requisition = requirement ? await this.prs.get(requirement.prId) : null;
+    if (!requirement || !requisition || !isTenderPricing(requisition) || requisition.sourceTenderId !== tenderId) {
+      throw new ConflictException('the quotation line does not answer this tender\'s pricing requisition — a price for another bid cannot price this one');
+    }
+
+    const buildUp = (await this.estimates.listByTender(ctx.tenantId, tenderId)).find((b) => b.id === buildUpId);
+    if (!buildUp) throw new NotFoundException(`build-up ${buildUpId} not found on this tender`);
+    if (requirement.sourceBoqItemId !== buildUp.boqItemId) {
+      throw new ConflictException('the quotation line prices a different BOQ item than this component\'s — a supplier price is taken only for the item it was asked for');
+    }
+    const component = buildUp.components.find((c) => c.id === componentId);
+    if (!component) throw new NotFoundException(`component ${componentId} not found in build-up ${buildUpId}`);
+    if (component.costType !== 'material') {
+      throw new ConflictException(`a supplier's supply price can only price a material component — this one is ${component.costType}`);
+    }
+
+    const technical = await this.evaluations.eligibilityFor(ctx.tenantId, quotationLineId);
+    if (technical.eligibility !== 'eligible' || !technical.verdict || technical.verdict === 'non_compliant') {
+      throw new ConflictException(
+        technical.eligibility === 'not_eligible'
+          ? 'the Technical Manager judged this line non-compliant — it is not a market alternative for this requirement, whatever its price'
+          : 'this line has no current technical verdict — a supplier price becomes a basis only after it has been judged',
+      );
+    }
+
+    const baseCurrency = (await this.settings.get(ctx.tenantId, 'finance.defaultCurrency').catch(() => null))?.trim() || 'AED';
+    const admitted = admitCurrency(baseCurrency);
+    if (!admitted.admissible) throw new ConflictException(admitted.detail);
+    const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BadRequestException('comparisonDate must be a date in YYYY-MM-DD form');
+    const compared = await this.comparison.compareRequirement(ctx.tenantId, requirement.id, { baseCurrency: admitted.currency, comparisonDate: date });
+    const row = compared.offers.find((o) => o.quotationLineId === quotationLineId);
+    if (!row || !row.provenance) {
+      throw new ConflictException('the governed comparison does not carry this line as a current offer — its revision may have been superseded or withdrawn');
+    }
+    if (row.commercialStatus !== 'live') {
+      throw new ConflictException(`this offer is ${row.commercialStatus === 'expired' ? 'past its validity' : 'of unknown validity'} on ${date} — an expired price is not a basis`);
+    }
+    if (row.normalisedUnitPrice.status !== 'comparable') {
+      throw new ConflictException(`the comparison could not normalise this line (${row.normalisedUnitPrice.reason ?? 'no comparable value'}) — an unnormalised figure is not a basis`);
+    }
+
+    try {
+      const { buildUp: updated } = await this.estimateSourcing.source({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId ?? null,
+        buildUpId,
+        componentId,
+        // The lineage IS the revision and the line; the comparison names no RFQ, and a governed link
+        // must not be found by the legacy per-RFQ restamp anyway.
+        rfqId: null,
+        governed: {
+          quotationRevisionId: row.provenance.revisionId,
+          quotationLineId,
+          prLineId: requirement.id,
+          materialId: requirement.materialId,
+          currency: row.normalisedUnitPrice.currency,
+          technicalVerdict: technical.verdict,
+          comparisonDate: date,
+        },
+        supplierName: row.supplierName,
+        quoteAmount: row.normalisedUnitPrice.unitValue,
+        actorId: ctx.actorId ?? null,
+      });
+      return updated;
+    } catch (err) {
+      throw new BadRequestException(err instanceof Error ? err.message : 'sourcing failed');
+    }
   }
 
   /** Resolve an RFQ quote to its amount + supplier (procurement owns the RFQ). */

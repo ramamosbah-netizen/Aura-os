@@ -50,6 +50,16 @@ export interface PurchaseRequestLine {
   cbsNodeId: Id | null;
   notes: string | null;
 
+  /**
+   * On a TENDER-PRICING requisition only: the BOQ item this supply line prices, and who confirmed
+   * that the BOQ item IS this material. The mapping is a person's judgement, never a text match —
+   * "IP camera, 4MP dome" in a BOQ and a material record are the same thing only because somebody
+   * said so, and the record keeps who. Null on an operational requisition.
+   */
+  sourceBoqItemId: Id | null;
+  materialMappedBy: Id | null;
+  materialMappedAt: string | null;
+
   createdBy: Id | null;
   createdAt: string;
 }
@@ -78,6 +88,9 @@ export interface NewPurchaseRequestLine {
   cbsNodeId?: Id | null;
   notes?: string | null;
   createdBy?: Id | null;
+  sourceBoqItemId?: Id | null;
+  materialMappedBy?: Id | null;
+  materialMappedAt?: string | null;
 }
 
 const trimOrNull = (v: string | null | undefined): string | null => v?.trim() || null;
@@ -121,6 +134,9 @@ export function makePurchaseRequestLine(input: NewPurchaseRequestLine): Purchase
     wbsNodeId: input.wbsNodeId ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
     notes: trimOrNull(input.notes),
+    sourceBoqItemId: input.sourceBoqItemId ?? null,
+    materialMappedBy: input.materialMappedBy ?? null,
+    materialMappedAt: input.materialMappedAt ?? null,
     createdBy: input.createdBy ?? null,
     createdAt: new Date().toISOString(),
   };

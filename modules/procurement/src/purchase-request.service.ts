@@ -7,6 +7,7 @@ import { governingValue, type PurchaseRequestLine, readyToSubmit } from './domai
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestFilter, type PurchaseRequestStore } from './purchase-request-store';
 import { PurchaseOrderService } from './purchase-order.service';
 import { PurchaseOrderLineService } from './purchase-order-line.service';
+import { TenderPricingBoundary } from './tender-pricing-boundary.service';
 
 @Injectable()
 export class PurchaseRequestService {
@@ -36,6 +37,9 @@ export class PurchaseRequestService {
      * the same positional-construction reason as the store above.
      */
     @Optional() @Inject(PurchaseOrderLineService) private readonly orderLines: PurchaseOrderLineService | null = null,
+    // THE TENDER-PRICING BOUNDARY — one rule, asked by every door (see tender-pricing-boundary.service).
+    // Explicit token: an @Optional() union without one reflects as Object and arrives as null.
+    @Optional() @Inject(TenderPricingBoundary) private readonly pricingBoundary: TenderPricingBoundary | null = null,
   ) {}
 
   /**
@@ -106,6 +110,8 @@ export class PurchaseRequestService {
     }
 
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'PR', id);
+    // Approval is the act that drafts a purchase order. A pricing requisition never takes it.
+    if (status === 'submitted' || status === 'approved') await this.pricingBoundary?.assertMayEnterApproval(existing.id);
     const { value: governedValue, derived, lines } = await this.governing(existing);
 
     /**

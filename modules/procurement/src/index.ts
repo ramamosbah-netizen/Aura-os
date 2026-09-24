@@ -37,6 +37,7 @@ export * from './sourcing-recommendation.store';
 export * from './in-memory-sourcing-recommendation-store';
 export * from './postgres-sourcing-recommendation-store';
 export * from './sourcing-recommendation.service';
+export * from './tender-pricing-boundary.service';
 export * from './sourcing-award.service';
 export * from './po-position.port';
 export * from './domain/purchase-order-lifecycle';

@@ -9,11 +9,13 @@ interface Row {
   need_by_date: string | null; estimated_unit_cost: string | null;
   wbs_node_id: string | null; cbs_node_id: string | null; notes: string | null;
   created_by: string | null; created_at: string;
+  source_boq_item_id: string | null; material_mapped_by: string | null; material_mapped_at: string | Date | null;
 }
 
 const COLS = `id, tenant_id, company_id, pr_id, line_no, material_id, material_code, material_name,
   specification, manufacturer, model, uom, quantity, need_by_date, estimated_unit_cost,
-  wbs_node_id, cbs_node_id, notes, created_by, created_at`;
+  wbs_node_id, cbs_node_id, notes, created_by, created_at,
+  source_boq_item_id, material_mapped_by, material_mapped_at`;
 
 const dateOnly = (v: string | Date | null): string | null =>
   v === null ? null : typeof v === 'string' ? v.slice(0, 10) : v.toISOString().slice(0, 10);
@@ -30,6 +32,9 @@ function toLine(r: Row): PurchaseRequestLine {
     wbsNodeId: r.wbs_node_id, cbsNodeId: r.cbs_node_id, notes: r.notes,
     createdBy: r.created_by,
     createdAt: typeof r.created_at === 'string' ? r.created_at : new Date(r.created_at).toISOString(),
+    sourceBoqItemId: r.source_boq_item_id,
+    materialMappedBy: r.material_mapped_by,
+    materialMappedAt: r.material_mapped_at === null ? null : new Date(r.material_mapped_at).toISOString(),
   };
 }
 
@@ -41,11 +46,15 @@ export class PostgresPurchaseRequestLineStore implements PurchaseRequestLineStor
    * snapshot records what the material was when the line was authored; re-pointing a line at a
    * different material, or refreshing its description from the catalogue, would erase exactly the
    * thing it exists to preserve. A line that should name something else is removed and re-added.
+   *
+   * The BOQ-item mapping on a tender-pricing line follows the same rule for the same reason: who
+   * confirmed that a BOQ item IS a material is a fact about that moment, and quotations were asked
+   * against it. It is written on insert and never updated.
    */
   async save(l: PurchaseRequestLine): Promise<void> {
     await this.pool.query(
       `insert into public.aura_procurement_purchase_request_lines (${COLS})
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
        on conflict (id) do update set
          line_no = excluded.line_no,
          quantity = excluded.quantity,
@@ -56,7 +65,8 @@ export class PostgresPurchaseRequestLineStore implements PurchaseRequestLineStor
          notes = excluded.notes`,
       [l.id, l.tenantId, l.companyId, l.prId, l.lineNo, l.materialId, l.materialCode, l.materialName,
        l.specification, l.manufacturer, l.model, l.uom, l.quantity, l.needByDate, l.estimatedUnitCost,
-       l.wbsNodeId, l.cbsNodeId, l.notes, l.createdBy, l.createdAt],
+       l.wbsNodeId, l.cbsNodeId, l.notes, l.createdBy, l.createdAt,
+       l.sourceBoqItemId, l.materialMappedBy, l.materialMappedAt],
     );
   }
 

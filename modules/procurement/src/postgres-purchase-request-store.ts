@@ -18,9 +18,12 @@ interface Row {
   owner_id: string | null;
   created_by: string | null;
   created_at: Date | string;
+  purpose: string;
+  source_tender_id: string | null;
+  source_basis_revision_id: string | null;
 }
 
-const COLS = 'id, tenant_id, company_id, reference, title, project_id, project_name, discipline, status, value, owner_id, created_by, created_at';
+const COLS = 'id, tenant_id, company_id, reference, title, project_id, project_name, discipline, status, value, owner_id, created_by, created_at, purpose, source_tender_id, source_basis_revision_id';
 
 function rowToPr(r: Row): PurchaseRequest {
   return {
@@ -37,6 +40,9 @@ function rowToPr(r: Row): PurchaseRequest {
     ownerId: r.owner_id,
     createdBy: r.created_by,
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+    purpose: (r.purpose ?? 'operational') as PurchaseRequest['purpose'],
+    sourceTenderId: r.source_tender_id,
+    sourceBasisRevisionId: r.source_basis_revision_id,
   };
 }
 
@@ -45,7 +51,7 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
 
   async create(pr: PurchaseRequest): Promise<void> {
     await this.pool.query(
-      `INSERT INTO public.aura_procurement_purchase_requests (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      `INSERT INTO public.aura_procurement_purchase_requests (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
       [
         pr.id,
         pr.tenantId,
@@ -60,6 +66,11 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
         pr.ownerId,
         pr.createdBy,
         pr.createdAt,
+        // Written once, here. The UPDATE below never names these columns, and migration 0387's
+        // trigger refuses any statement that tries.
+        pr.purpose,
+        pr.sourceTenderId,
+        pr.sourceBasisRevisionId,
       ],
     );
   }

@@ -28,6 +28,7 @@ import {
   receiptOf,
   type RejectedByLine,
 } from './domain/order-receipt';
+import { TenderPricingBoundary } from './tender-pricing-boundary.service';
 
 export interface NewOrderLineInput {
   poId: Id;
@@ -69,6 +70,9 @@ export class PurchaseOrderLineService {
     @Optional() @Inject(PR_LINE_STORE) private readonly requestLines: PurchaseRequestLineStore | null = null,
     @Optional() @Inject(PROJECT_CODING) private readonly coding: ProjectCoding | null = null,
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
+    // THE TENDER-PRICING BOUNDARY — one rule, asked by every door (see tender-pricing-boundary.service).
+    // Explicit token: an @Optional() union without one reflects as Object and arrives as null.
+    @Optional() @Inject(TenderPricingBoundary) private readonly pricingBoundary: TenderPricingBoundary | null = null,
   ) {}
 
   private tenantId(): string | undefined {
@@ -137,6 +141,11 @@ export class PurchaseOrderLineService {
     await this.assertCoding(po.projectId, input.wbsNodeId, 'wbs');
     await this.assertCoding(po.projectId, input.cbsNodeId, 'cbs');
     if (input.sourcePrLineId) await this.assertRequestLine(input.sourcePrLineId);
+    // THE DOOR A HEADER CHECK NEVER SEES: an ordinary order, a line naming pricing quotations.
+    await this.pricingBoundary?.assertMayOrderLine(
+      { sourcePrLineId: input.sourcePrLineId ?? null, sourceQuoteLineId: input.sourceQuoteLineId ?? null },
+      po.tenantId,
+    );
 
     const existing = await this.lines.listForOrder(po.id, po.tenantId);
     const line = makePurchaseOrderLine({
@@ -264,6 +273,7 @@ export class PurchaseOrderLineService {
   async carryRequisitionLines(poId: Id, prId: Id): Promise<PurchaseOrderLine[]> {
     if (!this.requestLines) return [];
     const po = await this.order(poId);
+    await this.pricingBoundary?.assertMayRaiseOrder({ prId }, po.tenantId);
     const demand = await this.requestLines.listForRequest(prId, po.tenantId);
     if (demand.length === 0) return [];
 

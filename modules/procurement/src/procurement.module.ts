@@ -21,6 +21,7 @@ import { QuotationLineService } from './quotation-line.service';
 import { CommercialComparisonService } from './commercial-comparison.service';
 import { QuotationCaptureService } from './quotation-capture.service';
 import { SourcingRecommendationService } from './sourcing-recommendation.service';
+import { TenderPricingBoundary } from './tender-pricing-boundary.service';
 import { SourcingAwardService } from './sourcing-award.service';
 import { SOURCING_RECOMMENDATION_STORE } from './sourcing-recommendation.store';
 import { InMemorySourcingRecommendationStore } from './in-memory-sourcing-recommendation-store';
@@ -121,6 +122,7 @@ import { FrameworkAgreementService } from './framework-agreement.service';
         pool ? new PostgresSourcingRecommendationStore(pool) : new InMemorySourcingRecommendationStore(),
     },
     SourcingRecommendationService,
+    TenderPricingBoundary,
     // SUP-14 — the award. Turns an APPROVED recommendation into purchase orders that carry each
     // supplier's own currency and terms. It binds no store of its own: an award writes purchase
     // orders and their lines, and reads the offers the decision was made on.
@@ -147,6 +149,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [CommercialComparisonService, QuotationCaptureService, SourcingRecommendationService, SourcingAwardService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [TenderPricingBoundary, CommercialComparisonService, QuotationCaptureService, SourcingRecommendationService, SourcingAwardService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

@@ -18,6 +18,11 @@ const SITES = [
   ['@aura/procurement', 'SourcingAwardService', 'locks'],
   ['../dist/comms/comms.service', 'CommsService', 'users'],
   ['../dist/comms/comms.service', 'CommsService', 'events'],
+  // The tender-pricing boundary: every door that could turn pricing into buying must RECEIVE it.
+  ['@aura/procurement', 'PurchaseOrderService', 'pricingBoundary'],
+  ['@aura/procurement', 'PurchaseOrderLineService', 'pricingBoundary'],
+  ['@aura/procurement', 'PurchaseRequestService', 'pricingBoundary'],
+  ['@aura/procurement', 'SourcingRecommendationService', 'pricingBoundary'],
   // The control, fixed earlier today by adding @Inject(QuotationService).
   ['../dist/documents/document-requirements.controller', 'DocumentRequirementsController', 'quotations'],
 ];

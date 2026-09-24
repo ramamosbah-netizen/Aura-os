@@ -27,6 +27,7 @@ import {
   type WholeOfferTotal,
 } from './domain/sourcing-recommendation';
 import { SOURCING_RECOMMENDATION_STORE, type SourcingRecommendationStore } from './sourcing-recommendation.store';
+import { TenderPricingBoundary } from './tender-pricing-boundary.service';
 
 /**
  * SUP-13 — the governed sourcing recommendation.
@@ -89,6 +90,9 @@ export class SourcingRecommendationService {
     private readonly comparison: CommercialComparisonService,
     private readonly access: AccessService,
     @Optional() @Inject(EVENT_STORE) private readonly events: EventStore | null = null,
+    // THE TENDER-PRICING BOUNDARY — one rule, asked by every door (see tender-pricing-boundary.service).
+    // Explicit token: an @Optional() union without one reflects as Object and arrives as null.
+    @Optional() @Inject(TenderPricingBoundary) private readonly pricingBoundary: TenderPricingBoundary | null = null,
   ) {}
 
   private async emit(type: string, r: SourcingRecommendation, actorId: Id | null, payload: Record<string, unknown>): Promise<void> {
@@ -215,6 +219,9 @@ export class SourcingRecommendationService {
     selections: Array<{ offerId: Id; coveredPrLineIds: Id[] }>;
     createdBy?: Id | null;
   }): Promise<{ recommendation: SourcingRecommendation; selections: RecommendationSelection[] }> {
+    // SUP-13's one addition (approved by the programme owner): the comparison stays open for a
+    // pricing RFQ — that is how a bid gets supplier prices — but no award may be recommended on it.
+    await this.pricingBoundary?.assertMayRecommend(input.rfqId, tenantId);
     const { lines: requirementLines } = await this.requirements(tenantId, input.rfqId);
     const requirementIds = requirementLines.map((l) => l.id);
     const assembled = await this.prepare(tenantId, input.rfqId, input.context);

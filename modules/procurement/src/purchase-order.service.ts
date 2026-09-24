@@ -12,6 +12,7 @@ import { cancellationPosition, closureReadiness, issuability, type OrderPosition
 import type { PurchaseOrderLine } from './domain/purchase-order-line';
 import { orderCommitment } from './domain/purchase-order-line';
 import { type AcceptedByLine, receiptOf, receiptStatus, type RejectedByLine } from './domain/order-receipt';
+import { TenderPricingBoundary } from './tender-pricing-boundary.service';
 
 /** Optional quality gate — injected when the Quality module is loaded. */
 export const QUALITY_GATE = Symbol('QUALITY_GATE');
@@ -74,6 +75,9 @@ export class PurchaseOrderService implements OnModuleInit {
      * no guard, because it reads as one.
      */
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
+    // THE TENDER-PRICING BOUNDARY — one rule, asked by every door (see tender-pricing-boundary.service).
+    // Explicit token: an @Optional() union without one reflects as Object and arrives as null.
+    @Optional() @Inject(TenderPricingBoundary) private readonly pricingBoundary: TenderPricingBoundary | null = null,
   ) {}
 
   /** The real acting user from the request context (ALS), falling back to the record's creator. */
@@ -110,6 +114,8 @@ export class PurchaseOrderService implements OnModuleInit {
    * second order for the same decision impossible rather than merely unlikely (migration 0358).
    */
   async raise(tx: TxHandle | null, input: NewPurchaseOrder): Promise<PurchaseOrder> {
+    // Before anything is numbered or written: an order from a pricing exercise is not an order.
+    await this.pricingBoundary?.assertMayRaiseOrder({ prId: input.prId, rfqId: input.rfqId }, input.tenantId);
     const checked = await this.withApprovedSupplier(input);
     const po = makePurchaseOrder(checked);
     if (!po.reference) {
@@ -160,6 +166,7 @@ export class PurchaseOrderService implements OnModuleInit {
   }
 
   async create(input: NewPurchaseOrder, idempotencyKey?: string | null): Promise<PurchaseOrder> {
+    await this.pricingBoundary?.assertMayRaiseOrder({ prId: input.prId, rfqId: input.rfqId }, input.tenantId);
     const po = await this.commands.execute<PurchaseOrder>({
       id: newId(),
       name: CREATE_PO,

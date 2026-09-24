@@ -35,14 +35,24 @@ export const OPEN_QUOTATION_STATUSES: readonly QuotationStatus[] = [
 ];
 
 /**
- * Governance — the internal pricing sheet is only editable while the quotation is
- * still being worked up. Approval is the commitment point (it also locks the
- * immutable Commercial Baseline, R3), so from `approved` onwards the build-up
- * that justified the price is FROZEN: read, export and print only. Re-pricing
- * means raising a new revision, which starts as a draft with the sheet carried
- * forward and editable again.
+ * Governance — the internal pricing sheet is editable only while the quotation is still being
+ * worked up, and SUBMITTING IT FOR REVIEW ENDS THAT.
+ *
+ * `internal_review` used to be editable. It is the window in which a human has been asked to
+ * decide on a set of figures, and leaving it open meant the figures could move while they decided
+ * — so an approver could sign off numbers that no longer existed, and the offer they approved
+ * would rest on a costing nobody reviewed. EST-17 asks in as many words that approvers "review the
+ * same frozen build-up"; this is the line that makes that sentence true.
+ *
+ * Approval remains the COMMITMENT point (it locks the immutable Commercial Baseline, R3) and every
+ * state from `approved` onwards stays frozen for the stronger reason: the price is one the company
+ * is standing behind.
+ *
+ * Re-pricing a submitted offer is not blocked, it is GOVERNED: the reviewer returns it
+ * (`return_for_revision`), which costs a reason and is recorded, and it becomes an editable draft
+ * again. Without that route this freeze would strand corrections instead of governing them.
  */
-export const PRICING_EDITABLE_STATUSES: readonly QuotationStatus[] = ['draft', 'internal_review'];
+export const PRICING_EDITABLE_STATUSES: readonly QuotationStatus[] = ['draft'];
 
 /** True once the build-up is frozen (approved → sent → … and every terminal state). */
 export function isPricingLocked(q: Pick<Quotation, 'status'>): boolean {
@@ -305,6 +315,8 @@ export function makeQuotation(input: NewQuotation): Quotation {
 export type QuotationAction =
   | 'submit_review'
   | 'approve'
+  /** The other half of a review. Back to draft, with a reason, recorded. */
+  | 'return_for_revision'
   | 'send'
   | 'negotiate'
   | 'accept'
@@ -315,6 +327,10 @@ export type QuotationAction =
 const TRANSITIONS: Record<QuotationAction, { from: readonly QuotationStatus[]; to: QuotationStatus }> = {
   submit_review: { from: ['draft'], to: 'internal_review' },
   approve: { from: ['draft', 'internal_review'], to: 'approved' },
+  // A REVIEW HAS TWO OUTCOMES. Every other gate in AURA already had its second one — the technical
+  // study can request changes, an NCR verification can reject — and a submitted offer could only
+  // go forward or be killed outright, taking its number and its history with it.
+  return_for_revision: { from: ['internal_review'], to: 'draft' },
   send: { from: ['approved'], to: 'sent' },
   negotiate: { from: ['sent'], to: 'under_negotiation' },
   accept: { from: ['sent', 'under_negotiation'], to: 'accepted' },
@@ -329,7 +345,9 @@ export function applyQuotationAction(q: Quotation, action: QuotationAction): Quo
   const t = TRANSITIONS[action];
   if (!t) throw new Error(`unknown action ${action}`);
   if (!t.from.includes(q.status)) {
-    throw new Error(`cannot ${action.replace('_', ' ')} from status ${q.status}`);
+    // replaceAll, not replace: every action until now had at most one underscore, so
+    // `return_for_revision` came out as "return for_revision" in a message a user reads.
+    throw new Error(`cannot ${action.replaceAll('_', ' ')} from status ${q.status.replaceAll('_', ' ')}`);
   }
   return { ...q, status: t.to };
 }

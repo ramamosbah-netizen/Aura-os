@@ -58,6 +58,10 @@ interface CsvResponse {
 export const QUOTATION_ACTION_PERMISSION: Record<QuotationAction, string> = {
   submit_review: 'crm.quotation.update',
   approve: 'crm.quotation.approve',
+  // THE OTHER OUTCOME OF THE SAME REVIEW, so the same authority. An offer is returned by the
+  // person entitled to approve it; a preparer who could send back their own submission would hold
+  // a way to reopen a frozen costing whenever an approval looked like going against them.
+  return_for_revision: 'crm.quotation.approve',
   send: 'crm.quotation.send',
   negotiate: 'crm.quotation.update',
   accept: 'crm.quotation.update',
@@ -580,15 +584,33 @@ export class CrmQuotationsController {
 
   @Patch(':id/status')
   @Permissions('crm.quotation.read')
-  async changeStatus(@Param('id') id: string, @Body() dto: { action: QuotationAction }): Promise<Quotation> {
+  async changeStatus(
+    @Param('id') id: string,
+    @Body() dto: { action: QuotationAction; reason?: string },
+  ): Promise<Quotation> {
     if (!QUOTATION_ACTIONS.includes(dto?.action)) {
       throw new BadRequestException(`action must be one of ${QUOTATION_ACTIONS.join(', ')}`);
+    }
+    // Asked here as well as in the domain, so the person pressing the button is told before the
+    // transaction opens rather than after it refuses.
+    if (dto.action === 'return_for_revision' && !dto.reason?.trim()) {
+      throw new BadRequestException('returning an offer for revision requires a reason — the estimator has to know what to change');
     }
     const q = await this.quotations.get(id);
     if (!q) throw new NotFoundException(`quotation ${id} not found`);
     const actorId = this.tenant.get().actorId;
     if (actorId) this.access.assert(actorId, this.accessTarget(q, QUOTATION_ACTION_PERMISSION[dto.action]));
-    // Pass the actor so approval records who locked the commercial baseline (R3 governance).
-    return await this.quotations.changeStatus(id, dto.action, actorId);
+    // Pass the actor so approval records who locked the commercial baseline (R3 governance), and
+    // so a send-back records who sent it back.
+    return await this.quotations.changeStatus(id, dto.action, actorId, dto.reason);
+  }
+
+  /** Every time this offer was returned for revision, and why. Append-only, oldest first. */
+  @Permissions('crm.quotation.read')
+  @Get(':id/review-decisions')
+  async reviewDecisions(@Param('id') id: string) {
+    const q = await this.quotations.get(id);
+    if (!q) throw new NotFoundException(`quotation ${id} not found`);
+    return this.quotations.listReviewDecisions(this.tenant.get().tenantId, id);
   }
 }

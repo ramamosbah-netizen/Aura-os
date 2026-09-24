@@ -105,6 +105,31 @@ export class TenderPricingController {
    */
   private async assertEstimateNotCommitted(tenderId: string): Promise<void> {
     const generated = await this.quotations.listBySourceTender(this.tenant.get().tenantId, tenderId);
+
+    /**
+     * UNDER REVIEW IS ALREADY TOO LATE TO RE-PRICE.
+     *
+     * The lock below starts at `approved`, which left the review window open: an approver could be
+     * looking at a set of figures while the estimator reworked the costing underneath them, and
+     * the offer they signed would rest on a build-up nobody reviewed. Measured before this branch
+     * existed — with the offer sitting in `internal_review`, re-pricing a line was accepted and
+     * the tender's selling value moved from 179,821.20 to 2,279,774.40 while the offer kept its
+     * own snapshot at 117,804.00. The offer did not silently change; nothing said it no longer
+     * matched its source either.
+     *
+     * Asking for a decision is what seals the costing. EST-17 requires approvers to "review the
+     * same frozen build-up", and a build-up that can move during the review is not that.
+     */
+    const underReview = generated.filter((q) => q.status === 'internal_review');
+    if (underReview.length > 0) {
+      const which = underReview.map((q) => `${q.quoteNumber} Rev ${q.revision}`).join(', ');
+      throw new ConflictException(
+        `tender pricing sheet is locked: ${which} ${underReview.length === 1 ? 'is' : 'are'} with a ` +
+          `commercial reviewer, and the costing behind figures somebody is deciding on cannot be ` +
+          `re-worked while they decide. To change it, have the reviewer return the offer for revision.`,
+      );
+    }
+
     const committed = generated.filter((q) => isQuotationCommitted(q));
     if (committed.length === 0) return;
     const which = committed.map((q) => `${q.quoteNumber} Rev ${q.revision} (${q.status.replace('_', ' ')})`).join(', ');

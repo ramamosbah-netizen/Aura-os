@@ -34,6 +34,9 @@ import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { PostgresQuotationStore } from './postgres-quotation-store';
 import { QuotationService } from './quotation.service';
 import { CRM_COMMERCIAL_BASELINE_STORE } from './commercial-baseline-store';
+import { CRM_QUOTATION_REVIEW_STORE } from './quotation-review-store';
+import { InMemoryQuotationReviewStore } from './in-memory-quotation-review-store';
+import { PostgresQuotationReviewStore } from './postgres-quotation-review-store';
 import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline-store';
 import { PostgresCommercialBaselineStore } from './postgres-commercial-baseline-store';
 import { CRM_PRE_AWARD_STORE } from './pre-award-store';
@@ -144,6 +147,12 @@ import { LeadConversionService } from './lead-conversion.service';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresCommercialBaselineStore(pool) : new InMemoryCommercialBaselineStore(),
+    },
+    {
+      provide: CRM_QUOTATION_REVIEW_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresQuotationReviewStore(pool) : new InMemoryQuotationReviewStore(),
     },
     {
       provide: CRM_PRE_AWARD_STORE,

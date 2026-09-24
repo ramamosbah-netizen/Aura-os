@@ -88,7 +88,10 @@ describe('CRM quotation authorization contract', () => {
       permission: 'crm.quotation.approve',
       orgPath: [{ level: 'tenant', id: 'tenant-a' }],
     });
-    expect(changeStatus).toHaveBeenCalledWith('q-1', 'approve', 'approver-a');
+    // The fourth argument is the send-back REASON, which an approval does not carry. Asserted
+    // rather than loosened, because a reason quietly arriving on an approve would mean the
+    // controller was routing one action's payload into another.
+    expect(changeStatus).toHaveBeenCalledWith('q-1', 'approve', 'approver-a', undefined);
   });
 
   it('returns UI action access from the same permission decisions', async () => {

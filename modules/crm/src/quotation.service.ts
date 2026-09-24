@@ -18,6 +18,8 @@ import {
 import { type QuotationPricingView, computeQuotationPricing, computeEstimationPricing } from './domain/quotation-pricing';
 import { CRM_QUOTATION_STORE, type QuotationFilter, type QuotationStore } from './quotation-store';
 import { CRM_COMMERCIAL_BASELINE_STORE, type CommercialBaselineStore } from './commercial-baseline-store';
+import { CRM_QUOTATION_REVIEW_STORE, type QuotationReviewStore } from './quotation-review-store';
+import { makeQuotationReviewDecision, type QuotationReviewDecision } from './domain/quotation-review';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
 import type { QuotationSummary } from './quotation-store';
 
@@ -53,6 +55,8 @@ export class QuotationService {
     // Optional to keep the in-memory/domain harness usable. In the application this is wired by
     // CoreModule; governed quotations require a persisted commercial checklist at approval.
     @Optional() @Inject(DOCUMENT_REQUIREMENT_STORE) private readonly requirements: DocumentRequirementStore | null = null,
+    // Optional for the same reason as the checklist above: the no-DB harness boots without it.
+    @Optional() @Inject(CRM_QUOTATION_REVIEW_STORE) private readonly reviews: QuotationReviewStore | null = null,
   ) {}
 
   /** Keep the no-DB test/dev path usable while making PostgreSQL writes atomic in production. */
@@ -128,7 +132,7 @@ export class QuotationService {
     return updated;
   }
 
-  async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null): Promise<Quotation> {
+  async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null, reason?: string): Promise<Quotation> {
     let baselineInserted = false;
     let baseline: CommercialBaseline | null = null;
     let source!: Quotation;
@@ -144,6 +148,18 @@ export class QuotationService {
       // Segregation of duties: the preparer cannot approve their own quotation.
       if (action === 'approve' && actor && q.createdBy && actor === q.createdBy) {
         throw new Error(`access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties requires a different approver`);
+      }
+      /**
+       * …AND CANNOT RETURN IT EITHER. Sending an offer back is the OTHER outcome of the same
+       * review, so it carries the same separation: letting the preparer return their own
+       * submission would hand them a way to reopen a frozen costing whenever an approval looked
+       * like going against them, which is the freeze undone by the person it constrains.
+       */
+      if (action === 'return_for_revision' && actor && q.createdBy && actor === q.createdBy) {
+        throw new Error(`access denied: the preparer of quotation ${q.quoteNumber} cannot return their own quotation — returning it is a review decision, and the reviewer makes it`);
+      }
+      if (action === 'return_for_revision' && !reason?.trim()) {
+        throw new Error('returning an offer for revision requires a reason — the estimator has to know what to change');
       }
       if (action === 'approve' && actor) {
         this.access.assertApprovalAuthority(
@@ -164,6 +180,15 @@ export class QuotationService {
       const existing = action === 'approve' ? await this.baselines.getByQuotation(updated.tenantId, updated.id) : null;
       baseline = action === 'approve' && !existing ? makeCommercialBaseline(updated, actor) : null;
       await this.store.saveWithClient(handle, updated);
+      // The reason lands in the SAME transaction as the status change: an offer back in draft with
+      // no recorded reason is exactly the state this action exists to prevent.
+      if (action === 'return_for_revision') {
+        const decision = makeQuotationReviewDecision({
+          tenantId: q.tenantId, companyId: q.companyId, quotationId: q.id,
+          quoteNumber: q.quoteNumber, revision: q.revision, decidedBy: actor, reason: reason ?? '',
+        });
+        if (this.reviews) await this.reviews.saveWithClient(handle, decision);
+      }
       if (baseline) baselineInserted = await this.baselines.saveWithClient(handle, baseline);
       const committedEvents = baseline && baselineInserted
         ? [...events, makeEvent({
@@ -217,6 +242,11 @@ export class QuotationService {
    */
   getBaselineById(tenantId: Id, baselineId: Id): Promise<CommercialBaseline | null> {
     return this.baselines.get(baselineId).then((b) => (b && b.tenantId === tenantId ? b : null));
+  }
+
+  /** Every time this offer was sent back, and why. Empty when it never was. */
+  listReviewDecisions(tenantId: Id, quotationId: Id): Promise<QuotationReviewDecision[]> {
+    return this.reviews ? this.reviews.listByQuotation(tenantId, quotationId) : Promise.resolve([]);
   }
 
   getBaseline(tenantId: Id, quotationId: Id): Promise<CommercialBaseline | null> {

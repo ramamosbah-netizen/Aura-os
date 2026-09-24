@@ -94,7 +94,23 @@ describe('tender estimate summary', () => {
     expect(est.totalSellingValue).toBe(43362);
     expect(est.unpricedBoqValue).toBe(26000); // 10 × 2600
     expect(est.estimatedTenderValue).toBe(69362);
-    expect(est.marginPercent).toBeCloseTo(15.82, 2); // (3650+3212)/43362
+
+    /**
+     * MARGIN IS GROSS MARGIN, and overhead is cost.
+     *
+     * This asserted `(overhead + profit) / selling = 15.82%`. Delivery overhead is money the
+     * company SPENDS, so counting it as margin overstated what the business keeps — here by the
+     * full 8.42 points of overhead recovery, and on a measured live tender by 6.03 points against
+     * a true margin of 13.04%. The same screen also carried a third formula that ignored indirect,
+     * overhead and risk entirely.
+     *
+     * The blended figure is still computed and still useful — it is how much of the selling price
+     * is not direct-and-priced cost — but it is not the margin, and it now has its own name.
+     */
+    expect(est.totalCost).toBe(40150);      // 36500 direct + 3650 overhead
+    expect(est.grossProfit).toBe(3212);     // 43362 − 40150
+    expect(est.marginPercent).toBeCloseTo(7.41, 2);            // 3212 / 43362
+    expect(est.blendedRecoveryPercent).toBeCloseTo(15.82, 2);  // (3650 + 3212) / 43362
   });
 
   it('empty BOQ → zeroed summary', () => {

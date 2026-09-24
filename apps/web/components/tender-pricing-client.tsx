@@ -54,6 +54,12 @@ interface BuildUp {
   overheadPercent: number;
   riskPercent: number;
   profitPercent: number;
+  // The AMOUNTS the server persists beside the percentages. They were absent from this type, so
+  // the per-line margin column could only reach `directCost` — which is how it came to use a
+  // definition that ignored indirect, overhead and risk.
+  overheadAmount: number;
+  riskAmount: number;
+  profitAmount: number;
   sellingRate: number;
 }
 interface Estimate {
@@ -68,7 +74,12 @@ interface Estimate {
   totalSellingValue: number;
   unpricedBoqValue: number;
   estimatedTenderValue: number;
+  totalCost: number;
+  grossProfit: number;
+  /** Gross margin — grossProfit ÷ selling, overhead counted as the cost it is. */
   marginPercent: number;
+  /** (overhead + profit) ÷ selling. A real figure, under the name that says what it measures. */
+  blendedRecoveryPercent: number;
 }
 interface GeneratedQuotation {
   id: string;
@@ -174,7 +185,18 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
 
   const n = (v: string): number => Number(v) || 0;
 
-  /** Live line preview computed the same way the server compiles the sheet. */
+  /**
+   * Live line preview, computed the way the server compiles the sheet.
+   *
+   * This is the ONE place in the web app that reproduces the pricing engine, and it exists so the
+   * estimator sees the effect of a keystroke before saving. It is a PREVIEW of an unsaved draft —
+   * every figure on the record itself comes from the server. The moment a line is saved, the row,
+   * the totals and the margin below are the server's.
+   *
+   * Its margin used to be `(overhead + profit) / selling`, which counts delivery overhead as
+   * profit and overstated the real figure by the overhead percentage. It now matches
+   * `computeCommercialPricing`: gross profit over selling, where overhead is cost.
+   */
   const preview = (item: BOQItem, d: SheetDraft) => {
     const qty = item.quantity || 1;
     const supply = n(d.supplyUnitPrice) * qty;
@@ -192,7 +214,13 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
     const risk = (direct + indirect + overhead) * (n(d.riskPercent) / 100);
     const profit = (direct + indirect + overhead + risk) * (n(d.profitPercent) / 100);
     const selling = direct + indirect + overhead + risk + profit;
-    return { direct, indirect, overhead, risk, profit, selling, sellingRate: selling / qty, margin: selling > 0 ? ((overhead + profit) / selling) * 100 : 0 };
+    // Cost is everything the company expects to SPEND; overhead is one of those things.
+    const cost = direct + indirect + overhead + risk;
+    return {
+      direct, indirect, overhead, risk, profit, selling,
+      sellingRate: selling / qty,
+      margin: selling > 0 ? ((selling - cost) / selling) * 100 : 0,
+    };
   };
 
   const saveLine = async (item: BOQItem): Promise<void> => {
@@ -293,7 +321,10 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           <Stat label="Selling value" value={`AED ${aed(estimate.totalSellingValue)}`} strong />
           {estimate.unpricedBoqValue > 0 && <Stat label="Unpriced BOQ" value={`AED ${aed(estimate.unpricedBoqValue)}`} />}
           <Stat label="Tender value" value={`AED ${aed(estimate.estimatedTenderValue)}`} strong accent />
-          <Stat label="Margin" value={`${estimate.marginPercent}%`} accent />
+          {/* GROSS margin — what the company keeps after every cost including overhead. The
+              blended recovery figure beside it is a different question and now says so. */}
+          <Stat label="Gross margin" value={`${estimate.marginPercent}%`} accent />
+          <Stat label="OH + profit recovery" value={`${estimate.blendedRecoveryPercent}%`} />
           <Stat label="Priced" value={`${estimate.estimatedItemCount}/${estimate.itemCount} items`} />
         </div>
       )}
@@ -389,13 +420,17 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           },
           {
             key: 'margin',
-            label: 'Margin',
+            label: 'Gross margin',
             align: 'right',
-            width: 90,
+            width: 100,
             render: (item) => {
               const b = buildUps[item.id];
-              const margin = b && b.sellingRate > 0 ? ((b.sellingRate - b.directCost) / b.sellingRate) * 100 : null;
-              if (margin === null) return <span style={st.unpriced}>unpriced</span>;
+              if (!b || b.sellingRate <= 0) return <span style={st.unpriced}>unpriced</span>;
+              // A THIRD definition used to live here: (sellingRate - directCost) / sellingRate,
+              // which ignores indirect, overhead and risk and read ~5 points higher again. One
+              // screen was showing three different numbers for the margin on one tender.
+              const cost = b.directCost + (b.indirectAmount ?? 0) + b.overheadAmount + (b.riskAmount ?? 0);
+              const margin = ((b.sellingRate - cost) / b.sellingRate) * 100;
               return <span style={st.priced}>{margin.toFixed(1)}%</span>;
             },
           },

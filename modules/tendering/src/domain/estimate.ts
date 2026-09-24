@@ -228,8 +228,29 @@ export interface TenderEstimate {
   unpricedBoqValue: number;
   /** totalSellingValue + unpricedBoqValue — the tender value the estimate supports. */
   estimatedTenderValue: number;
-  /** Blended margin (overhead+profit) ÷ selling, over estimated items. 0 when nothing estimated. */
+  /** Σ direct + indirect + overhead + risk — what the company expects to SPEND. */
+  totalCost: number;
+  /** totalSellingValue − totalCost. The money the company actually keeps. */
+  grossProfit: number;
+  /**
+   * GROSS MARGIN: grossProfit ÷ selling, the same definition `computeCommercialPricing` uses.
+   *
+   * This used to be `(overhead + profit) ÷ selling` and was labelled "blended margin". Delivery
+   * overhead is money the company SPENDS — site supervision, temporary facilities, project
+   * overhead allocation — and counting it as margin overstates what the business keeps. Measured
+   * on a real tender before the change: 19.07% reported against a true gross margin of 13.04%,
+   * six points of overhead recovery presented as profit on the screen an estimator prices from.
+   *
+   * 13.0435% is not a coincidence: it is 15% markup expressed as a margin on sell. The shared
+   * engine had it right the whole time; this summary disagreed with it.
+   */
   marginPercent: number;
+  /**
+   * (overhead + profit) ÷ selling — the OLD `marginPercent`, kept under a name that says what it
+   * is. It is a real management figure: how much of the selling price is not direct-and-priced
+   * cost. It is not the margin, and it may never be rendered under a bare "Margin" label.
+   */
+  blendedRecoveryPercent: number;
 }
 
 export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], buildUps: RateBuildUp[]): TenderEstimate {
@@ -268,6 +289,11 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
   totalSellingValue = r2(totalSellingValue);
   unpricedBoqValue = r2(unpricedBoqValue);
 
+  // Cost is every loading the company expects to SPEND. Overhead belongs here and not in profit,
+  // which is the whole correction this summary carries.
+  const totalCost = r2(totalDirectCost + totalIndirect + totalOverhead + totalRisk);
+  const grossProfit = r2(totalSellingValue - totalCost);
+
   return {
     tenderId,
     boqId,
@@ -282,7 +308,10 @@ export function summariseEstimate(boqId: Id, tenderId: Id, items: BOQItem[], bui
     totalSellingValue,
     unpricedBoqValue,
     estimatedTenderValue: r2(totalSellingValue + unpricedBoqValue),
-    marginPercent: totalSellingValue > 0 ? r2(((totalOverhead + totalProfit) / totalSellingValue) * 100) : 0,
+    totalCost,
+    grossProfit,
+    marginPercent: totalSellingValue > 0 ? r2((grossProfit / totalSellingValue) * 100) : 0,
+    blendedRecoveryPercent: totalSellingValue > 0 ? r2(((totalOverhead + totalProfit) / totalSellingValue) * 100) : 0,
   };
 }
 

@@ -228,9 +228,31 @@ export class TenderingController {
 
   /**
    * Canonical customer technical-proposal source. The browser supplies only the Tender id: the
-   * approved study and approved commercial reference are resolved from persisted relations. Prices
-   * and internal costing are deliberately absent because this output accompanies, but is separate
+   * approved study and the approved scope are resolved from persisted relations. Prices and
+   * internal costing are deliberately absent because this output accompanies, but is separate
    * from, the commercial quotation.
+   *
+   * IT RESTS ON THE APPROVED TECHNICAL STUDY, NOT ON THE OFFER IT ACCOMPANIES.
+   *
+   * It used to require full submission readiness, which includes an internally approved commercial
+   * offer — and that made the journey a closed loop. The approval of an offer is gated on an
+   * evidence checklist whose `COMMERCIAL_EVIDENCE_TEMPLATE` demands a TECHNICAL_PROPOSAL; the
+   * proposal refused to exist until the offer was approved. Measured end to end on a real tender:
+   * both sides returned 409 for ever, so no client-facing output and no tender submission was
+   * reachable by anybody.
+   *
+   * The separation the loop violated is the one this system is built on: an estimate owns the
+   * calculation, a commercial approval governs the selling decision, and a TECHNICAL proposal is
+   * neither — it is the approved technical study made client-facing, and it carries no price. The
+   * only thing it ever took from the commercial side was a reference number for its cover.
+   *
+   * So the commercial reference is now OPTIONAL AND HONEST: cited when an offer has been approved,
+   * and stated as absent when it has not, rather than the document refusing to exist. The caller
+   * is told which it is holding — `commercialOfferApproved` — because a proposal that quietly
+   * omits its offer reference reads exactly like one that never had an offer.
+   *
+   * SUBMISSION IS UNCHANGED. `assertSubmissionReadiness` still requires the approved commercial
+   * offer, so nothing here lets an unpriced tender reach a customer.
    */
   @Get(':id/technical-proposal')
   @Permissions('tendering.study.read', 'crm.quotation.read')
@@ -238,8 +260,11 @@ export class TenderingController {
     const tender = await this.tenders.get(id);
     if (!tender) throw new NotFoundException(`tender ${id} not found`);
     const readiness = await this.submissionReadiness(tender);
-    if (!readiness.ready || !readiness.commercialQuotationId) {
-      throw new ConflictException(`technical proposal requires the approved Technical Study and approved commercial offer — ${readiness.gaps.join(' ')}`);
+    // THE SCOPE MUST BE THE APPROVED SCOPE. A proposal describing a study nobody signed off, or a
+    // scope that never reached the BOQ, is a document that commits the company to unreviewed work.
+    if (!readiness.technicalStudyApproved || !readiness.quantityTakeoffProjected) {
+      const blocking = readiness.gaps.filter((gap) => !gap.startsWith('Generate and internally approve'));
+      throw new ConflictException(`technical proposal requires the approved Technical Study and its approved scope — ${blocking.join(' ')}`);
     }
     const study = await this.packages.approvedTechnicalStudyForTender(tender.tenantId, tender.id);
     return {
@@ -251,11 +276,15 @@ export class TenderingController {
         submissionDeadline: tender.submissionDeadline,
       },
       study,
-      commercialReference: {
-        quotationId: readiness.commercialQuotationId,
-        quoteNumber: readiness.commercialQuoteNumber,
-        revision: readiness.commercialQuotationRevision,
-      },
+      /** Whether the offer this proposal accompanies has been internally approved yet. */
+      commercialOfferApproved: readiness.commercialOfferApproved,
+      commercialReference: readiness.commercialQuotationId
+        ? {
+            quotationId: readiness.commercialQuotationId,
+            quoteNumber: readiness.commercialQuoteNumber,
+            revision: readiness.commercialQuotationRevision,
+          }
+        : null,
     };
   }
 

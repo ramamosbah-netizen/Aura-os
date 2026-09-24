@@ -133,7 +133,31 @@ describe('decisionReadiness', () => {
     expect(r.missing[1]).toEqual({ type: 'VENDOR_QUOTE', have: 1, need: 3 });
   });
 
-  it('treats a decision with no requirements as ready rather than dividing by zero', () => {
-    expect(decisionReadiness([])).toMatchObject({ score: 100, verdict: 'READY', applicable: 0 });
+  /**
+   * THIS TEST USED TO ASSERT `score: 100, verdict: 'READY'` for an empty checklist, and its name
+   * said why: "rather than dividing by zero". The arithmetic concern was right and is still
+   * honoured — nothing divides by zero. The verdict was the part that did not survive contact with
+   * the product.
+   *
+   * MEASURED, on a real tender: `assertApprovalReadiness` refuses an empty checklist outright —
+   * "quotation QUO-2026-000001 approval blocked: readiness checklist is not configured" — while
+   * this function told every screen the same quotation was READY at 100%. Two answers to one
+   * question, and the green one was on the screen a person looks at.
+   *
+   * A decision nobody has written a checklist for has not met its evidence requirements; it has
+   * not had them stated. That is a third state, not a flattering reading of the first.
+   */
+  it('reports an unconfigured checklist as its own verdict, and still never divides by zero', () => {
+    expect(decisionReadiness([])).toMatchObject({ score: 0, verdict: 'UNCONFIGURED', applicable: 0 });
+    expect(Number.isFinite(decisionReadiness([]).score)).toBe(true);
+  });
+
+  it('reports a checklist whose every requirement is NOT_APPLICABLE as unconfigured too', () => {
+    // Stated and dismissed is not the same as met, and it is the same emptiness downstream: there
+    // is no evidence behind the decision either way.
+    const na = setNotApplicable(makeDocumentRequirement({
+      tenantId: 't1', entityType: 'crm.quotation', entityId: 'q1', type: 'VENDOR_QUOTE', requiredCount: 3,
+    }));
+    expect(decisionReadiness([na]).verdict).toBe('UNCONFIGURED');
   });
 });

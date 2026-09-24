@@ -640,6 +640,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.estimate.freeze',
       'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update',
       'crm.pricing-sheet.*',
+      // ASSEMBLES the evidence a commercial approval rests on — vendor quotes, datasheets, the
+      // technical proposal. Not `waive`: the estimator files the evidence, and deciding to proceed
+      // without a piece of it is the approver's exception to make, not the preparer's.
+      'documents.requirement.manage',
       'crm.internal-pricing.access',
       'tendering.takeoff.read', 'tendering.takeoff.create', 'tendering.takeoff.update', 'tendering.takeoff.project',
       'tendering.estimate.*', 'tendering.internal-pricing.access', 'tendering.tender.read', 'procurement.rfq.read',
@@ -791,6 +795,10 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'tenant-or-project',
     permissions: [
       'crm.estimate.read', 'crm.estimate.approve', 'crm.quotation.*', 'crm.internal-pricing.access',
+      // Approves on the evidence, so may also record and WAIVE it: proceeding with two vendor
+      // quotes instead of three is an exception to a control, and it is answered for by whoever
+      // signs the offer rather than by whoever prepared it.
+      'documents.requirement.manage', 'documents.requirement.waive',
       'tendering.internal-pricing.access',
       // `contracts.*` USED TO BE HERE.
       ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY, ...CONTRACTS_REGISTER_READ,

@@ -151,7 +151,19 @@ export function setNotApplicable(r: DocumentRequirement, now = new Date()): Docu
   return { ...r, status: 'NOT_APPLICABLE', updatedAt: now.toISOString() };
 }
 
-export type ReadinessVerdict = 'READY' | 'NEARLY_READY' | 'NOT_READY';
+/**
+ * `UNCONFIGURED` is its own answer, and the reason it exists is a measured defect.
+ *
+ * An empty checklist used to score 100 and read READY — the vacuous truth that nothing outstanding
+ * means nothing is missing. Meanwhile `assertApprovalReadiness` refused the very same state with
+ * "readiness checklist is not configured". So a screen showed a green READY badge on a quotation
+ * the server would not approve, and the two answers to one question never met.
+ *
+ * A decision nobody has written a checklist for is not a ready decision. It is a decision whose
+ * evidence requirements have not been stated, which is a different thing from having stated them
+ * and met them — the same distinction `undated` draws against `on-time`.
+ */
+export type ReadinessVerdict = 'READY' | 'NEARLY_READY' | 'NOT_READY' | 'UNCONFIGURED';
 
 export interface DecisionReadiness {
   /** Percent of applicable requirements settled. NOT_APPLICABLE is excluded from both sides. */
@@ -180,8 +192,14 @@ export function decisionReadiness(requirements: DocumentRequirement[]): Decision
     .map((r) => ({ type: r.type, have: r.evidence.length, need: r.requiredCount }))
     .sort((a, b) => a.have - b.have || a.type.localeCompare(b.type));
 
-  const score = applicable.length === 0 ? 100 : Math.round((settled.length / applicable.length) * 100);
-  const verdict: ReadinessVerdict = missing.length === 0 ? 'READY' : score >= 80 ? 'NEARLY_READY' : 'NOT_READY';
+  // NOTHING APPLICABLE IS NOT THE SAME AS NOTHING OUTSTANDING. A record with no checklist has had
+  // its evidence requirements left unstated; one whose every requirement is NOT_APPLICABLE has had
+  // them stated and dismissed. Both are unready, and neither scores 100.
+  const configured = applicable.length > 0;
+  const score = configured ? Math.round((settled.length / applicable.length) * 100) : 0;
+  const verdict: ReadinessVerdict = !configured
+    ? 'UNCONFIGURED'
+    : missing.length === 0 ? 'READY' : score >= 80 ? 'NEARLY_READY' : 'NOT_READY';
 
   return {
     score,

@@ -13,7 +13,7 @@ import {
   type DocumentRequirement,
   type DocumentRequirementType,
 } from '@aura/shared';
-import { DOCUMENT_REQUIREMENT_STORE, ParseUuidOr404Pipe, TenantContext, type DocumentRequirementStore } from '@aura/core';
+import { DOCUMENT_REQUIREMENT_STORE, ParseUuidOr404Pipe, Permissions, TenantContext, type DocumentRequirementStore } from '@aura/core';
 
 const EVIDENCE_TYPES = ['DOCUMENT_ID', 'EXTERNAL_REFERENCE', 'TRANSMITTAL', 'MANUAL_CONFIRMATION'];
 
@@ -50,6 +50,25 @@ class CreateRequirementDto {
 // and would swallow it — "requirements" is not a uuid, so the pipe answered 404. Depending on
 // controller registration ORDER to disambiguate would be an invisible coupling. The path is also
 // truer this way: a requirement is an obligation on a business record, not a sub-resource of a file.
+/**
+ * DECLARED, BECAUSE THE DERIVED NAME BELONGED TO NOBODY (SEC-01).
+ *
+ * These routes carried no `@Permissions`, so the guard derived
+ * `document-requirements.document-requirement.read` from the path — a name in no role's vocabulary.
+ * Measured on a live commercial journey: the estimator who must ASSEMBLE the evidence and the
+ * commercial manager who must APPROVE on it were both refused 403 reading the checklist, while an
+ * administrator saw it. The evidence gate for every commercial approval in AURA was visible only
+ * to somebody with no part in the decision.
+ *
+ * `documents.requirement.read` is satisfied by `documents.*.read`, which STAFF_BASE already gives
+ * every staff role: chasing outstanding evidence is everybody's job, and a checklist nobody can
+ * see is a checklist nobody can clear.
+ *
+ * The writes are split, because they are not one authority. `manage` states what a decision needs
+ * and records that evidence exists. `waive` says a requirement will not be met and the decision
+ * proceeds anyway — that is an exception to a control, and it belongs with the people who answer
+ * for the decision rather than with whoever is assembling the file.
+ */
 @Controller('document-requirements')
 export class DocumentRequirementsController {
   constructor(
@@ -58,6 +77,7 @@ export class DocumentRequirementsController {
   ) {}
 
   /** Requirements on one record, plus the computed readiness the UI renders. */
+  @Permissions('documents.requirement.read')
   @Get()
   async list(
     @Query('entityType') entityType?: string,
@@ -78,6 +98,7 @@ export class DocumentRequirementsController {
    * rather than duplicating it, and an already-settled requirement is NOT reset — re-seeding
    * must never quietly un-waive something someone decided.
    */
+  @Permissions('documents.requirement.manage')
   @Post('seed')
   async seed(@Body() dto: SeedDto): Promise<DocumentRequirement[]> {
     const tenantId = this.tenant.get().tenantId;
@@ -102,6 +123,7 @@ export class DocumentRequirementsController {
   }
 
   /** Add an explicit requirement beyond the template (a warranty letter this client insists on). */
+  @Permissions('documents.requirement.manage')
   @Post()
   async create(@Body() dto: CreateRequirementDto): Promise<DocumentRequirement> {
     const requirement = makeDocumentRequirement({
@@ -120,6 +142,7 @@ export class DocumentRequirementsController {
    * Record one piece of evidence. The requirement only flips to PROVIDED once ENOUGH exists —
    * one of three vendor quotes is still a gap, and the domain enforces that, not this controller.
    */
+  @Permissions('documents.requirement.manage')
   @Post(':id/evidence')
   async addEvidence(
     @Param('id', ParseUuidOr404Pipe) id: string,
@@ -138,6 +161,7 @@ export class DocumentRequirementsController {
   }
 
   /** Waive a requirement. The domain rejects a waiver with no reason — an unattributed one is not a control. */
+  @Permissions('documents.requirement.waive')
   @Post(':id/waive')
   async waive(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: WaiveDto): Promise<DocumentRequirement> {
     const found = await this.require(id);
@@ -152,6 +176,7 @@ export class DocumentRequirementsController {
   }
 
   /** Mark a requirement as not applying to this deal — excluded from the score entirely. */
+  @Permissions('documents.requirement.waive')
   @Post(':id/not-applicable')
   async notApplicable(@Param('id', ParseUuidOr404Pipe) id: string): Promise<DocumentRequirement> {
     const updated = setNotApplicable(await this.require(id));

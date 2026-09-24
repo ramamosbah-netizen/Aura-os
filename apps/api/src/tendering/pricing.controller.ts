@@ -1,6 +1,6 @@
-import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, NotFoundException, Param, Post, StreamableFile } from '@nestjs/common';
-import { NumberingService, ParseUuidOr404Pipe, Permissions, SettingsService, TenantContext } from '@aura/core';
-import { toCsv } from '@aura/shared';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, Inject, NotFoundException, Param, Post, StreamableFile } from '@nestjs/common';
+import { DOCUMENT_REQUIREMENT_STORE, NumberingService, ParseUuidOr404Pipe, Permissions, SettingsService, TenantContext, type DocumentRequirementStore } from '@aura/core';
+import { COMMERCIAL_EVIDENCE_TEMPLATE, makeDocumentRequirement, toCsv } from '@aura/shared';
 import {
   EstimateService,
   EstimateSourcingService,
@@ -61,6 +61,9 @@ export class TenderPricingController {
     private readonly numbering: NumberingService,
     private readonly settings: SettingsService,
     private readonly tenant: TenantContext,
+    // The offer this controller generates is approved behind an evidence checklist. Nothing seeded
+    // one, so every offer generated here was unapprovable — see `generateQuotation`.
+    @Inject(DOCUMENT_REQUIREMENT_STORE) private readonly requirements: DocumentRequirementStore,
   ) {}
 
   private async tenderOr404(id: string): Promise<Tender> {
@@ -562,6 +565,41 @@ export class TenderPricingController {
       pricedLines: priced,
       unpricedLines: items.length - priced,
     });
+
+    /**
+     * THE GATE IS CONFIGURED BY THE ACT THAT CREATES THE THING IT GATES.
+     *
+     * Approving a quotation requires an evidence checklist, and nothing on this path wrote one —
+     * so every offer generated from a tender was refused approval for ever with "readiness
+     * checklist is not configured", and with it the client-facing proposal and the tender
+     * submission. Measured on a real tender before this line existed: the checklist came back with
+     * zero rows and the approval 409'd whoever asked, including an administrator.
+     *
+     * Seeded here rather than left to a separate act somebody has to remember, because a control
+     * that only works when a second person performs an unprompted step is a control that does not
+     * work. Idempotent by the store's natural key, and it writes only what is absent: re-generating
+     * an offer never resets a requirement somebody has already provided or waived.
+     *
+     * NOT fatal. A checklist that failed to seed must not lose the priced offer that was just
+     * written — the approval refuses on its own, loudly and by name, and that is the control.
+     */
+    try {
+      const existing = await this.requirements.list({
+        tenantId: ctx.tenantId, entityType: 'crm.quotation', entityId: quotation.id,
+      });
+      const known = new Set(existing.map((r) => r.type));
+      for (const t of COMMERCIAL_EVIDENCE_TEMPLATE) {
+        if (known.has(t.type)) continue;
+        await this.requirements.upsert(makeDocumentRequirement({
+          tenantId: ctx.tenantId,
+          entityType: 'crm.quotation',
+          entityId: quotation.id,
+          type: t.type,
+          requiredCount: t.requiredCount,
+        }));
+      }
+    } catch { /* the approval gate refuses an unconfigured checklist by itself */ }
+
     return quotation;
   }
 }

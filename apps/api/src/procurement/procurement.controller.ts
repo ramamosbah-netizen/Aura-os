@@ -319,13 +319,19 @@ export class ProcurementController {
   }
 
   /**
+   * AUTHORING a requisition's status: sending it for a decision, or back to draft.
+   *
    * EXPLICIT, because route derivation reads the trailing segment and would require
    * `procurement.purchase-request.status` — an action word no shipped procurement role grants, so
    * a Buyer could not move their own requisition at all.
    *
-   * `update` is the floor: sending a requisition for a decision is part of authoring it. Making the
-   * decision is stronger, and the service asserts `procurement.pr.approve` for `approved` and
-   * `rejected` on top of this.
+   * THE DECISION IS NOT MADE HERE. This route used to carry `approved` and `rejected` too, with
+   * `update` as its floor and the service asserting `procurement.pr.approve` on top. The guard asserts
+   * the floor FIRST, and the Procurement Manager — the role whose job the decision is — holds
+   * `procurement.pr.approve` and not `procurement.pr.update`. Measured on 2026-09-24 with auth on:
+   * u-e2e-procmgr approving got 403 on `procurement.pr.update` before the service ran, so only a
+   * wildcard holder could approve or reject a requisition at all. The maker/checker split the service
+   * implements was unreachable for the checker. See `decidePr`.
    */
   @Patch('purchase-requests/:id/status')
   @Permissions('procurement.pr.update')
@@ -334,6 +340,36 @@ export class ProcurementController {
     @Body() dto: { status: PurchaseRequestStatus },
   ): Promise<PurchaseRequest> {
     if (!dto?.status) throw new BadRequestException('status is required');
+    if (dto.status === 'approved' || dto.status === 'rejected') {
+      throw new BadRequestException(
+        `"${dto.status}" is a decision on the requisition, not an edit to it — it is made at ` +
+          `PATCH purchase-requests/${id}/decision, by a holder of procurement.pr.approve`,
+      );
+    }
+    const found = await this.prs.get(id);
+    if (!found) throw new NotFoundException(`purchase request ${id} not found`);
+    const ctx = this.tenant.get();
+    return await this.prs.changeStatus(id, dto.status, ctx.actorId ?? undefined);
+  }
+
+  /**
+   * THE DECISION on a requisition: approve or reject. Its own route, so the permission the guard
+   * asserts IS the decision's — `procurement.pr.approve`, which the Procurement Manager holds and the
+   * Buyer does not — rather than an authoring floor the decision-maker was never given.
+   *
+   * The service still chooses the permission by the status it is asked for, and still applies the
+   * approval matrix and the tender-pricing boundary. Two checks of one rule, at two layers: a caller
+   * that reaches the service some other way meets the same answer.
+   */
+  @Patch('purchase-requests/:id/decision')
+  @Permissions('procurement.pr.approve')
+  async decidePr(
+    @Param('id') id: string,
+    @Body() dto: { status: PurchaseRequestStatus },
+  ): Promise<PurchaseRequest> {
+    if (dto?.status !== 'approved' && dto?.status !== 'rejected') {
+      throw new BadRequestException('a decision on a requisition is "approved" or "rejected"');
+    }
     const found = await this.prs.get(id);
     if (!found) throw new NotFoundException(`purchase request ${id} not found`);
     const ctx = this.tenant.get();

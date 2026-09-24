@@ -69,7 +69,7 @@ test.describe('An order shows what it buys and where it stands', () => {
     });
     await post(`/procurement/purchase-requests/${pr.id}/lines`, { material: camera.code, quantity: 12, estimatedUnitCost: 100 });
     await patch(`/procurement/purchase-requests/${pr.id}/status`, { status: 'submitted' });
-    await patch(`/procurement/purchase-requests/${pr.id}/status`, { status: 'approved' });
+    await patch(`/procurement/purchase-requests/${pr.id}/decision`, { status: 'approved' });
 
     const orders = await (await request.get(`${API}/procurement/purchase-orders`, { headers: apiAuthHeaders() })).json() as Array<{ id: string; title: string }>;
     const drafted = orders.find((o) => o.title.includes(`Carried ${run}`));

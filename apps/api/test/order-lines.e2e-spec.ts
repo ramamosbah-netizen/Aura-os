@@ -189,7 +189,7 @@ describe('a purchase order buys materials, and says how it came to buy them (JWT
     const demand = (await buyer.get(`/api/v1/procurement/purchase-requests/${prId}/lines`).expect(200)).body as Array<{ id: string }>;
 
     await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`).send({ status: 'submitted' }).expect(200);
-    await admin.patch(`/api/v1/procurement/purchase-requests/${prId}/status`).send({ status: 'approved' }).expect(200);
+    await admin.patch(`/api/v1/procurement/purchase-requests/${prId}/decision`).send({ status: 'approved' }).expect(200);
 
     const orders = (await buyer.get('/api/v1/procurement/purchase-orders').expect(200)).body as Array<{ id: string; title: string; value: number }>;
     const drafted = orders.find((o) => o.title.includes('Containment'));

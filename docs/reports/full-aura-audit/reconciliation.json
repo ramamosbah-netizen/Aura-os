@@ -14,7 +14,7 @@
     "UNVERIFIED": 43,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 68,
+  "gapRecords": 69,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -87,7 +87,8 @@
     "ARCH-01",
     "BID-01",
     "NCR-SOD-01",
-    "VAT-BASIS-01"
+    "VAT-BASIS-01",
+    "BUY-APPR-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,

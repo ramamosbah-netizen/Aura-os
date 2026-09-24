@@ -104,8 +104,10 @@ export default function PrList({
         body: JSON.stringify({ status }),
       });
       if (!res.ok) {
+        // The API says WHY in `message` (a refused authority names the permission); `error` is the
+        // BFF's own voice when the API could not be reached at all.
         const d = await res.json().catch(() => ({}));
-        setErr(d.error ?? `Error setting status to ${status}`);
+        setErr(d.message ?? d.error ?? `Error setting status to ${status}`);
       } else {
         router.refresh();
       }
@@ -206,13 +208,21 @@ export default function PrList({
                     <td style={registerTable.tdMuted}>{fmt(pr.createdAt)}</td>
                     <td style={registerTable.td}>
                       <div style={s.actions}>
-                        {pr.status === 'draft' && (
+                        {/*
+                          The decision is offered on a SUBMITTED requisition — the one the approvals
+                          inbox links here as "Approve" — and, as before, on a draft. It used to be
+                          offered on drafts only, so the inbox led the Procurement Manager to a row
+                          with no way to decide it. The server decides who may: a Buyer who presses
+                          these is refused, in words.
+                        */}
+                        {(pr.status === 'draft' || pr.status === 'submitted') && (
                           <>
                             <button
                               type="button"
                               disabled={isBusy}
                               onClick={() => updateStatus(pr.id, 'approved')}
                               style={s.btnAccent}
+                              data-testid={`pr-approve-${pr.id}`}
                             >
                               Approve
                             </button>
@@ -221,6 +231,7 @@ export default function PrList({
                               disabled={isBusy}
                               onClick={() => updateStatus(pr.id, 'rejected')}
                               style={s.btnDanger}
+                              data-testid={`pr-reject-${pr.id}`}
                             >
                               Reject
                             </button>

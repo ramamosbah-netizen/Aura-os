@@ -46,6 +46,7 @@ describe('a material requisition names materials, in units, by a date (JWT ON)',
   /** Raises demand: authors requisition lines, and cannot create a material. */
   let buyer: ReturnType<typeof request.agent>;
   let admin: ReturnType<typeof request.agent>;
+  let procmgr: ReturnType<typeof request.agent>;
   let projectId: string;
   let otherProjectId: string;
 
@@ -74,7 +75,10 @@ describe('a material requisition names materials, in units, by a date (JWT ON)',
     access.grant({ userId: 'rl-store', roleId: 'r-e2e-store', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     access.grant({ userId: 'rl-buyer', roleId: 'r-e2e-buyer', scope: { kind: 'org', level: 'tenant', id: TENANT } });
     access.grant({ userId: 'rl-admin', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: TENANT }, approvalLimit: 10_000_000 });
-    for (const userId of ['rl-store', 'rl-buyer', 'rl-admin']) {
+    // The SHIPPED Procurement Manager, unnarrowed: the decision must be reachable by the role that
+    // actually ships, not by a test role granted whatever the route happens to ask for.
+    access.grant({ userId: 'rl-procmgr', roleId: 'r-procurement-manager', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    for (const userId of ['rl-store', 'rl-buyer', 'rl-admin', 'rl-procmgr']) {
       users.save({ tenantId: TENANT, userId, displayName: userId, active: true });
     }
 
@@ -90,6 +94,7 @@ describe('a material requisition names materials, in units, by a date (JWT ON)',
     store = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'rl-store', tenantId: TENANT })}`);
     buyer = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'rl-buyer', tenantId: TENANT })}`);
     admin = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'rl-admin', tenantId: TENANT })}`);
+    procmgr = request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub: 'rl-procmgr', tenantId: TENANT })}`);
 
     projectId = (await admin.post('/api/v1/projects/projects').send({ title: 'Containment job' }).expect(201)).body.id;
     otherProjectId = (await admin.post('/api/v1/projects/projects').send({ title: 'A different job' }).expect(201)).body.id;
@@ -326,9 +331,55 @@ describe('a material requisition names materials, in units, by a date (JWT ON)',
     const submitted = await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`)
       .send({ status: 'submitted' }).expect(200);
     expect(submitted.body.status).toBe('submitted');
-    // …and the same person still cannot decide on it.
-    await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`)
+    // …and the same person still cannot decide on it — not at the decision's own door…
+    await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/decision`)
       .send({ status: 'approved' }).expect(403);
+    // …nor by asking the authoring route to carry the decision for them.
+    const sideDoor = await buyer.patch(`/api/v1/procurement/purchase-requests/${prId}/status`)
+      .send({ status: 'approved' }).expect(400);
+    expect(sideDoor.body.message).toMatch(/is a decision on the requisition, not an edit/);
+    expect((await buyer.get(`/api/v1/procurement/purchase-requests/${prId}`).expect(200)).body.status).toBe('submitted');
+  });
+
+  it('lets the SHIPPED Procurement Manager decide — approve and reject — and do nothing else to the requisition', async () => {
+    const withLines = async (): Promise<string> => {
+      const id = await newPr();
+      await buyer.post(`/api/v1/procurement/purchase-requests/${id}/lines`)
+        .send({ material: camera.code, quantity: 4, estimatedUnitCost: 450 }).expect(201);
+      return id;
+    };
+
+    // Authoring is the Buyer's: the manager may not send a requisition for their own decision.
+    const drafted = await withLines();
+    await procmgr.patch(`/api/v1/procurement/purchase-requests/${drafted}/status`)
+      .send({ status: 'submitted' }).expect(403);
+
+    // The decision is the manager's. It used to be refused 403 on `procurement.pr.update` before the
+    // service ever ran, which left the decision to wildcard holders only.
+    const toApprove = await withLines();
+    await buyer.patch(`/api/v1/procurement/purchase-requests/${toApprove}/status`).send({ status: 'submitted' }).expect(200);
+    const approved = await procmgr.patch(`/api/v1/procurement/purchase-requests/${toApprove}/decision`)
+      .send({ status: 'approved' }).expect(200);
+    expect(approved.body.status).toBe('approved');
+    // Approving an operational requisition still drafts its purchase order, at the lines' value, and
+    // the requisition's line travels onto it with its lineage.
+    const orders = (await admin.get('/api/v1/procurement/purchase-orders').expect(200)).body as Array<{ id: string; title: string; value: number; status: string }>;
+    const order = orders.find((o) => o.title === `PO for ${approved.body.title}`);
+    expect(order, 'approval should draft the purchase order').toBeDefined();
+    expect(order).toMatchObject({ value: 1800, status: 'draft' });
+    const demand = (await buyer.get(`/api/v1/procurement/purchase-requests/${toApprove}/lines`).expect(200)).body as Array<{ id: string }>;
+    const carried = (await admin.get(`/api/v1/procurement/purchase-orders/${order!.id}/lines`).expect(200)).body as Array<{ sourcePrLineId: string | null }>;
+    expect(carried.map((l) => l.sourcePrLineId)).toEqual(demand.map((l) => l.id));
+
+    const toReject = await withLines();
+    await buyer.patch(`/api/v1/procurement/purchase-requests/${toReject}/status`).send({ status: 'submitted' }).expect(200);
+    const rejected = await procmgr.patch(`/api/v1/procurement/purchase-requests/${toReject}/decision`)
+      .send({ status: 'rejected' }).expect(200);
+    expect(rejected.body.status).toBe('rejected');
+
+    // The decision route decides and does nothing else.
+    await procmgr.patch(`/api/v1/procurement/purchase-requests/${drafted}/decision`)
+      .send({ status: 'submitted' }).expect(400);
   });
 
   it('refuses to submit an incomplete requisition, rather than only reporting that it is incomplete', async () => {
@@ -366,7 +417,7 @@ describe('a material requisition names materials, in units, by a date (JWT ON)',
     expect(waiting?.value).toBe(6400);
 
     // …and approving it drafts the purchase order at that same value, not at the header's zero.
-    await admin.patch(`/api/v1/procurement/purchase-requests/${prId}/status`).send({ status: 'approved' }).expect(200);
+    await admin.patch(`/api/v1/procurement/purchase-requests/${prId}/decision`).send({ status: 'approved' }).expect(200);
     const pos = (await admin.get('/api/v1/procurement/purchase-orders').expect(200)).body as Array<{ title: string; value: number }>;
     const drafted = pos.find((p) => p.title.includes(prId.slice(0, 8)) || p.value === 6400);
     expect(drafted?.value).toBe(6400);

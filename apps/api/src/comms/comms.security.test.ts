@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { SSE_METADATA } from '@nestjs/common/constants';
 import { AccessService, PERMISSIONS_KEY, type NotificationService } from '@aura/core';
 import { describe, expect, it, vi } from 'vitest';
 import { CommsController } from './comms.controller';
@@ -437,9 +438,19 @@ describe('Route permissions', () => {
     ['sendMail', 'comms.mail.send'],
     ['markRead', 'comms.mail.read'],
     ['unread', 'comms.channel.read'],
+    ['stream', 'comms.channel.read'],
   ])('%s requires %s', (handler, permission) => {
     const fn = (CommsController.prototype as unknown as Record<string, () => unknown>)[handler];
     expect(Reflect.getMetadata(PERMISSIONS_KEY, fn), `${handler} must declare a permission`).toEqual([permission]);
+  });
+
+  /**
+   * Under `@Get`, Nest waits for a returned Observable to complete and sends its last value. The
+   * live stream never completes, so it hung with no headers and no bytes — no chat event reached
+   * any client. Only `@Sse` writes each emission as it happens.
+   */
+  it('serves the live chat stream as server-sent events, not as a plain GET', () => {
+    expect(Reflect.getMetadata(SSE_METADATA, CommsController.prototype.stream)).toBe(true);
   });
 
   it('grants the baseline capability to every standard role, so ordinary staff can communicate', () => {

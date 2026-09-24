@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Param, Post, Query, Sse } from '@nestjs/common';
 import { EventBus, Permissions, TenantContext } from '@aura/core';
 import { Observable } from 'rxjs';
 import type { ChatAttachment, ChatChannel, ChatMessage, ChatMessageKind, MailMessage, Mailbox } from '@aura/shared';
@@ -105,7 +105,13 @@ export class CommsController {
     return result;
   }
 
-  @Get('stream')
+  /**
+   * `@Sse`, never `@Get`: for a plain route Nest waits for a returned Observable to COMPLETE and
+   * sends its last value as JSON. This one never completes — it lives until the client leaves — so
+   * under `@Get` the request hung with no headers and no bytes, and no chat event ever reached a
+   * browser. Nest 11 accepts the async handler: it awaits `caller()`, then streams.
+   */
+  @Sse('stream')
   @Permissions('comms.channel.read')
   async stream(): Promise<Observable<{ data: unknown; type: string }>> {
     const { tenantId, companyId, username, isAdmin } = await this.caller();

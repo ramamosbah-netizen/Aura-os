@@ -21,6 +21,10 @@ export class InMemoryDocumentRequirementStore implements DocumentRequirementStor
     this.rows.set(id, { ...requirement, id, createdAt: existing?.createdAt ?? requirement.createdAt });
   }
 
+  async upsertWithClient(_tx: unknown, requirement: DocumentRequirement): Promise<void> {
+    await this.upsert(requirement);
+  }
+
   async list(filter: RequirementFilter): Promise<DocumentRequirement[]> {
     return [...this.rows.values()]
       .filter((r) => r.tenantId === filter.tenantId)

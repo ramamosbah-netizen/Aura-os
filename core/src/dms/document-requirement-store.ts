@@ -1,4 +1,5 @@
 import type { DocumentRequirement, Id } from '@aura/shared';
+import type { TxHandle } from '../events/tx';
 
 /** DI token for the evidence-requirement store. */
 export const DOCUMENT_REQUIREMENT_STORE = Symbol('DOCUMENT_REQUIREMENT_STORE');
@@ -19,6 +20,11 @@ export interface RequirementFilter {
  */
 export interface DocumentRequirementStore {
   upsert(requirement: DocumentRequirement): Promise<void>;
+  /**
+   * The same upsert inside a caller's transaction — for the evidence a decision was taken on,
+   * which must land with the decision or not at all.
+   */
+  upsertWithClient(tx: TxHandle | null, requirement: DocumentRequirement): Promise<void>;
   list(filter: RequirementFilter): Promise<DocumentRequirement[]>;
   /**
    * Both reads take the tenant explicitly (N-08). RLS is the net underneath, but this store is

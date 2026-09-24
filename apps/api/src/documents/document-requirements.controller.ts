@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, ConflictException, Body, Controller, ForbiddenException, Get, Inject, NotFoundException, Optional, Param, Post, Query } from '@nestjs/common';
 import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import {
   COMMERCIAL_EVIDENCE_TEMPLATE,
@@ -13,7 +13,7 @@ import {
   type DocumentRequirement,
   type DocumentRequirementType,
 } from '@aura/shared';
-import { DOCUMENT_REQUIREMENT_STORE, ParseUuidOr404Pipe, Permissions, TenantContext, type DocumentRequirementStore } from '@aura/core';
+import { DOCUMENT_REQUIREMENT_STORE, DerivedEvidenceRegistry, ParseUuidOr404Pipe, Permissions, TenantContext, type DocumentRequirementStore } from '@aura/core';
 import { QuotationService } from '@aura/crm';
 
 const EVIDENCE_TYPES = ['DOCUMENT_ID', 'EXTERNAL_REFERENCE', 'TRANSMITTAL', 'MANUAL_CONFIRMATION'];
@@ -84,6 +84,9 @@ export class DocumentRequirementsController {
     // evidence while every unit test passed. The same shape as quotation.service.ts's own
     // optional dependencies, which inject by explicit token for exactly this reason.
     @Optional() @Inject(QuotationService) private readonly quotations: QuotationService | null = null,
+    // Requirements whose evidence is COMPUTED — a tender offer's supplier quotations. Shown as they
+    // are now, and never attachable by hand. Explicit token, for the reason written above.
+    @Optional() @Inject(DerivedEvidenceRegistry) private readonly derived: DerivedEvidenceRegistry | null = null,
   ) {}
 
   /** Requirements on one record, plus the computed readiness the UI renders. */
@@ -93,11 +96,14 @@ export class DocumentRequirementsController {
     @Query('entityType') entityType?: string,
     @Query('entityId') entityId?: string,
   ): Promise<{ requirements: DocumentRequirement[]; readiness: DecisionReadiness }> {
-    const requirements = await this.store.list({
+    const stored = await this.store.list({
       tenantId: this.tenant.get().tenantId,
       entityType,
       entityId,
     });
+    // The same overlay the approval gate applies, so the checklist a person reads is the checklist
+    // the approval will be decided on — not a stored copy that the decision would then contradict.
+    const requirements = this.derived ? await this.derived.overlay(stored) : stored;
     return { requirements, readiness: decisionReadiness(requirements) };
   }
 
@@ -160,6 +166,19 @@ export class DocumentRequirementsController {
   ): Promise<DocumentRequirement> {
     const found = await this.require(id);
     const ctx = this.tenant.get();
+    /**
+     * A COMPUTED REQUIREMENT CANNOT BE TYPED IN. For a tender offer, "three supplier quotations"
+     * is established by the supplier quotations themselves — independent suppliers, confirmed
+     * revisions, technically judged, commercially compared, across the whole supply scope. A
+     * reference typed here would be three files to please a checklist, which is the thing the rule
+     * exists to refuse. What remains open is the exception: a reasoned waiver by the decision-maker.
+     */
+    if (this.derived && await this.derived.isDerived(found)) {
+      throw new ConflictException(
+        `${found.type} on this record is not allowed for hand-attached evidence — it is computed from its governed supplier quotations; ` +
+          'an unmet requirement is excused only by a reasoned waiver from the person who answers for the decision',
+      );
+    }
     let updated: DocumentRequirement;
     try {
       updated = addEvidence(found, { type: dto.type, reference: dto.reference, checkedBy: ctx.actorId ?? null });

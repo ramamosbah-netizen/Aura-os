@@ -1,4 +1,5 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
+import type { TxHandle } from '../events/tx';
 import type {
   DocumentEvidence,
   DocumentRequirement,
@@ -49,9 +50,14 @@ export class PostgresDocumentRequirementStore implements DocumentRequirementStor
   constructor(private readonly pool: Pool) {}
 
   async upsert(r: DocumentRequirement): Promise<void> {
+    await this.upsertWithClient(null, r);
+  }
+
+  async upsertWithClient(tx: TxHandle | null, r: DocumentRequirement): Promise<void> {
     // ON CONFLICT against the natural key in 0184. Re-seeding a template converges instead of
     // duplicating, and `id` is left alone so anything already referencing the row still resolves.
-    await this.pool.query(
+    const executor = (tx as PoolClient | null) ?? this.pool;
+    await executor.query(
       `INSERT INTO public.aura_document_requirements (${COLS})
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9,$10,$11)
        ON CONFLICT (tenant_id, entity_type, entity_id, type) DO UPDATE SET

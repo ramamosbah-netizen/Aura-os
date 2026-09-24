@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, decisionReadiness, diffFields, estimateLine, type DomainEvent, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
-import { DOCUMENT_REQUIREMENT_STORE, EVENT_STORE, TX_RUNNER, type DocumentRequirementStore, type EventStore, type TxHandle, type TxRunner, AccessService, TenantContext } from '@aura/core';
+import { assertSameTenant, decisionReadiness, diffFields, estimateLine, type DocumentRequirement, type DomainEvent, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { DOCUMENT_REQUIREMENT_STORE, DerivedEvidenceRegistry, EVENT_STORE, TX_RUNNER, type DocumentRequirementStore, type EventStore, type TxHandle, type TxRunner, AccessService, TenantContext } from '@aura/core';
 import {
   QUOTATION_EVENT,
   QUOTATION_ACTIONS,
@@ -57,6 +57,9 @@ export class QuotationService {
     @Optional() @Inject(DOCUMENT_REQUIREMENT_STORE) private readonly requirements: DocumentRequirementStore | null = null,
     // Optional for the same reason as the checklist above: the no-DB harness boots without it.
     @Optional() @Inject(CRM_QUOTATION_REVIEW_STORE) private readonly reviews: QuotationReviewStore | null = null,
+    // Evidence that is COMPUTED rather than attached — for a tender offer, its supplier quotations.
+    // Explicit token: an @Optional() union without one reflects as Object and arrives as null.
+    @Optional() @Inject(DerivedEvidenceRegistry) private readonly derivedEvidence: DerivedEvidenceRegistry | null = null,
   ) {}
 
   /** Keep the no-DB test/dev path usable while making PostgreSQL writes atomic in production. */
@@ -168,7 +171,7 @@ export class QuotationService {
           `quotation ${q.quoteNumber} approval`,
         );
       }
-      if (action === 'approve') await this.assertApprovalReadiness(q);
+      const decidedOn = action === 'approve' ? await this.assertApprovalReadiness(q) : [];
       updated = applyQuotationAction(q, action);
       const eventType = action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : QUOTATION_EVENT.statusChanged;
       const events: DomainEvent[] = [makeEvent({
@@ -180,6 +183,10 @@ export class QuotationService {
       const existing = action === 'approve' ? await this.baselines.getByQuotation(updated.tenantId, updated.id) : null;
       baseline = action === 'approve' && !existing ? makeCommercialBaseline(updated, actor) : null;
       await this.store.saveWithClient(handle, updated);
+      // The computed evidence the approval was decided on, written WITH the approval: from here the
+      // provider answers frozen and this is what the checklist shows. Nothing if nothing was computed.
+      const decidedAt = new Date().toISOString();
+      for (const row of decidedOn) await this.requirements?.upsertWithClient(handle, { ...row, updatedAt: decidedAt });
       // The reason lands in the SAME transaction as the status change: an offer back in draft with
       // no recorded reason is exactly the state this action exists to prevent.
       if (action === 'return_for_revision') {
@@ -218,15 +225,20 @@ export class QuotationService {
    * Commercial queue, API or Quotation 360) receives the same server decision.
    * A UI warning is never sufficient to authorize an approval.
    */
-  private async assertApprovalReadiness(q: Quotation): Promise<void> {
-    if (!this.requirements) return;
-    if (q.approvalReadinessMode === 'legacy') return;
-    const rows = await this.requirements.list({ tenantId: q.tenantId, entityType: 'crm.quotation', entityId: q.id });
+  /** Refuses an unready approval; returns the COMPUTED rows it was decided on, for the record. */
+  private async assertApprovalReadiness(q: Quotation): Promise<DocumentRequirement[]> {
+    if (!this.requirements) return [];
+    if (q.approvalReadinessMode === 'legacy') return [];
+    const stored = await this.requirements.list({ tenantId: q.tenantId, entityType: 'crm.quotation', entityId: q.id });
+    // The approval decides on the evidence AS IT IS NOW — a derived requirement is recomputed here,
+    // at the moment of decision, not read from whatever was last saved.
+    const rows = this.derivedEvidence ? await this.derivedEvidence.overlay(stored) : stored;
     if (rows.length === 0) {
       throw new Error(`quotation ${q.quoteNumber} approval blocked: readiness checklist is not configured`);
     }
     const readiness = decisionReadiness(rows);
-    if (readiness.verdict === 'READY') return;
+    // `overlay` returns a row untouched when nothing is computed for it, so a new object is a derived one.
+    if (readiness.verdict === 'READY') return rows.filter((row, i) => row !== stored[i]);
     const missing = readiness.missing.map((m) => `${m.type} (${m.have}/${m.need})`).join(', ');
     throw new Error(
       `quotation ${q.quoteNumber} approval blocked: decision readiness is ${readiness.verdict}` +

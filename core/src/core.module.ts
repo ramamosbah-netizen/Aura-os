@@ -34,6 +34,7 @@ import { DmsService } from './dms/dms.service';
 import { DOCUMENT_STORE } from './dms/document-store';
 import { DOCUMENT_PERMISSION_STORE } from './dms/document-permission-store';
 import { DocumentAccessResolver } from './dms/document-access-resolver';
+import { DerivedEvidenceRegistry } from './dms/derived-evidence';
 import { DOCUMENT_REQUIREMENT_STORE } from './dms/document-requirement-store';
 import { NEGOTIATION_STORE } from './crm/negotiation-store';
 import { InMemoryNegotiationStore } from './crm/in-memory-negotiation-store';
@@ -227,6 +228,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
         pool ? new PostgresNegotiationStore(pool) : new InMemoryNegotiationStore(),
     },
     DocumentAccessResolver,
+    DerivedEvidenceRegistry,
     DmsService,
     {
       provide: WORKFLOW_STORE,
@@ -260,6 +262,7 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
     DOCUMENT_REQUIREMENT_STORE,
     NEGOTIATION_STORE,
     DocumentAccessResolver,
+    DerivedEvidenceRegistry,
     TenantContext,
     OrgService,
     AccessService,

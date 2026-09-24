@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { InMemoryDocumentRequirementStore } from '@aura/core';
+import { DerivedEvidenceRegistry, InMemoryDocumentRequirementStore } from '@aura/core';
 import type { EventStore, AccessService, DocumentRequirementStore } from '@aura/core';
 import { addEvidence, makeDocumentRequirement } from '@aura/shared';
 import { QuotationService } from './quotation.service';
@@ -9,11 +9,15 @@ import { InMemoryCommercialBaselineStore } from './in-memory-commercial-baseline
 // Permissive access mock — these tests don't exercise the value-threshold/SoD approval gate.
 const noopAccess = { assert: () => {}, assertApprovalAuthority: () => {} } as unknown as AccessService;
 
-function harness(access: AccessService = noopAccess, requirements: DocumentRequirementStore | null = null) {
+function harness(
+  access: AccessService = noopAccess,
+  requirements: DocumentRequirementStore | null = null,
+  derived: DerivedEvidenceRegistry | null = null,
+) {
   const events = { append: vi.fn().mockResolvedValue(undefined) } as unknown as EventStore;
   const baselines = new InMemoryCommercialBaselineStore();
   const store = new InMemoryQuotationStore();
-  const svc = new QuotationService(store, baselines, events, access, undefined, undefined, requirements);
+  const svc = new QuotationService(store, baselines, events, access, undefined, undefined, requirements, null, derived);
   return { svc, baselines, events, store };
 }
 
@@ -107,6 +111,54 @@ describe('QuotationService — commercial governance (R3)', () => {
     await expect(svc.changeStatus(q.id, 'approve', 'u-manager'))
       .rejects.toThrow(/readiness checklist is not configured/i);
     expect((await svc.get(q.id))?.status).toBe('draft');
+  });
+
+  it('decides on COMPUTED supplier evidence, records what it decided on, and then stops recomputing', async () => {
+    const requirements = new InMemoryDocumentRequirementStore();
+    const registry = new DerivedEvidenceRegistry();
+    const { svc } = harness(noopAccess, requirements, registry);
+    const q = await newQuote(svc);
+    const computed = (ref: string) => ({ type: 'EXTERNAL_REFERENCE' as const, reference: ref, checkedBy: null, checkedAt: '2026-09-24T10:00:00.000Z' });
+    let camera = true;
+    let cable = false;
+    registry.register({
+      entityType: 'crm.quotation', requirementType: 'VENDOR_QUOTE',
+      derive: async (_tenantId, id) => {
+        const current = await svc.get(id);
+        if (current && current.status !== 'draft' && current.status !== 'internal_review') {
+          return { applies: true, frozen: true, satisfied: false, requiredCount: 0, evidence: [] };
+        }
+        const evidence = [...(camera ? [computed('supply item 1 — three suppliers')] : []), ...(cable ? [computed('supply item 2 — three suppliers')] : [])];
+        return { applies: true, satisfied: camera && cable, requiredCount: 2, evidence };
+      },
+    });
+    // Three typed references on the stored row: a checklist pleased by hand.
+    let typed = makeDocumentRequirement({ tenantId: 't1', entityType: 'crm.quotation', entityId: q.id, type: 'VENDOR_QUOTE', requiredCount: 3 });
+    for (const ref of ['SQ-1', 'SQ-2', 'SQ-3']) typed = addEvidence(typed, { type: 'EXTERNAL_REFERENCE', reference: ref, checkedBy: 'u1' });
+    expect(typed.status).toBe('PROVIDED');
+    await requirements.upsert(typed);
+
+    // Three quotes on the camera do not cover the cable: the typed references do not count either.
+    await expect(svc.changeStatus(q.id, 'approve', 'u-manager')).rejects.toThrow(/VENDOR_QUOTE \(1\/2\)/);
+    expect((await svc.get(q.id))?.status).toBe('draft');
+
+    cable = true;
+    await svc.changeStatus(q.id, 'approve', 'u-manager');
+    expect((await svc.get(q.id))?.status).toBe('approved');
+
+    // What the approval was decided on is now the record — the computed rows, not the typed ones.
+    const [recorded] = await requirements.list({ tenantId: 't1', entityType: 'crm.quotation', entityId: q.id });
+    expect(recorded.status).toBe('PROVIDED');
+    expect(recorded.requiredCount).toBe(2);
+    expect(recorded.evidence.map((e) => e.reference)).toEqual(['supply item 1 — three suppliers', 'supply item 2 — three suppliers']);
+
+    // A month later every offer has expired. The approved offer still reads as it was decided.
+    camera = false;
+    cable = false;
+    const [shown] = await registry.overlay(await requirements.list({ tenantId: 't1', entityType: 'crm.quotation', entityId: q.id }));
+    expect(shown.status).toBe('PROVIDED');
+    expect(shown.evidence).toHaveLength(2);
+    expect(await registry.isDerived(shown)).toBe(true);
   });
 
   it('allows only an explicitly legacy quotation to use no-checklist compatibility', async () => {

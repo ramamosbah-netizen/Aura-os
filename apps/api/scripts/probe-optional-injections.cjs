@@ -25,6 +25,11 @@ const SITES = [
   ['@aura/procurement', 'SourcingRecommendationService', 'pricingBoundary'],
   // The control, fixed earlier today by adding @Inject(QuotationService).
   ['../dist/documents/document-requirements.controller', 'DocumentRequirementsController', 'quotations'],
+  // Computed supplier evidence: the approval gate and the checklist must both RECEIVE the registry,
+  // and the registry must hold the tender-offer provider — or the rule silently does not exist.
+  ['@aura/crm', 'QuotationService', 'derivedEvidence'],
+  ['../dist/documents/document-requirements.controller', 'DocumentRequirementsController', 'derived'],
+  ['@aura/core', 'DerivedEvidenceRegistry', 'providers'],
 ];
 
 (async () => {
@@ -36,7 +41,9 @@ const SITES = [
       let instance;
       try { instance = app.get(Cls, { strict: false }); } catch { instance = await app.resolve(Cls, undefined, { strict: false }); }
       const value = instance[field];
-      verdict = value == null ? 'NULL      — silently absent' : `ARRIVED   — ${value.constructor?.name ?? typeof value}`;
+      verdict = value == null ? 'NULL      — silently absent'
+        : value instanceof Map ? `HOLDS     — ${[...value.keys()].join(', ') || '(nothing registered)'}`
+        : `ARRIVED   — ${value.constructor?.name ?? typeof value}`;
     } catch (err) {
       verdict = `UNREADABLE — ${err.message.slice(0, 90)}`;
     }

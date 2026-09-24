@@ -57,6 +57,28 @@ export class PurchaseRequestService {
     return { ...governingValue(pr.value, lines), lines };
   }
 
+  /**
+   * RAISE A TENDER-PRICING REQUISITION — its own act, under its own permission.
+   *
+   * `create` asserts `procurement.pr.create`, the authority to raise demand for a project. Granting
+   * that to the estimator so they could price a bid would also let them raise operational
+   * requisitions that buy things. So pricing is a separate door: `procurement.tender-sourcing.create`,
+   * held by the role that prices tenders, and able to make exactly one kind of record — a draft,
+   * with no project, naming its tender and BOQ basis. The domain refuses any other shape, and the
+   * database refuses it again.
+   */
+  async createForTenderPricing(input: Omit<NewPurchaseRequest, 'purpose' | 'projectId' | 'projectName' | 'status'> & {
+    sourceTenderId: Id;
+    sourceBasisRevisionId: string;
+  }): Promise<PurchaseRequest> {
+    if (input.createdBy) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
+      if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
+      this.access.assert(input.createdBy, { permission: 'procurement.tender-sourcing.create', orgPath });
+    }
+    return this.persistNew(makePurchaseRequest({ ...input, purpose: 'tender_pricing', projectId: null, status: 'draft' }));
+  }
+
   async create(input: NewPurchaseRequest): Promise<PurchaseRequest> {
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
@@ -64,8 +86,16 @@ export class PurchaseRequestService {
       const target: AccessTarget = { permission: 'procurement.pr.create', orgPath };
       this.access.assert(input.createdBy, target);
     }
+    // The operational door may not make a pricing requisition: that would be `procurement.pr.create`
+    // standing in for `procurement.tender-sourcing.create`, which is a different authority.
+    if (input.purpose === 'tender_pricing') {
+      throw new Error('a tender-pricing requisition can only be raised through its own act, under procurement.tender-sourcing.create');
+    }
+    return this.persistNew(makePurchaseRequest(input));
+  }
 
-    const pr = makePurchaseRequest(input);
+  /** Store a built requisition and record that it was raised. Shared by both creation acts. */
+  private async persistNew(pr: PurchaseRequest): Promise<PurchaseRequest> {
     await this.store.create(pr);
     await this.events.append([
       makeEvent({
@@ -80,10 +110,12 @@ export class PurchaseRequestService {
           status: pr.status,
           value: pr.value,
           project: pr.projectId ? { id: pr.projectId, name: pr.projectName } : null,
+          purpose: pr.purpose,
+          sourceTenderId: pr.sourceTenderId,
         },
       }),
     ]);
-    this.logger.log(`PR created: ${pr.title} (${pr.id}) value=${pr.value}`);
+    this.logger.log(`PR created: ${pr.title} (${pr.id}) value=${pr.value} purpose=${pr.purpose}`);
     return pr;
   }
 

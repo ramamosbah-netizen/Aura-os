@@ -644,6 +644,12 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // technical proposal. Not `waive`: the estimator files the evidence, and deciding to proceed
       // without a piece of it is the approver's exception to make, not the preparer's.
       'documents.requirement.manage',
+      // PUTS A BID'S SUPPLY SCOPE TO SUPPLIERS. A tender-pricing requisition prices and never buys
+      // (migration 0387), so this is its own act — NOT `procurement.pr.create`, which raises demand
+      // that buys things and which this role deliberately does not hold. And the estimator must be
+      // able to READ the material master to confirm "this BOQ item is this material": creating a
+      // material stays with whoever governs the master.
+      'procurement.tender-sourcing.create', 'inventory.material.read',
       'crm.internal-pricing.access',
       'tendering.takeoff.read', 'tendering.takeoff.create', 'tendering.takeoff.update', 'tendering.takeoff.project',
       'tendering.estimate.*', 'tendering.internal-pricing.access', 'tendering.tender.read', 'procurement.rfq.read',
@@ -778,6 +784,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
       'engineering.*', 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
+      // NAMED, though `engineering.*` already reaches it (SEC-01). The technical verdict on each
+      // supplier line is the act a tender's supplier prices depend on — a quote judged
+      // non-compliant is not a market alternative — and an authority this consequential should be
+      // held by name, so a later narrowing of the wildcard cannot silently remove it.
+      'engineering.technical-evaluation.decide',
       // DECIDES a material approval (ENG-04). The engineer who proposed the product must not be the
       // one who approves it, so this sits with the internal technical authority — alongside QA/QC,
       // which owns the register itself and holds `quality.*`.

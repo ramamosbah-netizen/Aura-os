@@ -14,6 +14,7 @@ import {
   requisitionTotal,
   type RequisitionTotal,
 } from './domain/purchase-request-line';
+import { isTenderPricing } from './domain/purchase-request';
 
 /**
  * Resolving a material for a requisition line.
@@ -69,6 +70,12 @@ export interface NewLineInput {
   wbsNodeId?: Id | null;
   cbsNodeId?: Id | null;
   notes?: string | null;
+  /**
+   * The BOQ item this line prices — on a TENDER-PRICING requisition only, where it is required.
+   * The person adding the line is recorded as the one who confirmed that the BOQ item IS this
+   * material: the mapping is a judgement, never a text match, and the record keeps whose.
+   */
+  sourceBoqItemId?: Id | null;
 }
 
 export interface LineEdit {
@@ -162,6 +169,20 @@ export class PurchaseRequestLineService {
     const pr = await this.requisition(input.prId);
     this.assertDraft(pr.status);
 
+    // A pricing line prices a named BOQ item; an operational line prices nothing. Asked here so the
+    // refusal is worded for a person — migration 0387 refuses the same row in the database.
+    const pricing = isTenderPricing(pr);
+    if (pricing && !input.sourceBoqItemId) {
+      throw new Error('a tender-pricing requisition line must name the BOQ item it prices');
+    }
+    if (!pricing && input.sourceBoqItemId) {
+      throw new Error('a BOQ item mapping is not allowed for an operational requisition — it buys, it does not price a bid');
+    }
+    const mappedBy = pricing ? (this.tenant?.get().actorId ?? null) : null;
+    if (pricing && !mappedBy) {
+      throw new Error('a tender-pricing line requires an authenticated person to confirm its material mapping — the record keeps who said this BOQ item is this material');
+    }
+
     // The material is resolved BEFORE anything is written: a line that could not name a real
     // catalogue material must not exist even briefly.
     const cited = await this.catalogue.citeMaterial(input.material, pr.tenantId);
@@ -190,6 +211,9 @@ export class PurchaseRequestLineService {
       cbsNodeId: input.cbsNodeId,
       notes: input.notes,
       createdBy: this.tenant?.get().actorId ?? null,
+      sourceBoqItemId: pricing ? input.sourceBoqItemId ?? null : null,
+      materialMappedBy: mappedBy,
+      materialMappedAt: pricing ? new Date().toISOString() : null,
     });
     await this.lines.save(line);
     await this.syncHeader(pr.id);

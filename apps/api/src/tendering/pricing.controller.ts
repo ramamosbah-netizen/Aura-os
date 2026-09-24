@@ -18,8 +18,31 @@ import {
   type Tender,
 } from '@aura/tendering';
 import { PreAwardPackageService, QuotationService, isQuotationCommitted, type NewQuotationLine, type Quotation } from '@aura/crm';
-import { RfqService } from '@aura/procurement';
+import { PurchaseRequestLineService, PurchaseRequestService, RfqService, type PurchaseRequest, type PurchaseRequestLine } from '@aura/procurement';
+import { MaterialService } from '@aura/inventory';
+import { ArrayNotEmpty, IsArray, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import * as XLSX from 'xlsx';
+
+/**
+ * One supply line of a tender-pricing requisition: THIS BOQ item IS THIS material.
+ *
+ * Both ids are chosen by the person raising it. Nothing here matches free text — "IP camera, 4MP
+ * dome" in a BOQ and a material record are the same thing only because somebody said so, and the
+ * requisition line records who.
+ */
+class PricingRequisitionLineDto {
+  @IsString() boqItemId!: string;
+  @IsString() materialId!: string;
+  /** Defaults to the BOQ item's own quantity — the scope the bid is priced on. */
+  @IsOptional() @IsNumber() quantity?: number;
+}
+
+class CreatePricingRequisitionDto {
+  @IsOptional() @IsString() title?: string;
+  @IsArray() @ArrayNotEmpty() @ValidateNested({ each: true }) @Type(() => PricingRequisitionLineDto)
+  lines!: PricingRequisitionLineDto[];
+}
 
 /** One pricing-sheet summary row (the hub + the summary CSV share it). */
 interface SheetSummary {
@@ -64,6 +87,11 @@ export class TenderPricingController {
     // The offer this controller generates is approved behind an evidence checklist. Nothing seeded
     // one, so every offer generated here was unapprovable — see `generateQuotation`.
     @Inject(DOCUMENT_REQUIREMENT_STORE) private readonly requirements: DocumentRequirementStore,
+    // The tender's supply scope is priced through procurement's own authorities, as a requisition
+    // that buys nothing (migration 0387). The material master is read, never written, from here.
+    private readonly prs: PurchaseRequestService,
+    private readonly prLines: PurchaseRequestLineService,
+    private readonly materials: MaterialService,
   ) {}
 
   private async tenderOr404(id: string): Promise<Tender> {
@@ -145,6 +173,89 @@ export class TenderPricingController {
         `estimate and ${committed.length === 1 ? 'is' : 'are'} committed to the client — the costing behind a ` +
         `committed price is immutable. To change it, ${route}.`,
     );
+  }
+
+  /**
+   * RAISE THE TENDER'S PRICING REQUISITION — its supply scope, put to suppliers.
+   *
+   * Procurement already owns everything a real supplier price needs: the RFQ, each supplier's
+   * quotation revisions line by line, a technical verdict per line and a governed commercial
+   * comparison. All of it is keyed to a requisition line. So the bid's supply scope is written as a
+   * requisition — one that prices and never buys (migration 0387 and `TenderPricingBoundary`).
+   *
+   * EVERYTHING IS CHECKED BEFORE ANYTHING IS WRITTEN: each BOQ item must be on THIS tender's current
+   * BOQ, each material must exist and be in use, and the material's unit must be the BOQ item's unit
+   * — a quotation priced per roll cannot price a BOQ line measured in metres, and converting one to
+   * the other is a separate act, not a mapping.
+   */
+  @Permissions('procurement.tender-sourcing.create')
+  @Post(':id/pricing-requisitions')
+  async createPricingRequisition(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: CreatePricingRequisitionDto,
+  ): Promise<{ requisition: PurchaseRequest; lines: PurchaseRequestLine[] }> {
+    const ctx = this.tenant.get();
+    const { tender, boq, items } = await this.governedPricingContext(id);
+    const basis = boq.sourceBasisRevisionId;
+    if (!basis) throw new ConflictException('pricing requires the approved take-off the BOQ was projected from');
+    const byItem = new Map(items.map((item) => [item.id, item]));
+
+    const planned: Array<{ item: BOQItem; materialId: string; quantity: number }> = [];
+    for (const [index, line] of dto.lines.entries()) {
+      const item = byItem.get(line.boqItemId);
+      if (!item) {
+        throw new BadRequestException(`line ${index + 1}: BOQ item ${line.boqItemId} is not present in this tender's current BOQ`);
+      }
+      let material;
+      try {
+        material = await this.materials.get(line.materialId, ctx.tenantId);
+      } catch {
+        throw new NotFoundException(`line ${index + 1}: material ${line.materialId} not found`);
+      }
+      if (material.status === 'obsolete') {
+        throw new BadRequestException(`line ${index + 1}: material ${material.code} is obsolete and cannot be priced`);
+      }
+      const unit = (value: string | null | undefined) => (value ?? '').trim().toLowerCase();
+      if (unit(material.uom) !== unit(item.unit)) {
+        throw new BadRequestException(
+          `line ${index + 1}: material ${material.code} is measured in '${material.uom}' and BOQ item ${item.itemCode} in '${item.unit}' — ` +
+            'the units must match, because the supplier prices will price this BOQ line',
+        );
+      }
+      const quantity = line.quantity ?? item.quantity;
+      if (!(quantity > 0)) throw new BadRequestException(`line ${index + 1}: quantity must be greater than zero`);
+      planned.push({ item, materialId: material.id, quantity });
+    }
+
+    const requisition = await this.prs.createForTenderPricing({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? null,
+      title: dto.title?.trim() || `Pricing — ${tender.title}`,
+      sourceTenderId: tender.id,
+      sourceBasisRevisionId: basis,
+      createdBy: ctx.actorId ?? null,
+    });
+    const lines: PurchaseRequestLine[] = [];
+    for (const { item, materialId, quantity } of planned) {
+      lines.push(await this.prLines.addLine({ prId: requisition.id, material: materialId, quantity, sourceBoqItemId: item.id }));
+    }
+    return { requisition, lines };
+  }
+
+  /** The tender's pricing requisitions and their mapped lines. */
+  @Permissions('tendering.estimate.read')
+  @Get(':id/pricing-requisitions')
+  async listPricingRequisitions(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+  ): Promise<Array<{ requisition: PurchaseRequest; lines: PurchaseRequestLine[] }>> {
+    const tender = await this.tenderOr404(id);
+    const ctx = this.tenant.get();
+    const requisitions = await this.prs.list({ tenantId: ctx.tenantId, sourceTenderId: tender.id, purpose: 'tender_pricing', limit: 50 });
+    const out: Array<{ requisition: PurchaseRequest; lines: PurchaseRequestLine[] }> = [];
+    for (const requisition of requisitions) {
+      out.push({ requisition, lines: await this.prLines.listLines(requisition.id) });
+    }
+    return out;
   }
 
   /** Default hourly rates for the sheet (admin-configurable module settings; CSV-era fallbacks). */

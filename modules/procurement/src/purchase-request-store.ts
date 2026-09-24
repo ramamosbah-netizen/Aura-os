@@ -8,6 +8,9 @@ export interface PurchaseRequestFilter {
   status?: string;
   projectId?: string;
   discipline?: string;
+  /** A tender's pricing requisitions. */
+  sourceTenderId?: string;
+  purpose?: string;
   limit?: number;
 }
 

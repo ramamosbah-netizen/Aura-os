@@ -25,6 +25,8 @@ export class InMemoryPurchaseRequestStore implements PurchaseRequestStore {
     if (filter.status) out = out.filter((r) => r.status === filter.status);
     if (filter.projectId) out = out.filter((r) => r.projectId === filter.projectId);
     if (filter.discipline) out = out.filter((r) => r.discipline === filter.discipline);
+    if (filter.sourceTenderId) out = out.filter((r) => r.sourceTenderId === filter.sourceTenderId);
+    if (filter.purpose) out = out.filter((r) => r.purpose === filter.purpose);
     out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

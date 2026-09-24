@@ -103,6 +103,9 @@ export class PostgresPurchaseRequestStore implements PurchaseRequestStore {
     add('status', filter.status);
     add('project_id', filter.projectId);
     add('discipline', filter.discipline);
+    // `source_tender_id` is uuid; `add` binds text, so compare as text.
+    add('source_tender_id::text', filter.sourceTenderId);
+    add('purpose', filter.purpose);
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

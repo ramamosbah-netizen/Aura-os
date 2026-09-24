@@ -9093,6 +9093,34 @@
       "severity": "MEDIUM",
       "remediationDependency": "None upstream, and it does NOT reopen QHS-03 — the capability is proved as built, and this records what that proof does and does not establish. It is a question about the ROLE CATALOGUE rather than about the NCR loop, and answering it by widening a shipped role to suit a fixture is the change this refuses to make.",
       "acceptanceProof": "The correcting authority and the verifying authority are held by DIFFERENT shipped roles, proved by driving the loop with one identity per role rather than two per role; the role that does remedial work records its own correction under its own authority and is refused the verification; and a tenant that assigns a single person to both roles is still refused the self-verification by the domain rule, so the separation does not depend on how the tenant staffs it."
+    },
+    {
+      "id": "VAT-BASIS-01",
+      "title": "A submitted bid is stored VAT-inclusive as a bare number, and the award it will be compared with is VAT-exclusive",
+      "capabilityIds": [
+        "EST-18",
+        "COM-05"
+      ],
+      "classification": "PARTIAL",
+      "kind": "reconciliation gap — recorded under ADR-0021, deliberately not changed",
+      "status": "OPEN",
+      "roles": [
+        "Sales Manager",
+        "Commercial Manager / QS",
+        "Finance",
+        "Senior Management"
+      ],
+      "stages": [
+        "Commercial / Certification",
+        "Finance / Collection"
+      ],
+      "authority": "ADR-0021 tender award evidence; the tender submission record; the Approved Commercial Baseline",
+      "currentBehavior": "ADR-0021 already separates three measures and says so in its own table (row 13): Quoted Total (incl. VAT), Award Value (excl. VAT) and Contract Value. The convention is written down. What is not is the BASIS OF THE NUMBER ON THE SUBMISSION RECORD. `submit` takes its value from `resolveAwardBasis`, which returns `baseline.total` — commented in the code as “the Contract Value measure, VAT-inclusive” — and stores it in `aura_tendering_submissions.submitted_value` as a plain number with nothing beside it to say which measure it is. MEASURED on a live submission: `ALD-376214 | 123,694.20`, which is subtotal 117,804.00 plus VAT 5,890.20. The customer’s award for the same bid would be captured, correctly, as `awardedValue` EXCLUDING VAT. Nothing compares the two today — win/loss sums a separately typed `ourBidValue`, and no screen shows submitted against awarded — so no wrong figure is on display yet. The gap is that the first comparison anybody builds will read a 5% VAT difference as a pricing gap: a tender won at exactly the submitted price would look like a 4.76% discount conceded, and one lost at our own price would look like a competitor undercutting us by the VAT.",
+      "expectedOperationalBehavior": "A submission record states the basis of every value it carries — net, VAT and gross, or an explicit basis marker — so no reader has to know which code path wrote it. Any comparison between what was bid and what was awarded compares net with net, and says so. The ADR-0021 measures are not renamed, merged or re-derived: Contract Value keeps its current meaning.",
+      "evidence": "FRESH, measured on 2026-09-24 while proving the tender exception path: apps/api/src/tendering/tendering.controller.ts `resolveAwardBasis` (returns `baseline.total`, commented VAT-inclusive) and `submit`; modules/tendering/src/domain/tender-award-evidence.ts (`awardedValue` excl. VAT); docs/adr/0021-tender-award-evidence.md row 13; submission ALD-376214 read back from PostgreSQL.",
+      "severity": "MEDIUM",
+      "remediationDependency": "None upstream. It must NOT be closed by changing what `baseline.total` or Contract Value means — that is the silent semantic change ADR-0021 exists to prevent. It is closed by making the submission say what it holds, and by making any comparison choose its basis on purpose.",
+      "acceptanceProof": "A submission read back from PostgreSQL carries its net value and its VAT (or an explicit basis) alongside the gross figure; a submitted-versus-awarded comparison, wherever one is introduced, is proved to compare net with net on a tender awarded at exactly the submitted price and to report a zero difference rather than a VAT-sized one; and Contract Value is unchanged."
     }
   ],
   "totals": {
@@ -9111,9 +9139,9 @@
       "UNVERIFIED": 43,
       "NOT_AUDITED": 0
     },
-    "gaps": 67,
+    "gaps": 68,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 21
+    "freshDefects": 22
   }
 }

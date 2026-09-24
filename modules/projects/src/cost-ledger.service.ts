@@ -21,7 +21,11 @@ export class CostLedgerService {
     // Union-typed optional parameters emit `Object` metadata; make the projection dependency
     // explicit so Nest cannot silently omit WBS AC reconciliation in the application graph.
     @Optional() @Inject(WbsService) private readonly wbs: WbsService | null = null,
-    @Optional() private readonly companies: CompaniesService | null = null,
+    // EXPLICIT TOKEN — without it `CompaniesService | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app: a cost posted with a
+    // company but no explicit base currency never learned the company's currency — recorded with
+    // monetary provenance unknown, or refused if it carried a source currency.
+    @Optional() @Inject(CompaniesService) private readonly companies: CompaniesService | null = null,
   ) {}
 
   /** Post a transaction and reconcile actual projections from canonical ledger history.

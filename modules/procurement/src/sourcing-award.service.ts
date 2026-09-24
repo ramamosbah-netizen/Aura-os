@@ -118,7 +118,12 @@ export class SourcingAwardService {
      * what in-memory mode can and cannot promise.
      */
     @Optional() @Inject(TX_RUNNER) private readonly txRunner: TxRunner | null = null,
-    @Optional() private readonly locks: LockService | null = null,
+    // EXPLICIT TOKEN — without it `LockService | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app, so the award lock was
+    // never taken. Raced 8 times without it: never a double award (0358's unique index held), but the
+    // loser was refused by a raw "duplicate key" error instead of the domain's "already awarded".
+    // SUP-14 is frozen (ADR-0022); this line is the whole of the change inside it.
+    @Optional() @Inject(LockService) private readonly locks: LockService | null = null,
     @Optional() @Inject(EVENT_STORE) private readonly events: EventStore | null = null,
   ) {}
 

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Optional } from '@nestjs/common';
+import { Inject, BadRequestException, Injectable, Optional } from '@nestjs/common';
 import { AccountService, OpportunityService } from '@aura/crm';
 import { TenantContext } from '@aura/core';
 import { TenderService } from '@aura/tendering';
@@ -20,7 +20,11 @@ export class QuotationReferenceService {
     private readonly accounts: AccountService,
     private readonly opportunities: OpportunityService,
     private readonly tenders: TenderService,
-    @Optional() private readonly tenant: TenantContext | null = null,
+    // EXPLICIT TOKEN — without it `TenantContext | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app: `belongsToTenant(x, null)`
+    // is true for every record, so this explicit ownership check — the second line of tenant defence
+    // — never ran. Isolation rested on the services and RLS alone; no cross-tenant leak was measured.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
 
   async validate(input: QuotationReferenceInput): Promise<{ accountId: string | null }> {

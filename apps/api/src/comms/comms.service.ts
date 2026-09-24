@@ -162,13 +162,20 @@ export class CommsService {
     @Inject(MAIL_STORE) private readonly mail: MailStore,
     // Optional keeps the direct service harnesses and in-memory unit tests backwards-compatible;
     // the API application always supplies the registry from CoreModule.
-    @Optional() private readonly users: UsersService | null = null,
+    // EXPLICIT TOKEN — without it `UsersService | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app: the directory showed
+    // everybody active with no company, and `activeMembers` returned channel members UNFILTERED, so a
+    // deactivated user stayed a member of every channel they had been in.
+    @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
     @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
     @Optional() @Inject(ProjectService) private readonly projects: ProjectService | null = null,
     // WhatsApp is another Communication facet. Optional keeps the focused chat/mail harnesses
     // usable while the production module supplies the persisted store.
     @Optional() @Inject(WHATSAPP_STORE) private readonly whatsapp: WhatsAppStore | null = null,
-    @Optional() private readonly events: EventBus | null = null,
+    // EXPLICIT TOKEN — without it `EventBus | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app, so `comms.chat.message`
+    // was never published — and the live stream (`GET comms/stream`) subscribes to exactly that event.
+    @Optional() @Inject(EventBus) private readonly events: EventBus | null = null,
   ) {}
 
   /**

@@ -1,4 +1,4 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { dummyVerify, verifyTotp } from '@aura/shared';
 import { AuditService } from '../audit/audit.service';
 import { AuthChallengeStore } from './auth-challenge.store';
@@ -75,7 +75,11 @@ export class AuthenticationService {
     private readonly sessionStore: SessionStore,
     private readonly refreshTokens: RefreshTokenStore,
     private readonly tenant: TenantContext,
-    @Optional() private readonly audit: AuditService | null = null,
+    // EXPLICIT TOKEN — without it `AuditService | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app, and measured in the data:
+    // the audit log held ZERO `auth` rows while other modules wrote theirs — no login, failed login,
+    // password change or refresh-token replay was ever recorded.
+    @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
   ) {}
 
   /**

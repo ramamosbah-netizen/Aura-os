@@ -46,7 +46,10 @@ export class NotificationService {
     @Inject(NOTIFICATION_STORE) private readonly store: NotificationStore,
     // Tenant-editable routing (Admin Center §2.8): notify.channels / notify.recipients /
     // notify.fallbackRecipient settings override the env defaults when present.
-    @Optional() private readonly settings: SettingsService | null = null,
+    // EXPLICIT TOKEN — without it `SettingsService | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app: every tenant routing
+    // setting, including a per-event `notify.rule.<event> = off`, was ignored for env defaults.
+    @Optional() @Inject(SettingsService) private readonly settings: SettingsService | null = null,
   ) {}
 
   /** A tenant routing setting, or null (no settings service / key unset / lookup failed). */

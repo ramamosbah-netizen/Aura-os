@@ -25,7 +25,11 @@ export class PreAwardService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly quotations: QuotationService,
     // Pre-Award package governance. Optional so no-DB/unit boots degrade to ungoverned (legacy path).
-    @Optional() private readonly packages: PreAwardPackageService | null = null,
+    // EXPLICIT TOKEN — without it `PreAwardPackageService | null` reflects as `Object`, Nest cannot resolve it,
+    // and @Optional() turns that into a silent null. Measured null in the live app: the governance gate in
+    // `generateQuotation` never ran, so a governed deal could be quoted from an approved scope with no
+    // approved estimate and no frozen pricing — the very bypass that gate says it closes.
+    @Optional() @Inject(PreAwardPackageService) private readonly packages: PreAwardPackageService | null = null,
   ) {}
 
   // ── Requirements ──

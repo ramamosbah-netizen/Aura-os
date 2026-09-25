@@ -2,11 +2,11 @@ import { Inject, Injectable, type OnModuleInit } from '@nestjs/common';
 import { ProjectResolverRegistry, TenantContext } from '@aura/core';
 import {
   NCR_STORE, INSPECTION_REQUEST_STORE, SNAG_STORE, ITP_STORE,
-  MATERIAL_APPROVAL_STORE, CALIBRATION_STORE, AUDIT_SCHEDULE_STORE,
+  MATERIAL_APPROVAL_STORE, CALIBRATION_STORE, AUDIT_SCHEDULE_STORE, ESCALATION_STORE,
 } from './quality.service';
 import type {
   NcrStore, InspectionRequestStore, SnagStore, ItpStore,
-  MaterialApprovalStore, CalibrationStore, AuditScheduleStore,
+  MaterialApprovalStore, CalibrationStore, AuditScheduleStore, EscalationStore,
 } from './store.interface';
 
 /**
@@ -32,6 +32,7 @@ export class QualityProjectResolvers implements OnModuleInit {
     @Inject(MATERIAL_APPROVAL_STORE) private readonly approvals: MaterialApprovalStore,
     @Inject(CALIBRATION_STORE) private readonly calibrations: CalibrationStore,
     @Inject(AUDIT_SCHEDULE_STORE) private readonly audits: AuditScheduleStore,
+    @Inject(ESCALATION_STORE) private readonly escalations: EscalationStore,
   ) {}
 
   /** The tenant this request is bound to, or null — never a guess. */
@@ -59,5 +60,7 @@ export class QualityProjectResolvers implements OnModuleInit {
     this.registry.register('quality', 'material-approval', scoped((id, t) => this.approvals.findById(id, t)));
     this.registry.register('quality', 'calibration', scoped((id, t) => this.calibrations.findById(id, t)));
     this.registry.register('quality', 'audit', scoped((id, t) => this.audits.findById(id, t)));
+    // An escalation from T&C is decided in the project it was raised on (TC-08).
+    this.registry.register('quality', 'escalation', scoped((id, t) => this.escalations.findById(id, t)));
   }
 }

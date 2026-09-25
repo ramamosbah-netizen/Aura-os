@@ -106,6 +106,14 @@ describe('corrective action, enforced by PostgreSQL (migration 0389)', () => {
       .toMatch(/aura_punch_correction_by_assignee/);
     expect(await refused(`UPDATE public.aura_commissioning_punch_items SET routing_reason='  ' WHERE id=$1`, [defect.id])).toMatch(/immutable once made|aura_punch_routing_complete/);
 
+    // NULL-safe completeness (0391): a routing with NO reason, and a correction with NO action, refused.
+    const bare = makePunchItem({ tenantId: TENANT, commissioningId: rec.id, projectId: PROJECT, description: 'Bare' });
+    await new PostgresCommissioningStore(pool!).savePunchItem(bare);
+    expect(await refused(`UPDATE public.aura_commissioning_punch_items SET routed_to='u-eng', routed_by='u-tc', routed_at=now() WHERE id=$1`, [bare.id]))
+      .toMatch(/aura_punch_routing_complete/);
+    expect(await refused(`UPDATE public.aura_commissioning_punch_items SET corrected_by='u-eng', corrected_at=now() WHERE id=$1`, [defect.id]))
+      .toMatch(/aura_punch_correction_complete/);
+
     // An unrouted defect closes as before — and once closed it is not rewritten.
     const plain = makePunchItem({ tenantId: TENANT, commissioningId: rec.id, projectId: PROJECT, description: 'Label missing' });
     await new PostgresCommissioningStore(pool!).savePunchItem(plain);

@@ -30,9 +30,9 @@ import { type CertificateLink, makeCertificateLink } from './domain/certificate-
 import { type ControlledDocumentFact, AS_BUILT_STATUS, referenceIsSound, resolveDocumentReference } from './domain/document-reference';
 import { assessSystemReadiness, type SystemReadiness } from './domain/commissioning-readiness';
 import {
-  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, APPROVED_CHECKLIST, WORK_RECEIPT,
+  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, APPROVED_CHECKLIST, WORK_RECEIPT, QUALITY_ESCALATION,
   type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort, type DocControlPort,
-  type ApprovedChecklistPort, type SystemChecklistFact, type WorkReceiptPort,
+  type ApprovedChecklistPort, type SystemChecklistFact, type WorkReceiptPort, type QualityEscalationPort, type EscalationOutcome,
   type EquipmentFact, type ItpFact, type NcrFact, type SnagFact,
 } from './ports';
 
@@ -226,6 +226,9 @@ export class CommissioningService {
     // A named person's My Work receipt (TC-08) — Projects'. Absent, a defect cannot be routed: routing
     // somebody a defect they are never told about would be a record, not a handoff.
     @Optional() @Inject(WORK_RECEIPT) private readonly receipts?: WorkReceiptPort,
+    // Quality's escalation queue (TC-08). Absent, an escalation is refused rather than recorded as asked
+    // of nobody.
+    @Optional() @Inject(QUALITY_ESCALATION) private readonly escalations?: QualityEscalationPort,
   ) {}
 
   /** Quality's revision, or a refusal in words — never a guess. */
@@ -1205,8 +1208,19 @@ export class CommissioningService {
   }
 
   /** Every defect on the project with its provenance, for the Defects & Retests surface. */
-  async listProjectPunchItems(tenantId: string, projectId?: string): Promise<PunchItem[]> {
-    return this.store.listPunchItemsForProject(tenantId, projectId);
+  /**
+   * Every defect on the project, each with QUALITY'S OUTCOME when it was escalated (TC-08): pending,
+   * an NCR raised (with its number), or not a non-conformance (with the reason). `quality` is null for a
+   * defect never escalated, and `qualityReadable` false when Quality could not be read — so an unread
+   * outcome is never shown as "not decided".
+   */
+  async listProjectPunchItems(tenantId: string, projectId?: string): Promise<Array<PunchItem & { quality: EscalationOutcome | null; qualityReadable: boolean }>> {
+    const items = await this.store.listPunchItemsForProject(tenantId, projectId);
+    const outcomes = projectId && this.escalations && items.some((i) => i.escalationRequestedAt)
+      ? await this.readPort('Quality escalations', () => this.escalations!.readEscalationOutcomes(tenantId, projectId))
+      : [];
+    const bySource = new Map((outcomes ?? []).map((o) => [o.sourceId, o]));
+    return items.map((i) => ({ ...i, quality: bySource.get(i.id) ?? null, qualityReadable: outcomes !== null }));
   }
 
   // ── ITP linkage (TC-GATE-3) ──────────────────────────────────────────────────────────────────
@@ -1404,11 +1418,31 @@ export class CommissioningService {
     tenantId: string,
     input: { qualityNcrId?: string | null; escalatedBy?: string | null },
   ): Promise<PunchItem> {
+    const rec = await this.mustFind(id, tenantId);
     const item = await this.store.findPunchItem(punchId, tenantId);
     if (!item || item.commissioningId !== id) throw new Error(`not found: punch item ${punchId}`);
-    const updated = escalateToQuality(item, input);
+    // The NCR is QUALITY'S to raise, from the escalation (TC-08, the owner's decision of 2026-09-25).
+    // A reference typed by T&C would be a second, unverified answer to Quality's own question.
+    if (input.qualityNcrId?.trim()) {
+      throw new Error('validation: an NCR reference must come from Quality\'s decision on the escalation — Testing & Commissioning only asks');
+    }
+    if (!this.escalations) {
+      throw new Error('the Quality escalation queue is unavailable — a defect is not escalated to nobody');
+    }
+    const updated = escalateToQuality(item, { escalatedBy: input.escalatedBy });
+    // The failing evidence, as it stands when T&C asks.
+    const point = item.testItemId ? (await this.store.listTestItems(id, tenantId)).find((t) => t.id === item.testItemId) : undefined;
+    const runs = point ? (await this.store.listTestRuns(id, tenantId)).filter((r) => r.testItemId === point.id) : [];
+    const lastFail = [...runs].reverse().find((r) => r.result === 'fail');
+    await this.escalations.receiveEscalation({
+      tenantId, companyId: rec.companyId, projectId: rec.projectId, sourceId: item.id, sourceReference: rec.code,
+      system: rec.system, description: item.description, severity: item.severity,
+      pointNo: point?.pointNo ?? null, failingRunNo: lastFail?.runNo ?? null,
+      failingActual: lastFail?.actual ?? null, failingRemarks: lastFail?.remarks ?? null,
+      requestedBy: input.escalatedBy ?? null,
+    });
     await this.store.savePunchItem(updated);
-    this.logger.log(`[Commissioning] defect ${punchId} escalated to Quality${input.qualityNcrId ? ` (NCR ${input.qualityNcrId})` : ''}`);
+    this.logger.log(`[Commissioning] defect ${punchId} on ${rec.code} escalated to Quality's queue`);
     return updated;
   }
 

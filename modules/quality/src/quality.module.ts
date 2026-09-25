@@ -9,6 +9,7 @@ import {
   SNAG_STORE,
   ITP_STORE,
   ITP_TEMPLATE_STORE,
+  ESCALATION_STORE,
   MATERIAL_APPROVAL_STORE,
   CALIBRATION_STORE,
   AUDIT_SCHEDULE_STORE,
@@ -22,6 +23,7 @@ import {
   InMemorySnagStore,
   InMemoryItpStore,
   InMemoryItpTemplateStore,
+  InMemoryEscalationStore,
   InMemoryMaterialApprovalStore,
   InMemoryCalibrationStore,
   InMemoryAuditScheduleStore,
@@ -34,6 +36,7 @@ import {
   PostgresSnagStore,
   PostgresItpStore,
   PostgresItpTemplateStore,
+  PostgresEscalationStore,
   PostgresMaterialApprovalStore,
   PostgresCalibrationStore,
   PostgresAuditScheduleStore,
@@ -85,6 +88,13 @@ import { QualityProjectResolvers } from './project-resolvers';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresItpTemplateStore(pool) : new InMemoryItpTemplateStore(),
+    },
+    {
+      // What Testing & Commissioning escalates, received as Quality's record (TC-08, migration 0390).
+      provide: ESCALATION_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresEscalationStore(pool) : new InMemoryEscalationStore(),
     },
     {
       provide: MATERIAL_APPROVAL_STORE,

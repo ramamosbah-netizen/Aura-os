@@ -618,12 +618,16 @@ function GateList({ gates, testIdPrefix }: { gates: Gate[]; testIdPrefix: string
 
 /** Escalation controls for the Defects surface — recorded by T&C, raised in Quality. */
 export function QualityEscalation({
-  item, ncrs, onDone,
-}: { item: PunchRow; ncrs: NcrFact[] | null; onDone: () => void }) {
+  item, onDone,
+}: { item: PunchRow; onDone: () => void }) {
+  /*
+   * ESCALATE, THEN READ QUALITY'S DECISION (TC-08, the owner's decision of 2026-09-25). T&C asks; the
+   * defect lands in QA/QC's queue; Quality raises an NCR from it or records that it is not one. The NCR
+   * reference comes from Quality's act — this control no longer lets T&C pick or type one.
+   */
   const hydrated = useHydrated();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [ncrId, setNcrId] = useState('');
 
   async function escalate(): Promise<void> {
     if (busy) return;
@@ -633,7 +637,7 @@ export function QualityEscalation({
       const res = await fetch(`/api/commissioning/records/${item.commissioningId}/punch/${item.id}/escalate`, {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ qualityNcrId: ncrId || undefined }),
+        body: JSON.stringify({}),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { message?: string; error?: string };
@@ -647,19 +651,27 @@ export function QualityEscalation({
     }
   }
 
-  if (item.qualityNcrId) {
-    return <span style={st.tagGood} data-testid={`escalated-${item.id}`}>Quality NCR {item.qualityNcrId}</span>;
+  if (item.escalationRequestedAt) {
+    // Quality's outcome, as Quality recorded it. A reference kept from before this seam existed is
+    // shown for what it is: a link T&C recorded, not a Quality decision.
+    const q = item.quality;
+    const text = item.qualityReadable === false
+      ? 'Escalated — Quality could not be read, so its decision is not shown'
+      : q?.status === 'ncr_raised'
+        ? `Quality raised ${q.ncrNumber ?? 'an NCR'}${q.decidedBy ? ` (${q.decidedBy})` : ''}`
+        : q?.status === 'not_nonconformance'
+          ? `Quality: not a non-conformance — ${q.reason}`
+          : item.qualityNcrId && !q
+            ? `Linked to ${item.qualityNcrId} before Quality decided escalations`
+            : 'With Quality — awaiting its decision';
+    return <span style={q?.status === 'ncr_raised' ? st.tagGood : st.tagWarn} data-testid={`escalated-${item.id}`}>{text}</span>;
   }
 
   return (
     <span style={st.escalate}>
       {error && <small style={st.errorInline} role="alert">{error}</small>}
-      <select value={ncrId} onChange={(e) => setNcrId(e.target.value)} disabled={busy || ncrs === null} style={st.selectSm} data-testid={`ncr-select-${item.id}`}>
-        <option value="">{ncrs === null ? 'Quality unavailable' : 'Link a Quality NCR…'}</option>
-        {(ncrs ?? []).map((n) => <option key={n.id} value={n.ncrNumber}>{n.ncrNumber} · {n.status}</option>)}
-      </select>
       <button style={st.smallBtn} onClick={escalate} disabled={busy || !hydrated} data-testid={`escalate-${item.id}`}>
-        {busy ? 'Recording…' : item.escalationRequestedAt ? 'Update' : 'Escalate'}
+        {busy ? 'Escalating…' : 'Escalate to Quality'}
       </button>
     </span>
   );

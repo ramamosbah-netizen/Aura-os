@@ -7,6 +7,7 @@ export * from './domain/snag';
 export * from './domain/itp';
 export * from './domain/itp-template';
 export * from './domain/system-itp';
+export * from './domain/escalation';
 export * from './domain/material-approval';
 export * from './domain/supplier-material-standing';
 export * from './domain/calibration';

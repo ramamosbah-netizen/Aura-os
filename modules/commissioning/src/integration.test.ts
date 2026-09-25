@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from '@aura/shared';
 import { CommissioningService } from './commissioning.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
-import type { ElvEquipmentPort, EngineeringReleasePort, QualityEvidencePort } from './ports';
+import type { ElvEquipmentPort, EngineeringReleasePort, EscalationOutcome, QualityEscalationPort, QualityEvidencePort } from './ports';
 import { ApprovedChecklistFixture } from './approved-checklist.fixture';
 
 /**
@@ -215,41 +215,69 @@ describe('TC-GATE-3 — ITP linkage', () => {
   });
 });
 
-describe('TC-GATE-3 — Quality escalation seam', () => {
-  it('records the request and the NCR reference, and creates no NCR', async () => {
-    const { svc } = service({ quality: qualityPort({}) });
-    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-08', title: 'CCTV', system: 'cctv' });
-    const defect = await svc.addPunchItem(rec.id, TENANT, { description: 'Camera 3 out of focus', severity: 'major' });
+describe('TC-08 — Quality receives what T&C escalates, and decides it', () => {
+  /** Quality's queue, as the port presents it: what T&C asked, and the outcome Quality recorded. */
+  function withQueue() {
+    const received: Array<Record<string, unknown>> = [];
+    const outcomes: EscalationOutcome[] = [];
+    const port: QualityEscalationPort = {
+      receiveEscalation: async (input) => { received.push(input); return { id: `esc-${received.length}`, status: 'pending' }; },
+      readEscalationOutcomes: async () => outcomes,
+    };
+    const store = new InMemoryCommissioningStore();
+    const svc = new CommissioningService(
+      store as never, { append: async () => {}, list: async () => [] } as never,
+      undefined, qualityPort({}) as never, undefined, undefined, undefined, undefined, port,
+    );
+    return { svc, received, outcomes };
+  }
 
-    const escalated = await svc.escalatePunchItem(rec.id, defect.id, TENANT, { qualityNcrId: 'NCR-014', escalatedBy: 'u1' });
-    expect(escalated.qualityNcrId).toBe('NCR-014');
+  it('hands Quality the defect and its failing run, creates no NCR, and records that T&C asked', async () => {
+    const { svc, received } = withQueue();
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-08', title: 'CCTV', system: 'cctv' });
+    const point = await svc.addTestItem(rec.id, TENANT, { pointNo: 'IMG-03', description: 'Camera image' });
+    await svc.recordTestResult(rec.id, point.id, TENANT, { result: 'fail', actual: 'Blurred', remarks: 'Focus drift' });
+    const defect = await svc.addPunchItem(rec.id, TENANT, { description: 'Camera 3 out of focus', severity: 'major', testItemId: point.id });
+
+    const escalated = await svc.escalatePunchItem(rec.id, defect.id, TENANT, { escalatedBy: 'u-tc' });
+    expect(escalated).toMatchObject({ escalatedBy: 'u-tc', qualityNcrId: null });
     expect(escalated.escalationRequestedAt).not.toBeNull();
-    expect(escalated.escalatedBy).toBe('u1');
-    // Nothing was written into Quality: the port is read-only and the evidence is unchanged.
+    expect(received).toEqual([expect.objectContaining({
+      projectId: 'p1', sourceId: defect.id, sourceReference: 'TC-CCTV-08', system: 'cctv', description: 'Camera 3 out of focus',
+      pointNo: 'IMG-03', failingRunNo: 1, failingActual: 'Blurred', failingRemarks: 'Focus drift', requestedBy: 'u-tc',
+    })]);
+    // Nothing was raised in Quality by T&C: the evidence it reads is unchanged.
     expect((await svc.readQualityEvidence(TENANT, 'p1'))?.ncrs).toEqual([]);
   });
 
-  it('can be requested before an NCR exists, then updated with the reference', async () => {
-    const { svc } = service();
+  it('refuses an NCR reference typed by T&C — the NCR is Quality\'s to raise', async () => {
+    const { svc, received } = withQueue();
     const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-09', title: 'CCTV', system: 'cctv' });
     const defect = await svc.addPunchItem(rec.id, TENANT, { description: 'Rack labelling', severity: 'minor' });
-
-    const requested = await svc.escalatePunchItem(rec.id, defect.id, TENANT, {});
-    expect(requested.escalationRequestedAt).not.toBeNull();
-    expect(requested.qualityNcrId).toBeNull();
-
-    const linked = await svc.escalatePunchItem(rec.id, defect.id, TENANT, { qualityNcrId: 'NCR-021' });
-    expect(linked.qualityNcrId).toBe('NCR-021');
-    expect(linked.escalationRequestedAt, 'the original request time is kept').toBe(requested.escalationRequestedAt);
+    await expect(svc.escalatePunchItem(rec.id, defect.id, TENANT, { qualityNcrId: 'NCR-021', escalatedBy: 'u-tc' }))
+      .rejects.toThrow(/must come from Quality's decision/);
+    expect(received).toEqual([]);
   });
 
-  it('refuses to escalate a defect that is already closed', async () => {
+  it('shows Quality\'s outcome on the defect — and says so when Quality cannot be read', async () => {
+    const { svc, outcomes } = withQueue();
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-11', title: 'CCTV', system: 'cctv' });
+    const defect = await svc.addPunchItem(rec.id, TENANT, { description: 'Loose connector', severity: 'minor' });
+    await svc.escalatePunchItem(rec.id, defect.id, TENANT, { escalatedBy: 'u-tc' });
+    outcomes.push({ sourceId: defect.id, status: 'ncr_raised', ncrId: 'n1', ncrNumber: 'NCR-031', reason: null, decidedBy: 'u-qa', decidedAt: '2026-09-25T10:00:00Z' });
+    const [row] = await svc.listProjectPunchItems(TENANT, 'p1');
+    expect(row).toMatchObject({ qualityReadable: true, quality: { status: 'ncr_raised', ncrNumber: 'NCR-031', decidedBy: 'u-qa' } });
+  });
+
+  it('refuses to escalate with no queue to receive it, and a defect already closed', async () => {
     const { svc } = service();
     const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-10', title: 'CCTV', system: 'cctv' });
     const defect = await svc.addPunchItem(rec.id, TENANT, { description: 'Loose connector', severity: 'minor' });
-    await svc.closePunchItem(rec.id, defect.id, TENANT, { resolution: 'Re-terminated' });
-
-    await expect(svc.escalatePunchItem(rec.id, defect.id, TENANT, { qualityNcrId: 'NCR-030' }))
-      .rejects.toThrow(/already closed/i);
+    await expect(svc.escalatePunchItem(rec.id, defect.id, TENANT, { escalatedBy: 'u-tc' })).rejects.toThrow(/escalation queue is unavailable/);
+    const queued = withQueue();
+    const rec2 = await queued.svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-12', title: 'CCTV', system: 'cctv' });
+    const closed = await queued.svc.addPunchItem(rec2.id, TENANT, { description: 'Loose connector', severity: 'minor' });
+    await queued.svc.closePunchItem(rec2.id, closed.id, TENANT, { resolution: 'Re-terminated' });
+    await expect(queued.svc.escalatePunchItem(rec2.id, closed.id, TENANT, { escalatedBy: 'u-tc' })).rejects.toThrow(/already closed/i);
   });
 });

@@ -62,6 +62,14 @@ export interface SnagStore {
 }
 
 /** The tenant library of system templates (TC-08/TC-09, migration 0388). */
+/** Escalations from Testing & Commissioning (TC-08, migration 0390) — Quality's own record. */
+export interface EscalationStore {
+  save(e: import('./domain/escalation').QualityEscalation, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<import('./domain/escalation').QualityEscalation | null>;
+  findBySource(tenantId: string, sourceId: string): Promise<import('./domain/escalation').QualityEscalation | null>;
+  listByProject(tenantId: string, projectId: string): Promise<import('./domain/escalation').QualityEscalation[]>;
+}
+
 export interface ItpTemplateStore {
   save(template: ItpTemplate, tx?: TxHandle): Promise<void>;
   findById(id: string, tenantId: string): Promise<ItpTemplate | null>;

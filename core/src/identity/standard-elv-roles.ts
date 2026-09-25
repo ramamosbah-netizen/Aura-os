@@ -405,6 +405,10 @@ const QUALITY_REGISTER = [
   // purpose: independence is between two PEOPLE, and the domain and the database both refuse the
   // preparer approving their own revision — as NCR verification already does.
   'quality.itp-template.manage', 'quality.itp.approve',
+  // WHAT T&C ESCALATES, RECEIVED AND DECIDED (TC-08): QA/QC reads the queue and decides each —
+  // raises the NCR from it, or records with a reason that it is not a non-conformance. The person who
+  // escalated may not decide it (domain and database).
+  'quality.escalation.read', 'quality.escalation.decide',
   'quality.audit.create', 'quality.audit.checklist', 'quality.audit.ncr',
   'quality.calibration.create',
   // The register itself is QA/QC's; the DECISION on a material approval is the Technical Manager's

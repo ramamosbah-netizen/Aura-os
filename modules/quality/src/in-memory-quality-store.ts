@@ -7,7 +7,8 @@ import type { MaterialApproval } from './domain/material-approval';
 import type { Calibration } from './domain/calibration';
 import type { AuditSchedule } from './domain/audit-schedule';
 import { type Page, type PageParams, paginate } from '@aura/shared';
-import type { NcrStore, NcrVerificationStore, InspectionRequestStore, SnagStore, ItpStore, ItpTemplateStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { NcrStore, NcrVerificationStore, InspectionRequestStore, SnagStore, ItpStore, ItpTemplateStore, EscalationStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { QualityEscalation } from './domain/escalation';
 import type { ItpTemplate } from './domain/itp-template';
 import type { ElvSystem } from '@aura/shared';
 import type { IrEvidence } from './domain/ir-evidence';
@@ -195,6 +196,31 @@ export class InMemoryItpStore implements ItpStore {
   async listPaged(tenantId: string, page: PageParams): Promise<Page<Itp>> {
     const all = await this.findAll(tenantId);
     return paginate(all.map((i) => ({ ...i, points: i.points.map((p) => ({ ...p })) })), page);
+  }
+}
+
+export class InMemoryEscalationStore implements EscalationStore {
+  private items = new Map<string, QualityEscalation>();
+
+  async save(e: QualityEscalation): Promise<void> {
+    this.items.set(e.id, { ...e });
+  }
+
+  async findById(id: string, tenantId: string): Promise<QualityEscalation | null> {
+    const e = this.items.get(id);
+    return e && e.tenantId === tenantId ? { ...e } : null;
+  }
+
+  async findBySource(tenantId: string, sourceId: string): Promise<QualityEscalation | null> {
+    const e = [...this.items.values()].find((x) => x.tenantId === tenantId && x.sourceId === sourceId);
+    return e ? { ...e } : null;
+  }
+
+  async listByProject(tenantId: string, projectId: string): Promise<QualityEscalation[]> {
+    return [...this.items.values()]
+      .filter((e) => e.tenantId === tenantId && e.projectId === projectId)
+      .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt))
+      .map((e) => ({ ...e }));
   }
 }
 

@@ -311,3 +311,29 @@ export interface WorkReceiptPort {
 }
 
 export const WORK_RECEIPT = Symbol('WORK_RECEIPT');
+
+/**
+ * QUALITY RECEIVES WHAT T&C ESCALATES (TC-08). T&C asks; the ask lands in QA/QC's queue as Quality's
+ * record; Quality decides. T&C reads the outcome and writes none of it.
+ */
+export interface EscalationOutcome {
+  sourceId: string;
+  status: 'pending' | 'ncr_raised' | 'not_nonconformance';
+  ncrId: string | null;
+  ncrNumber: string | null;
+  reason: string | null;
+  decidedBy: string | null;
+  decidedAt: string | null;
+}
+
+export interface QualityEscalationPort {
+  receiveEscalation(input: {
+    tenantId: string; companyId?: string | null; projectId: string; sourceId: string; sourceReference?: string | null;
+    system?: string | null; description: string; severity?: string | null; pointNo?: string | null;
+    failingRunNo?: number | null; failingActual?: string | null; failingRemarks?: string | null; requestedBy: string | null;
+  }): Promise<{ id: string; status: string }>;
+  /** Null when Quality cannot be read — never an empty list standing in for "nothing decided". */
+  readEscalationOutcomes(tenantId: string, projectId: string): Promise<EscalationOutcome[] | null>;
+}
+
+export const QUALITY_ESCALATION = Symbol('QUALITY_ESCALATION');

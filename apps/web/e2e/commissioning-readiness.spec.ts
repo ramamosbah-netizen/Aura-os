@@ -156,7 +156,7 @@ test('a Quality ITP is linked, shown with Quality’s own result, and blocks unt
   await expect(page.getByTestId(`pre-gate-${code}-quality`)).toContainText(/all 1 linked ITP point passed/i);
 });
 
-test('a defect is escalated to Quality by reference, without T&C raising an NCR', async ({ page, baseURL }) => {
+test('a defect is escalated to Quality\'s queue, without T&C raising an NCR', async ({ page, baseURL }) => {
   const projectId = await createProject(page.request, 'TC Gate3 Escalation', baseURL);
   const code = `CX-ES-${Date.now().toString().slice(-6)}`;
   const created = await page.request.post(CX, { headers: H(), data: { projectId, code, title: 'CCTV — Level 2', system: 'cctv' } });
@@ -166,14 +166,10 @@ test('a defect is escalated to Quality by reference, without T&C raising an NCR'
   const point = await (await page.request.post(`${CX}/${id}/test-items`, { headers: H(), data: { pointNo: 'IMG-04', description: 'Camera image' } })).json();
   await page.request.post(`${CX}/${id}/test-items/${point.id}/runs`, { headers: H(), data: { result: 'fail', remarks: 'No image — cable fault' } });
 
-  // A real NCR, raised in Quality, where NCRs are owned.
-  const ncrNumber = `NCR-${Date.now().toString().slice(-5)}`;
+  // Quality's NCR register, before: escalating must add nothing to it — the NCR is Quality's to raise
+  // from the escalation (TC-08; the full decision is proven in quality-escalation.spec.ts).
   const ncrBefore = await page.request.get(`${API}/api/v1/quality/ncrs`, { headers: H() });
   const countBefore = ((await ncrBefore.json()) as unknown[]).length;
-  await page.request.post(`${API}/api/v1/quality/ncrs`, {
-    headers: H(),
-    data: { projectId, ncrNumber, description: 'CCTV cable fault at Level 2', severity: 'major', system: 'cctv' },
-  });
 
   await page.goto(`/commissioning?section=defects&project=${projectId}`, { waitUntil: 'domcontentloaded' });
   await page.getByTestId('raise-defect-IMG-04').click();
@@ -182,13 +178,14 @@ test('a defect is escalated to Quality by reference, without T&C raising an NCR'
   const defectRow = page.locator('[data-testid^="defect-"]').filter({ hasText: 'IMG-04' }).first();
   const defectId = (await defectRow.getAttribute('data-testid'))!.replace('defect-', '');
 
-  await page.getByTestId(`ncr-select-${defectId}`).selectOption(ncrNumber);
   await page.getByTestId(`escalate-${defectId}`).click();
-  await expect(page.getByTestId(`escalated-${defectId}`)).toContainText(ncrNumber, { timeout: 15_000 });
+  await expect(page.getByTestId(`escalated-${defectId}`)).toContainText('With Quality — awaiting its decision', { timeout: 15_000 });
 
-  // The decisive assertion: T&C recorded a REFERENCE and created nothing in Quality.
+  // The decisive assertion: T&C ASKED — the defect is in Quality's queue — and created nothing in Quality.
+  const queue = (await (await page.request.get(`${API}/api/v1/quality/escalations?projectId=${projectId}`, { headers: H() })).json()) as Array<{ sourceId: string; status: string }>;
+  expect(queue.map((e) => `${e.sourceId}:${e.status}`)).toEqual([`${defectId}:pending`]);
   const ncrAfter = await page.request.get(`${API}/api/v1/quality/ncrs`, { headers: H() });
-  expect(((await ncrAfter.json()) as unknown[]).length, 'T&C must not have created an NCR of its own').toBe(countBefore + 1);
+  expect(((await ncrAfter.json()) as unknown[]).length, 'T&C must not have created an NCR of its own').toBe(countBefore);
 });
 
 test('the eight sections are reachable and keep the project', async ({ page, baseURL }) => {

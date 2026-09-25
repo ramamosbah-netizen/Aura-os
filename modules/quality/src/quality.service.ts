@@ -20,6 +20,7 @@ import { type Snag, makeSnag, resolveSnag, closeSnag } from './domain/snag';
 import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp, allPointsResolved } from './domain/itp';
 import { type ChecklistPointInput, type ItpTemplate, makeItpTemplate, editTemplateDraft, publishTemplate, retireTemplate, templateCoverage, templateSystem } from './domain/itp-template';
 import { prepareSystemItp, reviseSystemItp, editSystemItp, submitSystemItp, approveSystemItp, returnSystemItp, supersedeSystemItp } from './domain/system-itp';
+import { type NewQualityEscalation, type QualityEscalation, makeEscalation, assertDecidable, decideNcrRaised, decideNotNonconformance } from './domain/escalation';
 import {
   type MaterialApproval,
   type NewMaterialApproval,
@@ -40,6 +41,7 @@ export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
 export const SNAG_STORE = Symbol('SNAG_STORE');
 export const ITP_STORE = Symbol('ITP_STORE');
 export const ITP_TEMPLATE_STORE = Symbol('ITP_TEMPLATE_STORE');
+export const ESCALATION_STORE = Symbol('ESCALATION_STORE');
 export const MATERIAL_APPROVAL_STORE = Symbol('MATERIAL_APPROVAL_STORE');
 export const CALIBRATION_STORE = Symbol('CALIBRATION_STORE');
 export const AUDIT_SCHEDULE_STORE = Symbol('AUDIT_SCHEDULE_STORE');
@@ -51,6 +53,7 @@ import {
   type SnagStore,
   type ItpStore,
   type ItpTemplateStore,
+  type EscalationStore,
   type MaterialApprovalStore,
   type CalibrationStore,
   type AuditScheduleStore,
@@ -72,6 +75,8 @@ export const QUALITY_EVENT = {
   itpRevisionSubmitted: 'quality.itp.revision_submitted',
   itpRevisionApproved: 'quality.itp.revision_approved',
   itpRevisionReturned: 'quality.itp.revision_returned',
+  escalationReceived: 'quality.escalation.received',
+  escalationDecided: 'quality.escalation.decided',
   marCreated: 'quality.material_approval.created',
   marSubmitted: 'quality.material_approval.submitted',
   marReviewed: 'quality.material_approval.reviewed',
@@ -99,6 +104,9 @@ export class QualityService {
     // build; every library act refuses in words when it is absent. Explicit token: an @Optional()
     // union without one reflects as Object and arrives as null.
     @Optional() @Inject(ITP_TEMPLATE_STORE) private readonly templateStore: ItpTemplateStore | null = null,
+    // What Testing & Commissioning escalates (TC-08, migration 0390). Absent, nothing can be received —
+    // which refuses the escalation at T&C rather than letting it vanish.
+    @Optional() @Inject(ESCALATION_STORE) private readonly escalationStore: EscalationStore | null = null,
   ) {}
 
   // ── NCR (Non-Conformance Reports) ──────────────────────────────────────────
@@ -1048,6 +1056,111 @@ export class QualityService {
     return (await this.itpStore.findByProject(projectId, tenantId))
       .filter((i) => i.kind === 'system_commissioning')
       .map(toChecklistFact);
+  }
+
+  // ── What T&C escalates, received and decided (TC-08) ─────────────────────────────────────
+
+  private escalations(): EscalationStore {
+    if (!this.escalationStore) throw new Error('the Quality escalation queue is unavailable');
+    return this.escalationStore;
+  }
+
+  /**
+   * RECEIVE an escalation — the commissioning port's call. T&C's authority to ask was asserted by its
+   * own route; this records the ask as Quality's record, once per defect. A second ask about the same
+   * defect returns the first: the queue holds one question per defect, not a stack of repeats.
+   */
+  async receiveEscalation(input: NewQualityEscalation): Promise<{ id: string; status: string }> {
+    const store = this.escalations();
+    const existing = await store.findBySource(input.tenantId, input.sourceId);
+    if (existing) return { id: existing.id, status: existing.status };
+    const escalation = makeEscalation(input);
+    await this.tx.run(async (handle) => {
+      await store.save(escalation, handle);
+      await this.events.appendWithClient(handle, [makeEvent({
+        type: QUALITY_EVENT.escalationReceived,
+        tenantId: escalation.tenantId, companyId: escalation.companyId, actorId: escalation.requestedBy,
+        aggregateType: 'quality.escalation', aggregateId: escalation.id,
+        payload: { projectId: escalation.projectId, sourceId: escalation.sourceId, sourceReference: escalation.sourceReference, pointNo: escalation.pointNo },
+      })]);
+    });
+    this.logger.log(`[Quality] escalation received from T&C for ${escalation.sourceReference ?? escalation.sourceId}`);
+    return { id: escalation.id, status: escalation.status };
+  }
+
+  /** QA/QC's queue for a project — every escalation, pending first, each with its outcome. */
+  async listEscalations(tenantId: Id, projectId: Id) {
+    const rows = await this.escalations().listByProject(tenantId, projectId);
+    const ncrs = await this.ncrStore.findByProject(projectId, tenantId);
+    const numberById = new Map(ncrs.map((n) => [n.id, n.ncrNumber]));
+    return rows
+      .map((e) => ({ ...e, ncrNumber: e.ncrId ? numberById.get(e.ncrId) ?? null : null }))
+      .sort((a, b) => Number(a.status !== 'pending') - Number(b.status !== 'pending') || a.requestedAt.localeCompare(b.requestedAt));
+  }
+
+  getEscalation(tenantId: Id, id: Id): Promise<QualityEscalation | null> {
+    return this.escalations().findById(id, tenantId);
+  }
+
+  /**
+   * Quality RAISES AN NCR FROM THE ESCALATION. The NCR is Quality's in every respect — raised under
+   * `quality.ncr.create` by the deciding person, in Quality's words — and carries the defect and its
+   * failing run, so the non-conformance and the evidence that prompted it cannot be read apart.
+   */
+  async raiseNcrFromEscalation(input: {
+    tenantId: Id; companyId?: string | null; actorId: Id | null; id: Id;
+    ncrNumber: string; severity?: Ncr['severity']; dueAt?: string | null;
+  }) {
+    const escalation = await this.escalations().findById(input.id, input.tenantId);
+    if (!escalation) throw new Error(`escalation ${input.id} not found`);
+    assertDecidable(escalation, input.actorId);
+    const failing = escalation.pointNo
+      ? ` Failing test point ${escalation.pointNo}${escalation.failingRunNo ? `, run ${escalation.failingRunNo}` : ''}${escalation.failingActual ? `: ${escalation.failingActual}` : ''}${escalation.failingRemarks ? ` — ${escalation.failingRemarks}` : ''}.`
+      : '';
+    const ncr = await this.raiseNcr({
+      tenantId: input.tenantId,
+      companyId: input.companyId ?? undefined,
+      projectId: escalation.projectId,
+      ncrNumber: input.ncrNumber,
+      description: `Escalated by Testing & Commissioning (${escalation.sourceReference ?? 'system'}): ${escalation.description}.${failing}`,
+      severity: input.severity ?? (escalation.severity === 'minor' ? 'minor' : 'major'),
+      system: escalation.system ?? undefined,
+      raisedBy: input.actorId ?? undefined,
+      dueAt: input.dueAt ?? null,
+    });
+    const decided = decideNcrRaised(escalation, { ncrId: ncr.id, actorId: input.actorId });
+    await this.saveEscalationDecision(decided);
+    return { ...decided, ncrNumber: ncr.ncrNumber };
+  }
+
+  /** Quality records, with its reason, that the escalated defect is not a non-conformance. */
+  async declineEscalation(tenantId: Id, actorId: Id | null, id: Id, reason: string | undefined) {
+    const escalation = await this.escalations().findById(id, tenantId);
+    if (!escalation) throw new Error(`escalation ${id} not found`);
+    const decided = decideNotNonconformance(escalation, { reason, actorId });
+    await this.saveEscalationDecision(decided);
+    return { ...decided, ncrNumber: null };
+  }
+
+  private async saveEscalationDecision(decided: QualityEscalation): Promise<void> {
+    await this.tx.run(async (handle) => {
+      await this.escalations().save(decided, handle);
+      await this.events.appendWithClient(handle, [makeEvent({
+        type: QUALITY_EVENT.escalationDecided,
+        tenantId: decided.tenantId, companyId: decided.companyId, actorId: decided.decidedBy,
+        aggregateType: 'quality.escalation', aggregateId: decided.id,
+        payload: { status: decided.status, ncrId: decided.ncrId, reason: decided.decisionReason, sourceId: decided.sourceId },
+      })]);
+    });
+  }
+
+  /** What became of each escalation on a project — the commissioning port's read. Null when unreadable. */
+  async readEscalationOutcomes(tenantId: Id, projectId: Id) {
+    if (!this.escalationStore) return null;
+    return (await this.listEscalations(tenantId, projectId)).map((e) => ({
+      sourceId: e.sourceId, status: e.status, ncrId: e.ncrId, ncrNumber: e.ncrNumber,
+      reason: e.decisionReason, decidedBy: e.decidedBy, decidedAt: e.decidedAt,
+    }));
   }
 
   async listPublishedTemplateSystems(tenantId: Id) {

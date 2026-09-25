@@ -222,6 +222,36 @@ export class QualityController {
     return this.qualityService.listNcrVerifications(ctx.tenantId, id);
   }
 
+  // ── What Testing & Commissioning escalates (TC-08) ─────────────────────────────────────────
+
+  /** QA/QC's queue for a project: every escalation from T&C, pending first, each with its outcome. */
+  @Get('escalations')
+  @Permissions('quality.escalation.read')
+  listEscalations(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    return this.qualityService.listEscalations(this.tenant.get().tenantId, projectId);
+  }
+
+  /** Raise the NCR from the escalation — Quality's NCR, linked back to the defect and its failing run. */
+  @Post('escalations/:id/raise-ncr')
+  @Permissions('quality.escalation.decide')
+  raiseNcrFromEscalation(@Param('id') id: string, @Body() dto: { ncrNumber?: string; severity?: 'minor' | 'major'; dueAt?: string }) {
+    if (!dto?.ncrNumber?.trim()) throw new BadRequestException('ncrNumber is required');
+    const ctx = this.tenant.get();
+    return this.qualityService.raiseNcrFromEscalation({
+      tenantId: ctx.tenantId, companyId: ctx.companyId || null, actorId: ctx.actorId || null, id,
+      ncrNumber: dto.ncrNumber.trim(), severity: dto.severity, dueAt: dto.dueAt ?? null,
+    });
+  }
+
+  /** Record, with a reason, that the escalated defect is not a non-conformance. */
+  @Post('escalations/:id/decline')
+  @Permissions('quality.escalation.decide')
+  declineEscalation(@Param('id') id: string, @Body() dto: { reason?: string }) {
+    const ctx = this.tenant.get();
+    return this.qualityService.declineEscalation(ctx.tenantId, ctx.actorId || null, id, dto?.reason);
+  }
+
   @Get('ncrs')
   listNcrs(@Query('projectId') projectId?: string): Promise<Ncr[]> {
     const ctx = this.tenant.get();

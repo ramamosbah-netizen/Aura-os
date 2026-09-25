@@ -85,6 +85,9 @@ export interface PunchRow {
   /** Routed to a named Design / Technical Engineer for a design correction (TC-08). */
   routedTo?: string | null; routingReason?: string | null;
   correctiveAction?: string | null; correctionReference?: string | null; correctedBy?: string | null;
+  /** Quality's decision on the escalation (TC-08); `qualityReadable` false when Quality could not be read. */
+  quality?: { status: 'pending' | 'ncr_raised' | 'not_nonconformance'; ncrNumber: string | null; reason: string | null; decidedBy: string | null; decidedAt: string | null } | null;
+  qualityReadable?: boolean;
 }
 export interface DeviceRow {
   id: string; tag: string; system: string; model: string | null; location: string | null;
@@ -220,7 +223,7 @@ export default function CommissioningWorkspaceClient({
       ) : active === 'readiness' ? (
         <ReadinessSection systems={systems} projectId={selectedProject || undefined} />
       ) : (
-        <Defects systems={systems} punch={punch} ncrs={qualityEvidence?.ncrs ?? null} />
+        <Defects systems={systems} punch={punch} />
       )}
     </div>
   );
@@ -590,7 +593,7 @@ function Testing({
 
 // ── Defects & Retests ───────────────────────────────────────────────────────────────────────────
 
-function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: PunchRow[] | null; ncrs: { id: string; ncrNumber: string; system: string | null; severity: string; status: string }[] | null }) {
+function Defects({ systems, punch }: { systems: SystemView[]; punch: PunchRow[] | null }) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [busy, setBusy] = useState<string | null>(null);
@@ -726,7 +729,7 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
                   {system && <CommissioningDefectRouting item={item} projectId={system.record.projectId} onDone={() => router.refresh()} />}
                   {/* Escalation is a note T&C keeps about its own defect plus a reference to the NCR
                       someone raised in Quality. No NCR is created here. */}
-                  <QualityEscalation item={item} ncrs={ncrs} onDone={() => router.refresh()} />
+                  <QualityEscalation item={item} onDone={() => router.refresh()} />
                   <button style={st.smallBtn} onClick={() => closeDefect(item)} disabled={busy !== null || !hydrated} data-testid={`close-defect-${item.id}`}>
                     {busy === item.id ? 'Closing…' : 'Close'}
                   </button>
@@ -742,8 +745,8 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
       {/* The authority boundary, stated on the screen rather than assumed. */}
       <p style={st.authorityNote} data-testid="quality-boundary">
         A defect here is a <strong>commissioning punch item</strong> — T&amp;C’s own authority, and the gate on sign-off.
-        Non-conformances and snags are owned by Quality and are not raised or mirrored from this workspace;
-        a failure that needs one must be raised in Quality, and that linkage is not built yet.
+        Non-conformances and snags are owned by Quality and are not raised or mirrored from this workspace:
+        escalating a defect puts it in Quality&rsquo;s queue, and Quality decides whether it is a non-conformance.
       </p>
     </section>
   );

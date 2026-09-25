@@ -26,6 +26,71 @@ const V1 = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
  */
 const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
+/**
+ * THE GOVERNED PRE-AWARD CHAIN the quotation gate asks for (Q → P → E → B).
+ *
+ * A lead-converted opportunity is governed work, so a quotation can only be raised once its Pre-Award
+ * package holds an APPROVED scope, an APPROVED estimate and a FROZEN pricing revision — the gate says
+ * so in words and this walks exactly those acts, through the real routes, rather than around them.
+ * Each independent approval is a different shipped person, as the rules require: the Pre-Sales engineer
+ * writes the technical study and the Technical Manager (its assigned reviewer) approves it; the
+ * preparer — the session's user, as elsewhere in this spec — drafts the scope, costs it and prices it;
+ * the Sales Manager approves the scope and the estimate. The numbers are this test's own.
+ */
+const PRESALES = process.env.E2E_PRESALES_USERNAME ?? 'u-e2e-presales';
+const TECHMGR = process.env.E2E_TECHMGR_USERNAME ?? 'u-e2e-techmgr';
+const SALESMGR = process.env.E2E_SALESMGR_USERNAME ?? 'u-e2e-salesmgr';
+
+async function governDeal(
+  api: import('@playwright/test').APIRequestContext,
+  oppId: string,
+  preparer: Record<string, string>,
+): Promise<void> {
+  const login = async (username: string) => {
+    const r = await api.post(`${V1}/auth/login`, { data: { username, password: process.env.E2E_PASSWORD ?? 'e2e-password' } });
+    expect(r.ok(), `${username} must be able to sign in for the governed chain — ${await r.text()}`).toBe(true);
+    return { Authorization: `Bearer ${((await r.json()) as { token: string }).token}` };
+  };
+  const [presales, techmgr, salesmgr] = await Promise.all([login(PRESALES), login(TECHMGR), login(SALESMGR)]);
+  const ok = async <T>(res: import('@playwright/test').APIResponse, act: string): Promise<T> => {
+    expect(res.ok(), `${act} — ${res.status()} ${await res.text()}`).toBe(true);
+    return (await res.json()) as T;
+  };
+  const base = `${V1}/crm/opportunities/${oppId}/pre-award-package`;
+
+  // P — the technical basis: written by Pre-Sales, approved by its assigned reviewer.
+  const study = await ok<{ id: string }>(await api.post(`${base}/studies`, {
+    headers: presales,
+    data: {
+      title: `Journey technical study ${RUN}`, inputRevision: 'Client enquiry Rev 0', reviewerId: TECHMGR,
+      scopeSummary: 'IP CCTV for the journey site.', systems: [{ discipline: 'cctv', name: 'CCTV surveillance' }],
+      requirements: [{ category: 'client', statement: '24 IP cameras, 30-day retention', compliance: 'compliant' }],
+      surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+    },
+  }), 'Pre-Sales writing the technical study');
+  await ok(await api.post(`${base}/studies/${study.id}/submit`, { headers: presales, data: {} }), 'Pre-Sales submitting the study');
+  await ok(await api.post(`${base}/studies/${study.id}/approve`, { headers: techmgr, data: { comment: 'Technical basis accepted for estimating' } }),
+    'the Technical Manager approving the study');
+
+  // Q — the scope, drafted from the approved study and approved by someone else.
+  const lines = [{ lineId: 'camera-line', description: 'IP camera, 4MP dome', quantity: 24, unit: 'no', sourceLineId: 'journey-line-1' }];
+  const draft = await ok<{ id: string }>(await api.post(`${base}/scope`, { headers: preparer, data: { lines } }), 'drafting the scope from the approved study');
+  const scope = await ok<{ id: string }>(await api.post(`${base}/scope/${draft.id}/approve`, { headers: salesmgr, data: {} }), 'the Sales Manager approving the scope');
+
+  // E — the estimate of that approved scope: frozen, then approved.
+  const costed = await ok<{ estimate: { id: string } }>(await api.post(`${base}/estimate`, {
+    headers: preparer,
+    data: { basisRevisionId: scope.id, lines, buildUps: [{ basisLineId: 'camera-line', components: [{ costType: 'material', description: 'IP camera', quantity: 1, unitCost: 100 }] }] },
+  }), 'costing the approved scope');
+  await ok(await api.post(`${base}/estimate/${costed.estimate.id}/freeze`, { headers: preparer, data: {} }), 'freezing the estimate');
+  await ok(await api.post(`${base}/estimate/${costed.estimate.id}/approve`, { headers: salesmgr, data: {} }), 'the Sales Manager approving the estimate');
+
+  // B — pricing, frozen: the quotation's numbers come from here, never from the opportunity's value.
+  const sheet = await ok<{ id: string }>(await api.post(`${base}/pricing/open`, { headers: preparer, data: {} }), 'opening the pricing revision');
+  await ok(await api.patch(`${base}/pricing/${sheet.id}/policy`, { headers: preparer, data: { method: 'target_margin', percent: 20 } }), 'setting the pricing policy');
+  await ok(await api.post(`${base}/pricing/${sheet.id}/freeze`, { headers: preparer, data: {} }), 'freezing the pricing revision');
+}
+
 /** Pre-award: signal → lead → qualified lead → opportunity. Returns the opportunity id. */
 async function signalToOpportunity(
   request: import('@playwright/test').APIRequestContext,
@@ -74,7 +139,9 @@ test('the pre-award spine: a radar signal becomes a qualified opportunity with a
   expect(opp.executionType, 'a non-tender deal is a direct sale').toBe('direct_sale');
   expect(opp.value).toBe(1_250_000);
 
-  // The direct-sale path opens a quotation from the opportunity.
+  // The direct-sale path opens a quotation from the opportunity — once the governed chain the
+  // quotation gate asks for is in place (approved scope, approved estimate, frozen pricing).
+  await governDeal(request, oppId, apiAuthHeaders());
   const toQuote = await request.post(`/api/crm/opportunities/${oppId}/convert-to-quotation`, { data: {} });
   expect(toQuote.status(), 'a direct-sale opportunity must open a quotation').toBe(201);
   const quoteId = ((await toQuote.json()) as { id: string }).id;
@@ -134,7 +201,8 @@ test('the direct-sale middle: a quotation clears SoD and evidence readiness and 
   const oppId = c.opportunityId ?? c.opportunity?.id ?? c.id!;
   expect(oppId, 'the lead must convert to an opportunity').toBeTruthy();
 
-  // Open a quotation and submit it for review.
+  // Walk the governed chain the quotation gate asks for, then open a quotation and submit it.
+  await governDeal(api, oppId, bearer(admin));
   const q = await api.post(`/api/v1/crm/opportunities/${oppId}/convert-to-quotation`, { headers: bearer(admin), data: {} });
   expect(q.status()).toBe(201);
   const quoteId = ((await q.json()) as { id: string }).id;
@@ -144,13 +212,16 @@ test('the direct-sale middle: a quotation clears SoD and evidence readiness and 
   // Give the approver the crm authority they need (they are still not the preparer, so SoD holds).
   await api.post('/api/v1/admin/access/grants', { headers: bearer(admin), data: { userId: CHECKER, roleId: 'r-sales-manager' } });
 
-  // Settle the evidence-readiness checklist: seed it, then waive each still-required row.
+  // Settle the evidence-readiness checklist: seed it, then waive each still-required row. The waiver
+  // is the Commercial Manager's — the person who answers for the commercial decision — because the
+  // quotation's own preparer may never excuse its evidence (the exception-path rule).
+  const commercial = await apiLogin(api, process.env.E2E_COMMERCIAL_USERNAME ?? 'u-e2e-qs');
   const seeded = await api.post('/api/v1/document-requirements/seed', { headers: bearer(admin), data: { entityType: 'crm.quotation', entityId: quoteId } });
   const rows = (await seeded.json()) as Array<{ id: string; status: string }>;
   for (const row of rows) {
     if (row.status === 'REQUIRED') {
-      const w = await api.post(`/api/v1/document-requirements/${row.id}/waive`, { headers: bearer(admin), data: { reason: 'e2e journey proof — evidence waived' } });
-      expect(w.ok(), 'a required evidence row must be waivable with a reason').toBe(true);
+      const w = await api.post(`/api/v1/document-requirements/${row.id}/waive`, { headers: bearer(commercial), data: { reason: 'e2e journey proof — evidence waived' } });
+      expect(w.ok(), `a required evidence row must be waivable with a reason — ${await w.text()}`).toBe(true);
     }
   }
 

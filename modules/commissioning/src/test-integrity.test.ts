@@ -20,7 +20,8 @@ function service(): { svc: CommissioningService; events: DomainEvent[]; checklis
   const store = new InMemoryCommissioningStore();
   const eventStore = {
     append: async (batch: DomainEvent[]) => { events.push(...batch); },
-    list: async () => [],
+    list: async (filter: { tenantId?: string; aggregateId?: string } = {}) =>
+      events.filter((e) => (!filter.tenantId || e.tenantId === filter.tenantId) && (!filter.aggregateId || e.aggregateId === filter.aggregateId)),
     listByAggregate: async () => [],
   };
   // The service takes the two collaborators by DI symbol; constructing directly keeps the test on
@@ -232,6 +233,32 @@ describe('TC-08/TC-09 — T&C executes the approved checklist', () => {
     const { svc, checklists, rec } = await systemWithTwoPoints();
     const r2 = checklists.approve({ projectId: 'p1', system: 'cctv', revision: 2, points: [{ code: 'PL-034', activity: 'Permanent link' }] });
     await expect(svc.bindChecklist(rec.id, TENANT, r2.itpId, 'u-tc')).rejects.toThrow(/immutable once bound/);
+  });
+
+  it('reads the record history back from the event store, retests marked (TC-09)', async () => {
+    const { svc, rec, link, image } = await systemWithTwoPoints();
+    await svc.recordTestResult(rec.id, link.id, TENANT, { result: 'fail', remarks: 'Over length', testedBy: 'u-tc' });
+    await svc.recordTestResult(rec.id, link.id, TENANT, { result: 'pass', actual: '71.2 m', testedBy: 'u-tc' });
+    await svc.recordTestResult(rec.id, image.id, TENANT, { result: 'pass', testedBy: 'u-tc' });
+
+    const history = await svc.readHistory(rec.id, TENANT);
+    expect(history.readable).toBe(true);
+    // Created FROM the revision: the history starts with what it was tested against.
+    expect(history.events[0]).toMatchObject({ type: 'commissioning.checklist.bound', actorId: 'u-tc', payload: { revision: 1, atRegistration: true } });
+    const runs = history.events.filter((e) => e.type === 'commissioning.test-run.recorded');
+    expect(runs.map((e) => `${e.payload.pointNo}#${e.payload.runNo}:${e.payload.result}:${e.payload.isRetest}`))
+      .toEqual(['PL-034#1:fail:false', 'PL-034#2:pass:true', 'IMG-01#1:pass:false']);
+    expect(runs.every((e) => e.actorId === 'u-tc')).toBe(true);
+
+    // The workspace names the point that passed only on retest.
+    expect((await svc.readWorkspace(TENANT)).systems[0].retestedPoints).toEqual(['PL-034']);
+  });
+
+  it('says the history is unreadable rather than empty when the store cannot be read', async () => {
+    const failing = { append: async () => {}, list: async () => { throw new Error('store down'); } };
+    const svc = new CommissioningService(new InMemoryCommissioningStore() as never, failing as never);
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-H', title: 'H', system: 'cctv' });
+    expect(await svc.readHistory(rec.id, TENANT)).toEqual({ readable: false, events: [] });
   });
 
   it('refuses to bind with Quality unreadable — an absent port never unblocks', async () => {

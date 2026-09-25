@@ -119,6 +119,10 @@ export interface DossierFacts {
      * the evidence pack still exists and still goes in the dossier, it simply has no document number.
      */
     certificate: { documentNumber: string | null; revision: string | null; current: boolean; note: string | null } | null;
+    /** The approved checklist revision the system was tested against (TC-08/TC-09), when bound. */
+    checklist?: { reference: string | null; revision: number } | null;
+    /** The points that stand passed only because a retest passed (TC-09). */
+    retestedPoints?: string[];
   }[];
   omItems: {
     id: string;
@@ -157,15 +161,22 @@ export function assembleDossier(facts: DossierFacts): DossierView {
     // plainly on the line rather than dropping it from the dossier.
     const cert = s.certificate;
     const registered = cert !== null && cert.current;
+    // The retest history travels WITH the line (TC-09): what the system was tested against and which
+    // points passed only on a retest are part of what the client is handed, and the issued manifest
+    // keeps them as they stood at issue.
+    const history = [
+      s.checklist ? `tested against ${s.checklist.reference ?? 'the approved checklist'} rev ${s.checklist.revision}` : null,
+      s.retestedPoints && s.retestedPoints.length > 0 ? `passed on retest: ${s.retestedPoints.join(', ')}` : null,
+    ].filter(Boolean).map((part) => ` · ${part}`).join('');
     return entry(
       'commissioning_certificate',
       s.id,
       registered ? cert!.documentNumber : s.code,
       `${s.code} — ${s.title}`,
       s.commissioned
-        ? registered
+        ? (registered
           ? `commissioned · ${cert!.documentNumber} rev ${cert!.revision}`
-          : 'commissioned · evidence pack only'
+          : 'commissioned · evidence pack only') + history
         : 'not commissioned',
       s.commissioned,
       s.commissioned

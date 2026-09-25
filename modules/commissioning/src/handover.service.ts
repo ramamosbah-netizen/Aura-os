@@ -310,6 +310,10 @@ export class HandoverService {
         witnessedBy: s.record.witnessedBy ?? null,
         pointsPassed: s.pointsPassed,
         pointsTotal: s.pointsTotal,
+        // What the system was tested against, and what it took (TC-09) — facts the issued manifest
+        // keeps as they stood at issue.
+        checklist: s.checklist ? { reference: s.checklist.reference, revision: s.checklist.revision } : null,
+        retestedPoints: s.retestedPoints,
         certificate: s.certificate
           ? {
               documentNumber: s.certificate.documentNumber,

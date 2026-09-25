@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { newId } from '@aura/shared';
+import { ELV_SYSTEMS, newId } from '@aura/shared';
 import { PostgresCommissioningStore } from './postgres-commissioning-store';
 import { makeCommissioningRecord } from './domain/commissioning-record';
 import { makeTestItem } from './domain/commissioning-test-item';
@@ -253,6 +253,34 @@ describe('the approved checklist, enforced by PostgreSQL (migration 0388)', () =
         VALUES ($1,'somebody-else',$2,'RLS','x','cctv',$3,1,'tc-1',now())`, [newId(), P1, approvedCctv]).then(() => 'accepted', (e: Error) => e.message);
       expect(m).toMatch(/different tenant/);
     } finally { await other.end(); }
+  });
+
+  /**
+   * EVERY CANONICAL SYSTEM, THE SAME WAY — the owner's interpretation A. PostgreSQL binds and judges
+   * PASS for each of the 23 ids identically; nothing is keyed on a particular system. On a project of
+   * its own, so it cannot meet the fixtures above.
+   */
+  skipless('binds, refuses PASS until the mandatory point passes, and commissions — for all 23 systems', async () => {
+    const systems = ELV_SYSTEMS.filter((s) => s !== 'other');
+    expect(systems).toHaveLength(23);
+    const project = newId();
+    const commission = `UPDATE public.aura_commissioning_records SET status = 'commissioned', commissioned_by = 'tc-1', witnessed_by = 'Consultant' WHERE id = $1`;
+    for (const system of systems) {
+      const itp = newId();
+      await systemItp(itp, { project_id: project, system });
+      const id = await record({ project_id: project, system, title: system, ...bind(itp) });
+      const p = await point(id, { origin: 'itp', itp_id: itp, itp_point_code: 'P-01', mandatory: true, point_no: 'P-01', description: 'x', expected: 'y', project_id: project });
+      expect(await refused(commission, [id]), system).toMatch(/mandatory point of its approved revision has not passed/);
+      await q(`UPDATE public.aura_commissioning_test_items SET result = 'pass' WHERE id = $1`, [p]);
+      await q(commission, [id]);
+      expect((await q(`SELECT status, itp_id FROM public.aura_commissioning_records WHERE id = $1`, [id])).rows[0], system)
+        .toMatchObject({ status: 'commissioned', itp_id: itp });
+    }
+    // …and `other` names no system a checklist can be written for, even as a draft.
+    const other = await systemItp(newId(), {
+      project_id: project, system: 'other', status: 'draft', submitted_by: null, submitted_at: null, approved_by: null, approved_at: null,
+    }).then(() => 'accepted', (e: Error) => e.message);
+    expect(other).toMatch(/aura_itp_kind_shape/);
   });
 
   /**

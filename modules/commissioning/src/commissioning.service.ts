@@ -91,6 +91,8 @@ export interface CommissioningSystemView {
   pointsUntested: number;
   /** Points whose lineage contains a failure, whatever they read now — the retest history. */
   pointsEverFailed: number;
+  /** The points that stand passed only because a retest passed — named, for the dossier (TC-09). */
+  retestedPoints: string[];
   retestsRequired: number;
   openPunch: number;
   eligible: boolean;
@@ -268,6 +270,14 @@ export class CommissioningService {
     await this.store.save(bound);
     for (const item of checklistTestItems(bound, fact)) await this.store.saveTestItem(item);
     await this.syncTally(bound, params.tenantId);
+    // The binding a record is BORN with is the same act as a later one, and is audited the same way —
+    // otherwise its history would start at its first run with nothing saying what it was tested against.
+    await this.events.append([makeEvent({
+      type: 'commissioning.checklist.bound',
+      tenantId: params.tenantId, companyId: bound.companyId, actorId: params.createdBy ?? null,
+      aggregateType: 'commissioning.record', aggregateId: bound.id,
+      payload: { itpId: fact.itpId, reference: fact.reference, revision: fact.revision, points: fact.points.length, atRegistration: true },
+    })]);
     this.logger.log(`[Commissioning] registered ${rec.code} (${rec.system}) from ${fact.reference} revision ${fact.revision}`);
     return (await this.store.find(bound.id, params.tenantId)) ?? bound;
   }
@@ -683,6 +693,29 @@ export class CommissioningService {
     return updated;
   }
 
+  /**
+   * THE RECORD'S AUDIT HISTORY, read back from the PERSISTED event store (TC-09).
+   *
+   * The audited acts on a system — its binding to the approved checklist, each run (and whether it
+   * was a retest), the sign-off — are appended as domain events. This reads them back for one
+   * record, oldest first, from the store that holds them, rather than re-describing the record's
+   * current state: history is what was recorded, not what can be inferred now. `readable: false`
+   * when the store could not be read — never an empty list standing in for one.
+   */
+  async readHistory(id: string, tenantId: string): Promise<{
+    readable: boolean;
+    events: Array<{ id: string; type: string; at: string; actorId: string | null; payload: Record<string, unknown> }>;
+  }> {
+    const rec = await this.mustFind(id, tenantId);
+    const events = await this.readPort('event store', () => this.events.list({ tenantId, aggregateId: rec.id, limit: 500 }));
+    return {
+      readable: events !== null,
+      events: (events ?? [])
+        .filter((e) => e.aggregateType === 'commissioning.record')
+        .map((e) => ({ id: e.id, type: e.type, at: e.occurredAt, actorId: e.actorId, payload: e.payload })),
+    };
+  }
+
   listTestRuns(id: string, tenantId: string): Promise<CommissioningTestRun[]> {
     return this.store.listTestRuns(id, tenantId);
   }
@@ -915,6 +948,9 @@ export class CommissioningService {
       // A retest is owed where a point stands failed. Counting runs instead would count history.
       const retestsRequired = failing.length;
       const everFailed = points.filter((p) => (runsByItem.get(p.id) ?? []).some((r) => r.result === 'fail')).length;
+      const retestedPoints = points
+        .filter((p) => p.result === 'pass' && (runsByItem.get(p.id) ?? []).some((r) => r.result === 'fail'))
+        .map((p) => p.pointNo);
 
       // The blockers, in the words the person reading them can act on. Order matters: this is the
       // sentence the Overview shows, and the first item should be the one to do next.
@@ -1037,6 +1073,7 @@ export class CommissioningService {
         pointsFailing: failing.length,
         pointsUntested: untested.length,
         pointsEverFailed: everFailed,
+        retestedPoints,
         retestsRequired,
         openPunch: openPunch.length,
         // Eligibility asks the same question `commission()` asks, so the screen and the guard can

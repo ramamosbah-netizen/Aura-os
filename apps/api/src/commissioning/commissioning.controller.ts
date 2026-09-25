@@ -497,6 +497,15 @@ export class CommissioningController {
   }
 
   /** Every run on the system, for the 360 and for export. */
+  /**
+   * The record's audit history, read back from the persisted event store (TC-09): binding, every run
+   * and whether it was a retest, defects, the sign-off — who, when, what.
+   */
+  @Get(':id/history')
+  history(@Param('id') id: string) {
+    return this.service.readHistory(id, this.tenant.get().tenantId);
+  }
+
   @Get(':id/test-runs')
   listAllRuns(@Param('id') id: string): Promise<CommissioningTestRun[]> {
     return this.service.listTestRuns(id, this.tenant.get().tenantId);

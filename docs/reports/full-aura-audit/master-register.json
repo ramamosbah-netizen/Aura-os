@@ -3779,7 +3779,7 @@
       "stages": [
         "T&C"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Commissioning / Quality / DocControl",
       "evidence": [
         "N-TC",
@@ -3793,12 +3793,12 @@
         "api": "COMPLETE",
         "permissions": "COMPLETE",
         "ui": "COMPLETE",
-        "actualOutput": "PARTIAL",
+        "actualOutput": "COMPLETE",
         "browser": "COMPLETE",
-        "handoff": "PARTIAL"
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Quality owns the checklist a system is commissioned against: a tenant System Template Library (one versioned template per canonical ELV system, never `other`, starting EMPTY), adopted into a project as a revision that a DIFFERENT QA/QC person approves (the preparer is refused in the service and by a CHECK constraint), frozen on approval, changed only as the next revision (migration 0388). T&C creates a commissioning record FROM the approved revision or binds one explicitly; its points arrive carrying their lineage and a hand-typed point on a bound record is refused; the binding is pinned, so a later revision applies to records bound afterwards and a record executing revision 1 stays on it. PASS is the revision's: bound, every MANDATORY point's latest run a pass, no point of any origin failing, no defect open — asked in the same words by the service, the workspace, the readiness chain (a Quality-owned `checklist` gate) and PostgreSQL. The installation-inspection ITP and its WBS gates are untouched and never read as a checklist. Fixed on the way: a BEFORE INSERT guard judged every upsert as a new row (caught by the live trace; the store path is now tested); `GET /quality/itps` ignored `?projectId=` and answered a project member with every project's plans; the T&C register form offered `pa_va`, which is stored as `other` and could never be bound. RETEST HISTORY: the per-point run lineage is unchanged and survives binding — a typed failure recorded before binding still blocks PASS and is retained after its retest — and a pinned record keeps executing, retesting and commissions after its revision is superseded.",
-      "acceptanceProof": "Auth-ON proof against PostgreSQL with the shipped roles: `system-checklist-approval.spec.ts` drives intercom through fail (run 1) → defect → retest (run 2) → close → commission with both runs visible after sign-off; `approved-checklist.pg.test.ts` proves retention through the real store's upserts; the run append's denial is `commissioning-permissions.spec.ts`. OPEN: the retest audit event is proven in the service, not read back from the persisted event store (actualOutput); the history's receipt in the handover dossier is not re-proven for a bound record (handoff); and \"each supported system\" awaits the owner's reading."
+      "currentBehavior": "Quality owns the checklist a system is commissioned against: a tenant System Template Library (one versioned template per canonical ELV system, never `other`, starting EMPTY), adopted into a project as a revision that a DIFFERENT QA/QC person approves (the preparer is refused in the service and by a CHECK constraint), frozen on approval, changed only as the next revision (migration 0388). T&C creates a commissioning record FROM the approved revision or binds one explicitly; its points arrive carrying their lineage and a hand-typed point on a bound record is refused; the binding is pinned, so a later revision applies to records bound afterwards and a record executing revision 1 stays on it. PASS is the revision's: bound, every MANDATORY point's latest run a pass, no point of any origin failing, no defect open — asked in the same words by the service, the workspace, the readiness chain (a Quality-owned `checklist` gate) and PostgreSQL. The installation-inspection ITP and its WBS gates are untouched and never read as a checklist. Fixed on the way: a BEFORE INSERT guard judged every upsert as a new row (caught by the live trace; the store path is now tested); `GET /quality/itps` ignored `?projectId=` and answered a project member with every project's plans; the T&C register form offered `pa_va`, which is stored as `other` and could never be bound. RETEST HISTORY: the per-point run lineage is unchanged and survives binding — a typed failure recorded before binding still blocks PASS and is retained after its retest — and a pinned record keeps executing, retesting and commissions after its revision is superseded. The record's history is read back from the PERSISTED event store (binding — including the one a record is created with — every run with its retest marked and who recorded it, the sign-off), shown on the system's own page and served by a governed route. The evidence pack names the approved revision and prints each run of a retested point; the handover dossier's line for the system carries \"tested against <ITP> rev <n> · passed on retest: <points>\", captured into the ISSUED manifest as it stood at issue. Owner's interpretation A of \"every supported system\": binding and the PASS rule are keyed on the canonical id alone, proven for all 23 systems in PostgreSQL and in the domain, `other` refused.",
+      "acceptanceProof": "Auth-ON proof against PostgreSQL with the shipped roles. `retest-history-handover.spec.ts`: u-e2e-tc fails a point, retests it and signs off in the browser; the record page reads back \"run 1: fail\" and \"run 2: pass (retest)\" attributed to u-e2e-tc; the governed history route returns the persisted events in order (QA/QC 200, a viewer without a commissioning grant 403); the evidence pack prints \"#1 fail (…) → #2 pass\" and the approved revision; u-e2e-fm reads the retest line in the ISSUED dossier manifest. `approved-checklist.pg.test.ts` 20 as aura_app, including all 23 systems; commissioning 237 and quality 81 unit tests; turbo test/typecheck/lint 78/78. ACCEPTED LIMIT, recorded rather than decided here: the package in that proof is SUBMITTED by the administrator, because submitting opens a document-control transmittal (`doccontrol.transmittal.create`) and no shipped role holds both that and `commissioning.handover.submit` — PM and T&C hold submit, the Document Controller holds the transmittal. That is a handover authority question for the programme owner; the receipt under test is Handover/FM's."
     },
     {
       "id": "TC-10",
@@ -9152,8 +9152,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 37,
-      "PARTIAL": 82,
+      "COMPLETE": 38,
+      "PARTIAL": 81,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

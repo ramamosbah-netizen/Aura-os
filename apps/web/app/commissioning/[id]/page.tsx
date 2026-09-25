@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { notFound } from 'next/navigation';
 import { getJson } from '@/lib/api';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import CommissioningActions from '@/components/commissioning-actions';
 import CommissioningTestSheet, { type TestSheetPoint, type TestSheetRun } from '@/components/commissioning-test-sheet';
 import CommissioningChecklistBinding, { type BoundChecklist } from '@/components/commissioning-checklist-binding';
@@ -19,12 +20,35 @@ interface Detail {
   checklist: BoundChecklist | null; passGaps: string[];
 }
 
+interface HistoryEvent { id: string; type: string; at: string; actorId: string | null; payload: Record<string, unknown> }
+interface History { readable: boolean; events: HistoryEvent[] }
+
+/** One recorded act, in words — read from the persisted event, never reconstructed from today's state. */
+function describeEvent(e: HistoryEvent): string {
+  const p = e.payload;
+  switch (e.type) {
+    case 'commissioning.test-run.recorded': {
+      const measured = [p.actual, p.remarks].filter((v) => typeof v === 'string' && v).join(' — ');
+      return `${String(p.pointNo)} run ${String(p.runNo)}: ${String(p.result)}${p.isRetest ? ' (retest)' : ''}${measured ? ` — ${measured}` : ''}`;
+    }
+    case 'commissioning.checklist.bound':
+      return `Bound to ${String(p.reference)} revision ${String(p.revision)} (${String(p.points)} points)`;
+    case 'commissioning.record.commissioned':
+      return 'Commissioned (witnessed sign-off recorded)';
+    default:
+      return e.type.replace(/^commissioning\./, '').replace(/[.-]/g, ' ');
+  }
+}
+
 const STATUS_LABEL: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', tested: 'Tested', commissioned: 'Commissioned', failed: 'Failed' };
 const LIFECYCLE = ['pending', 'in_progress', 'tested', 'commissioned'];
 
 export default async function Commissioning360({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const d = await getJson<Detail>(`/api/commissioning/records/${id}/detail`);
+  const [d, history] = await Promise.all([
+    getJson<Detail>(`/api/commissioning/records/${id}/detail`),
+    getJson<History>(`/api/commissioning/records/${id}/history`),
+  ]);
   if (!d?.record) notFound();
   const { record, testItems, testRuns, punchItems } = d;
   const openPunch = punchItems.filter((p) => p.status === 'open');
@@ -97,6 +121,28 @@ export default async function Commissioning360({ params }: { params: Promise<{ i
         </div>
       </section>
 
+      {/* THE RECORD'S HISTORY (TC-09), read back from the persisted event store: who did what, and
+          when — every run, retests marked. What was recorded, not what today's state implies. */}
+      <section style={st.section} data-testid="cx-history">
+        <h2 style={st.h2}>Record history</h2>
+        {history === null || !history.readable ? (
+          <p style={st.tdMuted} role="alert" data-testid="cx-history-unreadable">The record’s history could not be read, so none is shown.</p>
+        ) : history.events.length === 0 ? (
+          <p style={st.tdMuted}>Nothing has been recorded against this system yet.</p>
+        ) : (
+          <ol style={st.history}>
+            {history.events.map((e, i) => (
+              <li key={e.id} style={st.historyRow} data-testid={`cx-history-${i}`}>
+                <span>{describeEvent(e)}</span>
+                <small style={st.historyMeta}>
+                  {e.actorId ?? 'unattributed'} · {new Date(e.at).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </small>
+              </li>
+            ))}
+          </ol>
+        )}
+      </section>
+
       {record.status === 'commissioned' && (
         <p style={st.signoff} data-testid="signoff">Signed off by {record.commissionedBy}, witnessed by {record.witnessedBy}{record.commissionedAt ? ` on ${new Date(record.commissionedAt).toLocaleDateString()}` : ''}. This unlocks project handover.</p>
       )}
@@ -130,5 +176,8 @@ const st = {
   td: { padding: '8px 12px', borderBottom: '1px solid var(--border, #f1f5f9)' } as CSSProperties,
   tdCode: { padding: '8px 12px', borderBottom: '1px solid var(--border, #f1f5f9)', fontWeight: 600, fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
   tdMuted: { padding: '8px 12px', borderBottom: '1px solid var(--border, #f1f5f9)', color: 'var(--muted)' } as CSSProperties,
+  history: { margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 4, fontSize: 13 } as CSSProperties,
+  historyRow: { display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' } as CSSProperties,
+  historyMeta: { color: 'var(--muted)' } as CSSProperties,
   signoff: { marginTop: 20, padding: '10px 14px', borderRadius: 8, background: 'var(--good-soft)', color: 'var(--good)', fontSize: 13 } as CSSProperties,
 };

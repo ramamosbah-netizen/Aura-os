@@ -747,7 +747,7 @@
 | T&C | TC-06 | COMPLETE |
 | T&C | TC-07 | COMPLETE |
 | T&C | TC-08 | PARTIAL |
-| T&C | TC-09 | PARTIAL |
+| T&C | TC-09 | COMPLETE |
 | T&C | TC-10 | UNVERIFIED |
 | T&C | TC-11 | PARTIAL |
 | T&C | OUT-01 | PARTIAL |

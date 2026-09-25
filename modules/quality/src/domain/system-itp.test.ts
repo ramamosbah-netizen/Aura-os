@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { ELV_SYSTEMS } from '@aura/shared';
 import { activateItp, closeItp, makeItp, recordPointResult } from './itp';
 import { editTemplateDraft, makeItpTemplate, publishTemplate, retireTemplate, templateCoverage, type ChecklistPointInput } from './itp-template';
 import { approveSystemItp, editSystemItp, prepareSystemItp, returnSystemItp, reviseSystemItp, submitSystemItp, supersedeSystemItp } from './system-itp';
@@ -13,6 +14,32 @@ const points: ChecklistPointInput[] = [
 const template = () => makeItpTemplate({ tenantId: 't1', system: 'cctv', version: 1, title: 'CCTV commissioning checklist', points, createdBy: 'qa-1' });
 const published = () => publishTemplate(template(), 'qa-1');
 const prepared = () => prepareSystemItp({ tenantId: 't1', projectId: 'p1', reference: 'ITP-CCTV', template: published(), revision: 1, createdBy: 'qa-1' });
+
+/**
+ * EVERY CANONICAL SYSTEM, THE SAME WAY (the owner's interpretation A of "every supported system").
+ * The mechanism is keyed on the canonical id and nothing else: each of the 23 travels template →
+ * publish → project revision → submit → independent approval identically, and `other` never does.
+ * The points are this test's own — one per system, invented for no system in the product.
+ */
+describe('every canonical system', () => {
+  const systems = ELV_SYSTEMS.filter((s) => s !== 'other');
+
+  it('covers all 23, and each travels the same governed path to an approved revision', () => {
+    expect(systems).toHaveLength(23);
+    expect(templateCoverage([]).map((c) => c.system)).toEqual(systems);
+    for (const system of systems) {
+      const t = publishTemplate(makeItpTemplate({
+        tenantId: 't1', system, version: 1, title: `${system} checklist`, createdBy: 'qa-1',
+        points: [{ code: 'P-01', activity: 'Test-fixture point', acceptanceCriteria: 'Test-fixture criterion' }],
+      }), 'qa-1');
+      const draft = prepareSystemItp({ tenantId: 't1', projectId: 'p1', reference: `ITP-${system}`, template: t, revision: 1, createdBy: 'qa-1' });
+      const submitted = submitSystemItp(draft, 'qa-1');
+      expect(() => approveSystemItp(submitted, 'qa-1'), `${system}: the preparer may not approve`).toThrow(/may not approve/);
+      const approved = approveSystemItp(submitted, 'qa-2');
+      expect(approved, system).toMatchObject({ kind: 'system_commissioning', system, revision: 1, status: 'approved', approvedBy: 'qa-2' });
+    }
+  });
+});
 
 describe('the tenant template library', () => {
   it('names a canonical system — never free text, never "other"', () => {

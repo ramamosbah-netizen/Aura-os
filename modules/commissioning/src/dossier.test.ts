@@ -98,6 +98,20 @@ describe('TC-GATE-7 — the dossier is assembled, never owned', () => {
       expect(entry.state).toBe('commissioned · CX-CERT-001 rev A');
     });
 
+    it('carries what the system was tested against and which points passed only on retest (TC-09)', () => {
+      const bound = [{ ...system(null)[0], checklist: { reference: 'ITP-CCTV', revision: 2 }, retestedPoints: ['IMG-01', 'PL-034'] }];
+      const entry = sectionOf(assembleDossier(facts({ systems: bound })), 'commissioning_certificate').entries[0];
+      expect(entry.state).toBe('commissioned · evidence pack only · tested against ITP-CCTV rev 2 · passed on retest: IMG-01, PL-034');
+      // Captured at issue exactly as it read — the manifest is what the client was handed.
+      const [captured] = captureDossier(assembleDossier(facts({ systems: bound })), { id: 'ho-1', tenantId: TENANT, companyId: null, projectId: 'p1' }, 1)
+        .filter((i) => i.kind === 'commissioning_certificate');
+      expect(captured.state).toContain('passed on retest: IMG-01, PL-034');
+      // …and a system that never needed a retest does not claim one.
+      const clean = [{ ...bound[0], retestedPoints: [] }];
+      expect(sectionOf(assembleDossier(facts({ systems: clean })), 'commissioning_certificate').entries[0].state)
+        .toBe('commissioned · evidence pack only · tested against ITP-CCTV rev 2');
+    });
+
     it('still issues the pack when none is registered, and says so on the line', () => {
       const entry = sectionOf(assembleDossier(facts({ systems: system(null) })), 'commissioning_certificate').entries[0];
       // The evidence exists either way — a missing certificate is not a missing evidence pack.

@@ -40,7 +40,12 @@ interface Attachment {
   description: string | null;
   capturedBy: string | null;
 }
-interface Detail { record: Record_; testItems: TestItem[]; testRuns: TestRun[]; punchItems: Punch[]; certificate: Certificate | null; signoffEvidence?: SignoffEvidence[]; attachments?: Attachment[] }
+/** The approved checklist revision the system was tested against (TC-08/TC-09), as Quality holds it now. */
+interface BoundChecklist { reference: string | null; revision: number; status: string | null; approvedBy: string | null; unreadable: boolean }
+interface Detail {
+  record: Record_; testItems: TestItem[]; testRuns: TestRun[]; punchItems: Punch[]; certificate: Certificate | null;
+  signoffEvidence?: SignoffEvidence[]; attachments?: Attachment[]; checklist?: BoundChecklist | null;
+}
 
 /**
  * The commissioning EVIDENCE PACK for one system (TC-GATE-3).
@@ -134,6 +139,18 @@ export default async function CommissioningCertificate({ params }: { params: Pro
         { label: 'System', value: record.title },
         { label: 'System type', value: record.system.replace(/_/g, ' ') },
         ...(record.location ? [{ label: 'Location', value: record.location }] : []),
+        // WHAT IT WAS TESTED AGAINST. A pack that does not say which approved revision its points came
+        // from cannot be checked against Quality's register — nor tell a later revision from this one.
+        {
+          label: 'Approved checklist',
+          value: !detail.checklist
+            ? (record.status === 'commissioned'
+              ? 'none — commissioned before approved checklists were required'
+              : 'not bound to an approved checklist')
+            : `${detail.checklist.reference ?? 'ITP'} rev ${detail.checklist.revision}`
+              + (detail.checklist.approvedBy ? `, approved by ${detail.checklist.approvedBy}` : '')
+              + (detail.checklist.status === 'superseded' ? ' (since superseded; this system stays on it)' : ''),
+        },
         { label: 'Test points', value: `${record.pointsPassed} / ${record.pointsTotal} passed` },
         { label: 'Points passed on retest', value: String(retested) },
         ...(record.commissionedBy ? [{ label: 'Commissioned by', value: record.commissionedBy }] : []),
@@ -165,9 +182,14 @@ export default async function CommissioningCertificate({ params }: { params: Pro
           description: t.description,
           expected: t.expected ?? '—',
           actual: t.actual ?? '—',
-          // The number of attempts is part of the evidence: a point proven on the third run is not
-          // the same fact as one proven on the first, and the pack should not flatten them.
-          attempts: runs.length === 0 ? '—' : `${runs.length}${failedBefore ? ' (retested)' : ''}`,
+          // The attempts ARE part of the evidence: a point proven on the third run is not the same fact
+          // as one proven on the first. Each run is printed — what failed, what it measured and why —
+          // so the retest history travels with the pack rather than living only on the record.
+          attempts: runs.length === 0
+            ? '—'
+            : failedBefore
+              ? runs.map((r) => `#${r.runNo} ${r.result}${r.result === 'fail' && (r.actual || r.remarks) ? ` (${[r.actual, r.remarks].filter(Boolean).join(' — ')})` : ''}`).join(' → ')
+              : `${runs.length}`,
           result: t.result,
         };
       })}

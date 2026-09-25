@@ -90,7 +90,17 @@ export class DerivedEvidenceRegistry {
 
   /** The stored rows with every derived requirement replaced by its current computed state. */
   async overlay(rows: DocumentRequirement[]): Promise<DocumentRequirement[]> {
+    return (await this.overlayMarked(rows)).rows;
+  }
+
+  /**
+   * `overlay`, and which of the rows are COMPUTED — so a checklist can say "counted from the supplier
+   * quotations" instead of showing a number a reader would take for attachments. One derivation per
+   * row: marking them separately would compute every governed requirement twice.
+   */
+  async overlayMarked(rows: DocumentRequirement[]): Promise<{ rows: DocumentRequirement[]; derivedIds: string[] }> {
     const out: DocumentRequirement[] = [];
+    const derivedIds: string[] = [];
     for (const row of rows) {
       if (row.status === 'WAIVED' || row.status === 'NOT_APPLICABLE') { out.push(row); continue; }
       const provider = this.providers.get(key(row.entityType, row.type));
@@ -99,6 +109,7 @@ export class DerivedEvidenceRegistry {
       try {
         verdict = await provider.derive(row.tenantId, row.entityId);
       } catch {
+        derivedIds.push(row.id);
         /**
          * FAIL CLOSED, and not merely by keeping the stored row: a row written before this rule
          * existed can still hold hand-typed references, and a failure must not let them count again.
@@ -107,7 +118,9 @@ export class DerivedEvidenceRegistry {
         out.push({ ...row, evidence: [], status: 'REQUIRED' });
         continue;
       }
-      if (!verdict.applies || verdict.frozen) { out.push(row); continue; }
+      if (!verdict.applies) { out.push(row); continue; }
+      derivedIds.push(row.id);
+      if (verdict.frozen) { out.push(row); continue; }
       out.push({
         ...row,
         requiredCount: Math.max(1, verdict.requiredCount),
@@ -115,6 +128,6 @@ export class DerivedEvidenceRegistry {
         status: verdict.satisfied ? 'PROVIDED' : 'REQUIRED',
       });
     }
-    return out;
+    return { rows: out, derivedIds };
   }
 }

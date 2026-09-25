@@ -106,6 +106,7 @@ describe('tender-pricing boundary, enforced by PostgreSQL (migration 0387)', () 
   afterAll(async () => {
     if (!pool) return;
     for (const table of [
+      'aura_tendering_estimate_sources',
       'aura_procurement_purchase_order_lines', 'aura_procurement_purchase_orders',
       'aura_procurement_sourcing_recommendations',
       'aura_procurement_quotation_lines', 'aura_procurement_quotation_revisions',
@@ -330,6 +331,54 @@ describe('tender-pricing boundary, enforced by PostgreSQL (migration 0387)', () 
   });
 
   // ── FAIL-CLOSED ─────────────────────────────────────────────────────────────────────────
+  // ── THE ESTIMATE'S SUPPLY PRICE ───────────────────────────────────────────────────────────
+  describe('an estimate source names exactly one lineage, and a governed one completely', () => {
+    const newSource = (over: Record<string, unknown>) => {
+      const row = {
+        id: newId(), tenant_id: TENANT, tender_id: tender, buildup_id: newId(), boq_item_id: boqItem, component_id: newId(),
+        supplier_name: 'Supplier A', sourced_unit_cost: 410, previous_unit_cost: 420, ...over,
+      };
+      const cols = Object.keys(row);
+      return pool!.query(
+        `INSERT INTO public.aura_tendering_estimate_sources (${cols.join(',')}) VALUES (${cols.map((_, i) => `$${i + 1}`).join(',')})`,
+        Object.values(row),
+      );
+    };
+    const governed = () => ({
+      quotation_line_id: pricingQuoteLine, quotation_revision_id: newId(), pr_line_id: pricingLine, material_id: material,
+      currency: 'AED', technical_verdict: 'compliant', comparison_date: '2026-09-24',
+    });
+
+    skipless('accepts a governed line with its whole lineage — revision, requirement, material, currency, verdict, date', async () => {
+      await newSource(governed());
+    });
+    skipless('refuses a source that names a quote header AND a governed line — one figure, two stories', async () => {
+      expect(await refused(`INSERT INTO public.aura_tendering_estimate_sources
+        (id, tenant_id, tender_id, buildup_id, boq_item_id, component_id, rfq_id, quote_id, supplier_name,
+         quotation_line_id, quotation_revision_id, pr_line_id, material_id, currency, technical_verdict, comparison_date)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'Supplier A',$9,$10,$11,$12,'AED','compliant','2026-09-24')`,
+      [newId(), TENANT, tender, newId(), boqItem, newId(), pricingRfq, newId(), pricingQuoteLine, newId(), pricingLine, material]))
+        .toMatch(/aura_estimate_source_one_lineage/);
+    });
+    skipless('refuses a source that names NEITHER — a supply price from nowhere', async () => {
+      expect(await refused(`INSERT INTO public.aura_tendering_estimate_sources
+        (id, tenant_id, tender_id, buildup_id, boq_item_id, component_id, supplier_name) VALUES ($1,$2,$3,$4,$5,$6,'Supplier A')`,
+      [newId(), TENANT, tender, newId(), boqItem, newId()])).toMatch(/aura_estimate_source_one_lineage/);
+    });
+    for (const missing of ['quotation_revision_id', 'pr_line_id', 'material_id', 'currency', 'technical_verdict', 'comparison_date'] as const) {
+      skipless(`refuses a governed line without its ${missing} — an incomplete lineage is not a lineage`, async () => {
+        const row: Record<string, unknown> = governed();
+        delete row[missing];
+        let reason = '';
+        try { await newSource(row); } catch (err) { reason = (err as Error).message; }
+        expect(reason).toMatch(/aura_estimate_source_governed_complete/);
+      });
+    }
+    skipless('CONTROL — a legacy quote-header source is still accepted, unchanged', async () => {
+      await newSource({ rfq_id: operationalRfq, quote_id: newId() });
+    });
+  });
+
   skipless('the lookups cannot be told "no" by a row-level policy hiding the row', async () => {
     // Switch this session to ANOTHER tenant: the policy now hides every fixture row from `aura_app`.
     const client = await pool!.connect();

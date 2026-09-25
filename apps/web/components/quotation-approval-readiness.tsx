@@ -5,9 +5,10 @@ import DecisionReadiness, { type EvidenceDoc, type StoredRequirement } from './d
 
 /** Approval context belongs to the quotation record. It reads the shared DMS/evidence contracts;
  * it does not create a quotation-local checklist or document store. */
-export default function QuotationApprovalReadiness({ quotationId }: { quotationId: string }) {
+export default function QuotationApprovalReadiness({ quotationId, sourceTenderId = null }: { quotationId: string; sourceTenderId?: string | null }) {
   const [docs, setDocs] = useState<EvidenceDoc[]>([]);
   const [requirements, setRequirements] = useState<StoredRequirement[]>([]);
+  const [derivedIds, setDerivedIds] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,6 +24,7 @@ export default function QuotationApprovalReadiness({ quotationId }: { quotationI
       const [docsJson, reqJson] = await Promise.all([docsRes.json(), reqRes.json()]);
       setDocs(Array.isArray(docsJson) ? docsJson : []);
       setRequirements(Array.isArray(reqJson?.requirements) ? reqJson.requirements : []);
+      setDerivedIds(Array.isArray(reqJson?.derived) ? reqJson.derived : []);
     } catch {
       setError('Could not load approval readiness.');
     } finally {
@@ -54,7 +56,14 @@ export default function QuotationApprovalReadiness({ quotationId }: { quotationI
   return (
     <div>
       {error && <p style={st.error}>{error}</p>}
-      <DecisionReadiness docs={docs} requirements={requirements} quotationId={quotationId} onSeed={() => void seed()} />
+      <DecisionReadiness
+        docs={docs}
+        requirements={requirements}
+        quotationId={quotationId}
+        onSeed={() => void seed()}
+        derivedIds={derivedIds}
+        coverageHref={sourceTenderId ? `/tendering/tenders/${sourceTenderId}/pricing#supply-coverage` : null}
+      />
       <p style={st.note}>Approval is executed here on the quotation record. Evidence and sharing remain governed by Document Control.</p>
     </div>
   );

@@ -95,7 +95,7 @@ export class DocumentRequirementsController {
   async list(
     @Query('entityType') entityType?: string,
     @Query('entityId') entityId?: string,
-  ): Promise<{ requirements: DocumentRequirement[]; readiness: DecisionReadiness }> {
+  ): Promise<{ requirements: DocumentRequirement[]; readiness: DecisionReadiness; derived: string[] }> {
     const stored = await this.store.list({
       tenantId: this.tenant.get().tenantId,
       entityType,
@@ -103,8 +103,11 @@ export class DocumentRequirementsController {
     });
     // The same overlay the approval gate applies, so the checklist a person reads is the checklist
     // the approval will be decided on — not a stored copy that the decision would then contradict.
-    const requirements = this.derived ? await this.derived.overlay(stored) : stored;
-    return { requirements, readiness: decisionReadiness(requirements) };
+    // `derived` names the rows whose evidence is COMPUTED, so the screen can say where it came from.
+    const { rows: requirements, derivedIds } = this.derived
+      ? await this.derived.overlayMarked(stored)
+      : { rows: stored, derivedIds: [] as string[] };
+    return { requirements, readiness: decisionReadiness(requirements), derived: derivedIds };
   }
 
   /**

@@ -19,6 +19,8 @@ interface PurchaseRequest {
    * not name.
    */
   status: 'draft' | 'submitted' | 'approved' | 'rejected';
+  /** `tender_pricing` prices a bid and buys nothing (migration 0387): it never takes a decision. */
+  purpose?: 'operational' | 'tender_pricing';
   value: number;
   createdAt: string;
 }
@@ -215,7 +217,12 @@ export default function PrList({
                           with no way to decide it. The server decides who may: a Buyer who presses
                           these is refused, in words.
                         */}
-                        {(pr.status === 'draft' || pr.status === 'submitted') && (
+                        {pr.purpose === 'tender_pricing' && (
+                          <span style={{ color: 'var(--muted)', fontSize: 12.5 }} data-testid={`pr-pricing-${pr.id}`}>
+                            Prices a bid — no approval, no order
+                          </span>
+                        )}
+                        {pr.purpose !== 'tender_pricing' && (pr.status === 'draft' || pr.status === 'submitted') && (
                           <>
                             <button
                               type="button"

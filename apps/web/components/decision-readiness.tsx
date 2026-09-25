@@ -68,6 +68,8 @@ export interface ReadinessItem {
   /** Only set when the item came from a persisted requirement. */
   status?: StoredRequirement['status'];
   note?: string | null;
+  /** COMPUTED by the server from governed records (a tender offer's supplier quotations), never attached. */
+  derived?: boolean;
 }
 
 export interface Readiness {
@@ -80,7 +82,7 @@ export interface Readiness {
   persisted: boolean;
 }
 
-export function readinessFor(docs: EvidenceDoc[], requirements?: StoredRequirement[]): Readiness {
+export function readinessFor(docs: EvidenceDoc[], requirements?: StoredRequirement[], derivedIds: readonly string[] = []): Readiness {
   if (requirements && requirements.length > 0) {
     // NOT_APPLICABLE leaves the calculation entirely — it is not a gap, it is a non-question.
     const applicable = requirements.filter((r) => r.status !== 'NOT_APPLICABLE');
@@ -94,6 +96,7 @@ export function readinessFor(docs: EvidenceDoc[], requirements?: StoredRequireme
       met: r.status === 'PROVIDED' || r.status === 'WAIVED',
       status: r.status,
       note: r.note,
+      derived: derivedIds.includes(r.id),
     }));
     const ready = items.filter((i) => i.met).length;
     const score = items.length === 0 ? 100 : Math.round((ready / items.length) * 100);
@@ -131,13 +134,17 @@ const VERDICT: Record<Readiness['verdict'], { label: string; color: string }> = 
   NOT_READY: { label: 'Not ready', color: 'var(--bad)' },
 };
 
-export default function DecisionReadiness({ docs, requirements, quotationId, onSeed }: {
+export default function DecisionReadiness({ docs, requirements, quotationId, onSeed, derivedIds, coverageHref }: {
   docs: EvidenceDoc[];
   requirements?: StoredRequirement[];
   quotationId: string;
   onSeed?: () => void;
+  /** Requirements the server COMPUTES — shown as counted, not as attachments anyone could add. */
+  derivedIds?: readonly string[];
+  /** Where a computed requirement's working can be read (the tender's supply coverage). */
+  coverageHref?: string | null;
 }) {
-  const r = readinessFor(docs, requirements);
+  const r = readinessFor(docs, requirements, derivedIds);
   const v = VERDICT[r.verdict];
 
   return (
@@ -151,18 +158,26 @@ export default function DecisionReadiness({ docs, requirements, quotationId, onS
 
       <ul style={st.list}>
         {r.items.map((i) => (
-          <li key={i.kind} style={st.row}>
+          <li key={i.kind} style={st.row} data-testid={`readiness-${i.kind}`}>
             <span style={{ ...st.tick, color: i.met ? 'var(--good)' : 'var(--bad)' }}>
               {i.status === 'WAIVED' ? '⊘' : i.met ? '✔' : '✖'}
             </span>
             <span style={st.label}>
               {i.label}
               {i.status === 'WAIVED' && i.note && <span style={st.why}> — {i.note}</span>}
+              {i.derived && i.status !== 'WAIVED' && (
+                <span style={st.why}>
+                  {' '}— counted from the tender&apos;s supplier quotations, per supply item
+                  {coverageHref && <> · <a href={coverageHref} style={st.link}>see coverage</a></>}
+                </span>
+              )}
             </span>
             <span style={st.count}>
               {i.status === 'WAIVED'
                 ? 'waived'
-                : i.need > 1
+                : i.derived
+                  ? `${i.have} of ${i.need} item${i.need === 1 ? '' : 's'} covered`
+                  : i.need > 1
                   ? `${i.have} of ${i.need}`
                   : i.met
                     ? 'attached'

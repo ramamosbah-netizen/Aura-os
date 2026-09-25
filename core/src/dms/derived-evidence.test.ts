@@ -84,6 +84,24 @@ describe('DerivedEvidenceRegistry', () => {
     expect(await reg.isDerived(decided)).toBe(true);
   });
 
+  it('marks which rows are computed — live, frozen and failed — and leaves the rest unmarked', async () => {
+    const reg = new DerivedEvidenceRegistry();
+    let mode: 'live' | 'frozen' | 'throws' | 'not-governed' = 'live';
+    reg.register(provider(async () => {
+      if (mode === 'throws') throw new Error('comparison unavailable');
+      if (mode === 'not-governed') return verdict({ applies: false });
+      return verdict(mode === 'frozen' ? { frozen: true } : { satisfied: true, evidence: [typed[0], typed[1]] });
+    }));
+    const governed = row();
+    const other = row({ type: 'DATASHEET' });
+    const waived = row({ type: 'VENDOR_QUOTE', entityId: 'q2', status: 'WAIVED' });
+    for (const [m, expected] of [['live', [governed.id]], ['frozen', [governed.id]], ['throws', [governed.id]], ['not-governed', []]] as const) {
+      mode = m;
+      const { derivedIds } = await reg.overlayMarked([governed, other, waived]);
+      expect(derivedIds, m).toEqual(expected);
+    }
+  });
+
   it('refuses a second provider for the same pair — one requirement, one answer', () => {
     const reg = new DerivedEvidenceRegistry();
     reg.register(provider(async () => verdict({})));

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { computeBidScore, recommendationFor, DEFAULT_BID_CRITERIA, type BidCriterion, type BidRecommendation } from '@aura/shared';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import TenderAwardDialog from './tender-award-dialog';
+import TenderSubmitDialog from './tender-submit-dialog';
 import Tender360Context from './tender-360-context';
 import BidCriterionHelp from './bid-criterion-help';
 import TechnicalStudyWorkspace from './technical-study-workspace';
@@ -416,14 +417,17 @@ export default function TenderDetail({ tender, workspace = 'dashboard' }: { tend
             >
               Mark Lost
             </button>
-            <button
+            {/* The governed submit, with its facts — not a status flip (see tender-submit-dialog). */}
+            <TenderSubmitDialog
+              tenderId={tender.id}
+              tenderTitle={tender.title}
               disabled={tender.status === 'submitted' || statusBusy || submissionReadiness?.ready === false}
-              onClick={() => updateStatus('submitted')}
-              style={s.btnSecondary}
-              title={submissionReadiness?.ready === false ? submissionReadiness.gaps.join(' ') : 'Record the approved bid submission'}
-            >
-              Submit Tender
-            </button>
+              disabledReason={submissionReadiness?.ready === false ? submissionReadiness.gaps.join(' ') : undefined}
+              onSubmitted={() => {
+                router.refresh();
+                window.location.reload();
+              }}
+            />
             {submissionReadiness?.ready && (
               <a
                 href={`/api/tendering/tenders/${tender.id}/technical-proposal.pdf`}

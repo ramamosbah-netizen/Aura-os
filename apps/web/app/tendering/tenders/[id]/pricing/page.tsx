@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../../components/record-chrome';
 import TenderPricingClient from '../../../../../components/tender-pricing-client';
+import TenderSupplySourcing from '../../../../../components/tender-supply-sourcing';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,7 @@ export default async function TenderPricingPage({ params }: { params: Promise<{ 
         then generate the client quotation.
       </p>
       <TenderPricingClient tenderId={tender.id} />
+      <TenderSupplySourcing tenderId={tender.id} />
     </div>
   );
 }

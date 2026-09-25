@@ -459,13 +459,23 @@ export class TenderPricingController {
       { wch: 14 }, { wch: 42 }, { wch: 10 }, ...Array.from({ length: 37 }, () => ({ wch: 16 })),
     ];
 
+    // A GOVERNED source's lineage is the quotation revision and line it was taken from, judged and
+    // compared on a stated date. These columns were absent, so a supply price taken the governed way
+    // exported with its RFQ and quote cells blank — the workbook could not say where the figure came from.
     const sourceRows = sources.map((source) => ({
       'Source link ID': source.id,
       'BOQ item ID': source.boqItemId,
       'Build-up ID': source.buildUpId,
       'Component ID': source.componentId,
-      'RFQ ID': source.rfqId,
-      'Supplier quote ID': source.quoteId,
+      Lineage: source.governed ? 'Governed quotation line' : 'Legacy quote header',
+      'Quotation revision ID': source.governed?.quotationRevisionId ?? '',
+      'Quotation line ID': source.governed?.quotationLineId ?? '',
+      'Requisition line ID': source.governed?.prLineId ?? '',
+      'Technical verdict': source.governed?.technicalVerdict ?? '',
+      'Comparison date': source.governed?.comparisonDate ?? '',
+      Currency: source.governed?.currency ?? '',
+      'RFQ ID': source.rfqId ?? '',
+      'Supplier quote ID': source.quoteId ?? '',
       Supplier: source.supplierName,
       'Sourced unit cost': source.sourcedUnitCost,
       'Previous unit cost': source.previousUnitCost,
@@ -474,7 +484,7 @@ export class TenderPricingController {
     }));
     const sourceSheet = XLSX.utils.json_to_sheet(sourceRows.length > 0 ? sourceRows : [{ Status: 'No supplier quotation links recorded for this estimate.' }]);
     if (sourceRows.length > 0) sourceSheet['!autofilter'] = { ref: sourceSheet['!ref']! };
-    sourceSheet['!cols'] = Array.from({ length: 11 }, () => ({ wch: 28 }));
+    sourceSheet['!cols'] = Array.from({ length: 18 }, () => ({ wch: 28 }));
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, summary, 'Summary');

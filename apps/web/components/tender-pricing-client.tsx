@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import AuraDataTable from './ui/aura-data-table';
+import { announcePricingChanged, onPricingChanged } from '@/lib/tender-pricing-events';
 
 // Tender pricing sheet — the company's INTERNAL Cost & Resource Breakdown
 // (mirrors the estimator's spreadsheet: material supply, technician/engineer/PM
@@ -139,7 +140,9 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
 
   useEffect(() => {
     void load();
-  }, [load]);
+    // A supply price taken from a supplier line below changes this sheet's figures.
+    return onPricingChanged(tenderId, () => void load());
+  }, [load, tenderId]);
 
   if (!data) return err ? (
     <section style={{ padding: 24, border: '1px solid var(--line)', borderRadius: 14, background: 'var(--panel)' }}>
@@ -258,6 +261,8 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
       setOpen(null);
       setDraft(null);
       await load();
+      // …and a line priced here creates the build-up the supply panel prices into.
+      announcePricingChanged(tenderId);
       setMsg(`Line ${item.itemCode} priced — selling rate ${aed(d.sellingRate)}/${item.unit}, written back to the BOQ.`);
     } finally {
       setBusy(false);

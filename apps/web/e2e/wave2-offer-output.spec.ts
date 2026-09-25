@@ -178,7 +178,9 @@ test('downloads governed Tender pricing and technical outputs from their clear w
 
   await page.goto(`/tendering/tenders/${tender.id}/pricing`);
   await expect(page.getByText('INTERNAL — cost & resource breakdown')).toBeVisible();
-  await expect(page.getByText('IP camera complete')).toBeVisible();
+  // The item is on the sheet — and, since the supply sourcing panel sits below it, named there too.
+  await expect(page.getByText('IP camera complete').first()).toBeVisible();
+  await expect(page.getByTestId('supply-sourcing')).toContainText('IP camera complete');
   const workbookLink = page.getByRole('link', { name: 'Download pricing workbook (.xlsx)' });
   await expect(workbookLink).toBeVisible();
   const [workbookDownload] = await Promise.all([
@@ -203,6 +205,20 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   expect(checklistResponse.ok(), await checklistResponse.text()).toBe(true);
   const checklist = await checklistResponse.json() as { requirements: Array<{ id: string; type: string; requiredCount: number }> };
   for (const row of checklist.requirements) {
+    /**
+     * VENDOR_QUOTE on an offer raised from a tender is COMPUTED from the tender's governed supplier
+     * quotations (stage E) and cannot be typed in — three references here are now refused 409, which
+     * is the rule working. This fixture's tender was never put to suppliers, so it takes the governed
+     * exception: a reasoned waiver by the commercial manager who answers for the decision. The real
+     * supplier path is proved in tender-real-supply-path.spec.ts.
+     */
+    if (row.type === 'VENDOR_QUOTE') {
+      const waived = await request.post(`${API}/document-requirements/${row.id}/waive`, {
+        headers: commercial.headers, data: { reason: 'Wave 2 output fixture: this tender was not put to suppliers; outputs are under test, not sourcing' },
+      });
+      expect(waived.ok(), await waived.text()).toBe(true);
+      continue;
+    }
     for (let index = 0; index < row.requiredCount; index += 1) {
       let reference = `W2-external-vendor-${index + 1}`;
       let type = 'EXTERNAL_REFERENCE';
@@ -300,7 +316,9 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   await page.getByRole('button', { name: 'Save terms' }).click();
   await expect(page.getByText('Final negotiated phased delivery against approved programme')).toBeVisible();
 
-  await makeApprovalReady(request, adminHeaders, revisedQuoteId);
+  // The administrator authored this revision, and a preparer may not excuse their own evidence —
+  // the independent commercial manager, who approves it below, does.
+  await makeApprovalReady(request, commercial.headers, revisedQuoteId);
   await page.goto(`/crm/quotations/${revisedQuoteId}`, { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: /Submit for review/ }).first().click();
   await expect(page.getByText(/Internal review/i).first()).toBeVisible();

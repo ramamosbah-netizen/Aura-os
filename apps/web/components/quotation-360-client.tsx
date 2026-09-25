@@ -533,7 +533,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
       {tab === 'approval' && (
         <RecordCard title="Approval context">
-          <QuotationApprovalReadiness quotationId={q.id} />
+          <QuotationApprovalReadiness quotationId={q.id} sourceTenderId={q.sourceTenderId} />
         </RecordCard>
       )}
 

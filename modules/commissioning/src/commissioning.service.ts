@@ -23,16 +23,16 @@ import {
 import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './domain/commissioning-test-item';
 import { bindChecklist as bindToChecklist, checklistPassGaps, checklistTestItems, countedPoints } from './domain/approved-checklist';
 import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
-import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
+import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality, routeToEngineering, recordCorrectiveAction } from './domain/punch-item';
 import { type CommissioningItpLink, makeItpLink } from './domain/commissioning-itp-link';
 import { type AsBuiltLink, makeAsBuiltLink } from './domain/asbuilt-link';
 import { type CertificateLink, makeCertificateLink } from './domain/certificate-link';
 import { type ControlledDocumentFact, AS_BUILT_STATUS, referenceIsSound, resolveDocumentReference } from './domain/document-reference';
 import { assessSystemReadiness, type SystemReadiness } from './domain/commissioning-readiness';
 import {
-  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, APPROVED_CHECKLIST,
+  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, APPROVED_CHECKLIST, WORK_RECEIPT,
   type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort, type DocControlPort,
-  type ApprovedChecklistPort, type SystemChecklistFact,
+  type ApprovedChecklistPort, type SystemChecklistFact, type WorkReceiptPort,
   type EquipmentFact, type ItpFact, type NcrFact, type SnagFact,
 } from './ports';
 
@@ -223,6 +223,9 @@ export class CommissioningService {
     // The approved system checklist (TC-08/TC-09) — Quality's, read to bind a record and to report
     // coverage. Absent means nothing can be bound, which blocks commissioning; it never unblocks it.
     @Optional() @Inject(APPROVED_CHECKLIST) private readonly checklists?: ApprovedChecklistPort,
+    // A named person's My Work receipt (TC-08) — Projects'. Absent, a defect cannot be routed: routing
+    // somebody a defect they are never told about would be a record, not a handoff.
+    @Optional() @Inject(WORK_RECEIPT) private readonly receipts?: WorkReceiptPort,
   ) {}
 
   /** Quality's revision, or a refusal in words — never a guess. */
@@ -782,9 +785,107 @@ export class CommissioningService {
   ): Promise<PunchItem> {
     const item = await this.store.findPunchItem(punchId, tenantId);
     if (!item || item.commissioningId !== id) throw new Error(`not found: punch item ${punchId}`);
-    const updated = closePunch(item, input);
+    // The latest result of the point it came from — the retest is what closes a routed defect.
+    const point = item.testItemId ? (await this.store.listTestItems(id, tenantId)).find((t) => t.id === item.testItemId) : undefined;
+    const updated = closePunch(item, input, point?.result ?? null);
     await this.store.savePunchItem(updated);
     return updated;
+  }
+
+  /**
+   * ROUTE A DEFECT TO ENGINEERING (TC-08, the owner's decision of 2026-09-25).
+   *
+   * T&C names the Design / Technical Engineer; Projects decides whether that person can receive work
+   * on this project, BEFORE anything is written; the engineer receives it in My Work. There is no state
+   * in which a defect reads as routed to somebody who was never told — an unavailable receipt refuses
+   * the routing.
+   */
+  async routeDefect(
+    id: string,
+    punchId: string,
+    tenantId: string,
+    input: { assigneeId: string; reason: string },
+    actorId: string | null,
+  ): Promise<PunchItem> {
+    const rec = await this.mustFind(id, tenantId);
+    const item = await this.store.findPunchItem(punchId, tenantId);
+    if (!item || item.commissioningId !== id) throw new Error(`not found: punch item ${punchId}`);
+    const routed = routeToEngineering(item, { assigneeId: input.assigneeId, reason: input.reason, routedBy: actorId });
+    if (!this.receipts) {
+      throw new Error('the My Work receipt is unavailable — a defect is not routed to somebody who cannot be told');
+    }
+    if (!(await this.receipts.canReceive(tenantId, rec.projectId, routed.routedTo!))) {
+      throw new Error(`validation: ${routed.routedTo} must be a member of this project to receive a defect on it`);
+    }
+    const receipt = await this.receipts.raise({
+      tenantId,
+      projectId: rec.projectId,
+      assigneeId: routed.routedTo!,
+      assignedBy: actorId!,
+      title: `Design correction: ${rec.code} — ${item.description}`,
+      description: `Routed by Testing & Commissioning: ${routed.routingReason} Record the corrective action on Engineering · Commissioning corrections; T&C closes the defect after the retest.`,
+    });
+    const saved = { ...routed, routingReceiptId: receipt.id };
+    await this.store.savePunchItem(saved);
+    await this.events.append([makeEvent({
+      type: 'commissioning.defect.routed',
+      tenantId, companyId: rec.companyId, actorId,
+      aggregateType: 'commissioning.record', aggregateId: rec.id,
+      payload: { punchId, routedTo: saved.routedTo, reason: saved.routingReason, receiptId: receipt.id },
+    })]);
+    this.logger.log(`[Commissioning] defect ${punchId} on ${rec.code} routed to ${saved.routedTo}`);
+    return saved;
+  }
+
+  /** The engineer the defect was routed to records its corrective action. It does not close it. */
+  async recordCorrection(
+    id: string,
+    punchId: string,
+    tenantId: string,
+    input: { action: string; reference?: string | null },
+    actorId: string | null,
+  ): Promise<PunchItem> {
+    const rec = await this.mustFind(id, tenantId);
+    const item = await this.store.findPunchItem(punchId, tenantId);
+    if (!item || item.commissioningId !== id) throw new Error(`not found: punch item ${punchId}`);
+    const corrected = recordCorrectiveAction(item, { action: input.action, reference: input.reference, actorId });
+    await this.store.savePunchItem(corrected);
+    await this.events.append([makeEvent({
+      type: 'commissioning.defect.corrected',
+      tenantId, companyId: rec.companyId, actorId,
+      aggregateType: 'commissioning.record', aggregateId: rec.id,
+      payload: { punchId, action: corrected.correctiveAction, reference: corrected.correctionReference },
+    })]);
+    return corrected;
+  }
+
+  /**
+   * THE ENGINEER'S QUEUE: the defects on a project routed to THIS person, with the evidence they
+   * answer — the system, the failing point and its latest run. Only their own: a queue of everybody's
+   * routed defects would be a register, and the register is T&C's.
+   */
+  async listEngineeringCorrections(tenantId: string, projectId: string, actorId: string | null) {
+    if (!actorId) return [];
+    const [punch, records, items] = await Promise.all([
+      this.store.listPunchItemsForProject(tenantId, projectId),
+      this.store.list(tenantId, projectId),
+      this.store.listTestItemsForProject(tenantId, projectId),
+    ]);
+    const recordById = new Map(records.map((r) => [r.id, r]));
+    const itemById = new Map(items.map((i) => [i.id, i]));
+    return punch
+      .filter((p) => p.routedTo === actorId)
+      .map((p) => {
+        const rec = recordById.get(p.commissioningId);
+        const point = p.testItemId ? itemById.get(p.testItemId) : undefined;
+        return {
+          ...p,
+          systemCode: rec?.code ?? null,
+          systemTitle: rec?.title ?? null,
+          system: rec?.system ?? null,
+          point: point ? { pointNo: point.pointNo, description: point.description, expected: point.expected, actual: point.actual, result: point.result } : null,
+        };
+      });
   }
 
   listPunchItems(id: string, tenantId: string): Promise<PunchItem[]> {

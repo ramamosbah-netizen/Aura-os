@@ -40,6 +40,28 @@ export class ProjectResponsibilityService {
     );
   }
 
+  /**
+   * A RECEIPT raised as the consequence of an act another domain has ALREADY authorised — T&C routing
+   * a defect to a named engineer (TC-08, the owner's decision of 2026-09-25) — rather than a
+   * responsibility somebody assigns here.
+   *
+   * The difference from {@link assign} is exactly one check and it is deliberate: assigning work on
+   * a project is `projects.responsibility.create` (a PM's act), but the routing's own authority was
+   * asserted by the commissioning route before this call, and making the router also hold the PM's
+   * grant would make the approved handoff unreachable. What is NOT relaxed is who may RECEIVE: the
+   * assignee must be a member of the project, by {@link canReceive} — the one definition of it.
+   * Reached only through the commissioning WORK_RECEIPT port.
+   */
+  async raiseReceipt(input: NewProjectResponsibility): Promise<ProjectResponsibility> {
+    if (!this.canReceive(input.projectId, input.assigneeId)) {
+      throw new BadRequestException('assignee must be a member of this project');
+    }
+    const value = makeProjectResponsibility(input);
+    await this.rows.create(value);
+    await this.emit('projects.responsibility.assigned', value, input.assignedBy);
+    return value;
+  }
+
   async assign(input: NewProjectResponsibility): Promise<ProjectResponsibility> {
     await this.guard(input.projectId, input.tenantId, input.assignedBy, 'projects.responsibility.create');
     if (!this.canReceive(input.projectId, input.assigneeId)) {

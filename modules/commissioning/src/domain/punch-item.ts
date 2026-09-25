@@ -41,6 +41,25 @@ export interface PunchItem {
   escalationRequestedAt: string | null;
   escalatedBy: Id | null;
   qualityNcrId: string | null;
+  /**
+   * ROUTED TO ENGINEERING (TC-08, the owner's decision of 2026-09-25): a defect that needs a design
+   * correction is sent by T&C to a named Design / Technical Engineer, who receives it in My Work.
+   * Immutable once made; null on a defect T&C resolves itself.
+   */
+  routedTo: Id | null;
+  routedBy: Id | null;
+  routedAt: string | null;
+  routingReason: string | null;
+  /** The My Work item the engineer received it as. */
+  routingReceiptId: string | null;
+  /**
+   * THE CORRECTIVE ACTION, recorded by the engineer it was routed to — what changed, and the revised
+   * drawing or RFI it rests on. Recording it does not close the defect: T&C closes it, after the retest.
+   */
+  correctiveAction: string | null;
+  correctionReference: string | null;
+  correctedBy: Id | null;
+  correctedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -84,17 +103,94 @@ export function makePunchItem(input: NewPunchItem): PunchItem {
     escalationRequestedAt: null,
     escalatedBy: null,
     qualityNcrId: null,
+    routedTo: null,
+    routedBy: null,
+    routedAt: null,
+    routingReason: null,
+    routingReceiptId: null,
+    correctiveAction: null,
+    correctionReference: null,
+    correctedBy: null,
+    correctedAt: null,
     createdAt: now,
     updatedAt: now,
   };
 }
 
-/** Close a punch item once the defect is rectified (retested). A resolution note is required. */
-export function closePunch(item: PunchItem, input: { resolution: string; closedBy?: Id | null }): PunchItem {
+/**
+ * Close a punch item once the defect is rectified (retested). A resolution note is required.
+ *
+ * A defect ROUTED TO ENGINEERING closes only once its corrective action is recorded and — when it came
+ * from a test point — once that point's latest run is a pass: the retest, not the correction, is what
+ * proves it. `pointResult` is that latest result, read by the caller from the evidence.
+ */
+export function closePunch(
+  item: PunchItem,
+  input: { resolution: string; closedBy?: Id | null },
+  pointResult: string | null = null,
+): PunchItem {
   if (item.status === 'closed') throw new Error('conflict: punch item is already closed');
   if (!input.resolution?.trim()) throw new Error('a resolution note is required to close a punch item');
+  if (item.routedTo) {
+    if (!item.correctiveAction) {
+      throw new Error(`a defect routed to Engineering can only be closed once its corrective action is recorded — it is with ${item.routedTo}`);
+    }
+    if (item.testItemId && pointResult !== 'pass') {
+      throw new Error('a defect routed to Engineering can only be closed once the retest of its test point has passed');
+    }
+  }
   const now = new Date().toISOString();
   return { ...item, status: 'closed', resolution: input.resolution.trim(), closedBy: input.closedBy ?? null, closedAt: now, updatedAt: now };
+}
+
+/** T&C sends a defect that needs a design correction to a named Design / Technical Engineer. */
+export function routeToEngineering(
+  item: PunchItem,
+  input: { assigneeId: Id; reason: string; routedBy: Id | null },
+): PunchItem {
+  if (item.status === 'closed') throw new Error('conflict: the defect is already closed');
+  if (item.routedTo) {
+    throw new Error(`the defect's routing to Engineering is immutable once made — it is with ${item.routedTo}`);
+  }
+  if (!input.routedBy) throw new Error('validation: routing a defect requires an authenticated person');
+  if (!input.assigneeId?.trim()) throw new Error('validation: routing a defect requires the engineer it is routed to');
+  if (!input.reason?.trim()) throw new Error('validation: routing a defect requires a reason — what the design has to answer');
+  const now = new Date().toISOString();
+  return {
+    ...item,
+    routedTo: input.assigneeId.trim(),
+    routedBy: input.routedBy,
+    routedAt: now,
+    routingReason: input.reason.trim(),
+    updatedAt: now,
+  };
+}
+
+/**
+ * The engineer the defect was routed to records the corrective action. Only they may: a correction
+ * recorded by somebody else would put a design decision in the mouth of a person who never made it.
+ * It may be re-recorded while the defect is open — a first correction that fails its retest is followed
+ * by a second — and every recording is audited as its own event.
+ */
+export function recordCorrectiveAction(
+  item: PunchItem,
+  input: { action: string; reference?: string | null; actorId: Id | null },
+): PunchItem {
+  if (item.status === 'closed') throw new Error('conflict: the defect is already closed');
+  if (!item.routedTo) throw new Error('only a defect routed to Engineering can take a corrective action from Engineering');
+  if (!input.actorId || input.actorId !== item.routedTo) {
+    throw new Error(`access denied: this defect was routed to ${item.routedTo} — only they record its corrective action`);
+  }
+  if (!input.action?.trim()) throw new Error('validation: a corrective action must say what was changed');
+  const now = new Date().toISOString();
+  return {
+    ...item,
+    correctiveAction: input.action.trim(),
+    correctionReference: input.reference?.trim() || null,
+    correctedBy: input.actorId,
+    correctedAt: now,
+    updatedAt: now,
+  };
 }
 
 /**

@@ -296,3 +296,18 @@ export interface ApprovedChecklistPort {
 }
 
 export const APPROVED_CHECKLIST = Symbol('APPROVED_CHECKLIST');
+
+/**
+ * A NAMED PERSON'S RECEIPT, in My Work (TC-08). Projects owns responsibilities; T&C raises one as the
+ * consequence of its own governed act — routing a defect to an engineer — and never decides who may
+ * receive work on a project: `canReceive` is Projects' rule, asked before anything is written.
+ */
+export interface WorkReceiptPort {
+  canReceive(tenantId: string, projectId: string, userId: string): boolean | Promise<boolean>;
+  raise(input: {
+    tenantId: string; projectId: string; assigneeId: string; assignedBy: string;
+    title: string; description: string;
+  }): Promise<{ id: string }>;
+}
+
+export const WORK_RECEIPT = Symbol('WORK_RECEIPT');

@@ -1,7 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
-import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST } from '@aura/commissioning';
+import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST, WORK_RECEIPT } from '@aura/commissioning';
 import { InventoryModule, StockService, MaterialService, ISSUED_POSITION, WORK_PACKAGE } from '@aura/inventory';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
@@ -144,6 +144,22 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // The approved system checklist (TC-08/TC-09): Quality owns the revision; T&C binds a record to
     // it and executes its points. Unwired, nothing can be bound — and nothing unbound commissions.
     { provide: APPROVED_CHECKLIST, useExisting: QualityService },
+    // A named engineer's My Work receipt for a defect T&C routes to them (TC-08). Projects decides who
+    // can receive work on a project; the routing's own authority was asserted by the commissioning route.
+    {
+      provide: WORK_RECEIPT,
+      inject: [ProjectResponsibilityService],
+      useFactory: (responsibilities: ProjectResponsibilityService) => ({
+        canReceive: (_tenantId: string, projectId: string, userId: string) => responsibilities.canReceive(projectId, userId),
+        async raise(input: { tenantId: string; projectId: string; assigneeId: string; assignedBy: string; title: string; description: string }) {
+          const receipt = await responsibilities.raiseReceipt({
+            tenantId: input.tenantId, projectId: input.projectId, workstream: 'commissioning',
+            title: input.title, description: input.description, assigneeId: input.assigneeId, assignedBy: input.assignedBy,
+          });
+          return { id: receipt.id };
+        },
+      }),
+    },
 
     // ── Handover's document references (TC-GATE-6) ────────────────────────────────────────────
     // Handover points at controlled documents it does not own, and asks whether an as-built exists.
@@ -168,6 +184,6 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // projection of code, name and unit. Nothing here moves stock.
     { provide: INVENTORY, useExisting: StockService },
   ],
-  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, WORK_PACKAGE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST],
+  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, WORK_PACKAGE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST, WORK_RECEIPT],
 })
 export class GatesModule {}

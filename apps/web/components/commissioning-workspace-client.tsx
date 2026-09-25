@@ -8,6 +8,7 @@ import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
 import Pager, { usePaged } from '@/components/ui/pager';
 import CommissioningSystemPanel from './commissioning-system-panel';
+import CommissioningDefectRouting from './commissioning-defect-routing';
 import { ChecklistCoverageTable, missingChecklistReason, type ChecklistCoverageView } from './commissioning-checklist-binding';
 import { ELV_SYSTEMS, elvSystemLabel } from '@aura/shared';
 import {
@@ -81,6 +82,9 @@ export interface PunchRow {
   location: string | null; resolution: string | null; testItemId: string | null; sourceRunId: string | null; createdAt: string;
   /** The Quality escalation seam: T&C's note, and a REFERENCE to the NCR someone raised over there. */
   escalationRequestedAt: string | null; escalatedBy: string | null; qualityNcrId: string | null;
+  /** Routed to a named Design / Technical Engineer for a design correction (TC-08). */
+  routedTo?: string | null; routingReason?: string | null;
+  correctiveAction?: string | null; correctionReference?: string | null; correctedBy?: string | null;
 }
 export interface DeviceRow {
   id: string; tag: string; system: string; model: string | null; location: string | null;
@@ -719,6 +723,7 @@ function Defects({ systems, punch, ncrs }: { systems: SystemView[]; punch: Punch
                   {item.location ? ` · ${item.location}` : ''}
                 </span>
                 <span style={st.defectAction}>
+                  {system && <CommissioningDefectRouting item={item} projectId={system.record.projectId} onDone={() => router.refresh()} />}
                   {/* Escalation is a note T&C keeps about its own defect plus a reference to the NCR
                       someone raised in Quality. No NCR is created here. */}
                   <QualityEscalation item={item} ncrs={ncrs} onDone={() => router.refresh()} />

@@ -451,13 +451,20 @@ export class PostgresCommissioningStore implements CommissioningStore {
   async savePunchItem(i: PunchItem): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_punch_items
-        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, test_item_id, source_run_id, escalation_requested_at, escalated_by, quality_ncr_id, created_at, updated_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20)
+        (id, tenant_id, company_id, commissioning_id, project_id, description, severity, location, status, raised_by, resolution, closed_by, closed_at, test_item_id, source_run_id, escalation_requested_at, escalated_by, quality_ncr_id, created_at, updated_at,
+         routed_to, routed_by, routed_at, routing_reason, routing_receipt_id, corrective_action, correction_reference, corrected_by, corrected_at)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
        on conflict (id) do update set status = excluded.status, resolution = excluded.resolution,
          closed_by = excluded.closed_by, closed_at = excluded.closed_at,
          escalation_requested_at = excluded.escalation_requested_at, escalated_by = excluded.escalated_by,
-         quality_ncr_id = excluded.quality_ncr_id, updated_at = excluded.updated_at`,
-      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.testItemId, i.sourceRunId, i.escalationRequestedAt, i.escalatedBy, i.qualityNcrId, i.createdAt, i.updatedAt],
+         quality_ncr_id = excluded.quality_ncr_id, updated_at = excluded.updated_at,
+         routed_to = excluded.routed_to, routed_by = excluded.routed_by, routed_at = excluded.routed_at,
+         routing_reason = excluded.routing_reason, routing_receipt_id = excluded.routing_receipt_id,
+         corrective_action = excluded.corrective_action, correction_reference = excluded.correction_reference,
+         corrected_by = excluded.corrected_by, corrected_at = excluded.corrected_at`,
+      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.description, i.severity, i.location, i.status, i.raisedBy, i.resolution, i.closedBy, i.closedAt, i.testItemId, i.sourceRunId, i.escalationRequestedAt, i.escalatedBy, i.qualityNcrId, i.createdAt, i.updatedAt,
+        i.routedTo ?? null, i.routedBy ?? null, i.routedAt ?? null, i.routingReason ?? null, i.routingReceiptId ?? null,
+        i.correctiveAction ?? null, i.correctionReference ?? null, i.correctedBy ?? null, i.correctedAt ?? null],
     );
   }
   async findPunchItem(id: string, tenantId: string): Promise<PunchItem | null> {
@@ -771,6 +778,10 @@ function toPunch(r: Record<string, unknown>): PunchItem {
     testItemId: (r.test_item_id as string) ?? null, sourceRunId: (r.source_run_id as string) ?? null,
     escalationRequestedAt: tsIso(r.escalation_requested_at), escalatedBy: (r.escalated_by as string) ?? null,
     qualityNcrId: (r.quality_ncr_id as string) ?? null,
+    routedTo: (r.routed_to as string) ?? null, routedBy: (r.routed_by as string) ?? null, routedAt: tsIso(r.routed_at),
+    routingReason: (r.routing_reason as string) ?? null, routingReceiptId: (r.routing_receipt_id as string) ?? null,
+    correctiveAction: (r.corrective_action as string) ?? null, correctionReference: (r.correction_reference as string) ?? null,
+    correctedBy: (r.corrected_by as string) ?? null, correctedAt: tsIso(r.corrected_at),
     createdAt: tsIso(r.created_at) as string, updatedAt: tsIso(r.updated_at) as string,
   };
 }

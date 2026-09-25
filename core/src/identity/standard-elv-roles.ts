@@ -442,6 +442,9 @@ const COMMISSIONING_RECORD = [
   // Binding a system to Quality's approved checklist revision (TC-08/TC-09). T&C chooses WHICH
   // record executes it; Quality alone decides what the revision says.
   'commissioning.record.checklist-binding',
+  // Routing a defect that needs a design correction to a named Design / Technical Engineer (TC-08).
+  // T&C still closes it, and only after the retest passes.
+  'commissioning.record.route-to-engineering',
 ] as const;
 
 /**
@@ -695,6 +698,11 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // request is that somebody else answers it.
       'quality.material-approval.create', 'quality.material-approval.submit',
       'quality.material-approval.read', 'quality.material-approval.revise',
+      // RECORDS THE CORRECTIVE ACTION on a commissioning defect T&C routed to them, and nothing else in
+      // commissioning (TC-08, the owner's decision of 2026-09-25): no test runs, no closing, no sign-off.
+      // The service further holds it to the defects routed to THIS engineer. It READS the T&C register
+      // it writes into (register read-parity) — read-only, no other commissioning act.
+      'commissioning.record.corrective-action', 'commissioning.record.read',
       readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },

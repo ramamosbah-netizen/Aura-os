@@ -38,6 +38,16 @@ class BindChecklistDto {
   @IsString() itpId!: string;
 }
 
+class RouteDefectDto {
+  @IsString() assigneeId!: string;
+  @IsString() reason!: string;
+}
+
+class CorrectiveActionDto {
+  @IsString() action!: string;
+  @IsOptional() @IsString() reference?: string;
+}
+
 class TestDto {
   @IsInt() @Min(0) pointsPassed!: number;
   @IsOptional() @IsInt() @Min(0) pointsTotal?: number;
@@ -190,6 +200,19 @@ export class CommissioningController {
    * CHECKLIST COVERAGE (TC-08/TC-09): per system on the project, Quality's published template, the
    * approved revision, and whether each record is bound. Declared BEFORE `:id`.
    */
+  /**
+   * THE ENGINEER'S QUEUE (TC-08): defects on a project routed to the caller, with the evidence they
+   * answer. Held by the corrective-action grant — the Design / Technical Engineer reads nothing else of
+   * commissioning. Declared BEFORE `:id`.
+   */
+  @Get('engineering-corrections')
+  @Permissions('commissioning.record.corrective-action')
+  engineeringCorrections(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    const ctx = this.tenant.get();
+    return this.service.listEngineeringCorrections(ctx.tenantId, projectId, ctx.actorId);
+  }
+
   @Get('checklist-coverage')
   checklistCoverage(@Query('projectId') projectId?: string) {
     if (!projectId) throw new BadRequestException('projectId is required');
@@ -603,6 +626,24 @@ export class CommissioningController {
    * Record that a defect needs a Quality non-conformance, and the NCR that answers it.
    * T&C does not raise the NCR — Quality owns that, and this stores only a reference to it.
    */
+  /** T&C routes a defect that needs a design correction to a named Design / Technical Engineer. */
+  @Post(':id/punch/:punchId/route-to-engineering')
+  routeDefect(@Param('id') id: string, @Param('punchId') punchId: string, @Body() dto: RouteDefectDto) {
+    if (!dto?.assigneeId?.trim()) throw new BadRequestException('assigneeId is required');
+    if (!dto?.reason?.trim()) throw new BadRequestException('reason is required');
+    const ctx = this.tenant.get();
+    return this.service.routeDefect(id, punchId, ctx.tenantId, { assigneeId: dto.assigneeId, reason: dto.reason }, ctx.actorId);
+  }
+
+  /** The engineer it was routed to records the corrective action. It does not close the defect. */
+  @Post(':id/punch/:punchId/corrective-action')
+  @Permissions('commissioning.record.corrective-action')
+  recordCorrection(@Param('id') id: string, @Param('punchId') punchId: string, @Body() dto: CorrectiveActionDto) {
+    if (!dto?.action?.trim()) throw new BadRequestException('action is required');
+    const ctx = this.tenant.get();
+    return this.service.recordCorrection(id, punchId, ctx.tenantId, { action: dto.action, reference: dto.reference ?? null }, ctx.actorId);
+  }
+
   @Put(':id/punch/:punchId/escalate')
   escalate(@Param('id') id: string, @Param('punchId') punchId: string, @Body() dto: EscalateDto): Promise<PunchItem> {
     const ctx = this.tenant.get();

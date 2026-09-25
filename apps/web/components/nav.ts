@@ -144,6 +144,7 @@ export const NAV: NavGroup[] = [
         title: 'Engineering', glyph: '⚙',
         items: [
           { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Shop drawings, RFIs, & submittals' },
+          { label: 'Commissioning Corrections', href: '/engineering/corrections', glyph: '🔧', desc: 'Defects T&C routed to you for a design correction' },
         ],
       },
       {

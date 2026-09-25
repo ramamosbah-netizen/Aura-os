@@ -90,13 +90,23 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const quote = await post(`/tendering/tenders/${tender.id}/quotation`);
     await post('/document-requirements/seed', { entityType: 'crm.quotation', entityId: quote.id });
     const checklist = await get(`/document-requirements?entityType=crm.quotation&entityId=${quote.id}`);
-    for (const row of checklist.requirements) for (let i = 0; i < row.requiredCount; i++) {
-      let reference = `fictional-vendor-${i}`, type = 'EXTERNAL_REFERENCE';
-      if (row.type !== 'VENDOR_QUOTE') {
-        const doc = await post('/documents', { title: `Audit ${row.type}`, kind: row.type, aggregateType: 'crm.quotation', aggregateId: quote.id, content: 'Fictional audit evidence only.' });
-        reference = doc.document?.id ?? doc.id; type = 'DOCUMENT_ID';
+    for (const row of checklist.requirements) {
+      /**
+       * On an offer raised from a TENDER, VENDOR_QUOTE is computed from the tender's governed supplier
+       * quotations (stage E, 510776b8): a typed reference is refused 409, asserted so the rule stays
+       * under test. This tender was never put to suppliers, so it takes the governed exception — a
+       * reasoned waiver by the checker, who approves the offer and did not prepare it.
+       */
+      if (row.type === 'VENDOR_QUOTE') {
+        await http.post(`/api/v1/document-requirements/${row.id}/evidence`).send({ type: 'EXTERNAL_REFERENCE', reference: 'fictional-vendor-typed' }).expect(409);
+        await checker.post(`/api/v1/document-requirements/${row.id}/waive`)
+          .send({ reason: 'Delivery audit fixture: this tender was not put to suppliers; the journey under test is award to handover' }).expect(201);
+        continue;
       }
-      await post(`/document-requirements/${row.id}/evidence`, { type, reference });
+      for (let i = 0; i < row.requiredCount; i++) {
+        const doc = await post('/documents', { title: `Audit ${row.type}`, kind: row.type, aggregateType: 'crm.quotation', aggregateId: quote.id, content: 'Fictional audit evidence only.' });
+        await post(`/document-requirements/${row.id}/evidence`, { type: 'DOCUMENT_ID', reference: doc.document?.id ?? doc.id });
+      }
     }
     await patch(`/crm/quotations/${quote.id}/status`, { action: 'submit_review' });
     await checker.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' }).expect(200);

@@ -19,6 +19,32 @@ const binaryParser = (response: IncomingMessage, callback: (error: Error | null,
   response.on('error', (error) => callback(error));
 };
 
+/**
+ * A minimal, structurally valid one-page PDF: header, catalog, page tree, one page, a cross-reference
+ * table with correct byte offsets, and a trailer. A `drawing` may hold only PDF, CAD or image content,
+ * checked from the bytes (core/src/dms/file-type-policy.ts, XOP-09), so a drawing fixture has to BE
+ * one — plain text named as a drawing is refused 400, which is the policy working, not the fixture's
+ * point. The label rides in a comment so each upload stays distinguishable.
+ */
+function minimalPdf(label: string): Buffer {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >>',
+  ];
+  let body = `%PDF-1.4\n% ${label}\n`;
+  const offsets: number[] = [];
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(body, 'latin1'));
+    body += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xref = Buffer.byteLength(body, 'latin1');
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  body += offsets.map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`).join('');
+  body += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+  return Buffer.from(body, 'latin1');
+}
+
 // Readable characterization for the J1 audit, not acceptance of the observed gaps.
 // All writes are isolated in-memory fixtures. Fallbacks are explicitly recorded;
 // an admin continuation does not count as completion by the intended employee.
@@ -144,7 +170,7 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     const evidenceEndpoint = `${base}/evidence`;
     const salesEvidenceUpload = await sales.post(evidenceEndpoint)
       .field('category', 'drawing').field('title', 'Unauthorized drawing')
-      .attach('file', Buffer.from('sales must not upload engineering evidence'), { filename: 'unauthorized.txt', contentType: 'text/plain' });
+      .attach('file', minimalPdf('sales must not upload engineering evidence'), { filename: 'unauthorized.pdf', contentType: 'application/pdf' });
     expect(salesEvidenceUpload.status).toBe(403);
     const uploadedEvidence = (await engineer.post(evidenceEndpoint)
       .field('category', 'client_specification').field('title', 'Client CCTV specification · Rev A')
@@ -181,7 +207,7 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     }).expect(201)).body;
     const foreignEvidence = (await engineer.post(`/api/v1/crm/opportunities/${foreignOpportunity.id}/pre-award-package/evidence`)
       .field('category', 'drawing').field('title', 'Unrelated opportunity drawing')
-      .attach('file', Buffer.from('unrelated'), { filename: 'unrelated.txt', contentType: 'text/plain' })
+      .attach('file', minimalPdf('unrelated'), { filename: 'unrelated.pdf', contentType: 'application/pdf' })
       .expect(201)).body.document;
     const studyPayload = {
       title: 'J1 CCTV technical study', inputRevision: 'Client enquiry Rev 01', reviewerId: 'j1-technical-manager',
@@ -274,12 +300,24 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     expect(selfApproval.status).toBe(403);
     const beforeEvidence = await checker.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' });
     expect(beforeEvidence.status).toBe(409);
-    const attachEvidence = async (quotationId: string) => {
+    const attachEvidence = async (quotationId: string, tenderOffer = false) => {
     await admin.post('/api/v1/document-requirements/seed').send({ entityType: 'crm.quotation', entityId: quotationId }).expect(201);
     const checklist = (await admin.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quotationId}`).expect(200)).body;
     // Real local DMS documents for document references; supplier quotations remain
     // declared external references. This tests readiness mechanics, not content quality.
     for (const row of checklist.requirements) {
+      /**
+       * On an offer raised from a TENDER, VENDOR_QUOTE is computed from the tender's governed supplier
+       * quotations (stage E, 510776b8): a typed reference is refused 409, which is asserted here so the
+       * rule stays under test. This tender was never put to suppliers, so it takes the governed
+       * exception — a reasoned waiver by the commercial manager who answers for the decision.
+       */
+      if (tenderOffer && row.type === 'VENDOR_QUOTE') {
+        await admin.post(`/api/v1/document-requirements/${row.id}/evidence`).send({ type: 'EXTERNAL_REFERENCE', reference: 'J1-typed-vendor-quote' }).expect(409);
+        await commercialManager.post(`/api/v1/document-requirements/${row.id}/waive`)
+          .send({ reason: 'J1 fixture: this tender was not put to suppliers; the journey under test is study to offer, not sourcing' }).expect(201);
+        continue;
+      }
       for (let i = 0; i < row.requiredCount; i++) {
         let reference = `J1-external-vendor-${i + 1}`;
         let type = 'EXTERNAL_REFERENCE';
@@ -412,7 +450,7 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     const foreignTender = (await admin.post('/api/v1/tendering/tenders').send({ title: 'J1 unrelated tender', value: 1 }).expect(201)).body;
     const foreignTenderEvidence = (await engineer.post(`/api/v1/tendering/tenders/${foreignTender.id}/study-files`)
       .field('category', 'drawing').field('title', 'Unrelated tender drawing')
-      .attach('file', Buffer.from('unrelated tender'), { filename: 'unrelated-tender.txt', contentType: 'text/plain' })
+      .attach('file', minimalPdf('unrelated tender'), { filename: 'unrelated-tender.pdf', contentType: 'application/pdf' })
       .expect(201)).body.document;
     const tenderStudyBase = `/api/v1/tendering/tenders/${tender.id}`;
     const prematureTenderQuotation = await admin.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({ vatRate: 5 });
@@ -523,7 +561,7 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     expect(String(prematureTenderSubmission.body.message)).toMatch(/internally approved commercial offer/i);
     const tenderQuote = (await estimator.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({ vatRate: 5 }).expect(201)).body;
     await estimator.patch(`/api/v1/crm/quotations/${tenderQuote.id}/status`).send({ action: 'submit_review' }).expect(200);
-    await attachEvidence(tenderQuote.id);
+    await attachEvidence(tenderQuote.id, true);
     await commercialManager.patch(`/api/v1/crm/quotations/${tenderQuote.id}/status`).send({ action: 'approve' }).expect(200);
     const proposalSource = (await commercialManager.get(`/api/v1/tendering/tenders/${tender.id}/technical-proposal`).expect(200)).body;
     expect(proposalSource).toMatchObject({

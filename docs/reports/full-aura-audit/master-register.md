@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 69 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 39 |
-| PARTIAL | 80 |
+| COMPLETE | 40 |
+| PARTIAL | 79 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -135,7 +135,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 69 gap records (34 reused + 12 ne
 | TC-05 | PASS FAIL evidence | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-06 | Witness identity | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-07 | Witness signature and attachments | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
-| TC-08 | Defect and corrective action | PARTIAL | Commissioning / Quality / DocControl | N-TC; R-J26 |
+| TC-08 | Defect and corrective action | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-09 | Retest history | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-10 | Controlled certificate | UNVERIFIED | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-11 | Readiness rollup | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |

@@ -1209,6 +1209,51 @@ export class CommissioningService {
 
   /** Every defect on the project with its provenance, for the Defects & Retests surface. */
   /**
+   * THE DEFECT AND CORRECTIVE-ACTION REGISTER for a project (TC-08) — one row per defect, joined to the
+   * evidence each answers: its system, the test point it came from and that point's failing run, the
+   * routing to Engineering and the corrective action, the retest (the point's latest result), the
+   * closure, and Quality's decision on an escalation. A READ, composing records that already exist; it
+   * decides nothing and stores nothing, which is what lets a document printed from it be trusted.
+   */
+  async readDefectRegister(tenantId: string, projectId: string) {
+    const [records, punch, items, runs] = await Promise.all([
+      this.store.list(tenantId, projectId),
+      this.listProjectPunchItems(tenantId, projectId),
+      this.store.listTestItemsForProject(tenantId, projectId),
+      this.store.listTestRunsForProject(tenantId, projectId),
+    ]);
+    const recordById = new Map(records.map((r) => [r.id, r]));
+    const itemById = new Map(items.map((i) => [i.id, i]));
+    return {
+      projectName: records.find((r) => r.projectName)?.projectName ?? null,
+      qualityReadable: punch.every((p) => p.qualityReadable),
+      defects: punch.map((p) => {
+        const rec = recordById.get(p.commissioningId);
+        const point = p.testItemId ? itemById.get(p.testItemId) : undefined;
+        const pointRuns = point ? runs.filter((r) => r.testItemId === point.id).sort((a, b) => a.runNo - b.runNo) : [];
+        const failing = [...pointRuns].reverse().find((r) => r.result === 'fail') ?? null;
+        return {
+          id: p.id,
+          systemCode: rec?.code ?? null,
+          systemTitle: rec?.title ?? null,
+          description: p.description,
+          severity: p.severity,
+          status: p.status,
+          raisedBy: p.raisedBy,
+          raisedAt: p.createdAt,
+          point: point ? { pointNo: point.pointNo, latestResult: point.result, runs: pointRuns.length } : null,
+          failingRun: failing ? { runNo: failing.runNo, actual: failing.actual, remarks: failing.remarks } : null,
+          routing: p.routedTo ? { to: p.routedTo, by: p.routedBy, at: p.routedAt, reason: p.routingReason } : null,
+          correction: p.correctiveAction ? { action: p.correctiveAction, reference: p.correctionReference, by: p.correctedBy, at: p.correctedAt } : null,
+          closure: p.status === 'closed' ? { by: p.closedBy, at: p.closedAt, resolution: p.resolution } : null,
+          escalated: Boolean(p.escalationRequestedAt),
+          quality: p.quality,
+        };
+      }),
+    };
+  }
+
+  /**
    * Every defect on the project, each with QUALITY'S OUTCOME when it was escalated (TC-08): pending,
    * an NCR raised (with its number), or not a non-conformance (with the reason). `quality` is null for a
    * defect never escalated, and `qualityReadable` false when Quality could not be read — so an unread

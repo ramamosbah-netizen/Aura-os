@@ -102,6 +102,25 @@ describe('TC-08 — the corrective action, and who closes', () => {
     expect((await svc.closePunchItem(rec.id, defect.id, TENANT, { resolution: 'Cleaned lens', closedBy: 'u-tc' })).status).toBe('closed');
   });
 
+  it('the register joins each defect to its evidence, routing, correction, retest and closure', async () => {
+    const { svc, rec, point, defect } = await failedSystem();
+    await svc.routeDefect(rec.id, defect.id, TENANT, { assigneeId: 'u-eng', reason: 'Design change' }, 'u-tc');
+    await svc.recordCorrection(rec.id, defect.id, TENANT, { action: 'IR upgraded', reference: 'DWG-004 rev C' }, 'u-eng');
+    await svc.recordTestResult(rec.id, point.id, TENANT, { result: 'pass', actual: 'Clear at 40 m', testedBy: 'u-tc' });
+    await svc.closePunchItem(rec.id, defect.id, TENANT, { resolution: 'Upgraded and retested', closedBy: 'u-tc' });
+    const register = await svc.readDefectRegister(TENANT, 'p1');
+    expect(register.defects).toHaveLength(1);
+    expect(register.defects[0]).toMatchObject({
+      systemCode: 'TC-CX-01', status: 'closed',
+      point: { pointNo: 'IMG-01', latestResult: 'pass', runs: 2 },
+      failingRun: { runNo: 1, remarks: 'Image drops at night' },
+      routing: { to: 'u-eng', by: 'u-tc', reason: 'Design change' },
+      correction: { action: 'IR upgraded', reference: 'DWG-004 rev C', by: 'u-eng' },
+      closure: { by: 'u-tc', resolution: 'Upgraded and retested' },
+      escalated: false,
+    });
+  });
+
   it("the engineer's queue holds only the defects routed to them", async () => {
     const { svc, rec, defect } = await failedSystem();
     const other = await svc.addPunchItem(rec.id, TENANT, { description: 'Rack label missing' });

@@ -223,7 +223,7 @@ export default function CommissioningWorkspaceClient({
       ) : active === 'readiness' ? (
         <ReadinessSection systems={systems} projectId={selectedProject || undefined} />
       ) : (
-        <Defects systems={systems} punch={punch} />
+        <Defects systems={systems} punch={punch} projectId={selectedProject || undefined} />
       )}
     </div>
   );
@@ -593,7 +593,7 @@ function Testing({
 
 // ── Defects & Retests ───────────────────────────────────────────────────────────────────────────
 
-function Defects({ systems, punch }: { systems: SystemView[]; punch: PunchRow[] | null }) {
+function Defects({ systems, punch, projectId }: { systems: SystemView[]; punch: PunchRow[] | null; projectId?: string }) {
   const router = useRouter();
   const hydrated = useHydrated();
   const [busy, setBusy] = useState<string | null>(null);
@@ -742,6 +742,12 @@ function Defects({ systems, punch }: { systems: SystemView[]; punch: PunchRow[] 
         </>
       )}
 
+      {/* The register as a document (TC-08), printed from the same records — it decides nothing. */}
+      {projectId && (
+        <a href={`/api/commissioning/records/defect-register.pdf?projectId=${encodeURIComponent(projectId)}`} style={st.authorityNote} data-testid="defect-register-pdf">
+          Download the defect and corrective-action register (PDF)
+        </a>
+      )}
       {/* The authority boundary, stated on the screen rather than assumed. */}
       <p style={st.authorityNote} data-testid="quality-boundary">
         A defect here is a <strong>commissioning punch item</strong> — T&amp;C’s own authority, and the gate on sign-off.

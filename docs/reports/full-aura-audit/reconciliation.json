@@ -1,8 +1,8 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 39,
-    "PARTIAL": 80,
+    "COMPLETE": 40,
+    "PARTIAL": 79,
     "BACKEND_ONLY": 4,
     "UI_ONLY": 0,
     "ABSENT": 0,
@@ -92,9 +92,9 @@
   ],
   "rolePairs": 999,
   "journeyPairs": 938,
-  "pageTemplates": 221,
+  "pageTemplates": 223,
   "newPageAudited": 36,
-  "newPageNotAudited": 185,
+  "newPageNotAudited": 187,
   "newTestsPassed": 563,
   "newTestsFailed": 3,
   "newTestFilesExecuted": 89,

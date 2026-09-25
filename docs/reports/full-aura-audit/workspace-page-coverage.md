@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-221 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+223 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -90,6 +90,7 @@
 | apps/web/app/documents/control/page.tsx | PARTIAL | Transmittal UI now distinguishes draft, sent, receipt and acknowledgement and displays purpose |
 | apps/web/app/documents/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/documents/[id]/pdf/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/engineering/corrections/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/engineering/drawings/page.tsx | PARTIAL | Live grouped register/search/open path passed |
 | apps/web/app/engineering/drawings/[id]/page.tsx | PARTIAL | Live submit/review/approve audit path passed; transmit not executed |
 | apps/web/app/engineering/page.tsx | NOT_AUDITED | UNVERIFIED |
@@ -193,6 +194,7 @@
 | apps/web/app/projects/variations/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/calibrations/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/control/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/quality/escalations/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/inspection-requests/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/irs/[id]/print/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/itps/page.tsx | NOT_AUDITED | UNVERIFIED |

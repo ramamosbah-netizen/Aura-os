@@ -213,6 +213,17 @@ export class CommissioningController {
     return this.service.listEngineeringCorrections(ctx.tenantId, projectId, ctx.actorId);
   }
 
+  /**
+   * The defect and corrective-action register (TC-08): each defect with its evidence, routing,
+   * correction, retest, closure and Quality's decision. A read; the document is printed from it.
+   * Declared BEFORE `:id`.
+   */
+  @Get('defect-register')
+  defectRegister(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    return this.service.readDefectRegister(this.tenant.get().tenantId, projectId);
+  }
+
   @Get('checklist-coverage')
   checklistCoverage(@Query('projectId') projectId?: string) {
     if (!projectId) throw new BadRequestException('projectId is required');

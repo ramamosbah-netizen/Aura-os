@@ -3,6 +3,7 @@ import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../components/record-chrome';
 import TenderDetail from '../../../../components/tender-detail';
 import Sales360Journey from '../../../../components/sales-360-journey';
+import TenderAwardBasis, { type TenderCommercialBasisView } from '../../../../components/tender-award-basis';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,8 @@ interface Tender {
   status: 'draft' | 'submitted' | 'won' | 'lost';
   value: number;
   createdAt: string;
+  /** Pinned by the award (ADR-0021): the approved baseline of one revision. Null until awarded. */
+  commercialBasis?: TenderCommercialBasisView | null;
 }
 
 export default async function TenderDetailPage({
@@ -34,6 +37,16 @@ export default async function TenderDetailPage({
     );
   }
 
+  // The award's basis, named: which offer and revision, and who approved it. Read under the viewer's
+  // own permission — a viewer who may not read the offer still sees that a basis was pinned.
+  const basis = tender.commercialBasis ?? null;
+  const [basisQuotation, basisBaseline] = basis
+    ? await Promise.all([
+      getJson<{ quoteNumber: string; revision: number }>(`/api/crm/quotations/${basis.quotationId}`),
+      getJson<{ revision: number; lockedBy: string | null; lockedAt: string }>(`/api/crm/quotations/${basis.quotationId}/baseline`),
+    ])
+    : [null, null];
+
   return (
     <div style={st.container}>
       <RecordChrome type="Tender" title={tender.title} />
@@ -41,6 +54,7 @@ export default async function TenderDetailPage({
       <div style={st.navRow}>
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>
       </div>
+      {basis && <TenderAwardBasis basis={basis} quotation={basisQuotation} baseline={basisBaseline} />}
       <TenderDetail tender={tender} />
     </div>
   );

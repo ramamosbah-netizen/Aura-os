@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AccessService, CompaniesService, DmsService, Permissions, SettingsService, TenantContext, ParseUuidOr404Pipe, UsersService } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Tender, type TenderStatus, TenderService, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
+import { type Tender, type TenderStatus, TenderService, checkTenderTransition, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
 import { AccountService, PreAwardPackageService, QuotationService, type TechnicalStudyContent } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 import { resolveDocumentIdentity } from '../common/document-identity';
@@ -198,10 +198,26 @@ export class TenderingController {
         break;
       }
     }
+    /**
+     * THE TRANSITION'S OWN GATE, TOO. Submitting also passes the domain gate (T1): a Go/Conditional
+     * bid decision and a priced estimate. Readiness used to answer only the three questions above, so
+     * it reported READY, the screen enabled "Submit Tender", and the server then refused with "No
+     * Go/Conditional bid decision on record" — measured on a real submission. Readiness now asks the
+     * same question the submission is asked, from the same evidence, so the two cannot disagree.
+     *
+     * "The same question" includes the value it is asked about: `submit` evaluates the gate against
+     * the tender carrying the approved offer's baseline value (resolveAwardBasis), not the tender's
+     * own figure, so this does exactly that — otherwise a tender created at 0 would read "not a bid"
+     * here while its submission, correctly, went through.
+     */
+    const basis = await this.resolveAwardBasis(tender.tenantId, tender.id);
+    const submitted = basis && basis.value > 0 ? { ...tender, value: basis.value } : tender;
+    const transition = checkTenderTransition(submitted, 'submitted', await this.tenders.tenderEvidence(tender.tenantId, tender.id));
     const gaps = [
       ...(!technicalStudyApproved ? ['Complete independent approval of the Technical Study.'] : []),
       ...(!quantityTakeoffProjected ? ['Complete and approve the Quantity Take-Off, then send it to Estimation.'] : []),
       ...(!commercialOfferApproved ? ['Generate and internally approve the current commercial offer.'] : []),
+      ...transition.gaps.map((g) => g.message),
     ];
     return {
       ready: gaps.length === 0,
@@ -268,7 +284,11 @@ export class TenderingController {
     // THE SCOPE MUST BE THE APPROVED SCOPE. A proposal describing a study nobody signed off, or a
     // scope that never reached the BOQ, is a document that commits the company to unreviewed work.
     if (!readiness.technicalStudyApproved || !readiness.quantityTakeoffProjected) {
-      const blocking = readiness.gaps.filter((gap) => !gap.startsWith('Generate and internally approve'));
+      // Only the technical gaps: the proposal does not rest on the offer or the bid decision.
+      const blocking = [
+        ...(!readiness.technicalStudyApproved ? ['Complete independent approval of the Technical Study.'] : []),
+        ...(!readiness.quantityTakeoffProjected ? ['Complete and approve the Quantity Take-Off, then send it to Estimation.'] : []),
+      ];
       throw new ConflictException(`technical proposal requires the approved Technical Study and its approved scope — ${blocking.join(' ')}`);
     }
     const study = await this.packages.approvedTechnicalStudyForTender(tender.tenantId, tender.id);

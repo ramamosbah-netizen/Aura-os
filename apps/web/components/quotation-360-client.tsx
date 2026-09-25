@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Timeline from './timeline';
 import { QuotationNegotiationPanel } from './negotiation-tab';
 import QuotationApprovalReadiness from './quotation-approval-readiness';
+import QuotationReviewDecision from './quotation-review-decision';
 import QuotationDocumentsPanel from './quotation-documents-panel';
 import type { AssessmentInput } from '@aura/shared';
 import DataStateNotice from './ui/data-state';
@@ -534,6 +535,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       {tab === 'approval' && (
         <RecordCard title="Approval context">
           <QuotationApprovalReadiness quotationId={q.id} sourceTenderId={q.sourceTenderId} />
+          <QuotationReviewDecision quotationId={q.id} status={q.status} canDecide={allowed.approve} />
         </RecordCard>
       )}
 

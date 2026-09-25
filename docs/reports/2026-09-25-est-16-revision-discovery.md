@@ -82,6 +82,25 @@ generate Rev 1 of the SAME offer, compare Rev 1 with Rev 0, approve, send, revis
 re-price, generate Rev 2, approve, award — with the award's basis read back as Rev 2's baseline and
 Rev 0 and Rev 1 unchanged in PostgreSQL.
 
+## Built while the decisions are open
+
+The parts that do not depend on them, proved in `apps/web/e2e/tender-offer-review-award.spec.ts`
+(shipped roles, auth on, PostgreSQL):
+
+- **Return for revision, on screen.** The Approval tab carries the second review outcome with its
+  reason. The preparer who tries it is refused in the server's words; the independent reviewer returns
+  the offer and it is back in draft, read back.
+- **The review history.** Every return with who, when and why against its revision, and the approval
+  with who and when, on the Approval tab.
+- **The award names its revision.** The tender reads *Awarded on QUO-… Rev 0 — approved by …*, linked
+  to that offer, and the pinned basis is read back as that revision's baseline.
+- **Readiness asks what submission asks.** Found on the way: readiness omitted the transition gate, so
+  it reported ready without a bid decision and the screen enabled a submission the server refused. It
+  now evaluates the same gate against the same value `submit` uses; the button is disabled and says
+  why until the bid decision exists.
+
+Not built: A, B, C and D above — they wait on the decisions below.
+
 ## Decisions needed
 
 1. **A:** after a first submission, is every change to a tender offer a new revision of the same

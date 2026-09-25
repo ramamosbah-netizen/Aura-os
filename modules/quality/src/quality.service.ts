@@ -18,6 +18,8 @@ import {
 } from './domain/ir-evidence';
 import { type Snag, makeSnag, resolveSnag, closeSnag } from './domain/snag';
 import { type Itp, type PointResult, makeItp, activateItp, recordPointResult, closeItp, allPointsResolved } from './domain/itp';
+import { type ChecklistPointInput, type ItpTemplate, makeItpTemplate, editTemplateDraft, publishTemplate, retireTemplate, templateCoverage, templateSystem } from './domain/itp-template';
+import { prepareSystemItp, reviseSystemItp, editSystemItp, submitSystemItp, approveSystemItp, returnSystemItp, supersedeSystemItp } from './domain/system-itp';
 import {
   type MaterialApproval,
   type NewMaterialApproval,
@@ -37,6 +39,7 @@ export const NCR_VERIFICATION_STORE = Symbol('NCR_VERIFICATION_STORE');
 export const INSPECTION_REQUEST_STORE = Symbol('INSPECTION_REQUEST_STORE');
 export const SNAG_STORE = Symbol('SNAG_STORE');
 export const ITP_STORE = Symbol('ITP_STORE');
+export const ITP_TEMPLATE_STORE = Symbol('ITP_TEMPLATE_STORE');
 export const MATERIAL_APPROVAL_STORE = Symbol('MATERIAL_APPROVAL_STORE');
 export const CALIBRATION_STORE = Symbol('CALIBRATION_STORE');
 export const AUDIT_SCHEDULE_STORE = Symbol('AUDIT_SCHEDULE_STORE');
@@ -47,6 +50,7 @@ import {
   type InspectionRequestStore,
   type SnagStore,
   type ItpStore,
+  type ItpTemplateStore,
   type MaterialApprovalStore,
   type CalibrationStore,
   type AuditScheduleStore,
@@ -63,6 +67,11 @@ export const QUALITY_EVENT = {
   snagClosed: 'quality.snag.closed',
   itpCreated: 'quality.itp.created',
   itpClosed: 'quality.itp.closed',
+  itpTemplatePublished: 'quality.itp_template.published',
+  itpRevisionPrepared: 'quality.itp.revision_prepared',
+  itpRevisionSubmitted: 'quality.itp.revision_submitted',
+  itpRevisionApproved: 'quality.itp.revision_approved',
+  itpRevisionReturned: 'quality.itp.revision_returned',
   marCreated: 'quality.material_approval.created',
   marSubmitted: 'quality.material_approval.submitted',
   marReviewed: 'quality.material_approval.reviewed',
@@ -86,6 +95,10 @@ export class QualityService {
     @Inject(TX_RUNNER) private readonly tx: TxRunner,
     private readonly access: AccessService,
     @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
+    // The tenant library of system templates (TC-08/TC-09). Optional so the no-DB harnesses still
+    // build; every library act refuses in words when it is absent. Explicit token: an @Optional()
+    // union without one reflects as Object and arrives as null.
+    @Optional() @Inject(ITP_TEMPLATE_STORE) private readonly templateStore: ItpTemplateStore | null = null,
   ) {}
 
   // ── NCR (Non-Conformance Reports) ──────────────────────────────────────────
@@ -830,6 +843,218 @@ export class QualityService {
     return updated;
   }
 
+  // ── The approved system checklist (TC-08 / TC-09) ─────────────────────────────────────────
+
+  private templates(): ItpTemplateStore {
+    if (!this.templateStore) throw new Error('the ITP template library is unavailable');
+    return this.templateStore;
+  }
+
+  private assertTenantPerm(actorId: Id | null, tenantId: Id, companyId: string | null | undefined, permission: string): void {
+    if (!actorId) return;
+    const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+    if (companyId) orgPath.push({ level: 'company', id: companyId });
+    this.access.assert(actorId, { permission, orgPath });
+  }
+
+  getItp(tenantId: Id, id: Id): Promise<Itp | null> {
+    return this.itpStore.findById(id, tenantId);
+  }
+
+  listItpTemplates(tenantId: Id, system?: string): Promise<ItpTemplate[]> {
+    return this.templates().list(tenantId, system ? templateSystem(system) : undefined);
+  }
+
+  async getItpTemplate(tenantId: Id, id: Id): Promise<ItpTemplate | null> {
+    return this.templates().findById(id, tenantId);
+  }
+
+  /** Every canonical system and the version Quality has published for it — unready shown, never hidden. */
+  async itpTemplateCoverage(tenantId: Id) {
+    return templateCoverage(await this.templates().list(tenantId));
+  }
+
+  async createItpTemplate(input: {
+    tenantId: Id; companyId?: string | null; actorId: Id | null; system: string; title: string; points: ChecklistPointInput[];
+  }): Promise<ItpTemplate> {
+    this.assertTenantPerm(input.actorId, input.tenantId, input.companyId, 'quality.itp-template.manage');
+    const system = templateSystem(input.system);
+    const existing = await this.templates().list(input.tenantId, system);
+    const version = existing.reduce((max, t) => Math.max(max, t.version), 0) + 1;
+    const template = makeItpTemplate({ ...input, system, version, createdBy: input.actorId });
+    await this.tx.run(async (handle) => { await this.templates().save(template, handle); });
+    return template;
+  }
+
+  async editItpTemplate(tenantId: Id, actorId: Id | null, id: Id, patch: { title?: string; points?: ChecklistPointInput[] }): Promise<ItpTemplate> {
+    const t = await this.templates().findById(id, tenantId);
+    if (!t) throw new Error(`ITP template ${id} not found`);
+    this.assertTenantPerm(actorId, tenantId, t.companyId, 'quality.itp-template.manage');
+    const next = editTemplateDraft(t, patch);
+    await this.tx.run(async (handle) => { await this.templates().save(next, handle); });
+    return next;
+  }
+
+  async publishItpTemplate(tenantId: Id, actorId: Id | null, id: Id): Promise<ItpTemplate> {
+    const t = await this.templates().findById(id, tenantId);
+    if (!t) throw new Error(`ITP template ${id} not found`);
+    this.assertTenantPerm(actorId, tenantId, t.companyId, 'quality.itp-template.manage');
+    const next = publishTemplate(t, actorId);
+    const event = makeEvent({
+      type: QUALITY_EVENT.itpTemplatePublished, tenantId, companyId: t.companyId, actorId,
+      aggregateType: 'quality.itp_template', aggregateId: t.id,
+      payload: { system: t.system, version: t.version, points: t.points.length },
+    });
+    await this.tx.run(async (handle) => {
+      await this.templates().save(next, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    return next;
+  }
+
+  async retireItpTemplate(tenantId: Id, actorId: Id | null, id: Id): Promise<ItpTemplate> {
+    const t = await this.templates().findById(id, tenantId);
+    if (!t) throw new Error(`ITP template ${id} not found`);
+    this.assertTenantPerm(actorId, tenantId, t.companyId, 'quality.itp-template.manage');
+    const next = retireTemplate(t, actorId);
+    await this.tx.run(async (handle) => { await this.templates().save(next, handle); });
+    return next;
+  }
+
+  /** Every revision of one system's checklist on one project, newest first. */
+  private async systemRevisions(tenantId: Id, projectId: Id, system: string): Promise<Itp[]> {
+    return (await this.itpStore.findByProject(projectId, tenantId))
+      .filter((i) => i.kind === 'system_commissioning' && i.system === system)
+      .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0));
+  }
+
+  private assertNoRevisionInPreparation(revisions: Itp[], system: string): void {
+    const open = revisions.find((i) => i.status === 'draft' || i.status === 'submitted');
+    if (open) {
+      throw new Error(`the ${system} checklist on this project already has revision ${open.revision} in preparation (${open.status}) — finish or return that one first`);
+    }
+  }
+
+  /** Quality adopts a published template into the project as the next revision of that system's checklist. */
+  async prepareSystemItp(input: {
+    tenantId: Id; companyId?: string | null; actorId: Id | null; projectId: Id; projectName?: string | null; templateId: Id; reference?: string;
+  }): Promise<Itp> {
+    await this.projectScope?.requireProject(input.tenantId, input.projectId);
+    this.assertItpPerm(input.actorId, input.tenantId, input.companyId ?? null, 'quality.itp.create', input.projectId);
+    const template = await this.templates().findById(input.templateId, input.tenantId);
+    if (!template) throw new Error(`ITP template ${input.templateId} not found`);
+    const revisions = await this.systemRevisions(input.tenantId, input.projectId, template.system);
+    this.assertNoRevisionInPreparation(revisions, template.system);
+    const revision = (revisions[0]?.revision ?? 0) + 1;
+    const current = revisions.find((i) => i.status === 'approved') ?? null;
+    const itp = prepareSystemItp({
+      tenantId: input.tenantId, companyId: input.companyId ?? null, projectId: input.projectId, projectName: input.projectName ?? null,
+      // A document number names the checklist, not one revision of it: revision 2 is the same
+      // ITP at its next revision, so it keeps the number, and the revision is carried on its own.
+      reference: input.reference?.trim() || current?.reference || revisions[0]?.reference || `ITP-${template.system.toUpperCase().replace(/_/g, '-')}`,
+      template, revision, parent: current, createdBy: input.actorId,
+    });
+    await this.saveRevisionEvent(itp, QUALITY_EVENT.itpRevisionPrepared, input.actorId);
+    return itp;
+  }
+
+  /** The next revision of the current approved checklist, for Quality to change and approve again. */
+  async reviseSystemItp(tenantId: Id, actorId: Id | null, id: Id, reference?: string): Promise<Itp> {
+    const approved = await this.itpStore.findById(id, tenantId);
+    if (!approved) throw new Error(`ITP ${id} not found`);
+    this.assertItpPerm(actorId, tenantId, approved.companyId, 'quality.itp.create', approved.projectId);
+    const revisions = await this.systemRevisions(tenantId, approved.projectId, approved.system ?? '');
+    this.assertNoRevisionInPreparation(revisions, approved.system ?? 'system');
+    const next = reviseSystemItp(approved, { revision: (revisions[0]?.revision ?? 0) + 1, reference, createdBy: actorId });
+    await this.saveRevisionEvent(next, QUALITY_EVENT.itpRevisionPrepared, actorId);
+    return next;
+  }
+
+  async editSystemItp(tenantId: Id, actorId: Id | null, id: Id, patch: { title?: string; points?: ChecklistPointInput[] }): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    this.assertItpPerm(actorId, tenantId, itp.companyId, 'quality.itp.create', itp.projectId);
+    const next = editSystemItp(itp, patch);
+    await this.tx.run(async (handle) => { await this.itpStore.save(next, handle); });
+    return next;
+  }
+
+  async submitSystemItp(tenantId: Id, actorId: Id | null, id: Id): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    this.assertItpPerm(actorId, tenantId, itp.companyId, 'quality.itp.create', itp.projectId);
+    const next = submitSystemItp(itp, actorId);
+    await this.saveRevisionEvent(next, QUALITY_EVENT.itpRevisionSubmitted, actorId);
+    return next;
+  }
+
+  /**
+   * APPROVAL, BY SOMEBODY OTHER THAN THE AUTHOR, AND IT FREEZES THE REVISION. The previous approved
+   * revision of the same system is superseded in the SAME transaction — first, so the database's
+   * one-current-revision rule is never momentarily broken — and records already bound to it keep it.
+   */
+  async approveSystemItp(tenantId: Id, actorId: Id | null, id: Id): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    this.assertItpPerm(actorId, tenantId, itp.companyId, 'quality.itp.approve', itp.projectId);
+    const approved = approveSystemItp(itp, actorId);
+    const previous = (await this.systemRevisions(tenantId, itp.projectId, itp.system ?? ''))
+      .find((i) => i.status === 'approved' && i.id !== itp.id) ?? null;
+    const event = makeEvent({
+      type: QUALITY_EVENT.itpRevisionApproved, tenantId, companyId: itp.companyId, actorId,
+      aggregateType: 'quality.itp', aggregateId: itp.id,
+      payload: { reference: itp.reference, system: itp.system, revision: itp.revision, projectId: itp.projectId, supersedes: previous?.id ?? null },
+    });
+    await this.tx.run(async (handle) => {
+      if (previous) await this.itpStore.save(supersedeSystemItp(previous, itp.id), handle);
+      await this.itpStore.save(approved, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`ITP ${itp.reference} (${itp.system} rev ${itp.revision}) approved by ${actorId}`);
+    return approved;
+  }
+
+  async returnSystemItp(tenantId: Id, actorId: Id | null, id: Id, reason: string | undefined): Promise<Itp> {
+    const itp = await this.itpStore.findById(id, tenantId);
+    if (!itp) throw new Error(`ITP ${id} not found`);
+    this.assertItpPerm(actorId, tenantId, itp.companyId, 'quality.itp.approve', itp.projectId);
+    const next = returnSystemItp(itp, actorId, reason);
+    await this.saveRevisionEvent(next, QUALITY_EVENT.itpRevisionReturned, actorId);
+    return next;
+  }
+
+  private async saveRevisionEvent(itp: Itp, type: string, actorId: Id | null): Promise<void> {
+    const event = makeEvent({
+      type, tenantId: itp.tenantId, companyId: itp.companyId, actorId,
+      aggregateType: 'quality.itp', aggregateId: itp.id,
+      payload: { reference: itp.reference, system: itp.system, revision: itp.revision, status: itp.status, projectId: itp.projectId },
+    });
+    await this.tx.run(async (handle) => {
+      await this.itpStore.save(itp, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+  }
+
+  /**
+   * Implements `ApprovedChecklistPort` for Testing & Commissioning: a system checklist as Quality
+   * holds it — the revision, its status and its points — for T&C to bind to and execute.
+   */
+  async readSystemChecklist(tenantId: Id, itpId: Id) {
+    const itp = await this.itpStore.findById(itpId, tenantId);
+    return itp && itp.kind === 'system_commissioning' ? toChecklistFact(itp) : null;
+  }
+
+  async listProjectSystemChecklists(tenantId: Id, projectId: Id) {
+    return (await this.itpStore.findByProject(projectId, tenantId))
+      .filter((i) => i.kind === 'system_commissioning')
+      .map(toChecklistFact);
+  }
+
+  async listPublishedTemplateSystems(tenantId: Id) {
+    if (!this.templateStore) return null;
+    return (await this.itpTemplateCoverage(tenantId)).map((c) => ({ system: c.system as string, publishedVersion: c.publishedVersion }));
+  }
+
   /**
    * Implements `QualityEvidencePort` for Testing & Commissioning (TC-GATE-3).
    *
@@ -875,8 +1100,10 @@ export class QualityService {
       ncrs: ncrs
         .filter((n) => n.projectId === projectId)
         .map((n) => ({ id: n.id, ncrNumber: n.ncrNumber, system: n.system, severity: n.severity, status: n.status })),
+      // Installation-inspection plans only: a system checklist reaches T&C through its binding,
+      // never through this manual link path.
       itps: itps
-        .filter((i) => i.projectId === projectId)
+        .filter((i) => i.projectId === projectId && i.kind !== 'system_commissioning')
         .map((i) => ({
           id: i.id,
           reference: i.reference,
@@ -893,8 +1120,8 @@ export class QualityService {
     };
   }
 
-  listItps(tenantId: Id): Promise<Itp[]> {
-    return this.itpStore.findAll(tenantId);
+  listItps(tenantId: Id, projectId?: Id): Promise<Itp[]> {
+    return projectId ? this.itpStore.findByProject(projectId, tenantId) : this.itpStore.findAll(tenantId);
   }
 
   listItpsPaged(tenantId: Id, page: PageParams): Promise<Page<Itp>> {
@@ -1036,7 +1263,10 @@ export class QualityService {
   ): Promise<{ passed: boolean; openItps?: string[]; reason?: string }> {
     if (!projectId) return { passed: true };
     const itps = await this.itpStore.findByProject(projectId, tenantId);
-    const open = itps.filter((i) => i.status === 'active' && !allPointsResolved(i));
+    // Installation-inspection plans only. A system checklist's points are executed on its
+    // commissioning record and never resolved on the plan — counting them here would block every
+    // work package for ever, and it would mix installation inspection with commissioning.
+    const open = itps.filter((i) => i.kind !== 'system_commissioning' && i.status === 'active' && !allPointsResolved(i));
     if (open.length > 0) {
       const refs = open.map((i) => i.reference);
       return {
@@ -1187,4 +1417,28 @@ export class QualityService {
     this.logger.warn(`Non-conformance ticket ${ncr.ncrNumber} auto-generated from failed audit check: ${item.question}`);
     return ncr;
   }
+}
+
+/** A system checklist as T&C reads it: which revision, whether it is the approved one, and its points. */
+function toChecklistFact(itp: Itp) {
+  return {
+    itpId: itp.id,
+    projectId: itp.projectId,
+    system: itp.system as string,
+    revision: itp.revision ?? 0,
+    reference: itp.reference,
+    title: itp.title,
+    status: itp.status as string,
+    approvedBy: itp.approvedBy,
+    approvedAt: itp.approvedAt,
+    sourceTemplateVersion: itp.sourceTemplateVersion,
+    points: itp.points.map((p) => ({
+      code: p.code ?? '',
+      activity: p.activity,
+      method: p.method ?? null,
+      acceptanceCriteria: p.acceptanceCriteria,
+      mandatory: p.mandatory !== false,
+      pointType: p.pointType as string,
+    })),
+  };
 }

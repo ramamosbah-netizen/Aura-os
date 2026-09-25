@@ -23,6 +23,7 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { altApiAuthHeaders, apiAuthHeaders } from './api-auth';
+import { systemFromChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
@@ -137,16 +138,13 @@ test('the whole chain: engineering through acceptance, closeout and the service 
   ).json();
   await req.put(`${API}/api/v1/elv/devices/${device.id}/status`, { headers: H(), data: { status: 'installed' } });
 
-  // ── 3. T&C registers the system and its test point ───────────────────────────────────────────
-  const system = await (
-    await req.post(CX, { headers: H(), data: { projectId, code: `CX-J${run}`, title: 'CCTV — Tower A', system: 'cctv' } })
-  ).json();
-  const point = await (
-    await req.post(`${CX}/${system.id}/test-items`, {
-      headers: H(),
-      data: { pointNo: 'IMG-01', description: 'Camera image', expected: 'Image on VMS' },
-    })
-  ).json();
+  // ── 3. Quality approves the checklist; T&C registers the system FROM it ─────────────────────
+  // A second QA/QC person approves (TC-08/TC-09): the points T&C executes are Quality's, declared here.
+  const system = await systemFromChecklist(req, {
+    projectId, code: `CX-J${run}`, title: 'CCTV — Tower A', system: 'cctv',
+    points: [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }],
+  });
+  const point = system.point('IMG-01');
 
   // ── 4. It FAILS, and a failing point cannot be commissioned ──────────────────────────────────
   await req.post(`${CX}/${system.id}/test-items/${point.id}/runs`, {

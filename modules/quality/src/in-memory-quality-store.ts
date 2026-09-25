@@ -7,7 +7,9 @@ import type { MaterialApproval } from './domain/material-approval';
 import type { Calibration } from './domain/calibration';
 import type { AuditSchedule } from './domain/audit-schedule';
 import { type Page, type PageParams, paginate } from '@aura/shared';
-import type { NcrStore, NcrVerificationStore, InspectionRequestStore, SnagStore, ItpStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { NcrStore, NcrVerificationStore, InspectionRequestStore, SnagStore, ItpStore, ItpTemplateStore, MaterialApprovalStore, CalibrationStore, AuditScheduleStore, MaterialApprovalFilter } from './store.interface';
+import type { ItpTemplate } from './domain/itp-template';
+import type { ElvSystem } from '@aura/shared';
 import type { IrEvidence } from './domain/ir-evidence';
 import type { NcrEvidence } from './domain/ncr-evidence';
 
@@ -193,6 +195,26 @@ export class InMemoryItpStore implements ItpStore {
   async listPaged(tenantId: string, page: PageParams): Promise<Page<Itp>> {
     const all = await this.findAll(tenantId);
     return paginate(all.map((i) => ({ ...i, points: i.points.map((p) => ({ ...p })) })), page);
+  }
+}
+
+export class InMemoryItpTemplateStore implements ItpTemplateStore {
+  private items = new Map<string, ItpTemplate>();
+
+  async save(t: ItpTemplate): Promise<void> {
+    this.items.set(t.id, { ...t, points: t.points.map((p) => ({ ...p })) });
+  }
+
+  async findById(id: string, tenantId: string): Promise<ItpTemplate | null> {
+    const t = this.items.get(id);
+    return t && t.tenantId === tenantId ? { ...t, points: t.points.map((p) => ({ ...p })) } : null;
+  }
+
+  async list(tenantId: string, system?: ElvSystem): Promise<ItpTemplate[]> {
+    return [...this.items.values()]
+      .filter((t) => t.tenantId === tenantId && (!system || t.system === system))
+      .sort((a, b) => a.system.localeCompare(b.system) || b.version - a.version)
+      .map((t) => ({ ...t, points: t.points.map((p) => ({ ...p })) }));
   }
 }
 

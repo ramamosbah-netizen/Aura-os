@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-220 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+221 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -201,6 +201,7 @@
 | apps/web/app/quality/ncrs/[id]/page.tsx | PARTIAL | Live plan/correct/verify-close path passed |
 | apps/web/app/quality/ncrs/[id]/print/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/quality/snags/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/quality/system-checklists/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/search/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/site/control/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/site/daily-reports/page.tsx | NOT_AUDITED | UNVERIFIED |

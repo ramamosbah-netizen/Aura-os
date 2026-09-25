@@ -21,6 +21,7 @@ import {
   makeCommissioningAttachment,
 } from './domain/commissioning-attachment';
 import { type CommissioningTestItem, makeTestItem, applyLatestRun } from './domain/commissioning-test-item';
+import { bindChecklist as bindToChecklist, checklistPassGaps, checklistTestItems, countedPoints } from './domain/approved-checklist';
 import { type CommissioningTestRun, makeTestRun } from './domain/commissioning-test-run';
 import { type PunchItem, type PunchSeverity, makePunchItem, closePunch, escalateToQuality } from './domain/punch-item';
 import { type CommissioningItpLink, makeItpLink } from './domain/commissioning-itp-link';
@@ -29,8 +30,9 @@ import { type CertificateLink, makeCertificateLink } from './domain/certificate-
 import { type ControlledDocumentFact, AS_BUILT_STATUS, referenceIsSound, resolveDocumentReference } from './domain/document-reference';
 import { assessSystemReadiness, type SystemReadiness } from './domain/commissioning-readiness';
 import {
-  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL,
+  ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, APPROVED_CHECKLIST,
   type ElvEquipmentPort, type QualityEvidencePort, type EngineeringReleasePort, type DocControlPort,
+  type ApprovedChecklistPort, type SystemChecklistFact,
   type EquipmentFact, type ItpFact, type NcrFact, type SnagFact,
 } from './ports';
 
@@ -94,6 +96,8 @@ export interface CommissioningSystemView {
   eligible: boolean;
   commissioned: boolean;
   blockers: string[];
+  /** The approved revision this system executes — null when unbound, which blocks commissioning. */
+  checklist: { itpId: string; revision: number; reference: string | null; boundBy: string | null; boundAt: string | null } | null;
   failingPoints: FailingPointView[];
   /**
    * The wider handover question (TC-GATE-3), deliberately distinct from `eligible` above.
@@ -214,7 +218,18 @@ export class CommissioningService {
     // link be recorded and leaves the readiness chain to report it unverified. An unwired port must
     // block proof, never work.
     @Optional() @Inject(DOC_CONTROL) private readonly docControl?: DocControlPort,
+    // The approved system checklist (TC-08/TC-09) — Quality's, read to bind a record and to report
+    // coverage. Absent means nothing can be bound, which blocks commissioning; it never unblocks it.
+    @Optional() @Inject(APPROVED_CHECKLIST) private readonly checklists?: ApprovedChecklistPort,
   ) {}
+
+  /** Quality's revision, or a refusal in words — never a guess. */
+  private async readChecklist(tenantId: string, itpId: string): Promise<SystemChecklistFact> {
+    if (!this.checklists) throw new Error('the approved checklist is unavailable — Quality could not be read, so nothing can be bound');
+    const fact = await this.checklists.readSystemChecklist(tenantId, itpId);
+    if (!fact) throw new Error(`ITP revision ${itpId} not found`);
+    return fact;
+  }
 
   /** Read a neighbouring domain without letting its outage fail this request. */
   private async readPort<T>(name: string, run: () => Promise<T>): Promise<T | null> {
@@ -239,11 +254,83 @@ export class CommissioningService {
     location?: string | null;
     pointsTotal?: number;
     createdBy?: string | null;
+    /** The approved system-ITP revision to create the record FROM (layer 4 of the checklist contract). */
+    itpId?: string | null;
   }): Promise<CommissioningRecord> {
     const rec = makeCommissioningRecord(params);
-    await this.store.save(rec);
-    this.logger.log(`[Commissioning] registered ${rec.code} (${rec.system}) on project ${rec.projectId}`);
-    return rec;
+    if (!params.itpId) {
+      await this.store.save(rec);
+      this.logger.log(`[Commissioning] registered ${rec.code} (${rec.system}) on project ${rec.projectId}`);
+      return rec;
+    }
+    const fact = await this.readChecklist(params.tenantId, params.itpId);
+    const bound = bindToChecklist(rec, fact, params.createdBy ?? null);
+    await this.store.save(bound);
+    for (const item of checklistTestItems(bound, fact)) await this.store.saveTestItem(item);
+    await this.syncTally(bound, params.tenantId);
+    this.logger.log(`[Commissioning] registered ${rec.code} (${rec.system}) from ${fact.reference} revision ${fact.revision}`);
+    return (await this.store.find(bound.id, params.tenantId)) ?? bound;
+  }
+
+  /**
+   * Bind a record — typically one already in progress — to the current approved revision for its
+   * system. Its points arrive from the revision; any points typed before binding stay as history and
+   * never count toward PASS, except that one standing failed still blocks: a recorded failure is not
+   * erased by binding.
+   */
+  async bindChecklist(id: string, tenantId: string, itpId: string, actorId: string | null): Promise<CommissioningRecord> {
+    const rec = await this.mustFind(id, tenantId);
+    const fact = await this.readChecklist(tenantId, itpId);
+    const bound = bindToChecklist(rec, fact, actorId);
+    await this.store.save(bound);
+    for (const item of checklistTestItems(bound, fact)) await this.store.saveTestItem(item);
+    await this.syncTally(bound, tenantId);
+    await this.events.append([makeEvent({
+      type: 'commissioning.checklist.bound',
+      tenantId, companyId: rec.companyId, actorId,
+      aggregateType: 'commissioning.record', aggregateId: rec.id,
+      payload: { itpId: fact.itpId, reference: fact.reference, revision: fact.revision, points: fact.points.length },
+    })]);
+    this.logger.log(`[Commissioning] ${rec.code} bound to ${fact.reference} revision ${fact.revision}`);
+    return (await this.store.find(id, tenantId)) ?? bound;
+  }
+
+  /**
+   * CHECKLIST COVERAGE for one project: every system in scope — from its commissioning records and
+   * from Quality's checklists — with the template Quality has published, the approved revision, and
+   * whether each record is bound. Unready systems are shown, never hidden.
+   */
+  async checklistCoverage(tenantId: string, projectId: string) {
+    const [records, checklists, templates] = await Promise.all([
+      this.store.list(tenantId, projectId),
+      this.checklists ? this.readPort('Quality checklists', () => this.checklists!.listProjectSystemChecklists(tenantId, projectId)) : Promise.resolve(null),
+      this.checklists ? this.readPort('ITP template library', () => this.checklists!.listPublishedTemplateSystems(tenantId)) : Promise.resolve(null),
+    ]);
+    const systems = [...new Set([...records.map((r) => r.system as string), ...(checklists ?? []).map((c) => c.system)])].sort();
+    return {
+      readable: checklists !== null && templates !== null,
+      systems: systems.map((system) => {
+        const approved = (checklists ?? []).find((c) => c.system === system && c.status === 'approved') ?? null;
+        const inPreparation = (checklists ?? []).find((c) => c.system === system && (c.status === 'draft' || c.status === 'submitted')) ?? null;
+        const templateVersion = templates?.find((t) => t.system === system)?.publishedVersion ?? null;
+        const mine = records.filter((r) => r.system === system);
+        const state = !approved
+          ? (templateVersion === null ? 'no_template' : 'no_approved_itp')
+          : mine.some((r) => !r.itpId && r.status !== 'commissioned') ? 'unbound' : 'ready';
+        return {
+          system,
+          state,
+          templateVersion,
+          approved: approved ? { itpId: approved.itpId, revision: approved.revision, reference: approved.reference, approvedBy: approved.approvedBy, approvedAt: approved.approvedAt } : null,
+          inPreparation: inPreparation ? { itpId: inPreparation.itpId, revision: inPreparation.revision, status: inPreparation.status } : null,
+          records: mine.map((r) => ({
+            id: r.id, code: r.code, status: r.status, itpId: r.itpId, itpRevision: r.itpRevision,
+            // Commissioned before the checklist existed: shown as history, never re-judged.
+            legacyCommissioned: r.status === 'commissioned' && !r.itpId,
+          })),
+        };
+      }),
+    };
   }
 
   async get(id: string, tenantId: string): Promise<CommissioningRecord | null> {
@@ -433,27 +520,19 @@ export class CommissioningService {
     recordedBy: string | null = null,
   ): Promise<CommissioningRecord> {
     const rec = await this.mustFind(id, tenantId);
-    // Retest gate: a system with open defects on its punch list cannot be signed off.
-    const openPunch = (await this.store.listPunchItems(id, tenantId)).filter((p) => p.status === 'open');
-    if (openPunch.length > 0) {
-      throw new Error(`only a system with no open punch items can be commissioned (${openPunch.length} open)`);
+    /**
+     * THE PASS RULE (TC-08/TC-09), re-derived from the EVIDENCE rather than a tally on the record:
+     * bound to an approved revision; every MANDATORY point of that revision executed with a latest
+     * run of pass; no point standing failed; no defect open. PostgreSQL holds the same rule.
+     */
+    if (!rec.itpId) {
+      throw new Error('only a system bound to an approved ITP revision can be commissioned — bind it to the approved revision for its system first');
     }
-
-    // Eligibility is re-derived from the EVIDENCE here, not read from the stored tally. The domain
-    // guard below still checks the tally, but a tally is a number on the record — this asks the test
-    // points themselves, so a system can never be signed off while a point stands failed or was
-    // never executed, whatever the tally happens to say.
+    const openPunch = (await this.store.listPunchItems(id, tenantId)).filter((p) => p.status === 'open');
     const items = await this.store.listTestItems(id, tenantId);
-    if (items.length > 0) {
-      const failed = items.filter((i) => i.result === 'fail');
-      const untested = items.filter((i) => i.result === 'pending');
-      if (failed.length > 0 || untested.length > 0) {
-        const parts = [
-          ...(failed.length > 0 ? [`${failed.length} test point${failed.length === 1 ? '' : 's'} still failing (${failed.map((i) => i.pointNo).join(', ')})`] : []),
-          ...(untested.length > 0 ? [`${untested.length} never executed (${untested.map((i) => i.pointNo).join(', ')})`] : []),
-        ];
-        throw new Error(`only a system whose every test point has passed can be commissioned — ${parts.join('; ')}`);
-      }
+    const gaps = checklistPassGaps(rec, items, openPunch.length);
+    if (gaps.length > 0) {
+      throw new Error(`only a system whose every mandatory point has passed, with no failing point and no open defect, can be commissioned — ${gaps.join('; ')}`);
     }
 
     const next = commission(rec, patch, recordedBy);
@@ -531,6 +610,11 @@ export class CommissioningService {
   ): Promise<CommissioningTestItem> {
     const rec = await this.mustFind(id, tenantId);
     if (rec.status === 'commissioned') throw new Error('conflict: record is already commissioned');
+    if (rec.itpId) {
+      throw new Error(
+        "a hand-typed test point is not allowed for a commissioning record bound to an approved ITP revision — its points come from that revision, and a missing point is Quality's to add in the next one",
+      );
+    }
     const item = makeTestItem({ tenantId, companyId: rec.companyId, commissioningId: rec.id, projectId: rec.projectId, ...input });
     await this.store.saveTestItem(item);
     await this.syncTally(rec, tenantId);
@@ -703,6 +787,14 @@ export class CommissioningService {
     signoffEvidence: Array<SignoffEvidence & { coverage: 'current' | 'superseded' | 'unverifiable' }>;
     /** What the test produced: instrument printouts, photographs, calibration certificates. */
     attachments: CommissioningAttachment[];
+    /**
+     * The approved revision this record executes, as Quality holds it now (TC-08/TC-09) — null when
+     * unbound. `unreadable` when bound but Quality could not be read: the binding stands, the name
+     * is simply not shown.
+     */
+    checklist: { itpId: string; revision: number; reference: string | null; status: string | null; approvedBy: string | null; approvedAt: string | null; unreadable: boolean } | null;
+    /** What stands between this system and PASS — the same words `commission()` refuses with. */
+    passGaps: string[];
   } | null> {
     const record = await this.store.find(id, tenantId);
     if (!record) return null;
@@ -715,6 +807,10 @@ export class CommissioningService {
       this.store.listAttachments(id, tenantId),
     ]);
     const documents = link ? await this.readDocuments(tenantId, record.projectId) : null;
+    const bound = record.itpId && this.checklists
+      ? await this.readPort('Quality checklist', () => this.checklists!.readSystemChecklist(tenantId, record.itpId!))
+      : null;
+    const openPunch = punchItems.filter((p) => p.status === 'open').length;
     return {
       record,
       testItems,
@@ -723,6 +819,18 @@ export class CommissioningService {
       certificate: link ? resolveCertificate(link, documents) : null,
       signoffEvidence: signoff.map((e) => ({ ...e, coverage: signoffCoversResult(e.signedContentHash, record) })),
       attachments,
+      checklist: record.itpId
+        ? {
+          itpId: record.itpId,
+          revision: record.itpRevision ?? 0,
+          reference: bound?.reference ?? null,
+          status: bound?.status ?? null,
+          approvedBy: bound?.approvedBy ?? null,
+          approvedAt: bound?.approvedAt ?? null,
+          unreadable: !bound,
+        }
+        : null,
+      passGaps: record.status === 'commissioned' ? [] : checklistPassGaps(record, testItems, openPunch),
     };
   }
 
@@ -757,6 +865,11 @@ export class CommissioningService {
       // which shows on each link as "unverified" rather than as a silent pass.
       projectId ? this.readDocuments(tenantId, projectId) : Promise.resolve(null),
     ]);
+    // The approved checklists the records are bound to, for the name of each. Read once per project.
+    const checklists = projectId && this.checklists
+      ? await this.readPort('Quality checklists', () => this.checklists!.listProjectSystemChecklists(tenantId, projectId))
+      : null;
+    const checklistById = new Map((checklists ?? []).map((c) => [c.itpId, c]));
     const itpsById = new Map((qualityEvidence?.itps ?? []).map((itp) => [itp.id, itp]));
     const itemsById = new Map(items.map((item) => [item.id, item]));
     const linksByRecord = new Map<string, typeof itpLinks>();
@@ -796,7 +909,8 @@ export class CommissioningService {
       const points = itemsByRecord.get(record.id) ?? [];
       const openPunch = (punchByRecord.get(record.id) ?? []).filter((p) => p.status === 'open');
       const failing = points.filter((p) => p.result === 'fail');
-      const untested = points.filter((p) => p.result === 'pending');
+      // What PASS is decided on: a bound record's mandatory points; an unbound record's every point.
+      const untested = countedPoints(record, points).filter((p) => p.result === 'pending');
       const passed = points.filter((p) => p.result === 'pass');
       // A retest is owed where a point stands failed. Counting runs instead would count history.
       const retestsRequired = failing.length;
@@ -804,11 +918,9 @@ export class CommissioningService {
 
       // The blockers, in the words the person reading them can act on. Order matters: this is the
       // sentence the Overview shows, and the first item should be the one to do next.
-      const blockers: string[] = [];
-      if (points.length === 0) blockers.push('No test points defined');
-      if (untested.length > 0) blockers.push(`${untested.length} test point${untested.length === 1 ? '' : 's'} never executed`);
-      if (failing.length > 0) blockers.push(`${failing.length} test point${failing.length === 1 ? '' : 's'} failing — retest required`);
-      if (openPunch.length > 0) blockers.push(`${openPunch.length} open punch item${openPunch.length === 1 ? '' : 's'}`);
+      // The same rule `commission()` asks, so the screen and the guard can never disagree.
+      const blockers: string[] = record.status === 'commissioned' ? [] : checklistPassGaps(record, points, openPunch.length);
+      const boundTo = record.itpId ? checklistById.get(record.itpId) ?? null : null;
 
       const failingPoints: FailingPointView[] = failing.map((point) => {
         const lineage = runsByItem.get(point.id) ?? [];
@@ -892,6 +1004,7 @@ export class CommissioningService {
         pointsEverFailed: everFailed,
         openPunch: openPunch.length,
         commissioned: record.status === 'commissioned',
+        checklist: record.itpId ? { reference: boundTo?.reference ?? `revision ${record.itpRevision}`, revision: record.itpRevision ?? 0 } : null,
         signedOffBy: record.commissionedBy,
         witnessedBy: record.witnessedBy,
         equipment: equipment === null ? null : equipment.map((d) => ({
@@ -928,7 +1041,10 @@ export class CommissioningService {
         openPunch: openPunch.length,
         // Eligibility asks the same question `commission()` asks, so the screen and the guard can
         // never disagree about who is ready.
-        eligible: record.status !== 'commissioned' && points.length > 0 && failing.length === 0 && untested.length === 0 && openPunch.length === 0,
+        eligible: record.status !== 'commissioned' && blockers.length === 0,
+        checklist: record.itpId
+          ? { itpId: record.itpId, revision: record.itpRevision ?? 0, reference: boundTo?.reference ?? null, boundBy: record.itpBoundBy, boundAt: record.itpBoundAt }
+          : null,
         commissioned: record.status === 'commissioned',
         blockers,
       };

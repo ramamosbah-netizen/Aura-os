@@ -11,6 +11,8 @@ export async function POST(request: Request): Promise<Response> {
     system?: string;
     location?: string;
     pointsTotal?: number;
+    /** The approved checklist revision to create the record FROM (TC-08/TC-09). */
+    itpId?: string;
   };
 
   if (!body.projectId || !body.code || !body.title) {

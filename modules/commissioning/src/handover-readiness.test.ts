@@ -7,6 +7,7 @@ import { assessHandoverReadiness, type HandoverReadinessFacts } from './domain/h
 import { resolveStockReference } from './domain/stock-reference';
 import type { ControlledDocumentFact } from './domain/document-reference';
 import type { DocControlPort, ElvEquipmentPort, EngineeringReleasePort, QualityEvidencePort } from './ports';
+import { ApprovedChecklistFixture } from './approved-checklist.fixture';
 
 /**
  * TC-GATE-4 — handover readiness as a projection.
@@ -411,6 +412,10 @@ describe('TC-GATE-4 — the readiness projection', () => {
 
 // ── through the service, where the projection meets the real T&C calculation ────────────────────
 
+/** The approved checklist the CCTV system executes — declared here, one point, for these tests only. */
+const checklists = new ApprovedChecklistFixture();
+const CCTV_CHECKLIST = checklists.approve({ projectId: 'p1', system: 'cctv', points: [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }] });
+
 function services(ports: {
   elv?: ElvEquipmentPort;
   quality?: QualityEvidencePort;
@@ -420,7 +425,7 @@ function services(ports: {
   const events: DomainEvent[] = [];
   const store = new InMemoryCommissioningStore();
   const eventStore = { append: async (b: DomainEvent[]) => { events.push(...b); }, list: async () => [], listByAggregate: async () => [] };
-  const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never, ports.docControl as never);
+  const commissioning = new CommissioningService(store as never, eventStore as never, ports.elv as never, ports.quality as never, ports.engineering as never, ports.docControl as never, checklists);
   const handover = new HandoverService(store as never, eventStore as never, commissioning, ports.docControl as never);
   return { commissioning, handover, events };
 }
@@ -458,8 +463,8 @@ async function completePackAndTraining(handover: HandoverService, commissioning:
 }
 
 async function commissionedProject(commissioning: CommissioningService) {
-  const rec = await commissioning.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-01', title: 'CCTV', system: 'cctv' });
-  const point = await commissioning.addTestItem(rec.id, TENANT, { pointNo: 'IMG-01', description: 'Camera image' });
+  const rec = await commissioning.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-01', title: 'CCTV', system: 'cctv', itpId: CCTV_CHECKLIST.itpId, createdBy: 'u-tc' });
+  const [point] = await commissioning.listTestItems(rec.id, TENANT);
   await commissioning.recordTestResult(rec.id, point.id, TENANT, { result: 'pass', actual: 'Image on VMS' });
   await commissioning.commission(rec.id, TENANT, { commissionedBy: 'Engineer', witnessedBy: 'Consultant' });
   return rec;

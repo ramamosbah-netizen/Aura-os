@@ -159,8 +159,19 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const device = await post('/elv/devices', { projectId, tag: 'AUD-CAM-01', system: 'cctv' });
     await put(`/elv/devices/${device.id}/status`, { status: 'installed' });
     const cx = '/commissioning/records', ho = '/commissioning/handovers';
-    const system = await post(cx, { projectId, code: 'AUD-CX', title: 'CCTV commissioning', system: 'cctv' });
-    const point = await post(`${cx}/${system.id}/test-items`, { pointNo: 'IMG-01', description: 'Image on VMS' });
+    // The approved checklist the system is commissioned against (TC-08/TC-09): prepared by one
+    // person, approved by ANOTHER. Its one point is declared here, for this audit only.
+    const template = await post('/quality/itp-templates', {
+      system: 'cctv', title: 'CCTV SAT', points: [{ code: 'IMG-01', activity: 'Image on VMS', acceptanceCriteria: 'Image visible' }],
+    });
+    await post(`/quality/itp-templates/${template.id}/publish`);
+    const systemItp = await post('/quality/itps/system', { projectId, templateId: template.id });
+    await post(`/quality/itps/${systemItp.id}/submit`);
+    await http.post(`/api/v1/quality/itps/${systemItp.id}/approve`).send({}).expect(403);
+    await postAsChecker(`/quality/itps/${systemItp.id}/approve`);
+    const system = await post(cx, { projectId, code: 'AUD-CX', title: 'CCTV commissioning', system: 'cctv', itpId: systemItp.id });
+    const [point] = await get(`${cx}/${system.id}/test-items`);
+    expect(point).toMatchObject({ pointNo: 'IMG-01', origin: 'itp', mandatory: true });
     await post(`${cx}/${system.id}/test-items/${point.id}/runs`, { result: 'fail', remarks: 'Fictional cable fault' });
     await http.put(`/api/v1${cx}/${system.id}/commission`).send({ commissionedBy: 'Engineer', witnessedBy: 'Consultant' }).expect(409);
     const punch = await post(`${cx}/${system.id}/punch`, { description: 'Cable fault', severity: 'major' });

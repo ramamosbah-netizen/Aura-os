@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { getJson } from '@/lib/api';
 import CommissioningActions from '@/components/commissioning-actions';
 import CommissioningTestSheet, { type TestSheetPoint, type TestSheetRun } from '@/components/commissioning-test-sheet';
+import CommissioningChecklistBinding, { type BoundChecklist } from '@/components/commissioning-checklist-binding';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,9 +11,13 @@ interface Record_ {
   id: string; code: string; title: string; system: string; location: string | null; status: string;
   projectName: string | null; projectId: string; pointsTotal: number; pointsPassed: number;
   commissionedBy: string | null; witnessedBy: string | null; commissionedAt: string | null; createdAt: string;
+  itpId: string | null; itpBoundBy: string | null; itpBoundAt: string | null;
 }
 interface Punch { id: string; description: string; severity: string; status: string; resolution: string | null; location: string | null }
-interface Detail { record: Record_; testItems: TestSheetPoint[]; testRuns: TestSheetRun[]; punchItems: Punch[] }
+interface Detail {
+  record: Record_; testItems: TestSheetPoint[]; testRuns: TestSheetRun[]; punchItems: Punch[];
+  checklist: BoundChecklist | null; passGaps: string[];
+}
 
 const STATUS_LABEL: Record<string, string> = { pending: 'Pending', in_progress: 'In Progress', tested: 'Tested', commissioned: 'Commissioned', failed: 'Failed' };
 const LIFECYCLE = ['pending', 'in_progress', 'tested', 'commissioned'];
@@ -23,7 +28,7 @@ export default async function Commissioning360({ params }: { params: Promise<{ i
   if (!d?.record) notFound();
   const { record, testItems, testRuns, punchItems } = d;
   const openPunch = punchItems.filter((p) => p.status === 'open');
-  const allPassed = testItems.length > 0 && testItems.every((t) => t.result === 'pass');
+  const gaps = d.passGaps ?? [];
   const stepIndex = LIFECYCLE.indexOf(record.status);
 
   return (
@@ -53,7 +58,17 @@ export default async function Commissioning360({ params }: { params: Promise<{ i
         ))}
       </div>
 
-      <CommissioningActions id={record.id} status={record.status} openPunch={openPunch.map((p) => ({ id: p.id, description: p.description, severity: p.severity }))} allPassed={allPassed} />
+      <CommissioningChecklistBinding
+        recordId={record.id}
+        projectId={record.projectId}
+        system={record.system}
+        status={record.status}
+        checklist={d.checklist ?? null}
+        boundBy={record.itpBoundBy}
+        boundAt={record.itpBoundAt}
+      />
+
+      <CommissioningActions id={record.id} status={record.status} openPunch={openPunch.map((p) => ({ id: p.id, description: p.description, severity: p.severity }))} allPassed={gaps.length === 0} gaps={gaps} />
 
       <CommissioningTestSheet
         recordId={record.id}

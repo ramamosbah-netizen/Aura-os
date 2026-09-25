@@ -3,6 +3,7 @@ import type { DomainEvent } from '@aura/shared';
 import { CommissioningService } from './commissioning.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
 import type { ElvEquipmentPort, EngineeringReleasePort, QualityEvidencePort } from './ports';
+import { ApprovedChecklistFixture } from './approved-checklist.fixture';
 
 /**
  * TC-GATE-3 — the seams to the domains T&C reads.
@@ -24,14 +25,19 @@ function service(ports: {
   const events: DomainEvent[] = [];
   const store = new InMemoryCommissioningStore();
   const eventStore = { append: async (b: DomainEvent[]) => { events.push(...b); }, list: async () => [], listByAggregate: async () => [] };
+  // The approved checklist is wired throughout: these tests are about the OTHER domains' ports, and
+  // a system must be bound to an approved revision before it can be commissioned at all.
+  const checklists = new ApprovedChecklistFixture();
   const svc = new CommissioningService(
     store as never,
     eventStore as never,
     ports.elv as never,
     ports.quality as never,
     ports.engineering as never,
+    undefined,
+    checklists,
   );
-  return { svc, events };
+  return { svc, events, checklists };
 }
 
 const elvPort = (devices: { tag: string; system: string; status: string; commissioningRecordId?: string | null }): ElvEquipmentPort => ({
@@ -51,9 +57,10 @@ const engineeringPort = (drawings: { discipline: string; status: string; count: 
   readProjectDrawingRelease: async () => drawings,
 });
 
-async function commissionedSystem(svc: CommissioningService) {
-  const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-01', title: 'CCTV — Tower A', system: 'cctv' });
-  const point = await svc.addTestItem(rec.id, TENANT, { pointNo: 'IMG-01', description: 'Camera image' });
+async function commissionedSystem({ svc, checklists }: { svc: CommissioningService; checklists: ApprovedChecklistFixture }) {
+  const itp = checklists.approve({ projectId: 'p1', system: 'cctv', points: [{ code: 'IMG-01', activity: 'Camera image' }] });
+  const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-01', title: 'CCTV — Tower A', system: 'cctv', itpId: itp.itpId, createdBy: 'u-tc' });
+  const point = (await svc.listTestItems(rec.id, TENANT))[0];
   await svc.recordTestResult(rec.id, point.id, TENANT, { result: 'pass', actual: 'Image on VMS' });
   await svc.commission(rec.id, TENANT, { commissionedBy: 'Engineer', witnessedBy: 'Consultant' });
   return { rec, point };
@@ -61,8 +68,9 @@ async function commissionedSystem(svc: CommissioningService) {
 
 describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
   it('reports UNKNOWN for every unread domain, and refuses COMMISSIONING READY', async () => {
-    const { svc } = service(); // nothing wired at all
-    const { rec } = await commissionedSystem(svc);
+    const h = service(); // nothing wired at all but the approved checklist
+    const { svc } = h;
+    const { rec } = await commissionedSystem(h);
 
     const view = await svc.readWorkspace(TENANT, 'p1');
     const system = view.systems.find((s) => s.record.id === rec.id)!;
@@ -75,12 +83,13 @@ describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
 
   it('reports UNKNOWN rather than failing the request when a port throws', async () => {
     const exploding: QualityEvidencePort = { readProjectQualityEvidence: async () => { throw new Error('Quality is down'); } };
-    const { svc } = service({
+    const h = service({
       elv: elvPort({ tag: 'CAM-001', system: 'cctv', status: 'installed' }),
       engineering: engineeringPort([{ discipline: 'cctv', status: 'approved', count: 1 }]),
       quality: exploding,
     });
-    const { rec } = await commissionedSystem(svc);
+    const { svc } = h;
+    const { rec } = await commissionedSystem(h);
 
     const view = await svc.readWorkspace(TENANT, 'p1');
     const system = view.systems.find((s) => s.record.id === rec.id)!;
@@ -92,12 +101,13 @@ describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
   });
 
   it('reaches COMMISSIONING READY once every domain answers', async () => {
-    const { svc } = service({
+    const h = service({
       elv: elvPort({ tag: 'CAM-001', system: 'cctv', status: 'installed' }),
       quality: qualityPort({}),
       engineering: engineeringPort([{ discipline: 'cctv', status: 'approved', count: 1 }]),
     });
-    const { rec } = await commissionedSystem(svc);
+    const { svc } = h;
+    const { rec } = await commissionedSystem(h);
 
     const view = await svc.readWorkspace(TENANT, 'p1');
     const system = view.systems.find((s) => s.record.id === rec.id)!;
@@ -107,12 +117,13 @@ describe('TC-GATE-3 — an unbound port blocks rather than passes', () => {
   });
 
   it('a project-wide non-conformance blocks a system that is otherwise ready', async () => {
-    const { svc } = service({
+    const h = service({
       elv: elvPort({ tag: 'CAM-001', system: 'cctv', status: 'installed' }),
       quality: qualityPort({ ncrs: [{ id: 'n1', ncrNumber: 'NCR-020', system: null, severity: 'major', status: 'raised' }] }),
       engineering: engineeringPort([{ discipline: 'cctv', status: 'approved', count: 1 }]),
     });
-    await commissionedSystem(svc);
+    const { svc } = h;
+    await commissionedSystem(h);
 
     const [system] = (await svc.readWorkspace(TENANT, 'p1')).systems;
     expect(system.readiness.commissioningReady).toBe(false);

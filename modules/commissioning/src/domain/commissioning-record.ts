@@ -51,6 +51,14 @@ export interface CommissioningRecord {
   createdBy: Id | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * The approved system-ITP revision this record executes (TC-08/TC-09) — pinned for good once
+   * bound. Null on a record that has not been bound, which can therefore never be commissioned.
+   */
+  itpId: Id | null;
+  itpRevision: number | null;
+  itpBoundBy: Id | null;
+  itpBoundAt: string | null;
 }
 
 export interface NewCommissioningRecord {
@@ -94,6 +102,10 @@ export function makeCommissioningRecord(input: NewCommissioningRecord): Commissi
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,
+    itpId: null,
+    itpRevision: null,
+    itpBoundBy: null,
+    itpBoundAt: null,
   };
 }
 
@@ -134,8 +146,11 @@ export function commission(
   if (rec.status === 'commissioned') {
     throw new Error('conflict: record is already commissioned');
   }
-  if (rec.pointsTotal > 0 && rec.pointsPassed < rec.pointsTotal) {
-    throw new Error('only a system with all test points passed can be commissioned');
+  // The approved checklist (TC-08/TC-09): nothing is commissioned on points nobody approved. What the
+  // points themselves say is re-derived from the evidence by the service (`checklistPassGaps`) and
+  // held again by PostgreSQL — a tally on the record is not evidence.
+  if (!rec.itpId) {
+    throw new Error('only a system bound to an approved ITP revision can be commissioned — bind it to the approved revision for its system first');
   }
   if (!patch.commissionedBy?.trim() || !patch.witnessedBy?.trim()) {
     throw new Error('validation: commissionedBy and witnessedBy are required to sign off');

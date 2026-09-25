@@ -43,16 +43,22 @@ interface Row {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  itp_id: string | null;
+  itp_revision: number | null;
+  itp_bound_by: string | null;
+  itp_bound_at: string | Date | null;
 }
 
 // SELECT list: date read via ::text to avoid timezone drift.
 const COLS = `id, tenant_id, company_id, project_id, project_name, code, title, system, location,
   status, points_total, points_passed, test_date::text, remarks,
-  commissioned_at, commissioned_by, witnessed_by, commission_recorded_by, created_by, created_at, updated_at`;
+  commissioned_at, commissioned_by, witnessed_by, commission_recorded_by, created_by, created_at, updated_at,
+  itp_id, itp_revision, itp_bound_by, itp_bound_at`;
 // INSERT list: same columns, no casts (a cast is invalid in a column list).
 const INSERT_COLS = `id, tenant_id, company_id, project_id, project_name, code, title, system, location,
   status, points_total, points_passed, test_date, remarks,
-  commissioned_at, commissioned_by, witnessed_by, commission_recorded_by, created_by, created_at, updated_at`;
+  commissioned_at, commissioned_by, witnessed_by, commission_recorded_by, created_by, created_at, updated_at,
+  itp_id, itp_revision, itp_bound_by, itp_bound_at`;
 
 function toRecord(r: Row): CommissioningRecord {
   return {
@@ -77,6 +83,10 @@ function toRecord(r: Row): CommissioningRecord {
     createdBy: r.created_by,
     createdAt: typeof r.created_at === 'string' ? r.created_at : new Date(r.created_at).toISOString(),
     updatedAt: typeof r.updated_at === 'string' ? r.updated_at : new Date(r.updated_at).toISOString(),
+    itpId: r.itp_id ?? null,
+    itpRevision: r.itp_revision == null ? null : Number(r.itp_revision),
+    itpBoundBy: r.itp_bound_by ?? null,
+    itpBoundAt: r.itp_bound_at == null ? null : (typeof r.itp_bound_at === 'string' ? r.itp_bound_at : new Date(r.itp_bound_at).toISOString()),
   };
 }
 
@@ -86,8 +96,12 @@ export class PostgresCommissioningStore implements CommissioningStore {
   async save(rec: CommissioningRecord): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_records (${INSERT_COLS})
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25)
        on conflict (id) do update set
+         itp_id = excluded.itp_id,
+         itp_revision = excluded.itp_revision,
+         itp_bound_by = excluded.itp_bound_by,
+         itp_bound_at = excluded.itp_bound_at,
          project_name = excluded.project_name,
          title = excluded.title,
          system = excluded.system,
@@ -107,6 +121,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
         rec.system, rec.location, rec.status, rec.pointsTotal, rec.pointsPassed, rec.testDate,
         rec.remarks, rec.commissionedAt, rec.commissionedBy, rec.witnessedBy, rec.commissionRecordedBy, rec.createdBy,
         rec.createdAt, rec.updatedAt,
+        rec.itpId ?? null, rec.itpRevision ?? null, rec.itpBoundBy ?? null, rec.itpBoundAt ?? null,
       ],
     );
   }
@@ -341,10 +356,12 @@ export class PostgresCommissioningStore implements CommissioningStore {
   async saveTestItem(i: CommissioningTestItem): Promise<void> {
     await this.pool.query(
       `insert into public.aura_commissioning_test_items
-        (id, tenant_id, company_id, commissioning_id, project_id, point_no, description, expected, actual, result, remarks, tested_by, tested_at, created_at)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+        (id, tenant_id, company_id, commissioning_id, project_id, point_no, description, expected, actual, result, remarks, tested_by, tested_at, created_at,
+         origin, itp_id, itp_point_code, mandatory)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        on conflict (id) do update set actual = excluded.actual, result = excluded.result, remarks = excluded.remarks, tested_by = excluded.tested_by, tested_at = excluded.tested_at`,
-      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.pointNo, i.description, i.expected, i.actual, i.result, i.remarks, i.testedBy, i.testedAt, i.createdAt],
+      [i.id, i.tenantId, i.companyId, i.commissioningId, i.projectId, i.pointNo, i.description, i.expected, i.actual, i.result, i.remarks, i.testedBy, i.testedAt, i.createdAt,
+        i.origin ?? 'manual', i.itpId ?? null, i.itpPointCode ?? null, i.mandatory ?? false],
     );
   }
   async findTestItem(id: string, tenantId: string): Promise<CommissioningTestItem | null> {
@@ -597,6 +614,8 @@ function toTestItem(r: Record<string, unknown>): CommissioningTestItem {
     pointNo: r.point_no as string, description: r.description as string, expected: (r.expected as string) ?? null,
     actual: (r.actual as string) ?? null, result: r.result as CommissioningTestItem['result'], remarks: (r.remarks as string) ?? null,
     testedBy: (r.tested_by as string) ?? null, testedAt: tsIso(r.tested_at), createdAt: tsIso(r.created_at) as string,
+    origin: (r.origin as CommissioningTestItem['origin']) ?? 'manual', itpId: (r.itp_id as string) ?? null,
+    itpPointCode: (r.itp_point_code as string) ?? null, mandatory: Boolean(r.mandatory),
   };
 }
 

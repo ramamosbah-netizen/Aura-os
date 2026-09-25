@@ -7,6 +7,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { approvedChecklist } from './approved-checklist';
 
 const API = (process.env.AURA_API_URL ?? 'http://localhost:4000') + '/api/v1/commissioning/records';
 const H = () => apiAuthHeaders();
@@ -32,8 +33,9 @@ test('the T&C workspace carries a system from no evidence to witnessed sign-off'
   await expect(page).toHaveURL(new RegExp(`project=${projectId}`));
   await expect(page.getByTestId('cx-card-all-systems')).toContainText('1');
 
-  // A system with nothing to prove is not "ready" — the Overview says what is missing.
-  await expect(page.getByTestId('cx-blocking')).toContainText('No test points defined');
+  // A system with nothing to prove is not "ready" — the Overview says what is missing. Since
+  // TC-08/TC-09 that is first the approved checklist: nothing it holds could make it PASS without one.
+  await expect(page.getByTestId('cx-blocking')).toContainText('No approved checklist');
 
   // Navigating the sections keeps the project. This is the continuity requirement, asserted rather
   // than assumed: a section switch that drops the filter silently shows another project's work.
@@ -60,18 +62,22 @@ test('the T&C workspace carries a system from no evidence to witnessed sign-off'
   // Empty state, proved rather than assumed: this project has no devices registered.
   await expect(page.getByText('No devices registered for this project')).toBeVisible();
 
-  // ── Testing: open the system, author a point, execute it ───────────────────────────────────────
+  // ── Testing: open the system, bind it to Quality's approved checklist, execute its point ───────
+  // The point is Quality's (TC-08/TC-09) — declared here for this test, approved by a second QA/QC.
+  const checklist = await approvedChecklist(page.request, projectId, 'structured_cabling', [
+    { code: 'PL-034', activity: 'Permanent link 034', acceptanceCriteria: '90 m or less' },
+  ]);
   await page.getByTestId('cx-section-testing').click();
   await page.getByTestId(`cx-open-${code}`).click();
   // A real loading state while the system's detail is fetched.
   await expect(page.getByTestId(`system-panel-${code}`)).toBeVisible({ timeout: 15_000 });
 
-  await page.getByTestId('add-test-point').click();
-  await page.getByTestId('point-no').fill('PL-034');
-  await page.getByTestId('point-description').fill('Permanent link 034');
-  await page.getByTestId('point-expected').fill('90 m or less');
-  await page.getByTestId('point-save').click();
+  await expect(page.getByTestId('cx-checklist-unbound')).toContainText(`${checklist.reference} · revision ${checklist.revision}`);
+  await page.getByTestId('cx-checklist-bind').click();
+  await expect(page.getByTestId('cx-checklist-bound')).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('test-point-PL-034')).toBeVisible();
+  // A bound record takes no hand-typed point: the form is not offered.
+  await expect(page.getByTestId('add-test-point')).toHaveCount(0);
   // Reconciled without a reload: the list line above the panel already knows.
   await expect(page.getByTestId(`cx-points-${code}`)).toContainText('0/1 passed');
 
@@ -105,11 +111,15 @@ test('the T&C workspace carries a system from no evidence to witnessed sign-off'
 
   // ── Sign-off is refused while the defect is open, and the screen agrees ────────────────────────
   await page.getByTestId('cx-section-testing').click();
-  await expect(page.getByTestId(`cx-blockers-${code}`)).toContainText(/open punch item/i);
+  await expect(page.getByTestId(`cx-blockers-${code}`)).toContainText(/open defect/i);
   await page.getByTestId(`cx-open-${code}`).click();
   await expect(page.getByTestId(`system-panel-${code}`)).toBeVisible({ timeout: 15_000 });
+  // Named first: since XOP-12 the screen refuses an unnamed sign-off before asking the API, and the
+  // refusal under test here is the API's.
+  await page.getByPlaceholder('Commissioned by').fill('Test Engineer');
+  await page.getByPlaceholder('Witnessed by (consultant/client)').fill('Client Consultant');
   await page.getByTestId('btn-commission').click();
-  await expect(page.getByTestId('cx-error')).toContainText(/open punch|still failing/i);
+  await expect(page.getByTestId('cx-error')).toContainText(/open defect|failing/i);
 
   // ── Retest, close the defect, and the blockers clear ───────────────────────────────────────────
   await page.getByTestId('record-run-PL-034').click();

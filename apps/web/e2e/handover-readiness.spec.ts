@@ -13,12 +13,19 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
 const HO = `${API}/api/v1/commissioning/handovers`;
 const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
+
+/**
+ * The checklist Quality approves for the CCTV system in this spec — declared here, for this test only.
+ * Since TC-08/TC-09 a system is commissioned against an approved revision's points, not typed ones.
+ */
+const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
 /**
  * A long journey on purpose, and it has grown with every gate: it drives Testing & Commissioning,
@@ -82,9 +89,10 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   await expect(page.getByTestId(`handover-submit-${pkgCode}`)).toHaveAttribute('title', /not commissioning ready/i);
 
   // ── Make the evidence real, in the domains that own it ──────────────────────────────────────────
-  const point = await (await page.request.post(`${CX}/${systemId}/test-items`, { headers: H(), data: { pointNo: 'IMG-01', description: 'Camera image on VMS' } })).json();
+  const point = (await bindToChecklist(page.request, { recordId: systemId, projectId, system: 'cctv', points: CCTV_POINTS }))('IMG-01');
   await page.request.post(`${CX}/${systemId}/test-items/${point.id}/runs`, { headers: H(), data: { result: 'pass', actual: 'Image on VMS' } });
-  await page.request.put(`${CX}/${systemId}/commission`, { headers: H(), data: { commissionedBy: 'Test Engineer', witnessedBy: 'Client Consultant' } });
+  const signed = await page.request.put(`${CX}/${systemId}/commission`, { headers: H(), data: { commissionedBy: 'Test Engineer', witnessedBy: 'Client Consultant' } });
+  expect(signed.ok(), `the system must commission against its approved checklist — ${await signed.text()}`).toBe(true);
 
   const device = await (await page.request.post(`${API}/api/v1/elv/devices`, { headers: H(), data: { projectId, tag: 'CAM-001', system: 'cctv' } })).json();
   await page.request.put(`${API}/api/v1/elv/devices/${device.id}/status`, { headers: H(), data: { status: 'installed' } });

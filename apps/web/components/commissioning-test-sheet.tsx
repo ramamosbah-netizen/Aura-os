@@ -12,6 +12,10 @@ export interface TestSheetPoint {
   actual: string | null;
   result: string;
   remarks: string | null;
+  /** `itp` — from the bound approved revision; `manual` — typed on the record. */
+  origin?: 'itp' | 'manual';
+  /** Whether PASS needs this point (approved-revision points only). */
+  mandatory?: boolean;
 }
 
 export interface TestSheetRun {
@@ -102,6 +106,9 @@ export default function CommissioningTestSheet({
               <div key={point.id} style={st.point} data-testid={`test-point-${point.pointNo}`}>
                 <div style={st.pointHead}>
                   <span style={st.pointNo}>{point.pointNo}</span>
+                  <span style={point.origin === 'itp' && point.mandatory ? st.tagMandatory : st.tagOther} data-testid={`point-origin-${point.pointNo}`}>
+                    {point.origin === 'itp' ? (point.mandatory ? 'mandatory' : 'optional') : 'typed'}
+                  </span>
                   <span style={st.pointDesc}>
                     <strong>{point.description}</strong>
                     <small>Expected: {point.expected ?? '—'}</small>
@@ -190,6 +197,8 @@ const st = {
   point: { border: '1px solid var(--border, #e5e7eb)', borderRadius: 10, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 } as CSSProperties,
   pointHead: { display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' } as CSSProperties,
   pointNo: { fontFamily: 'var(--mono, ui-monospace, monospace)', fontWeight: 700, fontSize: 13 } as CSSProperties,
+  tagMandatory: { alignSelf: 'center', padding: '1px 7px', borderRadius: 999, background: 'var(--info-soft)', color: 'var(--info)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' } as CSSProperties,
+  tagOther: { alignSelf: 'center', padding: '1px 7px', borderRadius: 999, border: '1px solid var(--border, #e5e7eb)', color: 'var(--muted)', fontSize: 10, fontWeight: 700, textTransform: 'uppercase' } as CSSProperties,
   pointDesc: { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 180, fontSize: 13 } as CSSProperties,
   pointResult: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', fontSize: 12 } as CSSProperties,
   retested: { padding: '3px 9px', borderRadius: 999, background: 'var(--warn-soft, rgba(234,179,8,.15))', color: 'var(--warn)', fontSize: 11, fontWeight: 700 } as CSSProperties,

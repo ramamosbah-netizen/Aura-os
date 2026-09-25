@@ -16,6 +16,8 @@ import {
   type Calibration,
   type AuditSchedule,
   type ChecklistItem,
+  type ChecklistPointInput,
+  type ItpTemplate,
   QualityService,
 } from '@aura/quality';
 
@@ -631,9 +633,15 @@ export class QualityController {
     });
   }
 
+  /**
+   * Narrowed to `?projectId=` when one is given. The guard authorises a project member FOR that
+   * project, and the handler used to ignore it and answer with every plan in the tenant — so a
+   * member of one project read every other project's ITPs, and a project's checklist screen showed
+   * another project's approved revision as its own.
+   */
   @Get('itps')
-  listItps(): Promise<Itp[]> {
-    return this.qualityService.listItps(this.tenant.get().tenantId);
+  listItps(@Query('projectId') projectId?: string): Promise<Itp[]> {
+    return this.qualityService.listItps(this.tenant.get().tenantId, projectId || undefined);
   }
 
   @Get('itps/paged')
@@ -659,6 +667,119 @@ export class QualityController {
   async closeItp(@Param('id') id: string): Promise<Itp> {
     const ctx = this.tenant.get();
     return await this.qualityService.closeItp(ctx.tenantId, ctx.actorId, id);
+  }
+
+  // ── The approved system checklist (TC-08 / TC-09) ───────────────────────────
+  //
+  // Quality owns every act below: the tenant library, adopting a template into a project, adapting
+  // it, and the approval — by a QA/QC person other than the preparer. T&C reads them and executes the
+  // approved points on the commissioning record bound to the revision; it writes none of this.
+
+  @Get('itp-templates/coverage')
+  @Permissions('quality.itp-template.read')
+  templateCoverage() {
+    return this.qualityService.itpTemplateCoverage(this.tenant.get().tenantId);
+  }
+
+  @Get('itp-templates')
+  @Permissions('quality.itp-template.read')
+  listTemplates(@Query('system') system?: string): Promise<ItpTemplate[]> {
+    return this.qualityService.listItpTemplates(this.tenant.get().tenantId, system || undefined);
+  }
+
+  @Get('itp-templates/:id')
+  @Permissions('quality.itp-template.read')
+  async getTemplate(@Param('id') id: string): Promise<ItpTemplate> {
+    const t = await this.qualityService.getItpTemplate(this.tenant.get().tenantId, id);
+    if (!t) throw new NotFoundException(`ITP template ${id} not found`);
+    return t;
+  }
+
+  @Post('itp-templates')
+  @Permissions('quality.itp-template.manage')
+  createTemplate(@Body() dto: { system: string; title: string; points: ChecklistPointInput[] }): Promise<ItpTemplate> {
+    const ctx = this.tenant.get();
+    return this.qualityService.createItpTemplate({
+      tenantId: ctx.tenantId, companyId: ctx.companyId || null, actorId: ctx.actorId || null,
+      system: dto?.system, title: dto?.title, points: dto?.points,
+    });
+  }
+
+  @Put('itp-templates/:id')
+  @Permissions('quality.itp-template.manage')
+  editTemplate(@Param('id') id: string, @Body() dto: { title?: string; points?: ChecklistPointInput[] }): Promise<ItpTemplate> {
+    const ctx = this.tenant.get();
+    return this.qualityService.editItpTemplate(ctx.tenantId, ctx.actorId || null, id, { title: dto?.title, points: dto?.points });
+  }
+
+  @Post('itp-templates/:id/publish')
+  @Permissions('quality.itp-template.manage')
+  publishTemplate(@Param('id') id: string): Promise<ItpTemplate> {
+    const ctx = this.tenant.get();
+    return this.qualityService.publishItpTemplate(ctx.tenantId, ctx.actorId || null, id);
+  }
+
+  @Post('itp-templates/:id/retire')
+  @Permissions('quality.itp-template.manage')
+  retireTemplate(@Param('id') id: string): Promise<ItpTemplate> {
+    const ctx = this.tenant.get();
+    return this.qualityService.retireItpTemplate(ctx.tenantId, ctx.actorId || null, id);
+  }
+
+  /** Adopt a published template into a project as the next revision of that system's checklist. */
+  @Post('itps/system')
+  @Permissions('quality.itp.create')
+  prepareSystemItp(@Body() dto: { projectId: string; projectName?: string; templateId: string; reference?: string }): Promise<Itp> {
+    if (!dto?.projectId) throw new BadRequestException('projectId is required');
+    if (!dto?.templateId) throw new BadRequestException('templateId is required');
+    const ctx = this.tenant.get();
+    return this.qualityService.prepareSystemItp({
+      tenantId: ctx.tenantId, companyId: ctx.companyId || null, actorId: ctx.actorId || null,
+      projectId: dto.projectId, projectName: dto.projectName ?? null, templateId: dto.templateId, reference: dto.reference,
+    });
+  }
+
+  @Get('itps/:id')
+  @Permissions('quality.itp.read')
+  async getItp(@Param('id') id: string): Promise<Itp> {
+    const itp = await this.qualityService.getItp(this.tenant.get().tenantId, id);
+    if (!itp) throw new NotFoundException(`ITP ${id} not found`);
+    return itp;
+  }
+
+  @Put('itps/:id/checklist')
+  @Permissions('quality.itp.create')
+  editSystemItp(@Param('id') id: string, @Body() dto: { title?: string; points?: ChecklistPointInput[] }): Promise<Itp> {
+    const ctx = this.tenant.get();
+    return this.qualityService.editSystemItp(ctx.tenantId, ctx.actorId || null, id, { title: dto?.title, points: dto?.points });
+  }
+
+  @Post('itps/:id/submit')
+  @Permissions('quality.itp.create')
+  submitSystemItp(@Param('id') id: string): Promise<Itp> {
+    const ctx = this.tenant.get();
+    return this.qualityService.submitSystemItp(ctx.tenantId, ctx.actorId || null, id);
+  }
+
+  @Post('itps/:id/approve')
+  @Permissions('quality.itp.approve')
+  approveSystemItp(@Param('id') id: string): Promise<Itp> {
+    const ctx = this.tenant.get();
+    return this.qualityService.approveSystemItp(ctx.tenantId, ctx.actorId || null, id);
+  }
+
+  @Post('itps/:id/return')
+  @Permissions('quality.itp.approve')
+  returnSystemItp(@Param('id') id: string, @Body() dto: { reason?: string }): Promise<Itp> {
+    const ctx = this.tenant.get();
+    return this.qualityService.returnSystemItp(ctx.tenantId, ctx.actorId || null, id, dto?.reason);
+  }
+
+  @Post('itps/:id/revise')
+  @Permissions('quality.itp.create')
+  reviseSystemItp(@Param('id') id: string, @Body() dto: { reference?: string }): Promise<Itp> {
+    const ctx = this.tenant.get();
+    return this.qualityService.reviseSystemItp(ctx.tenantId, ctx.actorId || null, id, dto?.reference);
   }
 
   // ── Material Approval Requests (MAR) ───────────────────────────────────────

@@ -8,6 +8,7 @@ import {
   INSPECTION_REQUEST_STORE,
   SNAG_STORE,
   ITP_STORE,
+  ITP_TEMPLATE_STORE,
   MATERIAL_APPROVAL_STORE,
   CALIBRATION_STORE,
   AUDIT_SCHEDULE_STORE,
@@ -20,6 +21,7 @@ import {
   InMemoryInspectionRequestStore,
   InMemorySnagStore,
   InMemoryItpStore,
+  InMemoryItpTemplateStore,
   InMemoryMaterialApprovalStore,
   InMemoryCalibrationStore,
   InMemoryAuditScheduleStore,
@@ -31,6 +33,7 @@ import {
   PostgresInspectionRequestStore,
   PostgresSnagStore,
   PostgresItpStore,
+  PostgresItpTemplateStore,
   PostgresMaterialApprovalStore,
   PostgresCalibrationStore,
   PostgresAuditScheduleStore,
@@ -75,6 +78,13 @@ import { QualityProjectResolvers } from './project-resolvers';
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresItpStore(pool) : new InMemoryItpStore(),
+    },
+    {
+      // The tenant library of system templates (TC-08/TC-09, migration 0388).
+      provide: ITP_TEMPLATE_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresItpTemplateStore(pool) : new InMemoryItpTemplateStore(),
     },
     {
       provide: MATERIAL_APPROVAL_STORE,

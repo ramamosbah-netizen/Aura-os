@@ -7,8 +7,11 @@ import lineage from './service-scope-helper-lineage.json';
 
 const root=resolve(__dirname,'../../..');
 describe('service authorization architecture — classified ownership, not a projectId spelling rule',()=>{
-  it('accounts for 67 service assertions plus the shared Projects helper, with no silent additions/removals',()=>{
+  it('accounts for 68 service assertions plus the shared Projects helper, with no silent additions/removals',()=>{
     const actual=inventory(root);
+    // 68 since TC-08/TC-09: the System Template Library is tenant-level by the frozen contract, so
+    // managing a template asserts a tenant grant with no project — declared, not slipped in. Every
+    // project act on the checklist (prepare, submit, approve, return) goes through assertItpPerm.
     // 67 since QHS-03: an NCR gained a door for its evidence and a due date it could be late
     // against. Neither asserted anything before because neither existed — nothing could be
     // overdue without a date, so there was nothing to escalate. Two new authorities for two new
@@ -23,9 +26,9 @@ describe('service authorization architecture — classified ownership, not a pro
     // wave D's two new helpers were both forced to be stated rather than slipped in.
     // 62 since wave B: approving a risk assessment asserted NOTHING before, so the census grew by the
     // one authority that was missing rather than by a new feature.
-    expect(actual.filter(r=>r.file.endsWith('.service.ts'))).toHaveLength(67);
+    expect(actual.filter(r=>r.file.endsWith('.service.ts'))).toHaveLength(68);
     expect(actual.map(r=>r.key).sort()).toEqual(classification.map(r=>r.key).sort());
-    expect(new Set(classification.map(r=>r.key)).size).toBe(68);
+    expect(new Set(classification.map(r=>r.key)).size).toBe(69);
     expect(actual.filter(r=>r.file.startsWith('modules/commissioning/'))).toHaveLength(0);
   });
   it('pins each reviewed target and canonical validation/load source, including intentional non-project authority',()=>{
@@ -38,6 +41,7 @@ describe('service authorization architecture — classified ownership, not a pro
     }
     expect(classification.filter(r=>r.classification==='NOT_PROJECT_OWNED').map(r=>r.key)).toEqual([
       'modules/hse/src/hse.service.ts#recordSafetyTraining',
+      'modules/quality/src/quality.service.ts#assertTenantPerm',
     ]);
     expect(classification.filter(r=>r.organizationBranch).map(r=>r.key).sort()).toEqual([
       'modules/quality/src/quality.service.ts#recordCalibration',

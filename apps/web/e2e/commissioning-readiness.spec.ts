@@ -7,10 +7,17 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
 const H = () => apiAuthHeaders();
+
+/**
+ * The checklist Quality approves for the CCTV system in this spec — declared here, for this test only.
+ * Since TC-08/TC-09 a system is commissioned against an approved revision's points, not typed ones.
+ */
+const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
 test('readiness is derived from the domains that own it, and UNKNOWN blocks', async ({ page, baseURL }) => {
   const projectId = await createProject(page.request, 'TC Gate3', baseURL);
@@ -22,9 +29,10 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
 
   // T&C's own evidence: one point, passed, signed off and witnessed. By Gate-2 rules this system is
   // commissioned — and that is exactly the state this gate must not confuse with readiness.
-  const point = await (await page.request.post(`${CX}/${id}/test-items`, { headers: H(), data: { pointNo: 'IMG-01', description: 'Camera image on VMS', expected: 'Sharp image' } })).json();
+  const point = (await bindToChecklist(page.request, { recordId: id, projectId, system: 'cctv', points: CCTV_POINTS }))('IMG-01');
   await page.request.post(`${CX}/${id}/test-items/${point.id}/runs`, { headers: H(), data: { result: 'pass', actual: 'Image on VMS' } });
-  await page.request.put(`${CX}/${id}/commission`, { headers: H(), data: { commissionedBy: 'Test Engineer', witnessedBy: 'Client Consultant' } });
+  const signed = await page.request.put(`${CX}/${id}/commission`, { headers: H(), data: { commissionedBy: 'Test Engineer', witnessedBy: 'Client Consultant' } });
+  expect(signed.ok(), `the system must commission against its approved checklist — ${await signed.text()}`).toBe(true);
 
   // ── Readiness: commissioned, but not ready — and the chain says which domains have not answered ─
   await page.goto(`/commissioning?section=readiness&project=${projectId}`, { waitUntil: 'domcontentloaded' });

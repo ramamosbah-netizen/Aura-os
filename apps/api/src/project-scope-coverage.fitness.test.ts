@@ -53,6 +53,11 @@ const NOT_PROJECT_BEARING: Record<string, string> = {
   'projects:quantity-ledger':
     'its only id-bearing route is `quantity-ledger/position/:boqItemId`, where the id is a BOQ ' +
     'item’s, not a ledger entry’s — there is nothing here to look up by that id',
+  'quality:itp-template':
+    'the System Template Library is TENANT-level by the frozen TC-08/TC-09 contract: one template ' +
+    'per canonical system, adapted INTO each project as that project’s own ITP revision. A template ' +
+    'has no project to resolve to; it is governed org-wide by `quality.itp-template.manage`, and the ' +
+    'project copy it becomes is resolved through `quality:itp` like every other ITP',
 };
 
 function controllerFiles(dir: string): string[] {

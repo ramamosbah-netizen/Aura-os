@@ -7,6 +7,7 @@ import CommissioningWorkspaceClient, {
   type DeviceRow, type Project, type PunchRow, type WorkspaceView,
 } from '../../components/commissioning-workspace-client';
 import type { QualityEvidence } from '../../components/commissioning-gate3-sections';
+import type { ChecklistCoverageView } from '../../components/commissioning-checklist-binding';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export default async function CommissioningPage({
   const project = filters.project ?? '';
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
-  const [view, projects, punch, devices, qualityEvidence] = await Promise.all([
+  const [view, projects, punch, devices, qualityEvidence, checklistCoverage] = await Promise.all([
     getJson<WorkspaceView>(`/api/commissioning/records/workspace${scoped}`),
     getJson<Project[]>('/api/projects/projects'),
     getJson<PunchRow[]>(`/api/commissioning/records/punch-items${scoped}`),
@@ -36,6 +37,8 @@ export default async function CommissioningPage({
     // one thing while the readiness chain computed from another — the drift these ports exist to stop.
     project ? getJson<DeviceRow[]>(`/api/commissioning/records/equipment?projectId=${encodeURIComponent(project)}`) : Promise.resolve([]),
     project ? getJson<QualityEvidence>(`/api/commissioning/records/quality-evidence?projectId=${encodeURIComponent(project)}`) : Promise.resolve(null),
+    // Which systems have an approved checklist (TC-08/TC-09) — read through T&C, which reads Quality.
+    project ? getJson<ChecklistCoverageView>(`/api/commissioning/records/checklist-coverage?projectId=${encodeURIComponent(project)}`) : Promise.resolve(undefined),
   ]);
 
   const totals = view?.totals;
@@ -72,6 +75,7 @@ export default async function CommissioningPage({
         devices={devices}
         qualityEvidence={qualityEvidence}
         selectedProject={project}
+        checklistCoverage={checklistCoverage}
       />
     </div>
   );

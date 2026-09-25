@@ -5,10 +5,17 @@ import { useRouter } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
 import CommissioningActions from './commissioning-actions';
 import CommissioningTestSheet, { type TestSheetPoint, type TestSheetRun } from './commissioning-test-sheet';
+import CommissioningChecklistBinding, { type BoundChecklist } from './commissioning-checklist-binding';
 
 interface PunchRow { id: string; description: string; severity: string; status: string; resolution: string | null; testItemId: string | null }
-interface RecordRow { id: string; code: string; title: string; status: string; pointsTotal: number; pointsPassed: number }
-interface Detail { record: RecordRow; testItems: TestSheetPoint[]; testRuns: TestSheetRun[]; punchItems: PunchRow[] }
+interface RecordRow {
+  id: string; code: string; title: string; status: string; pointsTotal: number; pointsPassed: number;
+  system: string; projectId: string; itpId: string | null; itpBoundBy: string | null; itpBoundAt: string | null;
+}
+interface Detail {
+  record: RecordRow; testItems: TestSheetPoint[]; testRuns: TestSheetRun[]; punchItems: PunchRow[];
+  checklist: BoundChecklist | null; passGaps: string[];
+}
 
 /**
  * One system's testing work, opened in place inside the workspace (TC-GATE-2).
@@ -126,17 +133,30 @@ export default function CommissioningSystemPanel({ recordId, onChanged }: { reco
   if (!detail) return null;
 
   const locked = detail.record.status === 'commissioned';
+  const bound = Boolean(detail.record.itpId);
   const openPunch = detail.punchItems.filter((p) => p.status === 'open');
 
   return (
     <div style={st.panel} data-testid={`system-panel-${detail.record.code}`}>
       {error && <p style={st.error} role="alert">{error}</p>}
 
+      <CommissioningChecklistBinding
+        recordId={detail.record.id}
+        projectId={detail.record.projectId}
+        system={detail.record.system}
+        status={detail.record.status}
+        checklist={detail.checklist}
+        boundBy={detail.record.itpBoundBy}
+        boundAt={detail.record.itpBoundAt}
+        onChanged={reconcile}
+      />
+
       <CommissioningActions
         id={detail.record.id}
         status={detail.record.status}
         openPunch={openPunch.map((p) => ({ id: p.id, description: p.description, severity: p.severity }))}
-        allPassed={detail.testItems.length > 0 && detail.testItems.every((t) => t.result === 'pass')}
+        allPassed={(detail.passGaps ?? []).length === 0}
+        gaps={detail.passGaps}
         onChanged={reconcile}
       />
 
@@ -148,7 +168,14 @@ export default function CommissioningSystemPanel({ recordId, onChanged }: { reco
         onChanged={reconcile}
       />
 
-      {!locked && (
+      {/* A bound record's points are the approved revision's: nothing typed here could count, and the
+          API refuses it. The form is not offered, rather than offered and refused. */}
+      {!locked && bound && (
+        <p style={st.tallyNote} data-testid="points-from-checklist">
+          Test points come from the approved checklist. A missing point is Quality’s to add, in the next revision.
+        </p>
+      )}
+      {!locked && !bound && (
         adding ? (
           <div style={st.addForm}>
             <input style={st.input} placeholder="Point no (e.g. PL-034)" value={pointNo} onChange={(e) => setPointNo(e.target.value)} disabled={busy} data-testid="point-no" aria-label="Test point number" />
@@ -165,7 +192,7 @@ export default function CommissioningSystemPanel({ recordId, onChanged }: { reco
       {/* The tally by hand, offered ONLY where there is no sheet to contradict — a small system
           proven by a supplier certificate rather than point by point. The moment a point exists the
           service refuses this, so the control disappears before the refusal can be reached. */}
-      {!locked && detail.testItems.length === 0 && (
+      {!locked && !bound && detail.testItems.length === 0 && (
         <div style={st.addForm} data-testid="tally-form">
           <span style={st.tallyNote}>No test sheet on this system. Add points above, or record the tally from an external test certificate:</span>
           <input style={st.input} type="number" min={0} placeholder="Points passed" value={tallyPassed} onChange={(e) => setTallyPassed(e.target.value)} disabled={busy} data-testid="tally-passed" aria-label="Points passed" />

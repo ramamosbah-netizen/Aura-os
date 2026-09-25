@@ -400,6 +400,11 @@ const QUALITY_REGISTER = [
   'quality.ncr.create', 'quality.ncr.plan', 'quality.ncr.correct', 'quality.ncr.verify', 'quality.ncr.close',
   'quality.snag.create', 'quality.snag.resolve', 'quality.snag.close',
   'quality.itp.create', 'quality.itp.activate', 'quality.itp.points', 'quality.itp.close',
+  // THE APPROVED SYSTEM CHECKLIST (TC-08/TC-09). Quality owns the templates, the project adaptation,
+  // the approval and the acceptance criteria. `approve` is held by the same role as `create` on
+  // purpose: independence is between two PEOPLE, and the domain and the database both refuse the
+  // preparer approving their own revision — as NCR verification already does.
+  'quality.itp-template.manage', 'quality.itp.approve',
   'quality.audit.create', 'quality.audit.checklist', 'quality.audit.ncr',
   'quality.calibration.create',
   // The register itself is QA/QC's; the DECISION on a material approval is the Technical Manager's
@@ -434,6 +439,9 @@ const COMMISSIONING_RECORD = [
   'commissioning.record.result', 'commissioning.record.fail', 'commissioning.record.commission',
   'commissioning.record.punch', 'commissioning.record.close', 'commissioning.record.escalate',
   'commissioning.record.itp-links', 'commissioning.record.asbuilt-links', 'commissioning.record.certificate-link',
+  // Binding a system to Quality's approved checklist revision (TC-08/TC-09). T&C chooses WHICH
+  // record executes it; Quality alone decides what the revision says.
+  'commissioning.record.checklist-binding',
 ] as const;
 
 /**

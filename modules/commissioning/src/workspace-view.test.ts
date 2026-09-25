@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from '@aura/shared';
 import { CommissioningService } from './commissioning.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
+import { ApprovedChecklistFixture } from './approved-checklist.fixture';
 
 /**
  * TC-GATE-2 — the workspace read model.
@@ -16,7 +17,16 @@ function service() {
   const events: DomainEvent[] = [];
   const store = new InMemoryCommissioningStore();
   const eventStore = { append: async (b: DomainEvent[]) => { events.push(...b); }, list: async () => [], listByAggregate: async () => [] };
-  return { svc: new CommissioningService(store as never, eventStore as never), events };
+  const checklists = new ApprovedChecklistFixture();
+  const svc = new CommissioningService(store as never, eventStore as never, undefined, undefined, undefined, undefined, checklists);
+  /** A CCTV record created from an approved revision carrying exactly these points. */
+  const boundSystem = async (code: string, points: string[]) => {
+    const itp = checklists.approve({ projectId: 'p1', system: 'cctv', points: points.map((c) => ({ code: c, activity: `Point ${c}` })) });
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code, title: 'CCTV', system: 'cctv', itpId: itp.itpId, createdBy: 'u-tc' });
+    const items = await svc.listTestItems(rec.id, TENANT);
+    return { rec, point: (c: string) => items.find((i) => i.pointNo === c)! };
+  };
+  return { svc, events, boundSystem };
 }
 
 describe('TC-GATE-2 — workspace projection', () => {
@@ -26,23 +36,23 @@ describe('TC-GATE-2 — workspace projection', () => {
 
     const view = await svc.readWorkspace(TENANT);
     expect(view.totals).toMatchObject({ inScope: 1, noTestPoints: 1, eligible: 0, commissioned: 0 });
-    expect(view.systems[0].blockers).toContain('No test points defined');
+    expect(view.systems[0].blockers).toEqual(['No approved checklist — bind this system to the approved ITP revision for its system']);
+    expect(view.systems[0].checklist).toBeNull();
     expect(view.systems[0].eligible, 'a system with no evidence is not eligible').toBe(false);
   });
 
   it('counts a point that has never been executed separately from one that failed', async () => {
-    const { svc } = service();
-    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-02', title: 'Cabling' });
-    const a = await svc.addTestItem(rec.id, TENANT, { pointNo: 'PL-001', description: 'Link' });
-    await svc.addTestItem(rec.id, TENANT, { pointNo: 'PL-002', description: 'Link' });
-    await svc.recordTestResult(rec.id, a.id, TENANT, { result: 'fail', remarks: 'Over length' });
+    const { svc, boundSystem } = service();
+    const { rec, point } = await boundSystem('TC-02', ['PL-001', 'PL-002']);
+    await svc.recordTestResult(rec.id, point('PL-001').id, TENANT, { result: 'fail', remarks: 'Over length' });
 
-    const view = await svc.readWorkspace(TENANT);
+    const view = await svc.readWorkspace(TENANT, 'p1');
     const s = view.systems[0];
     expect(s).toMatchObject({ pointsTotal: 2, pointsFailing: 1, pointsUntested: 1, retestsRequired: 1 });
+    expect(s.checklist).toMatchObject({ revision: 1, reference: 'ITP-CCTV', boundBy: 'u-tc' });
     expect(s.blockers).toEqual([
-      '1 test point never executed',
-      '1 test point failing — retest required',
+      '1 test point failing — retest required (PL-001)',
+      '1 mandatory point of the approved revision never executed (PL-002)',
     ]);
   });
 
@@ -71,9 +81,9 @@ describe('TC-GATE-2 — workspace projection', () => {
   });
 
   it('reports eligible exactly when the sign-off guard would allow it', async () => {
-    const { svc } = service();
-    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-05', title: 'CCTV' });
-    const point = await svc.addTestItem(rec.id, TENANT, { pointNo: 'IMG-01', description: 'Image' });
+    const { svc, boundSystem } = service();
+    const { rec, point: p } = await boundSystem('TC-05', ['IMG-01']);
+    const point = p('IMG-01');
 
     await svc.recordTestResult(rec.id, point.id, TENANT, { result: 'fail', remarks: 'No image' });
     expect((await svc.readWorkspace(TENANT)).systems[0].eligible).toBe(false);
@@ -89,16 +99,15 @@ describe('TC-GATE-2 — workspace projection', () => {
   });
 
   it('an open defect makes a fully-passed system ineligible, and the guard agrees', async () => {
-    const { svc } = service();
-    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-06', title: 'CCTV' });
-    const point = await svc.addTestItem(rec.id, TENANT, { pointNo: 'IMG-01', description: 'Image' });
-    await svc.recordTestResult(rec.id, point.id, TENANT, { result: 'pass' });
+    const { svc, boundSystem } = service();
+    const { rec, point } = await boundSystem('TC-06', ['IMG-01']);
+    await svc.recordTestResult(rec.id, point('IMG-01').id, TENANT, { result: 'pass' });
     await svc.addPunchItem(rec.id, TENANT, { description: 'Camera 3 out of focus', severity: 'major' });
 
     const s = (await svc.readWorkspace(TENANT)).systems[0];
     expect(s).toMatchObject({ eligible: false, openPunch: 1 });
-    expect(s.blockers).toContain('1 open punch item');
-    await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).rejects.toThrow(/open punch/i);
+    expect(s.blockers).toEqual(['1 open defect']);
+    await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).rejects.toThrow(/1 open defect/i);
   });
 
   it('scopes to one project', async () => {

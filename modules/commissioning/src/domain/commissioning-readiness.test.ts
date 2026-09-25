@@ -24,6 +24,7 @@ const base: ReadinessFacts = {
   drawings: [{ discipline: 'cctv', status: 'approved', count: 1 }],
   ncrs: [],
   itpRequirements: [],
+  checklist: { reference: 'ITP-CCTV', revision: 1 },
 };
 
 const gate = (facts: Partial<ReadinessFacts>, id: string) =>
@@ -37,8 +38,18 @@ describe('TC-GATE-3 — readiness chain', () => {
     // TC-GATE-13 added `inspections` after `engineering`: the installation is inspected before it is
     // commissioned, so the chain reads in the order the work actually happens.
     expect(result.gates.map((g) => g.id)).toEqual([
-      'equipment', 'installation', 'engineering', 'inspections', 'quality', 'tests', 'defects', 'retests', 'signoff', 'certificates',
+      'equipment', 'installation', 'engineering', 'inspections', 'quality', 'checklist', 'tests', 'defects', 'retests', 'signoff', 'certificates',
     ]);
+  });
+
+  it('blocks on a system not bound to an approved checklist, and names Quality as its owner', () => {
+    const r = assessSystemReadiness({ ...base, checklist: null });
+    const g = r.gates.find((x) => x.id === 'checklist')!;
+    expect(g.state).toBe('BLOCKED');
+    expect(g.source).toBe('Quality');
+    expect(g.reason).toMatch(/not bound to an approved ITP revision/i);
+    expect(r.commissioningReady).toBe(false);
+    expect(gate({}, 'checklist').reason).toMatch(/ITP-CCTV, revision 1/);
   });
 
   it('every gate names the domain that owns its answer', () => {

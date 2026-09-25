@@ -13,6 +13,7 @@ interface Itp {
   discipline: string;
   status: string;
   points: ItpPoint[];
+  kind?: string;
 }
 
 export default async function ItpPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
@@ -20,7 +21,11 @@ export default async function ItpPage({ searchParams }: { searchParams: Promise<
   // filtering afterwards never gets the chance to run.
   const { projectId } = await searchParams;
   const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
-  const itps = await getJson<Itp[]>(`/api/quality/itps${scope}`);
+  const all = await getJson<Itp[]>(`/api/quality/itps${scope}`);
+  // Installation inspection plans only. A system commissioning checklist shares the register but is
+  // governed differently — revisions, independent approval — and lives on its own page, so neither
+  // is ever read as the other.
+  const itps = all === null ? null : all.filter((i) => (i.kind ?? 'installation_inspection') === 'installation_inspection');
 
   return (
     <div style={st.page}>
@@ -28,7 +33,8 @@ export default async function ItpPage({ searchParams }: { searchParams: Promise<
       <p style={st.sub}>
         ITPs define the inspection points per work activity — Hold / Witness / Review / Surveillance —
         with acceptance criteria. Build the plan, activate it, sign off each point pass/fail, then close
-        once every point is resolved.
+        once every point is resolved. The checklists a system is commissioned against are on{' '}
+        <a href="/quality/system-checklists" style={{ color: 'var(--accent)' }}>System commissioning checklists</a>.
       </p>
       <section style={{ marginTop: 10 }}>
         {itps === null ? <p style={st.muted}>API offline.</p> : <ItpClient initialItps={itps ?? []} />}

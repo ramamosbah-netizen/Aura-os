@@ -11,12 +11,19 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { systemFromChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
 const HO = `${API}/api/v1/commissioning/handovers`;
 const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
+
+/**
+ * The checklist Quality approves for the CCTV system in this spec — declared here, for this test only.
+ * Since TC-08/TC-09 a system is commissioned against an approved revision's points, not typed ones.
+ */
+const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
 /** TC-GATE-16: spares became a record. Listed, handed over, and acknowledged by the client. */
 async function acknowledgeSpares(request: import('@playwright/test').APIRequestContext, commissioningId: string) {
@@ -39,10 +46,10 @@ async function registerDocument(request: Req, projectId: string, documentNumber:
 
 /** A system that passes its whole T&C chain, so only the handover items can block. */
 async function readySystem(request: Req, projectId: string, code: string) {
-  const rec = await (await request.post(CX, { headers: H(), data: { projectId, code, title: 'CCTV — Tower A', system: 'cctv' } })).json();
-  const point = await (await request.post(`${CX}/${rec.id}/test-items`, { headers: H(), data: { pointNo: 'IMG-01', description: 'Camera image' } })).json();
-  await request.post(`${CX}/${rec.id}/test-items/${point.id}/runs`, { headers: H(), data: { result: 'pass', actual: 'Image on VMS' } });
-  await request.put(`${CX}/${rec.id}/commission`, { headers: H(), data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' } });
+  const rec = await systemFromChecklist(request, { projectId, code, title: 'CCTV — Tower A', system: 'cctv', points: CCTV_POINTS });
+  await request.post(`${CX}/${rec.id}/test-items/${rec.point('IMG-01').id}/runs`, { headers: H(), data: { result: 'pass', actual: 'Image on VMS' } });
+  const signed = await request.put(`${CX}/${rec.id}/commission`, { headers: H(), data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' } });
+  expect(signed.ok(), `the system must commission against its approved checklist — ${await signed.text()}`).toBe(true);
 
   const device = await (await request.post(`${API}/api/v1/elv/devices`, { headers: H(), data: { projectId, tag: 'CAM-001', system: 'cctv' } })).json();
   await request.put(`${API}/api/v1/elv/devices/${device.id}/status`, { headers: H(), data: { status: 'installed' } });

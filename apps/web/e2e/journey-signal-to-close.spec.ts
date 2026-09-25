@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createActiveProject, runId } from './fixtures';
+import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 /**
  * §25 — the whole journey, from a radar signal to a closed project.
@@ -16,6 +18,13 @@ import { createActiveProject, runId } from './fixtures';
  */
 
 const RUN = runId();
+const V1 = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
+
+/**
+ * The checklist Quality approves for the CCTV system in this spec — declared here, for this test only.
+ * Since TC-08/TC-09 a system is commissioned against an approved revision's points, not typed ones.
+ */
+const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
 /** Pre-award: signal → lead → qualified lead → opportunity. Returns the opportunity id. */
 async function signalToOpportunity(
@@ -206,6 +215,9 @@ test('the loop closes: a signed contract delivers a project whose completion com
   }
   const record = await api.post('/api/v1/commissioning/records', { headers: bearer(admin), data: { projectId, code: `SYS-${RUN}`, title: 'CCTV head end', system: 'cctv' } });
   const recordId = ((await record.json()) as { id: string }).id;
+  // Commissioned against Quality's approved checklist (TC-08/TC-09), with its point executed.
+  const point = (await bindToChecklist(api, { recordId, projectId, system: 'cctv', points: CCTV_POINTS }, bearer(admin)))('IMG-01');
+  await api.post(`/api/v1/commissioning/records/${recordId}/test-items/${point.id}/runs`, { headers: bearer(admin), data: { result: 'pass', actual: 'Image on VMS' } });
   const commissioned = await api.put(`/api/v1/commissioning/records/${recordId}/commission`, { headers: bearer(admin), data: { commissionedBy: 'u-admin', witnessedBy: CHECKER } });
   await api.post('/api/v1/doccontrol/register', { headers: bearer(admin), data: { projectId, documentNumber: `AB-${RUN}`, title: 'As-built — CCTV head end', status: 'as_built' } });
   test.skip(!commissioned.ok(), `commissioning fixture could not complete (${commissioned.status()}), so the loop cannot be closed here`);
@@ -252,6 +264,8 @@ test('the delivery close: an executed project clears every domain gate and compl
   });
   expect(record.ok(), 'the commissioning fixture must exist').toBe(true);
   const recordId = ((await record.json()) as { id: string }).id;
+  const point = (await bindToChecklist(request, { recordId, projectId, system: 'cctv', points: CCTV_POINTS }))('IMG-01');
+  await request.post(`${V1}/commissioning/records/${recordId}/test-items/${point.id}/runs`, { headers: apiAuthHeaders(), data: { result: 'pass', actual: 'Image on VMS' } });
   const commissioned = await request.put(`/api/commissioning/records/${recordId}/commission`, {
     data: { commissionedBy: 'u-admin', witnessedBy: 'u-e2e-checker' },
   });

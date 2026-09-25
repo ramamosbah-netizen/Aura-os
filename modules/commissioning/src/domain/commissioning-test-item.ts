@@ -16,6 +16,8 @@ import type { CommissioningTestRun } from './commissioning-test-run';
  * assert something the layer beneath it does not support.
  */
 export type TestResult = 'pending' | 'pass' | 'fail';
+/** `itp` — instantiated from the bound approved revision, Quality's words; `manual` — typed on an unbound record. */
+export type TestItemOrigin = 'manual' | 'itp';
 
 export interface CommissioningTestItem {
   id: Id;
@@ -32,6 +34,10 @@ export interface CommissioningTestItem {
   testedBy: Id | null;
   testedAt: string | null;
   createdAt: string;
+  origin: TestItemOrigin;
+  itpId: Id | null;
+  itpPointCode: string | null;
+  mandatory: boolean;
 }
 
 export interface NewCommissioningTestItem {
@@ -42,6 +48,8 @@ export interface NewCommissioningTestItem {
   pointNo: string;
   description: string;
   expected?: string | null;
+  /** Set only when the point is instantiated from the bound approved revision. */
+  checklist?: { itpId: Id; code: string; mandatory: boolean };
 }
 
 export function makeTestItem(input: NewCommissioningTestItem): CommissioningTestItem {
@@ -62,6 +70,10 @@ export function makeTestItem(input: NewCommissioningTestItem): CommissioningTest
     testedBy: null,
     testedAt: null,
     createdAt: new Date().toISOString(),
+    origin: input.checklist ? 'itp' : 'manual',
+    itpId: input.checklist?.itpId ?? null,
+    itpPointCode: input.checklist?.code ?? null,
+    mandatory: input.checklist?.mandatory ?? false,
   };
 }
 

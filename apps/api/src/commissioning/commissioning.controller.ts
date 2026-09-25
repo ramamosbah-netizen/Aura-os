@@ -30,6 +30,12 @@ class RegisterDto {
   @IsOptional() @IsString() system?: ElvSystem;
   @IsOptional() @IsString() location?: string;
   @IsOptional() @IsInt() @Min(0) pointsTotal?: number;
+  /** The approved system-ITP revision to create the record FROM — its points arrive with it. */
+  @IsOptional() @IsString() itpId?: string;
+}
+
+class BindChecklistDto {
+  @IsString() itpId!: string;
 }
 
 class TestDto {
@@ -176,7 +182,18 @@ export class CommissioningController {
       location: dto.location ?? null,
       pointsTotal: dto.pointsTotal,
       createdBy: ctx.actorId,
+      itpId: dto.itpId || null,
     });
+  }
+
+  /**
+   * CHECKLIST COVERAGE (TC-08/TC-09): per system on the project, Quality's published template, the
+   * approved revision, and whether each record is bound. Declared BEFORE `:id`.
+   */
+  @Get('checklist-coverage')
+  checklistCoverage(@Query('projectId') projectId?: string) {
+    if (!projectId) throw new BadRequestException('projectId is required');
+    return this.service.checklistCoverage(this.tenant.get().tenantId, projectId);
   }
 
   @Get()
@@ -435,6 +452,17 @@ export class CommissioningController {
   @Get(':id/test-items')
   listTestItems(@Param('id') id: string): Promise<CommissioningTestItem[]> {
     return this.service.listTestItems(id, this.tenant.get().tenantId);
+  }
+
+  /**
+   * Bind a record to the current approved revision for its system — explicitly, by a person, by the
+   * revision's id. Never inferred from a discipline or a name; pinned for good once made.
+   */
+  @Post(':id/checklist-binding')
+  bindChecklist(@Param('id') id: string, @Body() dto: BindChecklistDto): Promise<CommissioningRecord> {
+    if (!dto?.itpId?.trim()) throw new BadRequestException('itpId is required');
+    const ctx = this.tenant.get();
+    return this.service.bindChecklist(id, ctx.tenantId, dto.itpId.trim(), ctx.actorId);
   }
 
   @Post(':id/test-items')

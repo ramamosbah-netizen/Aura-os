@@ -28,6 +28,7 @@ export type GateId =
   | 'engineering'
   | 'inspections'
   | 'quality'
+  | 'checklist'
   | 'tests'
   | 'defects'
   | 'retests'
@@ -120,6 +121,8 @@ export interface ReadinessFacts {
   irs: { irNumber: string; discipline: string; status: string; locationDetail: string }[] | null;
   /** ITP requirements a person has linked to this system, with Quality's own result for each. */
   itpRequirements: { reference: string; activity: string; pointType: string; result: string }[];
+  /** The approved system-ITP revision the record is bound to (TC-08/TC-09) — null when unbound. */
+  checklist?: { reference: string; revision: number } | null;
 }
 
 const gate = (id: GateId, label: string, source: ReadinessGate['source'], state: GateState, reason: string): ReadinessGate =>
@@ -132,6 +135,7 @@ export function assessSystemReadiness(facts: ReadinessFacts): SystemReadiness {
     engineeringGate(facts),
     inspectionsGate(facts),
     qualityGate(facts),
+    checklistGate(facts),
     testsGate(facts),
     defectsGate(facts),
     retestsGate(facts),
@@ -288,6 +292,16 @@ function qualityGate(f: ReadinessFacts): ReadinessGate {
   return gate(id, label, src, 'READY', linked > 0
     ? `No open non-conformance, and all ${linked} linked ITP point${linked === 1 ? '' : 's'} passed.`
     : 'No open non-conformance against this system. No ITP is linked to it.');
+}
+
+function checklistGate(f: ReadinessFacts): ReadinessGate {
+  const id: GateId = 'checklist';
+  const label = 'Approved checklist';
+  const src = 'Quality' as const;
+  if (!f.checklist) {
+    return gate(id, label, src, 'BLOCKED', 'Not bound to an approved ITP revision — the points this system is tested against have not been approved by Quality.');
+  }
+  return gate(id, label, src, 'READY', `Bound to ${f.checklist.reference}, revision ${f.checklist.revision}, approved by Quality.`);
 }
 
 function testsGate(f: ReadinessFacts): ReadinessGate {

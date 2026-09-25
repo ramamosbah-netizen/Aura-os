@@ -12,6 +12,7 @@
 import { expect, test } from '@playwright/test';
 import { projectFixtureId } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 const API = (process.env.AURA_API_URL ?? 'http://localhost:4000') + '/api/v1/commissioning/records';
 const H = () => apiAuthHeaders();
@@ -23,11 +24,17 @@ test('a failed test survives its retest, and the tally cannot buy a sign-off', a
     data: { projectId: await projectFixtureId(page.request, baseURL), code, title: 'Structured cabling — Level 3', system: 'structured_cabling' },
   });
   test.skip(created.status() === 502 || created.status() === 404 || !created.ok(), 'commissioning API not reachable');
-  const { id } = await created.json();
+  const { id, projectId } = await created.json();
 
-  // Two points: one that will fail and be retested, one that stays unexecuted for a while.
-  await page.request.post(`${API}/${id}/test-items`, { headers: H(), data: { pointNo: 'PL-034', description: 'Permanent link 034', expected: '≤ 90 m' } });
-  await page.request.post(`${API}/${id}/test-items`, { headers: H(), data: { pointNo: 'IMG-01', description: 'Camera image', expected: 'Image on VMS' } });
+  // Two points, from Quality's approved checklist: one that will fail and be retested, one that
+  // stays unexecuted for a while. Declared here, for this test only (TC-08/TC-09).
+  await bindToChecklist(page.request, {
+    recordId: id, projectId, system: 'structured_cabling',
+    points: [
+      { code: 'PL-034', activity: 'Permanent link 034', acceptanceCriteria: '≤ 90 m' },
+      { code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' },
+    ],
+  });
 
   await page.goto(`/commissioning/${id}`, { waitUntil: 'domcontentloaded' });
   await expect(page.getByTestId('test-point-PL-034')).toBeVisible();
@@ -58,8 +65,12 @@ test('a failed test survives its retest, and the tally cannot buy a sign-off', a
   await expect(page.getByTestId('point-result-PL-034')).toHaveText('fail');
 
   // ── Sign-off is blocked while a point stands failed ────────────────────────────────────────────
+  // Named first: since XOP-12 the screen refuses an unnamed sign-off before asking the API, and the
+  // refusal under test here is the API's.
+  await page.getByPlaceholder('Commissioned by').fill('Test Engineer');
+  await page.getByPlaceholder('Witnessed by (consultant/client)').fill('Client Consultant');
   await page.getByTestId('btn-commission').click();
-  await expect(page.getByTestId('cx-error')).toContainText(/still failing \(PL-034\)/);
+  await expect(page.getByTestId('cx-error')).toContainText(/failing — retest required \(PL-034\)/);
   await expect(page.getByTestId('cx-status')).not.toHaveText('Commissioned');
 
   // ── Run #2: the retest passes. The failure stays. ──────────────────────────────────────────────
@@ -77,6 +88,10 @@ test('a failed test survives its retest, and the tally cannot buy a sign-off', a
   await expect(page.getByTestId('retested-PL-034')).toBeVisible();
 
   // ── Sign-off still blocked: the second point was never executed ────────────────────────────────
+  // Named first: since XOP-12 the screen refuses an unnamed sign-off before asking the API, and the
+  // refusal under test here is the API's.
+  await page.getByPlaceholder('Commissioned by').fill('Test Engineer');
+  await page.getByPlaceholder('Witnessed by (consultant/client)').fill('Client Consultant');
   await page.getByTestId('btn-commission').click();
   await expect(page.getByTestId('cx-error')).toContainText(/never executed \(IMG-01\)/);
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DomainEvent } from '@aura/shared';
 import { CommissioningService } from './commissioning.service';
 import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
+import { ApprovedChecklistFixture } from './approved-checklist.fixture';
 
 /**
  * TC-GATE-1 — the two integrity defects, asserted end to end through the service.
@@ -13,8 +14,9 @@ import { InMemoryCommissioningStore } from './in-memory-commissioning-store';
  */
 const TENANT = 't-gate1';
 
-function service(): { svc: CommissioningService; events: DomainEvent[] } {
+function service(): { svc: CommissioningService; events: DomainEvent[]; checklists: ApprovedChecklistFixture } {
   const events: DomainEvent[] = [];
+  const checklists = new ApprovedChecklistFixture();
   const store = new InMemoryCommissioningStore();
   const eventStore = {
     append: async (batch: DomainEvent[]) => { events.push(...batch); },
@@ -23,16 +25,25 @@ function service(): { svc: CommissioningService; events: DomainEvent[] } {
   };
   // The service takes the two collaborators by DI symbol; constructing directly keeps the test on
   // the real code path without a Nest container.
-  const svc = new CommissioningService(store as never, eventStore as never);
-  return { svc, events };
+  const svc = new CommissioningService(store as never, eventStore as never, undefined, undefined, undefined, undefined, checklists);
+  return { svc, events, checklists };
 }
 
+/** A CCTV system created FROM an approved revision whose two points this fixture declares. */
 async function systemWithTwoPoints() {
-  const { svc, events } = service();
-  const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-01', title: 'CCTV — Tower A' });
-  const link = await svc.addTestItem(rec.id, TENANT, { pointNo: 'PL-034', description: 'Permanent link', expected: '≤ 90 m' });
-  const image = await svc.addTestItem(rec.id, TENANT, { pointNo: 'IMG-01', description: 'Camera image', expected: 'Image on VMS' });
-  return { svc, events, rec, link, image };
+  const { svc, events, checklists } = service();
+  const itp = checklists.approve({
+    projectId: 'p1', system: 'cctv',
+    points: [
+      { code: 'PL-034', activity: 'Permanent link', acceptanceCriteria: '≤ 90 m' },
+      { code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' },
+    ],
+  });
+  const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-01', title: 'CCTV — Tower A', system: 'cctv', itpId: itp.itpId, createdBy: 'u-tc' });
+  const points = await svc.listTestItems(rec.id, TENANT);
+  const link = points.find((p) => p.pointNo === 'PL-034')!;
+  const image = points.find((p) => p.pointNo === 'IMG-01')!;
+  return { svc, events, checklists, rec, link, image };
 }
 
 describe('TC-GATE-1 — retest lineage', () => {
@@ -114,7 +125,7 @@ describe('TC-GATE-1 — the tally cannot contradict the evidence', () => {
     await svc.recordTestResult(rec.id, image.id, TENANT, { result: 'pass', actual: 'Image OK' });
 
     await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'Engineer', witnessedBy: 'Consultant' }))
-      .rejects.toThrow(/still failing \(PL-034\)/);
+      .rejects.toThrow(/failing — retest required \(PL-034\)/);
 
     await svc.recordTestResult(rec.id, link.id, TENANT, { result: 'pass', actual: '71.2 m', remarks: 'Re-pulled' });
     const done = await svc.commission(rec.id, TENANT, { commissionedBy: 'Engineer', witnessedBy: 'Consultant' });
@@ -129,7 +140,7 @@ describe('TC-GATE-1 — the tally cannot contradict the evidence', () => {
     const { svc, rec, link } = await systemWithTwoPoints();
     await svc.recordTestResult(rec.id, link.id, TENANT, { result: 'pass' });
     await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'Engineer', witnessedBy: 'Consultant' }))
-      .rejects.toThrow(/never executed \(IMG-01\)/);
+      .rejects.toThrow(/mandatory point of the approved revision never executed \(IMG-01\)/);
   });
 
   it('still requires a signer and a witness', async () => {
@@ -144,6 +155,88 @@ describe('TC-GATE-1 — the tally cannot contradict the evidence', () => {
     await svc.recordTestResult(rec.id, link.id, TENANT, { result: 'pass' });
     await svc.recordTestResult(rec.id, image.id, TENANT, { result: 'pass' });
     await svc.addPunchItem(rec.id, TENANT, { description: 'Camera 3 out of focus', severity: 'major' });
-    await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).rejects.toThrow(/open punch items/i);
+    await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).rejects.toThrow(/1 open defect/i);
+  });
+});
+
+describe('TC-08/TC-09 — T&C executes the approved checklist', () => {
+  it('creates the points FROM the approved revision, carrying their lineage', async () => {
+    const { rec, link } = await systemWithTwoPoints();
+    expect(rec.itpId).toBeTruthy();
+    expect(rec.itpRevision).toBe(1);
+    expect(rec.itpBoundBy).toBe('u-tc');
+    expect(link).toMatchObject({ origin: 'itp', itpId: rec.itpId, itpPointCode: 'PL-034', mandatory: true, expected: '≤ 90 m' });
+  });
+
+  it('refuses a hand-typed point on a bound record', async () => {
+    const { svc, rec } = await systemWithTwoPoints();
+    await expect(svc.addTestItem(rec.id, TENANT, { pointNo: 'X-01', description: 'Extra', expected: 'Anything' }))
+      .rejects.toThrow(/hand-typed test point is not allowed/);
+    expect(await svc.listTestItems(rec.id, TENANT)).toHaveLength(2);
+  });
+
+  it('refuses to commission an unbound record, however its points read', async () => {
+    const { svc } = service();
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-02', title: 'CCTV — Tower B', system: 'cctv' });
+    const typed = await svc.addTestItem(rec.id, TENANT, { pointNo: 'T-01', description: 'Typed point' });
+    await svc.recordTestResult(rec.id, typed.id, TENANT, { result: 'pass' });
+    await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' }))
+      .rejects.toThrow(/only a system bound to an approved ITP revision can be commissioned/);
+  });
+
+  it('binds an in-progress record, keeps its typed history, and a typed failure still blocks', async () => {
+    const { svc, checklists } = service();
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-03', title: 'CCTV — Podium', system: 'cctv' });
+    const typed = await svc.addTestItem(rec.id, TENANT, { pointNo: 'T-01', description: 'Typed before the checklist' });
+    await svc.recordTestResult(rec.id, typed.id, TENANT, { result: 'fail', remarks: 'No image' });
+    const itp = checklists.approve({ projectId: 'p1', system: 'cctv', points: [{ code: 'C-01', activity: 'Camera image' }] });
+
+    const bound = await svc.bindChecklist(rec.id, TENANT, itp.itpId, 'u-tc');
+    expect(bound.itpId).toBe(itp.itpId);
+    const points = await svc.listTestItems(rec.id, TENANT);
+    expect(points.map((p) => `${p.pointNo}:${p.origin}`).sort()).toEqual(['C-01:itp', 'T-01:manual']);
+
+    const c01 = points.find((p) => p.pointNo === 'C-01')!;
+    await svc.recordTestResult(rec.id, c01.id, TENANT, { result: 'pass' });
+    // A recorded failure is not erased by binding.
+    await expect(svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).rejects.toThrow(/failing — retest required \(T-01\)/);
+    await svc.recordTestResult(rec.id, typed.id, TENANT, { result: 'pass', remarks: 'Retested' });
+    expect((await svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).status).toBe('commissioned');
+  });
+
+  it('lets a non-mandatory point stay unexecuted', async () => {
+    const { svc, checklists } = service();
+    const itp = checklists.approve({
+      projectId: 'p1', system: 'public_address',
+      points: [{ code: 'M-01', activity: 'Zone levels' }, { code: 'O-01', activity: 'Optional survey', mandatory: false }],
+    });
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-PA-01', title: 'PAVA', system: 'public_address', itpId: itp.itpId, createdBy: 'u-tc' });
+    const m01 = (await svc.listTestItems(rec.id, TENANT)).find((p) => p.pointNo === 'M-01')!;
+    await svc.recordTestResult(rec.id, m01.id, TENANT, { result: 'pass' });
+    expect((await svc.commission(rec.id, TENANT, { commissionedBy: 'E', witnessedBy: 'C' })).status).toBe('commissioned');
+  });
+
+  it('refuses a revision of another project, another system, or one not approved', async () => {
+    const { svc, checklists } = service();
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-CCTV-04', title: 'CCTV', system: 'cctv' });
+    const otherProject = checklists.approve({ projectId: 'p2', system: 'cctv', points: [{ code: 'C-01', activity: 'x' }] });
+    const otherSystem = checklists.approve({ projectId: 'p1', system: 'fire_alarm', points: [{ code: 'F-01', activity: 'x' }] });
+    const submitted = checklists.approve({ projectId: 'p1', system: 'cctv', revision: 2, status: 'submitted', points: [{ code: 'C-01', activity: 'x' }] });
+    await expect(svc.bindChecklist(rec.id, TENANT, otherProject.itpId, 'u-tc')).rejects.toThrow(/different project/);
+    await expect(svc.bindChecklist(rec.id, TENANT, otherSystem.itpId, 'u-tc')).rejects.toThrow(/different system/);
+    await expect(svc.bindChecklist(rec.id, TENANT, submitted.itpId, 'u-tc')).rejects.toThrow(/only the current approved ITP revision can be bound/);
+    expect((await svc.get(rec.id, TENANT))?.itpId).toBeNull();
+  });
+
+  it('pins the binding — a record cannot be moved to another revision', async () => {
+    const { svc, checklists, rec } = await systemWithTwoPoints();
+    const r2 = checklists.approve({ projectId: 'p1', system: 'cctv', revision: 2, points: [{ code: 'PL-034', activity: 'Permanent link' }] });
+    await expect(svc.bindChecklist(rec.id, TENANT, r2.itpId, 'u-tc')).rejects.toThrow(/immutable once bound/);
+  });
+
+  it('refuses to bind with Quality unreadable — an absent port never unblocks', async () => {
+    const svc = new CommissioningService(new InMemoryCommissioningStore() as never, { append: async () => {} } as never);
+    const rec = await svc.register({ tenantId: TENANT, projectId: 'p1', code: 'TC-X', title: 'X', system: 'cctv' });
+    await expect(svc.bindChecklist(rec.id, TENANT, 'anything', 'u-tc')).rejects.toThrow(/is unavailable/);
   });
 });

@@ -12,11 +12,18 @@ export class PostgresItpStore implements ItpStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_quality_itps (
-        id, tenant_id, company_id, project_id, project_name, reference, title, discipline, status, points, activated_by, activated_at, closed_by, closed_at, created_by, created_at, updated_at
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        id, tenant_id, company_id, project_id, project_name, reference, title, discipline, status, points, activated_by, activated_at, closed_by, closed_at, created_by, created_at, updated_at,
+        kind, system, revision, parent_itp_id, source_template_id, source_template_version,
+        submitted_by, submitted_at, approved_by, approved_at, superseded_by, superseded_at, returned_reason
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
       on conflict (id) do update set
-        status = excluded.status, points = excluded.points, activated_by = excluded.activated_by, activated_at = excluded.activated_at, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at`,
-      [itp.id, itp.tenantId, itp.companyId, itp.projectId, itp.projectName, itp.reference, itp.title, itp.discipline, itp.status, JSON.stringify(itp.points), itp.activatedBy, itp.activatedAt, itp.closedBy, itp.closedAt, itp.createdBy, itp.createdAt, itp.updatedAt],
+        status = excluded.status, points = excluded.points, activated_by = excluded.activated_by, activated_at = excluded.activated_at, closed_by = excluded.closed_by, closed_at = excluded.closed_at, updated_at = excluded.updated_at,
+        title = excluded.title, submitted_by = excluded.submitted_by, submitted_at = excluded.submitted_at,
+        approved_by = excluded.approved_by, approved_at = excluded.approved_at,
+        superseded_by = excluded.superseded_by, superseded_at = excluded.superseded_at, returned_reason = excluded.returned_reason`,
+      [itp.id, itp.tenantId, itp.companyId, itp.projectId, itp.projectName, itp.reference, itp.title, itp.discipline, itp.status, JSON.stringify(itp.points), itp.activatedBy, itp.activatedAt, itp.closedBy, itp.closedAt, itp.createdBy, itp.createdAt, itp.updatedAt,
+        itp.kind ?? 'installation_inspection', itp.system ?? null, itp.revision ?? null, itp.parentItpId ?? null, itp.sourceTemplateId ?? null, itp.sourceTemplateVersion ?? null,
+        itp.submittedBy ?? null, itp.submittedAt ?? null, itp.approvedBy ?? null, itp.approvedAt ?? null, itp.supersededBy ?? null, itp.supersededAt ?? null, itp.returnedReason ?? null],
     );
   }
 
@@ -63,6 +70,19 @@ export class PostgresItpStore implements ItpStore {
       createdBy: row.created_by,
       createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : String(row.created_at),
       updatedAt: row.updated_at instanceof Date ? row.updated_at.toISOString() : String(row.updated_at),
+      kind: row.kind ?? 'installation_inspection',
+      system: row.system ?? null,
+      revision: row.revision == null ? null : Number(row.revision),
+      parentItpId: row.parent_itp_id ?? null,
+      sourceTemplateId: row.source_template_id ?? null,
+      sourceTemplateVersion: row.source_template_version == null ? null : Number(row.source_template_version),
+      submittedBy: row.submitted_by ?? null,
+      submittedAt: row.submitted_at instanceof Date ? row.submitted_at.toISOString() : (row.submitted_at ?? null),
+      approvedBy: row.approved_by ?? null,
+      approvedAt: row.approved_at instanceof Date ? row.approved_at.toISOString() : (row.approved_at ?? null),
+      supersededBy: row.superseded_by ?? null,
+      supersededAt: row.superseded_at instanceof Date ? row.superseded_at.toISOString() : (row.superseded_at ?? null),
+      returnedReason: row.returned_reason ?? null,
     };
   }
 }

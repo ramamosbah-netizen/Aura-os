@@ -1073,5 +1073,19 @@
       "checks": [],
       "provenance": []
     }
+  },
+  {
+    "key": "modules/quality/src/quality.service.ts#assertTenantPerm",
+    "classification": "NOT_PROJECT_OWNED",
+    "resolution": "The tenant-level System Template Library (TC-08/TC-09): a template belongs to no project by the frozen contract; tenant/company functional grant quality.itp-template.manage required.",
+    "organizationBranch": null,
+    "baselineScope": "unscoped",
+    "change": "New intentional tenant authority for the ITP template library",
+    "evidence": "a system template is adapted into each project as that project's own ITP revision",
+    "security": {
+      "target": "{ permission, orgPath }",
+      "checks": [],
+      "provenance": []
+    }
   }
 ]

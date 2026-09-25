@@ -6,5 +6,6 @@ export { PostgresNcrVerificationStore } from './postgres-ncr-verification-store'
 export { PostgresInspectionRequestStore } from './postgres-ir-store';
 export { PostgresSnagStore } from './postgres-snag-store';
 export { PostgresItpStore } from './postgres-itp-store';
+export { PostgresItpTemplateStore } from './postgres-itp-template-store';
 export { PostgresMaterialApprovalStore } from './postgres-mar-store';
 export { PostgresAuditScheduleStore } from './postgres-audit-schedule-store';

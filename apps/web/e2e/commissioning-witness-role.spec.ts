@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
 import { provisionedActorsUnavailable } from './provisioned-actors';
+import { systemFromChecklist } from './approved-checklist';
 
 /**
  * TC-06 / TC-07 — WHOSE WITNESS, WHAT THE TEST PRODUCED, AND WHO EXECUTES IT.
@@ -63,13 +64,15 @@ test('a T&C engineer attaches test evidence and takes a witnessed sign-off under
   });
   expect([200, 201, 409].includes(member.status()), `putting the T&C engineer on the project: ${await member.text()}`).toBe(true);
 
-  const record = await (
-    await page.request.post(`${API}/api/v1/commissioning/records`, {
-      headers: apiAuthHeaders(),
-      data: { projectId, code: `CX-W${run}`, title: 'CCTV — witnessed test', system: 'cctv' },
-    })
-  ).json() as { id: string; code: string };
+  // Created FROM Quality's approved checklist (TC-08/TC-09), its one point executed and passed.
+  const record = await systemFromChecklist(page.request, {
+    projectId, code: `CX-W${run}`, title: 'CCTV — witnessed test', system: 'cctv',
+    points: [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }],
+  });
   expect(record?.id, 'the fixture record must exist before the screen is driven').toBeTruthy();
+  await page.request.post(`${API}/api/v1/commissioning/records/${record.id}/test-items/${record.point('IMG-01').id}/runs`, {
+    headers: apiAuthHeaders(), data: { result: 'pass', actual: 'Image on VMS' },
+  });
 
   const context = await browser.newContext({ storageState: undefined });
   const tc = await context.newPage();

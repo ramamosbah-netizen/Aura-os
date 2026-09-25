@@ -16,12 +16,17 @@ type WitnessAuthority = 'consultant' | 'client' | 'authority';
  * surfaces that 409 rather than hiding it.
  */
 export default function CommissioningActions({
-  id, status, openPunch, allPassed, onChanged,
+  id, status, openPunch, allPassed, gaps, onChanged,
 }: {
   id: string;
   status: string;
   openPunch: OpenPunch[];
   allPassed: boolean;
+  /**
+   * What stands between the system and PASS, in the API's own words (TC-08/TC-09) — the same list
+   * `commission()` refuses with, so the screen cannot promise a sign-off the backend will refuse.
+   */
+  gaps?: string[];
   /** Reconciliation hook — see CommissioningTestSheet. Defaults to refreshing the server page. */
   onChanged?: () => void | Promise<void>;
 }) {
@@ -214,13 +219,16 @@ export default function CommissioningActions({
           />
         </div>
       </div>
-      {!allPassed && <span style={st.hint}>All test points must pass before sign-off.</span>}
+      {gaps && gaps.length > 0 ? (
+        <ul style={st.gaps} data-testid="cx-pass-gaps">{gaps.map((g) => <li key={g}>{g}</li>)}</ul>
+      ) : !allPassed && <span style={st.hint}>Every mandatory point of the approved checklist must pass before sign-off.</span>}
       {error && <span style={st.error} data-testid="cx-error">{error}</span>}
     </div>
   );
 }
 
 const st = {
+  gaps: { margin: 0, paddingLeft: 18, color: 'var(--warn)', fontSize: 12, lineHeight: 1.5 } as CSSProperties,
   wrap: { display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', border: '1px solid var(--border, #e5e7eb)', borderRadius: 12, background: 'var(--surface, var(--panel-2))' } as CSSProperties,
   group: { display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' } as CSSProperties,
   input: { padding: '7px 10px', borderRadius: 8, border: '1px solid var(--border, #d1d5db)', fontSize: 13, background: 'var(--bg, #fff)', color: 'inherit', minWidth: 180 } as CSSProperties,

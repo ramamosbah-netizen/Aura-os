@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createActiveProject, runId } from './fixtures';
+import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 /**
  * §27 — closeout is a gate, not a checklist.
@@ -15,6 +17,13 @@ import { createActiveProject, runId } from './fixtures';
  */
 
 const RUN = runId();
+const V1 = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
+
+/**
+ * The checklist Quality approves for the CCTV system in this spec — declared here, for this test only.
+ * Since TC-08/TC-09 a system is commissioned against an approved revision's points, not typed ones.
+ */
+const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
 async function project(request: import('@playwright/test').APIRequestContext, title: string) {
   // A project being closed out has, by definition, been executed. Reaching `active` through the
@@ -120,6 +129,9 @@ test('a clean project closes, and the permitting verdict is kept as evidence', a
   });
   expect(record.ok(), 'the commissioning fixture must exist').toBe(true);
   const { id: recordId } = (await record.json()) as { id: string };
+  // Commissioned against Quality's approved checklist (TC-08/TC-09), with its point executed.
+  const point = (await bindToChecklist(request, { recordId, projectId, system: 'cctv', points: CCTV_POINTS }))('IMG-01');
+  await request.post(`${V1}/commissioning/records/${recordId}/test-items/${point.id}/runs`, { headers: apiAuthHeaders(), data: { result: 'pass', actual: 'Image on VMS' } });
   // PUT, and both names are required: commissioning is a WITNESSED sign-off, so the domain refuses
   // one without a witness. Read from the route rather than assumed — POST answers 405 here.
   const commissioned = await request.put(`/api/commissioning/records/${recordId}/commission`, {

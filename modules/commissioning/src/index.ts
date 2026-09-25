@@ -1,5 +1,6 @@
 export * from './domain/commissioning-record';
 export * from './domain/commissioning-test-item';
+export * from './domain/approved-checklist';
 export * from './domain/commissioning-test-run';
 export * from './domain/commissioning-itp-link';
 export * from './domain/commissioning-readiness';

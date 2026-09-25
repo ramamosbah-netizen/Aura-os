@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useMemo, useState, useTransition, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
 import { COMMISSIONING_PATH, COMMISSIONING_SECTIONS } from '@/lib/workspace-sections';
@@ -8,6 +8,8 @@ import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import EmptyState from '@/components/ui/empty-state';
 import Pager, { usePaged } from '@/components/ui/pager';
 import CommissioningSystemPanel from './commissioning-system-panel';
+import { ChecklistCoverageTable, missingChecklistReason, type ChecklistCoverageView } from './commissioning-checklist-binding';
+import { ELV_SYSTEMS, elvSystemLabel } from '@aura/shared';
 import {
   ItpSection, PreCommissioningSection, CertificatesSection, ReadinessSection, QualityEscalation,
   type QualityEvidence,
@@ -96,7 +98,7 @@ type Filter = 'all' | 'failing' | 'untested' | 'no-points' | 'eligible' | 'commi
  * the backend will refuse, and there is no readiness flag for anyone to tick.
  */
 export default function CommissioningWorkspaceClient({
-  projects, view, punch, devices, qualityEvidence, selectedProject,
+  projects, view, punch, devices, qualityEvidence, selectedProject, checklistCoverage,
 }: {
   projects: Project[];
   view: WorkspaceView | null;
@@ -105,6 +107,8 @@ export default function CommissioningWorkspaceClient({
   /** Quality's ITPs and non-conformances. Null when Quality could not be read — never an empty list. */
   qualityEvidence: QualityEvidence | null;
   selectedProject: string;
+  /** The project's approved-checklist coverage (TC-08/TC-09). Undefined when no project is chosen. */
+  checklistCoverage?: ChecklistCoverageView | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -200,7 +204,7 @@ export default function CommissioningWorkspaceClient({
       ) : active === 'overview' ? (
         <Overview view={view} hrefFor={hrefFor} go={go} hydrated={hydrated} />
       ) : active === 'systems' ? (
-        <Systems systems={systems} devices={devices} selectedProject={selectedProject} projects={projects} />
+        <Systems systems={systems} devices={devices} selectedProject={selectedProject} projects={projects} checklistCoverage={checklistCoverage} />
       ) : active === 'itp' ? (
         <ItpSection systems={systems} evidence={qualityEvidence} />
       ) : active === 'pre-commissioning' ? (
@@ -289,8 +293,8 @@ function Overview({
 // ── Systems & Equipment ─────────────────────────────────────────────────────────────────────────
 
 function Systems({
-  systems, devices, selectedProject, projects,
-}: { systems: SystemView[]; devices: DeviceRow[] | null; selectedProject: string; projects: Project[] }) {
+  systems, devices, selectedProject, projects, checklistCoverage,
+}: { systems: SystemView[]; devices: DeviceRow[] | null; selectedProject: string; projects: Project[]; checklistCoverage?: ChecklistCoverageView | null }) {
   const bySystem = new Map<string, DeviceRow[]>();
   for (const device of devices ?? []) {
     const list = bySystem.get(device.system) ?? [];
@@ -303,6 +307,16 @@ function Systems({
   return (
     <section aria-label="Systems and equipment" style={st.section}>
       <RegisterSystem projects={projects} selectedProject={selectedProject} />
+
+      {checklistCoverage !== undefined && (
+        <>
+          <h3 style={st.h3}>Approved checklists</h3>
+          <p style={st.authorityNote}>
+            Owned by Quality. A system is commissioned against the approved revision of its own checklist — never one matched by name — and a system without one is not ready.
+          </p>
+          <ChecklistCoverageTable coverage={checklistCoverage} />
+        </>
+      )}
 
       <h3 style={st.h3}>Commissioning scope</h3>
       {systems.length === 0 ? (
@@ -378,6 +392,28 @@ function RegisterSystem({ projects, selectedProject }: { projects: Project[]; se
   const [title, setTitle] = useState('');
   const [system, setSystem] = useState('cctv');
   const [location, setLocation] = useState('');
+  // The approved checklist to create the record FROM (TC-08/TC-09), read from Quality through T&C.
+  const [coverage, setCoverage] = useState<ChecklistCoverageView | null | 'loading'>(null);
+  const [fromChecklist, setFromChecklist] = useState(true);
+
+  useEffect(() => {
+    if (!open || !projectId) return;
+    let live = true;
+    setCoverage('loading');
+    void (async () => {
+      try {
+        const res = await fetch(`/api/commissioning/records/checklist-coverage?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+        const data = res.ok ? ((await res.json()) as ChecklistCoverageView) : null;
+        if (live) setCoverage(data);
+      } catch {
+        if (live) setCoverage(null);
+      }
+    })();
+    return () => { live = false; };
+  }, [open, projectId]);
+
+  const coverageEntry = coverage && coverage !== 'loading' ? coverage.systems.find((s) => s.system === system) ?? null : null;
+  const approved = coverageEntry?.approved ?? null;
 
   async function submit(): Promise<void> {
     if (busy) return;
@@ -391,6 +427,7 @@ function RegisterSystem({ projects, selectedProject }: { projects: Project[]; se
           projectId,
           projectName: projects.find((p) => p.id === projectId)?.title ?? null,
           code, title, system, location: location || undefined,
+          itpId: approved && fromChecklist ? approved.itpId : undefined,
         }),
       });
       if (!res.ok) {
@@ -426,9 +463,11 @@ function RegisterSystem({ projects, selectedProject }: { projects: Project[]; se
           <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="CCTV — Tower A" style={st.input} disabled={busy} data-testid="system-title" />
         </label>
         <label style={st.field}><span>System type</span>
-          <select value={system} onChange={(e) => setSystem(e.target.value)} style={st.select} disabled={busy}>
-            {['cctv', 'access_control', 'fire_alarm', 'pa_va', 'bms', 'network', 'intercom', 'structured_cabling', 'audio_visual', 'other'].map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+          {/* The canonical system list — the id a checklist is matched by. A value outside it would be
+              stored as "other", which no checklist can ever be approved for. */}
+          <select value={system} onChange={(e) => setSystem(e.target.value)} style={st.select} disabled={busy} data-testid="system-type">
+            {ELV_SYSTEMS.map((s) => (
+              <option key={s} value={s}>{elvSystemLabel(s)}</option>
             ))}
           </select>
         </label>
@@ -436,12 +475,28 @@ function RegisterSystem({ projects, selectedProject }: { projects: Project[]; se
           <input value={location} onChange={(e) => setLocation(e.target.value)} placeholder="Level 3 lobby" style={st.input} disabled={busy} />
         </label>
       </div>
+      <div style={st.formRow} data-testid="register-checklist">
+        {coverage === 'loading' ? (
+          <span style={st.hint}>Reading Quality’s approved checklists…</span>
+        ) : coverage === null || !coverage.readable ? (
+          <span style={st.hint}>Quality’s checklists could not be read — the system can be registered, but not commissioned until it is bound to an approved checklist.</span>
+        ) : approved ? (
+          <label style={st.hint}>
+            <input type="checkbox" checked={fromChecklist} onChange={(e) => setFromChecklist(e.target.checked)} disabled={busy} data-testid="register-from-checklist" />{' '}
+            Create it from {approved.reference} · revision {approved.revision}, approved by Quality — its points arrive with it
+          </label>
+        ) : (
+          <span style={st.hint} data-testid="register-no-checklist">
+            Not ready: {missingChecklistReason(coverageEntry)}. It can be registered, but not commissioned until it is bound to an approved checklist.
+          </span>
+        )}
+      </div>
       {/* No "test points (total)" field: the sheet is the authority for the tally since TC-GATE-1,
           so a number typed here would be overwritten the moment a point was executed. */}
       <div style={st.formRow}>
         <button style={st.primary} onClick={submit} disabled={busy || !hydrated || !code.trim() || !title.trim()} data-testid="system-save">{busy ? 'Registering…' : 'Register system'}</button>
         <button style={st.cancel} onClick={() => { setOpen(false); setError(null); }} disabled={busy}>Cancel</button>
-        <span style={st.hint}>Test points are added to the system’s sheet in Testing &amp; Commissioning.</span>
+        <span style={st.hint}>Test points come from the approved checklist; they are executed in Testing &amp; Commissioning.</span>
       </div>
     </div>
   );

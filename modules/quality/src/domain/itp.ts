@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { ElvSystem } from '@aura/shared';
 
 /**
  * Inspection & Test Plan (ITP) — the QA plan defining, per work activity, the inspection points
@@ -6,15 +7,32 @@ import { randomUUID } from 'node:crypto';
  * Distinct from a one-off inspection request: the ITP is the *plan*; results are signed off against
  * its points. Lifecycle: draft → active → closed (closeable only once every point is resolved).
  */
-export type ItpStatus = 'draft' | 'active' | 'closed';
+export type ItpStatus = 'draft' | 'active' | 'closed' | 'submitted' | 'approved' | 'superseded';
 export type InspectionPointType = 'hold' | 'witness' | 'review' | 'surveillance';
 export type PointResult = 'pending' | 'passed' | 'failed';
+
+/**
+ * TWO KINDS OF PLAN, NEVER ONE BEHAVIOUR.
+ *
+ * `installation_inspection` — today's plan: hold and witness points QA/QC executes on site, a
+ * free-text discipline, draft → active → closed, and its results gate WBS completion.
+ *
+ * `system_commissioning` — the approved checklist of ONE canonical ELV system on a project (TC-08,
+ * TC-09): a governed revision prepared from a tenant template, approved by a QA/QC person other than
+ * its preparer, frozen once approved (draft → submitted → approved → superseded). Its points are
+ * executed on the commissioning record bound to it, never on the plan.
+ */
+export type ItpKind = 'installation_inspection' | 'system_commissioning';
 
 export interface ItpPoint {
   activity: string;
   pointType: InspectionPointType;
   acceptanceCriteria: string;
   result: PointResult;
+  /** System checklist only: the point's stable code, how it is tested, and whether PASS needs it. */
+  code?: string;
+  method?: string | null;
+  mandatory?: boolean;
 }
 
 export interface NewItpPoint {
@@ -42,7 +60,29 @@ export interface Itp {
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+  kind: ItpKind;
+  /** System checklist only — the canonical id it is bound to. Never inferred from `discipline`. */
+  system: ElvSystem | null;
+  revision: number | null;
+  parentItpId: string | null;
+  sourceTemplateId: string | null;
+  sourceTemplateVersion: number | null;
+  submittedBy: string | null;
+  submittedAt: string | null;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  supersededBy: string | null;
+  supersededAt: string | null;
+  returnedReason: string | null;
 }
+
+/** The fields an installation-inspection plan carries for the system-checklist columns: none. */
+export const INSTALLATION_ITP_DEFAULTS = {
+  kind: 'installation_inspection' as ItpKind,
+  system: null, revision: null, parentItpId: null, sourceTemplateId: null, sourceTemplateVersion: null,
+  submittedBy: null, submittedAt: null, approvedBy: null, approvedAt: null,
+  supersededBy: null, supersededAt: null, returnedReason: null,
+};
 
 export interface NewItp {
   tenantId: string;
@@ -93,7 +133,17 @@ export function makeItp(input: NewItp): Itp {
     createdBy: input.createdBy ?? null,
     createdAt: now,
     updatedAt: now,
+    ...INSTALLATION_ITP_DEFAULTS,
   };
+}
+
+/** The installation-inspection acts refuse a system checklist by name — the two never mix. */
+function assertInstallationPlan(itp: Itp, act: string): void {
+  if (itp.kind === 'system_commissioning') {
+    throw new Error(
+      `${act} is not allowed for a system commissioning ITP — it is approved as a revision, and its points are executed on the commissioning record bound to it`,
+    );
+  }
 }
 
 /**
@@ -105,6 +155,7 @@ export function makeItp(input: NewItp): Itp {
  * inspections complete, and not one of those three acts left a name behind.
  */
 export function activateItp(itp: Itp, actorId: string | null = null): Itp {
+  assertInstallationPlan(itp, 'activating');
   if (itp.status !== 'draft') throw new Error(`cannot activate from status ${itp.status}`);
   const now = new Date().toISOString();
   return { ...itp, status: 'active', activatedBy: actorId, activatedAt: now, updatedAt: now };
@@ -112,6 +163,7 @@ export function activateItp(itp: Itp, actorId: string | null = null): Itp {
 
 /** Sign off a point (by index) as passed or failed. Only on an active ITP. */
 export function recordPointResult(itp: Itp, pointIndex: number, result: PointResult): Itp {
+  assertInstallationPlan(itp, 'recording a result on the plan');
   if (itp.status !== 'active') throw new Error('can only record results on an active ITP');
   if (result !== 'passed' && result !== 'failed') throw new Error("result must be 'passed' or 'failed'");
   if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= itp.points.length) {
@@ -127,6 +179,7 @@ export function allPointsResolved(itp: Itp): boolean {
 
 /** active → closed. Declaring the inspections complete, and saying who declared it. */
 export function closeItp(itp: Itp, actorId: string | null = null): Itp {
+  assertInstallationPlan(itp, 'closing');
   if (itp.status !== 'active') throw new Error(`cannot close from status ${itp.status}`);
   if (!allPointsResolved(itp)) throw new Error('cannot close — some inspection points are still pending');
   const now = new Date().toISOString();

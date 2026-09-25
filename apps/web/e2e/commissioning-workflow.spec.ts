@@ -6,6 +6,7 @@ import { expect, test } from '@playwright/test';
 import { projectFixtureId } from './fixtures';
 
 import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 const API = (process.env.AURA_API_URL ?? 'http://localhost:4000') + '/api/v1/commissioning/records';
 // Seeds go straight to the API rather than through the BFF, so they need their own token.
@@ -18,9 +19,13 @@ test('commissioning 360: punch gate blocks sign-off until closed (UI)', async ({
   test.skip(created.status() === 502 || created.status() === 404 || !created.ok(), 'commissioning API not reachable');
   const rec = await created.json();
   const id = rec.id;
+  // The two points come from Quality's approved checklist (TC-08/TC-09), declared for this test only.
+  const point = await bindToChecklist(page.request, {
+    recordId: id, projectId: rec.projectId, system: 'cctv',
+    points: ['1', '2'].map((n) => ({ code: n, activity: `Cam ${n} live view`, acceptanceCriteria: 'Live view on VMS' })),
+  });
   for (const n of ['1', '2']) {
-    const t = await (await page.request.post(`${API}/${id}/test-items`, { headers: H(), data: { pointNo: n, description: `Cam ${n} live view` } })).json();
-    await page.request.put(`${API}/${id}/test-items/${t.id}/result`, { headers: H(), data: { result: 'pass', actual: 'OK' } });
+    await page.request.put(`${API}/${id}/test-items/${point(n).id}/result`, { headers: H(), data: { result: 'pass', actual: 'OK' } });
   }
   await page.request.post(`${API}/${id}/punch`, { headers: H(), data: { description: 'Loose connector at Cam 2', severity: 'major' } });
 
@@ -31,8 +36,12 @@ test('commissioning 360: punch gate blocks sign-off until closed (UI)', async ({
   await expect(page.getByTestId('punch-gate')).toBeVisible();
 
   // Attempt to commission while the punch item is open → backend refuses (409, surfaced in the UI).
+  // Named first: since XOP-12 the screen refuses an unnamed sign-off before asking the API, and the
+  // refusal under test here is the API's.
+  await page.getByPlaceholder('Commissioned by').fill('Test Engineer');
+  await page.getByPlaceholder('Witnessed by (consultant/client)').fill('Client Consultant');
   await page.getByTestId('btn-commission').click();
-  await expect(page.getByTestId('cx-error')).toContainText(/open punch/i);
+  await expect(page.getByTestId('cx-error')).toContainText(/open defect/i);
   await expect(page.getByTestId('cx-status')).toHaveText('Tested'); // unchanged
 
   // Close the punch item (retest gate), then commission succeeds.

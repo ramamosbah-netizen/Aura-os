@@ -256,3 +256,43 @@ export const ENGINEERING_RELEASE = Symbol('ENGINEERING_RELEASE');
 export const DOC_CONTROL = Symbol('DOC_CONTROL');
 export const DOC_CONTROL_ISSUE = Symbol('DOC_CONTROL_ISSUE');
 export const INVENTORY = Symbol('INVENTORY');
+
+/**
+ * THE APPROVED SYSTEM CHECKLIST, as Quality holds it (TC-08 / TC-09).
+ *
+ * T&C binds a commissioning record to the current approved revision of its project's checklist for
+ * its canonical system, and executes the points that revision carries. Quality owns every field here;
+ * T&C reads them and writes none. Matched by canonical system id and never by free-text discipline.
+ */
+export interface ChecklistPointFact {
+  code: string;
+  activity: string;
+  method: string | null;
+  acceptanceCriteria: string;
+  mandatory: boolean;
+  pointType: string;
+}
+
+export interface SystemChecklistFact {
+  itpId: string;
+  projectId: string;
+  system: string;
+  revision: number;
+  reference: string;
+  title: string;
+  /** draft | submitted | approved | superseded — only `approved` can be bound. */
+  status: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  sourceTemplateVersion: number | null;
+  points: ChecklistPointFact[];
+}
+
+export interface ApprovedChecklistPort {
+  readSystemChecklist(tenantId: string, itpId: string): Promise<SystemChecklistFact | null>;
+  listProjectSystemChecklists(tenantId: string, projectId: string): Promise<SystemChecklistFact[]>;
+  /** Null when the template library cannot be read — never an empty list standing in for it. */
+  listPublishedTemplateSystems(tenantId: string): Promise<Array<{ system: string; publishedVersion: number | null }> | null>;
+}
+
+export const APPROVED_CHECKLIST = Symbol('APPROVED_CHECKLIST');

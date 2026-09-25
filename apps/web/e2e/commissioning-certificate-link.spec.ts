@@ -11,11 +11,18 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { bindToChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
 const CX = `${API}/api/v1/commissioning/records`;
 const DC = `${API}/api/v1/doccontrol`;
 const H = () => apiAuthHeaders();
+
+/**
+ * The checklist Quality approves for the CCTV system in this spec — declared here, for this test only.
+ * Since TC-08/TC-09 a system is commissioned against an approved revision's points, not typed ones.
+ */
+const CCTV_POINTS = [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }];
 
 type Req = import('@playwright/test').APIRequestContext;
 
@@ -41,9 +48,10 @@ test('a certificate cannot be registered before the system is signed off, or aga
   expect(JSON.stringify(await tooEarly.json())).toMatch(/only a commissioned system can have its certificate registered/i);
 
   // Sign the system off, properly: a point, a passing run, a witnessed sign-off.
-  const point = await (await page.request.post(`${CX}/${system.id}/test-items`, { headers: H(), data: { pointNo: 'IMG-01', description: 'Camera image' } })).json();
+  const point = (await bindToChecklist(page.request, { recordId: system.id, projectId, system: 'cctv', points: CCTV_POINTS }))('IMG-01');
   await page.request.post(`${CX}/${system.id}/test-items/${point.id}/runs`, { headers: H(), data: { result: 'pass', actual: 'Image on VMS' } });
-  await page.request.put(`${CX}/${system.id}/commission`, { headers: H(), data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' } });
+  const signed = await page.request.put(`${CX}/${system.id}/commission`, { headers: H(), data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' } });
+  expect(signed.ok(), `the system must commission against its approved checklist — ${await signed.text()}`).toBe(true);
 
   // GUARD 2 — the reference must be a document the register actually holds.
   const typo = await page.request.post(`${CX}/${system.id}/certificate-link`, { headers: H(), data: { documentId: `CX-CERT-${stamp}X` } });
@@ -68,9 +76,10 @@ test('the registered certificate shows on the surface, the printed pack and the 
   test.skip(!created.ok(), 'commissioning API not reachable');
   const system = await created.json();
 
-  const point = await (await page.request.post(`${CX}/${system.id}/test-items`, { headers: H(), data: { pointNo: 'IMG-01', description: 'Camera image' } })).json();
+  const point = (await bindToChecklist(page.request, { recordId: system.id, projectId, system: 'cctv', points: CCTV_POINTS }))('IMG-01');
   await page.request.post(`${CX}/${system.id}/test-items/${point.id}/runs`, { headers: H(), data: { result: 'pass', actual: 'Image on VMS' } });
-  await page.request.put(`${CX}/${system.id}/commission`, { headers: H(), data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' } });
+  const signed = await page.request.put(`${CX}/${system.id}/commission`, { headers: H(), data: { commissionedBy: 'Engineer', witnessedBy: 'Consultant' } });
+  expect(signed.ok(), `the system must commission against its approved checklist — ${await signed.text()}`).toBe(true);
 
   // ── Before registration: the surface and the pack both say so plainly ───────────────────────────
   await page.goto(`/commissioning?project=${projectId}&section=certificates`, { waitUntil: 'domcontentloaded' });

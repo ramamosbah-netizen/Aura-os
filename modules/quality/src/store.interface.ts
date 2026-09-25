@@ -7,6 +7,8 @@ import type { IrEvidence } from './domain/ir-evidence';
 import type { NcrEvidence } from './domain/ncr-evidence';
 import type { Snag } from './domain/snag';
 import type { Itp } from './domain/itp';
+import type { ItpTemplate } from './domain/itp-template';
+import type { ElvSystem } from '@aura/shared';
 import type { MaterialApproval } from './domain/material-approval';
 import type { Calibration } from './domain/calibration';
 import type { AuditSchedule } from './domain/audit-schedule';
@@ -57,6 +59,13 @@ export interface SnagStore {
   findByProject(projectId: string, tenantId: string): Promise<Snag[]>;
   findAll(tenantId: string): Promise<Snag[]>;
   listPaged(tenantId: string, page: PageParams): Promise<Page<Snag>>;
+}
+
+/** The tenant library of system templates (TC-08/TC-09, migration 0388). */
+export interface ItpTemplateStore {
+  save(template: ItpTemplate, tx?: TxHandle): Promise<void>;
+  findById(id: string, tenantId: string): Promise<ItpTemplate | null>;
+  list(tenantId: string, system?: ElvSystem): Promise<ItpTemplate[]>;
 }
 
 export interface ItpStore {

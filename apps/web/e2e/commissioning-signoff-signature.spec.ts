@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { systemFromChecklist } from './approved-checklist';
 
 /**
  * XOP-12 — A PERSON CAN SIGN A WITNESSED SIGN-OFF, ON THE SCREEN.
@@ -40,13 +41,15 @@ test('a witnessed sign-off is signed on the commissioning screen, by two named p
 
   // A system with no test points commissions on the screen without a test sheet in the way: what
   // is being proved here is the SIGNATURE CONTROL, and the readiness gates have their own specs.
-  const record = await (
-    await page.request.post(`${API}/api/v1/commissioning/records`, {
-      headers: apiAuthHeaders(),
-      data: { projectId, code: `CX-UI${run}`, title: 'CCTV — signature UI', system: 'cctv' },
-    })
-  ).json() as { id: string; code: string };
+  // Created FROM Quality's approved checklist (TC-08/TC-09), its one point executed and passed.
+  const record = await systemFromChecklist(page.request, {
+    projectId, code: `CX-UI${run}`, title: 'CCTV — signature UI', system: 'cctv',
+    points: [{ code: 'IMG-01', activity: 'Camera image', acceptanceCriteria: 'Image on VMS' }],
+  });
   expect(record?.id, 'the fixture record must exist before the screen is driven').toBeTruthy();
+  await page.request.post(`${API}/api/v1/commissioning/records/${record.id}/test-items/${record.point('IMG-01').id}/runs`, {
+    headers: apiAuthHeaders(), data: { result: 'pass', actual: 'Image on VMS' },
+  });
 
   await page.goto(`/commissioning/${record.id}`, { waitUntil: 'domcontentloaded' });
 

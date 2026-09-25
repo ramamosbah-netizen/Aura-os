@@ -199,7 +199,9 @@ export class HandoverService {
       // routes around that rule and reports success.
       //
       // An authorization failure now propagates: the submitter is told they cannot open the
-      // conveyance, rather than discovering later that none exists. Everything else — doccontrol
+      // conveyance, rather than discovering later that none exists. (Since the owner's 2026-09-25
+      // decision the submission opens its own DRAFT without Document Control's create grant, so this
+      // is reached only by a real refusal — releasing the draft is still Document Control's.) Everything else — doccontrol
       // being absent, a transient store failure — keeps the soft behaviour, because those are
       // genuinely "the dossier went out and the register can catch up", not "a control was skipped".
       const message = error instanceof Error ? error.message : String(error);

@@ -10,12 +10,11 @@
 //   the handover dossier carries "tested against … · passed on retest: …" for the T&C engineer, and
 //     Handover/FM reads the same line in the ISSUED manifest.
 //
-// WHO SUBMITS is the one act not done by a shipped operational role here, and deliberately: submitting
-// opens a document-control transmittal, which asserts `doccontrol.transmittal.create`, and no shipped
-// role holds both that and `commissioning.handover.submit` (PM and T&C hold submit; the Document
-// Controller holds the transmittal). That is a pre-existing authority question for the programme
-// owner, recorded in the TC-09 report — not something this proof decides by widening a role. The
-// administrator submits, and the RECEIPT under test is Handover/FM's.
+// WHO SUBMITS, and who releases: the T&C engineer submits the package on screen. Since the programme
+// owner's 2026-09-25 decision the submission opens the dossier's transmittal as a DRAFT under the
+// handover's own authority — before it, only an administrator could submit a package citing a
+// controlled document. Releasing it stays Document Control's: the T&C engineer is refused sending it
+// (`doccontrol.transmittal.send`) and refused opening an arbitrary transmittal.
 //
 // The other domains' evidence the handover needs (device, drawing, as-built, O&M, training, spares) is
 // seeded through their own APIs as in handover-dossier.spec.ts; it is not what this proves.
@@ -151,10 +150,23 @@ test('a retest is persisted, read back, printed on the pack and received in the 
   await caret.click();
   await expect(tc.getByTestId(`dossier-entry-${system.id}`)).toContainText(retestLine);
 
-  // The package is ready once every domain answers — and the issue is captured on submission.
-  const pkgId = ((await pkg.json()) as { id: string }).id;
-  const submitted = await page.request.put(`${HO}/${pkgId}/submit`, { headers: H(), data: {} });
-  expect(submitted.ok(), `the package must submit once the evidence supports it — ${await submitted.text()}`).toBe(true);
+  // ── The T&C engineer submits it on screen; the issue is captured on submission ──────────────
+  await tc.goto(`/handover?project=${projectId}`, { waitUntil: 'domcontentloaded' });
+  await tc.getByTestId(`handover-open-${pkgCode}`).click();
+  const submit = tc.getByTestId(`handover-submit-${pkgCode}`);
+  await expect(submit, 'the package is ready once every domain answers').toBeEnabled({ timeout: 30_000 });
+  await submit.click();
+  await expect(submit).toHaveCount(0, { timeout: 30_000 });
+
+  // The submission opened the conveyance as a DRAFT, opened by the T&C engineer; releasing it is not theirs.
+  const transmittals = (await (await page.request.get(`${DC}/transmittals`, { headers: H() })).json()) as Array<{ id: string; code: string; status: string; projectId: string; createdBy: string | null }>;
+  const conveyance = transmittals.find((t) => t.projectId === projectId && t.code === `TR-${pkgCode}-1`);
+  expect(conveyance, 'the submission opened its transmittal').toBeTruthy();
+  expect(conveyance).toMatchObject({ status: 'draft', createdBy: TC });
+  const tcSends = await page.request.post(`${DC}/transmittals/${conveyance!.id}/send`, { headers: tcApi, data: {} });
+  expect(tcSends.status(), 'the T&C engineer may not release the conveyance').toBe(403);
+  const tcOpensOther = await page.request.post(`${DC}/transmittals`, { headers: tcApi, data: { projectId, code: `TR-X-${run}`, title: 'Not a handover' } });
+  expect(tcOpensOther.status(), 'nor open an arbitrary transmittal').toBe(403);
 
   // ── HANDOFF: Handover/FM reads the ISSUED manifest, retest history and all ────────────────────
   const fm = await openAs(browser, baseURL!, FM);

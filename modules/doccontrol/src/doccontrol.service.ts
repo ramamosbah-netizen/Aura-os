@@ -109,6 +109,15 @@ export class DocControlService {
     createdBy?: string;
     /** See {@link TransmittalKind}. Omitted — and unreachable from any request body — means external. */
     kind?: TransmittalKind;
+    /**
+     * WHO OPENED THIS DRAFT, when it was not Document Control. Only `handover_submission`, set by
+     * {@link openTransmittal} and unreachable from any request body: a handover's submission opens
+     * the draft that conveys its dossier (the programme owner's decision, 2026-09-25). The submitter's
+     * authority — `commissioning.handover.submit` — was asserted by the handover route before this
+     * call; what it does NOT grant is releasing anything: the transmittal is external, and sending it
+     * still asserts `doccontrol.transmittal.send`.
+     */
+    openedBy?: 'handover_submission';
   }): Promise<Transmittal> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
     // WHICH PERMISSION APPLIES NOW DEPENDS ON WHAT KIND OF CONVEYANCE THIS IS, not on whether an
@@ -125,7 +134,7 @@ export class DocControlService {
     // What changes is that the actor is now RECORDED either way. Skipping a permission check is not
     // a reason to forget who acted.
     const external = (input.kind ?? 'external') === 'external';
-    if (input.createdBy && external) {
+    if (input.createdBy && external && input.openedBy !== 'handover_submission') {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
       const target: AccessTarget = { permission: 'doccontrol.transmittal.create', orgPath, resource: { type: 'project', id: input.projectId } };
@@ -140,7 +149,8 @@ export class DocControlService {
       actorId: input.createdBy || null,
       aggregateType: 'doccontrol.transmittal',
       aggregateId: transmittal.id,
-      payload: { code: transmittal.code, title: transmittal.title, projectId: transmittal.projectId },
+      // The opener is recorded either way; a draft opened by a handover's submission says so.
+      payload: { code: transmittal.code, title: transmittal.title, projectId: transmittal.projectId, ...(input.openedBy ? { openedBy: input.openedBy } : {}) },
     });
 
     await this.tx.run(async (handle) => {
@@ -917,6 +927,8 @@ export class DocControlService {
       actorId?: string | null;
     },
   ): Promise<{ id: string; code: string }> {
+    // Opened as the handover SUBMISSION's act, as a DRAFT: its opener is recorded, and releasing it to
+    // the client remains Document Control's — `sendTransmittal` asserts `doccontrol.transmittal.send`.
     const transmittal = await this.createTransmittal({
       tenantId,
       code: request.code,
@@ -924,6 +936,7 @@ export class DocControlService {
       projectId: request.projectId,
       projectName: request.projectName ?? undefined,
       createdBy: request.actorId ?? undefined,
+      openedBy: 'handover_submission',
     });
     if (request.items.length > 0) {
       // 'for_information': a handover dossier conveys the record, it does not ask for a review.

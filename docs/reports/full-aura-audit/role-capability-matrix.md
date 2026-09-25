@@ -140,7 +140,7 @@
 | Design / Technical Engineer | TC-08 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | TC-09 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | TC-10 | UNVERIFIED | UNVERIFIED |
-| Design / Technical Engineer | TC-11 | PARTIAL | UNVERIFIED |
+| Design / Technical Engineer | TC-11 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | OUT-01 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | OUT-02 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | OUT-03 | UNVERIFIED | UNVERIFIED |
@@ -720,7 +720,7 @@
 | QA/QC | TC-08 | PARTIAL | UNVERIFIED |
 | QA/QC | TC-09 | COMPLETE | UNVERIFIED |
 | QA/QC | TC-10 | UNVERIFIED | UNVERIFIED |
-| QA/QC | TC-11 | PARTIAL | UNVERIFIED |
+| QA/QC | TC-11 | COMPLETE | UNVERIFIED |
 | QA/QC | OUT-01 | PARTIAL | UNVERIFIED |
 | QA/QC | OUT-02 | PARTIAL | UNVERIFIED |
 | QA/QC | OUT-03 | UNVERIFIED | UNVERIFIED |
@@ -836,7 +836,7 @@
 | T&C Engineer | TC-08 | PARTIAL | UNVERIFIED |
 | T&C Engineer | TC-09 | COMPLETE | UNVERIFIED |
 | T&C Engineer | TC-10 | UNVERIFIED | UNVERIFIED |
-| T&C Engineer | TC-11 | PARTIAL | UNVERIFIED |
+| T&C Engineer | TC-11 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-01 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-02 | COMPLETE | UNVERIFIED |
 | T&C Engineer | HO-03 | PARTIAL | UNVERIFIED |

@@ -214,7 +214,7 @@ export default function CommissioningWorkspaceClient({
       ) : active === 'certificates' ? (
         <CertificatesSection systems={systems} />
       ) : active === 'readiness' ? (
-        <ReadinessSection systems={systems} />
+        <ReadinessSection systems={systems} projectId={selectedProject || undefined} />
       ) : (
         <Defects systems={systems} punch={punch} ncrs={qualityEvidence?.ncrs ?? null} />
       )}

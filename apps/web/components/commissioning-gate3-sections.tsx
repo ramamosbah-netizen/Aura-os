@@ -519,7 +519,7 @@ function AsBuiltLinks({ systems }: { systems: SystemView[] }) {
 
 // ── Readiness & Handover ────────────────────────────────────────────────────────────────────────
 
-export function ReadinessSection({ systems }: { systems: SystemView[] }) {
+export function ReadinessSection({ systems, projectId }: { systems: SystemView[]; projectId?: string }) {
   /**
    * COLLAPSED BY DEFAULT, for the same reason as Pre-Commissioning and more so: the readiness
    * chain is TEN gates per system, so twenty systems put two hundred rows on one screen and the
@@ -535,6 +535,12 @@ export function ReadinessSection({ systems }: { systems: SystemView[] }) {
 
   return (
     <section aria-label="Readiness and handover" style={st.section}>
+      {/* The rollup as a document (TC-11), printed from the same read as this screen — it decides nothing. */}
+      {projectId && (
+        <a href={`/api/commissioning/records/readiness-rollup.pdf?projectId=${encodeURIComponent(projectId)}`} style={st.authorityNote} data-testid="readiness-rollup-pdf">
+          Download the readiness rollup (PDF)
+        </a>
+      )}
       <p style={st.authorityNote} data-testid="readiness-authority">
         T&amp;C owns <strong>&ldquo;commissioned / technically ready&rdquo;</strong>. Handover owns &ldquo;ready to transfer and
         accepted by the client&rdquo;. This chain is the first of those two, per system, and is what Handover reads — it does

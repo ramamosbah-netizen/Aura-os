@@ -79,9 +79,9 @@
 | Pre-Sales | EST-08 | PARTIAL |
 | Pre-Sales | EST-09 | PARTIAL |
 | Pre-Sales | EST-10 | PARTIAL |
-| Pre-Sales | EST-11 | UNVERIFIED |
-| Pre-Sales | EST-12 | UNVERIFIED |
-| Pre-Sales | EST-13 | UNVERIFIED |
+| Pre-Sales | EST-11 | COMPLETE |
+| Pre-Sales | EST-12 | PARTIAL |
+| Pre-Sales | EST-13 | COMPLETE |
 | Pre-Sales | EST-14 | PARTIAL |
 | Pre-Sales | EST-15 | PARTIAL |
 | Pre-Sales | EST-16 | PARTIAL |

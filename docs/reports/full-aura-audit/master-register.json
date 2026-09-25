@@ -822,7 +822,7 @@
       "stages": [
         "Pre-Sales"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Estimation core / Tender estimate / CRM pricing",
       "evidence": [
         "N-EST",
@@ -831,16 +831,17 @@
       "source": "shared/src/domain/estimation-core.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Pre-Sales / Estimator, Commercial Manager / QS, Technical Manager role executes Supplier quotation source in the canonical Estimation core / Tender estimate / CRM pricing context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "A BID'S SUPPLY PRICE COMES FROM A GOVERNED SUPPLIER LINE, NEVER A QUOTE HEADER. The estimator maps each BOQ item, by choice and never by matching text, to one material-master record of the same unit and puts the scope to suppliers on a TENDER-PRICING requisition — one that prices the bid and buys nothing, refused an approval lifecycle, a purchase order, an order line and a recommendation by the service AND by PostgreSQL (migration 0387). A supply price is then taken from ONE supplier quotation line, and only if that line answers this tender's requisition, prices the same BOQ item, lands on a material component, is judged eligible by the Technical Manager, and is live and comparable in the governed comparison on a stated date; the figure written is the comparison's normalised value, never the raw line price. The estimate source records its whole lineage — quotation revision, line, requisition line, material, currency, technical verdict, comparison date — and the database refuses a source naming both a quote header and a governed line, neither, or an incomplete governed lineage. Where a tender has a pricing requisition the legacy quote-header route is refused. The internal pricing workbook exports that lineage.",
+      "acceptanceProof": "Auth-ON, PostgreSQL rebuilt from zero, shipped users signed in through the login form (apps/web/e2e/tender-real-supply-path.spec.ts): the estimator maps and puts to suppliers on screen, read back as a draft tender-pricing requisition with each line mapped by u-e2e-estimator; takes the supply price from Gulf Security's camera line (395 AED) and Emirates ELV's cable line (5.9 AED) on screen, surviving a page reload, read back governed with verdict and line. DENIALS: the Technical Manager pricing the bid 403; over the API a non-compliant line, another item's line, a labour component and the legacy quote header each 409. PERSISTENCE: 36-case SQL suite for 0387, ten of them the estimate-source constraints. ACTUAL OUTPUT: the build-up and selling rate repriced from the governed figure, and the pricing workbook's Supplier Sources sheet read back from the live tender with each source's revision, line, requisition line, verdict, comparison date and currency — it exported them blank until this slice. NEXT-ROLE RECEIPT: the independent commercial approver receives the computed three-supplier requirement and the approval records each counted supplier's revision and line."
     },
     {
       "id": "EST-12",
@@ -854,7 +855,7 @@
       "stages": [
         "Pre-Sales"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Estimation core / Tender estimate / CRM pricing",
       "evidence": [
         "N-EST",
@@ -863,16 +864,17 @@
       "source": "shared/src/domain/estimation-core.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "PARTIAL",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Pre-Sales / Estimator, Commercial Manager / QS, Technical Manager role executes Technical comparison in the canonical Estimation core / Tender estimate / CRM pricing context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "THE TECHNICAL MANAGER'S VERDICT DECIDES WHICH SUPPLIER OFFERS MAY PRICE THE BID. The verdict is SUP-13's (ADR-0022), consumed through procurement's eligibilityFor and re-derived nowhere: compliant or compliant-with-deviation lines are eligible, a non-compliant line is refused as a supply basis and excluded from the three-supplier count with the reason in words, and a line with no verdict does not count. An amended verdict needs a reason, supersedes rather than erases, and moves coverage and the approval gate in both directions. The verdict is also written onto the estimate source. OPEN: the output today is the verdict record with its rationale and the exclusion on coverage; there is no side-by-side technical comparison document for a tender, and whether this capability requires one is the programme owner's decision.",
+      "acceptanceProof": "Auth-ON, PostgreSQL rebuilt from zero, shipped users (apps/web/e2e/tender-real-supply-path.spec.ts): the Technical Manager judges Al Noor's camera Not compliant and its cable Compliant on the evaluator's own screen, read back under the Buyer's permission; the estimator's coverage excludes that camera by name while the cable counts; the estimator recording a verdict is refused 403. REMAINING: the programme owner's answer on whether a cross-supplier technical comparison document is required; until then actual output is PARTIAL."
     },
     {
       "id": "EST-13",
@@ -886,7 +888,7 @@
       "stages": [
         "Pre-Sales"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Estimation core / Tender estimate / CRM pricing",
       "evidence": [
         "N-EST",
@@ -895,16 +897,17 @@
       "source": "shared/src/domain/estimation-core.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Pre-Sales / Estimator, Commercial Manager / QS, Technical Manager role executes Commercial comparison in the canonical Estimation core / Tender estimate / CRM pricing context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "THE ESTIMATE TAKES THE GOVERNED COMPARISON'S FIGURE, AND ONLY WHAT IT CAN COMPARE COUNTS. The commercial comparison is SUP-06's, reused and not re-implemented: every supplier line on a requirement normalised to the tenant's base currency on a stated date, with validity (live, expired, unknown) and an unknown value carrying its reason. In the tender context it does two jobs. It is the price basis — the estimate takes the normalised unit value of a live, comparable line — and it is the COUNT — the offer's three-supplier requirement counts, per supply item, only independent suppliers whose line is live and comparable, so a draft revision, an expired or unknown-validity offer and a second offer from a supplier already counted are shown excluded with the reason. The comparison is computed, never stored; the estimate source keeps the currency and comparison date, and staleness is re-read on that same date so only the supplier's offer can move it.",
+      "acceptanceProof": "Auth-ON, PostgreSQL rebuilt from zero, shipped users (apps/web/e2e/tender-real-supply-path.spec.ts): the estimator's coverage names each counted supplier with its normalised figure and each excluded one with its reason, links each requirement to Procurement's comparison screen, and the comparison sheet PDF for the pricing requirement names every supplier. DENIAL: the Sales Manager reading the supplier comparison 403. Over the API (stages D and E): a line not comparable or not live is refused as a basis; a draft revision, an expired offer and a same-supplier alternative do not count. PERSISTENCE: currency and comparison date proved required on a governed estimate source by SQL. NEXT-ROLE RECEIPT: the comparison's figure prices the bid, and the approval's recorded evidence names, per supply item, its comparison date and currency."
     },
     {
       "id": "EST-14",
@@ -9149,8 +9152,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 35,
-      "PARTIAL": 81,
+      "COMPLETE": 37,
+      "PARTIAL": 82,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9159,7 +9162,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 9,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 43,
+      "UNVERIFIED": 40,
       "NOT_AUDITED": 0
     },
     "gaps": 69,

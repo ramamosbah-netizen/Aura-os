@@ -490,7 +490,16 @@ export class TenderingController {
     if (!dto?.status) throw new BadRequestException('status is required');
     const found = await this.tenders.get(id);
     if (!found) throw new NotFoundException(`tender ${id} not found`);
-    if (dto.status === 'submitted') await this.assertSubmissionReadiness(found);
+    if (dto.status === 'submitted') {
+      await this.assertSubmissionReadiness(found);
+      // THE SAME FIGURE BY EITHER ROUTE. `submit` snapshots the approved offer's value (its locked
+      // baseline — what the client was sent), resolved here because only the app layer may read
+      // across tendering → quotation → baseline (ADR-0011). This route used to reach the domain
+      // without it, so its record carried the tender's own estimate instead: two routes into one
+      // fact, disagreeing about what was offered. It stays a bare record (method 'other').
+      const basis = await this.resolveAwardBasis(found.tenantId, id);
+      return (await this.tenders.submit(id, {}, basis?.value)).tender;
+    }
     return this.tenders.changeStatus(id, dto.status);
   }
 

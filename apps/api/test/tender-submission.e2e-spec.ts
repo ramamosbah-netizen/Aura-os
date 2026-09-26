@@ -115,17 +115,17 @@ describe('T2 tender submission record (HTTP)', () => {
   });
 
   it('the legacy status route still works — and now leaves a (bare) record behind', async () => {
-    const { tender: t } = await readyToSubmit();
+    const { tender: t, offer } = await readyToSubmit();
     const estimate = (await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body.value as number;
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'submitted' }).expect(200);
 
     const listed = (await http.get(`/api/v1/tendering/tenders/${t.id}/submissions`).expect(200)).body;
     expect(listed).toHaveLength(1);
     expect(listed[0].method).toBe('other');
-    // AS THE CODE STANDS this route snapshots the tender's own value (the priced BOQ), whereas the
-    // submit command above snapshots the approved offer's baseline — the two routes disagree.
-    expect(estimate).toBeGreaterThan(0);
-    expect(listed[0].submittedValue).toBe(estimate);
+    // The same figure as the submit command: the approved offer's baseline — what the client was
+    // sent — and not the tender's own estimate (the priced BOQ, excl. VAT), which it used to record.
+    expect(offer.baselineTotal).not.toBe(estimate);
+    expect(listed[0].submittedValue).toBe(offer.baselineTotal);
   });
 
   it('resubmission appends a second record — a fact is never edited', async () => {

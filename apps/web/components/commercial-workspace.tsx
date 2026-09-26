@@ -17,6 +17,7 @@ export interface CommQuotation {
   id: string; quoteNumber: string; customerName: string; accountId: string | null;
   sourceTenderId?: string | null; sourceOpportunityId?: string | null; convertedContractId?: string | null;
   ownerId?: string | null; terms?: string | null; revision?: number; parentQuotationId?: string | null;
+  approvalReadinessMode?: 'governed' | 'legacy';
   issueDate: string; validUntil: string | null; subtotal: number; vatTotal: number; total: number;
   status: string; lines: Line[];
 }

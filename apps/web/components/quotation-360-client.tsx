@@ -31,6 +31,8 @@ export interface Quotation {
   subject?: string | null;
   exclusions?: string[]; paymentConditions?: string | null; deliveryTerms?: string | null;
   sourceTenderId: string | null; sourceOpportunityId: string | null; convertedContractId: string | null;
+  /** 'legacy' quotations predate the evidence gate; every other one is refused approval until READY. */
+  approvalReadinessMode?: 'governed' | 'legacy';
   issueDate: string; validUntil: string | null; lines: Line[]; subtotal: number; vatTotal: number; total: number;
   pricing: { unitCosts?: number[]; lines?: unknown[] } | null;
 }
@@ -545,7 +547,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
       {tab === 'approval' && (
         <RecordCard title="Approval context">
-          <QuotationApprovalReadiness quotationId={q.id} sourceTenderId={q.sourceTenderId} />
+          <QuotationApprovalReadiness quotationId={q.id} sourceTenderId={q.sourceTenderId} enforced={q.approvalReadinessMode !== 'legacy'} onAttach={() => setTab('documents')} />
           <QuotationReviewDecision quotationId={q.id} status={q.status} canDecide={allowed.approve} />
         </RecordCard>
       )}

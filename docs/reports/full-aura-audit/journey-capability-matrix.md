@@ -5,11 +5,11 @@
 | Stage | Capability | Status |
 | --- | --- | --- |
 | Sales | INT-01 | PARTIAL |
-| Sales | INT-02 | PARTIAL |
-| Sales | INT-03 | PARTIAL |
+| Sales | INT-02 | COMPLETE |
+| Sales | INT-03 | COMPLETE |
 | Sales | INT-04 | WRONG_BEHAVIOR |
 | Sales | INT-05 | PARTIAL |
-| Sales | INT-06 | PARTIAL |
+| Sales | INT-06 | COMPLETE |
 | Sales | OUT-01 | PARTIAL |
 | Sales | OUT-02 | PARTIAL |
 | Sales | OUT-03 | UNVERIFIED |

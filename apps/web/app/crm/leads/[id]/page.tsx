@@ -34,7 +34,10 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   return (
     <div style={st.container}>
       <RecordChrome type="Lead" title={lead.name} />
-      <Sales360Journey current="lead" />
+      <Sales360Journey current="lead" records={{
+        lead: `/crm/leads/${lead.id}`,
+        opportunity: typeof lead.convertedOpportunityId === 'string' ? `/crm/opportunities/${lead.convertedOpportunityId}` : null,
+      }} />
       <div style={st.navRow}>
         <a href="/crm/leads" style={st.link}>← Back to Sales Pipeline</a>
       </div>

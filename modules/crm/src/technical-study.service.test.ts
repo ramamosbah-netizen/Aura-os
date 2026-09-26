@@ -151,3 +151,17 @@ describe('STU-04: a requirement cites its frozen source document, and a clarific
     expect(study.clarifications[0]).toMatchObject({ requirementRef: 'cd circular 12 s.4', reference: 'RFI-07' });
   });
 });
+
+describe('opening a pre-award package is idempotent under a race (J1-13)', () => {
+  it('returns the package a concurrent reader created instead of failing on the unique key', async () => {
+    const store = new InMemoryPreAwardPackageStore();
+    const service = new PreAwardPackageService(store, new InMemoryPricingSheetStore());
+    const winner = await service.openDirect({ tenantId: 't1', opportunityId: 'o-race' });
+    // The loser read "no package" before the winner's insert landed, then collided on save.
+    const getByOpportunity = store.getByOpportunity.bind(store);
+    let firstRead = true;
+    store.getByOpportunity = async (t, o) => { if (firstRead) { firstRead = false; return null; } return getByOpportunity(t, o); };
+    store.savePackage = async () => { throw new Error('duplicate key value violates unique constraint "aura_crm_pre_award_packages_opportunity"'); };
+    await expect(service.openDirect({ tenantId: 't1', opportunityId: 'o-race' })).resolves.toMatchObject({ id: winner.id });
+  });
+});

@@ -63,7 +63,17 @@ export class PreAwardPackageService {
     const existing = await this.store.getByOpportunity(input.tenantId, input.opportunityId);
     if (existing) return existing;
     const pkg = makePreAwardPackage({ tenantId: input.tenantId, companyId: input.companyId ?? null, opportunityId: input.opportunityId, createdBy: input.createdBy ?? null });
-    await this.store.savePackage(pkg);
+    try {
+      await this.store.savePackage(pkg);
+    } catch (err) {
+      // Two first readers race to open the same package, and the store's one-per-opportunity key
+      // refuses the second insert. Measured (J1-13): a page's two concurrent reads, one of them the
+      // study evidence list, failed 400 "duplicate key" and the Sales enquiry documents vanished.
+      // The package exists — return it.
+      const raced = await this.store.getByOpportunity(input.tenantId, input.opportunityId);
+      if (raced) return raced;
+      throw err;
+    }
     this.logger.log(`Direct pre-award package opened for opportunity ${input.opportunityId} (${pkg.id})`);
     return pkg;
   }
@@ -73,7 +83,14 @@ export class PreAwardPackageService {
     const existing = await this.store.getByTender(input.tenantId, input.tenderId);
     if (existing) return existing;
     const pkg = makePreAwardPackage({ tenantId: input.tenantId, companyId: input.companyId ?? null, tenderId: input.tenderId, createdBy: input.createdBy ?? null });
-    await this.store.savePackage(pkg);
+    try {
+      await this.store.savePackage(pkg);
+    } catch (err) {
+      // The same race as openDirect, on the tender's key.
+      const raced = await this.store.getByTender(input.tenantId, input.tenderId);
+      if (raced) return raced;
+      throw err;
+    }
     this.logger.log(`Tender pre-award package opened for tender ${input.tenderId} (${pkg.id})`);
     return pkg;
   }

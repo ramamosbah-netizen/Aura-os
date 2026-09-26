@@ -1,8 +1,9 @@
 import { apiFetch, apiBase, authHeader } from '@/lib/api';
 
-export async function GET(): Promise<Response> {
+export async function GET(request?: Request): Promise<Response> {
   try {
-    const res = await apiFetch(`${apiBase()}/api/v1/crm/quotations`, { headers: await authHeader(), cache: 'no-store' });
+    const query = request ? new URL(request.url).search : '';
+    const res = await apiFetch(`${apiBase()}/api/v1/crm/quotations${query}`, { headers: await authHeader(), cache: 'no-store' });
     return Response.json(res.ok ? await res.json() : [], { status: res.ok ? 200 : res.status });
   } catch {
     return Response.json([], { status: 502 });

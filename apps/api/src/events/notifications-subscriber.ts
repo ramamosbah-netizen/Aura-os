@@ -17,10 +17,11 @@ export class NotificationsSubscriber implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    const raise = async (e: DomainEvent, title: string, body: string, category: string, refType: string): Promise<void> => {
+    const raise = async (e: DomainEvent, title: string, body: string, category: string, refType: string, userId: string | null = null): Promise<void> => {
       try {
         // e.type activates the admin per-event rule (notify.rule.<event>, §2.8 depth).
-        await this.notifications.record({ tenantId: e.tenantId, title, body, category, refType, refId: e.aggregateId }, [], e.type);
+        // `userId` null is a tenant-wide notice; a named user is the one person it is for.
+        await this.notifications.record({ tenantId: e.tenantId, userId, title, body, category, refType, refId: e.aggregateId }, [], e.type);
       } catch (err) {
         this.logger.error(`Failed to raise notification for ${e.type}: ${err}`);
       }
@@ -59,13 +60,18 @@ export class NotificationsSubscriber implements OnModuleInit {
     // C7 — the CRM half of the stream, which had never been wired here. Event-driven facts only:
     // the time-based ones (SLA breach, overdue follow-up) cannot be events because nothing happens
     // when nothing happens — the sweep at POST /crm/automation/run raises those.
-    // The lead events carry ids, not names (payload: { assignedTo, assignedAt } and
+    // The lead events carry ids, not names (payload: { fromAssignedTo, toAssignedTo, assignedBy } and
     // { opportunityId, accountId, ... }) — so these bodies say what the payload actually knows
     // rather than interpolating fields that would render as "undefined". The notification links to
     // the record by refId; the record is where the name lives.
     this.bus.subscribe('crm.lead.assigned', (e: DomainEvent) => {
       const p = e.payload as Record<string, unknown>;
-      void raise(e, 'Lead assigned', `A lead was assigned to ${p.assignedTo ?? 'someone'}. The first-response clock starts now.`, 'crm', 'crm.lead');
+      // INT-03: the assignment is the assignee's news. It was raised with no recipient, which made
+      // it a notice to EVERYONE in the tenant — the new owner received it only as one reader of a
+      // broadcast, and everybody else received somebody else's work.
+      // The event (LeadService.assign) names the new owner `toAssignedTo`, beside `fromAssignedTo`.
+      const assignee = typeof p.toAssignedTo === 'string' && p.toAssignedTo ? p.toAssignedTo : null;
+      void raise(e, 'Lead assigned to you', 'A lead is yours now. The first-response clock starts now.', 'crm', 'crm.lead', assignee);
     });
 
     this.bus.subscribe('crm.lead.converted', (e: DomainEvent) => {

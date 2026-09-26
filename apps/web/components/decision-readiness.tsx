@@ -134,7 +134,7 @@ const VERDICT: Record<Readiness['verdict'], { label: string; color: string }> = 
   NOT_READY: { label: 'Not ready', color: 'var(--bad)' },
 };
 
-export default function DecisionReadiness({ docs, requirements, quotationId, onSeed, derivedIds, coverageHref }: {
+export default function DecisionReadiness({ docs, requirements, quotationId, onSeed, derivedIds, coverageHref, enforced = true, onAttach }: {
   docs: EvidenceDoc[];
   requirements?: StoredRequirement[];
   quotationId: string;
@@ -143,6 +143,14 @@ export default function DecisionReadiness({ docs, requirements, quotationId, onS
   derivedIds?: readonly string[];
   /** Where a computed requirement's working can be read (the tender's supply coverage). */
   coverageHref?: string | null;
+  /**
+   * Whether the server REFUSES an approval that is not READY — every quotation except a legacy
+   * one. J1-12: the copy used to say "approving now means approving without them" while the
+   * approval gate refused exactly that, so the screen described a choice the user did not have.
+   */
+  enforced?: boolean;
+  /** Where evidence is attached from here — the quote's Documents. Without it, a link opens them. */
+  onAttach?: () => void;
 }) {
   const r = readinessFor(docs, requirements, derivedIds);
   const v = VERDICT[r.verdict];
@@ -188,9 +196,10 @@ export default function DecisionReadiness({ docs, requirements, quotationId, onS
       </ul>
 
       {r.verdict !== 'READY' && (
-        <p style={st.note}>
-          {r.total - r.ready} requirement{r.total - r.ready === 1 ? '' : 's'} outstanding — approving now
-          means approving without them.
+        <p style={st.note} data-testid="readiness-consequence">
+          {r.total - r.ready} requirement{r.total - r.ready === 1 ? '' : 's'} outstanding — {enforced
+            ? 'this quote cannot be approved until each is attached, waived or marked not applicable.'
+            : 'this legacy quote can still be approved, but approving now means approving without them.'}
         </p>
       )}
 
@@ -200,14 +209,14 @@ export default function DecisionReadiness({ docs, requirements, quotationId, onS
             Set a checklist on this quote
           </button>
         )}
-        <a href={`/crm/quotations/${quotationId}`} style={st.link}>
-          Open the quote to attach evidence →
-        </a>
+        {onAttach
+          ? <button type="button" style={st.seed} onClick={onAttach}>Attach evidence in Documents →</button>
+          : <a href={`/crm/quotations/${quotationId}?focus=documents`} style={st.link}>Open the quote&apos;s documents to attach evidence →</a>}
       </p>
       {!r.persisted && (
         <p style={st.derived}>
           Derived from attached documents — no checklist set, so nothing here can be waived or
-          marked not applicable.
+          marked not applicable{enforced ? ', and the quote cannot be approved until a checklist is set.' : '.'}
         </p>
       )}
     </div>

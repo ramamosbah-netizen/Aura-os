@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import LeadFollowUps from './lead-follow-ups';
 import { useRouter } from 'next/navigation';
 import { LEAD_QUALIFICATION_DIMENSIONS, LEAD_QUALIFICATION_LABELS, elvSystemLabel, type ElvSystem, type AssessmentInput } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
@@ -465,6 +466,7 @@ export default function Lead360Client({ lead, qualification, accounts }: {
               <InfoRow label="Timeline" value={lead.expectedTimeline ?? '—'} />
             </RecordCard>
           </CardGrid>
+          <LeadFollowUps leadId={lead.id} leadName={lead.name} ownerId={lead.assignedTo ?? null} />
           {conversionContext}
         </>
       )}

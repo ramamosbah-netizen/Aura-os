@@ -5,11 +5,11 @@
 | Role | Capability | Capability status | Role-specific acceptance |
 | --- | --- | --- | --- |
 | Sales | INT-01 | PARTIAL | UNVERIFIED |
-| Sales | INT-02 | PARTIAL | UNVERIFIED |
-| Sales | INT-03 | PARTIAL | UNVERIFIED |
+| Sales | INT-02 | COMPLETE | UNVERIFIED |
+| Sales | INT-03 | COMPLETE | UNVERIFIED |
 | Sales | INT-04 | WRONG_BEHAVIOR | UNVERIFIED |
 | Sales | INT-05 | PARTIAL | UNVERIFIED |
-| Sales | INT-06 | PARTIAL | UNVERIFIED |
+| Sales | INT-06 | COMPLETE | UNVERIFIED |
 | Sales | AWD-01 | PARTIAL | UNVERIFIED |
 | Sales | AWD-02 | PARTIAL | UNVERIFIED |
 | Sales | AWD-03 | PARTIAL | UNVERIFIED |

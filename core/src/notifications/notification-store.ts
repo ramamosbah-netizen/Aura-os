@@ -106,6 +106,13 @@ export class PostgresNotificationStore implements NotificationStore {
   async list(filter: NotificationFilter): Promise<Notification[]> {
     const params: unknown[] = [filter.tenantId];
     let sql = `SELECT ${COLS} FROM public.aura_notifications WHERE tenant_id = $1`;
+    // A notification addressed to one person is theirs alone. This filter was missing here — the
+    // in-memory store and unreadCount both applied it — so on PostgreSQL every user's list showed
+    // everyone else's personal notifications, and the list disagreed with its own unread badge.
+    if (filter.userId !== undefined) {
+      params.push(filter.userId);
+      sql += ` AND (user_id IS NULL OR user_id = $${params.length})`;
+    }
     if (filter.unreadOnly) sql += ' AND read = false';
     params.push(filter.limit ?? 100);
     sql += ` ORDER BY created_at DESC LIMIT $${params.length}`;

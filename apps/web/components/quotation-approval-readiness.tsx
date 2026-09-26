@@ -5,7 +5,7 @@ import DecisionReadiness, { type EvidenceDoc, type StoredRequirement } from './d
 
 /** Approval context belongs to the quotation record. It reads the shared DMS/evidence contracts;
  * it does not create a quotation-local checklist or document store. */
-export default function QuotationApprovalReadiness({ quotationId, sourceTenderId = null }: { quotationId: string; sourceTenderId?: string | null }) {
+export default function QuotationApprovalReadiness({ quotationId, sourceTenderId = null, enforced = true, onAttach }: { quotationId: string; sourceTenderId?: string | null; enforced?: boolean; onAttach?: () => void }) {
   const [docs, setDocs] = useState<EvidenceDoc[]>([]);
   const [requirements, setRequirements] = useState<StoredRequirement[]>([]);
   const [derivedIds, setDerivedIds] = useState<string[]>([]);
@@ -63,6 +63,8 @@ export default function QuotationApprovalReadiness({ quotationId, sourceTenderId
         onSeed={() => void seed()}
         derivedIds={derivedIds}
         coverageHref={sourceTenderId ? `/tendering/tenders/${sourceTenderId}/pricing#supply-coverage` : null}
+        enforced={enforced}
+        onAttach={onAttach}
       />
       <p style={st.note}>Approval is executed here on the quotation record. Evidence and sharing remain governed by Document Control.</p>
     </div>

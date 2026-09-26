@@ -80,6 +80,9 @@ export class CrmAutomationController {
         await this.notifications.record(
           {
             tenantId,
+            // The escalation names who it is for (the owner, or the follow-up's assignee); only an
+            // escalation nobody owns is a tenant-wide notice.
+            userId: e.ownerId ?? null,
             title: e.title,
             body: e.body,
             category: 'crm',

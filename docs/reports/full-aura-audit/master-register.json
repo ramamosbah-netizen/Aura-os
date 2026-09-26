@@ -81,7 +81,7 @@
       "stages": [
         "Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "CRM",
       "evidence": [
         "R-J1"
@@ -89,17 +89,17 @@
       "source": "apps/api/test/j1-journey-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh API proof round-tripped typed ELV systems plus site/project context on lead create/update and refused unknown system values. The complete Sales intake UI was not executed.",
-      "acceptanceProof": "Sales captures customer, site, systems and scope once in the UI; Pre-Sales receives the same canonical context without re-entry."
+      "currentBehavior": "SALES CAPTURES THE WHOLE JOB ONCE, ON SCREEN, AND PRE-SALES RECEIVES IT WITHOUT RE-ENTRY. The New Lead form takes customer, contact, site (project and location), systems and scope; the converted opportunity's study shows the same requirement, site and systems as canonical intake, and the requirement arrives locked in the study (STU-04). Corrected here: the 'Systems in scope' label wrapped every checkbox, so the first checkbox's accessible name was the whole list ('Systems in scope CCTV Access Control …'); it is now a labelled group.",
+      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (sales-enquiry-intake.spec.ts), shipped roles: the Sales Manager captures the enquiry on screen and assigns it to u-e2e-sales; the rep is notified once and schedules, sees overdue, and completes dated follow-ups on the enquiry; files the client specification and its revision 2; the enquiry is converted and assigned; Pre-Sales receives the context, the document and the history; the reviewer reads the document; the estimator is refused it. INT-02 specifically: the lead read back with systems ['cctv','access_control'] and its location; the study's intake box shows the requirement, the location and CCTV. STATED: the enquiry's context reaches the study on the DIRECT route; the tender route's hand-over is stated on STU-04."
     },
     {
       "id": "INT-03",
@@ -111,7 +111,7 @@
       "stages": [
         "Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "CRM",
       "evidence": [
         "R-J1"
@@ -119,17 +119,17 @@
       "source": "apps/api/test/j1-journey-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh API proof persisted owner, next action and due date, flagged overdue work and treated won/lost records as terminal. Assignment notification and timezone behavior remain unproven.",
-      "acceptanceProof": "Sales assigns owner and due dates in the intake UI; assignee receives the work once and overdue/escalation rules are visible."
+      "currentBehavior": "AN OWNER AND DUE DATES ARE SET ON THE ENQUIRY, THE ASSIGNEE RECEIVES THE WORK ONCE, AND OVERDUE WORK IS VISIBLE. Four defects measured and corrected: (1) NO LEAD COULD BE ASSIGNED ON SCREEN — the Lead 360 assign control called two web routes that did not exist (assignable users, assign), received nothing and hid itself; they exist now. (2) THE ASSIGNMENT WAS A BROADCAST — 'Lead assigned' was raised with no recipient, so every user in the tenant received somebody else's work; it is now addressed to the new owner, read from the event's own payload (toAssignedTo), and the CRM escalation sweep addresses its escalations to their owner or assignee too. (3) EVERYONE SAW EVERYONE'S PERSONAL NOTIFICATIONS — the PostgreSQL notification list ignored the user filter that the in-memory store and the unread count both applied, so a notice addressed to one user was listed to all; the list now filters. (4) NO DUE DATE COULD BE SET ON AN ENQUIRY — its one-click outcomes wrote undated tasks, so nothing on a lead could fall due or become overdue; the enquiry now schedules dated follow-ups, shows them overdue, and states the escalation rule (overdue follow-ups turn high priority in My Work and the CRM escalation sweep notifies the assignee; a lead with no first response inside its SLA is escalated to its owner).",
+      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (sales-enquiry-intake.spec.ts), shipped roles: the Sales Manager captures the enquiry on screen and assigns it to u-e2e-sales; the rep is notified once and schedules, sees overdue, and completes dated follow-ups on the enquiry; files the client specification and its revision 2; the enquiry is converted and assigned; Pre-Sales receives the context, the document and the history; the reviewer reads the document; the estimator is refused it. INT-03 specifically: the Sales Manager assigns on screen with a reason; the rep has exactly one 'Lead assigned to you', addressed to them, and another user has none; a follow-up scheduled yesterday shows 'Overdue' on the enquiry and exactly one high-priority item on the rep's My Work. Unit: notifications-subscriber.test.ts (2), notification-store.test.ts (2). STATED: the escalation sweep (POST /crm/automation/run) is operator-triggered and was not run in the proof; dates are calendar dates compared in UTC, and behaviour for a non-UTC working day is not proved."
     },
     {
       "id": "INT-04",
@@ -201,7 +201,7 @@
       "stages": [
         "Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "CRM",
       "evidence": [
         "R-J1"
@@ -209,17 +209,17 @@
       "source": "apps/api/test/j1-journey-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh API proof merged events and activities into one opportunity timeline, supported planned → in-progress → completed activity timestamps and accepted assignment. Enquiry documents and live role handoff remain unproven.",
-      "acceptanceProof": "Sales schedules and completes follow-up from the enquiry, attaches governed files and hands the same record to Pre-Sales with a complete history."
+      "currentBehavior": "SALES FOLLOWS UP FROM THE ENQUIRY, FILES ITS DOCUMENTS ON IT, AND HANDS THE SAME RECORD TO PRE-SALES WITH ITS HISTORY. A follow-up is scheduled on the enquiry, completed there with its outcome and the next follow-up, and kept as the enquiry's history; the client documents are uploaded and revised on the enquiry itself; after conversion Pre-Sales receives the same document at the same revision and, through the journey link to the lead, the follow-up history. Corrected here: (1) the follow-up card (INT-03); (2) THE DOCUMENTS COULD VANISH ON ARRIVAL — opening an opportunity's pre-award package on first read was not race-safe: two concurrent first reads both inserted, the second failed 400 'duplicate key', and when that was the study's evidence list the Sales enquiry documents did not appear; opening is idempotent now (the tender package too).",
+      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (sales-enquiry-intake.spec.ts), shipped roles: the Sales Manager captures the enquiry on screen and assigns it to u-e2e-sales; the rep is notified once and schedules, sees overdue, and completes dated follow-ups on the enquiry; files the client specification and its revision 2; the enquiry is converted and assigned; Pre-Sales receives the context, the document and the history; the reviewer reads the document; the estimator is refused it. INT-06 specifically: the follow-up completed with 'Site visit agreed for Thursday' and its next follow-up; the specification at revision 2 is byte-identical for Pre-Sales, readable by the Technical Manager, refused to the Estimator (403); Pre-Sales opens the lead from the opportunity's journey bar and reads the completed follow-up. Unit: technical-study.service.test.ts (package opening under a race)."
     },
     {
       "id": "STU-01",
@@ -7050,13 +7050,13 @@
     },
     {
       "id": "J1-02",
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "originalClassification": "INCOMPLETE",
       "currentBehavior": "Intake UI لا يلتقط جميع معلومات job؛ حقول backend أوسع من نموذج create/edit المفحوص.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-02",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "INT-02",
         "INT-03"
@@ -7071,7 +7071,7 @@
       "expectedOperationalBehavior": "Enquiry site and systems works with canonical inputs, governed permissions and usable handoff; Enquiry deadlines and owner works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Sales captures customer, site, systems and scope once in the UI; Pre-Sales receives the same canonical context without re-entry.; Sales assigns owner and due dates in the intake UI; assignee receives the work once and overdue/escalation rules are visible."
+      "acceptanceProof": "MET. THE FINDING: the intake screen did not capture the whole job, and backend fields were wider than the form. NOW Sales captures customer, contact, site, systems and scope once on screen, assigns the owner on the enquiry (the assign control could not appear before — its web routes were missing) and sets due dates as follow-ups on it; the owner receives the assignment once, addressed to them; overdue follow-ups are shown and their escalation rule stated; Pre-Sales receives the same context without re-entry. Proved in sales-enquiry-intake.spec.ts (browser, Auth-ON, PostgreSQL). See INT-02 and INT-03."
     },
     {
       "id": "J1-03",
@@ -7346,13 +7346,13 @@
     },
     {
       "id": "J1-12",
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "originalClassification": "CONFUSING",
       "currentBehavior": "generic journey links لا تحافظ دائمًا على السجل؛ requirement UI مخفية داخل Commercial؛ approval copy لا يطابق المنع الفعلي.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-12",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "INT-06"
       ],
@@ -7366,17 +7366,17 @@
       "expectedOperationalBehavior": "Follow-up and enquiry documents works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Sales schedules and completes follow-up from the enquiry, attaches governed files and hands the same record to Pre-Sales with a complete history."
+      "acceptanceProof": "MET ON EACH OF ITS THREE COMPLAINTS. (1) GENERIC JOURNEY LINKS: the journey bar on a lead, an opportunity and a quotation now links each step to the record this deal is linked to — the converted opportunity, the source lead, the tender or study, the live quotation, the contract — falling back to the register only when there is none (proved: lead → its opportunity; opportunity → its lead; no quote yet → the register). The tender page keeps register links: a tender records no opportunity. (2) REQUIREMENTS HIDDEN INSIDE COMMERCIAL: the customer requirements register is now on the opportunity's Overview (proved: the enquiry's requirement is there for Pre-Sales). (3) APPROVAL COPY vs THE ACTUAL GATE: the readiness panel said 'approving now means approving without them' while the gate refused exactly that; a governed quote now says it cannot be approved until each item is attached, waived or not applicable (and that a checklist must be set), the legacy wording is kept only for legacy quotes, and 'attach evidence' opens the quote's Documents instead of reloading the same page — proved against the gate, which refuses the approval 409. Proved in sales-enquiry-intake.spec.ts."
     },
     {
       "id": "J1-13",
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "originalClassification": "DISCONNECTED",
       "currentBehavior": "Lead document action ينتقل إلى DMS عام؛ كامل إرفاق ثم وصول مهندس/معتمد إلى النسخة نفسها لم يثبت.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-13",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "INT-06"
       ],
@@ -7390,7 +7390,7 @@
       "expectedOperationalBehavior": "Follow-up and enquiry documents works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Sales schedules and completes follow-up from the enquiry, attaches governed files and hands the same record to Pre-Sales with a complete history."
+      "acceptanceProof": "MET. THE FINDING: the lead's document action sent Sales to the general document register, and the attach-then-engineer/approver-read path to the same version was unproved. NOW the client documents are uploaded and revised on the enquiry itself; after conversion the assigned Pre-Sales engineer receives the same document at revision 2 byte for byte, the assigned reviewer reads it, and an estimator outside the deal team is refused. A race that made the documents vanish on arrival (package opening, 400 'duplicate key') was found and corrected on the way. Proved in sales-enquiry-intake.spec.ts (browser, Auth-ON, PostgreSQL). See INT-06."
     },
     {
       "id": "J1-14",
@@ -9155,8 +9155,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 48,
-      "PARTIAL": 77,
+      "COMPLETE": 51,
+      "PARTIAL": 74,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

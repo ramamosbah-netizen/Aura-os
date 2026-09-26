@@ -16,7 +16,14 @@ const STEPS: Array<{ id: Surface | 'signal' | 'scope' | 'estimate' | 'contract';
  * Shared, read-only journey rail for every Sales 360 record. It makes the same
  * Signal → Contract chain visible without moving ownership or adding mutations.
  */
-export default function Sales360Journey({ current }: { current: Surface }) {
+export type JourneyStep = typeof STEPS[number]['id'];
+
+/**
+ * `records` are the records THIS deal is linked to, by step. A step with one links to it; a step
+ * without one falls back to its register. J1-12: every step used to open the register, so from a
+ * converted lead "Opportunity" opened the whole pipeline board rather than the deal it became.
+ */
+export default function Sales360Journey({ current, records = {} }: { current: Surface; records?: Partial<Record<JourneyStep, string | null>> }) {
   return (
     <section data-testid="sales-360-journey" style={st.section} aria-label="Sales and Commercial journey">
       <div style={st.header}>
@@ -29,10 +36,14 @@ export default function Sales360Journey({ current }: { current: Surface }) {
       <nav style={st.steps} aria-label="Sales record journey">
         {STEPS.map((step, index) => {
           const active = step.id === current;
+          const record = records[step.id] ?? null;
           return (
             <span key={step.id} style={st.stepWrap}>
               <a
-                href={step.href}
+                href={record ?? step.href}
+                data-testid={`journey-${step.id}`}
+                data-linked={record ? 'record' : 'register'}
+                title={record ? `This deal's ${step.label.toLowerCase()}` : `All ${step.label.toLowerCase()} records`}
                 aria-current={active ? 'page' : undefined}
                 style={{ ...st.step, ...(active ? st.stepActive : {}) }}
               >

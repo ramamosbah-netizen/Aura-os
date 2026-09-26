@@ -6,7 +6,8 @@ import Sales360Journey from '../../../../components/sales-360-journey';
 
 export const dynamic = 'force-dynamic';
 
-interface Opportunity { id: string; title: string; }
+interface Opportunity { id: string; title: string; leadId?: string | null; tenderId?: string | null; executionType?: string | null }
+interface QuoteRef { id: string; status: string; revision?: number; createdAt?: string }
 
 /**
  * Opportunity 360 — the deal command center. Qualification, stakeholders,
@@ -15,7 +16,13 @@ interface Opportunity { id: string; title: string; }
  */
 export default async function OpportunityDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const opp = await getJson<Opportunity>(`/api/crm/opportunities/${id}`);
+  const [opp, quotes] = await Promise.all([
+    getJson<Opportunity>(`/api/crm/opportunities/${id}`),
+    getJson<QuoteRef[]>(`/api/crm/quotations?sourceOpportunityId=${encodeURIComponent(id)}`),
+  ]);
+  // The deal's live offer: the latest revision that has not been superseded.
+  const liveQuote = (quotes ?? []).filter((q) => q.status !== 'revised' && q.status !== 'cancelled')
+    .sort((a, b) => (b.revision ?? 0) - (a.revision ?? 0))[0] ?? null;
 
   if (!opp) {
     return (
@@ -29,7 +36,12 @@ export default async function OpportunityDetailPage({ params }: { params: Promis
   return (
     <div style={st.container}>
       <RecordChrome type="Opportunity" title={opp.title} />
-      <Sales360Journey current="opportunity" />
+      <Sales360Journey current="opportunity" records={{
+        lead: opp.leadId ? `/crm/leads/${opp.leadId}` : null,
+        opportunity: `/crm/opportunities/${opp.id}`,
+        scope: opp.tenderId ? `/tendering/tenders/${opp.tenderId}` : `/crm/opportunities/${opp.id}?area=study`,
+        quotation: liveQuote ? `/crm/quotations/${liveQuote.id}` : null,
+      }} />
       <div style={st.navRow}>
         <a href="/crm/pipeline" style={st.link}>← Back to Pipeline</a>
       </div>

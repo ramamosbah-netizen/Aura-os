@@ -150,6 +150,7 @@ export default function CommercialDecisionQueue({ quotations, contracts, evidenc
               requirements={reqsFor(selected.id)}
               quotationId={selected.id}
               onSeed={() => void seedChecklist(selected.id)}
+              enforced={selected.approvalReadinessMode !== 'legacy'}
             />
 
             {/* Linked records — the chain, not a Contracts tab. */}

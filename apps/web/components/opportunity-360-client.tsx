@@ -7,6 +7,7 @@ import Timeline from './timeline';
 import CommercialPanel from './commercial-panel';
 import TechnicalStudyWorkspace from './technical-study-workspace';
 import PreSalesAssignmentPanel from './presales-assignment-panel';
+import ScopeEvidenceCard from './scope-evidence-card';
 import BuyingJourneyPanel from './buying-journey-panel';
 import WinPlanPanel from './win-plan-panel';
 import DealDepthPanel from './deal-depth-panel';
@@ -476,6 +477,9 @@ export default function Opportunity360Client({ opportunityId, currentUserId = nu
         </RecordCard>
       }
     >
+      {/* J1-12: the customer's requirements were reachable only inside Commercial, where Sales and
+          Pre-Sales reviewing the deal did not look for them. The same register, on the Overview. */}
+      {tab === 'overview' && <div data-testid="overview-requirements"><ScopeEvidenceCard opportunityId={o.id} /></div>}
       {tab === 'overview' && (
         <CardGrid>
           <RecordCard title="Competitors">

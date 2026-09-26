@@ -236,8 +236,10 @@ export class CrmQuotationsController {
     @Query('ownerId') ownerId?: string,
     @Query('issueDateFrom') issueDateFrom?: string,
     @Query('issueDateTo') issueDateTo?: string,
+    // The deal's own offers — what a record page links to, rather than the whole register.
+    @Query('sourceOpportunityId') sourceOpportunityId?: string,
   ): Promise<Quotation[]> {
-    return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo, limit: 100 });
+    return this.quotations.list({ tenantId: this.tenant.get().tenantId, status, accountId, search, ownerId, issueDateFrom, issueDateTo, sourceOpportunityId, limit: 100 });
   }
 
   /** What this item has been quoted for before — the historic half of the pricing library. */

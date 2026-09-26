@@ -126,7 +126,10 @@ export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { o
               <div style={st.sectionTitle}>Job context</div>
               <Field label="Project / site name"><input value={form.projectName} onChange={set('projectName')} placeholder="e.g. Marina Tower" style={st.input} /></Field>
               <Field label="Location"><input value={form.projectLocation} onChange={set('projectLocation')} placeholder="Dubai / plot / building" style={st.input} /></Field>
-              <Field label="Systems in scope" span2>
+              {/* A group, not a <label>: a label wrapping every checkbox made the whole list the
+                  first checkbox's name ("Systems in scope CCTV Access Control …"). */}
+              <div role="group" aria-labelledby="lead-capture-systems" style={{ ...st.field, gridColumn: '1 / -1' }}>
+                <span id="lead-capture-systems" style={st.fieldLabel}>Systems in scope</span>
                 <div style={st.systemGrid}>
                   {ELV_SYSTEMS.map((system) => (
                     <label key={system} style={{ ...st.systemChip, ...(form.systems.includes(system) ? st.systemChipOn : {}) }}>
@@ -135,7 +138,7 @@ export default function LeadCapture({ onSaved, buttonLabel = '+ New Lead' }: { o
                     </label>
                   ))}
                 </div>
-              </Field>
+              </div>
               <Field label="Sector"><select value={form.sector} onChange={set('sector')} style={st.input}><option value="">Select sector</option>{ELV_SECTORS.map((v) => <option key={v} value={v}>{v.replaceAll('_', ' ')}</option>)}</select></Field>
               <Field label="Project stage"><select value={form.projectStage} onChange={set('projectStage')} style={st.input}><option value="">Select stage</option>{PROJECT_STAGES.map((v) => <option key={v} value={v}>{v.replaceAll('_', ' ')}</option>)}</select></Field>
               <Field label="Expected timeline"><input value={form.expectedTimeline} onChange={set('expectedTimeline')} placeholder="e.g. Offer due in 10 days" style={st.input} /></Field>

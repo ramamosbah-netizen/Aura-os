@@ -5,7 +5,7 @@ import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { TenantContext } from '@aura/core';
+import { AccessService, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -20,7 +20,26 @@ async function eventually<T>(fetcher: () => Promise<T[]>, tries = 20): Promise<T
   return fetcher();
 }
 
-/** New quotations are governed by default; satisfy the persisted checklist before approval. */
+/**
+ * The people who sign the governed pre-pricing acts, with the shipped roles that own them. Pricing is
+ * downstream of an independently approved technical study and an approved quantity take-off projected
+ * to the BOQ (`governedPricingContext`), and the study's reviewer must be an ACTIVE workspace user who
+ * holds `tendering.study.approve` — the same rule production applies, so the fixture names real people.
+ */
+const TENANT = 'chain-tenant';
+const PRESALES = 'u-e2e-presales';
+const TECH_MANAGER = 'u-e2e-techmgr';
+const ESTIMATOR = 'u-e2e-estimator';
+const COMMERCIAL_MANAGER = 'u-e2e-qs';
+
+/**
+ * New quotations are governed by default; satisfy the persisted checklist before approval.
+ *
+ * VENDOR_QUOTE on an offer raised from a tender is COMPUTED from the tender's governed supplier
+ * quotations and cannot be typed in (409). This tender was never put to suppliers — the supplier path
+ * is proved in apps/web/e2e/tender-real-supply-path.spec.ts — so it takes the governed exception: a
+ * reasoned waiver by the Commercial Manager, who answers for it and is not the offer's preparer.
+ */
 async function makeApprovalReady(http: ReturnType<typeof request>, quoteId: string): Promise<void> {
   await http.post('/api/v1/document-requirements/seed')
     .send({ entityType: 'crm.quotation', entityId: quoteId }).expect(201);
@@ -28,6 +47,12 @@ async function makeApprovalReady(http: ReturnType<typeof request>, quoteId: stri
     requirements: Array<{ id: string; type: string; requiredCount: number }>;
   };
   for (const requirement of result.requirements) {
+    if (requirement.type === 'VENDOR_QUOTE') {
+      await http.post(`/api/v1/document-requirements/${requirement.id}/waive`).set('x-e2e-actor', COMMERCIAL_MANAGER)
+        .send({ reason: 'Deal-chain fixture: this tender was not put to suppliers; the supplier path is proved elsewhere' })
+        .expect(201);
+      continue;
+    }
     for (let i = 0; i < requirement.requiredCount; i++) {
       await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`)
         .send({ type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID', reference: `${requirement.type}-${i + 1}` })
@@ -50,12 +75,18 @@ describe('business-chain e2e (HTTP)', () => {
       transformOptions: { exposeUnsetFields: false },
     }));
     const tenant = app.get(TenantContext);
+    const access = app.get(AccessService);
+    const users = app.get(UsersService);
+    for (const [userId, roleId] of [[PRESALES, 'r-pre-sales'], [TECH_MANAGER, 'r-technical-manager'], [ESTIMATOR, 'r-estimator'], [COMMERCIAL_MANAGER, 'r-commercial-manager']]) {
+      access.grant({ userId, roleId, scope: { kind: 'org', level: 'tenant', id: TENANT } });
+      users.save({ tenantId: TENANT, userId, displayName: userId, active: true });
+    }
     // ADR-0021 needs a REAL identity to capture award evidence (no 'system' fallback), but
     // switching the actor on globally would turn AccessService on for every other call in these
     // specs. So the actor is per-request, via a header only the award helper sends.
     app.use((_req: unknown, _res: unknown, next: () => void) =>
       tenant.run(
-        { tenantId: 'chain-tenant', companyId: null, actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null, correlationId: 'e2e-chains' },
+        { tenantId: TENANT, companyId: null, actorId: (_req as { headers?: Record<string, string> }).headers?.['x-e2e-actor'] ?? null, correlationId: 'e2e-chains' },
         () => next(),
       ),
     );
@@ -89,14 +120,36 @@ describe('business-chain e2e (HTTP)', () => {
     ).body;
     expect(tender.sourceOpportunityId).toBe(opp.id);
 
-    // 2b. Price the bid and APPROVE the resulting quotation, which locks the immutable Commercial
-    //     Baseline. That baseline is the contract's commercial basis. Without one the award is still
-    //     valid but NO contract is created (the deferred path) — the tender's own estimate is never
-    //     promoted to a contractual value. See ADR-0021's follow-up.
-    const { boq } = (await http.get(`/api/v1/tendering/tenders/${tender.id}/boq`).expect(200)).body;
-    await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/items`)
-      .send({ boqId: boq.id, itemCode: '1.1', description: 'ELV package', unit: 'LS', quantity: 1, rate: 780_000 })
-      .expect(201);
+    // 2b. The governed basis pricing stands on: Pre-Sales writes the technical study and the Technical
+    //     Manager — independently — approves it; the quantity take-off is approved and the Estimator
+    //     projects it to the BOQ; the Estimator then prices the item. No BOQ line is typed in directly.
+    const base = `/api/v1/tendering/tenders/${tender.id}`;
+    const study = (await http.post(`${base}/studies`).set('x-e2e-actor', PRESALES).send({
+      title: 'Marina Tower ELV technical study', inputRevision: 'Client specification Rev 01', reviewerId: TECH_MANAGER,
+      scopeSummary: 'Supply, install, test and commission the ELV package.',
+      systems: [{ discipline: 'ELV', name: 'CCTV', designBasis: 'IP cameras and NVR', interfaces: ['LAN'] }],
+      requirements: [{ category: 'client', statement: 'ELV package as specified', acceptanceCriteria: 'Installed and tested', compliance: 'compliant', response: 'Included' }],
+      surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+    }).expect(201)).body;
+    await http.post(`${base}/studies/${study.id}/submit`).set('x-e2e-actor', PRESALES).expect(201);
+    await http.post(`${base}/studies/${study.id}/approve`).set('x-e2e-actor', TECH_MANAGER).send({ comment: 'Approved for estimation' }).expect(201);
+    const takeoff = (await http.post(`${base}/quantity-takeoff`).set('x-e2e-actor', PRESALES)
+      .send({ lines: [{ description: 'ELV package', unit: 'LS', quantity: 1 }] }).expect(201)).body;
+    await http.post(`${base}/quantity-takeoff/${takeoff.id}/approve`).set('x-e2e-actor', TECH_MANAGER).send({}).expect(201);
+    const projection = (await http.post(`${base}/quantity-takeoff/${takeoff.id}/project-to-boq`).set('x-e2e-actor', ESTIMATOR).expect(201)).body;
+    const [item] = projection.items as Array<{ id: string }>;
+    await http.post(`${base}/pricing/items/${item.id}`).set('x-e2e-actor', ESTIMATOR).send({
+      resources: {
+        supplyUnitPrice: 520_000, technician: { count: 4, hours: 400, rate: 55 }, engineer: { count: 1, hours: 200, rate: 90 },
+        projectManager: { count: 0, hours: 0, rate: 0 }, transport: 0, wastagePercent: 0, accessories: 0, subcontract: 0, equipmentRent: 0, otherDirect: 0,
+      },
+      indirectPercent: 4, overheadPercent: 8, riskPercent: 3, profitPercent: 15,
+    }).expect(201);
+
+    //     Then the offer is generated and APPROVED, which locks the immutable Commercial Baseline. That
+    //     baseline is the contract's commercial basis. Without one the award is still valid but NO
+    //     contract is created (the deferred path) — the tender's own estimate is never promoted to a
+    //     contractual value. See ADR-0021's follow-up.
     const quote = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
     expect(quote.sourceTenderId).toBe(tender.id);
     await makeApprovalReady(http, quote.id);

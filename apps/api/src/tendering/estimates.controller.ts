@@ -1,7 +1,7 @@
-import { BadRequestException, Body, ConflictException, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
 import { TenantContext, Permissions } from '@aura/core';
 import { type CostComponent, type RateBuildUp, type TenderEstimate, EstimateService } from '@aura/tendering';
-import { isQuotationCommitted, QuotationService } from '@aura/crm';
+import { TenderPricingLock } from './tender-pricing-lock';
 
 interface BuildRateDto {
   boqItemId: string;
@@ -23,7 +23,7 @@ export class EstimatesController {
   constructor(
     private readonly estimates: EstimateService,
     private readonly tenant: TenantContext,
-    private readonly quotations: QuotationService,
+    private readonly pricingLock: TenderPricingLock,
   ) {}
 
   @Post()
@@ -34,17 +34,11 @@ export class EstimatesController {
       throw new BadRequestException('at least one cost component is required');
     }
     const ctx = this.tenant.get();
-    // This legacy composition endpoint must obey the same freeze boundary as the canonical
-    // pricing workspace. Once a tender-generated quotation is committed, rebuilding a rate here
-    // would silently change the cost evidence behind an issued offer. Re-price through a new
-    // quotation revision instead.
+    // This legacy composition endpoint obeys the SAME freeze as the canonical pricing sheet — the one
+    // rule in TenderPricingLock. It used to carry its own copy of only the committed half, so while a
+    // reviewer was deciding on an offer the costing behind it could still be rebuilt here (EST-17).
     const tenderId = await this.estimates.tenderIdForBoqItem(ctx.tenantId, dto.boqItemId);
-    if (tenderId) {
-      const committed = (await this.quotations.listBySourceTender(ctx.tenantId, tenderId)).filter(isQuotationCommitted);
-      if (committed.length > 0) {
-        throw new ConflictException('tender estimate is locked by a committed quotation; raise a quotation revision to re-price');
-      }
-    }
+    if (tenderId) await this.pricingLock.assertOpen(tenderId);
     try {
       return await this.estimates.buildRate(
         {

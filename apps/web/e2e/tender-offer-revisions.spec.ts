@@ -89,6 +89,10 @@ test.describe('EST-16 — a tender has one offer, and its submitted revisions do
       resources: { supplyUnitPrice: supply, technician: { count: 2, hours: 90, rate: 55 }, engineer: { count: 0, hours: 0, rate: 0 }, projectManager: { count: 0, hours: 0, rate: 0 }, transport: 0, wastagePercent: 0, accessories: 0, subcontract: 0, equipmentRent: 0, otherDirect: 0 },
       indirectPercent: 4, overheadPercent: 8, riskPercent: 3, profitPercent: 15,
     });
+    // The LEGACY composition route re-works the same costing — it obeys the same lock, in the same words.
+    const legacyRate = (unitCost: number) => raw('estimator', 'POST', '/tendering/estimates', {
+      boqItemId: camera.id, components: [{ costType: 'material', description: 'IP camera', quantity: 1, unitCost }], applyToBoq: false,
+    });
     const priceOk = async (supply: number) => { const r = await price(supply); expect(r.ok(), `pricing at ${supply}: ${await r.text()}`).toBe(true); };
     await priceOk(420);
     const quote = (id: string) => call<Quote>('qs2', 'GET', `/crm/quotations/${id}`);
@@ -125,6 +129,9 @@ test.describe('EST-16 — a tender has one offer, and its submitted revisions do
     await call('estimator', 'PATCH', `/crm/quotations/${rev0Id}/status`, { action: 'submit_review' });
     await refused('estimator', 'POST', `/tendering/tenders/${T}/quotation`, {}, 409, 'is with a commercial reviewer');
     expect((await price(400)).status(), 'the costing is sealed while a reviewer decides').toBe(409);
+    const legacyUnderReview = await legacyRate(400);
+    expect(legacyUnderReview.status(), 'the legacy estimates route is sealed while a reviewer decides, too').toBe(409);
+    expect(((await legacyUnderReview.json()) as { message: string }).message).toContain('is with a commercial reviewer');
     await estimator.reload();
     await expect(estimator.getByTestId('tender-offer-guidance')).toContainText('is with a commercial reviewer');
     await expect(estimator.getByTestId('offer-generate')).toHaveCount(0);
@@ -161,6 +168,9 @@ test.describe('EST-16 — a tender has one offer, and its submitted revisions do
     const rev1Baseline = await call<{ id: string; total: number; revision: number }>('qs2', 'GET', `/crm/quotations/${rev1Id}/baseline`);
     expect(rev1Baseline).toMatchObject({ revision: 1, total: rev1.total });
     expect((await price(380)).status(), 'the costing behind a sent price is frozen').toBe(409);
+    const legacyCommitted = await legacyRate(380);
+    expect(legacyCommitted.status(), 'the legacy estimates route is frozen behind a sent price').toBe(409);
+    expect(((await legacyCommitted.json()) as { message: string }).message).toContain('committed to the client');
 
     // ── A SENT offer revised with a reason → Rev 2; re-priced; the new draft refreshes in place ─
     await estimator.reload();

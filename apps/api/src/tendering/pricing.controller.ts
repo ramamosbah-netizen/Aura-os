@@ -23,6 +23,7 @@ import {
   QuotationLineService, RfqService, isTenderPricing, type PurchaseRequest, type PurchaseRequestLine,
 } from '@aura/procurement';
 import { MaterialService } from '@aura/inventory';
+import { TenderPricingLock } from './tender-pricing-lock';
 import { ArrayNotEmpty, IsArray, IsNumber, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import * as XLSX from 'xlsx';
@@ -100,6 +101,8 @@ export class TenderPricingController {
     private readonly quotationLines: QuotationLineService,
     private readonly evaluations: QuotationLineEvaluationService,
     private readonly comparison: CommercialComparisonService,
+    // The costing lock — one rule shared with the legacy estimates route (see TenderPricingLock).
+    private readonly pricingLock: TenderPricingLock,
   ) {}
 
   private async tenderOr404(id: string): Promise<Tender> {
@@ -124,63 +127,6 @@ export class TenderPricingController {
       );
     }
     return { tender, ...current };
-  }
-
-  /**
-   * Governance — this estimate is the costing that justifies the quotation generated from it.
-   * Once that quotation is a live commitment to the client (approved onwards, mirroring the
-   * quotation sheet's own lock), the costing behind it is FROZEN: re-working it would rewrite
-   * the justification for a price we are already standing behind. Re-price the sanctioned way —
-   * raise a quotation revision, which starts as a draft.
-   *
-   * Dead quotes (rejected/expired/cancelled) and superseded ones (`revised`) hold no live
-   * commitment, so the estimate stays open for the next bid.
-   *
-   * The rule lives here in the composition layer, not in @aura/tendering: tendering must not
-   * depend on CRM (ADR-0011) — the same seam R5 uses to keep it decoupled from procurement.
-   */
-  private async assertEstimateNotCommitted(tenderId: string): Promise<void> {
-    const generated = await this.quotations.listBySourceTender(this.tenant.get().tenantId, tenderId);
-
-    /**
-     * UNDER REVIEW IS ALREADY TOO LATE TO RE-PRICE.
-     *
-     * The lock below starts at `approved`, which left the review window open: an approver could be
-     * looking at a set of figures while the estimator reworked the costing underneath them, and
-     * the offer they signed would rest on a build-up nobody reviewed. Measured before this branch
-     * existed — with the offer sitting in `internal_review`, re-pricing a line was accepted and
-     * the tender's selling value moved from 179,821.20 to 2,279,774.40 while the offer kept its
-     * own snapshot at 117,804.00. The offer did not silently change; nothing said it no longer
-     * matched its source either.
-     *
-     * Asking for a decision is what seals the costing. EST-17 requires approvers to "review the
-     * same frozen build-up", and a build-up that can move during the review is not that.
-     */
-    const underReview = generated.filter((q) => q.status === 'internal_review');
-    if (underReview.length > 0) {
-      const which = underReview.map((q) => `${q.quoteNumber} Rev ${q.revision}`).join(', ');
-      throw new ConflictException(
-        `tender pricing sheet is locked: ${which} ${underReview.length === 1 ? 'is' : 'are'} with a ` +
-          `commercial reviewer, and the costing behind figures somebody is deciding on cannot be ` +
-          `re-worked while they decide. To change it, have the reviewer return the offer for revision.`,
-      );
-    }
-
-    const committed = generated.filter((q) => isQuotationCommitted(q));
-    if (committed.length === 0) return;
-    const which = committed.map((q) => `${q.quoteNumber} Rev ${q.revision} (${q.status.replace('_', ' ')})`).join(', ');
-    // A revision is only legal from sent/under_negotiation (and the dead states) — never from
-    // `accepted`, where the price is already the basis of a contract. Point each case at the route
-    // that actually exists rather than at advice that would 400.
-    const onlyAccepted = committed.every((q) => q.status === 'accepted');
-    const route = onlyAccepted
-      ? 'an accepted price is the basis of the contract — change it through a contract variation'
-      : 'raise a quotation revision to re-price';
-    throw new ConflictException(
-      `tender pricing sheet is locked: ${which} ${committed.length === 1 ? 'was' : 'were'} generated from this ` +
-        `estimate and ${committed.length === 1 ? 'is' : 'are'} committed to the client — the costing behind a ` +
-        `committed price is immutable. To change it, ${route}.`,
-    );
   }
 
   /**
@@ -578,7 +524,7 @@ export class TenderPricingController {
     await this.tenders.assertBOQItemOwnedByTender(ctx.tenantId, id, itemId).catch(() => {
       throw new NotFoundException('BOQ item not found for this Tender');
     });
-    await this.assertEstimateNotCommitted(id);
+    await this.pricingLock.assertOpen(id);
     if (!dto?.resources || typeof dto.resources !== 'object') throw new BadRequestException('resources breakdown is required');
     try {
       return await this.estimates.buildRate(
@@ -615,7 +561,7 @@ export class TenderPricingController {
     @Body() dto: { rfqId?: string; quoteId?: string; quotationLineId?: string; comparisonDate?: string },
   ): Promise<RateBuildUp> {
     await this.governedPricingContext(id);
-    await this.assertEstimateNotCommitted(id);
+    await this.pricingLock.assertOpen(id);
     const ctx = this.tenant.get();
 
     if (dto?.quotationLineId) {
@@ -664,7 +610,7 @@ export class TenderPricingController {
     @Param('componentId', ParseUuidOr404Pipe) componentId: string,
   ): Promise<{ ok: true }> {
     await this.governedPricingContext(id);
-    await this.assertEstimateNotCommitted(id);
+    await this.pricingLock.assertOpen(id);
     const ctx = this.tenant.get();
     await this.estimateSourcing.unsource(ctx.tenantId, buildUpId, componentId, ctx.actorId ?? null);
     return { ok: true };

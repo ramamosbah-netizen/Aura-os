@@ -37,7 +37,7 @@
 | Sales | XOP-06 | PARTIAL |
 | Sales | XOP-07 | PARTIAL |
 | Sales | XOP-08 | PARTIAL |
-| Sales | XOP-09 | WRONG_BEHAVIOR |
+| Sales | XOP-09 | PARTIAL |
 | Sales | XOP-10 | UNVERIFIED |
 | Sales | XOP-11 | PARTIAL |
 | Sales | XOP-12 | COMPLETE |
@@ -63,12 +63,12 @@
 | Sales | MGT-15 | WRONG_BEHAVIOR |
 | Pre-Sales | STU-01 | PARTIAL |
 | Pre-Sales | STU-02 | UNVERIFIED |
-| Pre-Sales | STU-03 | WRONG_BEHAVIOR |
+| Pre-Sales | STU-03 | COMPLETE |
 | Pre-Sales | STU-04 | PARTIAL |
 | Pre-Sales | STU-05 | PARTIAL |
-| Pre-Sales | STU-06 | UNVERIFIED |
+| Pre-Sales | STU-06 | COMPLETE |
 | Pre-Sales | STU-07 | UNVERIFIED |
-| Pre-Sales | STU-08 | UNVERIFIED |
+| Pre-Sales | STU-08 | COMPLETE |
 | Pre-Sales | EST-01 | PARTIAL |
 | Pre-Sales | EST-02 | PARTIAL |
 | Pre-Sales | EST-03 | PARTIAL |
@@ -129,7 +129,7 @@
 | Pre-Sales | XOP-06 | PARTIAL |
 | Pre-Sales | XOP-07 | PARTIAL |
 | Pre-Sales | XOP-08 | PARTIAL |
-| Pre-Sales | XOP-09 | WRONG_BEHAVIOR |
+| Pre-Sales | XOP-09 | PARTIAL |
 | Pre-Sales | XOP-10 | UNVERIFIED |
 | Pre-Sales | XOP-11 | PARTIAL |
 | Pre-Sales | XOP-12 | COMPLETE |
@@ -172,7 +172,7 @@
 | Award | XOP-06 | PARTIAL |
 | Award | XOP-07 | PARTIAL |
 | Award | XOP-08 | PARTIAL |
-| Award | XOP-09 | WRONG_BEHAVIOR |
+| Award | XOP-09 | PARTIAL |
 | Award | XOP-10 | UNVERIFIED |
 | Award | XOP-11 | PARTIAL |
 | Award | XOP-12 | COMPLETE |
@@ -230,7 +230,7 @@
 | Mobilisation | XOP-06 | PARTIAL |
 | Mobilisation | XOP-07 | PARTIAL |
 | Mobilisation | XOP-08 | PARTIAL |
-| Mobilisation | XOP-09 | WRONG_BEHAVIOR |
+| Mobilisation | XOP-09 | PARTIAL |
 | Mobilisation | XOP-10 | UNVERIFIED |
 | Mobilisation | XOP-11 | PARTIAL |
 | Mobilisation | XOP-12 | COMPLETE |
@@ -256,12 +256,12 @@
 | Mobilisation | MGT-15 | WRONG_BEHAVIOR |
 | Engineering | STU-01 | PARTIAL |
 | Engineering | STU-02 | UNVERIFIED |
-| Engineering | STU-03 | WRONG_BEHAVIOR |
+| Engineering | STU-03 | COMPLETE |
 | Engineering | STU-04 | PARTIAL |
 | Engineering | STU-05 | PARTIAL |
-| Engineering | STU-06 | UNVERIFIED |
+| Engineering | STU-06 | COMPLETE |
 | Engineering | STU-07 | UNVERIFIED |
-| Engineering | STU-08 | UNVERIFIED |
+| Engineering | STU-08 | COMPLETE |
 | Engineering | ENG-01 | PARTIAL |
 | Engineering | ENG-02 | PARTIAL |
 | Engineering | ENG-03 | COMPLETE |
@@ -295,7 +295,7 @@
 | Engineering | XOP-06 | PARTIAL |
 | Engineering | XOP-07 | PARTIAL |
 | Engineering | XOP-08 | PARTIAL |
-| Engineering | XOP-09 | WRONG_BEHAVIOR |
+| Engineering | XOP-09 | PARTIAL |
 | Engineering | XOP-10 | UNVERIFIED |
 | Engineering | XOP-11 | PARTIAL |
 | Engineering | XOP-12 | COMPLETE |
@@ -362,7 +362,7 @@
 | Planning | XOP-06 | PARTIAL |
 | Planning | XOP-07 | PARTIAL |
 | Planning | XOP-08 | PARTIAL |
-| Planning | XOP-09 | WRONG_BEHAVIOR |
+| Planning | XOP-09 | PARTIAL |
 | Planning | XOP-10 | UNVERIFIED |
 | Planning | XOP-11 | PARTIAL |
 | Planning | XOP-12 | COMPLETE |
@@ -435,7 +435,7 @@
 | Procurement | XOP-06 | PARTIAL |
 | Procurement | XOP-07 | PARTIAL |
 | Procurement | XOP-08 | PARTIAL |
-| Procurement | XOP-09 | WRONG_BEHAVIOR |
+| Procurement | XOP-09 | PARTIAL |
 | Procurement | XOP-10 | UNVERIFIED |
 | Procurement | XOP-11 | PARTIAL |
 | Procurement | XOP-12 | COMPLETE |
@@ -492,7 +492,7 @@
 | Site | XOP-06 | PARTIAL |
 | Site | XOP-07 | PARTIAL |
 | Site | XOP-08 | PARTIAL |
-| Site | XOP-09 | WRONG_BEHAVIOR |
+| Site | XOP-09 | PARTIAL |
 | Site | XOP-10 | UNVERIFIED |
 | Site | XOP-11 | PARTIAL |
 | Site | XOP-12 | COMPLETE |
@@ -535,7 +535,7 @@
 | QA/QC & HSE | XOP-06 | PARTIAL |
 | QA/QC & HSE | XOP-07 | PARTIAL |
 | QA/QC & HSE | XOP-08 | PARTIAL |
-| QA/QC & HSE | XOP-09 | WRONG_BEHAVIOR |
+| QA/QC & HSE | XOP-09 | PARTIAL |
 | QA/QC & HSE | XOP-10 | UNVERIFIED |
 | QA/QC & HSE | XOP-11 | PARTIAL |
 | QA/QC & HSE | XOP-12 | COMPLETE |
@@ -593,7 +593,7 @@
 | Progress | XOP-06 | PARTIAL |
 | Progress | XOP-07 | PARTIAL |
 | Progress | XOP-08 | PARTIAL |
-| Progress | XOP-09 | WRONG_BEHAVIOR |
+| Progress | XOP-09 | PARTIAL |
 | Progress | XOP-10 | UNVERIFIED |
 | Progress | XOP-11 | PARTIAL |
 | Progress | XOP-12 | COMPLETE |
@@ -654,7 +654,7 @@
 | Commercial / Certification | XOP-06 | PARTIAL |
 | Commercial / Certification | XOP-07 | PARTIAL |
 | Commercial / Certification | XOP-08 | PARTIAL |
-| Commercial / Certification | XOP-09 | WRONG_BEHAVIOR |
+| Commercial / Certification | XOP-09 | PARTIAL |
 | Commercial / Certification | XOP-10 | UNVERIFIED |
 | Commercial / Certification | XOP-11 | PARTIAL |
 | Commercial / Certification | XOP-12 | COMPLETE |
@@ -715,7 +715,7 @@
 | Finance / Collection | XOP-06 | PARTIAL |
 | Finance / Collection | XOP-07 | PARTIAL |
 | Finance / Collection | XOP-08 | PARTIAL |
-| Finance / Collection | XOP-09 | WRONG_BEHAVIOR |
+| Finance / Collection | XOP-09 | PARTIAL |
 | Finance / Collection | XOP-10 | UNVERIFIED |
 | Finance / Collection | XOP-11 | PARTIAL |
 | Finance / Collection | XOP-12 | COMPLETE |
@@ -777,7 +777,7 @@
 | T&C | XOP-06 | PARTIAL |
 | T&C | XOP-07 | PARTIAL |
 | T&C | XOP-08 | PARTIAL |
-| T&C | XOP-09 | WRONG_BEHAVIOR |
+| T&C | XOP-09 | PARTIAL |
 | T&C | XOP-10 | UNVERIFIED |
 | T&C | XOP-11 | PARTIAL |
 | T&C | XOP-12 | COMPLETE |
@@ -824,7 +824,7 @@
 | Handover | XOP-06 | PARTIAL |
 | Handover | XOP-07 | PARTIAL |
 | Handover | XOP-08 | PARTIAL |
-| Handover | XOP-09 | WRONG_BEHAVIOR |
+| Handover | XOP-09 | PARTIAL |
 | Handover | XOP-10 | UNVERIFIED |
 | Handover | XOP-11 | PARTIAL |
 | Handover | XOP-12 | COMPLETE |
@@ -871,7 +871,7 @@
 | Warranty / Service | XOP-06 | PARTIAL |
 | Warranty / Service | XOP-07 | PARTIAL |
 | Warranty / Service | XOP-08 | PARTIAL |
-| Warranty / Service | XOP-09 | WRONG_BEHAVIOR |
+| Warranty / Service | XOP-09 | PARTIAL |
 | Warranty / Service | XOP-10 | UNVERIFIED |
 | Warranty / Service | XOP-11 | PARTIAL |
 | Warranty / Service | XOP-12 | COMPLETE |
@@ -918,7 +918,7 @@
 | Closeout | XOP-06 | PARTIAL |
 | Closeout | XOP-07 | PARTIAL |
 | Closeout | XOP-08 | PARTIAL |
-| Closeout | XOP-09 | WRONG_BEHAVIOR |
+| Closeout | XOP-09 | PARTIAL |
 | Closeout | XOP-10 | UNVERIFIED |
 | Closeout | XOP-11 | PARTIAL |
 | Closeout | XOP-12 | COMPLETE |

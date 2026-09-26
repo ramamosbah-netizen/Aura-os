@@ -1,7 +1,7 @@
 import type { Pool, PoolClient } from 'pg';
 import type { Id } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
-import type { PreAwardPackageStore } from './pre-award-package-store';
+import type { PreAwardPackageStore, StudyAwaitingWork } from './pre-award-package-store';
 import type { PreAwardPackage, EstimationBasisRevision, EstimateRevision, EstimateBuildUp } from './domain/pre-award-package';
 import type { TechnicalStudyContent, TechnicalStudyRevision } from './domain/technical-study';
 
@@ -99,30 +99,29 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
   }
 
   async listStudies(tenantId: Id, packageId: Id): Promise<TechnicalStudyRevision[]> {
-    const result = await this.pool.query<{
-      id: string; tenant_id: string; company_id: string | null; package_id: string; revision_no: number;
-      parent_study_id: string | null; title: string; input_revision: string; status: TechnicalStudyRevision['status'];
-      content: TechnicalStudyContent; author_id: string; reviewer_id: string; created_at: Date; updated_at: Date;
-      submitted_at: Date | null; reviewed_by: string | null; reviewed_at: Date | null; review_comment: string | null;
-    }>(
+    const result = await this.pool.query<StudyRow>(
       `select id,tenant_id,company_id,package_id,revision_no,parent_study_id,title,input_revision,status,content,
               author_id,reviewer_id,created_at,updated_at,submitted_at,reviewed_by,reviewed_at,review_comment
          from public.aura_crm_technical_study_revisions
         where tenant_id=$1 and package_id=$2 order by revision_no`,
       [tenantId, packageId],
     );
-    return result.rows.map((row) => ({
-      id: row.id, tenantId: row.tenant_id, companyId: row.company_id, packageId: row.package_id,
-      revisionNo: row.revision_no, parentStudyId: row.parent_study_id, title: row.title,
-      inputRevision: row.input_revision, status: row.status, authorId: row.author_id,
-      reviewerId: row.reviewer_id, ...(row.content ?? {
-        scopeSummary: '', systems: [], requirements: [], surveyFindings: [], clarifications: [],
-        deviations: [], assumptions: [], exclusions: [], evidence: [],
-      }),
-      createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
-      submittedAt: row.submitted_at?.toISOString() ?? null, reviewedBy: row.reviewed_by,
-      reviewedAt: row.reviewed_at?.toISOString() ?? null, reviewComment: row.review_comment,
-    }));
+    return result.rows.map(studyFromRow);
+  }
+
+  async listStudiesAwaiting(tenantId: Id, userId: Id): Promise<StudyAwaitingWork[]> {
+    const result = await this.pool.query<StudyRow & { opportunity_id: string | null; tender_id: string | null }>(
+      `select s.id,s.tenant_id,s.company_id,s.package_id,s.revision_no,s.parent_study_id,s.title,s.input_revision,
+              s.status,s.content,s.author_id,s.reviewer_id,s.created_at,s.updated_at,s.submitted_at,s.reviewed_by,
+              s.reviewed_at,s.review_comment,p.opportunity_id,p.tender_id
+         from public.aura_crm_technical_study_revisions s
+         join public.aura_crm_pre_award_packages p on p.id = s.package_id
+        where s.tenant_id=$1
+          and ((s.status='in_review' and s.reviewer_id=$2) or (s.status='changes_requested' and s.author_id=$2))
+        order by s.updated_at`,
+      [tenantId, userId],
+    );
+    return result.rows.map((row) => ({ study: studyFromRow(row), opportunityId: row.opportunity_id, tenderId: row.tender_id }));
   }
 
   async listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]> {
@@ -145,4 +144,26 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
       notes: b.notes ?? null,
     }));
   }
+}
+
+type StudyRow = {
+  id: string; tenant_id: string; company_id: string | null; package_id: string; revision_no: number;
+  parent_study_id: string | null; title: string; input_revision: string; status: TechnicalStudyRevision['status'];
+  content: TechnicalStudyContent; author_id: string; reviewer_id: string; created_at: Date; updated_at: Date;
+  submitted_at: Date | null; reviewed_by: string | null; reviewed_at: Date | null; review_comment: string | null;
+};
+
+function studyFromRow(row: StudyRow): TechnicalStudyRevision {
+  return {
+    id: row.id, tenantId: row.tenant_id, companyId: row.company_id, packageId: row.package_id,
+    revisionNo: row.revision_no, parentStudyId: row.parent_study_id, title: row.title,
+    inputRevision: row.input_revision, status: row.status, authorId: row.author_id,
+    reviewerId: row.reviewer_id, ...(row.content ?? {
+      scopeSummary: '', systems: [], requirements: [], surveyFindings: [], clarifications: [],
+      deviations: [], assumptions: [], exclusions: [], evidence: [],
+    }),
+    createdAt: row.created_at.toISOString(), updatedAt: row.updated_at.toISOString(),
+    submittedAt: row.submitted_at?.toISOString() ?? null, reviewedBy: row.reviewed_by,
+    reviewedAt: row.reviewed_at?.toISOString() ?? null, reviewComment: row.review_comment,
+  };
 }

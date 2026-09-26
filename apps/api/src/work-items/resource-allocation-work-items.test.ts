@@ -77,7 +77,7 @@ function harness(options: { employee?: unknown; assignments?: unknown[]; allowed
     prs as never, rfqs as never, pos as never,
     projectRisks as never, projectIssues as never, projectResponsibilities as never,
     resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never,
-    projects as never, access as never, auth as never, notifications as never,
+    projects as never, access as never, auth as never, notifications as never, { studiesAwaiting: async () => [] } as never,
   );
   return { service, resourceBookings, resourcePlanning, resourceCatalog, hr };
 }

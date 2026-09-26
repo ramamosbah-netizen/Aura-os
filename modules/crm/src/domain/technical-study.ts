@@ -240,6 +240,14 @@ export function technicalStudyReadiness(study: TechnicalStudyRevision): Technica
   if (unassessed) blockers.push(`${unassessed} requirement(s) are not assessed`);
   const openClarifications = study.clarifications.filter((item) => item.status === 'open').length;
   if (openClarifications) blockers.push(`${openClarifications} clarification(s) remain open`);
+  // A requirement assessed as a deviation is named by a recorded deviation through its reference —
+  // the same reference the technical proposal prints beside the deviation. Without one, the
+  // approved study would tell the customer "Deviation" with no stated departure or resolution.
+  const ref = (value: string) => value.trim().toLowerCase();
+  const namedRefs = new Set(study.deviations.map((item) => ref(item.requirementRef)).filter(Boolean));
+  const unrecorded = study.requirements
+    .filter((item) => item.compliance === 'deviation' && !(ref(item.sourceRef) && namedRefs.has(ref(item.sourceRef)))).length;
+  if (unrecorded) blockers.push(`${unrecorded} requirement(s) assessed as a deviation have no deviation recorded against their reference`);
   const openDeviations = study.deviations.filter((item) => item.status === 'open').length;
   if (openDeviations) blockers.push(`${openDeviations} deviation(s) have no disposition`);
   return { ready: blockers.length === 0, blockers };

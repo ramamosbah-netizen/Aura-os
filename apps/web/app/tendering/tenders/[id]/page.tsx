@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { getJson } from '@/lib/api';
+import { currentUser, getJson } from '@/lib/api';
 import RecordChrome from '../../../../components/record-chrome';
 import TenderDetail from '../../../../components/tender-detail';
 import Sales360Journey from '../../../../components/sales-360-journey';
@@ -55,7 +55,7 @@ export default async function TenderDetailPage({
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>
       </div>
       {basis && <TenderAwardBasis basis={basis} quotation={basisQuotation} baseline={basisBaseline} />}
-      <TenderDetail tender={tender} />
+      <TenderDetail tender={tender} currentUserId={(await currentUser())?.sub ?? null} />
     </div>
   );
 }

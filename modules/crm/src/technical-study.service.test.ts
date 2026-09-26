@@ -4,6 +4,7 @@ import { InMemoryPricingSheetStore } from './in-memory-pricing-sheet-store';
 import { PreAwardPackageService } from './pre-award-package.service';
 import { InMemoryPreAwardStore } from './in-memory-pre-award-store';
 import { makeRequirement } from './domain/solution-scope';
+import { technicalStudyReadiness, type TechnicalStudyRevision } from './domain/technical-study';
 
 const completeContent = {
   scopeSummary: 'IP CCTV for the warehouse',
@@ -61,5 +62,45 @@ describe('PreAwardPackageService technical-study revisions', () => {
       authorId: 'engineer', reviewerId: 'manager', ...completeContent,
       requirements: [{ ...linked, sourceRequirementId: theirs.id }],
     })).rejects.toThrow(/persisted on this opportunity/);
+  });
+});
+
+/**
+ * STU-06. The readiness rule already refused an OPEN deviation; it did not notice a deviation that
+ * was never written down. A requirement assessed as a deviation, with no deviation recorded against
+ * it, read as approval-ready — so the approved study, and the technical proposal printed from it,
+ * told the customer "Deviation" beside a requirement with no stated departure, impact or resolution.
+ */
+describe('technical study readiness: a requirement assessed as a deviation must carry one', () => {
+  const study = (over: Partial<TechnicalStudyRevision>): TechnicalStudyRevision => ({
+    id: 's1', tenantId: 't1', companyId: null, packageId: 'p1', revisionNo: 1, parentStudyId: null,
+    title: 'Study', inputRevision: 'Client 01', status: 'draft', authorId: 'engineer', reviewerId: 'manager',
+    createdAt: '', updatedAt: '', submittedAt: null, reviewedBy: null, reviewedAt: null, reviewComment: null,
+    ...completeContent, ...over,
+  });
+  const deviating = { ...completeContent.requirements[0], sourceRef: 'Spec A §4.2', compliance: 'deviation' as const };
+  const recorded = { id: 'd1', requirementRef: 'spec a §4.2 ', description: '14-day retention offered', impact: 'Storage cost', proposedResolution: 'Client to confirm', status: 'accepted' as const };
+
+  it('refuses a deviation assessment with nothing recorded against it', () => {
+    expect(technicalStudyReadiness(study({ requirements: [deviating] }))).toEqual({
+      ready: false, blockers: ['1 requirement(s) assessed as a deviation have no deviation recorded against their reference'],
+    });
+  });
+
+  it('refuses a deviation recorded against some other reference', () => {
+    const readiness = technicalStudyReadiness(study({ requirements: [deviating], deviations: [{ ...recorded, requirementRef: 'Spec B' }] }));
+    expect(readiness.ready).toBe(false);
+  });
+
+  it('refuses a deviation assessment on a requirement with no reference for a deviation to name', () => {
+    const readiness = technicalStudyReadiness(study({ requirements: [{ ...deviating, sourceRef: ' ' }], deviations: [{ ...recorded, requirementRef: '' }] }));
+    expect(readiness.ready).toBe(false);
+  });
+
+  it('accepts the deviation once it is recorded against the requirement, and disposed', () => {
+    expect(technicalStudyReadiness(study({ requirements: [deviating], deviations: [recorded] }))).toEqual({ ready: true, blockers: [] });
+    // Recorded but undecided is the rule that already existed, and still holds.
+    expect(technicalStudyReadiness(study({ requirements: [deviating], deviations: [{ ...recorded, status: 'open' }] })).blockers)
+      .toEqual(['1 deviation(s) have no disposition']);
   });
 });

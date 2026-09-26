@@ -1,5 +1,5 @@
 import type { Id } from '@aura/shared';
-import type { PreAwardPackageStore } from './pre-award-package-store';
+import type { PreAwardPackageStore, StudyAwaitingWork } from './pre-award-package-store';
 import type { PreAwardPackage, EstimationBasisRevision, EstimateRevision, EstimateBuildUp } from './domain/pre-award-package';
 import type { TechnicalStudyRevision } from './domain/technical-study';
 
@@ -34,6 +34,16 @@ export class InMemoryPreAwardPackageStore implements PreAwardPackageStore {
       .filter((study) => study.tenantId === tenantId && study.packageId === packageId)
       .sort((a, b) => a.revisionNo - b.revisionNo)
       .map((study) => this.clone(study));
+  }
+  async listStudiesAwaiting(tenantId: Id, userId: Id): Promise<StudyAwaitingWork[]> {
+    return [...this.studies.values()]
+      .filter((study) => study.tenantId === tenantId && (
+        (study.status === 'in_review' && study.reviewerId === userId)
+        || (study.status === 'changes_requested' && study.authorId === userId)))
+      .map((study) => {
+        const pkg = this.packages.get(study.packageId);
+        return { study: this.clone(study), opportunityId: pkg?.opportunityId ?? null, tenderId: pkg?.tenderId ?? null };
+      });
   }
   async listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]> {
     return [...this.basis.values()].filter((b) => b.tenantId === tenantId && b.packageId === packageId).map((b) => this.clone(b));

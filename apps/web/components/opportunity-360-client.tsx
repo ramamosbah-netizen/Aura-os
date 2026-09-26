@@ -96,7 +96,7 @@ const BANT: Array<{ key: 'budget' | 'authority' | 'need' | 'timeline'; label: st
   { key: 'timeline', label: 'Timeline' },
 ];
 
-export default function Opportunity360Client({ opportunityId }: { opportunityId: string }) {
+export default function Opportunity360Client({ opportunityId, currentUserId = null }: { opportunityId: string; currentUserId?: string | null }) {
   const [data, setData] = useState<Payload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -601,7 +601,7 @@ export default function Opportunity360Client({ opportunityId }: { opportunityId:
       )}
 
       {tab === 'commercial' && <CommercialPanel opportunityId={o.id} />}
-      {tab === 'study' && <TechnicalStudyWorkspace opportunityId={o.id} route={data.route} tenderId={data.tenders[0]?.id ?? null} />}
+      {tab === 'study' && <TechnicalStudyWorkspace opportunityId={o.id} route={data.route} tenderId={data.tenders[0]?.id ?? null} currentUserId={currentUserId} />}
       {tab === 'strategy' && <BuyingJourneyPanel opportunityId={o.id} />}
 
       {tab === 'strategy' && (

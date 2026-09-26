@@ -5,7 +5,7 @@ import {
   type CostComponent, type ResourceBreakdown, type PricingPolicy, type PricingDiscount, type SellingFigures,
   type EstimationLineInput, emptyEstimationInput,
 } from '@aura/shared';
-import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, UNGOVERNED } from './pre-award-package-store';
+import { CRM_PRE_AWARD_PACKAGE_STORE, type PreAwardGovernance, type PreAwardPackageStore, type StudyAwaitingWork, UNGOVERNED } from './pre-award-package-store';
 import { CRM_PRICING_SHEET_STORE, type PricingSheetStore } from './pricing-sheet-store';
 import { CRM_PRE_AWARD_STORE, type PreAwardStore } from './pre-award-store';
 import {
@@ -270,6 +270,15 @@ export class PreAwardPackageService {
     const submitted = submitTechnicalStudy(await this.technicalStudy(tenantId, packageId, studyId), actorId);
     await this.store.saveStudy(submitted);
     return submitted;
+  }
+
+  /**
+   * The study revisions whose next act belongs to `userId`: those submitted to them for review, and
+   * those returned to them as author. Read from the revisions' own status, so an approval or a
+   * resubmission takes the item off one list and puts it on the other with nothing to reconcile.
+   */
+  async studiesAwaiting(tenantId: Id, userId: Id): Promise<StudyAwaitingWork[]> {
+    return this.store.listStudiesAwaiting(tenantId, userId);
   }
 
   async approveTechnicalStudy(tenantId: Id, packageId: Id, studyId: Id, actorId: Id, comment?: string | null): Promise<TechnicalStudyRevision> {

@@ -83,12 +83,19 @@ interface TechnicalStudyWorkspaceProps {
   opportunityId: string;
   route?: 'direct' | 'tender';
   tenderId?: string | null;
+  /**
+   * The signed-in user, from the server session. It decides whether this viewer is the study's
+   * author or its assigned reviewer, so it cannot come from `/workspace/me`: that read needs
+   * `workspace.me.read`, which no shipped role outside Administrator holds, and the assigned
+   * Technical Manager was told to wait for himself. The API still checks every act.
+   */
+  currentUserId?: string | null;
 }
 
 export default function TechnicalStudyWorkspace(props: TechnicalStudyWorkspaceProps) {
   if (props.route === 'tender') {
     if (props.tenderId) {
-      return <DirectTechnicalStudyWorkspace opportunityId={props.opportunityId} tenderId={props.tenderId} />;
+      return <DirectTechnicalStudyWorkspace opportunityId={props.opportunityId} tenderId={props.tenderId} currentUserId={props.currentUserId ?? null} />;
     }
     return <section style={st.panel} aria-labelledby="technical-study-heading">
       <p style={st.eyebrow}>PRE-SALES / ENGINEERING</p>
@@ -100,10 +107,10 @@ export default function TechnicalStudyWorkspace(props: TechnicalStudyWorkspacePr
       </div>
     </section>;
   }
-  return <DirectTechnicalStudyWorkspace opportunityId={props.opportunityId} />;
+  return <DirectTechnicalStudyWorkspace opportunityId={props.opportunityId} currentUserId={props.currentUserId ?? null} />;
 }
 
-function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunityId: string; tenderId?: string }) {
+function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId }: { opportunityId: string; tenderId?: string; currentUserId: string | null }) {
   const [studies, setStudies] = useState<Study[]>([]);
   const [users, setUsers] = useState<DirectoryUser[]>([]);
   const [documents, setDocuments] = useState<DocRow[]>([]);
@@ -128,7 +135,13 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunit
     ? `/api/tendering/tenders/${encodeURIComponent(tenderId!)}/study-files`
     : `${base.replace(/\/studies$/, '')}/evidence`;
 
+  // Only the LATEST load may apply what it read. Two loads overlap on arrival (React runs the
+  // effect twice in development, and an action reloads while a read may still be in flight); the
+  // earlier one used to land last and replace an editor the author had already started typing in.
+  const loadSeq = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current;
+    const latest = () => seq === loadSeq.current;
     setLoading(true); setError(null);
     try {
       const [studyRes, reviewerRes, documentRes, requirementRes, intakeRes, meRes] = await Promise.all([
@@ -137,21 +150,23 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunit
         fetch(evidenceEndpoint, { cache: 'no-store' }),
         isTender ? Promise.resolve(null) : fetch(`/api/crm/opportunities/${encodeURIComponent(opportunityId)}/requirements`, { cache: 'no-store' }),
         isTender ? Promise.resolve(null) : fetch(`${base.replace(/\/studies$/, '')}/intake-context`, { cache: 'no-store' }),
-        fetch('/api/workspace/me', { cache: 'no-store' }),
+        currentUserId ? Promise.resolve(null) : fetch('/api/workspace/me', { cache: 'no-store' }),
       ]);
+      if (!latest()) return;
       if (!studyRes.ok) {
         const payload = await studyRes.json().catch(() => ({}));
-        setError(messageOf(payload, `Could not load the technical study (${studyRes.status})`));
+        if (latest()) setError(messageOf(payload, `Could not load the technical study (${studyRes.status})`));
         return;
       }
       const loaded = await studyRes.json().catch(() => []);
       const rows = Array.isArray(loaded) ? loaded as Study[] : [];
-      setStudies(rows);
       const current = rows.filter((row) => row.status !== 'superseded').at(-1);
       const canonicalRequirements = requirementRes?.ok
         ? await requirementRes.json().catch(() => []) as CanonicalRequirement[]
         : [];
       const sourceIntake = intakeRes?.ok ? await intakeRes.json().catch(() => null) as IntakeContext | null : null;
+      if (!latest()) return;
+      setStudies(rows);
       setIntake(sourceIntake);
       setEditor(current ? editorFrom(current) : {
         ...blankEditor(),
@@ -161,7 +176,7 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunit
           : [blankSystem()],
         requirements: requirementsFrom(Array.isArray(canonicalRequirements) ? canonicalRequirements : []),
       });
-      const me = meRes.ok ? await meRes.json().catch(() => null) as WorkspaceMe | null : null;
+      const me = meRes?.ok ? await meRes.json().catch(() => null) as WorkspaceMe | null : null;
       if (reviewerRes.ok) {
         const directory = await reviewerRes.json().catch(() => []);
         setUsers(Array.isArray(directory) ? (directory as Array<{ userId: string; displayName?: string }>).map((user) => ({ username: user.userId, displayName: user.displayName, roleLabel: 'Technical approver' })) : []);
@@ -172,15 +187,20 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunit
         const docs = await documentRes.json().catch(() => []);
         setDocuments(Array.isArray(docs) ? docs as DocRow[] : []);
       }
-      setActorId(me?.username ?? '');
-    } catch { setError('The technical-study service is unreachable.'); }
-    finally { setLoading(false); }
-  }, [base, evidenceEndpoint, isTender, opportunityId, tenderId]);
+      setActorId(currentUserId ?? me?.username ?? '');
+    } catch { if (latest()) setError('The technical-study service is unreachable.'); }
+    finally { if (latest()) setLoading(false); }
+  }, [base, currentUserId, evidenceEndpoint, isTender, opportunityId, tenderId]);
   useEffect(() => { void load(); }, [load]);
 
   const current = useMemo(() => studies.filter((row) => row.status !== 'superseded').at(-1) ?? null, [studies]);
-  const editable = !current || current.status === 'draft' || current.status === 'changes_requested' || current.status === 'approved';
+  // An APPROVED study is a frozen record first: what was signed off, and the evidence revisions it
+  // froze, must stay readable. It used to open straight into a next-revision form for everyone —
+  // the reviewer included — and the frozen evidence it rests on could not be opened by anybody.
+  // Revising it is now an explicit act.
+  const [revising, setRevising] = useState(false);
   const startingRevision = current?.status === 'approved';
+  const editable = !current || current.status === 'draft' || current.status === 'changes_requested' || (startingRevision && revising);
 
   const payload = useCallback(() => ({
     title: editor.title.trim(), inputRevision: editor.inputRevision.trim(), reviewerId: editor.reviewerId,
@@ -414,8 +434,8 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunit
           <Section title="Deviations and exclusions" help="Every technical deviation needs an explicit disposition before the study can be approved.">
             {editor.deviations.map((row, index) => (
               <div key={row.id || index} style={st.stackRow}>
-                <div style={st.grid3}><input style={st.input} value={row.requirementRef} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, requirementRef: e.target.value } : item) })} placeholder="Requirement reference" /><input style={st.input} value={row.description} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, description: e.target.value } : item) })} placeholder="Deviation" /><select style={st.input} value={row.status} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, status: e.target.value as DeviationRow['status'] } : item) })}><option value="open">Open</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></div>
-                <div style={st.grid2}><input style={st.input} value={row.impact} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, impact: e.target.value } : item) })} placeholder="Technical / cost / schedule impact" /><input style={st.input} value={row.proposedResolution} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, proposedResolution: e.target.value } : item) })} placeholder="Proposed resolution" /></div>
+                <div style={st.grid3}><input style={st.input} aria-label={`Deviation requirement reference ${index + 1}`} value={row.requirementRef} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, requirementRef: e.target.value } : item) })} placeholder="Requirement reference" /><input style={st.input} aria-label={`Deviation ${index + 1}`} value={row.description} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, description: e.target.value } : item) })} placeholder="Deviation" /><select style={st.input} aria-label={`Deviation disposition ${index + 1}`} value={row.status} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, status: e.target.value as DeviationRow['status'] } : item) })}><option value="open">Open</option><option value="accepted">Accepted</option><option value="rejected">Rejected</option></select></div>
+                <div style={st.grid2}><input style={st.input} aria-label={`Deviation impact ${index + 1}`} value={row.impact} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, impact: e.target.value } : item) })} placeholder="Technical / cost / schedule impact" /><input style={st.input} aria-label={`Deviation resolution ${index + 1}`} value={row.proposedResolution} onChange={(e) => setEditor({ ...editor, deviations: editor.deviations.map((item, i) => i === index ? { ...item, proposedResolution: e.target.value } : item) })} placeholder="Proposed resolution" /></div>
                 <button style={st.remove} onClick={() => setEditor({ ...editor, deviations: editor.deviations.filter((_, i) => i !== index) })}>Remove deviation</button>
               </div>
             ))}
@@ -446,7 +466,10 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId }: { opportunit
           </div>
         </>
       ) : (
-        <ReadOnlyStudy study={current!} />
+        <>
+          <ReadOnlyStudy study={current!} />
+          {startingRevision && <div style={st.actions}><button style={st.secondary} onClick={() => setRevising(true)}>Revise this approved study</button></div>}
+        </>
       )}
 
       {current?.status === 'in_review' && (
@@ -473,6 +496,7 @@ function ReadOnlyStudy({ study }: { study: Study }) {
     <div style={st.summaryGrid}><b>{study.systems.length}<small> systems</small></b><b>{study.requirements.length}<small> requirements</small></b><b>{study.surveyFindings.length}<small> survey findings</small></b><b>{study.clarifications.length}<small> clarifications</small></b><b>{study.deviations.length}<small> deviations</small></b><b>{study.evidence.length}<small> evidence files</small></b></div>
     {study.evidence.length > 0 && <div style={st.docGrid}>{study.evidence.map((document) => <div key={`${document.documentId}:${document.revision}`} style={st.doc}><span><b>{document.title}</b><br /><small>{document.kind.replaceAll('_', ' ')} · frozen revision {document.revision}</small><br /><DocumentFileLink documentId={document.documentId} title={document.title} version={Number(document.revision)} label="Open frozen revision" /></span></div>)}</div>}
     {study.requirements.length > 0 && <table style={st.table}><thead><tr><th>Requirement</th><th>Source</th><th>Assessment</th><th>Response</th></tr></thead><tbody>{study.requirements.map((row) => <tr key={row.id}><td>{row.statement}</td><td>{row.sourceRef || '—'}</td><td>{row.compliance.replace('_', ' ')}</td><td>{row.response || '—'}</td></tr>)}</tbody></table>}
+    {study.deviations.length > 0 && <table style={st.table} aria-label="Recorded deviations"><thead><tr><th>Requirement</th><th>Deviation</th><th>Impact</th><th>Resolution</th><th>Disposition</th></tr></thead><tbody>{study.deviations.map((row, index) => <tr key={row.id || index}><td>{row.requirementRef || '—'}</td><td>{row.description}</td><td>{row.impact || '—'}</td><td>{row.proposedResolution || '—'}</td><td>{row.status}</td></tr>)}</tbody></table>}
   </div>;
 }
 function Section({ title, help, children }: { title: string; help: string; children: React.ReactNode }) { return <div style={st.section}><h3 style={st.h3}>{title}</h3><p style={st.help}>{help}</p>{children}</div>; }

@@ -79,7 +79,7 @@ function money(n: number): string {
   return typeof n === 'number' ? 'AED ' + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—';
 }
 
-export default function TenderDetail({ tender, workspace = 'dashboard' }: { tender: Tender; workspace?: 'dashboard' | 'boq' }) {
+export default function TenderDetail({ tender, workspace = 'dashboard', currentUserId = null }: { tender: Tender; workspace?: 'dashboard' | 'boq'; currentUserId?: string | null }) {
   const router = useRouter();
   
   // Component State
@@ -468,7 +468,7 @@ export default function TenderDetail({ tender, workspace = 'dashboard' }: { tend
       {/* GO / NO-GO QUALIFICATION (T-A) — the bid/no-bid gate, before any estimating */}
       {workspace === 'dashboard' && <>
         <div id="qualification"><QualificationPanel tenderId={tender.id} /></div>
-        <div id="study"><TechnicalStudyWorkspace opportunityId="" route="tender" tenderId={tender.id} /></div>
+        <div id="study"><TechnicalStudyWorkspace opportunityId="" route="tender" tenderId={tender.id} currentUserId={currentUserId} /></div>
         <div id="compliance-matrix"><TenderComplianceMatrix tenderId={tender.id} /></div>
       </>}
 

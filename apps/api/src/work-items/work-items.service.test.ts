@@ -38,8 +38,9 @@ function harness() {
   const access = { can: vi.fn(() => ({ allowed: true })) };
   const auth = { enabled: false };
   const notifications = { record: vi.fn(async () => ({})) };
-  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never, projects as never, access as never, auth as never, notifications as never);
-  return { service, activities, notifications, projectResponsibilities, resourceBookings, hr, access, auth };
+  const preAward = { studiesAwaiting: vi.fn(empty) };
+  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never, projects as never, access as never, auth as never, notifications as never, preAward as never);
+  return { service, activities, notifications, projectResponsibilities, resourceBookings, hr, access, auth, preAward };
 }
 
 describe('WorkItemsService', () => {
@@ -158,5 +159,57 @@ describe('WorkItemsService', () => {
     expect(access.can).toHaveBeenCalledWith('user-a', expect.objectContaining({
       permission: 'work-items.work-item.read', resource: { type: 'project', id: 'project-a' },
     }));
+  });
+
+  describe('STU-08: a technical study reaches the person whose act is next', () => {
+    const study = (over: Record<string, unknown>) => ({
+      id: 'study-1', tenantId: 'tenant-a', companyId: null, packageId: 'pkg-1', revisionNo: 2, parentStudyId: null,
+      title: 'Tower B CCTV study', inputRevision: 'Tender drawings Rev C', status: 'in_review',
+      authorId: 'u-presales', reviewerId: 'u-techmgr', reviewedBy: null, reviewedAt: null, reviewComment: null,
+      createdAt: '2026-09-20T00:00:00.000Z', updatedAt: '2026-09-21T00:00:00.000Z', submittedAt: '2026-09-21T00:00:00.000Z',
+      ...over,
+    });
+
+    it('lists a submitted study for its named reviewer, linked to the tender study', async () => {
+      const { service, preAward } = harness();
+      preAward.studiesAwaiting.mockResolvedValue([{ study: study({}), opportunityId: null, tenderId: 'tender-9' }] as never);
+
+      const { items, coverage } = await service.list('tenant-a', 'u-techmgr');
+
+      expect(preAward.studiesAwaiting).toHaveBeenCalledWith('tenant-a', 'u-techmgr');
+      expect(items).toContainEqual(expect.objectContaining({
+        id: 'technical-study:study-1', source: 'technical-study', module: 'Pre-Sales', kind: 'Technical study review',
+        title: 'Tower B CCTV study · S-002', href: '/tendering/tenders/tender-9#study',
+        status: 'todo', sourceStatus: 'in_review', scopes: ['assigned'], actions: [], origin: 'other',
+      }));
+      expect(coverage.connected).toContain('Pre-Sales');
+    });
+
+    it('returns a study to its author with the review comment, linked to the opportunity study', async () => {
+      const { service, preAward } = harness();
+      preAward.studiesAwaiting.mockResolvedValue([{
+        study: study({ status: 'changes_requested', reviewedBy: 'u-techmgr', reviewComment: 'Retention is 30 days, not 14' }),
+        opportunityId: 'opp-3', tenderId: null,
+      }] as never);
+
+      const { items } = await service.list('tenant-a', 'u-presales');
+
+      expect(items).toContainEqual(expect.objectContaining({
+        kind: 'Technical study returned', href: '/crm/opportunities/opp-3?area=study',
+        detail: 'Returned for changes: Retention is 30 days, not 14', origin: 'other',
+      }));
+    });
+
+    it('shows nothing to anyone else a study names, whatever the store hands back', async () => {
+      const { service, preAward } = harness();
+      preAward.studiesAwaiting.mockResolvedValue([
+        { study: study({}), opportunityId: 'opp-3', tenderId: null },
+        { study: study({ id: 'study-2', status: 'changes_requested' }), opportunityId: 'opp-3', tenderId: null },
+      ] as never);
+
+      // The author of a study in review, and the reviewer of a returned one, are waiting — not due.
+      expect((await service.list('tenant-a', 'u-presales')).items.map((i) => i.sourceId)).not.toContain('study-1');
+      expect((await service.list('tenant-a', 'u-techmgr')).items.map((i) => i.sourceId)).not.toContain('study-2');
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActivityService, type Activity, type TaskRecurrence } from '@aura/crm';
+import { ActivityService, PreAwardPackageService, type Activity, type StudyAwaitingWork, type TaskRecurrence } from '@aura/crm';
 import { AccessService, AuthService, NotificationService } from '@aura/core';
 import { EngineeringService, type Drawing, type Rfi, type TechnicalQuery } from '@aura/engineering';
 import { HrService, type Employee } from '@aura/hr';
@@ -154,10 +154,11 @@ export class WorkItemsService {
     private readonly access: AccessService,
     private readonly auth: AuthService,
     private readonly notifications: NotificationService,
+    private readonly preAward: PreAwardPackageService,
   ) {}
 
   async list(tenantId: string, actorId: string, companyId: string | null = null): Promise<WorkItemsPayload> {
-    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, materialApprovals, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities] = await Promise.all([
+    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, materialApprovals, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities, studies] = await Promise.all([
       this.activities.list({ tenantId, assigneeId: actorId, limit: 1000 }),
       this.activities.list({ tenantId, createdBy: actorId, limit: 1000 }),
       this.engineering.listDrawings({ tenantId, limit: 1000 }),
@@ -176,6 +177,7 @@ export class WorkItemsService {
       this.projectRisks.list({ openOnly: true, limit: 1000 }),
       this.projectIssues.list({ openOnly: true, limit: 1000 }),
       this.projectResponsibilities.list({ tenantId, assigneeId: actorId, openOnly: true, limit: 1000 }),
+      this.preAward.studiesAwaiting(tenantId, actorId),
     ]);
 
     const items = new Map<string, WorkItem>();
@@ -206,6 +208,7 @@ export class WorkItemsService {
     for (const po of pos) this.addPo(put, po, actorId);
     for (const risk of projectRisks) this.addProjectRisk(put, risk, actorId);
     for (const issue of projectIssues) this.addProjectIssue(put, issue, actorId);
+    for (const study of studies) this.addTechnicalStudy(put, study, actorId);
     const responsibilityProjects = new Map<string, string>();
     await Promise.all([...new Set(projectResponsibilities.map((value) => value.projectId))].map(async (projectId) => {
       const project = await this.projects.get(projectId);
@@ -229,7 +232,7 @@ export class WorkItemsService {
         .filter((item) => item.status !== 'cancelled')
         .sort((a, b) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') || b.updatedAt.localeCompare(a.updatedAt)),
       coverage: {
-        connected: ['Activities', 'Engineering', 'Quality', 'HSE', 'Procurement', 'Projects', ...(allocations.employee ? ['Planning'] : [])],
+        connected: ['Activities', 'Pre-Sales', 'Engineering', 'Quality', 'HSE', 'Procurement', 'Projects', ...(allocations.employee ? ['Planning'] : [])],
         notConnected: [
           ...(allocations.employee ? [] : [{
             module: 'Planning',
@@ -777,6 +780,36 @@ export class WorkItemsService {
     const allowed = activity.createdBy === actorId || (allowAssignee && activity.assigneeId === actorId);
     if (!allowed) throw new ForbiddenException(`Only the task creator can ${operation} this item.`);
     return activity;
+  }
+
+  /**
+   * A technical study whose next act is this person's (STU-08). Submitting a study for review used
+   * to reach nobody: the named Technical Manager learned of it only by opening the tender or the
+   * opportunity, and a study returned for changes reached its author the same way. The item is read
+   * from the revision's status, so approving, returning or resubmitting moves it with no second
+   * record to close. The review itself happens on the study, never from this list.
+   */
+  private addTechnicalStudy(put: (item: WorkItem) => void, entry: StudyAwaitingWork, actor: string): void {
+    const { study } = entry;
+    const reviewing = study.status === 'in_review' && study.reviewerId === actor;
+    const returned = study.status === 'changes_requested' && study.authorId === actor;
+    if (!reviewing && !returned) return;
+    const href = entry.tenderId ? `/tendering/tenders/${entry.tenderId}#study`
+      : entry.opportunityId ? `/crm/opportunities/${entry.opportunityId}?area=study` : '/crm/opportunities';
+    const label = `S-${String(study.revisionNo).padStart(3, '0')}`;
+    put({
+      id: `technical-study:${study.id}`, source: 'technical-study', sourceId: study.id,
+      module: 'Pre-Sales', kind: reviewing ? 'Technical study review' : 'Technical study returned',
+      title: `${study.title} · ${label}`,
+      detail: reviewing
+        ? `Submitted for your review on input ${study.inputRevision}. Approve the technical basis or return it with a comment.`
+        : `Returned for changes: ${study.reviewComment ?? 'no comment recorded'}`,
+      href, projectId: null, projectName: null,
+      status: 'todo', sourceStatus: study.status, priority: 'normal', dueAt: null,
+      createdAt: study.createdAt, updatedAt: study.updatedAt,
+      scopes: ['assigned'], isFollowUp: false, actions: [],
+      origin: origin(reviewing ? study.authorId : study.reviewedBy, actor),
+    });
   }
 
   private addDrawing(put: (item: WorkItem) => void, d: Drawing, actor: string): void {

@@ -23,6 +23,17 @@ export const UNGOVERNED: PreAwardGovernance = {
   governed: false, packageId: null, scopeApproved: false, estimateApproved: false, pricingFrozen: false,
 };
 
+/**
+ * A study revision that is waiting on one person, with the record it belongs to: the reviewer it
+ * was submitted to, or the author it was returned to. The package's opportunity or tender is what
+ * a work list links to — the study has no page of its own.
+ */
+export interface StudyAwaitingWork {
+  study: TechnicalStudyRevision;
+  opportunityId: Id | null;
+  tenderId: Id | null;
+}
+
 export interface PreAwardPackageStore {
   // ── writes ──
   savePackage(p: PreAwardPackage): Promise<void>;
@@ -37,6 +48,8 @@ export interface PreAwardPackageStore {
   getByOpportunity(tenantId: Id, opportunityId: Id): Promise<PreAwardPackage | null>;
   getByTender(tenantId: Id, tenderId: Id): Promise<PreAwardPackage | null>;
   listStudies(tenantId: Id, packageId: Id): Promise<TechnicalStudyRevision[]>;
+  /** Revisions in review with `userId` as reviewer, and revisions returned to `userId` as author. */
+  listStudiesAwaiting(tenantId: Id, userId: Id): Promise<StudyAwaitingWork[]>;
   listBasis(tenantId: Id, packageId: Id): Promise<EstimationBasisRevision[]>;
   listEstimates(tenantId: Id, packageId: Id): Promise<EstimateRevision[]>;
   /** The per-line build-ups of one estimate revision — the material/labour/plant detail. */

@@ -111,7 +111,22 @@ const nonBlank = (value: string, field: string): string => {
 const strings = (values: string[] | undefined): string[] =>
   (values ?? []).map((value) => value.trim()).filter(Boolean);
 
-const content = (input: TechnicalStudyContent): TechnicalStudyContent => ({
+/**
+ * STU-02: a survey finding cites evidence the revision FREEZES — the photo or survey sheet at the
+ * revision this study rests on. A finding pointing at any document of the record would read its
+ * latest revision, so a later re-upload would silently change what the approved survey observed.
+ */
+const content = (input: TechnicalStudyContent): TechnicalStudyContent => {
+  const normalised = contentOf(input);
+  const frozen = new Set(normalised.evidence.map((item) => item.documentId));
+  const loose = normalised.surveyFindings.filter((finding) => finding.evidenceDocumentIds.some((id) => !frozen.has(id)));
+  if (loose.length) {
+    throw new Error(`a survey finding must cite evidence frozen into this study revision — select the document as study evidence first (${loose.map((f) => f.area).join(', ')})`);
+  }
+  return normalised;
+};
+
+const contentOf = (input: TechnicalStudyContent): TechnicalStudyContent => ({
   scopeSummary: input.scopeSummary?.trim() ?? '',
   systems: (input.systems ?? []).map((system) => ({
     id: system.id || newId(),

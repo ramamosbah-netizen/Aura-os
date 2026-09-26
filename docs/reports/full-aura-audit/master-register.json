@@ -267,7 +267,7 @@
         "Pre-Sales",
         "Engineering"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "CRM solution scope / Tender pre-award",
       "evidence": [
         "R-J1"
@@ -275,16 +275,17 @@
       "source": "apps/api/test/j1-journey-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Pre-Sales / Estimator, Design / Technical Engineer, Technical Manager role executes Site survey on existing opportunity in the canonical CRM solution scope / Tender pre-award context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "currentBehavior": "THE SURVEY LIVES IN THE STUDY OF THE EXISTING OPPORTUNITY (or tender), not in an intake that creates one. Measured and corrected on the way: (1) A FINDING COULD CITE ANY DOCUMENT OF THE RECORD, so a later re-upload silently changed what the approved survey observed — a finding now cites only evidence its study revision FREEZES, and dropping a document from the evidence drops its citations. (2) THE REVIEWER COULD NOT OPEN THE SURVEY SHEET: no document rule covered files filed on an opportunity, so a direct study's evidence was readable by its uploader alone and the assigned Technical Manager got 'Access denied' on the sheet he was approving — a rule now opens the study's evidence kinds, under crm.study.read on the persisted opportunity (the tender route's counterpart already existed). (3) The survey fields had no labels, and the reviewer's decision screen showed only a COUNT of findings; each finding is now shown with the frozen revision it cites and a button to open it. The tender technical proposal prints each finding's cited evidence.",
+      "acceptanceProof": "Unit: technical-study.service.test.ts (a finding citing an unfrozen document refused), opportunity-study-document-access.provider.test.ts (3, including a check that its kinds are exactly those the evidence route files). Browser, Auth-ON, migrated PostgreSQL (presales-site-survey.spec.ts), shipped roles, on a DIRECT opportunity whose study is assigned to and accepted by Pre-Sales: the survey sheet uploaded on screen, a finding recorded with area, observation and impact and citing it, saved and RELOADED (it persists). REFUSED: a finding citing a sheet the revision does not freeze (400), a sheet from another opportunity (400), a viewer reading the study (403), the Estimator writing it (403). NEXT ROLE: the Technical Manager receives the study in My Work, reads the findings with 'rev 1' and approves. ACTUAL OUTPUT: after the sheet is re-issued as rev 2, the approved survey still cites rev 1, opens it in the viewer ('Version 1'), and downloads it byte for byte. Regressions green: presales-study-assignment, tender-study-signoff, wave2-offer-output, wave1-presales-ux, journey-signal-to-close, approved-scope-quantity. STATED: the tender quantity take-off seeds its lines from requirements or systems, so a survey finding does not become a take-off line on screen (the API accepts one as a source); the tender proposal's per-finding evidence line is not asserted in a browser."
     },
     {
       "id": "STU-03",
@@ -7128,13 +7129,13 @@
     },
     {
       "id": "J1-05",
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "originalClassification": "DISCONNECTED",
       "currentBehavior": "Tender Technical يفتح Engineering العام الذي يعرض رابط رجوع إلى Tender، دون مساحة دراسة pre-award متكاملة؛ survey الحالي intake لإنشاء فرصة لا استكمال survey لفرصة قائمة.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-05",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "STU-02"
       ],
@@ -7151,7 +7152,7 @@
       "expectedOperationalBehavior": "Site survey on existing opportunity works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Representative Pre-Sales / Estimator, Design / Technical Engineer, Technical Manager role executes Site survey on existing opportunity in the canonical CRM solution scope / Tender pre-award context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "MET. THE FINDING: the tender's technical area opened the general Engineering screen with no integrated pre-award study, and the only survey was an intake that CREATES an opportunity, not one that completes the survey of an existing one. NOW: the site survey is recorded inside the technical study of the existing opportunity (and of the tender, where the study is embedded on the tender page — J1-06). Pre-Sales, holding the accepted assignment, records findings on screen citing the survey sheet the study freezes; save/reload, the refusals (unfrozen or foreign sheet 400, viewer 403, estimator 403), the Technical Manager's receipt, reading and approval, and the frozen sheet's download are proved in presales-site-survey.spec.ts (browser, Auth-ON, PostgreSQL). Corrected on the way: the reviewer could not open the survey sheet at all, and a finding's citation was not frozen (STU-02)."
     },
     {
       "id": "J1-06",
@@ -9154,7 +9155,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 46,
+      "COMPLETE": 47,
       "PARTIAL": 78,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -9164,7 +9165,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 6,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 38,
+      "UNVERIFIED": 37,
       "NOT_AUDITED": 0
     },
     "gaps": 69,

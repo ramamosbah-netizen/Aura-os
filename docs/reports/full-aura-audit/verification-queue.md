@@ -1,6 +1,6 @@
 # Pinned verification queue
 
-38 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
+37 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
 
 ## Closure updates
 
@@ -10,7 +10,6 @@ Wave 3 is **CLOSED / VERIFIED** for its bounded journey, proved iteration by ite
 
 | ID | Capability | Roles | Stages | Authority | Current evidence boundary | Acceptance proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| STU-02 | Site survey on existing opportunity | Pre-Sales / Estimator; Design / Technical Engineer; Technical Manager | Pre-Sales; Engineering | CRM solution scope / Tender pre-award | R-J1 | Representative Pre-Sales / Estimator, Design / Technical Engineer, Technical Manager role executes Site survey on existing opportunity in the canonical CRM solution scope / Tender pre-award context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | STU-07 | RFIs and clarifications | Pre-Sales / Estimator; Design / Technical Engineer; Technical Manager | Pre-Sales; Engineering | CRM solution scope / Tender pre-award | R-J1 | Representative Pre-Sales / Estimator, Design / Technical Engineer, Technical Manager role executes RFIs and clarifications in the canonical CRM solution scope / Tender pre-award context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | EST-07 | Logistics and landed cost | Pre-Sales / Estimator; Commercial Manager / QS; Technical Manager | Pre-Sales | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 | Representative Pre-Sales / Estimator, Commercial Manager / QS, Technical Manager role executes Logistics and landed cost in the canonical Estimation core / Tender estimate / CRM pricing context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SUP-02 | Deviations and exclusions | Procurement Manager / Buyer; Technical Manager; Commercial Manager / QS | Procurement; Pre-Sales | Procurement RFQ | N-RFQ | Representative Procurement Manager / Buyer, Technical Manager, Commercial Manager / QS role executes Deviations and exclusions in the canonical Procurement RFQ context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |

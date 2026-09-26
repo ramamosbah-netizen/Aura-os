@@ -54,7 +54,7 @@
 | Sales | XOP-16 | WRONG_BEHAVIOR | UNVERIFIED |
 | Sales | XOP-17 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | STU-01 | COMPLETE | UNVERIFIED |
-| Pre-Sales / Estimator | STU-02 | UNVERIFIED | UNVERIFIED |
+| Pre-Sales / Estimator | STU-02 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | STU-03 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | STU-04 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | STU-05 | PARTIAL | UNVERIFIED |
@@ -117,7 +117,7 @@
 | Pre-Sales / Estimator | XOP-16 | WRONG_BEHAVIOR | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-17 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | STU-01 | COMPLETE | UNVERIFIED |
-| Design / Technical Engineer | STU-02 | UNVERIFIED | UNVERIFIED |
+| Design / Technical Engineer | STU-02 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | STU-03 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | STU-04 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | STU-05 | PARTIAL | UNVERIFIED |
@@ -398,7 +398,7 @@
 | Project Manager | MGT-14 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-15 | WRONG_BEHAVIOR | UNVERIFIED |
 | Technical Manager | STU-01 | COMPLETE | UNVERIFIED |
-| Technical Manager | STU-02 | UNVERIFIED | UNVERIFIED |
+| Technical Manager | STU-02 | COMPLETE | UNVERIFIED |
 | Technical Manager | STU-03 | COMPLETE | UNVERIFIED |
 | Technical Manager | STU-04 | PARTIAL | UNVERIFIED |
 | Technical Manager | STU-05 | PARTIAL | UNVERIFIED |

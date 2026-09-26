@@ -62,7 +62,7 @@
 | Sales | MGT-14 | PARTIAL |
 | Sales | MGT-15 | WRONG_BEHAVIOR |
 | Pre-Sales | STU-01 | COMPLETE |
-| Pre-Sales | STU-02 | UNVERIFIED |
+| Pre-Sales | STU-02 | COMPLETE |
 | Pre-Sales | STU-03 | COMPLETE |
 | Pre-Sales | STU-04 | PARTIAL |
 | Pre-Sales | STU-05 | PARTIAL |
@@ -255,7 +255,7 @@
 | Mobilisation | MGT-14 | PARTIAL |
 | Mobilisation | MGT-15 | WRONG_BEHAVIOR |
 | Engineering | STU-01 | COMPLETE |
-| Engineering | STU-02 | UNVERIFIED |
+| Engineering | STU-02 | COMPLETE |
 | Engineering | STU-03 | COMPLETE |
 | Engineering | STU-04 | PARTIAL |
 | Engineering | STU-05 | PARTIAL |

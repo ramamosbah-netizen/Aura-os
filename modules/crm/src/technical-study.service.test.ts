@@ -104,3 +104,21 @@ describe('technical study readiness: a requirement assessed as a deviation must 
       .toEqual(['1 deviation(s) have no disposition']);
   });
 });
+
+describe('STU-02: a survey finding cites the evidence its study revision freezes', () => {
+  const finding = { id: 'f1', area: 'Podium car park', observation: 'Ceiling void blocked by ducts', impact: 'Surface containment', evidenceDocumentIds: ['photo-1'] };
+  const photo = { documentId: 'photo-1', title: 'Car park survey photos', kind: 'site_survey', revision: '1' };
+
+  it('refuses a finding citing a document the revision does not freeze', async () => {
+    const store = new InMemoryPreAwardPackageStore();
+    const service = new PreAwardPackageService(store, new InMemoryPricingSheetStore());
+    const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'o-survey' });
+    const study = (surveyFindings: typeof finding[], evidence: typeof photo[]) => service.createTechnicalStudy({
+      tenantId: 't1', companyId: null, packageId: pkg.id, opportunityId: 'o-survey', title: 'Study', inputRevision: 'Client 01',
+      authorId: 'engineer', reviewerId: 'manager', ...completeContent, surveyFindings, evidence,
+    });
+    await expect(study([finding], [])).rejects.toThrow(/a survey finding must cite evidence frozen into this study revision .*Podium car park/);
+    const created = await study([finding], [photo]);
+    expect(created.surveyFindings[0]).toMatchObject({ area: 'Podium car park', evidenceDocumentIds: ['photo-1'] });
+  });
+});

@@ -256,6 +256,11 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
       evidence: exists
         ? editor.evidence.filter((item) => item.documentId !== doc.id)
         : [...editor.evidence, { documentId: doc.id, title: doc.title, kind: doc.kind, revision: String(doc.currentVersion ?? '') }],
+      // A finding cites only what the revision freezes (STU-02); a document leaving the evidence
+      // leaves every citation of it too.
+      surveyFindings: exists
+        ? editor.surveyFindings.map((finding) => ({ ...finding, evidenceDocumentIds: finding.evidenceDocumentIds.filter((id) => id !== doc.id) }))
+        : editor.surveyFindings,
     });
   };
 
@@ -410,13 +415,25 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
             <button style={st.secondary} onClick={() => setEditor({ ...editor, requirements: [...editor.requirements, blankRequirement()] })}>+ Add requirement</button>
           </Section>
 
-          <Section title="Site survey" help="Capture conditions that affect design, quantities, access, installation or authority approval.">
+          <Section title="Site survey" help="Capture conditions that affect design, quantities, access, installation or authority approval. A finding cites the survey photos or sheets this revision freezes as evidence.">
             {editor.surveyFindings.map((row, index) => (
-              <div key={row.id || index} style={st.rowGrid}>
-                <input style={st.input} value={row.area} onChange={(e) => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i === index ? { ...item, area: e.target.value } : item) })} placeholder="Area / location" />
-                <input style={st.input} value={row.observation} onChange={(e) => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i === index ? { ...item, observation: e.target.value } : item) })} placeholder="Observed condition" />
-                <input style={st.input} value={row.impact} onChange={(e) => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i === index ? { ...item, impact: e.target.value } : item) })} placeholder="Design / cost / programme impact" />
-                <button style={st.remove} onClick={() => setEditor({ ...editor, surveyFindings: editor.surveyFindings.filter((_, i) => i !== index) })}>Remove</button>
+              <div key={row.id || index} style={st.stackRow}>
+                <div style={st.rowGrid}>
+                  <input aria-label={`Survey area ${index + 1}`} style={st.input} value={row.area} onChange={(e) => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i === index ? { ...item, area: e.target.value } : item) })} placeholder="Area / location" />
+                  <input aria-label={`Survey observation ${index + 1}`} style={st.input} value={row.observation} onChange={(e) => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i === index ? { ...item, observation: e.target.value } : item) })} placeholder="Observed condition" />
+                  <input aria-label={`Survey impact ${index + 1}`} style={st.input} value={row.impact} onChange={(e) => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i === index ? { ...item, impact: e.target.value } : item) })} placeholder="Design / cost / programme impact" />
+                  <button style={st.remove} onClick={() => setEditor({ ...editor, surveyFindings: editor.surveyFindings.filter((_, i) => i !== index) })}>Remove</button>
+                </div>
+                {editor.evidence.length === 0 ? <small style={st.muted}>Select survey photos or sheets as study evidence below to cite them here.</small> : (
+                  <div style={st.citations}>{editor.evidence.map((doc) => <label key={doc.documentId} style={st.citation}>
+                    <input type="checkbox" aria-label={`Survey finding ${index + 1} cites ${doc.title}`} checked={row.evidenceDocumentIds.includes(doc.documentId)}
+                      onChange={() => setEditor({ ...editor, surveyFindings: editor.surveyFindings.map((item, i) => i !== index ? item : {
+                        ...item, evidenceDocumentIds: item.evidenceDocumentIds.includes(doc.documentId)
+                          ? item.evidenceDocumentIds.filter((id) => id !== doc.documentId) : [...item.evidenceDocumentIds, doc.documentId],
+                      }) })} />
+                    {doc.title} · rev {doc.revision || '—'}
+                  </label>)}</div>
+                )}
               </div>
             ))}
             <button style={st.secondary} onClick={() => setEditor({ ...editor, surveyFindings: [...editor.surveyFindings, blankSurvey()] })}>+ Add survey finding</button>
@@ -502,6 +519,10 @@ function ReadOnlyStudy({ study }: { study: Study }) {
     <div style={st.summaryGrid}><b>{study.systems.length}<small> systems</small></b><b>{study.requirements.length}<small> requirements</small></b><b>{study.surveyFindings.length}<small> survey findings</small></b><b>{study.clarifications.length}<small> clarifications</small></b><b>{study.deviations.length}<small> deviations</small></b><b>{study.evidence.length}<small> evidence files</small></b></div>
     {study.evidence.length > 0 && <div style={st.docGrid}>{study.evidence.map((document) => <div key={`${document.documentId}:${document.revision}`} style={st.doc}><span><b>{document.title}</b><br /><small>{document.kind.replaceAll('_', ' ')} · frozen revision {document.revision}</small><br /><DocumentFileLink documentId={document.documentId} title={document.title} version={Number(document.revision)} label="Open frozen revision" /></span></div>)}</div>}
     {study.requirements.length > 0 && <table style={st.table}><thead><tr><th>Requirement</th><th>Source</th><th>Assessment</th><th>Response</th></tr></thead><tbody>{study.requirements.map((row) => <tr key={row.id}><td>{row.statement}</td><td>{row.sourceRef || '—'}</td><td>{row.compliance.replace('_', ' ')}</td><td>{row.response || '—'}</td></tr>)}</tbody></table>}
+    {study.surveyFindings.length > 0 && <table style={st.table} aria-label="Site survey findings"><thead><tr><th>Area</th><th>Observation</th><th>Impact</th><th>Evidence</th></tr></thead><tbody>{study.surveyFindings.map((row, index) => <tr key={row.id || index}><td>{row.area}</td><td>{row.observation}</td><td>{row.impact || '—'}</td><td>{row.evidenceDocumentIds.length === 0 ? '—' : row.evidenceDocumentIds.map((id) => {
+      const frozen = study.evidence.find((item) => item.documentId === id);
+      return frozen ? <span key={id}>{frozen.title} · rev {frozen.revision} <DocumentFileLink documentId={id} title={frozen.title} version={Number(frozen.revision)} label="Open cited revision" /></span> : null;
+    })}</td></tr>)}</tbody></table>}
     {study.deviations.length > 0 && <table style={st.table} aria-label="Recorded deviations"><thead><tr><th>Requirement</th><th>Deviation</th><th>Impact</th><th>Resolution</th><th>Disposition</th></tr></thead><tbody>{study.deviations.map((row, index) => <tr key={row.id || index}><td>{row.requirementRef || '—'}</td><td>{row.description}</td><td>{row.impact || '—'}</td><td>{row.proposedResolution || '—'}</td><td>{row.status}</td></tr>)}</tbody></table>}
   </div>;
 }
@@ -528,6 +549,8 @@ const st = {
   callout: { background: 'var(--panel-2)', border: '1px solid var(--accent)', borderRadius: 8, padding: 10, fontSize: 12.5 } as CSSProperties,
   intakeBox: { marginTop: 14, padding: 12, border: '1px solid color-mix(in srgb, var(--accent) 45%, var(--border))', borderRadius: 10, background: 'var(--panel-2)' } as CSSProperties,
   intakeGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8, marginTop: 10 } as CSSProperties,
+  citations: { display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 4 } as CSSProperties,
+  citation: { display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--muted)' } as CSSProperties,
   intakeFact: { display: 'flex', flexDirection: 'column', gap: 3, borderTop: '1px solid var(--border)', paddingTop: 7, fontSize: 11.5, overflowWrap: 'anywhere' } as CSSProperties,
   section: { marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--border)' } as CSSProperties,
   help: { color: 'var(--muted)', fontSize: 12, margin: '0 0 10px' } as CSSProperties,

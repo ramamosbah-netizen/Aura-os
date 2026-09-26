@@ -10,11 +10,11 @@ interface TechnicalProposalSource {
     scopeSummary: string;
     systems: Array<{ discipline: string; name: string; designBasis: string; interfaces: string[] }>;
     requirements: Array<{ category: string; statement: string; acceptanceCriteria: string; sourceRef: string; compliance: string; response: string }>;
-    surveyFindings: Array<{ area: string; observation: string; impact: string }>;
+    surveyFindings: Array<{ area: string; observation: string; impact: string; evidenceDocumentIds?: string[] }>;
     clarifications: Array<{ question: string; answer: string; status: string; reference: string }>;
     deviations: Array<{ requirementRef: string; description: string; impact: string; proposedResolution: string; status: string }>;
     assumptions: string[]; exclusions: string[];
-    evidence: Array<{ title: string; kind: string; revision: string }>;
+    evidence: Array<{ documentId: string; title: string; kind: string; revision: string }>;
   };
   /**
    * NULL until the offer this proposal accompanies is internally approved. The proposal rests on
@@ -140,7 +140,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   if (source.study.surveyFindings.length) {
     heading('Site survey findings');
-    for (const finding of source.study.surveyFindings) record(finding.area, [['Observation', finding.observation], ['Impact', finding.impact]]);
+    for (const finding of source.study.surveyFindings) {
+      const cited = (finding.evidenceDocumentIds ?? [])
+        .map((id) => source.study.evidence.find((item) => item.documentId === id))
+        .filter((item): item is typeof source.study.evidence[number] => Boolean(item))
+        .map((item) => `${item.title} (rev ${item.revision || '-'})`);
+      record(finding.area, [['Observation', finding.observation], ['Impact', finding.impact], ...(cited.length ? [['Evidence', cited.join('; ')] as [string, string]] : [])]);
+    }
   }
   if (source.study.clarifications.length) {
     heading('Clarifications');

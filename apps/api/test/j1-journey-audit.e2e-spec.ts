@@ -134,19 +134,26 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     expect(converted.preSalesAssignment).toMatchObject({
       member: { opportunityId: opp.id, userId: 'j1-engineer', role: 'PRESALES' },
       reviewerMember: { opportunityId: opp.id, userId: 'j1-technical-manager', role: 'TECHNICAL_REVIEWER' },
-      activity: { relatedId: opp.id, assigneeId: 'j1-engineer', dueDate: '2026-09-23' },
+      // STU-01 (the owner's decision of 2026-09-26): the package is a record the engineer answers,
+      // not an ordinary task that could be ticked off with no study at all.
+      assignment: {
+        opportunityId: opp.id, version: 1, status: 'assigned', assigneeId: 'j1-engineer', reviewerId: 'j1-technical-manager',
+        dueDate: '2026-09-23', inputRevision: 'Client enquiry Rev 01', assignedBy: 'j1-sales',
+      },
     });
     const inboxAfter = await engineer.get('/api/v1/work-items');
-    console.log('J1_HANDOFF_OBSERVATION', JSON.stringify({ fixtureRole: 'r-pre-sales', beforeHttp: inboxBefore.status, beforeCount: inboxBefore.body.items?.length, afterHttp: inboxAfter.status, automaticAssignmentVisible: inboxAfter.body.items?.some((item: { id: string }) => item.id === `crm-activity:${converted.preSalesAssignment.activity.id}`), dueDate: converted.preSalesAssignment.activity.dueDate, reviewer: 'j1-technical-manager' }));
+    console.log('J1_HANDOFF_OBSERVATION', JSON.stringify({ fixtureRole: 'r-pre-sales', beforeHttp: inboxBefore.status, beforeCount: inboxBefore.body.items?.length, afterHttp: inboxAfter.status, automaticAssignmentVisible: inboxAfter.body.items?.some((item: { id: string }) => item.id === `presales-assignment:${converted.preSalesAssignment.assignment.id}`), dueDate: converted.preSalesAssignment.assignment.dueDate, reviewer: 'j1-technical-manager' }));
     const invalidLead = (await sales.post('/api/v1/crm/leads').send({ name: 'J1 invalid assignment', requirement: 'Validate canonical assignee' }).expect(201)).body;
     await sales.patch(`/api/v1/crm/leads/${invalidLead.id}`).send({ status: 'qualified' }).expect(200);
     const invalidAssignment = await sales.post(`/api/v1/crm/leads/${invalidLead.id}/convert`).send({
+      requiresTender: false,
       preSalesAssignment: {
         assigneeId: 'missing-user', reviewerId: 'j1-technical-manager', dueDate: '2026-09-23',
         inputRevision: 'Rev 01', deliverables: ['Technical study'],
       },
     });
     expect(invalidAssignment.status).toBe(400);
+    expect(String(invalidAssignment.body.message)).toContain('Pre-Sales assignee must be an active workspace user');
     const unconvertedLead = (await sales.get(`/api/v1/crm/leads/${invalidLead.id}`).expect(200)).body;
     expect(unconvertedLead).toMatchObject({ status: 'qualified', convertedOpportunityId: null });
     const beforePackageQuote = await admin.post(`/api/v1/crm/opportunities/${opp.id}/convert-to-quotation`);
@@ -217,6 +224,18 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
       surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [],
       evidence: [{ documentId: intakeEvidence.id, title: 'caller-spoofed title', kind: 'drawing', revision: '999' }],
     };
+    // The study waits for the engineer to take the work on — and is theirs, for the named reviewer.
+    const assignmentId = converted.preSalesAssignment.assignment.id;
+    const beforeAcceptance = await engineer.post(`${base}/studies`).send(studyPayload);
+    expect(beforeAcceptance.status).toBe(409);
+    expect(String(beforeAcceptance.body.message)).toContain('not yet accepted');
+    expect((await sales.post(`/api/v1/work-items/presales-assignment/${assignmentId}/accept`)).status).toBe(409);
+    expect((await engineer.post(`/api/v1/work-items/presales-assignment/${assignmentId}/accept`).expect(201)).body)
+      .toMatchObject({ source: 'presales-assignment', status: 'in_progress', actions: [] });
+    // Even an administrator, who holds every grant, is not the engineer Sales assigned.
+    const otherAuthor = await admin.post(`${base}/studies`).send(studyPayload);
+    expect(otherAuthor.status).toBe(409);
+    expect(String(otherAuthor.body.message)).toContain('only the assigned Pre-Sales engineer can write this study');
     const eligibleReviewers = (await engineer.get(`${base}/reviewers`).expect(200)).body;
     expect(eligibleReviewers.some((row: { userId: string }) => row.userId === 'j1-technical-manager')).toBe(true);
     expect(eligibleReviewers.some((row: { userId: string }) => row.userId === 'j1-engineer')).toBe(false);
@@ -241,6 +260,13 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     expect(salesStudyApproval.status).toBe(403);
     const approvedStudy = (await technicalManager.post(`${base}/studies/${study.id}/approve`).send({ comment: 'Technical basis accepted for estimating' }).expect(201)).body;
     expect(approvedStudy.status).toBe('approved');
+    // The approved study completes the assignment, and it comes back to Sales to receive.
+    const returned = (await sales.get('/api/v1/work-items').expect(200)).body.items
+      .find((item: { id: string }) => item.id === `presales-assignment:${assignmentId}`);
+    expect(returned).toMatchObject({ kind: 'Study approved — scope ready', actions: ['complete'] });
+    expect((await engineer.get('/api/v1/work-items').expect(200)).body.items
+      .some((item: { id: string }) => item.id === `presales-assignment:${assignmentId}`)).toBe(false);
+    expect((await sales.post(`/api/v1/work-items/presales-assignment/${assignmentId}/complete`).expect(201)).body.status).toBe('done');
     const draft = (await author.post(`${base}/scope`).send({ sourceId: 'manual-study', lines }).expect(201)).body;
     expect(draft.sourceId).toBe(study.id);
     expect(draft.sourceRevRef).toContain('technical-study:S-001:Client enquiry Rev 01');

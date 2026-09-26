@@ -153,11 +153,11 @@ function DeclineDialog({ item, busy, error, onClose, onConfirm }: { item: WorkIt
   const [reason, setReason] = useState('');
   useEffect(() => { const close = (event: KeyboardEvent) => { if (event.key === 'Escape' && !busy) onClose(); }; window.addEventListener('keydown', close); return () => window.removeEventListener('keydown', close); }, [busy, onClose]);
   return <div className={styles.modalBackdrop} role="presentation"><section className={`${styles.taskEditor} ${styles.rescheduleEditor}`} role="dialog" aria-modal="true" aria-labelledby="decline-title" data-testid="decline-dialog">
-    <header className={styles.editorHead}><div><span>ALLOCATION</span><h2 id="decline-title">Decline this allocation</h2></div><button type="button" onClick={onClose} disabled={busy} aria-label="Close decline dialog"><X aria-hidden /></button></header>
+    <header className={styles.editorHead}><div><span>{item.source === 'presales-assignment' ? 'PRE-SALES STUDY' : 'ALLOCATION'}</span><h2 id="decline-title">{item.source === 'presales-assignment' ? 'Decline this study' : 'Decline this allocation'}</h2></div><button type="button" onClick={onClose} disabled={busy} aria-label="Close decline dialog"><X aria-hidden /></button></header>
     <form className={styles.editorForm} onSubmit={(event) => { event.preventDefault(); if (reason.trim().length >= 3) void onConfirm(reason.trim()); }}>
       <div className={styles.rescheduleSummary}><strong>{item.title}</strong><span>{item.detail}</span></div>
       <label className={styles.editorWide}><span>Why can you not take this?</span><textarea autoFocus value={reason} onChange={(event) => setReason(event.target.value)} rows={4} minLength={3} required placeholder="On leave, already committed elsewhere, wrong trade…" /></label>
-      <p className={styles.auditHint}>The booking is not cancelled. The planner sees your answer against it and decides what changes.</p>
+      <p className={styles.auditHint}>{item.source === 'presales-assignment' ? 'The study goes back to Sales with your reason, and they reassign it.' : 'The booking is not cancelled. The planner sees your answer against it and decides what changes.'}</p>
       {error ? <p className={styles.modalError} role="alert">{error}</p> : null}
       <footer className={styles.editorActions}><span /><div><button className={styles.subtleAction} type="button" disabled={busy} onClick={onClose}>Cancel</button><button className={styles.primaryAction} type="submit" disabled={busy || reason.trim().length < 3}>{busy ? 'Sending…' : 'Send decline'}</button></div></footer>
     </form>

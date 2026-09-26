@@ -278,6 +278,19 @@ export function requestTechnicalStudyChanges(study: TechnicalStudyRevision, acto
   return { ...study, status: 'changes_requested', reviewedBy: actorId, reviewedAt: now, reviewComment: nonBlank(comment, 'review comment'), updatedAt: now };
 }
 
+/**
+ * Hand an unfinished revision to the engineer and reviewer a Sales REISSUE names (STU-01). Without
+ * it, a reassigned study deadlocks: the new engineer may neither edit the old engineer's draft nor
+ * open a second one beside it. Decided revisions are history and are never moved.
+ */
+export function handOverTechnicalStudy(study: TechnicalStudyRevision, people: { authorId: Id; reviewerId: Id }): TechnicalStudyRevision {
+  if (study.status !== 'draft' && study.status !== 'changes_requested' && study.status !== 'in_review') {
+    throw new Error(`study revision is ${study.status}; only an unfinished revision can be handed over`);
+  }
+  if (people.authorId === people.reviewerId) throw new Error('study author and reviewer must be different users');
+  return { ...study, authorId: people.authorId, reviewerId: people.reviewerId, updatedAt: new Date().toISOString() };
+}
+
 export function supersedeTechnicalStudy(study: TechnicalStudyRevision): TechnicalStudyRevision {
   if (study.status !== 'approved') throw new Error('only an approved study can be superseded by a new revision');
   return { ...study, status: 'superseded', updatedAt: new Date().toISOString() };

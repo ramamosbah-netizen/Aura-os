@@ -5,7 +5,7 @@ import { Type } from 'class-transformer';
 import { AccessService, DmsService, TenantContext, ParseUuidOr404Pipe, Permissions, UsersService } from '@aura/core';
 import {
   type BasisLine, OpportunityService, PreAwardPackageService, QuotationService,
-  LeadService,
+  LeadService, PreSalesAssignmentService,
   type StudyCompliance, type StudyClarificationStatus, type StudyDeviationStatus,
   type StudyRequirementCategory, type TechnicalStudyContent,
 } from '@aura/crm';
@@ -213,7 +213,15 @@ export class CrmPreAwardPackageController {
     private readonly users: UsersService,
     private readonly access: AccessService,
     private readonly dms: DmsService,
+    private readonly assignments: PreSalesAssignmentService,
   ) {}
+
+  /** The study revision a route acts on, read from its package — never from the caller. */
+  private async studyOf(tenantId: string, packageId: string, studyId: string) {
+    const study = (await this.packages.listTechnicalStudies(tenantId, packageId)).find((row) => row.id === studyId);
+    if (!study) throw new NotFoundException(`technical study ${studyId} not found`);
+    return study;
+  }
 
   private documentActor() {
     const ctx = this.tenant.get();
@@ -448,7 +456,10 @@ export class CrmPreAwardPackageController {
     const { tenantId, companyId, packageId } = await this.ensurePackage(id);
     const actorId = this.tenant.get().actorId;
     if (!actorId) throw new BadRequestException('authenticated study author is required');
+    // STU-01 (the owner's decision of 2026-09-26): an assigned study is its engineer's, for its
+    // reviewer, on its input revision — and it starts only once the engineer has accepted it.
     await this.assertEligibleReviewer(tenantId, companyId, dto.reviewerId, actorId);
+    await this.assignments.assertStudyAct(tenantId, id, { authorId: actorId, reviewerId: dto.reviewerId, inputRevision: dto.inputRevision ?? '' });
     const content = await this.canonicalizeEvidence(id, toTechnicalStudyContent(dto));
     return this.packages.createTechnicalStudy({
       tenantId, companyId, packageId, opportunityId: id, title: dto.title, inputRevision: dto.inputRevision,
@@ -466,6 +477,10 @@ export class CrmPreAwardPackageController {
     const { tenantId, companyId, packageId } = await this.ensurePackage(id);
     const actorId = this.tenant.get().actorId;
     if (!actorId) throw new BadRequestException('authenticated study author is required');
+    const current = await this.studyOf(tenantId, packageId, studyId);
+    await this.assignments.assertStudyAct(tenantId, id, {
+      authorId: actorId, reviewerId: dto.reviewerId ?? current.reviewerId, inputRevision: dto.inputRevision ?? current.inputRevision,
+    });
     if (dto.reviewerId) {
       await this.assertEligibleReviewer(tenantId, companyId, dto.reviewerId, actorId);
     }
@@ -482,6 +497,8 @@ export class CrmPreAwardPackageController {
     const { tenantId, packageId } = await this.ensurePackage(id);
     const actorId = this.tenant.get().actorId;
     if (!actorId) throw new BadRequestException('authenticated study author is required');
+    const study = await this.studyOf(tenantId, packageId, studyId);
+    await this.assignments.assertStudyAct(tenantId, id, { authorId: actorId, reviewerId: study.reviewerId, inputRevision: study.inputRevision });
     return this.packages.submitTechnicalStudy(tenantId, packageId, studyId, actorId);
   }
 
@@ -495,7 +512,16 @@ export class CrmPreAwardPackageController {
     const { tenantId, packageId } = await this.ensurePackage(id);
     const actorId = this.tenant.get().actorId;
     if (!actorId) throw new BadRequestException('authenticated reviewer is required');
-    return this.packages.approveTechnicalStudy(tenantId, packageId, studyId, actorId, dto?.comment);
+    // A reissue may have moved the package on while this revision sat in review: it is approved
+    // only if it still answers the assignment as it stands.
+    const study = await this.studyOf(tenantId, packageId, studyId);
+    await this.assignments.assertStudyAct(tenantId, id, { authorId: study.authorId, reviewerId: study.reviewerId, inputRevision: study.inputRevision });
+    const approved = await this.packages.approveTechnicalStudy(tenantId, packageId, studyId, actorId, dto?.comment);
+    // The approved study completes the assignment it answers; Sales receives it in My Work.
+    await this.assignments.completeOnApproval(tenantId, id, {
+      id: approved.id, authorId: approved.authorId, reviewerId: approved.reviewerId, inputRevision: approved.inputRevision,
+    }, actorId);
+    return approved;
   }
 
   @Post(':id/pre-award-package/studies/:studyId/request-changes')
@@ -509,6 +535,8 @@ export class CrmPreAwardPackageController {
     const { tenantId, packageId } = await this.ensurePackage(id);
     const actorId = this.tenant.get().actorId;
     if (!actorId) throw new BadRequestException('authenticated reviewer is required');
+    const study = await this.studyOf(tenantId, packageId, studyId);
+    await this.assignments.assertStudyAct(tenantId, id, { authorId: study.authorId, reviewerId: study.reviewerId, inputRevision: study.inputRevision });
     return this.packages.requestTechnicalStudyChanges(tenantId, packageId, studyId, actorId, dto.comment);
   }
 

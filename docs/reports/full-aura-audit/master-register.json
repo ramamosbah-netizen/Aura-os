@@ -234,7 +234,7 @@
         "Pre-Sales",
         "Engineering"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "CRM solution scope / Tender pre-award",
       "evidence": [
         "R-J1"
@@ -242,17 +242,17 @@
       "source": "apps/api/test/j1-journey-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Reused J1-04: generic Activity reaches inbox; structured study handoff not established.",
-      "acceptanceProof": "Sales assigns complete versioned study package; engineer accepts and returns approved scope."
+      "currentBehavior": "COMPLETE FOR THE SCOPE THE OWNER SET (2026-09-26: 'Bind it', 'Accept/decline + auto-return', 'Direct route only for now'). THE TENDER ROUTE IS NOT COVERED: a tender study is started by Pre-Sales on the tender with no Sales assignment, and a conversion onto the tender path now refuses one rather than create a task that binds nothing. WHAT WAS WRONG, measured: the assignment made at conversion was two deal-team rows and an ordinary task — anyone holding study authority could write the study, pick another reviewer, type another input revision, and tick the task off with no study at all; Sales heard nothing back. And Sales could not make the assignment on screen: the convert drawer read the full user directory (workspace.user.read, which no Sales role holds), so both pick-lists were empty and a lead could not be converted in the UI. NOW: the assignment is a record of its own (migration 0394) — engineer, independent reviewer, input revision, due date, deliverables, version and history. The engineer ACCEPTS or DECLINES it (with a reason) in My Work; a decline returns it to Sales, who REISSUES it as a new version with a reason, handing any unfinished study revision and the deal-team seats to the people it now names. The study is BOUND: it starts only once accepted, and only the assigned engineer writes it, for the named reviewer, on the assignment's input revision (the screen shows both locked). Nobody closes it by hand: the approved study COMPLETES it, and Sales receives 'Study approved — scope ready', which they mark received. Sales picks engineer and reviewer from a list read under the deal-team grant, each checked able to do their part.",
+      "acceptanceProof": "Unit: presales-assignment.test.ts (10). Contract, Auth-ON: j1-journey-audit.e2e-spec.ts (the study refused before acceptance, Sales refused accepting, the administrator refused writing it, the return reaching Sales and received). Browser, Auth-ON, migrated PostgreSQL (presales-study-assignment.spec.ts), shipped roles: r-sales converts the lead on screen and assigns u-e2e-presales with u-e2e-techmgr reviewing; the engineer declines in My Work with a reason; it returns to Sales, who reissues v2 on the opportunity with a reason; the engineer accepts v2 (no 'Complete' on the row); the study editor shows the reviewer and input revision locked; the Technical Manager approves on screen; the task leaves the engineer's list and Sales marks the returned study received. REFUSED: the study before acceptance (409), the Technical Manager accepting (409), accepting twice (409), the engineer reissuing (403, deal-team grant), a viewer reading the package (403), the Sales Manager — every CRM grant — writing the study (409 'only the assigned Pre-Sales engineer'), the Estimator writing it (403), another input revision (409 'can only follow a reissue by Sales'), the engineer taking Sales' receipt (409). ACTUAL OUTPUT: the assignment's history read back — v1 assigned by Sales, declined by the engineer, v2 reissued by Sales, accepted by the engineer, completed by the Technical Manager's approval, received by Sales. Migration 0394 round-tripped down and up. Regressions green: wave1-presales-ux, journey-signal-to-close, approved-scope-quantity, tender-study-signoff, employee-account-allocation (the shared decline dialog), my-work-project-register."
     },
     {
       "id": "STU-02",
@@ -7101,13 +7101,13 @@
     },
     {
       "id": "J1-04",
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "originalClassification": "INCOMPLETE",
       "currentBehavior": "تكليف دراسة بتواريخ ومخرجات ومراجع ومُراجع غير موجود كعملية مكتملة في المسار؛ Activity/My Work يعملان.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-04",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "STU-01"
       ],
@@ -7124,7 +7124,7 @@
       "expectedOperationalBehavior": "Study assignment and acceptance works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Sales assigns complete versioned study package; engineer accepts and returns approved scope."
+      "acceptanceProof": "MET ON THE DIRECT ROUTE, the scope the owner set on 2026-09-26 ('Direct route only for now'); the tender route is recorded as NOT COVERED on STU-01. THE FINDING: a study assignment with dates, deliverables, references and a reviewer did not exist as a complete process — only a generic task. SALES ASSIGNS A COMPLETE VERSIONED STUDY PACKAGE: engineer, independent reviewer, input revision, due date and deliverables, picked on screen by a shipped Sales role, kept as a versioned record reissued with a reason. ENGINEER ACCEPTS: in My Work, or declines with a reason that returns it to Sales. RETURNS APPROVED SCOPE: the study is bound to the package and, once the Technical Manager approves it, the assignment completes itself and Sales receives 'Study approved — scope ready'. Proved in presales-study-assignment.spec.ts (browser, Auth-ON, PostgreSQL) and j1-journey-audit.e2e-spec.ts (Auth-ON contract)."
     },
     {
       "id": "J1-05",
@@ -9154,8 +9154,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 45,
-      "PARTIAL": 79,
+      "COMPLETE": 46,
+      "PARTIAL": 78,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

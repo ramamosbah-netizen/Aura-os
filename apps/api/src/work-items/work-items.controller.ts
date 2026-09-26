@@ -82,7 +82,7 @@ export class WorkItemsController {
     if (!ctx.actorId) throw new UnauthorizedException('A signed-in user is required');
     if (!ACTIONS.has(action as WorkItemAction)) throw new BadRequestException('Unknown work-item action');
     if (action === 'decline' && !dto?.reason?.trim()) {
-      throw new BadRequestException('Declining an allocation requires a reason');
+      throw new BadRequestException('Declining requires a reason');
     }
     return this.workItems.act(ctx.tenantId, ctx.actorId, source, id, action as WorkItemAction, ctx.companyId ?? null, dto?.reason);
   }

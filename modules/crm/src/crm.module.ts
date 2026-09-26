@@ -88,6 +88,8 @@ import { PostgresInstalledBaseStore } from './postgres-installed-base-store';
 import { InstalledBaseService } from './installed-base.service';
 
 import { LeadConversionService } from './lead-conversion.service';
+import { PreSalesAssignmentService } from './presales-assignment.service';
+import { CRM_PRESALES_ASSIGNMENT_STORE, InMemoryPreSalesAssignmentStore, PostgresPreSalesAssignmentStore } from './presales-assignment-store';
 
 /**
  * The CRM business module. Imports the kernel (CoreModule) for the event store,
@@ -123,6 +125,13 @@ import { LeadConversionService } from './lead-conversion.service';
       useFactory: (pool: Pool | null) =>
         pool ? new PostgresQualificationDecisionStore(pool) : new InMemoryQualificationDecisionStore(),
     },
+    {
+      provide: CRM_PRESALES_ASSIGNMENT_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresPreSalesAssignmentStore(pool) : new InMemoryPreSalesAssignmentStore(),
+    },
+    PreSalesAssignmentService,
     {
       provide: CRM_PRE_AWARD_PACKAGE_STORE,
       inject: [PG_POOL],
@@ -238,6 +247,6 @@ import { LeadConversionService } from './lead-conversion.service';
     ScopeAssistService,
     LeadConversionService,
   ],
-  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, PricingQuotationService, ScopeAssistService, LeadConversionService],
+  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, PricingQuotationService, ScopeAssistService, LeadConversionService, PreSalesAssignmentService],
 })
 export class CrmModule {}

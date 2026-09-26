@@ -57,7 +57,7 @@ function harness(risks: unknown[] = [], issues: unknown[] = []) {
     prs as never, rfqs as never, pos as never,
     projectRisks as never, projectIssues as never, projectResponsibilities as never,
     resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never,
-    projects as never, access as never, auth as never, notifications as never, { studiesAwaiting: async () => [] } as never,
+    projects as never, access as never, auth as never, notifications as never, { studiesAwaiting: async () => [] } as never, { listAwaiting: async () => [] } as never,
   );
   return { service, projectRisks, projectIssues };
 }

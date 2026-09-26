@@ -37,7 +37,7 @@ export class PostgresPreAwardPackageStore implements PreAwardPackageStore {
         author_id,reviewer_id,created_at,updated_at,submitted_at,reviewed_by,reviewed_at,review_comment)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
        on conflict (id) do update set title=excluded.title,input_revision=excluded.input_revision,
-         status=excluded.status,content=excluded.content,reviewer_id=excluded.reviewer_id,
+         status=excluded.status,content=excluded.content,author_id=excluded.author_id,reviewer_id=excluded.reviewer_id,
          updated_at=excluded.updated_at,submitted_at=excluded.submitted_at,reviewed_by=excluded.reviewed_by,
          reviewed_at=excluded.reviewed_at,review_comment=excluded.review_comment`,
       [s.id, s.tenantId, s.companyId, s.packageId, s.revisionNo, s.parentStudyId, s.title,

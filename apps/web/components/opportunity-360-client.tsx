@@ -6,6 +6,7 @@ import { STAKEHOLDER_ROLE_LABEL, STRENGTH_LABEL, STRENGTH_COLOR } from './stakeh
 import Timeline from './timeline';
 import CommercialPanel from './commercial-panel';
 import TechnicalStudyWorkspace from './technical-study-workspace';
+import PreSalesAssignmentPanel from './presales-assignment-panel';
 import BuyingJourneyPanel from './buying-journey-panel';
 import WinPlanPanel from './win-plan-panel';
 import DealDepthPanel from './deal-depth-panel';
@@ -601,7 +602,7 @@ export default function Opportunity360Client({ opportunityId, currentUserId = nu
       )}
 
       {tab === 'commercial' && <CommercialPanel opportunityId={o.id} />}
-      {tab === 'study' && <TechnicalStudyWorkspace opportunityId={o.id} route={data.route} tenderId={data.tenders[0]?.id ?? null} currentUserId={currentUserId} />}
+      {tab === 'study' && <>{data.route !== 'tender' && <PreSalesAssignmentPanel opportunityId={o.id} currentUserId={currentUserId} />}<TechnicalStudyWorkspace opportunityId={o.id} route={data.route} tenderId={data.tenders[0]?.id ?? null} currentUserId={currentUserId} /></>}
       {tab === 'strategy' && <BuyingJourneyPanel opportunityId={o.id} />}
 
       {tab === 'strategy' && (

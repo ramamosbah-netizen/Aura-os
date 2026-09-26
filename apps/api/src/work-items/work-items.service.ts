@@ -1,5 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActivityService, PreAwardPackageService, type Activity, type StudyAwaitingWork, type TaskRecurrence } from '@aura/crm';
+import { ActivityService, PreAwardPackageService, PreSalesAssignmentService, type Activity, type PreSalesAssignment, type StudyAwaitingWork, type TaskRecurrence } from '@aura/crm';
 import { AccessService, AuthService, NotificationService } from '@aura/core';
 import { EngineeringService, type Drawing, type Rfi, type TechnicalQuery } from '@aura/engineering';
 import { HrService, type Employee } from '@aura/hr';
@@ -155,10 +155,11 @@ export class WorkItemsService {
     private readonly auth: AuthService,
     private readonly notifications: NotificationService,
     private readonly preAward: PreAwardPackageService,
+    private readonly preSalesAssignments: PreSalesAssignmentService,
   ) {}
 
   async list(tenantId: string, actorId: string, companyId: string | null = null): Promise<WorkItemsPayload> {
-    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, materialApprovals, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities, studies] = await Promise.all([
+    const [assignedActivities, createdActivities, drawings, rfis, tqs, ncrs, materialApprovals, snags, capas, prs, rfqs, pos, projectRisks, projectIssues, projectResponsibilities, studies, assignments] = await Promise.all([
       this.activities.list({ tenantId, assigneeId: actorId, limit: 1000 }),
       this.activities.list({ tenantId, createdBy: actorId, limit: 1000 }),
       this.engineering.listDrawings({ tenantId, limit: 1000 }),
@@ -178,6 +179,7 @@ export class WorkItemsService {
       this.projectIssues.list({ openOnly: true, limit: 1000 }),
       this.projectResponsibilities.list({ tenantId, assigneeId: actorId, openOnly: true, limit: 1000 }),
       this.preAward.studiesAwaiting(tenantId, actorId),
+      this.preSalesAssignments.listAwaiting(tenantId, actorId),
     ]);
 
     const items = new Map<string, WorkItem>();
@@ -209,6 +211,10 @@ export class WorkItemsService {
     for (const risk of projectRisks) this.addProjectRisk(put, risk, actorId);
     for (const issue of projectIssues) this.addProjectIssue(put, issue, actorId);
     for (const study of studies) this.addTechnicalStudy(put, study, actorId);
+    for (const assignment of assignments) {
+      const item = this.preSalesAssignmentItem(assignment, actorId);
+      if (item) put(item);
+    }
     const responsibilityProjects = new Map<string, string>();
     await Promise.all([...new Set(projectResponsibilities.map((value) => value.projectId))].map(async (projectId) => {
       const project = await this.projects.get(projectId);
@@ -548,8 +554,9 @@ export class WorkItemsService {
     reason?: string | null,
   ): Promise<WorkItem> {
     if (source === 'resource-allocation') return this.answerAllocation(tenantId, actorId, id, action, companyId, reason);
+    if (source === 'presales-assignment') return this.answerPreSalesAssignment(tenantId, actorId, id, action, reason);
     if (action === 'accept' || action === 'decline') {
-      throw new ForbiddenException('Only a resource allocation can be accepted or declined.');
+      throw new ForbiddenException('Only a resource allocation or a Pre-Sales study assignment can be accepted or declined.');
     }
     if (source === 'project-responsibility') {
       const existing = await this.projectResponsibilities.get(id);
@@ -780,6 +787,80 @@ export class WorkItemsService {
     const allowed = activity.createdBy === actorId || (allowAssignee && activity.assigneeId === actorId);
     if (!allowed) throw new ForbiddenException(`Only the task creator can ${operation} this item.`);
     return activity;
+  }
+
+  /**
+   * A Pre-Sales study assignment whose next act is this person's (STU-01, the owner's decision of
+   * 2026-09-26). The engineer ANSWERS it — accept or decline, both on the row — and then works it;
+   * there is no "complete": the approved study completes it. Sales sees a decline to reassign, and
+   * the approved study to receive. Read from the assignment's own status, like the study itself.
+   */
+  private preSalesAssignmentItem(a: PreSalesAssignment & { opportunityTitle?: string | null }, actor: string): WorkItem | null {
+    const deal = a.opportunityTitle ?? 'opportunity';
+    const packageLine = `Input ${a.inputRevision} · ${a.deliverables.join(', ')} · reviewer ${a.reviewerId}`;
+    const base = {
+      id: `presales-assignment:${a.id}`, source: 'presales-assignment', sourceId: a.id, module: 'Pre-Sales',
+      href: `/crm/opportunities/${a.opportunityId}?area=study`, projectId: null, projectName: null,
+      sourceStatus: a.status, createdAt: a.createdAt, updatedAt: a.updatedAt, isFollowUp: false,
+    };
+    if (a.assigneeId === actor && a.status === 'assigned') {
+      return {
+        ...base, kind: 'Pre-Sales study assigned', title: `Pre-Sales study — ${deal} · v${a.version}`,
+        detail: `${packageLine}. Accept to start the study, or decline with a reason.`,
+        status: 'todo', priority: derivedPriority(a.dueDate), dueAt: a.dueDate, scopes: ['assigned'],
+        actions: ['accept', 'decline'], origin: origin(a.assignedBy, actor),
+      };
+    }
+    if (a.assigneeId === actor && a.status === 'accepted') {
+      return {
+        ...base, kind: 'Pre-Sales study', title: `Pre-Sales study — ${deal} · v${a.version}`,
+        detail: `${packageLine}. Completes when ${a.reviewerId} approves the study.`,
+        status: 'in_progress', priority: derivedPriority(a.dueDate), dueAt: a.dueDate, scopes: ['assigned'],
+        actions: [], origin: origin(a.assignedBy, actor),
+      };
+    }
+    if (a.assignedBy === actor && a.status === 'declined') {
+      return {
+        ...base, kind: 'Pre-Sales study declined', title: `Pre-Sales study declined — ${deal}`,
+        detail: `Declined by ${a.assigneeId}: ${a.declineReason ?? 'no reason recorded'}. Reassign it on the opportunity.`,
+        status: 'todo', priority: 'high', dueAt: a.dueDate, scopes: ['created'],
+        actions: [], origin: origin(a.assigneeId, actor),
+      };
+    }
+    if (a.assignedBy === actor && a.status === 'completed' && !a.acknowledgedAt) {
+      return {
+        ...base, kind: 'Study approved — scope ready', title: `Study approved — scope ready · ${deal}`,
+        detail: `${a.reviewerId} approved the study ${a.assigneeId} wrote on input ${a.inputRevision}. Mark it received once you have taken it up.`,
+        status: 'todo', priority: 'normal', dueAt: null, scopes: ['created'],
+        actions: ['complete'], origin: origin(a.reviewerId, actor),
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Answer a Pre-Sales assignment as the person it names. Identity is the authority here, as for an
+   * allocation: the domain refuses anyone but the assigned engineer (accept, decline) or the Sales
+   * user who assigned it (receive).
+   */
+  private async answerPreSalesAssignment(tenantId: string, actorId: string, id: string, action: WorkItemAction, reason?: string | null): Promise<WorkItem> {
+    const updated = action === 'accept' ? await this.preSalesAssignments.accept(tenantId, id, actorId)
+      : action === 'decline' ? await this.preSalesAssignments.decline(tenantId, id, actorId, reason ?? '')
+        : action === 'complete' ? await this.preSalesAssignments.acknowledge(tenantId, id, actorId)
+          : null;
+    if (!updated) throw new ForbiddenException('A Pre-Sales study is accepted or declined by its engineer and received by Sales; it is not started or reopened here.');
+    const listed = (await this.preSalesAssignments.listAwaiting(tenantId, actorId)).find((row) => row.id === updated.id);
+    const item = listed ? this.preSalesAssignmentItem(listed, actorId) : null;
+    // Answered and off this person's list (a decline, a receipt): report it done where it was.
+    return item ?? {
+      id: `presales-assignment:${updated.id}`, source: 'presales-assignment', sourceId: updated.id, module: 'Pre-Sales',
+      kind: action === 'decline' ? 'Pre-Sales study declined' : 'Study approved — scope ready',
+      title: action === 'decline' ? 'Pre-Sales study declined' : 'Study received', detail: null,
+      href: `/crm/opportunities/${updated.opportunityId}?area=study`, projectId: null, projectName: null,
+      status: 'done', sourceStatus: updated.status, priority: 'normal', dueAt: null,
+      createdAt: updated.createdAt, updatedAt: updated.updatedAt, scopes: ['assigned'], isFollowUp: false,
+      actions: [], origin: origin(updated.assignedBy, actorId),
+    };
   }
 
   /**

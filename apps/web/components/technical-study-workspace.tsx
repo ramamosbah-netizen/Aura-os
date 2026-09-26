@@ -116,6 +116,8 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
   const [documents, setDocuments] = useState<DocRow[]>([]);
   const [intake, setIntake] = useState<IntakeContext | null>(null);
   const [actorId, setActorId] = useState('');
+  // STU-01: an assigned study's reviewer and input revision are the assignment's, not the author's to choose.
+  const [assigned, setAssigned] = useState<{ reviewerId: string; inputRevision: string; status: string; assigneeId: string } | null>(null);
   const [editor, setEditor] = useState<Editor>(blankEditor);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -144,13 +146,14 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
     const latest = () => seq === loadSeq.current;
     setLoading(true); setError(null);
     try {
-      const [studyRes, reviewerRes, documentRes, requirementRes, intakeRes, meRes] = await Promise.all([
+      const [studyRes, reviewerRes, documentRes, requirementRes, intakeRes, meRes, assignmentRes] = await Promise.all([
         fetch(base, { cache: 'no-store' }),
         fetch(isTender ? `/api/tendering/tenders/${encodeURIComponent(tenderId!)}/study-reviewers` : `${base.replace(/\/studies$/, '')}/reviewers`, { cache: 'no-store' }),
         fetch(evidenceEndpoint, { cache: 'no-store' }),
         isTender ? Promise.resolve(null) : fetch(`/api/crm/opportunities/${encodeURIComponent(opportunityId)}/requirements`, { cache: 'no-store' }),
         isTender ? Promise.resolve(null) : fetch(`${base.replace(/\/studies$/, '')}/intake-context`, { cache: 'no-store' }),
         currentUserId ? Promise.resolve(null) : fetch('/api/workspace/me', { cache: 'no-store' }),
+        isTender ? Promise.resolve(null) : fetch(`/api/crm/opportunities/${encodeURIComponent(opportunityId)}/presales-assignment`, { cache: 'no-store' }),
       ]);
       if (!latest()) return;
       if (!studyRes.ok) {
@@ -165,11 +168,14 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
         ? await requirementRes.json().catch(() => []) as CanonicalRequirement[]
         : [];
       const sourceIntake = intakeRes?.ok ? await intakeRes.json().catch(() => null) as IntakeContext | null : null;
+      const assignment = assignmentRes?.ok ? ((await assignmentRes.json().catch(() => null)) as { assignment: { reviewerId: string; inputRevision: string; status: string; assigneeId: string } | null } | null)?.assignment ?? null : null;
       if (!latest()) return;
       setStudies(rows);
       setIntake(sourceIntake);
+      setAssigned(assignment);
       setEditor(current ? editorFrom(current) : {
         ...blankEditor(),
+        ...(assignment ? { reviewerId: assignment.reviewerId, inputRevision: assignment.inputRevision } : {}),
         scopeSummary: sourceIntake?.requirement ?? '',
         systems: sourceIntake?.systems?.length
           ? sourceIntake.systems.map((system) => ({ ...blankSystem(), name: system.label }))
@@ -359,9 +365,9 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
           <Section title="Study identity" help="Use the client drawing/specification revision this work is based on. A later client issue becomes a new study revision.">
             <div style={st.grid3}>
               <Field label="Study title"><input style={st.input} value={editor.title} onChange={(e) => setEditor({ ...editor, title: e.target.value })} placeholder="Warehouse CCTV and Access Control study" /></Field>
-              <Field label="Input revision"><input style={st.input} value={editor.inputRevision} onChange={(e) => setEditor({ ...editor, inputRevision: e.target.value })} placeholder="Client drawings Rev 02 · 14 Sep 2026" /></Field>
+              <Field label="Input revision"><input style={st.input} value={editor.inputRevision} readOnly={Boolean(assigned)} title={assigned ? 'Set by the Sales assignment; a new input revision comes through a reissue' : undefined} onChange={(e) => setEditor({ ...editor, inputRevision: e.target.value })} placeholder="Client drawings Rev 02 · 14 Sep 2026" /></Field>
               <Field label="Technical reviewer">
-                <select style={st.input} value={editor.reviewerId} onChange={(e) => setEditor({ ...editor, reviewerId: e.target.value })}>
+                <select style={st.input} value={editor.reviewerId} disabled={Boolean(assigned)} title={assigned ? 'Named by the Sales assignment; a different reviewer comes through a reassignment' : undefined} onChange={(e) => setEditor({ ...editor, reviewerId: e.target.value })}>
                   <option value="">Select independent reviewer…</option>
                   {users.filter((user) => user.username !== actorId).map((user) => <option key={user.username} value={user.username}>{user.displayName || user.username}{user.roleLabel ? ` · ${user.roleLabel}` : ''}</option>)}
                 </select>

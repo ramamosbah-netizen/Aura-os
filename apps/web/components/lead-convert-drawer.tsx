@@ -22,7 +22,8 @@ interface Preview {
 
 interface LeadLite { id: string; name: string; companyName: string | null }
 interface AccountLite { id: string; name: string }
-interface DirectoryUser { username: string; roleLabel?: string; active?: boolean }
+interface Candidate { userId: string; displayName?: string }
+interface Candidates { engineers: Candidate[]; reviewers: Candidate[] }
 
 const CONF_COLOR: Record<Exclude<Confidence, 'NONE'>, string> = {
   EXACT: 'var(--good)', PROBABLE: 'var(--warn)', POSSIBLE: 'var(--muted)',
@@ -39,7 +40,9 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
   const [err, setErr] = useState<string | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
   const [contactNames, setContactNames] = useState<Record<string, string>>({});
-  const [users, setUsers] = useState<DirectoryUser[]>([]);
+  // Who may write the study, and who may review it — read under the deal-team grant Sales holds.
+  // The full user directory needs workspace.user.read, which no Sales role has: both lists were empty.
+  const [candidates, setCandidates] = useState<Candidates>({ engineers: [], reviewers: [] });
 
   // choices
   const [accountMode, setAccountMode] = useState<'link' | 'create'>('create');
@@ -65,7 +68,7 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
       const [pRes, cRes, uRes] = await Promise.all([
         fetch(`/api/crm/leads/${lead.id}/convert-preview`, { cache: 'no-store' }),
         fetch('/api/crm/contacts', { cache: 'no-store' }).catch(() => null),
-        fetch('/api/workspace/users', { cache: 'no-store' }).catch(() => null),
+        fetch('/api/crm/presales-candidates', { cache: 'no-store' }).catch(() => null),
       ]);
       if (!pRes.ok) { setErr('Could not load the conversion preview.'); return; }
       const p = (await pRes.json()) as Preview;
@@ -79,8 +82,8 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
         setContactNames(Object.fromEntries(cs.map((c) => [c.id, c.accountName ? `${c.name} · ${c.accountName}` : c.name])));
       }
       if (uRes?.ok) {
-        const directory = (await uRes.json().catch(() => [])) as DirectoryUser[];
-        setUsers(Array.isArray(directory) ? directory.filter((user) => user.active !== false) : []);
+        const found = (await uRes.json().catch(() => null)) as Candidates | null;
+        setCandidates({ engineers: found?.engineers ?? [], reviewers: found?.reviewers ?? [] });
       }
     } catch {
       setErr('CRM API unreachable.');
@@ -103,7 +106,8 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
   const submit = async () => {
     if (busy || !preview) return;
     const selectedDeliverables = deliverables.split('\n').map((item) => item.trim()).filter(Boolean);
-    if (!presalesAssigneeId || !reviewerId || !studyDueDate || !inputRevision.trim() || selectedDeliverables.length === 0) {
+    const direct = requiresTender === 'false';
+    if (direct && (!presalesAssigneeId || !reviewerId || !studyDueDate || !inputRevision.trim() || selectedDeliverables.length === 0)) {
       setErr('Select the Pre-Sales engineer and reviewer, then enter the due date, input revision and required deliverables.');
       return;
     }
@@ -115,13 +119,16 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
       value: value ? Number(value) : undefined,
       requiresTender: requiresTender === 'true',
       closeDate: closeDate || undefined,
-      preSalesAssignment: {
-        assigneeId: presalesAssigneeId,
-        reviewerId,
-        dueDate: studyDueDate,
-        inputRevision: inputRevision.trim(),
-        deliverables: selectedDeliverables,
-      },
+      // The assignment binds a study on a DIRECT opportunity; a tender's study is started on the tender.
+      ...(direct ? {
+        preSalesAssignment: {
+          assigneeId: presalesAssigneeId,
+          reviewerId,
+          dueDate: studyDueDate,
+          inputRevision: inputRevision.trim(),
+          deliverables: selectedDeliverables,
+        },
+      } : {}),
     };
     // Account: link to the match, or force-create a new one when a match exists but was declined.
     if (accountMode === 'link' && accMatch) body.accountId = accMatch.id;
@@ -260,20 +267,21 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
 
                   <div style={st.section}>
                     <div style={st.sectionTitle}>4 · Pre-Sales handoff</div>
-                    <p style={st.help}>Assign the technical study now. The engineer receives this as work linked to the new Opportunity.</p>
+                    {requiresTender === 'true' ? <p style={st.help}>On the tender path the technical study is started by Pre-Sales on the tender itself, so nothing is assigned here.</p> : <>
+                    <p style={st.help}>Assign the technical study now. The engineer accepts or declines it in My Work; the study is theirs to write, for the reviewer you name, on this input revision — and it comes back to you when it is approved.</p>
                     <div style={st.grid}>
                       <label style={st.field}>
                         <span style={st.lbl}>Pre-Sales / Engineer *</span>
                         <select style={st.input} value={presalesAssigneeId} onChange={(e) => setPresalesAssigneeId(e.target.value)}>
                           <option value="">Select engineer</option>
-                          {users.map((user) => <option key={user.username} value={user.username}>{user.username}{user.roleLabel ? ` · ${user.roleLabel}` : ''}</option>)}
+                          {candidates.engineers.map((user) => <option key={user.userId} value={user.userId}>{user.displayName && user.displayName !== user.userId ? `${user.displayName} · ${user.userId}` : user.userId}</option>)}
                         </select>
                       </label>
                       <label style={st.field}>
                         <span style={st.lbl}>Technical reviewer *</span>
                         <select style={st.input} value={reviewerId} onChange={(e) => setReviewerId(e.target.value)}>
                           <option value="">Select reviewer</option>
-                          {users.map((user) => <option key={user.username} value={user.username}>{user.username}{user.roleLabel ? ` · ${user.roleLabel}` : ''}</option>)}
+                          {candidates.reviewers.filter((user) => user.userId !== presalesAssigneeId).map((user) => <option key={user.userId} value={user.userId}>{user.displayName && user.displayName !== user.userId ? `${user.displayName} · ${user.userId}` : user.userId}</option>)}
                         </select>
                       </label>
                       <label style={st.field}>
@@ -289,6 +297,7 @@ export default function LeadConvertDrawer({ lead, accounts, onDone }: {
                         <textarea style={{ ...st.input, minHeight: 96, resize: 'vertical' }} value={deliverables} onChange={(e) => setDeliverables(e.target.value)} />
                       </label>
                     </div>
+                    </>}
                   </div>
                 </>
               )}

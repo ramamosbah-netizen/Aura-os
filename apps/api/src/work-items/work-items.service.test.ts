@@ -39,8 +39,9 @@ function harness() {
   const auth = { enabled: false };
   const notifications = { record: vi.fn(async () => ({})) };
   const preAward = { studiesAwaiting: vi.fn(empty) };
-  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never, projects as never, access as never, auth as never, notifications as never, preAward as never);
-  return { service, activities, notifications, projectResponsibilities, resourceBookings, hr, access, auth, preAward };
+  const preSales = { listAwaiting: vi.fn(empty), accept: vi.fn(), decline: vi.fn(), acknowledge: vi.fn() };
+  const service = new WorkItemsService(activities as never, engineering as never, quality as never, hse as never, prs as never, rfqs as never, pos as never, projectRisks as never, projectIssues as never, projectResponsibilities as never, resourceBookings as never, resourcePlanning as never, resourceCatalog as never, hr as never, projects as never, access as never, auth as never, notifications as never, preAward as never, preSales as never);
+  return { service, activities, notifications, projectResponsibilities, resourceBookings, hr, access, auth, preAward, preSales };
 }
 
 describe('WorkItemsService', () => {

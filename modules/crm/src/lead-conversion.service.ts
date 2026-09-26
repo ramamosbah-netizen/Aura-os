@@ -9,9 +9,9 @@ import { makeAccount, CRM_EVENT as CRM_ACCOUNT_EVENT } from './domain/account';
 import { makeContact, CRM_CONTACT_EVENT } from './domain/contact';
 import { makeRequirement, PREAWARD_EVENT } from './domain/solution-scope';
 import { CRM_PRE_AWARD_STORE, type PreAwardStore } from './pre-award-store';
-import { CRM_ACTIVITY_STORE, type ActivityStore } from './activity-store';
 import { CRM_OPPORTUNITY_DEPTH_STORE, type OpportunityDepthStore } from './opportunity-depth-store';
-import { CRM_ACTIVITY_EVENT, makeActivity, type Activity } from './domain/activity';
+import { CRM_PRESALES_ASSIGNMENT_STORE, type PreSalesAssignmentStore } from './presales-assignment-store';
+import { makePreSalesAssignment, PRESALES_ASSIGNMENT_EVENT, type PreSalesAssignment } from './domain/presales-assignment';
 
 export interface PreSalesAssignmentInput {
   assigneeId: Id;
@@ -59,7 +59,11 @@ export interface ConvertLeadResult {
   opportunity: Opportunity;
   account: IdentityLink;
   contact: IdentityLink | null;
-  preSalesAssignment: { member: OpportunityDealMember; reviewerMember: OpportunityDealMember; activity: Activity } | null;
+  /**
+   * The assignment Sales made with the conversion (STU-01): a record the engineer accepts or declines,
+   * which the approved study completes. It replaced an ordinary task that bound nothing.
+   */
+  preSalesAssignment: { member: OpportunityDealMember; reviewerMember: OpportunityDealMember; assignment: PreSalesAssignment } | null;
 }
 
 export interface ConvertPreview {
@@ -104,7 +108,7 @@ export class LeadConversionService {
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(CRM_PRE_AWARD_STORE) private readonly preAward: PreAwardStore | null = null,
-    @Optional() @Inject(CRM_ACTIVITY_STORE) private readonly activityStore: ActivityStore | null = null,
+    @Optional() @Inject(CRM_PRESALES_ASSIGNMENT_STORE) private readonly assignmentStore: PreSalesAssignmentStore | null = null,
     @Optional() @Inject(CRM_OPPORTUNITY_DEPTH_STORE) private readonly depthStore: OpportunityDepthStore | null = null,
     @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
   ) {}
@@ -315,38 +319,47 @@ export class LeadConversionService {
     const assignmentInput = input.preSalesAssignment;
     let assignmentMember: OpportunityDealMember | null = null;
     let reviewerMember: OpportunityDealMember | null = null;
-    let assignmentActivity: Activity | null = null;
+    let assignment: PreSalesAssignment | null = null;
     if (assignmentInput) {
       if (!input.actorId) throw new Error('actor is required to assign Pre-Sales work');
-      if (!this.activityStore || !this.depthStore || !this.users) {
+      // Direct route only, for now (the owner's decision of 2026-09-26): a tender's study lives on the
+      // tender, which Pre-Sales starts there; this assignment binds a study on the opportunity.
+      if (opp.requiresTender) {
+        throw new Error('a Pre-Sales study assignment requires the direct route — a tender study is started by Pre-Sales on the tender');
+      }
+      if (!this.assignmentStore || !this.depthStore || !this.users) {
         throw new Error('Pre-Sales assignment services are unavailable');
       }
-      const deliverables = [...new Set(assignmentInput.deliverables.map((item) => item.trim()).filter(Boolean))];
-      if (!assignmentInput.assigneeId?.trim()) throw new Error('Pre-Sales assignee is required');
-      if (!assignmentInput.reviewerId?.trim()) throw new Error('technical reviewer is required');
-      if (assignmentInput.assigneeId === assignmentInput.reviewerId) throw new Error('technical reviewer must be independent from the Pre-Sales assignee');
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(assignmentInput.dueDate)) throw new Error('Pre-Sales due date is required');
-      if (!assignmentInput.inputRevision?.trim()) throw new Error('input revision is required');
-      if (deliverables.length === 0) throw new Error('at least one Pre-Sales deliverable is required');
-
-      this.access.assert(input.actorId, {
-        permission: 'crm.activity.create',
-        orgPath: [{ level: 'tenant', id: lead.tenantId }, ...(lead.companyId ? [{ level: 'company' as const, id: lead.companyId }] : [])],
+      // Assigning an engineer and a reviewer IS a deal-team act (the owner's decision of 2026-09-26:
+      // changing either later "is a deal-team reassignment"), so it is governed by the same grant.
+      const orgPath = [{ level: 'tenant' as const, id: lead.tenantId }, ...(lead.companyId ? [{ level: 'company' as const, id: lead.companyId }] : [])];
+      this.access.assert(input.actorId, { permission: 'crm.opportunity.deal-team', orgPath });
+      assignment = makePreSalesAssignment({
+        tenantId: lead.tenantId, companyId: lead.companyId, opportunityId: opp.id, assignedBy: input.actorId,
+        assigneeId: assignmentInput.assigneeId, reviewerId: assignmentInput.reviewerId, dueDate: assignmentInput.dueDate,
+        inputRevision: assignmentInput.inputRevision, deliverables: assignmentInput.deliverables,
       });
       await this.users.ensureTenant(lead.tenantId);
-      const assignee = this.users.get(lead.tenantId, assignmentInput.assigneeId);
-      const reviewer = this.users.get(lead.tenantId, assignmentInput.reviewerId);
+      const assignee = this.users.get(lead.tenantId, assignment.assigneeId);
+      const reviewer = this.users.get(lead.tenantId, assignment.reviewerId);
       if (!assignee?.active) throw new Error('Pre-Sales assignee must be an active workspace user');
       if (!reviewer?.active) throw new Error('technical reviewer must be an active workspace user');
+      // The study is bound to these two people, so each must be able to do their part — an
+      // assignment to someone who cannot write, or cannot approve, the study would never complete.
+      if (!this.access.can(assignment.assigneeId, { permission: 'crm.study.create', orgPath }).allowed) {
+        throw new Error('the Pre-Sales assignee must hold crm.study.create to write the study');
+      }
+      if (!this.access.can(assignment.reviewerId, { permission: 'crm.study.approve', orgPath }).allowed) {
+        throw new Error('the technical reviewer must hold crm.study.approve to review the study');
+      }
 
-      const responsibility = `Study ${deliverables.join(', ')} from input revision ${assignmentInput.inputRevision.trim()}; reviewer ${assignmentInput.reviewerId}`;
       assignmentMember = makeDealMember({
         tenantId: lead.tenantId,
         opportunityId: opp.id,
-        userId: assignmentInput.assigneeId,
+        userId: assignment.assigneeId,
         userName: assignee.displayName,
         role: 'PRESALES',
-        responsibility,
+        responsibility: `Study ${assignment.deliverables.join(', ')} from input revision ${assignment.inputRevision}; reviewer ${assignment.reviewerId}`,
       });
       // The reviewer is part of the same canonical deal team. This is also the persisted relation
       // used by DMS to grant read-only access to the original Sales intake documents; no copied file
@@ -354,28 +367,10 @@ export class LeadConversionService {
       reviewerMember = makeDealMember({
         tenantId: lead.tenantId,
         opportunityId: opp.id,
-        userId: assignmentInput.reviewerId,
+        userId: assignment.reviewerId,
         userName: reviewer.displayName,
         role: 'TECHNICAL_REVIEWER',
-        responsibility: `Review the Pre-Sales study based on input revision ${assignmentInput.inputRevision.trim()}`,
-      });
-      assignmentActivity = makeActivity({
-        tenantId: lead.tenantId,
-        companyId: lead.companyId,
-        type: 'task',
-        subject: `Complete Pre-Sales study — ${opp.title}`,
-        notes: [
-          `Deliverables: ${deliverables.join(', ')}`,
-          `Input revision: ${assignmentInput.inputRevision.trim()}`,
-          `Technical reviewer: ${reviewer.displayName} (${assignmentInput.reviewerId})`,
-          `Source enquiry: ${lead.id}`,
-        ].join('\n'),
-        relatedType: 'opportunity',
-        relatedId: opp.id,
-        relatedName: opp.title,
-        dueDate: assignmentInput.dueDate,
-        assigneeId: assignmentInput.assigneeId,
-        createdBy: input.actorId,
+        responsibility: `Review the Pre-Sales study based on input revision ${assignment.inputRevision}`,
       });
     }
 
@@ -437,15 +432,18 @@ export class LeadConversionService {
             payload: { memberId: reviewerMember.id, userId: reviewerMember.userId, role: reviewerMember.role },
           })]
         : []),
-      ...(assignmentActivity
+      ...(assignment
         ? [makeEvent({
-            type: CRM_ACTIVITY_EVENT.created,
+            type: PRESALES_ASSIGNMENT_EVENT.assigned,
             tenantId: lead.tenantId,
             companyId: lead.companyId,
             actorId: input.actorId ?? null,
-            aggregateType: 'crm.activity',
-            aggregateId: assignmentActivity.id,
-            payload: { type: assignmentActivity.type, subject: assignmentActivity.subject, relatedType: assignmentActivity.relatedType, relatedId: assignmentActivity.relatedId },
+            aggregateType: 'crm.presales_assignment',
+            aggregateId: assignment.id,
+            payload: {
+              opportunityId: opp.id, version: assignment.version, status: assignment.status, assigneeId: assignment.assigneeId,
+              reviewerId: assignment.reviewerId, inputRevision: assignment.inputRevision, dueDate: assignment.dueDate, sourceLeadId: lead.id,
+            },
           })]
         : []),
     ];
@@ -457,7 +455,7 @@ export class LeadConversionService {
       if (seededRequirement) await this.preAward!.saveRequirementWithClient(handle, seededRequirement);
       if (assignmentMember) await this.depthStore!.saveDealMemberWithClient(handle, assignmentMember);
       if (reviewerMember) await this.depthStore!.saveDealMemberWithClient(handle, reviewerMember);
-      if (assignmentActivity) await this.activityStore!.saveWithClient(handle, assignmentActivity);
+      if (assignment) await this.assignmentStore!.saveWithClient(handle, assignment);
       await this.leads.updateWithClient(handle, convertedLead);
       await this.events.appendWithClient(handle, evs);
     });
@@ -469,8 +467,8 @@ export class LeadConversionService {
       opportunity: opp,
       account: accountLink,
       contact: contactLink,
-      preSalesAssignment: assignmentMember && reviewerMember && assignmentActivity
-        ? { member: assignmentMember, reviewerMember, activity: assignmentActivity }
+      preSalesAssignment: assignmentMember && reviewerMember && assignment
+        ? { member: assignmentMember, reviewerMember, assignment }
         : null,
     };
   }

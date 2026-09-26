@@ -256,19 +256,26 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   await writeFile(path.resolve(process.cwd(), '../../output/pdf/wave2-technical-proposal-proof.pdf'), bytes);
 
   // Continue the Tender-sourced commercial record through the customer loop in its canonical
-  // Quotation 360 UI. Revision creates a new immutable row and keeps the source Tender relation.
+  // Quotation 360 UI. A tender offer is ONE offer (EST-16, the owner's decision of 2026-09-25): it is
+  // revised from its tender, with a reason, and the new revision is regenerated from the tender's
+  // governed estimate — Quotation 360 sends the reviser there rather than copying the figures.
   await page.goto(`/crm/quotations/${quote.id}`);
   await page.getByRole('button', { name: 'Record as sent' }).first().click();
   await expect(page.getByText('Sent', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Start negotiation' }).first().click();
   await expect(page.getByText('Under negotiation', { exact: true }).first()).toBeVisible();
-  const originalQuotePath = `/crm/quotations/${quote.id}`;
-  await Promise.all([
-    page.waitForURL((url) => url.pathname.startsWith('/crm/quotations/') && url.pathname !== originalQuotePath),
-    page.getByRole('button', { name: 'Revise ↺' }).first().click(),
-  ]);
-  await expect(page.getByText('Draft', { exact: true }).first()).toBeVisible();
-  const revisedQuoteId = new URL(page.url()).pathname.split('/').pop()!;
+  await expect(page.getByRole('link', { name: 'Revise from the tender ↺' })).toHaveAttribute('href', `/tendering/tenders/${tender.id}/pricing`);
+  const copyRevision = await request.post(`${API}/crm/quotations/${quote.id}/revise`, { headers: adminHeaders, data: {} });
+  expect(copyRevision.status(), 'a tender offer is not revised by copy').toBe(409);
+
+  const changeReason = 'Client requested revised delivery phasing before final tender submission.';
+  await page.goto(`/tendering/tenders/${tender.id}/pricing`);
+  await expect(page.getByTestId('offer-revise')).toBeDisabled();
+  await page.getByTestId('offer-revise-reason').fill(changeReason);
+  await page.getByTestId('offer-revise').click();
+  await expect(page.getByText(/Rev 1 raised from the current estimate/)).toBeVisible();
+  const revisionsOfRev0 = await (await request.get(`/api/crm/quotations/${quote.id}/revisions`)).json() as Array<{ id: string; revision: number }>;
+  const revisedQuoteId = revisionsOfRev0.find((r) => r.revision === 1)!.id;
   const chainResponse = await request.get(`/api/crm/quotations/${revisedQuoteId}/revisions`);
   expect(chainResponse.ok(), await chainResponse.text()).toBe(true);
   const chain = await chainResponse.json() as Array<{ id: string; sourceTenderId: string | null; revision: number; status: string }>;
@@ -284,22 +291,25 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   const staleRevision = await request.post(`${API}/crm/quotations/${quote.id}/revise`, {
     headers: adminHeaders, data: { parentQuotationId: 'forged-parent', revision: 99 },
   });
-  expect(staleRevision.status()).toBe(400);
+  expect(staleRevision.status()).toBe(409);
 
-  // The Tender quotation revision carries its canonical BOQ-derived quantity and cost build-up
-  // into the editable pricing workspace. Only the margin policy changes here.
-  await page.goto(`/crm/quotations/${revisedQuoteId}/pricing`, { waitUntil: 'domcontentloaded' });
-  await expect(page.getByLabel('Quantity')).toHaveValue('24');
-  await expect(page.getByLabel('Unit cost')).toHaveValue('100');
-  await page.getByLabel('Target margin %').fill('17');
-  await page.getByRole('button', { name: 'Save draft (creates the sheet)' }).click();
-  await expect(page.getByText(/Draft saved — sheet v1/)).toBeVisible();
-  await page.getByRole('button', { name: /Freeze baseline/ }).click();
-  await expect(page.getByText(/Baseline frozen/)).toBeVisible();
-  await page.getByRole('button', { name: /Generate quotation/ }).click();
-  await expect(page.getByText('Quotation lines generated from the frozen sheet.')).toBeVisible();
+  // Re-priced where a tender offer is priced — its estimate, unfrozen now that the live revision is a
+  // draft again — and the never-submitted Rev 1 takes the new figures IN PLACE. The CRM pricing
+  // workspace is not a second writer of a tender offer.
+  const repriced = await request.post(`${API}/tendering/estimates`, {
+    headers: adminHeaders,
+    data: { boqItemId: item.id, components: [{ costType: 'material', description: 'IP camera', quantity: 1, unitCost: 117 }], applyToBoq: false },
+  });
+  expect(repriced.ok(), await repriced.text()).toBe(true);
+  const workspaceSheet = await request.post(`${API}/crm/pricing-sheets`, {
+    headers: adminHeaders, data: { name: 'CRM workspace on a tender offer', quotationId: revisedQuoteId, lines: [] },
+  });
+  expect(workspaceSheet.status(), 'the CRM pricing workspace may not price a tender offer').toBe(409);
+  expect((await workspaceSheet.json()).message).toContain("can only be priced from its tender's estimate");
+  await page.goto(`/tendering/tenders/${tender.id}/pricing`);
+  await page.getByTestId('offer-refresh').click();
+  await expect(page.getByText(/Rev 1 refreshed in place from the estimate/)).toBeVisible();
 
-  const changeReason = 'Client requested revised delivery phasing before final tender submission.';
   const logged = await request.post('/api/crm/negotiation', {
     data: { quotationId: quote.id, type: 'SCOPE_CHANGED', note: changeReason },
   });

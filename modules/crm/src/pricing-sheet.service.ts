@@ -36,6 +36,16 @@ export class PricingSheetService {
   ) {}
 
   async create(input: NewPricingSheet): Promise<PricingSheet> {
+    // A tender offer is priced from its tender's governed estimate and nowhere else (EST-16): a CRM
+    // sheet behind it would be a second writer of the same figures. Refused here, before anything
+    // is written, rather than at the generate that would have rewritten the offer.
+    const behind = input.quotationId ? await this.quotations.get(input.quotationId) : null;
+    if (behind?.sourceTenderId) {
+      throw new Error(
+        `${behind.quoteNumber} is a tender offer and can only be priced from its tender's estimate — ` +
+          `re-price the tender, then generate or revise its offer there`,
+      );
+    }
     const sheet = makePricingSheet(input);
     await this.store.save(sheet);
     await this.events.append([

@@ -13,7 +13,12 @@ import { randomUUID } from 'node:crypto';
  * manager most wants to see before approving the third submission.
  */
 
-export type QuotationReviewOutcome = 'returned';
+/**
+ * `returned` — the commercial reviewer sent the offer back (the reviewer's reason).
+ * `revised` — the offer was superseded by its next revision (EST-16, the owner's decision of 2026-09-25):
+ * the reason is the reviser's, recorded against the revision it supersedes, beside the returns.
+ */
+export type QuotationReviewOutcome = 'returned' | 'revised';
 
 export interface QuotationReviewDecision {
   id: string;
@@ -45,7 +50,9 @@ export function makeQuotationReviewDecision(input: NewQuotationReviewDecision): 
   // A send-back with no reason tells the estimator nothing. It is not a review decision; it is an
   // obstruction, and it would make the record of it useless to the person who has to act on it.
   if (!reason) {
-    throw new Error('validation: returning an offer for revision requires a reason — the estimator has to know what to change');
+    throw new Error(input.outcome === 'revised'
+      ? 'validation: revising an offer requires a reason — the next revision must say why the last one changed'
+      : 'validation: returning an offer for revision requires a reason — the estimator has to know what to change');
   }
   return {
     id: randomUUID(),

@@ -76,7 +76,7 @@
 | Pre-Sales / Estimator | EST-13 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | EST-14 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | EST-15 | PARTIAL | UNVERIFIED |
-| Pre-Sales / Estimator | EST-16 | PARTIAL | UNVERIFIED |
+| Pre-Sales / Estimator | EST-16 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | EST-17 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | EST-18 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | EST-19 | WRONG_BEHAVIOR | UNVERIFIED |
@@ -420,7 +420,7 @@
 | Technical Manager | EST-13 | COMPLETE | UNVERIFIED |
 | Technical Manager | EST-14 | PARTIAL | UNVERIFIED |
 | Technical Manager | EST-15 | PARTIAL | UNVERIFIED |
-| Technical Manager | EST-16 | PARTIAL | UNVERIFIED |
+| Technical Manager | EST-16 | COMPLETE | UNVERIFIED |
 | Technical Manager | EST-17 | PARTIAL | UNVERIFIED |
 | Technical Manager | EST-18 | PARTIAL | UNVERIFIED |
 | Technical Manager | EST-19 | WRONG_BEHAVIOR | UNVERIFIED |
@@ -510,7 +510,7 @@
 | Commercial Manager / QS | EST-13 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | EST-14 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | EST-15 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | EST-16 | PARTIAL | UNVERIFIED |
+| Commercial Manager / QS | EST-16 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | EST-17 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | EST-18 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | EST-19 | WRONG_BEHAVIOR | UNVERIFIED |

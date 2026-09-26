@@ -29,9 +29,15 @@ describe('Tender quantity take-off lineage fitness', () => {
   it('prevents pricing and customer quotation from bypassing the approved take-off projection', () => {
     expect(pricingController).toContain('private async governedPricingContext');
     expect(pricingController).toContain('!current?.boq.sourceBasisRevisionId || !current.boq.projectedAt');
-    for (const method of ['sheetCsv', 'sheetXlsx', 'pricing', 'priceItem', 'sourceComponent', 'unsourceComponent', 'sources', 'generateQuotation']) {
+    for (const method of ['sheetCsv', 'sheetXlsx', 'pricing', 'priceItem', 'sourceComponent', 'unsourceComponent', 'sources', 'offerFromEstimate']) {
       const section = pricingController.slice(pricingController.indexOf(`async ${method}`));
       expect(section.slice(0, 1_800), method).toContain('governedPricingContext(id)');
+    }
+    // EST-16: every act that writes the tender's offer — its first generation, the in-place refresh
+    // and each revision — prices it through the one governed builder above.
+    for (const method of ['generateQuotation', 'reviseQuotation']) {
+      const section = pricingController.slice(pricingController.indexOf(`async ${method}(`));
+      expect(section.slice(0, 2_400), method).toContain('this.offerFromEstimate(id');
     }
   });
 });

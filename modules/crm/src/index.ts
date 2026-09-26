@@ -27,6 +27,7 @@ export * from './opportunity.service';
 export * from './domain/quotation';
 export * from './domain/quotation-pricing';
 export * from './domain/quotation-review';
+export * from './domain/quotation-compare';
 export * from './quotation-store';
 export * from './in-memory-quotation-store';
 export * from './postgres-quotation-store';

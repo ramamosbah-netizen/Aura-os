@@ -215,8 +215,10 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
                               <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(q.id, 'reject')}>Reject</button>
                             </>
                           )}
-                          {['sent', 'under_negotiation', 'rejected', 'expired'].includes(q.status) && (
-                            <button type="button" className="btn" style={st.smBtn} title="Supersede and draft Rev n+1" onClick={() => revise(q)}>Revise ↺</button>
+                          {['sent', 'under_negotiation', 'rejected', 'expired'].includes(q.status) && (q.sourceTenderId
+                            // A tender offer is revised from its tender, priced from its estimate, with a reason (EST-16).
+                            ? <a href={`/tendering/tenders/${q.sourceTenderId}/pricing`} className="btn" style={st.smBtn} title="Revise from the tender — priced from its estimate, with a reason">Revise ↺</a>
+                            : <button type="button" className="btn" style={st.smBtn} title="Supersede and draft Rev n+1" onClick={() => revise(q)}>Revise ↺</button>
                           )}
                           {OPEN_STATUSES.includes(q.status) && q.validUntil && q.validUntil < today && (
                             <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(q.id, 'expire')}>Expire</button>

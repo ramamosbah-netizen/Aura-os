@@ -987,7 +987,7 @@
       "stages": [
         "Pre-Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Estimation core / Tender estimate / CRM pricing",
       "evidence": [
         "N-EST",
@@ -996,17 +996,17 @@
       "source": "shared/src/domain/estimation-core.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh API proof froze a pricing build-up, refused re-pricing with 409, created a carried-forward revision and retained immutable submission value snapshots. Full UI revision comparison was not executed.",
-      "acceptanceProof": "Freeze and revise the complete estimate in the UI; compare versions, retain approver/reason and prove the awarded basis points to one immutable revision."
+      "currentBehavior": "ONE LOGICAL OFFER PER TENDER (the owner's decision of 2026-09-25, (a)(a)(a)). Generating an offer used to mint a new QUO number on every press, and award/readiness ranked every quote the tender had produced. Now a tender has one offer: the first generation is Rev 0; a draft nobody has been asked to decide on refreshes IN PLACE; once submitted, every change is its next revision — raised from the tender with a permanent reason, recorded append-only against the revision it supersedes in the same transaction, and regenerated from the governed estimate as it stands, never copied. Refused, naming the legal act: while a reviewer holds it (their return comes first), once accepted or awarded (a contract variation). CRM can neither copy-revise a tender offer nor price it through a pricing sheet — the estimate is its one writer. Award, submission and readiness resolve the ONE live revision and the award pins it by row id; superseded revisions keep their figures, baselines and decisions. Migration 0392: one number per tender (advisory-locked), a superseded revision immutable, figures move only in draft and for a tender offer only while never submitted, review decisions append-only with closed outcomes and non-blank reasons. Revisions compare on screen per BOQ item — quantity, direct cost, selling rate, unit price, line total, delta, totals — with each revision's approvals, returns and revision reasons. The return-for-revision authority and the pricing locks are unchanged; direct offers keep their rules.",
+      "acceptanceProof": "Auth-ON proof against migrated PostgreSQL with the shipped roles. `tender-offer-revisions.spec.ts`: u-e2e-estimator generates Rev 0 on screen and refreshes it in place (one row, one number); after submission generate and re-pricing are refused (409) and the screen offers neither; u-e2e-qs2 returns it; the estimator revises on screen with a reason (blank reason 400, viewer 403) and Rev 1 is regenerated from the estimate while Rev 0 keeps its total; CRM copy-revise and a CRM pricing sheet on the offer are refused (409); Rev 1 approved and sent, re-pricing refused; revised again with a reason to Rev 2, re-priced and refreshed in place; qs2 compares revisions on screen — figures read back against the API, approvals, the return and both revision reasons — a viewer is refused the comparison (403); Rev 2 approved, readiness names it, submitted and awarded — the award pins Rev 2 and a later revise is refused; Rev 0/Rev 1 figures, Rev 1's baseline and every decision persist. Regressions: wave2-offer-output (tender Rev 1 raised by the new path, its PDF and workbook, contract from the pinned revision), tender-offer-review-award, tender-real-supply-path, journey-signal-to-close, wave2-quotation-role-workflow. Unit 11; pg 4 through the real stores and raw SQL; 0392 down/up; turbo test/typecheck/lint 78/78. STATED: a cancelled tender offer is revisable with a reason rather than replaced; tenders that forked before 0392 keep their rows and cannot fork further; the award now includes a live revision under negotiation. FOUND, separate: the legacy POST /tendering/estimates route lacks the under-review lock (does not reopen EST-16 — an offer cannot change while reviewed); chains.e2e-spec's tender fixture never approves a study (fails identically before this change)."
     },
     {
       "id": "EST-17",
@@ -7413,7 +7413,7 @@
       "expectedOperationalBehavior": "Estimate revision and freeze works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Freeze and revise the complete estimate in the UI; compare versions, retain approver/reason and prove the awarded basis points to one immutable revision."
+      "acceptanceProof": "Auth-ON proof against migrated PostgreSQL with the shipped roles. `tender-offer-revisions.spec.ts`: u-e2e-estimator generates Rev 0 on screen and refreshes it in place (one row, one number); after submission generate and re-pricing are refused (409) and the screen offers neither; u-e2e-qs2 returns it; the estimator revises on screen with a reason (blank reason 400, viewer 403) and Rev 1 is regenerated from the estimate while Rev 0 keeps its total; CRM copy-revise and a CRM pricing sheet on the offer are refused (409); Rev 1 approved and sent, re-pricing refused; revised again with a reason to Rev 2, re-priced and refreshed in place; qs2 compares revisions on screen — figures read back against the API, approvals, the return and both revision reasons — a viewer is refused the comparison (403); Rev 2 approved, readiness names it, submitted and awarded — the award pins Rev 2 and a later revise is refused; Rev 0/Rev 1 figures, Rev 1's baseline and every decision persist. Regressions: wave2-offer-output (tender Rev 1 raised by the new path, its PDF and workbook, contract from the pinned revision), tender-offer-review-award, tender-real-supply-path, journey-signal-to-close, wave2-quotation-role-workflow. Unit 11; pg 4 through the real stores and raw SQL; 0392 down/up; turbo test/typecheck/lint 78/78. STATED: a cancelled tender offer is revisable with a reason rather than replaced; tenders that forked before 0392 keep their rows and cannot fork further; the award now includes a live revision under negotiation. FOUND, separate: the legacy POST /tendering/estimates route lacks the under-review lock (does not reopen EST-16 — an offer cannot change while reviewed); chains.e2e-spec's tender fixture never approves a study (fails identically before this change)."
     },
     {
       "id": "J2-01",
@@ -9152,8 +9152,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 40,
-      "PARTIAL": 79,
+      "COMPLETE": 41,
+      "PARTIAL": 78,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

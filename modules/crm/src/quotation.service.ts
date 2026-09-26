@@ -6,12 +6,14 @@ import {
   QUOTATION_ACTIONS,
   type Quotation,
   type NewQuotation,
+  type NewQuotationLine,
   type QuotationAction,
   applyQuotationAction,
   isPricingLocked,
   makeQuotation,
   normaliseExclusions,
   reviseQuotation,
+  refreshQuotationDraft,
   buildQuotationLine,
   computeQuotationTotals,
 } from './domain/quotation';
@@ -22,6 +24,7 @@ import { CRM_QUOTATION_REVIEW_STORE, type QuotationReviewStore } from './quotati
 import { makeQuotationReviewDecision, type QuotationReviewDecision } from './domain/quotation-review';
 import { type CommercialBaseline, makeCommercialBaseline, COMMERCIAL_BASELINE_EVENT } from './domain/commercial-baseline';
 import type { QuotationSummary } from './quotation-store';
+import { compareQuotationRevisions } from './domain/quotation-compare';
 
 export { QUOTATION_ACTIONS, type QuotationAction };
 
@@ -271,9 +274,26 @@ export class QuotationService {
     return this.baselines.list(tenantId, limit);
   }
 
-  /** Supersede + copy: the old record becomes 'revised', a new draft carries revision+1. */
-  async revise(id: Id, actorId: Id | null = null): Promise<Quotation> {
+  /**
+   * Supersede: the old record becomes 'revised', a new draft carries revision+1.
+   *
+   * By default the figures are COPIED (a direct or opportunity offer). EST-16 (the owner's decision of
+   * 2026-09-25) adds, for a tender offer, figures REGENERATED from the governed estimate, a revision
+   * from a RETURNED draft, and a REASON recorded against the revision it supersedes — append-only,
+   * beside the review decisions, in the same transaction.
+   */
+  async revise(
+    id: Id,
+    actorId: Id | null = null,
+    options: {
+      reason?: string;
+      regenerated?: { lines: NewQuotationLine[]; estimation: EstimationLineInput[] | null };
+    } = {},
+  ): Promise<Quotation> {
     const actor = this.actor(actorId);
+    // Whether a draft was submitted and RETURNED is read from the record, never taken from the caller.
+    const before = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
+    const fromReturnedDraft = before.status === 'draft' && (await this.everSubmitted(before.tenantId, before));
     let source!: Quotation;
     let next!: Quotation;
     await this.runAtomic(async (handle) => {
@@ -286,8 +306,25 @@ export class QuotationService {
         : await this.store.get(id);
       const q = assertSameTenant(locked, boundTenant, 'quotation', id);
       source = q;
-      const revision = reviseQuotation(q, { actorId: actor });
+      // ONE WRITER FOR A TENDER OFFER'S FIGURES (EST-16): its tender's governed estimate. A copy made
+      // here would be a revision nobody priced, beside the one the estimate says it should be.
+      if (q.sourceTenderId && !options.regenerated) {
+        throw new Error(
+          `${q.quoteNumber} is a tender offer and can only be revised from its tender — the next revision ` +
+            `is priced from the tender's estimate, and the reviser records why`,
+        );
+      }
+      const revision = reviseQuotation(q, { actorId: actor, regenerated: options.regenerated, fromReturnedDraft });
       next = revision.next;
+      // The reason is refused before anything is written, and lands WITH the supersession. A tender
+      // offer's revision always carries one — "Revising a submitted tender offer requires a permanent
+      // reason" (the owner's decision of 2026-09-25).
+      const reasoned = options.reason !== undefined || options.regenerated
+        ? makeQuotationReviewDecision({
+          tenantId: q.tenantId, companyId: q.companyId, quotationId: q.id, quoteNumber: q.quoteNumber,
+          revision: q.revision, outcome: 'revised', decidedBy: actor, reason: options.reason ?? '',
+        })
+        : null;
       const event = makeEvent({
         type: QUOTATION_EVENT.revised,
         tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
@@ -296,10 +333,72 @@ export class QuotationService {
       });
       await this.store.saveWithClient(handle, revision.superseded);
       await this.store.saveWithClient(handle, next);
+      if (reasoned && this.reviews) await this.reviews.saveWithClient(handle, reasoned);
       await this.appendEvents(handle, [event]);
     });
     this.logger.log(`Quotation ${source.quoteNumber} revised: Rev ${source.revision} → Rev ${next.revision}`);
     return next;
+  }
+
+  /**
+   * THE TENDER'S ONE OFFER (EST-16 (a)) — its live revision: the latest that has not been superseded.
+   * Null when the tender has none yet. Legacy tenders that forked into several numbers resolve to the
+   * most recent, so the fork is not extended.
+   */
+  async currentForTender(tenantId: Id, tenderId: Id): Promise<Quotation | null> {
+    const live = (await this.listBySourceTender(tenantId, tenderId)).filter((q) => q.status !== 'revised');
+    if (live.length === 0) return null;
+    return live.sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.revision - a.revision)[0];
+  }
+
+  /** Whether this revision has ever been submitted for a decision — a return is the trace it leaves. */
+  async everSubmitted(tenantId: Id, q: Quotation): Promise<boolean> {
+    const decisions = await this.listReviewDecisions(tenantId, q.id);
+    return decisions.some((d) => d.revision === q.revision);
+  }
+
+  /** Refresh a never-submitted draft in place — same number and revision, the estimate's figures. */
+  async refreshDraft(
+    id: Id,
+    actorId: Id | null,
+    input: { lines: NewQuotationLine[]; estimation: EstimationLineInput[] | null },
+  ): Promise<Quotation> {
+    const actor = this.actor(actorId);
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
+    const refreshed = refreshQuotationDraft(q, input, await this.everSubmitted(q.tenantId, q));
+    await this.runAtomic(async (handle) => {
+      await this.store.saveWithClient(handle, refreshed);
+      await this.appendEvents(handle, [makeEvent({
+        type: QUOTATION_EVENT.refreshed,
+        tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
+        aggregateType: 'crm.quotation', aggregateId: q.id,
+        payload: { quoteNumber: q.quoteNumber, revision: q.revision, fromTotal: q.total, toTotal: refreshed.total },
+      })]);
+    });
+    return refreshed;
+  }
+
+  /**
+   * TWO REVISIONS OF ONE OFFER, side by side (EST-16 (d)): the figures per BOQ item from each
+   * revision's frozen record, and the decisions each revision carries — who approved it (its locked
+   * baseline), who returned it and why, and why it was revised.
+   */
+  async compare(tenantId: Id, fromId: Id, toId: Id) {
+    const [from, to] = await Promise.all([this.store.get(fromId), this.store.get(toId)]);
+    const a = assertSameTenant(from, tenantId, 'quotation', fromId);
+    const b = assertSameTenant(to, tenantId, 'quotation', toId);
+    const comparison = compareQuotationRevisions(a, b);
+    const decisionsOf = async (q: Quotation) => {
+      const [reviews, baseline] = await Promise.all([this.listReviewDecisions(tenantId, q.id), this.baselines.getByQuotation(tenantId, q.id)]);
+      return {
+        approvedBy: baseline?.lockedBy ?? null,
+        approvedAt: baseline?.lockedAt ?? null,
+        returned: reviews.filter((r) => r.outcome === 'returned').map((r) => ({ by: r.decidedBy, at: r.decidedAt, reason: r.reason })),
+        revised: reviews.filter((r) => r.outcome === 'revised').map((r) => ({ by: r.decidedBy, at: r.decidedAt, reason: r.reason })),
+      };
+    };
+    const [fromDecisions, toDecisions] = await Promise.all([decisionsOf(a), decisionsOf(b)]);
+    return { ...comparison, from: { ...comparison.from, ...fromDecisions }, to: { ...comparison.to, ...toDecisions } };
   }
 
   /** Record the contract created from an accepted quotation (deal-chain link). */
@@ -432,6 +531,15 @@ export class QuotationService {
    */
   async saveEstimation(id: Id, items: EstimationLineInput[]): Promise<Quotation> {
     const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
+    // A tender offer's figures come from ONE place — the tender's governed estimate (EST-16). Pricing
+    // it here as well would be a second writer, and a returned revision re-priced in place would
+    // rewrite figures somebody has already been asked to decide on.
+    if (q.sourceTenderId) {
+      throw new Error(
+        `${q.quoteNumber} is a tender offer and can only be priced from its tender's estimate — ` +
+          `re-price the tender, then generate or revise its offer there`,
+      );
+    }
     if (isPricingLocked(q)) {
       throw new Error(
         `pricing sheet is locked: only a draft or in-review quotation can be re-priced — ` +

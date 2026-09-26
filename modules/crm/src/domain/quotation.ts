@@ -371,9 +371,33 @@ export function expireQuotation(q: Quotation): Quotation {
  * draft is created with revision+1 carrying the same number, account, source
  * references, lines and terms — edit then re-send.
  */
-export function reviseQuotation(q: Quotation, options: { actorId?: Id | null; issueDate?: string } = {}): { superseded: Quotation; next: Quotation } {
+export function reviseQuotation(
+  q: Quotation,
+  options: {
+    actorId?: Id | null;
+    issueDate?: string;
+    /**
+     * EST-16 (a): the next revision's figures REGENERATED from the governed estimate rather than copied
+     * from this one — a tender offer's price is the estimate's, never the previous revision's.
+     */
+    regenerated?: { lines: NewQuotationLine[]; estimation: EstimationLineInput[] | null };
+    /** A draft that was submitted and RETURNED — after a first submission, every change is a revision. */
+    fromReturnedDraft?: boolean;
+  } = {},
+): { superseded: Quotation; next: Quotation } {
   const revisable: QuotationStatus[] = ['sent', 'under_negotiation', 'rejected', 'expired'];
-  if (!revisable.includes(q.status)) {
+  /**
+   * A TENDER OFFER (regenerated from its estimate) is one logical offer for the life of the tender, so
+   * once it has been submitted every change is its next revision (EST-16 (a)): an approved offer not
+   * yet sent, and a cancelled one, are revised rather than replaced by a second number. Never from
+   * `internal_review` (the reviewer holds it — the return is theirs), `accepted` (a contract variation)
+   * or `revised` (already superseded).
+   */
+  const tenderRevisable: QuotationStatus[] = [...revisable, 'approved', 'cancelled'];
+  const allowed = q.status === 'draft'
+    ? Boolean(options.fromReturnedDraft)
+    : (options.regenerated ? tenderRevisable : revisable).includes(q.status);
+  if (!allowed) {
     throw new Error(`cannot revise from status ${q.status} — must be sent, under negotiation, rejected or expired`);
   }
   const issueDate = options.issueDate ?? new Date().toISOString().slice(0, 10);
@@ -400,16 +424,45 @@ export function reviseQuotation(q: Quotation, options: { actorId?: Id | null; is
     // A new revision must not inherit an already elapsed validity window. Preserve a future
     // commercial deadline, otherwise apply the same canonical default as a new quotation.
     validUntil: q.validUntil && q.validUntil >= issueDate ? q.validUntil : null,
-    lines: q.lines.map((l) => ({ description: l.description, quantity: l.quantity, ...(l.unit ? { unit: l.unit } : {}), ...(l.sourceItemId ? { sourceItemId: l.sourceItemId } : {}), unitPrice: l.unitPrice, vatRate: l.vatRate })),
+    lines: options.regenerated
+      ? options.regenerated.lines
+      : q.lines.map((l) => ({ description: l.description, quantity: l.quantity, ...(l.unit ? { unit: l.unit } : {}), ...(l.sourceItemId ? { sourceItemId: l.sourceItemId } : {}), unitPrice: l.unitPrice, vatRate: l.vatRate })),
     // Carry the internal build-up into the new revision — costs rarely reset between revisions.
-    pricing: q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
+    // A regenerated revision takes its costing from the estimate it was generated from instead.
+    pricing: options.regenerated ? null : q.pricing ? { lines: q.pricing.lines.map((l) => ({ ...l })) } : null,
     // The estimation build-up carries into a revision — re-pricing starts from the last cost model.
-    estimation: q.estimation ? q.estimation.map((e) => ({ ...e })) : null,
+    estimation: options.regenerated
+      ? options.regenerated.estimation
+      : q.estimation ? q.estimation.map((e) => ({ ...e })) : null,
     // The actor creating this revision is its preparer. Keep the historical creator only for
     // unauthenticated/system callers that have no actor identity.
     createdBy: options.actorId ?? q.createdBy,
   });
   return { superseded: { ...q, status: 'revised' }, next };
+}
+
+/**
+ * REFRESH A NEVER-SUBMITTED DRAFT IN PLACE (EST-16 (a), the owner's decision of 2026-09-25).
+ *
+ * Before anybody has been asked to decide on an offer, re-pricing it is not a revision — it is the
+ * draft being finished — so the same record takes the new figures: same number, same revision, no
+ * revision noise. Once it has been submitted, every change is its next revision instead.
+ */
+export function refreshQuotationDraft(
+  q: Quotation,
+  input: { lines: NewQuotationLine[]; estimation: EstimationLineInput[] | null },
+  everSubmitted: boolean,
+): Quotation {
+  if (q.status !== 'draft') {
+    throw new Error(`only a draft offer can be refreshed in place — ${q.quoteNumber} Rev ${q.revision} is ${q.status.replaceAll('_', ' ')}`);
+  }
+  if (everSubmitted) {
+    throw new Error(`only a never-submitted draft can be refreshed in place — ${q.quoteNumber} Rev ${q.revision} was submitted for review, so a change is its next revision`);
+  }
+  if (!input.lines || input.lines.length === 0) throw new Error('at least one line item is required');
+  const lines = input.lines.map(buildQuotationLine);
+  const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
+  return { ...q, lines, subtotal, vatTotal, total, estimation: input.estimation };
 }
 
 export const QUOTATION_EVENT = {
@@ -418,5 +471,7 @@ export const QUOTATION_EVENT = {
   accepted: 'crm.quotation.accepted',
   statusChanged: 'crm.quotation.status_changed',
   revised: 'crm.quotation.revised',
+  /** A never-submitted draft took the estimate's current figures in place (EST-16). */
+  refreshed: 'crm.quotation.refreshed',
   updated: 'crm.quotation.updated',
 } as const;

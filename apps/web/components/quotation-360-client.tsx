@@ -6,6 +6,7 @@ import Timeline from './timeline';
 import { QuotationNegotiationPanel } from './negotiation-tab';
 import QuotationApprovalReadiness from './quotation-approval-readiness';
 import QuotationReviewDecision from './quotation-review-decision';
+import QuotationRevisionCompare from './quotation-revision-compare';
 import QuotationDocumentsPanel from './quotation-documents-panel';
 import type { AssessmentInput } from '@aura/shared';
 import DataStateNotice from './ui/data-state';
@@ -163,7 +164,12 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       router.refresh();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
+  // A TENDER OFFER is revised from its tender (EST-16): the next revision is priced from the tender's
+  // governed estimate and the reviser records why. A copy made here would be a revision nobody priced.
+  const fromTender = Boolean(q.sourceTenderId);
+  const tenderPricingHref = q.sourceTenderId ? `/tendering/tenders/${q.sourceTenderId}/pricing` : null;
   const revise = async () => {
+    if (tenderPricingHref) { router.push(tenderPricingHref); return; }
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch(`/api/crm/quotations/${q.id}/revise`, { method: 'POST', headers: { 'Idempotency-Key': operationKey('revise') } });
@@ -210,13 +216,15 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
         </>
       )}
       {allowed.revise && ['sent', 'under_negotiation', 'rejected', 'expired'].includes(q.status) && (
-        <ActionButton kind="ghost" disabled={busy} onClick={() => void revise()}>Revise ↺</ActionButton>
+        tenderPricingHref
+          ? <ActionButton kind="ghost" href={tenderPricingHref}>Revise from the tender ↺</ActionButton>
+          : <ActionButton kind="ghost" disabled={busy} onClick={() => void revise()}>Revise ↺</ActionButton>
       )}
       {allowed.convertToContract && q.status === 'accepted' && !q.convertedContractId && (
         <ActionButton kind="primary" disabled={busy} onClick={() => void toContract()}>→ Contract</ActionButton>
       )}
       <ActionButton kind="ghost" href={`/api/crm/quotations/${q.id}/pdf`} target="_blank" rel="noopener noreferrer">⭳ Download PDF</ActionButton>
-      {canAccessInternalPricing && <ActionButton kind="ghost" href={`/crm/quotations/${q.id}/pricing`} target="_blank" rel="noopener noreferrer">⊞ Pricing sheet</ActionButton>}
+      {canAccessInternalPricing && <ActionButton kind="ghost" href={tenderPricingHref ?? `/crm/quotations/${q.id}/pricing`} target={tenderPricingHref ? undefined : '_blank'} rel={tenderPricingHref ? undefined : 'noopener noreferrer'}>{tenderPricingHref ? '⊞ Tender pricing' : '⊞ Pricing sheet'}</ActionButton>}
       {allowed.expire && pastValidity && isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => void act('expire')}>Record expired</ActionButton>}
       {allowed.cancel && isOpen && <ActionButton kind="ghost" disabled={busy} onClick={() => act('cancel')}>Cancel</ActionButton>}
     </>
@@ -280,7 +288,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
     insights.push({ tone: 'good', title: 'Accepted — convert to contract', detail: 'Close the loop: award this quote into a contract.', action: { label: 'Convert', onClick: () => void toContract() } });
   }
   if (allowed.revise && (q.status === 'rejected' || q.status === 'expired')) {
-    insights.push({ tone: 'warn', title: 'Not dead yet — revise', detail: `Supersede Rev ${q.revision} and draft Rev ${q.revision + 1} with updated commercials.`, action: { label: 'Revise ↺', onClick: () => void revise() } });
+    insights.push({ tone: 'warn', title: 'Not dead yet — revise', detail: fromTender ? `Revise it from the tender: Rev ${q.revision + 1} is priced from the tender's estimate, with a reason.` : `Supersede Rev ${q.revision} and draft Rev ${q.revision + 1} with updated commercials.`, action: { label: 'Revise ↺', onClick: () => void revise() } });
   }
 
   // Coverage of this rail. A quote with no validity date or no cost breakdown has NOT been checked
@@ -338,7 +346,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   else if ((q.status === 'rejected' || q.status === 'expired') && allowed.revise) nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
   else if ((q.status === 'sent' || q.status === 'under_negotiation') && allowed.negotiate) nba = { label: 'Record negotiation', hint: 'customer response received', onClick: () => void act('negotiate') };
   else if (q.status === 'sent' || q.status === 'under_negotiation') nba = { label: 'Open activity', hint: 'awaiting customer', onClick: () => setTab('activity') };
-  else if (canAccessInternalPricing && !pricing && isOpen) nba = { label: 'Build the pricing sheet', href: `/crm/quotations/${q.id}/pricing` };
+  else if (canAccessInternalPricing && !pricing && isOpen) nba = tenderPricingHref ? { label: 'Open the tender pricing', href: tenderPricingHref } : { label: 'Build the pricing sheet', href: `/crm/quotations/${q.id}/pricing` };
 
   // Outcome Loop — writes a real activity linked to this quotation (§17 activity stream).
   const logOutcome = async (choiceId: string): Promise<void> => {
@@ -516,6 +524,9 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
                 </a>
               ))}
             </div>
+          )}
+          {!revisionsError && revisions.length > 1 && canAccessInternalPricing && (
+            <QuotationRevisionCompare quotationId={q.id} revisions={revisions} />
           )}
         </RecordCard>
       )}

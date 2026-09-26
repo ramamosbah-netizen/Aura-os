@@ -514,7 +514,18 @@ export class TenderPricingController {
     buildUps: Record<string, RateBuildUp>;
     estimate: TenderEstimate | null;
     rates: { technician: number; engineer: number; projectManager: number };
-    quotations: Array<Pick<Quotation, 'id' | 'quoteNumber' | 'status' | 'total' | 'issueDate'>>;
+    quotations: Array<Pick<Quotation, 'id' | 'quoteNumber' | 'revision' | 'status' | 'total' | 'issueDate'>>;
+    /**
+     * The tender's ONE offer (EST-16) — its live revision — and the act that is legal on it next,
+     * decided here so the screen offers exactly what the server will accept: generate the first
+     * revision, refresh a never-submitted draft in place, revise a submitted one with a reason, or
+     * nothing (with the reason why).
+     */
+    offer: {
+      id: string; quoteNumber: string; revision: number; status: Quotation['status']; total: number;
+      next: 'refresh' | 'revise' | 'none';
+      guidance: string | null;
+    } | null;
     /** Governance state, server-owned — the UI renders it, it never re-derives the rule. */
     locked: boolean;
     /** Which committed quotations froze the sheet (empty when open). */
@@ -529,13 +540,26 @@ export class TenderPricingController {
       this.quotations.listBySourceTender(ctx.tenantId, id),
     ]);
     const committed = generated.filter((q) => isQuotationCommitted(q));
+    const current = await this.quotations.currentForTender(ctx.tenantId, id);
+    let offer: { id: string; quoteNumber: string; revision: number; status: Quotation['status']; total: number; next: 'refresh' | 'revise' | 'none'; guidance: string | null } | null = null;
+    if (current) {
+      const returned = current.status === 'draft' ? await this.quotations.everSubmitted(ctx.tenantId, current) : false;
+      const head = { id: current.id, quoteNumber: current.quoteNumber, revision: current.revision, status: current.status, total: current.total };
+      if (current.status === 'draft' && !returned) offer = { ...head, next: 'refresh', guidance: null };
+      else if (tender.commercialBasis) {
+        offer = { ...head, next: 'none', guidance: 'The tender was awarded on its approved revision, which is the basis of the contract — change the price through a contract variation.' };
+      } else if (current.status === 'internal_review' || current.status === 'accepted') {
+        offer = { ...head, next: 'none', guidance: this.offerGuidance(current, returned) };
+      } else offer = { ...head, next: 'revise', guidance: this.offerGuidance(current, returned) };
+    }
     return {
       tender,
       items,
       buildUps: Object.fromEntries(buildUps.map((b) => [b.boqItemId, b])),
       estimate,
       rates,
-      quotations: generated.map((q) => ({ id: q.id, quoteNumber: q.quoteNumber, status: q.status, total: q.total, issueDate: q.issueDate })),
+      quotations: generated.map((q) => ({ id: q.id, quoteNumber: q.quoteNumber, revision: q.revision, status: q.status, total: q.total, issueDate: q.issueDate })),
+      offer,
       locked: committed.length > 0,
       lockedBy: committed.map((q) => ({ id: q.id, quoteNumber: q.quoteNumber, revision: q.revision, status: q.status })),
     };
@@ -788,16 +812,11 @@ export class TenderPricingController {
   }
 
   /**
-   * Generate the client quotation from the tender's priced BOQ. Priced items carry
-   * their selling rate; unpriced items fall back to their current BOQ rate. The
-   * quotation is created as a DRAFT in CRM — review it, then send.
-  */
-  @Permissions('tendering.estimate.read', 'tendering.internal-pricing.access', 'crm.quotation.create')
-  @Post(':id/quotation')
-  async generateQuotation(
-    @Param('id', ParseUuidOr404Pipe) id: string,
-    @Body() dto: { validUntil?: string; vatRate?: number } = {},
-  ): Promise<Quotation> {
+   * THE OFFER'S FIGURES, from the tender's governed estimate and nothing else. Priced items carry
+   * their selling rate; unpriced items fall back to their current BOQ rate. Shared by the first
+   * generation, the in-place refresh and every revision, so all three price the same way.
+   */
+  private async offerFromEstimate(id: string, vatRateInput: number | undefined) {
     const ctx = this.tenant.get();
     const { tender, items } = await this.governedPricingContext(id);
     if (items.length === 0) throw new BadRequestException('the tender has no BOQ items — add the scope before generating a quotation');
@@ -805,7 +824,7 @@ export class TenderPricingController {
     const byItem = new Map(buildUps.map((b) => [b.boqItemId, b]));
 
     let priced = 0;
-    const vatRate = dto?.vatRate === undefined ? undefined : Number(dto.vatRate);
+    const vatRate = vatRateInput === undefined ? undefined : Number(vatRateInput);
     const lines: NewQuotationLine[] = items.map((item) => {
       const b = byItem.get(item.id);
       if (b) priced += 1;
@@ -822,34 +841,27 @@ export class TenderPricingController {
       throw new BadRequestException('no line has a price — fill the pricing sheet (or BOQ rates) first');
     }
     const estimation = items.map((item) => tenderBuildUpToEstimationLine(item, byItem.get(item.id) ?? null));
+    return { tender, lines, estimation, priced, itemCount: items.length };
+  }
 
-    const quoteNumber = await this.numbering.generateNextNumber(ctx.tenantId, ctx.companyId ?? null, 'crm', 'quotation', 'QUO');
-    const quotation = await this.quotations.create({
-      tenantId: ctx.tenantId,
-      companyId: ctx.companyId ?? null,
-      quoteNumber,
-      customerName: tender.accountName ?? tender.title,
-      accountId: tender.accountId,
-      sourceTenderId: tender.id,
-      issueDate: new Date().toISOString().slice(0, 10),
-      validUntil: dto?.validUntil ?? null,
-      lines,
-      estimation,
-      createdBy: ctx.actorId ?? null,
-    });
+  /** Where the tender's one offer stands, in words that name the next legal act. */
+  private offerGuidance(q: Quotation, returned: boolean): string {
+    const ref = `${q.quoteNumber} Rev ${q.revision}`;
+    if (q.status === 'draft' && returned) {
+      return `${ref} was returned for revision — it has been submitted, so a change is its next revision: revise the offer with a reason`;
+    }
+    if (q.status === 'internal_review') {
+      return `${ref} is with a commercial reviewer — have the reviewer return it for revision, then revise the offer with a reason`;
+    }
+    if (q.status === 'accepted') {
+      return `${ref} was accepted by the client — its price is the basis of the contract; change it through a contract variation`;
+    }
+    return `${ref} has been submitted and is ${q.status.replaceAll('_', ' ')} — revise the offer with a reason; the next revision is generated from the current estimate`;
+  }
 
-    await this.estimates.recordQuotationGenerated({
-      tenantId: ctx.tenantId,
-      companyId: ctx.companyId ?? null,
-      actorId: ctx.actorId ?? null,
-      tenderId: tender.id,
-      quotationId: quotation.id,
-      quoteNumber: quotation.quoteNumber,
-      total: quotation.total,
-      pricedLines: priced,
-      unpricedLines: items.length - priced,
-    });
-
+  /** The checklist a new offer record is approved against — written by the act that creates it. */
+  private async seedOfferChecklist(quotationId: string): Promise<void> {
+    const ctx = this.tenant.get();
     /**
      * THE GATE IS CONFIGURED BY THE ACT THAT CREATES THE THING IT GATES.
      *
@@ -862,14 +874,15 @@ export class TenderPricingController {
      * Seeded here rather than left to a separate act somebody has to remember, because a control
      * that only works when a second person performs an unprompted step is a control that does not
      * work. Idempotent by the store's natural key, and it writes only what is absent: re-generating
-     * an offer never resets a requirement somebody has already provided or waived.
+     * an offer never resets a requirement somebody has already provided or waived. Each REVISION is
+     * its own record and is approved on its own evidence, so a revision is seeded too.
      *
      * NOT fatal. A checklist that failed to seed must not lose the priced offer that was just
      * written — the approval refuses on its own, loudly and by name, and that is the control.
      */
     try {
       const existing = await this.requirements.list({
-        tenantId: ctx.tenantId, entityType: 'crm.quotation', entityId: quotation.id,
+        tenantId: ctx.tenantId, entityType: 'crm.quotation', entityId: quotationId,
       });
       const known = new Set(existing.map((r) => r.type));
       for (const t of COMMERCIAL_EVIDENCE_TEMPLATE) {
@@ -877,13 +890,125 @@ export class TenderPricingController {
         await this.requirements.upsert(makeDocumentRequirement({
           tenantId: ctx.tenantId,
           entityType: 'crm.quotation',
-          entityId: quotation.id,
+          entityId: quotationId,
           type: t.type,
           requiredCount: t.requiredCount,
         }));
       }
     } catch { /* the approval gate refuses an unconfigured checklist by itself */ }
+  }
 
+  /**
+   * GENERATE THE TENDER'S OFFER from its priced BOQ — ONE LOGICAL OFFER PER TENDER (EST-16 (a), the
+   * owner's decision of 2026-09-25).
+   *
+   * Every press used to mint a new QUO number, so a tender re-priced three times carried three
+   * unrelated offers and nothing said which one the client had. Now:
+   *
+   *   · no offer yet              → Rev 0 is created, as a draft.
+   *   · a draft never submitted   → refreshed IN PLACE: same number, same revision, the estimate's
+   *                                 current figures. Nobody has been asked to decide on it yet.
+   *   · anything submitted        → refused, naming the act that is legal instead: a revision with a
+   *                                 reason (POST :id/quotation/revise), the reviewer's return, or a
+   *                                 contract variation for an accepted price.
+   */
+  @Permissions('tendering.estimate.read', 'tendering.internal-pricing.access', 'crm.quotation.create')
+  @Post(':id/quotation')
+  async generateQuotation(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { validUntil?: string; vatRate?: number } = {},
+  ): Promise<Quotation> {
+    const ctx = this.tenant.get();
+    const current = await this.quotations.currentForTender(ctx.tenantId, id);
+    const returned = current?.status === 'draft' ? await this.quotations.everSubmitted(ctx.tenantId, current) : false;
+    if (current && (current.status !== 'draft' || returned)) {
+      throw new ConflictException(`the tender's offer can only be regenerated in place while it is a never-submitted draft — ${this.offerGuidance(current, returned)}`);
+    }
+    const { tender, lines, estimation, priced, itemCount } = await this.offerFromEstimate(id, dto?.vatRate);
+
+    const quotation = current
+      ? await this.quotations.refreshDraft(current.id, ctx.actorId ?? null, { lines, estimation })
+      : await this.quotations.create({
+        tenantId: ctx.tenantId,
+        companyId: ctx.companyId ?? null,
+        quoteNumber: await this.numbering.generateNextNumber(ctx.tenantId, ctx.companyId ?? null, 'crm', 'quotation', 'QUO'),
+        customerName: tender.accountName ?? tender.title,
+        accountId: tender.accountId,
+        sourceTenderId: tender.id,
+        issueDate: new Date().toISOString().slice(0, 10),
+        validUntil: dto?.validUntil ?? null,
+        lines,
+        estimation,
+        createdBy: ctx.actorId ?? null,
+      });
+
+    await this.estimates.recordQuotationGenerated({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? null,
+      actorId: ctx.actorId ?? null,
+      tenderId: tender.id,
+      quotationId: quotation.id,
+      quoteNumber: quotation.quoteNumber,
+      total: quotation.total,
+      pricedLines: priced,
+      unpricedLines: itemCount - priced,
+    });
+    await this.seedOfferChecklist(quotation.id);
     return quotation;
+  }
+
+  /**
+   * REVISE THE TENDER'S OFFER — with a reason, from the current governed estimate (EST-16 (a)).
+   *
+   * The offer's live revision is superseded (it keeps its figures, its approvals, its returns) and
+   * Rev n+1 is generated from the estimate AS IT STANDS — never copied from the revision before it.
+   * The reason is permanent: it is recorded against the revision it supersedes, in the same
+   * transaction. Refused while a reviewer holds the offer (their return comes first), once it is
+   * accepted (a contract variation), and for a draft nobody has been asked about (generate it again).
+   *
+   * The pricing lock is untouched: while a submitted revision is live the estimate is frozen, so the
+   * next revision starts from the figures that were decided on; re-pricing happens on that new draft,
+   * which then refreshes in place until it is submitted.
+   */
+  @Permissions('tendering.estimate.read', 'tendering.internal-pricing.access', 'crm.quotation.update')
+  @Post(':id/quotation/revise')
+  async reviseQuotation(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Body() dto: { reason?: string; vatRate?: number } = {},
+  ): Promise<Quotation> {
+    const ctx = this.tenant.get();
+    const awardedOn = (await this.tenderOr404(id)).commercialBasis;
+    // The award PINNED a revision. Superseding it would leave the contract resting on history.
+    if (awardedOn) {
+      throw new ConflictException(
+        `the tender's offer can only be revised before the award — the tender was awarded on quotation ${awardedOn.quotationId}, ` +
+          `which is the basis of its contract; change the price through a contract variation`,
+      );
+    }
+    const current = await this.quotations.currentForTender(ctx.tenantId, id);
+    if (!current) throw new ConflictException('the tender has no offer to revise — generate its offer first');
+    const returned = current.status === 'draft' ? await this.quotations.everSubmitted(ctx.tenantId, current) : false;
+    if (current.status === 'draft' && !returned) {
+      throw new ConflictException(`${current.quoteNumber} Rev ${current.revision} has never been submitted, so it is not revised — generate the offer again to refresh it in place`);
+    }
+    if (current.status === 'internal_review' || current.status === 'accepted') {
+      throw new ConflictException(`the tender's offer can only be revised once it is back from review and not yet accepted — ${this.offerGuidance(current, returned)}`);
+    }
+    const { tender, lines, estimation, priced, itemCount } = await this.offerFromEstimate(id, dto?.vatRate);
+    const next = await this.quotations.revise(current.id, ctx.actorId ?? null, { reason: dto?.reason ?? '', regenerated: { lines, estimation } });
+
+    await this.estimates.recordQuotationGenerated({
+      tenantId: ctx.tenantId,
+      companyId: ctx.companyId ?? null,
+      actorId: ctx.actorId ?? null,
+      tenderId: tender.id,
+      quotationId: next.id,
+      quoteNumber: next.quoteNumber,
+      total: next.total,
+      pricedLines: priced,
+      unpricedLines: itemCount - priced,
+    });
+    await this.seedOfferChecklist(next.id);
+    return next;
   }
 }

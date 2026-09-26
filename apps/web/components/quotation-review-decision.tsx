@@ -92,7 +92,7 @@ export default function QuotationReviewDecision({ quotationId, status, canDecide
         <ul style={st.list} data-testid="review-history">
           {decisions.map((d) => (
             <li key={d.id} style={st.row}>
-              <span style={st.warn}>Returned</span> Rev {d.revision} · by {d.decidedBy ?? 'unknown'} · {when(d.decidedAt)} — <span style={st.reason}>{d.reason}</span>
+              <span style={st.warn}>{d.outcome === 'revised' ? 'Revised' : 'Returned'}</span> Rev {d.revision} · by {d.decidedBy ?? 'unknown'} · {when(d.decidedAt)} — <span style={st.reason}>{d.reason}</span>
             </li>
           ))}
           {baseline && (

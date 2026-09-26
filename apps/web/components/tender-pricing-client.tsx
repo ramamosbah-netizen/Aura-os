@@ -85,9 +85,20 @@ interface Estimate {
 interface GeneratedQuotation {
   id: string;
   quoteNumber: string;
+  revision: number;
   status: string;
   total: number;
   issueDate: string;
+}
+/** The tender's one offer and the act the server will accept on it next (EST-16). */
+interface TenderOffer {
+  id: string;
+  quoteNumber: string;
+  revision: number;
+  status: string;
+  total: number;
+  next: 'refresh' | 'revise' | 'none';
+  guidance: string | null;
 }
 interface Payload {
   tender: Tender;
@@ -96,6 +107,7 @@ interface Payload {
   estimate: Estimate | null;
   rates: { technician: number; engineer: number; projectManager: number };
   quotations: GeneratedQuotation[];
+  offer: TenderOffer | null;
   /** Governance — server-owned; the sheet freezes once a generated quotation is committed. */
   locked: boolean;
   lockedBy: Array<{ id: string; quoteNumber: string; revision: number; status: string }>;
@@ -127,6 +139,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [reviseReason, setReviseReason] = useState('');
 
   const load = useCallback(async (): Promise<void> => {
     const res = await fetch(`/api/tendering/tenders/${tenderId}/pricing`, { cache: 'no-store' });
@@ -154,7 +167,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
     </section>
   ) : <p style={{ color: 'var(--muted)' }}>Loading pricing sheet…</p>;
 
-  const { items, buildUps, estimate, rates, quotations, locked, lockedBy } = data;
+  const { items, buildUps, estimate, rates, quotations, offer, locked, lockedBy } = data;
 
   const startEdit = (item: BOQItem): void => {
     const b = buildUps[item.id];
@@ -285,7 +298,34 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
         return;
       }
       await load();
-      setMsg(`Quotation ${d.quoteNumber} created as a draft (total AED ${aed(d.total)}) — review it in CRM, then send it to the client.`);
+      setMsg(offer
+        ? `${d.quoteNumber} Rev ${d.revision} refreshed in place from the estimate (total AED ${aed(d.total)}) — it has not been submitted, so no revision was raised.`
+        : `Quotation ${d.quoteNumber} Rev ${d.revision} created as a draft (total AED ${aed(d.total)}) — review it in CRM, then send it to the client.`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // A submitted offer changes only by its next revision, generated from the estimate as it stands,
+  // and the reason is kept for good (EST-16). The server refuses a blank one; so does this button.
+  const reviseOffer = async (): Promise<void> => {
+    setBusy(true);
+    setErr(null);
+    setMsg(null);
+    try {
+      const res = await fetch(`/api/tendering/tenders/${tenderId}/quotation/revise`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: reviseReason }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErr(d.message ?? d.error ?? 'Failed to revise the offer');
+        return;
+      }
+      setReviseReason('');
+      await load();
+      setMsg(`${d.quoteNumber} Rev ${d.revision} raised from the current estimate (total AED ${aed(d.total)}). Re-price if needed — the new draft refreshes in place until it is submitted.`);
     } finally {
       setBusy(false);
     }
@@ -305,7 +345,7 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
           immutable — read and export only.{' '}
           {lockedBy.every((q) => q.status === 'accepted')
             ? 'An accepted price is the basis of the contract; change it through a contract variation.'
-            : 'To re-price, raise a quotation revision.'}{' '}
+            : 'To re-price, revise the offer below with a reason.'}{' '}
           <a href="/crm/quotations" style={st.lockLink}>Open quotations</a>
         </div>
       )}
@@ -467,24 +507,63 @@ export default function TenderPricingClient({ tenderId }: { tenderId: string }) 
         <div>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Client quotation</div>
           <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-            Generates a draft CRM quotation from this sheet — one line per BOQ item at its selling rate. The breakdown stays internal.
+            One offer for this tender — one line per BOQ item at its selling rate; the breakdown stays internal. A draft nobody
+            has been asked to decide on refreshes in place; once submitted, every change is its next revision, with a reason.
           </div>
-          {quotations.length > 0 && (
-            <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {quotations.map((q) => (
+          {offer && (
+            <div data-testid="tender-offer" style={{ marginTop: 8, fontSize: 13 }}>
+              <a href={`/crm/quotations/${offer.id}`} style={st.lockLink}>{offer.quoteNumber} Rev {offer.revision}</a>
+              {' '}· {offer.status.replaceAll('_', ' ')} · AED {aed(offer.total)}
+              {offer.guidance && <div data-testid="tender-offer-guidance" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 4 }}>{offer.guidance}</div>}
+            </div>
+          )}
+          {quotations.length > 1 && (
+            <div data-testid="tender-offer-revisions" style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[...quotations].sort((a, b) => a.revision - b.revision).map((q) => (
                 <a key={q.id} href={`/crm/quotations/${q.id}`} style={st.quoteChip}>
-                  {q.quoteNumber} · {q.status} · AED {aed(q.total)}
+                  {q.quoteNumber} Rev {q.revision} · {q.status.replaceAll('_', ' ')} · AED {aed(q.total)}
                 </a>
               ))}
+            </div>
+          )}
+          {offer?.next === 'revise' && (
+            <div style={{ marginTop: 10, display: 'grid', gap: 6, maxWidth: 520 }}>
+              <label htmlFor="offer-revise-reason" style={{ fontSize: 12.5, fontWeight: 600 }}>Why is the offer being revised?</label>
+              <textarea
+                id="offer-revise-reason"
+                data-testid="offer-revise-reason"
+                value={reviseReason}
+                onChange={(e) => setReviseReason(e.target.value)}
+                rows={2}
+                style={{ padding: 8, borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', font: 'inherit' }}
+              />
             </div>
           )}
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
           <a href={`/api/tendering/tenders/${tenderId}/pricing.xlsx`} style={st.btnGhostLink}>Download pricing workbook (.xlsx)</a>
           <a href={`/api/tendering/tenders/${tenderId}/pricing/csv`} style={st.btnGhostLink}>Export data (.csv)</a>
-          <button style={st.btnPrimary} disabled={busy || items.length === 0} onClick={() => void generateQuotation()}>
-            Generate quotation →
-          </button>
+          {!offer && (
+            <button data-testid="offer-generate" style={st.btnPrimary} disabled={busy || items.length === 0} onClick={() => void generateQuotation()}>
+              Generate quotation →
+            </button>
+          )}
+          {offer?.next === 'refresh' && (
+            <button data-testid="offer-refresh" style={st.btnPrimary} disabled={busy || items.length === 0} onClick={() => void generateQuotation()}>
+              Refresh {offer.quoteNumber} Rev {offer.revision} from the estimate →
+            </button>
+          )}
+          {offer?.next === 'revise' && (
+            <button
+              data-testid="offer-revise"
+              style={st.btnPrimary}
+              disabled={busy || !reviseReason.trim()}
+              title={reviseReason.trim() ? undefined : 'Say why the offer is being revised — the reason is kept with the revision'}
+              onClick={() => void reviseOffer()}
+            >
+              Revise offer → Rev {offer.revision + 1}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -346,6 +346,19 @@ export class CrmQuotationsController {
   }
 
   /**
+   * Two revisions of this offer side by side (EST-16): per BOQ item the quantity, price and line
+   * total of each, the direct cost and selling rate from each revision's frozen estimation, the
+   * totals, and the decisions each carries (approved by, returned why, revised why). Computed on the
+   * server from the two immutable records. Internal: it shows cost, so it needs internal pricing.
+   */
+  @Permissions('crm.quotation.read', 'crm.internal-pricing.access')
+  @Get(':id/compare')
+  async compare(@Param('id') id: string, @Query('with') withId?: string) {
+    if (!withId) throw new BadRequestException('with is required — the revision to compare this one against');
+    return this.quotations.compare(this.tenant.get().tenantId, withId, id);
+  }
+
+  /**
    * Legal identity used on customer output. The quotation's persisted companyId selects the
    * company; the browser cannot switch the letterhead by changing a query or active-company UI.
    * Tenant profile fields fill attributes the current company master does not yet store.

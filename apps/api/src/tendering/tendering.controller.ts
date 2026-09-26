@@ -5,7 +5,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { AccessService, CompaniesService, DmsService, Permissions, SettingsService, TenantContext, ParseUuidOr404Pipe, UsersService } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
 import { type Tender, type TenderStatus, TenderService, checkTenderTransition, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
-import { AccountService, PreAwardPackageService, QuotationService, type TechnicalStudyContent } from '@aura/crm';
+import { AccountService, PreAwardPackageService, QuotationService, isQuotationCommitted, type TechnicalStudyContent } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 import { resolveDocumentIdentity } from '../common/document-identity';
 import * as xlsx from 'xlsx';
@@ -181,23 +181,13 @@ export class TenderingController {
     const boq = await this.tenders.getBOQByTender(tender.tenantId, tender.id);
     const quantityTakeoffProjected = Boolean(boq?.boq.sourceBasisRevisionId && boq.boq.projectedAt);
     const quantityTakeoffRevisionId = boq?.boq.sourceBasisRevisionId ?? null;
-    const quotations = await this.quotations.listBySourceTender(tender.tenantId, tender.id);
-    const internallyApproved = quotations
-      .filter((quotation) => ['approved', 'sent', 'under_negotiation', 'accepted'].includes(quotation.status))
-      .sort((a, b) => b.revision - a.revision);
-    let commercialOfferApproved = false;
-    let commercialQuotationId: string | null = null;
-    let commercialQuoteNumber: string | null = null;
-    let commercialQuotationRevision: number | null = null;
-    for (const quotation of internallyApproved) {
-      if (await this.quotations.getBaseline(tender.tenantId, quotation.id)) {
-        commercialOfferApproved = true;
-        commercialQuotationId = quotation.id;
-        commercialQuoteNumber = quotation.quoteNumber;
-        commercialQuotationRevision = quotation.revision;
-        break;
-      }
-    }
+    // The tender's ONE offer and its live revision (EST-16) — the same revision the award pins, so
+    // readiness, submission and award can never be talking about different figures.
+    const offer = await this.currentApprovedOffer(tender.tenantId, tender.id);
+    const commercialOfferApproved = offer !== null;
+    const commercialQuotationId = offer?.quotation.id ?? null;
+    const commercialQuoteNumber = offer?.quotation.quoteNumber ?? null;
+    const commercialQuotationRevision = offer?.quotation.revision ?? null;
     /**
      * THE TRANSITION'S OWN GATE, TOO. Submitting also passes the domain gate (T1): a Go/Conditional
      * bid decision and a priced estimate. Readiness used to answer only the three questions above, so
@@ -559,9 +549,25 @@ export class TenderingController {
   }
 
   /**
-   * The approved commercial baseline behind this tender's decided quotation, if one is locked now.
-   * Ranked accepted > approved > sent, the same order the contract reactor used — the change is WHEN
-   * the choice is made (once, at the award) rather than HOW it is made.
+   * THE EXACT APPROVED REVISION (EST-16, the owner's decision of 2026-09-25: "Award must pin the exact
+   * approved revision"). The tender has one logical offer; its LIVE revision — the one not superseded —
+   * is the basis when it stands committed (approved, sent, under negotiation or accepted) with a locked
+   * baseline. A superseded revision is never chosen, however it was ranked: once Rev n+1 exists, Rev n
+   * is history, and the award waits for Rev n+1's approval rather than reaching back past it.
+   *
+   * It used to rank every quote the tender had ever produced (accepted > approved > sent), which was
+   * right while each generation minted a new number and wrong once an offer has revisions.
+   */
+  private async currentApprovedOffer(tenantId: string, tenderId: string) {
+    const quotation = await this.quotations.currentForTender(tenantId, tenderId);
+    if (!quotation || !isQuotationCommitted(quotation)) return null;
+    const baseline = await this.quotations.getBaseline(tenantId, quotation.id);
+    return baseline ? { quotation, baseline } : null;
+  }
+
+  /**
+   * The award-time basis: the approved revision above, pinned by its own row id (each revision is a
+   * durable row, so the id IS the revision) and valued at its baseline.
    *
    * Enrichment, so a lookup failure must not fail the award: an award that cannot be recorded is far
    * worse than one recorded without a basis, which is an expected and handled state.
@@ -571,16 +577,9 @@ export class TenderingController {
     tenderId: string,
   ): Promise<{ baselineId: string; quotationId: string; value: number } | null> {
     try {
-      const quotes = await this.quotations.list({ tenantId, sourceTenderId: tenderId, limit: 50 });
-      if (!quotes?.length) return null;
-      const rank = (status: string): number => (status === 'accepted' ? 0 : status === 'approved' ? 1 : status === 'sent' ? 2 : 3);
-      const decided = quotes.filter((q) => rank(q.status) < 3).sort((a, b) => rank(a.status) - rank(b.status));
-      for (const q of decided) {
-        const baseline = await this.quotations.getBaseline(tenantId, q.id);
-        // `baseline.total` — the Contract Value measure, VAT-inclusive. Unchanged by this slice.
-        if (baseline) return { baselineId: baseline.id, quotationId: q.id, value: baseline.total };
-      }
-      return null;
+      const offer = await this.currentApprovedOffer(tenantId, tenderId);
+      // `baseline.total` — the Contract Value measure, VAT-inclusive. Unchanged by this slice.
+      return offer ? { baselineId: offer.baseline.id, quotationId: offer.quotation.id, value: offer.baseline.total } : null;
     } catch {
       return null;
     }

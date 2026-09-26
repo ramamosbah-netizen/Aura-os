@@ -27,9 +27,15 @@ export interface InspectionRequest {
 // TC-GATE-12: the canonical platform vocabulary. This list used to be four values, none of which
 // could describe an ELV system — on an ELV ERP.
 
-export default function InspectionRequestClient({ initial }: { initial: InspectionRequest[] }) {
+/**
+ * `scopedProjectId` — the project this register was opened for (a Project 360 workspace link carries
+ * it). J4-03: the list was already scoped to it, but the request form started blank and asked for the
+ * project again. Opened for a project, the form raises on THAT project and holds it: an inspection
+ * raised here for another project would vanish from the very list it was raised from.
+ */
+export default function InspectionRequestClient({ initial, scopedProjectId = null }: { initial: InspectionRequest[]; scopedProjectId?: string | null }) {
   const [rows, setRows] = useState(initial);
-  const [f, setF] = useState({ projectId: '', irNumber: '', discipline: 'electrical', locationDetail: '', inspectionDate: '' });
+  const [f, setF] = useState({ projectId: scopedProjectId ?? '', irNumber: '', discipline: 'electrical', locationDetail: '', inspectionDate: '' });
   const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
   /**
    * THE SIGNATURE BELONGS TO THE DECISION, not to the request.
@@ -168,7 +174,14 @@ export default function InspectionRequestClient({ initial }: { initial: Inspecti
       <h2 style={st.h2}>Request inspection</h2>
       <div style={st.formCard}>
         <div style={st.form}>
-          <Field label="Project"><ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} /></Field>
+          <Field label="Project">
+            <ProjectPicker value={f.projectId} onChange={(id) => set('projectId', id)} disabled={Boolean(scopedProjectId)} />
+            {scopedProjectId && (
+              <small data-testid="ir-project-scoped" style={{ color: 'var(--muted)' }}>
+                This project&apos;s register · <a href="/quality/inspection-requests">raise for another project</a>
+              </small>
+            )}
+          </Field>
           <Field label="IR number"><Input value={f.irNumber} onChange={(e) => set('irNumber', e.target.value)} placeholder="IR-001" /></Field>
           <Field label="Discipline"><Select value={f.discipline} onChange={(e) => set('discipline', e.target.value)}>{DISCIPLINES.map((d) => <option key={d} value={d}>{DISCIPLINE_LABELS[d]}</option>)}</Select></Field>
           <Field label="Location" style={{ minWidth: 220 }}><Input value={f.locationDetail} onChange={(e) => set('locationDetail', e.target.value)} placeholder="L3 riser, grid C4" /></Field>

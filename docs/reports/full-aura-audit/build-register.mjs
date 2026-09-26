@@ -1013,6 +1013,31 @@ Object.assign(defects.find(d=>d.id==='CRM-CUST-01'),{
  acceptanceProof:"MET, and the authority was decided before a single permission was written. THE BUSINESS DECISION: lead conversion is not the only door a customer comes through, because a rep meets five ordinary cases that have no lead behind them \u2014 a customer already known to the business, a referral, a new contact at an existing customer, a tender or enquiry in the company\u2019s name, and capturing details before a formal Lead exists. THE GRANT IS FOUR NAMED ACTS AND NO WILDCARD: `crm.account.create`, `crm.account.update`, `crm.contact.create`, `crm.contact.update` on r-sales. DELIBERATELY WITHHELD, and stated on the role itself: `crm.account.delete` (destructive), `crm.account.relationships` (the parent/subsidiary graph drives exposure aggregation, so it is a commercial decision), and `crm.account.installed-base` with its growth scan (asset truth about the customer\u2019s estate). LIVE, against a restarted API as u-e2e-sales: creating an account returns 201 where it returned 403, a contact is created against it, both update, and the three withheld acts stay refused. NOT CLAIMED: `crm.*` is still on r-sales-manager, so those same acts remain reachable by that role through a module wildcard. Naming them there, and flattening the last CRM wildcard, is stage-4 work and is not what this record fixed.",
 });
 
+/**
+ * J1-14, J4-01 AND J4-03 CLOSED (2026-09-26). Placed after every other write to them.
+ *
+ * Each closes on evidence that answers ITS OWN finding, not on the status of the capabilities it is
+ * linked to: J4-03's capability (QHS-01) was COMPLETE while the finding itself — the form re-asking
+ * for the project — was still true, and it closed only once that was fixed and proved.
+ */
+Object.assign(prior.find(g=>g.id==='J1-14'),{
+ classification:'COMPLETE',
+ status:'CLOSED_VERIFIED',
+ acceptanceProof:"MET BY EST-16 (b4c09ba8, the owner's decision of 2026-09-25), against both halves of the finding. REVISION READS: a revision chain is resolved by its LINKS, not its number, and reads the same from either end — QuotationService.listRevisions walks parent links up to the root and down again; quotation.service.test.ts pins it (\u2018reachable from either end\u2019, a same-number legacy row and an unlinked number-matched chain), and tender-offer-revisions.spec.ts reads Rev 0/1/2 of one number from the newest revision. A tender now has ONE logical offer, so a second number can no longer coexist with its chain (migration 0392 refuses it). THE PREVIOUS COMPARISON: two revisions of one offer compare on screen per BOQ item \u2014 quantity, direct cost, selling rate, unit price, line total, delta and totals \u2014 with each revision's approvals, returns and revision reasons, computed on the server from the two immutable records (GET crm/quotations/:id/compare; the reviewer drives it in tender-offer-revisions.spec.ts, figures read back against the API). The award pins the exact approved revision. ACCEPTED LIMITS: the comparison is browser-proven on a TENDER offer; it applies to any two revisions of one offer, but a direct offer's comparison has not been driven in a browser. Direct and opportunity offers keep their copy-revise rule by decision.",
+});
+
+Object.assign(prior.find(g=>g.id==='J4-01'),{
+ classification:'COMPLETE',
+ status:'CLOSED_VERIFIED',
+ acceptanceProof:"MET. The finding was that the daily report and the inspection request DISPLAYED photos and a signature without saving them with the record. Both surfaces now save, reload and serve them, proved in browsers against migrated PostgreSQL with auth ON by the three capabilities this record carries, each promoted on its own criterion: SIT-04 (site-evidence-round-trip.spec.ts \u2014 a picked photo and a drawn signature stored, reloaded with capturedBy/location and a hash equal to the received bytes, downloaded byte-verified; Finance refused 403), QHS-07 (inspection-qaqc-role.spec.ts \u2014 as u-e2e-qaqc under the shipped r-qa-qc role: photo and signature on the inspection record, the signature bound to the RESULT by a server-side hash, a Storekeeper refused, the PM receiving the exact committed bytes) and XOP-12 (four surfaces including both of these: attributable signatures, controlled output rendering them, tampering refused at the DMS boundary). ACCEPTED LIMITS are those recorded on the three capabilities; this closure adds none and hides none.",
+});
+
+Object.assign(prior.find(g=>g.id==='J4-03'),{
+ classification:'COMPLETE',
+ status:'CLOSED_VERIFIED',
+ acceptanceProof:"MET, BY A FIX \u2014 the linked capability (QHS-01) was already COMPLETE while this finding was still true, so its status was not taken as evidence. THE FINDING: an inspection request raised from a specific project asked for the project again; the list was scoped, the form was not. THE CAUSE: the Project 360 Quality workspace already opened the register with ?projectId= (contextHref) and the page already scoped its LIST to it, but never handed it to the request form, which started blank. THE FIX: the page passes the project to the form, which raises on it and holds it (the picker is prefilled and fixed, with a link to the unscoped register for another project) \u2014 an inspection raised there for another project would have vanished from the list it was raised from. PROOF, in a browser against migrated PostgreSQL with auth ON, as u-e2e-qaqc under the shipped r-qa-qc role and a project member (inspection-request-project-context.spec.ts): the project's Quality workspace links the register FOR that project; the form arrives holding that project, fixed; the engineer raises an inspection without choosing a project; read back through the API it sits on that project, requested, by the QA/QC engineer. THE CONTROL: opened without a project, the form asks and is free to. Regression: inspection-qaqc-role.spec.ts and inspection-evidence-round-trip.spec.ts green.",
+});
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

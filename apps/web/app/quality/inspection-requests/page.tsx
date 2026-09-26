@@ -20,7 +20,8 @@ export default async function InspectionRequestPage({ searchParams }: { searchPa
         rejected point drives an NCR or rework before the next inspection.
       </p>
       <section style={{ marginTop: 10 }}>
-        {irs === null ? <p style={st.muted}>API offline.</p> : <InspectionRequestClient initial={irs ?? []} />}
+        {/* J4-03: the project this page was opened for is the project an inspection is raised on. */}
+        {irs === null ? <p style={st.muted}>API offline.</p> : <InspectionRequestClient initial={irs ?? []} scopedProjectId={projectId ?? null} />}
       </section>
     </div>
   );

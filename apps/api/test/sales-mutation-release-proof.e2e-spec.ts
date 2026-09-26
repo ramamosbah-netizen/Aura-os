@@ -10,7 +10,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
-import { AccessService, AuthService, TenantContext } from '@aura/core';
+import { AccessService, AuthService, TenantContext, UsersService } from '@aura/core';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
@@ -73,6 +73,10 @@ describe('Sales mutation release proof (Supabase PostgreSQL)', () => {
     }
     // The approver also has authority in the control tenant used by the negative isolation check.
     access.grant({ userId: APPROVER, roleId: ROLE, scope: { kind: 'org', level: 'tenant', id: OTHER_TENANT } });
+    // A tender's technical study names an independent reviewer, who must be an ACTIVE workspace user
+    // (the rule production applies) — the approver is that person here.
+    const users = app.get(UsersService);
+    for (const user of [MAKER, APPROVER]) users.save({ tenantId: TENANT, userId: user, displayName: user, active: true });
   });
 
   afterAll(async () => {
@@ -91,7 +95,8 @@ describe('Sales mutation release proof (Supabase PostgreSQL)', () => {
       'aura_crm_negotiation_entries', 'aura_crm_commercial_baselines',
       'aura_crm_pricing_sheets', 'aura_crm_quotations', 'aura_crm_estimate_build_ups',
       'aura_crm_estimate_revisions', 'aura_crm_estimation_basis_revisions', 'aura_crm_pre_award_packages',
-      'aura_crm_scope_assist_proposals', 'aura_crm_solution_scopes', 'aura_tendering_tenders',
+      'aura_crm_scope_assist_proposals', 'aura_crm_solution_scopes', 'aura_crm_technical_study_revisions',
+      'aura_tendering_tenders', 'aura_users',
       'aura_crm_opportunities', 'aura_crm_lead_qualification_decisions', 'aura_crm_leads',
       'aura_crm_account_relationships', 'aura_crm_installed_base', 'aura_crm_contacts', 'aura_crm_accounts',
     ];
@@ -219,18 +224,28 @@ describe('Sales mutation release proof (Supabase PostgreSQL)', () => {
     tenderId = tender.id;
     expect(tender.sourceOpportunityId).toBe(tenderOpp.id);
 
-    const boqView = (await http.get(`/api/v1/tendering/tenders/${tenderId}/boq`).set(as(MAKER)).expect(200)).body;
-    const item = await http.post(`/api/v1/tendering/tenders/${tenderId}/boq/items`).set(as(MAKER)).send({
-      boqId: boqView.boq.id,
-      itemCode: '1.1',
-      description: 'Tender release-proof ELV package',
-      unit: 'LS',
-      quantity: 1,
-      rate: 300000,
-    }).expect(201);
+    // The governed basis pricing stands on (governedPricingContext): the maker writes the technical
+    // study and the approver — independently — approves it; the quantity take-off is approved and
+    // projected to the BOQ. A BOQ line is never typed in directly.
+    const base = `/api/v1/tendering/tenders/${tenderId}`;
+    const study = (await http.post(`${base}/studies`).set(as(MAKER)).send({
+      title: `Release proof technical study ${RUN_ID}`, inputRevision: 'Client specification Rev 01', reviewerId: APPROVER,
+      scopeSummary: 'Supply, install, test and commission the ELV package.',
+      systems: [{ discipline: 'ELV', name: 'CCTV', designBasis: 'IP cameras and NVR', interfaces: ['LAN'] }],
+      requirements: [{ category: 'client', statement: 'ELV package as specified', acceptanceCriteria: 'Installed and tested', compliance: 'compliant', response: 'Included' }],
+      surveyFindings: [], clarifications: [], deviations: [], assumptions: [], exclusions: [], evidence: [],
+    }).expect(201)).body;
+    await http.post(`${base}/studies/${study.id}/submit`).set(as(MAKER)).expect(201);
+    await http.post(`${base}/studies/${study.id}/approve`).set(as(APPROVER)).send({ comment: 'Approved for estimation' }).expect(201);
+    const takeoff = (await http.post(`${base}/quantity-takeoff`).set(as(MAKER))
+      .send({ lines: [{ description: 'Tender release-proof ELV package', unit: 'LS', quantity: 1 }] }).expect(201)).body;
+    await http.post(`${base}/quantity-takeoff/${takeoff.id}/approve`).set(as(APPROVER)).send({}).expect(201);
+    const projection = (await http.post(`${base}/quantity-takeoff/${takeoff.id}/project-to-boq`).set(as(MAKER)).expect(201)).body;
+    const boqView = { boq: projection.boq as { id: string } };
+    const itemId = (projection.items as Array<{ id: string }>)[0].id;
 
     const buildUp = await http.post('/api/v1/tendering/estimates').set(as(MAKER)).send({
-      boqItemId: item.body.id,
+      boqItemId: itemId,
       components: [{ costType: 'material', description: 'Release-proof equipment', quantity: 1, unitCost: 180000 }],
       overheadPercent: 5,
       profitPercent: 10,
@@ -248,26 +263,29 @@ describe('Sales mutation release proof (Supabase PostgreSQL)', () => {
       notes: `release-proof bid decision ${RUN_ID}`,
     }).expect(201)).body;
     expect(bidScore.recommendation).toBe('go');
-    const submitted = (await http.post(`/api/v1/tendering/tenders/${tenderId}/submit`).set(as(MAKER)).send({
-      method: 'portal',
-      portal: 'release-proof',
-      reference: `SUB-${RUN_ID}`,
-      addendaAcknowledged: 'yes',
-    }).expect(201)).body;
-    expect(submitted.tender.status).toBe('submitted');
-    expect(submitted.submission.tenderId).toBe(tenderId);
 
+    // The offer is generated and internally approved BEFORE the tender is submitted — submission
+    // requires the approved commercial offer (assertSubmissionReadiness).
     const quote = (await http.post(`/api/v1/tendering/tenders/${tenderId}/quotation`).set(as(MAKER)).send({}).expect(201)).body;
     expect(quote.sourceTenderId).toBe(tenderId);
     expect(quote.sourceOpportunityId ?? null).toBeNull();
 
-    // New tender-generated quotations are governed exactly like direct quotations.
+    // New tender-generated quotations are governed exactly like direct quotations. VENDOR_QUOTE on a
+    // tender offer is COMPUTED from the tender's governed supplier quotations and cannot be typed in
+    // (409); this tender was not put to suppliers, so the approver — not the offer's preparer — waives
+    // it with a reason, the governed exception.
     await http.post('/api/v1/document-requirements/seed').set(as(MAKER)).send({ entityType: 'crm.quotation', entityId: quote.id }).expect(201);
     const reqs = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quote.id}`).set(as(MAKER)).expect(200)).body.requirements as Array<{ id: string; type: string; requiredCount: number }>;
     for (const requirement of reqs) {
+      if (requirement.type === 'VENDOR_QUOTE') {
+        await http.post(`/api/v1/document-requirements/${requirement.id}/waive`).set(as(APPROVER))
+          .send({ reason: `release proof ${RUN_ID}: this tender was not put to suppliers; the supplier path is proved elsewhere` })
+          .expect(201);
+        continue;
+      }
       for (let i = 0; i < requirement.requiredCount; i++) {
         await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`).set(as(MAKER)).send({
-          type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID',
+          type: 'DOCUMENT_ID',
           reference: `sales-proof-${RUN_ID}-tender-${requirement.type}-${i}`,
         }).expect(201);
       }
@@ -276,6 +294,17 @@ describe('Sales mutation release proof (Supabase PostgreSQL)', () => {
     await http.patch(`/api/v1/crm/quotations/${quote.id}/status`).set(as(APPROVER)).send({ action: 'approve' }).expect(200);
     const baseline = (await http.get(`/api/v1/crm/quotations/${quote.id}/baseline`).set(as(MAKER)).expect(200)).body;
     expect(baseline.quotationId).toBe(quote.id);
+
+    // Submission records the approved offer's value — the figure the client was sent.
+    const submitted = (await http.post(`/api/v1/tendering/tenders/${tenderId}/submit`).set(as(MAKER)).send({
+      method: 'portal',
+      portal: 'release-proof',
+      reference: `SUB-${RUN_ID}`,
+      addendaAcknowledged: 'yes',
+    }).expect(201)).body;
+    expect(submitted.tender.status).toBe('submitted');
+    expect(submitted.submission.tenderId).toBe(tenderId);
+    expect(submitted.submission.submittedValue).toBe(baseline.total);
 
     // The tender award pins this exact baseline. A later quote/estimate change cannot be selected
     // by the award reactor because the commercialBasis is captured once on the tender.
@@ -301,7 +330,7 @@ describe('Sales mutation release proof (Supabase PostgreSQL)', () => {
 
     // The legacy estimate write surface is not a back door around the committed quotation freeze.
     await http.post('/api/v1/tendering/estimates').set(as(MAKER)).send({
-      boqItemId: item.body.id,
+      boqItemId: itemId,
       components: [{ costType: 'material', description: 'post-freeze mutation', quantity: 1, unitCost: 1 }],
       applyToBoq: true,
     }).expect(409);

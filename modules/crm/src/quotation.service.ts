@@ -14,6 +14,7 @@ import {
   normaliseExclusions,
   reviseQuotation,
   refreshQuotationDraft,
+  assertSourcedQuantitiesHeld,
   buildQuotationLine,
   computeQuotationTotals,
 } from './domain/quotation';
@@ -560,6 +561,9 @@ export class QuotationService {
         vatRate: q.lines[i]?.vatRate ?? 5,
       });
     });
+    // EST-19: the approved scope's quantities are held — checked on the lines as they will be written,
+    // after the positional source fallback above, so an item that omits its source is still judged.
+    assertSourcedQuantitiesHeld(q.lines, lines, `${q.quoteNumber} Rev ${q.revision}`, { requireAll: true });
     const { subtotal, vatTotal, total } = computeQuotationTotals(lines);
     const updated: Quotation = { ...q, lines, subtotal, vatTotal, total, estimation: rows };
     await this.store.save(updated);
@@ -576,6 +580,22 @@ export class QuotationService {
     ]);
     this.logger.log(`Estimation saved for ${q.quoteNumber}: ${lines.length} line(s), total ${total}`);
     return updated;
+  }
+
+  /**
+   * EST-19 — refuse, early, a pricing sheet that would change or invent an approved-scope line of this
+   * offer. The sheet is a draft being built, so a line not YET on it is not refused here; the offer's
+   * own write (saveEstimation) requires every sourced line.
+   */
+  async assertPricingHoldsApprovedScope(id: Id, items: EstimationLineInput[]): Promise<void> {
+    const q = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'quotation', id);
+    const rows = Array.isArray(items) ? items : [];
+    const priced = rows.map((it, i) => ({
+      description: (it.description ?? '').trim() || `Item ${i + 1}`,
+      quantity: estimateLine(it).quantity,
+      sourceItemId: it.sourceItemId ?? q.lines[i]?.sourceItemId ?? null,
+    }));
+    assertSourcedQuantitiesHeld(q.lines, priced, `${q.quoteNumber} Rev ${q.revision}`, { requireAll: false });
   }
 
   /** Quotations generated from a tender's pricing sheet. */

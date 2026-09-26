@@ -58,40 +58,55 @@ export class PricingQuotationService {
       if (existing) return existing;
     }
 
-    // (2) The quote to revise = the one produced by the PARENT pricing revision (the prior frozen sheet).
+    // (2) The quote the PARENT pricing revision produced, and the offer's LIVE revision descending
+    //     from it. They differ when the offer was revised after that pricing — a customer revision
+    //     raised in CRM, say — and the approved change must supersede what is live now.
+    //
+    //     EST-19, measured before this: a governed offer sent at the approved 24 and copy-revised in
+    //     CRM (Rev 1, still 24), then an APPROVED scope change to 30, costed, priced and frozen — and
+    //     converting it returned the copy, still at 24, linked to the 30 sheet. The approved change
+    //     never reached the offer, and the sheet and the offer disagreed about what was sold.
     const prior = await this.priorQuote(input.tenantId, sheet);
-    if (prior && prior.status === 'accepted') {
+    let base = prior;
+    if (prior) {
+      const tip = await this.liveTipOf(input.tenantId, prior);
+      if (tip && tip.id !== prior.id) {
+        // (3) Convergence for the non-atomic (in-memory) path: a prior attempt minted THIS sheet's
+        //     revision but did not link it — adopt it rather than duplicate. Only a revision this
+        //     sheet produced is adopted; any other live revision is superseded below.
+        if (JSON.stringify(tip.estimation ?? null) === JSON.stringify(sheet.lines)) {
+          if (sheet.quotationId !== tip.id) {
+            await this.tx.run((tx) => this.pricing.saveWithClient(tx, linkQuotation(sheet, tip.id)));
+          }
+          return tip;
+        }
+        base = tip;
+      }
+    }
+    if (base && base.status === 'accepted') {
       throw new Error(
-        `cannot re-price ${prior.quoteNumber}: the customer has already accepted it — an accepted quotation is an awarded deal, not a draft to revise`,
+        `cannot re-price ${base.quoteNumber}: the customer has already accepted it — an accepted quotation is an awarded deal, not a draft to revise`,
       );
     }
-
-    // (3) Convergence for the non-atomic (in-memory) path: if a prior attempt already minted the
-    //     revision child of `prior` but did not link the sheet, adopt it instead of duplicating.
-    //     Under a real transaction a failed attempt leaves nothing, so this branch simply never fires.
-    if (prior) {
-      const child = await this.liveRevisionChildOf(input.tenantId, prior);
-      if (child) {
-        if (sheet.quotationId !== child.id) {
-          await this.tx.run((tx) => this.pricing.saveWithClient(tx, linkQuotation(sheet, child.id)));
-        }
-        return child;
-      }
+    if (base && base.status === 'internal_review') {
+      throw new Error(
+        `${base.quoteNumber} Rev ${base.revision} is with a commercial reviewer, and a re-priced scope can only supersede it once the reviewer has returned or decided it`,
+      );
     }
 
     // (4) Money provenance: the quote's lines + totals come ONLY from this frozen sheet.
     const lineDrafts = quotationLinesFromSheet(sheet);
     const today = new Date().toISOString().slice(0, 10);
 
-    const quote = prior
+    const quote = base
       ? makeQuotation({
           tenantId: input.tenantId, companyId: sheet.companyId,
-          quoteNumber: prior.quoteNumber, customerName: prior.customerName, accountId: prior.accountId,
-          subject: prior.subject, contactName: prior.contactName, sourceOpportunityId: prior.sourceOpportunityId,
-          ownerId: prior.ownerId, terms: prior.terms, exclusions: prior.exclusions,
-          paymentConditions: prior.paymentConditions, deliveryTerms: prior.deliveryTerms,
-          revision: prior.revision + 1, parentQuotationId: prior.id,
-          issueDate: today, validUntil: prior.validUntil,
+          quoteNumber: base.quoteNumber, customerName: base.customerName, accountId: base.accountId,
+          subject: base.subject, contactName: base.contactName, sourceOpportunityId: base.sourceOpportunityId,
+          ownerId: base.ownerId, terms: base.terms, exclusions: base.exclusions,
+          paymentConditions: base.paymentConditions, deliveryTerms: base.deliveryTerms,
+          revision: base.revision + 1, parentQuotationId: base.id,
+          issueDate: today, validUntil: base.validUntil,
           lines: lineDrafts, estimation: sheet.lines, createdBy: input.actorId ?? null,
         })
       : makeQuotation({
@@ -102,12 +117,12 @@ export class PricingQuotationService {
         });
 
     await this.tx.run(async (tx) => {
-      if (prior) {
-        await this.quotations.saveWithClient(tx, { ...prior, status: 'revised' });
+      if (base) {
+        await this.quotations.saveWithClient(tx, { ...base, status: 'revised' });
         await this.events.appendWithClient(tx, [makeEvent({
           type: QUOTATION_EVENT.revised, tenantId: input.tenantId, companyId: sheet.companyId, actorId: input.actorId ?? null,
           aggregateType: 'crm.quotation', aggregateId: quote.id,
-          payload: { quoteNumber: quote.quoteNumber, fromRevision: prior.revision, toRevision: quote.revision, supersededId: prior.id, pricingSheetId: sheet.id },
+          payload: { quoteNumber: quote.quoteNumber, fromRevision: base.revision, toRevision: quote.revision, supersededId: base.id, pricingSheetId: sheet.id },
         })]);
       }
       await this.quotations.saveWithClient(tx, quote);
@@ -122,7 +137,7 @@ export class PricingQuotationService {
 
     this.logger.log(
       `Quotation ${quote.quoteNumber} Rev ${quote.revision} materialised from pricing ${sheet.id} (P-${String(sheet.version).padStart(3, '0')}, total ${quote.total})` +
-        (prior ? ` — superseded ${prior.quoteNumber} Rev ${prior.revision}` : ''),
+        (base ? ` — superseded ${base.quoteNumber} Rev ${base.revision}` : ''),
     );
     return quote;
   }
@@ -135,10 +150,18 @@ export class PricingQuotationService {
     return this.quotations.get(parent.quotationId);
   }
 
-  /** A single live (not-yet-superseded) revision child of `prior`, for retry convergence. */
-  private async liveRevisionChildOf(tenantId: Id, prior: Quotation): Promise<Quotation | null> {
+  /**
+   * The offer's LIVE revision descending from `prior`: follow the revision links down while each
+   * revision has exactly one child. `prior` itself when nothing has superseded it.
+   */
+  private async liveTipOf(tenantId: Id, prior: Quotation): Promise<Quotation | null> {
     const chain = await this.quotations.list({ tenantId, quoteNumber: prior.quoteNumber, limit: 100 });
-    const children = chain.filter((q) => q.parentQuotationId === prior.id && q.status !== 'revised');
-    return children.length === 1 ? children[0] : null;
+    let tip = prior;
+    for (let guard = 0; guard < chain.length; guard++) {
+      const children = chain.filter((q) => q.parentQuotationId === tip.id);
+      if (children.length !== 1) break;
+      tip = children[0];
+    }
+    return tip.status === 'revised' ? null : tip;
   }
 }

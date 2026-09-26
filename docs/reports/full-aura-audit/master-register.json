@@ -1086,7 +1086,7 @@
       "stages": [
         "Pre-Sales"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "PARTIAL",
       "authority": "Estimation core / Tender estimate / CRM pricing",
       "evidence": [
         "N-EST",
@@ -1095,17 +1095,17 @@
       "source": "shared/src/domain/estimation-core.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Reused J1-08: estimate caller quantity may differ from approved scope.",
-      "acceptanceProof": "Reject mismatched source quantities; approved change creates traceable revision."
+      "currentBehavior": "WRONG BEHAVIOUR CORRECTED ON THE DIRECT ROUTE; the capability stays PARTIAL on the layers still unproven. The approved scope's quantity now carries into the offer and cannot be re-measured by pricing. Wave 0 (J1-08) made the pre-award estimate load its quantity from the approved basis (a caller's 240 against 24 refused). This slice found and closed two further holes, each measured before it was fixed. (1) A SECOND WRITER: a governed direct offer materialised at the approved 24 was regenerated at 30 through a quotation-level CRM pricing sheet — no scope change, no revision. An approved-scope line (one carrying sourceItemId) now HOLDS its quantity: pricing re-prices it; a changed, repeated or invented sourced line is refused on the sheet (create and save) and on the offer's own write, and a dropped one on the offer's write. The workspace shows the quantity held. (2) AN APPROVED CHANGE THAT NEVER ARRIVED: after a CRM copy-revision of a sent offer, an approved scope change to 30 — costed, priced and frozen — converted onto the copy, still at 24, linked to the 30 sheet. The materialiser now supersedes the offer's LIVE revision, whichever path created it, and adopts a child only when that child was produced by the same sheet (retry convergence). An offer with a commercial reviewer is refused rather than superseded.",
+      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (approved-scope-quantity.spec.ts). The chain is signed as in journey-signal-to-close: Pre-Sales writes the study and the Technical Manager approves it; the fixture preparer drafts scope and estimate, and the Sales Manager approves both; the preparer prices and materialises; the Estimator (shipped r-estimator) owns the pricing acts under test. Rev 0's frozen build-up shows 24, held and read-only; a sheet asking for 30 is refused 409 by name. Rev 0 is approved (evidence waived by the Commercial Manager), sent by the Sales Manager and copy-revised by the Estimator. In Rev 1's live workspace the quantity is held while the margin is edited, saved, frozen and generated, and the offer keeps 24. A new sheet and a new sheet version asking for 30 are both refused. THE TRACEABLE PATH: the scope is revised to 30 and approved, costed, frozen, approved, priced and converted into Rev 2 at 30 with Rev 1 (the copy) as parent; the chain reads Rev 0 revised/24, Rev 1 revised/24, Rev 2 draft/30, and Rev 2's screen holds 30. Contract: j1-journey-audit.e2e-spec.ts (Auth-ON) refuses the sheet at 30 and keeps 24. Unit: approved-scope-quantity.test.ts (8) and pricing-quotation.service.test.ts (a later CRM revision superseded rather than adopted; a reviewed offer refused). Regressions green: journey-signal-to-close, wave2-quotation-role-workflow (a manual offer with no approved scope stays freely priced), wave2-offer-output, tender-offer-revisions, chains, and the DB-backed sales mutation proof. STILL UNPROVEN (why this stays PARTIAL): (a) the TENDER route's approved quantity change — a new take-off revision re-projected and carried into the offer's next revision — has not been driven in a browser, though its first clause holds (a projected BOQ refuses hand-typed lines; CRM cannot price a tender offer, EST-16); (b) the customer offer document printing the held quantity is not checked here; (c) award → sold quantity on the DIRECT route is not proven (the tender route's is, in wave2-offer-output); (d) scope-change authority (who may approve a quantity change) is evidenced in the Auth-ON J1 contract, not in a browser. STATED: a CRM copy whose figures happen to equal the new sheet's is adopted rather than superseded, which leaves sheet and offer consistent."
     },
     {
       "id": "AWD-01",
@@ -7239,13 +7239,13 @@
     },
     {
       "id": "J1-08",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "WRONG BEHAVIOR",
       "currentBehavior": "create estimate يقبل quantity من caller تختلف عن approved basis.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-08",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "EST-19"
       ],
@@ -7261,7 +7261,7 @@
       "expectedOperationalBehavior": "Awarded quantity continuity works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Reject mismatched source quantities; approved change creates traceable revision."
+      "acceptanceProof": "MET ON THE ROUTE THE FINDING NAMES — the direct pre-award estimate — and the capability it links to is NOT promoted by this closure. THE FINDING: creating an estimate accepted a caller quantity that differed from the approved basis. REJECT MISMATCHED SOURCE QUANTITIES: the estimate loads its quantity from the persisted approved basis and a caller's 240 against an approved 24 is refused 400 with the cost left at 2,400 (Wave 0, still asserted in j1-journey-audit.e2e-spec.ts, Auth-ON); the two further ways the same quantity could be re-measured are closed and proved in a browser against PostgreSQL (approved-scope-quantity.spec.ts): a quotation-level pricing sheet asking for 30 is refused on create and on save, and the offer keeps 24 through a re-priced revision. APPROVED CHANGE CREATES TRACEABLE REVISION: a scope revised to 30, approved by the Sales Manager, costed, priced and converted becomes the offer's next revision at 30, parented to the live revision it supersedes, with the chain 24/24/30 read back — including after a CRM copy-revision that previously swallowed the change. EST-19 stays PARTIAL for the layers named on it: the tender route's quantity-change revision in a browser, the customer document, the direct route's award-to-sold-quantity hand-off, and scope-change authority in a browser."
     },
     {
       "id": "J1-09",
@@ -9153,14 +9153,14 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 42,
-      "PARTIAL": 77,
+      "PARTIAL": 78,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 8,
-      "WRONG_BEHAVIOR": 9,
+      "WRONG_BEHAVIOR": 8,
       "UNREACHABLE": 0,
       "UNVERIFIED": 40,
       "NOT_AUDITED": 0

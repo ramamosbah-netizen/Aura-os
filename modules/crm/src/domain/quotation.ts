@@ -442,6 +442,58 @@ export function reviseQuotation(
 }
 
 /**
+ * EST-19 — AWARDED QUANTITY CONTINUITY. A line that carries its approved source (`sourceItemId`) holds
+ * the quantity the offer was materialised with from the approved scope basis. Pricing prices it; it
+ * does not re-measure it. Measured on a governed direct offer before this rule: the offer was raised at
+ * the approved 24, and a quotation-level pricing sheet regenerated it at 30 with no scope change —
+ * a second writer of the sold quantity, which the frozen criterion refuses ("reject mismatched source
+ * quantities; approved change creates traceable revision").
+ *
+ * Refused, each by name: a sourced line whose quantity changes; a sourced line repeated (two lines at
+ * the held quantity would double it); a line naming a source the offer was not raised from; and — when
+ * `requireAll`, i.e. when the offer itself is being written — a sourced line left out. A quantity change
+ * is a new approved scope revision, which materialises a new offer revision: that is the traceable path.
+ * Unsourced lines are not approved scope and are not held here.
+ */
+export function assertSourcedQuantitiesHeld(
+  current: ReadonlyArray<Pick<QuotationLine, 'description' | 'quantity' | 'sourceItemId'>>,
+  next: ReadonlyArray<{ description: string; quantity: number; sourceItemId?: string | null }>,
+  offerRef: string,
+  options: { requireAll: boolean },
+): void {
+  const held = new Map(current.filter((l) => l.sourceItemId).map((l) => [l.sourceItemId as string, l]));
+  if (held.size === 0) return;
+  const seen = new Set<string>();
+  for (const line of next) {
+    const source = line.sourceItemId ?? null;
+    if (!source) continue;
+    const was = held.get(source);
+    if (!was) {
+      throw new Error(`"${line.description}" names a source item ${offerRef} was not raised from — a sourced line can only come from the approved scope`);
+    }
+    if (seen.has(source)) {
+      throw new Error(`"${was.description}" can only appear once on ${offerRef} — it carries the approved scope quantity ${was.quantity}, and a second line would add to it`);
+    }
+    seen.add(source);
+    if (Number(line.quantity) !== Number(was.quantity)) {
+      throw new Error(
+        `the quantity of "${was.description}" can only change through a new approved scope revision — ` +
+          `${offerRef} carries ${was.quantity} from the approved basis, and the pricing asks for ${line.quantity}`,
+      );
+    }
+  }
+  if (options.requireAll) {
+    const dropped = [...held.values()].filter((l) => !seen.has(l.sourceItemId as string));
+    if (dropped.length > 0) {
+      throw new Error(
+        `approved scope can only leave ${offerRef} through a new approved scope revision — the pricing omits ` +
+          dropped.map((l) => `"${l.description}"`).join(', '),
+      );
+    }
+  }
+}
+
+/**
  * REFRESH A NEVER-SUBMITTED DRAFT IN PLACE (EST-16 (a), the owner's decision of 2026-09-25).
  *
  * Before anybody has been asked to decide on an offer, re-pricing it is not a revision — it is the

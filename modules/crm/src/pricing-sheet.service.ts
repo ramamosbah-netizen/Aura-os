@@ -46,6 +46,8 @@ export class PricingSheetService {
           `re-price the tender, then generate or revise its offer there`,
       );
     }
+    // EST-19: a sheet behind an offer prices its approved scope; it does not re-measure it.
+    if (behind) await this.quotations.assertPricingHoldsApprovedScope(behind.id, input.lines ?? []);
     const sheet = makePricingSheet(input);
     await this.store.save(sheet);
     await this.events.append([
@@ -71,6 +73,7 @@ export class PricingSheetService {
   /** Save the draft's lines (the workspace's Save). The domain refuses on a frozen sheet. */
   async saveLines(id: Id, lines: EstimationLineInput[]): Promise<PricingSheet> {
     const sheet = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'pricing sheet', id);
+    if (sheet.quotationId) await this.quotations.assertPricingHoldsApprovedScope(sheet.quotationId, Array.isArray(lines) ? lines : []);
     const updated = withSheetLines(sheet, Array.isArray(lines) ? lines : []);
     await this.store.save(updated);
     return updated;

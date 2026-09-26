@@ -295,6 +295,15 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     })]);
     const repeated = (await admin.post(`/api/v1/crm/opportunities/${opp.id}/convert-to-quotation`).expect(201)).body;
     expect(repeated.id).toBe(quote.id);
+    // EST-19: the offer holds the approved scope's quantity. A quotation-level pricing sheet used to
+    // regenerate it at 30 with no scope change — a second writer of the sold quantity. Refused by name.
+    const remeasured = await admin.post('/api/v1/crm/pricing-sheets').send({
+      name: 'J1 re-measure', quotationId: quote.id,
+      lines: [{ description: '24 IP cameras', quantity: 30, unit: 'no', sourceItemId: 'camera-line', materialUnitCost: 100 }],
+    });
+    expect(remeasured.status).toBe(409);
+    expect(remeasured.body.message).toContain('carries 24 from the approved basis, and the pricing asks for 30');
+    expect((await admin.get(`/api/v1/crm/quotations/${quote.id}`).expect(200)).body.lines[0].quantity).toBe(24);
     await admin.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'submit_review' }).expect(200);
     const selfApproval = await admin.patch(`/api/v1/crm/quotations/${quote.id}/status`).send({ action: 'approve' });
     expect(selfApproval.status).toBe(403);

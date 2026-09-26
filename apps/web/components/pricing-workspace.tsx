@@ -205,8 +205,12 @@ export default function PricingWorkspace({ quotationId, sheetName, initialSheet,
                 />
               </label>
               <div style={st.two}>
-                <Num label="Quantity" v={selected.quantity} on={(n) => patch(sel, { quantity: n })} />
-                <div />
+                {/* EST-19: an approved-scope line holds its quantity; pricing prices it, it does not re-measure it. */}
+                <Num label="Quantity" v={selected.quantity} on={(n) => patch(sel, { quantity: n })} disabled={Boolean(selected.sourceItemId)}
+                  title={selected.sourceItemId ? 'Held by the approved scope — a quantity change is a new approved scope revision' : undefined} />
+                {selected.sourceItemId
+                  ? <small data-testid="quantity-held" style={{ color: 'var(--muted)', alignSelf: 'end' }}>Quantity held by the approved scope</small>
+                  : <div />}
               </div>
 
               <Group title="Materials">
@@ -493,11 +497,11 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
     </div>
   );
 }
-function Num({ label, v, on }: { label: string; v: number; on: (n: number) => void }) {
+function Num({ label, v, on, disabled, title }: { label: string; v: number; on: (n: number) => void; disabled?: boolean; title?: string }) {
   return (
-    <label style={st.numField}>
+    <label style={st.numField} title={title}>
       <span style={st.numLabel}>{label}</span>
-      <input type="number" min={0} step="0.01" value={v} onChange={(e) => { const x = Number(e.target.value); on(Number.isFinite(x) && x >= 0 ? x : 0); }} style={st.numInput} />
+      <input type="number" min={0} step="0.01" value={v} disabled={disabled} onChange={(e) => { const x = Number(e.target.value); on(Number.isFinite(x) && x >= 0 ? x : 0); }} style={st.numInput} />
     </label>
   );
 }

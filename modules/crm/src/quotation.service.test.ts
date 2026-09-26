@@ -442,7 +442,8 @@ describe('QuotationService.saveEstimation — preserves scope lineage', () => {
     const { svc } = harness();
     const q = await svc.create({
       tenantId: 't1', quoteNumber: 'QT-LINEAGE', customerName: 'Emaar', issueDate: '2026-07-14',
-      lines: [{ description: 'Old', quantity: 1, unit: 'no', sourceItemId: 'boq-item-1', unitPrice: 1, vatRate: 7 }],
+      // Materialised at the approved scope quantity; pricing re-prices it and holds it (EST-19).
+      lines: [{ description: 'Old', quantity: 24, unit: 'no', sourceItemId: 'boq-item-1', unitPrice: 1, vatRate: 7 }],
     });
 
     const updated = await svc.saveEstimation(q.id, [{

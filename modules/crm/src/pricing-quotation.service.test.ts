@@ -6,6 +6,7 @@ import { InMemoryQuotationStore } from './in-memory-quotation-store';
 import { PreAwardPackageService } from './pre-award-package.service';
 import { PricingQuotationService } from './pricing-quotation.service';
 import { openCommercialPricing, applyPricingPolicy, type PricingSheet } from './domain/pricing-sheet';
+import { reviseQuotation } from './domain/quotation';
 
 // Slice 8 PR-2 — quotation materialisation from a pricing revision, by IDENTITY (not by numbers),
 // atomic, money-from-sheet. This proves the negotiation loop the audit found broken.
@@ -120,6 +121,47 @@ describe('Slice 8 PR-2 — pricing → quotation revision loop', () => {
     // the pricing↔quote link is now closed
     const current = await packages.frozenPricingFor(T, OPP);
     expect(current!.quotationId).toBe(q2.id);
+  });
+
+  /** A priced draft at a DIFFERENT margin — a pricing revision whose figures differ from its parent's. */
+  async function openDraftAt(version: number, parentSheetId: string | null, percent: number): Promise<PricingSheet> {
+    const draft = openCommercialPricing({
+      tenantId: T, name: 'Tower B ELV', opportunityId: OPP, packageId: pkgId,
+      estimateRevisionId: 'e2', baselineCost: 1000, version, parentSheetId, createdBy: 'u1',
+    });
+    const priced = applyPricingPolicy(draft, { method: 'markup', percent }, null);
+    await pricing.save(priced);
+    return priced;
+  }
+
+  it('EST-19: an approved change supersedes the offer as it is NOW — a later CRM revision is superseded, never adopted', async () => {
+    const p1 = await freeze(await openDraft(1, null));
+    const q1 = await generate();
+    // The customer revision raised in CRM after that pricing: Rev 1, a COPY of Rev 0's figures.
+    const { superseded, next: copy } = reviseQuotation({ ...q1, status: 'sent' }, { actorId: 'u-sales' });
+    await quotes.save(superseded);
+    await quotes.save(copy);
+
+    // An approved change, priced differently and frozen: it must reach the offer as ITS figures.
+    const p2 = await freeze(await openDraftAt(2, p1.id, 35));
+    const q2 = await generate();
+    expect(q2.id).not.toBe(copy.id);
+    expect(q2.revision).toBe(2);
+    expect(q2.parentQuotationId).toBe(copy.id);
+    expect(q2.subtotal).toBe(p2.totals.totalSell);
+    expect(q2.subtotal).not.toBe(copy.subtotal);
+    expect((await quotes.get(copy.id))!.status).toBe('revised'); // the copy is history, with its figures
+    expect((await quotes.get(copy.id))!.subtotal).toBe(copy.subtotal);
+    expect((await packages.frozenPricingFor(T, OPP))!.quotationId).toBe(q2.id);
+  });
+
+  it('EST-19: an offer with a commercial reviewer is not superseded by a re-priced scope', async () => {
+    const p1 = await freeze(await openDraft(1, null));
+    const q1 = await generate();
+    await quotes.save({ ...q1, status: 'internal_review' });
+    await freeze(await openDraftAt(2, p1.id, 35));
+    await expect(generate()).rejects.toThrow(/is with a commercial reviewer, and a re-priced scope can only supersede it once the reviewer has returned or decided it/);
+    expect(await countQuotes()).toBe(1);
   });
 });
 

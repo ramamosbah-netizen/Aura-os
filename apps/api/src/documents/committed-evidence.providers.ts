@@ -40,6 +40,31 @@ import { SiteService } from '@aura/site';
 
 const CORRECTION = 'a correction is made by signing again through the module’s own act, which keeps this one';
 
+/**
+ * EST-12 — AN ISSUED TECHNICAL COMPLIANCE MATRIX IS SEALED FROM THE MOMENT IT IS FILED. It is a
+ * controlled issue: the Technical Manager's act rendered it from frozen verdicts and recorded its
+ * hash, so replacing its bytes — even by the person who issued it — would make the record describe a
+ * document that no longer exists. A change is the NEXT revision, issued with a reason.
+ */
+@Injectable()
+export class TenderComplianceMatrixCommittedProvider implements CommittedEvidenceProvider, OnModuleInit {
+  readonly entity = 'tendering.tender';
+
+  constructor(private readonly resolver: DocumentAccessResolver) {}
+
+  onModuleInit(): void {
+    this.resolver.registerCommittedEvidenceProvider(this);
+  }
+
+  async isCommitted(document: Document): Promise<CommittedEvidenceVerdict> {
+    if (document.kind !== 'technical_compliance_matrix') return NOT_COMMITTED;
+    return {
+      committed: true,
+      reason: `"${document.title}" is an issued technical compliance matrix; it can only be superseded by re-issuing the matrix from the tender, with a reason, which files its next revision`,
+    };
+  }
+}
+
 @Injectable()
 export class SiteEvidenceCommittedProvider implements CommittedEvidenceProvider, OnModuleInit {
   readonly entity = 'site.daily-report';

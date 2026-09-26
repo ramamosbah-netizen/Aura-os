@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 69 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 41 |
-| PARTIAL | 78 |
+| COMPLETE | 42 |
+| PARTIAL | 77 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -46,7 +46,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 69 gap records (34 reused + 12 ne
 | EST-09 | Risk and contingency | PARTIAL | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
 | EST-10 | Delivery overhead | PARTIAL | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
 | EST-11 | Supplier quotation source | COMPLETE | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
-| EST-12 | Technical comparison | PARTIAL | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
+| EST-12 | Technical comparison | COMPLETE | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
 | EST-13 | Commercial comparison | COMPLETE | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
 | EST-14 | Margin versus markup | PARTIAL | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |
 | EST-15 | Discount and selling price | PARTIAL | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 |

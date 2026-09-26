@@ -9,6 +9,7 @@ import TenderSubmitDialog from './tender-submit-dialog';
 import Tender360Context from './tender-360-context';
 import BidCriterionHelp from './bid-criterion-help';
 import TechnicalStudyWorkspace from './technical-study-workspace';
+import TenderComplianceMatrix from './tender-compliance-matrix';
 import TenderTakeoffPanel from './tender-takeoff-panel';
 
 interface Tender {
@@ -468,6 +469,7 @@ export default function TenderDetail({ tender, workspace = 'dashboard' }: { tend
       {workspace === 'dashboard' && <>
         <div id="qualification"><QualificationPanel tenderId={tender.id} /></div>
         <div id="study"><TechnicalStudyWorkspace opportunityId="" route="tender" tenderId={tender.id} /></div>
+        <div id="compliance-matrix"><TenderComplianceMatrix tenderId={tender.id} /></div>
       </>}
 
       {/* BOQ SECTION */}

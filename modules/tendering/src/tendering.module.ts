@@ -31,6 +31,9 @@ import { TENDER_OUTCOME_STORE } from './win-loss-store';
 import { InMemoryTenderOutcomeStore } from './in-memory-win-loss-store';
 import { PostgresTenderOutcomeStore } from './postgres-win-loss-store';
 import { WinLossService } from './win-loss.service';
+import { COMPLIANCE_MATRIX_STORE } from './compliance-matrix-store';
+import { InMemoryComplianceMatrixStore } from './in-memory-compliance-matrix-store';
+import { PostgresComplianceMatrixStore } from './postgres-compliance-matrix-store';
 
 /** The Tendering business module — same shape as CRM (the module template). */
 @Module({
@@ -73,6 +76,13 @@ import { WinLossService } from './win-loss.service';
         pool ? new PostgresEstimateStore(pool) : new InMemoryEstimateStore(),
     },
     {
+      // EST-12 — the Technical Manager's issued compliance matrices, append-only (migration 0393).
+      provide: COMPLIANCE_MATRIX_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) =>
+        pool ? new PostgresComplianceMatrixStore(pool) : new InMemoryComplianceMatrixStore(),
+    },
+    {
       provide: TENDER_OUTCOME_STORE,
       inject: [PG_POOL],
       useFactory: (pool: Pool | null) =>
@@ -91,6 +101,6 @@ import { WinLossService } from './win-loss.service';
     WinLossService,
     ClarificationService,
   ],
-  exports: [TenderService, BidScoreService, EstimateService, EstimateSourcingService, WinLossService, ClarificationService],
+  exports: [TenderService, BidScoreService, EstimateService, EstimateSourcingService, WinLossService, ClarificationService, COMPLIANCE_MATRIX_STORE],
 })
 export class TenderingModule {}

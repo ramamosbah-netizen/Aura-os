@@ -42,4 +42,8 @@ export * from './win-loss-store';
 export * from './in-memory-win-loss-store';
 export * from './postgres-win-loss-store';
 export * from './win-loss.service';
+export * from './domain/compliance-matrix';
+export * from './compliance-matrix-store';
+export * from './in-memory-compliance-matrix-store';
+export * from './postgres-compliance-matrix-store';
 export * from './tendering.module';

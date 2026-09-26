@@ -137,6 +137,8 @@ const CATEGORY_FAMILIES: Record<string, readonly FileFamily[]> = {
   correspondence: ['pdf', 'office', 'text'],
   // What a client sends with an enquiry, before anyone has sorted it into a discipline.
   client_enquiry: ['pdf', 'office', 'image', 'text'],
+  // EST-12 — written by the server only: the issued matrix is a workbook rendered from frozen verdicts.
+  technical_compliance_matrix: ['office'],
 };
 
 /** Anything not named above. Deliberately conservative rather than permissive. */

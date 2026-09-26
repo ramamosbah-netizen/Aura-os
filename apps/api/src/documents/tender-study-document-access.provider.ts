@@ -27,8 +27,10 @@ export class TenderStudyDocumentAccessProvider implements AccessContextProvider,
     const tender = await this.tenders.get(document.aggregateId);
     if (!tender || tender.tenantId !== actor.tenantId) return [];
 
+    // EST-12 — the Technical Compliance Matrix sits in the same internal dossier but is read under its
+    // own grant: the Estimator, who prices from eligible offers, reads it without reading the study.
     const allowed = this.access.can(actor.userId, {
-      permission: 'tendering.study.read',
+      permission: document.kind === 'technical_compliance_matrix' ? 'tendering.compliance-matrix.read' : 'tendering.study.read',
       orgPath: [
         { level: 'tenant', id: tender.tenantId },
         ...(tender.companyId ? [{ level: 'company' as const, id: tender.companyId }] : []),

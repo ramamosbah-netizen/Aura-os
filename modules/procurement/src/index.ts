@@ -42,6 +42,7 @@ export * from './sourcing-award.service';
 export * from './po-position.port';
 export * from './domain/purchase-order-lifecycle';
 export * from './commercial-comparison.service';
+export * from './technical-compliance.service';
 export * from './domain/commercial-normalisation';
 export * from './domain/sourcing-recommendation';
 export * from './quotation-line-evaluation.service';

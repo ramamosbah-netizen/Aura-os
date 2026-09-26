@@ -668,6 +668,9 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.internal-pricing.access',
       'tendering.takeoff.read', 'tendering.takeoff.create', 'tendering.takeoff.update', 'tendering.takeoff.project',
       'tendering.estimate.*', 'tendering.internal-pricing.access', 'tendering.tender.read', 'procurement.rfq.read',
+      // EST-12 — the Estimator prepares the supplier scope and prices only from eligible offers, so reads
+      // the Technical Manager's issued matrix; issuing it stays with the Technical Manager.
+      'tendering.compliance-matrix.read',
       readOnly('doccontrol'), ...STAFF_BASE,
     ],
   },
@@ -809,6 +812,9 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // non-compliant is not a market alternative — and an authority this consequential should be
       // held by name, so a later narrowing of the wildcard cannot silently remove it.
       'engineering.technical-evaluation.decide',
+      // EST-12 — NAMED, like the verdict above: issuing the Technical Compliance Matrix is the same
+      // authority, and the one controlled document that records it.
+      'engineering.compliance-matrix.issue',
       // DECIDES a material approval (ENG-04). The engineer who proposed the product must not be the
       // one who approves it, so this sits with the internal technical authority — alongside QA/QC,
       // which owns the register itself and holds `quality.*`.

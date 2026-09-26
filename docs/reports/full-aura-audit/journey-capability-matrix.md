@@ -80,7 +80,7 @@
 | Pre-Sales | EST-09 | PARTIAL |
 | Pre-Sales | EST-10 | PARTIAL |
 | Pre-Sales | EST-11 | COMPLETE |
-| Pre-Sales | EST-12 | PARTIAL |
+| Pre-Sales | EST-12 | COMPLETE |
 | Pre-Sales | EST-13 | COMPLETE |
 | Pre-Sales | EST-14 | PARTIAL |
 | Pre-Sales | EST-15 | PARTIAL |

@@ -19,6 +19,7 @@ import { InMemoryQuotationLineEvaluationStore } from './in-memory-quotation-line
 import { PostgresQuotationLineEvaluationStore } from './postgres-quotation-line-evaluation-store';
 import { QuotationLineService } from './quotation-line.service';
 import { CommercialComparisonService } from './commercial-comparison.service';
+import { TechnicalComplianceService } from './technical-compliance.service';
 import { QuotationCaptureService } from './quotation-capture.service';
 import { SourcingRecommendationService } from './sourcing-recommendation.service';
 import { TenderPricingBoundary } from './tender-pricing-boundary.service';
@@ -104,6 +105,7 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     },
     QuotationLineService,
     CommercialComparisonService,
+    TechnicalComplianceService,
     {
       // QC-01 — the supplier quotation as an immutable family of offers and revisions. The in-memory
       // store enforces the same invariants the Postgres indexes do, so a violation cannot be a
@@ -149,6 +151,6 @@ import { FrameworkAgreementService } from './framework-agreement.service';
     SupplierService,
     FrameworkAgreementService,
   ],
-  exports: [TenderPricingBoundary, CommercialComparisonService, QuotationCaptureService, SourcingRecommendationService, SourcingAwardService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
+  exports: [TenderPricingBoundary, CommercialComparisonService, TechnicalComplianceService, QuotationCaptureService, SourcingRecommendationService, SourcingAwardService, PurchaseOrderService, PurchaseRequestService, PurchaseRequestLineService, PurchaseOrderLineService, QuotationLineService, QuotationLineEvaluationService, RfqService, SupplierService, FrameworkAgreementService],
 })
 export class ProcurementModule {}

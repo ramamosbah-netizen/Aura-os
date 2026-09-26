@@ -3,6 +3,7 @@ import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../../components/record-chrome';
 import TenderPricingClient from '../../../../../components/tender-pricing-client';
 import TenderSupplySourcing from '../../../../../components/tender-supply-sourcing';
+import TenderComplianceMatrix from '../../../../../components/tender-compliance-matrix';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,8 @@ export default async function TenderPricingPage({ params }: { params: Promise<{ 
       </p>
       <TenderPricingClient tenderId={tender.id} />
       <TenderSupplySourcing tenderId={tender.id} />
+      {/* EST-12 — the Technical Manager's issued matrix, handed to the Estimator who prices from eligible offers. */}
+      <TenderComplianceMatrix tenderId={tender.id} compact />
     </div>
   );
 }

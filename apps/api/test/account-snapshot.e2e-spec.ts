@@ -44,7 +44,9 @@ describe('account snapshot (HTTP)', () => {
   const CHAIN: ReadonlyArray<{ what: string; url: string; body: (accountId: string) => object }> = [
     { what: 'opportunity', url: '/api/v1/crm/opportunities', body: (accountId) => ({ title: 'Deal', accountId }) },
     { what: 'tender', url: '/api/v1/tendering/tenders', body: (accountId) => ({ title: 'Tender', accountId }) },
-    { what: 'contract', url: '/api/v1/contracts/contracts', body: (accountId) => ({ title: 'Contract', accountId }) },
+    // The manual create route requires an explicit amount — a missing one is not evidence of a
+    // zero-value contract (contracts.controller.ts). The seam under test is still this route.
+    { what: 'contract', url: '/api/v1/contracts/contracts', body: (accountId) => ({ title: 'Contract', accountId, value: 250_000 }) },
     { what: 'project', url: '/api/v1/projects/projects', body: (accountId) => ({ title: 'Project', accountId }) },
     { what: 'contact', url: '/api/v1/crm/contacts', body: (accountId) => ({ name: 'Layla Hassan', accountId }) },
   ];

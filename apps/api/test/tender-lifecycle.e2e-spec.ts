@@ -13,6 +13,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
+import { approveTenderOffer, governTenderBasis, grantTenderTeam } from './governed-tender.fixture';
 
 describe('T1 tender lifecycle & gates (HTTP)', () => {
   let app: INestApplication;
@@ -24,6 +25,7 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
     app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
+    grantTenderTeam(app, 't1-tenant');
     // ADR-0021 needs a REAL identity to capture award evidence (no 'system' fallback), but
     // switching the actor on globally would turn AccessService on for every other call in these
     // specs. So the actor is per-request, via a header only the award helper sends.
@@ -157,18 +159,25 @@ describe('T1 tender lifecycle & gates (HTTP)', () => {
     await scoreBid(t.id, 8);
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'estimating' }).expect(200);
 
-    // Cannot claim priced until something is priced.
+    // Cannot claim priced until something is priced — on the governed basis: an approved study, an
+    // approved take-off projected to the BOQ, and the item priced on the sheet.
     expect((await setStatus(t.id, 'priced')).status).toBe(409);
-    await priceOneItem(t.id);
+    await governTenderBasis(http, t.id, { description: 'Cameras', unit: 'no', quantity: 10 });
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'priced' }).expect(200);
 
+    // Submission needs the internally approved offer (assertSubmissionReadiness).
+    await approveTenderOffer(http, t.id);
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'submitted' }).expect(200);
+    const estimate = (await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body.value as number;
     const won = (await award(t.id).expect(201)).body;
     expect(won.status).toBe('won');
     // The award is EVIDENCED — the customer's number, not our estimate.
     expect(won.awardEvidence.awardedValue).toBe(1_000_000);
     expect(won.awardEvidence.currency).toBe('AED');
-    expect(won.value).toBe(500_000); // the estimate is untouched
+    // The estimate is untouched by the award: still the priced BOQ's value, not the customer's number.
+    expect(estimate).toBeGreaterThan(0);
+    expect(won.value).toBe(estimate);
+    expect(won.value).not.toBe(1_000_000);
   });
 
   it('a zero-value bid cannot be submitted even when scored and priced', async () => {

@@ -15,6 +15,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
+import { TENDER_TEAM, approveTenderOffer, governTenderBasis, grantTenderTeam, priceTenderItem } from './governed-tender.fixture';
 
 describe('T2 tender submission record (HTTP)', () => {
   let app: INestApplication;
@@ -26,6 +27,7 @@ describe('T2 tender submission record (HTTP)', () => {
     app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
     app.useGlobalFilters(new AllExceptionsFilter());
     const tenant = app.get(TenantContext);
+    grantTenderTeam(app, 't2-tenant');
     // ADR-0021 needs a REAL identity to capture award evidence (no 'system' fallback), but
     // switching the actor on globally would turn AccessService on for every other call in these
     // specs. So the actor is per-request, via a header only the award helper sends.
@@ -59,25 +61,17 @@ describe('T2 tender submission record (HTTP)', () => {
       .send({ tenderId, criteria: [{ name: 'fit', weight: 1, score }] })
       .expect(201);
 
-  const priceOneItem = async (tenderId: string, itemRate = 50_000) => {
-    const { boq } = (await http.get(`/api/v1/tendering/tenders/${tenderId}/boq`).expect(200)).body;
-    const item = (await http.post(`/api/v1/tendering/tenders/${tenderId}/boq/items`)
-      .send({ boqId: boq.id, itemCode: '01', description: 'Controllers', unit: 'no', quantity: 10, rate: itemRate })
-      .expect(201)).body;
-    await http.post('/api/v1/tendering/estimates')
-      .send({ boqItemId: item.id, components: [{ costType: 'material', description: 'DDC controller', quantity: 1, unitCost: 900 }], applyToBoq: false })
-      .expect(201);
-    return { boq, item };
-  };
-
-  // Walk a fresh tender through the T1 gates up to `priced`, ready to submit.
+  // Walk a fresh tender through the T1 gates up to `priced` on the governed basis (approved study,
+  // approved take-off projected to the BOQ, the item priced on the sheet), and approve its offer —
+  // submission reads that approved offer (assertSubmissionReadiness). Ready to submit.
   const readyToSubmit = async () => {
     const t = await newTender();
     await scoreBid(t.id, 8); // 80 → go
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'estimating' }).expect(200);
-    const { boq, item } = await priceOneItem(t.id);
+    const { itemId } = await governTenderBasis(http, t.id, { description: 'DDC controllers', unit: 'no', quantity: 10 }, 900);
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'priced' }).expect(200);
-    return { tender: t, boq, item };
+    const offer = await approveTenderOffer(http, t.id);
+    return { tender: t, itemId, offer };
   };
 
   it('the submit endpoint honours the T1 gate — a bare draft is refused with a 409', async () => {
@@ -91,7 +85,7 @@ describe('T2 tender submission record (HTTP)', () => {
   });
 
   it('submitting records the facts — channel, reference, addenda, who, and the value snapshot', async () => {
-    const { tender: t } = await readyToSubmit();
+    const { tender: t, offer } = await readyToSubmit();
 
     const res = await http.post(`/api/v1/tendering/tenders/${t.id}/submit`)
       .send({ method: 'portal', portal: 'Etimad', reference: 'SUB-2026-091', addendaAcknowledged: 'ADD-01..02', validUntil: '2026-10-15', notes: 'Two boxes, hand receipt.' })
@@ -104,7 +98,9 @@ describe('T2 tender submission record (HTTP)', () => {
     expect(s.reference).toBe('SUB-2026-091');
     expect(s.addendaAcknowledged).toBe('ADD-01..02');
     expect(s.validUntil).toBe('2026-10-15');
-    expect(s.submittedValue).toBe(500_000); // the BOQ total at the moment of submission
+    // The submit command snapshots the APPROVED OFFER's value (its locked baseline) — the figure the
+    // client was sent, resolved by the server and never taken from the request.
+    expect(s.submittedValue).toBe(offer.baselineTotal);
 
     const listed = (await http.get(`/api/v1/tendering/tenders/${t.id}/submissions`).expect(200)).body;
     expect(listed).toHaveLength(1);
@@ -120,12 +116,16 @@ describe('T2 tender submission record (HTTP)', () => {
 
   it('the legacy status route still works — and now leaves a (bare) record behind', async () => {
     const { tender: t } = await readyToSubmit();
+    const estimate = (await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body.value as number;
     await http.patch(`/api/v1/tendering/tenders/${t.id}/status`).send({ status: 'submitted' }).expect(200);
 
     const listed = (await http.get(`/api/v1/tendering/tenders/${t.id}/submissions`).expect(200)).body;
     expect(listed).toHaveLength(1);
     expect(listed[0].method).toBe('other');
-    expect(listed[0].submittedValue).toBe(500_000);
+    // AS THE CODE STANDS this route snapshots the tender's own value (the priced BOQ), whereas the
+    // submit command above snapshots the approved offer's baseline — the two routes disagree.
+    expect(estimate).toBeGreaterThan(0);
+    expect(listed[0].submittedValue).toBe(estimate);
   });
 
   it('resubmission appends a second record — a fact is never edited', async () => {
@@ -139,20 +139,25 @@ describe('T2 tender submission record (HTTP)', () => {
     expect(listed.map((s: { reference: string }) => s.reference).sort()).toEqual(['SUB-1', 'SUB-2']);
   });
 
-  it('the submitted value is a snapshot — a later BOQ edit does not rewrite the offer', async () => {
-    const { tender: t, boq } = await readyToSubmit();
+  it('the submitted value is a snapshot — a later re-pricing does not rewrite the offer', async () => {
+    const { tender: t, itemId, offer } = await readyToSubmit();
     const first = (await http.post(`/api/v1/tendering/tenders/${t.id}/submit`).send({ method: 'email' }).expect(201)).body;
-    expect(first.submission.submittedValue).toBe(500_000);
+    expect(first.submission.submittedValue).toBe(offer.baselineTotal);
 
-    // The estimate keeps moving after submission (value recomputes from the BOQ)…
-    await http.post(`/api/v1/tendering/tenders/${t.id}/boq/items`)
-      .send({ boqId: boq.id, itemCode: '02', description: 'Sensors', unit: 'no', quantity: 100, rate: 1_000 })
-      .expect(201);
-    expect((await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body.value).toBe(600_000);
+    // The estimate can still move after submission — the governed way: the offer is revised with a
+    // reason (EST-16), which reopens the costing, and the item is re-priced (value recomputes from the
+    // BOQ). A projected BOQ takes no hand-typed line, so this is how the value moves.
+    const before = (await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body.value as number;
+    await http.post(`/api/v1/tendering/tenders/${t.id}/quotation/revise`).set('x-e2e-actor', TENDER_TEAM.estimator)
+      .send({ reason: 'Client asked for a re-priced controller schedule after submission' }).expect(201);
+    await priceTenderItem(http, t.id, itemId, 1_400);
+    const after = (await http.get(`/api/v1/tendering/tenders/${t.id}`).expect(200)).body.value as number;
+    expect(after).toBeGreaterThan(before);
 
     // …but what was offered on the day stays what was offered on the day.
     const listed = (await http.get(`/api/v1/tendering/tenders/${t.id}/submissions`).expect(200)).body;
-    expect(listed[0].submittedValue).toBe(500_000);
+    expect(listed).toHaveLength(1);
+    expect(listed[0].submittedValue).toBe(offer.baselineTotal);
   });
 
   it('won reads the record: blocked without one, allowed with one — even after a retreat', async () => {

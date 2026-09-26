@@ -17,6 +17,7 @@ import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../src/app.module';
 import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
+import { approveTenderOffer, governTenderBasis, grantTenderTeam } from './governed-tender.fixture';
 
 const TENANT = 'qaa-tenant';
 const SALES = 'u-qaa-sales';       // granted r-sales → holds crm.opportunity.*
@@ -51,6 +52,8 @@ describe('ADR-0020 qualification-at-award (HTTP)', () => {
     const access = app.get(AccessService);
     access.seedStandardRoles();
     access.grant({ userId: SALES, roleId: 'r-sales', scope: { kind: 'org', level: 'tenant', id: TENANT } });
+    // The people who sign the tender's governed basis and offer — see governed-tender.fixture.ts.
+    grantTenderTeam(app, TENANT);
 
     const tenant = app.get(TenantContext);
     app.use((_req: unknown, _res: unknown, next: () => void) =>
@@ -80,17 +83,18 @@ describe('ADR-0020 qualification-at-award (HTTP)', () => {
   const read360 = async (id: string): Promise<Q360> =>
     (await http.get(`/api/v1/crm/opportunities/${id}/summary`).expect(200)).body as Q360;
 
-  /** Walk a tender through its governed gates and award it with real customer evidence (ADR-0021). */
+  /**
+   * Walk a tender through its governed gates and award it with real customer evidence (ADR-0021):
+   * priced on the governed basis (approved study, approved take-off projected to the BOQ, the item
+   * priced on the sheet) and submitted with its internally approved offer.
+   */
   const awardTender = async (tenderId: string) => {
     await http.patch(`/api/v1/tendering/tenders/${tenderId}/status`).send({ status: 'qualifying' }).expect(200);
     await http.post('/api/v1/tendering/bid-scores').send({ tenderId, criteria: [{ name: 'fit', weight: 1, score: 8 }] }).expect(201);
     await http.patch(`/api/v1/tendering/tenders/${tenderId}/status`).send({ status: 'estimating' }).expect(200);
-    const { boq } = (await http.get(`/api/v1/tendering/tenders/${tenderId}/boq`).expect(200)).body;
-    const item = (await http.post(`/api/v1/tendering/tenders/${tenderId}/boq/items`)
-      .send({ boqId: boq.id, itemCode: '01', description: 'Cameras', unit: 'no', quantity: 10, rate: 50_000 }).expect(201)).body;
-    await http.post('/api/v1/tendering/estimates')
-      .send({ boqItemId: item.id, components: [{ costType: 'material', description: 'IP camera', quantity: 1, unitCost: 1200 }], applyToBoq: false }).expect(201);
+    await governTenderBasis(http, tenderId, { description: 'Cameras', unit: 'no', quantity: 10 });
     await http.patch(`/api/v1/tendering/tenders/${tenderId}/status`).send({ status: 'priced' }).expect(200);
+    await approveTenderOffer(http, tenderId);
     await http.patch(`/api/v1/tendering/tenders/${tenderId}/status`).send({ status: 'submitted' }).expect(200);
     return (await http.post(`/api/v1/tendering/tenders/${tenderId}/award`).set('x-e2e-actor', SALES)
       .send({ awardedValue: 1_000_000, currency: 'AED', awardedAt: '2026-08-21T07:30:00.000Z', awardReference: 'LOA-QAA' }).expect(201)).body;

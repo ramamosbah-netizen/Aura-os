@@ -64,7 +64,7 @@
 | Pre-Sales | STU-01 | COMPLETE |
 | Pre-Sales | STU-02 | COMPLETE |
 | Pre-Sales | STU-03 | COMPLETE |
-| Pre-Sales | STU-04 | PARTIAL |
+| Pre-Sales | STU-04 | COMPLETE |
 | Pre-Sales | STU-05 | PARTIAL |
 | Pre-Sales | STU-06 | COMPLETE |
 | Pre-Sales | STU-07 | UNVERIFIED |
@@ -257,7 +257,7 @@
 | Engineering | STU-01 | COMPLETE |
 | Engineering | STU-02 | COMPLETE |
 | Engineering | STU-03 | COMPLETE |
-| Engineering | STU-04 | PARTIAL |
+| Engineering | STU-04 | COMPLETE |
 | Engineering | STU-05 | PARTIAL |
 | Engineering | STU-06 | COMPLETE |
 | Engineering | STU-07 | UNVERIFIED |

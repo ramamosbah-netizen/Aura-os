@@ -117,6 +117,7 @@ class StudyRequirementDto {
   @IsOptional() @IsString() acceptanceCriteria?: string;
   @IsOptional() @IsString() sourceRef?: string;
   @IsOptional() @IsString() sourceRequirementId?: string;
+  @IsOptional() @IsString() sourceDocumentId?: string;
   @IsIn(['unassessed', 'compliant', 'partial', 'deviation', 'not_applicable']) compliance!: StudyCompliance;
   @IsOptional() @IsString() response?: string;
 }
@@ -135,6 +136,7 @@ class StudyClarificationDto {
   @IsIn(['open', 'answered', 'closed']) status!: StudyClarificationStatus;
   @IsOptional() @IsString() answer?: string;
   @IsOptional() @IsString() reference?: string;
+  @IsOptional() @IsString() requirementRef?: string;
 }
 class StudyDeviationDto {
   @IsOptional() @IsString() id?: string;
@@ -183,9 +185,9 @@ export function toTechnicalStudyContent(dto: TechnicalStudyContentDto): Technica
   return {
     scopeSummary: dto.scopeSummary,
     systems: dto.systems.map((item) => ({ id: item.id ?? '', discipline: item.discipline, name: item.name, designBasis: item.designBasis ?? '', interfaces: item.interfaces ?? [] })),
-    requirements: dto.requirements.map((item) => ({ id: item.id ?? '', category: item.category, statement: item.statement, acceptanceCriteria: item.acceptanceCriteria ?? '', sourceRef: item.sourceRef ?? '', sourceRequirementId: item.sourceRequirementId ?? null, compliance: item.compliance, response: item.response ?? '' })),
+    requirements: dto.requirements.map((item) => ({ id: item.id ?? '', category: item.category, statement: item.statement, acceptanceCriteria: item.acceptanceCriteria ?? '', sourceRef: item.sourceRef ?? '', sourceRequirementId: item.sourceRequirementId ?? null, sourceDocumentId: item.sourceDocumentId || null, compliance: item.compliance, response: item.response ?? '' })),
     surveyFindings: dto.surveyFindings.map((item) => ({ id: item.id ?? '', area: item.area, observation: item.observation, impact: item.impact ?? '', evidenceDocumentIds: item.evidenceDocumentIds ?? [] })),
-    clarifications: dto.clarifications.map((item) => ({ id: item.id ?? '', question: item.question, requestedFrom: item.requestedFrom ?? '', dueDate: item.dueDate ?? null, status: item.status, answer: item.answer ?? '', reference: item.reference ?? '' })),
+    clarifications: dto.clarifications.map((item) => ({ id: item.id ?? '', question: item.question, requestedFrom: item.requestedFrom ?? '', dueDate: item.dueDate ?? null, status: item.status, answer: item.answer ?? '', reference: item.reference ?? '', requirementRef: item.requirementRef ?? '' })),
     deviations: dto.deviations.map((item) => ({ id: item.id ?? '', requirementRef: item.requirementRef ?? '', description: item.description, impact: item.impact ?? '', proposedResolution: item.proposedResolution ?? '', status: item.status })),
     assumptions: dto.assumptions,
     exclusions: dto.exclusions,
@@ -234,6 +236,7 @@ export class CrmPreAwardPackageController {
     const ids = new Set([
       ...content.evidence.map((item) => item.documentId),
       ...content.surveyFindings.flatMap((item) => item.evidenceDocumentIds),
+      ...content.requirements.map((item) => item.sourceDocumentId).filter((id): id is string => Boolean(id)),
     ]);
     const documents = new Map<string, Awaited<ReturnType<DmsService['getFor']>>>();
     for (const documentId of ids) {

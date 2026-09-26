@@ -122,3 +122,32 @@ describe('STU-02: a survey finding cites the evidence its study revision freezes
     expect(created.surveyFindings[0]).toMatchObject({ area: 'Podium car park', evidenceDocumentIds: ['photo-1'] });
   });
 });
+
+describe('STU-04: a requirement cites its frozen source document, and a clarification names its requirement', () => {
+  const spec = { documentId: 'spec-1', title: 'Civil Defence circular 12', kind: 'authority_requirement', revision: '2' };
+  const authority = { ...completeContent.requirements[0], id: 'r-cd', category: 'authority' as const, statement: 'Fire alarm interface to CCTV', sourceRef: 'CD circular 12 s.4', sourceDocumentId: 'spec-1' };
+  const rfi = { id: 'c1', question: 'Is a separate fire panel interface needed?', requestedFrom: 'Consultant', dueDate: null, status: 'closed' as const, answer: 'Yes, via dry contact', reference: 'RFI-07', requirementRef: 'cd circular 12 s.4' };
+
+  async function create(requirements: Array<typeof authority>, clarifications: Array<typeof rfi>, evidence: Array<typeof spec>) {
+    const service = new PreAwardPackageService(new InMemoryPreAwardPackageStore(), new InMemoryPricingSheetStore());
+    const pkg = await service.openDirect({ tenantId: 't1', opportunityId: 'o-req' });
+    return service.createTechnicalStudy({
+      tenantId: 't1', companyId: null, packageId: pkg.id, opportunityId: 'o-req', title: 'Study', inputRevision: 'Client 01',
+      authorId: 'engineer', reviewerId: 'manager', ...completeContent, requirements, clarifications, evidence,
+    });
+  }
+
+  it('refuses a requirement citing a document the revision does not freeze', async () => {
+    await expect(create([authority], [], [])).rejects.toThrow(/a requirement must cite a source document frozen into this study revision .*Fire alarm interface/);
+  });
+
+  it('refuses a clarification naming a requirement this revision does not record', async () => {
+    await expect(create([authority], [{ ...rfi, requirementRef: 'Spec 9.9' }], [spec])).rejects.toThrow(/a clarification must name a requirement recorded in this study revision \(Spec 9.9\)/);
+  });
+
+  it('keeps both links when they point inside the revision', async () => {
+    const study = await create([authority], [rfi], [spec]);
+    expect(study.requirements[0]).toMatchObject({ category: 'authority', sourceDocumentId: 'spec-1', sourceRef: 'CD circular 12 s.4' });
+    expect(study.clarifications[0]).toMatchObject({ requirementRef: 'cd circular 12 s.4', reference: 'RFI-07' });
+  });
+});

@@ -26,6 +26,11 @@ export interface StudyRequirement {
   acceptanceCriteria: string;
   sourceRef: string;
   sourceRequirementId: Id | null;
+  /**
+   * STU-04: the frozen evidence document the requirement is taken from — the specification, the
+   * authority circular. `sourceRef` says where in it; this says which revision of which file.
+   */
+  sourceDocumentId?: Id | null;
   compliance: StudyCompliance;
   response: string;
 }
@@ -46,6 +51,8 @@ export interface StudyClarification {
   status: StudyClarificationStatus;
   answer: string;
   reference: string;
+  /** STU-04: the requirement this clarification is raised against, by its source reference. */
+  requirementRef?: string;
 }
 
 export interface StudyDeviation {
@@ -123,6 +130,18 @@ const content = (input: TechnicalStudyContent): TechnicalStudyContent => {
   if (loose.length) {
     throw new Error(`a survey finding must cite evidence frozen into this study revision — select the document as study evidence first (${loose.map((f) => f.area).join(', ')})`);
   }
+  // STU-04: a requirement's source document is one the revision freezes, for the same reason.
+  const unsourced = normalised.requirements.filter((requirement) => requirement.sourceDocumentId && !frozen.has(requirement.sourceDocumentId));
+  if (unsourced.length) {
+    throw new Error(`a requirement must cite a source document frozen into this study revision — select it as study evidence first (${unsourced.map((r) => r.statement).join(', ')})`);
+  }
+  // …and a clarification names a requirement this revision records, by its source reference.
+  const ref = (value: string) => value.trim().toLowerCase();
+  const refs = new Set(normalised.requirements.map((requirement) => ref(requirement.sourceRef)).filter(Boolean));
+  const stray = normalised.clarifications.filter((item) => item.requirementRef && !refs.has(ref(item.requirementRef)));
+  if (stray.length) {
+    throw new Error(`a clarification must name a requirement recorded in this study revision (${stray.map((c) => c.requirementRef).join(', ')})`);
+  }
   return normalised;
 };
 
@@ -142,6 +161,7 @@ const contentOf = (input: TechnicalStudyContent): TechnicalStudyContent => ({
     acceptanceCriteria: requirement.acceptanceCriteria?.trim() ?? '',
     sourceRef: requirement.sourceRef?.trim() ?? '',
     sourceRequirementId: requirement.sourceRequirementId ?? null,
+    sourceDocumentId: requirement.sourceDocumentId || null,
     compliance: requirement.compliance ?? 'unassessed',
     response: requirement.response?.trim() ?? '',
   })),
@@ -160,6 +180,7 @@ const contentOf = (input: TechnicalStudyContent): TechnicalStudyContent => ({
     status: clarification.status ?? 'open',
     answer: clarification.answer?.trim() ?? '',
     reference: clarification.reference?.trim() ?? '',
+    requirementRef: clarification.requirementRef?.trim() ?? '',
   })),
   deviations: (input.deviations ?? []).map((deviation) => ({
     id: deviation.id || newId(),

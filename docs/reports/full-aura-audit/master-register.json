@@ -333,7 +333,7 @@
         "Pre-Sales",
         "Engineering"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "CRM solution scope / Tender pre-award",
       "evidence": [
         "R-J1"
@@ -341,17 +341,17 @@
       "source": "apps/api/test/j1-journey-audit.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh lead ELV-context proof persisted structured requirement/context fields incrementally, and tender gates required study facts. Authority/government requirement categories and study UI remain incomplete/unproven.",
-      "acceptanceProof": "Engineer records client, authority and government requirements as versioned structured items linked to source documents, compliance and clarifications."
+      "currentBehavior": "REQUIREMENTS ARE VERSIONED STRUCTURED ITEMS OF THE STUDY REVISION — client, government/authority, technical and site — each with its compliance, and now LINKED to the frozen document it comes from and to the clarifications raised on it. The Sales enquiry's requirement and context arrive in the study of the direct opportunity (locked, 'Linked from Sales intake'), which was the J1-03 finding. Built and corrected here: (1) a requirement cited its source only as free text; it now cites the evidence document the revision FREEZES (a requirement citing any other document is refused); (2) a clarification could not say which requirement it was raised against; it now names one by its source reference (a reference the revision does not record is refused); (3) the clarification fields had no labels; (4) the reviewer's screen listed requirements without their category or source document and did not show clarifications at all — it now shows both, with the cited revision to open; (5) UPLOADING EVIDENCE RESET THE UNSAVED STUDY FORM: each upload reloaded the whole study, so a second upload silently unticked the first file and anything typed was lost — an upload now refreshes the evidence list only. The tender technical proposal prints each requirement's source document and each clarification's requirement.",
+      "acceptanceProof": "Unit: technical-study.service.test.ts (3: an unfrozen source document refused, an unrecorded requirement reference refused, both links kept). Browser, Auth-ON, migrated PostgreSQL (presales-requirements.spec.ts), shipped roles, on a direct opportunity whose study is assigned to and accepted by Pre-Sales: the enquiry's requirement and site arrive in the study; the client specification and a Civil Defence circular are uploaded on screen and frozen; the enquiry requirement cites the specification; a government/authority requirement cites the circular; an RFI is raised against it; saved and RELOADED (all of it persists). REFUSED: a requirement citing a document the revision does not freeze (400), an RFI naming a requirement the revision does not record (400), a viewer reading the study (403). NEXT ROLE: the Technical Manager receives the study in My Work, reads each requirement with category, source and source document and the RFI against it, approves, and opens the circular at the revision cited ('Version 1'). Regressions green: presales-site-survey, presales-study-assignment, tender-study-signoff, wave1-presales-ux, wave2-offer-output, journey-signal-to-close, approved-scope-quantity, tender-compliance-matrix. STATED: on the TENDER route the Sales enquiry's requirement and context do not flow into the tender study (the intake context is shown on the direct route); the tender proposal's new source-document and requirement lines are not asserted in a browser."
     },
     {
       "id": "STU-05",
@@ -7075,13 +7075,13 @@
     },
     {
       "id": "J1-03",
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "originalClassification": "DISCONNECTED",
       "currentBehavior": "requirement النصي والسياق على Lead لا يظهران كمدخل study في Opportunity/Scope Assist؛ leadId محفوظ، فلا ندّعي ضياع السجل.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-03",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "STU-04"
       ],
@@ -7098,7 +7098,7 @@
       "expectedOperationalBehavior": "Client and authority requirements works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Engineer records client, authority and government requirements as versioned structured items linked to source documents, compliance and clarifications."
+      "acceptanceProof": "MET ON THE ROUTE THE FINDING NAMES — the Opportunity. THE FINDING: the enquiry's requirement text and context on the Lead did not appear as study input on the Opportunity. NOW they arrive in the study of the converted opportunity (the requirement locked and linked to the persisted opportunity requirement, the site and customer shown as canonical intake), and the engineer records client and government/authority requirements as versioned structured items linked to the frozen source document, to their compliance and to the clarifications raised on them — proved on screen with save/reload, refusals and the Technical Manager's review in presales-requirements.spec.ts (browser, Auth-ON, PostgreSQL). The tender route's enquiry hand-over is stated as not covered on STU-04."
     },
     {
       "id": "J1-04",
@@ -9155,8 +9155,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 47,
-      "PARTIAL": 78,
+      "COMPLETE": 48,
+      "PARTIAL": 77,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

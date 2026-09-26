@@ -18,9 +18,9 @@ interface IntakeContext {
   nextActivityDue: string | null; salesOwnerId: string | null; source: string | null;
 }
 interface SystemRow { id: string; discipline: string; name: string; designBasis: string; interfaces: string[] }
-interface RequirementRow { id: string; category: 'client' | 'authority' | 'technical' | 'site'; statement: string; acceptanceCriteria: string; sourceRef: string; sourceRequirementId: string | null; compliance: Compliance; response: string }
+interface RequirementRow { id: string; category: 'client' | 'authority' | 'technical' | 'site'; statement: string; acceptanceCriteria: string; sourceRef: string; sourceRequirementId: string | null; sourceDocumentId?: string | null; compliance: Compliance; response: string }
 interface SurveyRow { id: string; area: string; observation: string; impact: string; evidenceDocumentIds: string[] }
-interface ClarificationRow { id: string; question: string; requestedFrom: string; dueDate: string | null; status: 'open' | 'answered' | 'closed'; answer: string; reference: string }
+interface ClarificationRow { requirementRef?: string; id: string; question: string; requestedFrom: string; dueDate: string | null; status: 'open' | 'answered' | 'closed'; answer: string; reference: string }
 interface DeviationRow { id: string; requirementRef: string; description: string; impact: string; proposedResolution: string; status: 'open' | 'accepted' | 'rejected' }
 interface EvidenceRow { documentId: string; title: string; kind: string; revision: string }
 interface Study {
@@ -40,7 +40,7 @@ const SYSTEMS = [
 const blankSystem = (): SystemRow => ({ id: '', discipline: 'ELV', name: 'CCTV', designBasis: '', interfaces: [] });
 const blankRequirement = (): RequirementRow => ({ id: '', category: 'client', statement: '', acceptanceCriteria: '', sourceRef: '', sourceRequirementId: null, compliance: 'unassessed', response: '' });
 const blankSurvey = (): SurveyRow => ({ id: '', area: '', observation: '', impact: '', evidenceDocumentIds: [] });
-const blankClarification = (): ClarificationRow => ({ id: '', question: '', requestedFrom: 'Client / Consultant', dueDate: null, status: 'open', answer: '', reference: '' });
+const blankClarification = (): ClarificationRow => ({ id: '', question: '', requestedFrom: 'Client / Consultant', dueDate: null, status: 'open', answer: '', reference: '', requirementRef: '' });
 const blankDeviation = (): DeviationRow => ({ id: '', requirementRef: '', description: '', impact: '', proposedResolution: '', status: 'open' });
 
 interface Editor {
@@ -261,8 +261,21 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
       surveyFindings: exists
         ? editor.surveyFindings.map((finding) => ({ ...finding, evidenceDocumentIds: finding.evidenceDocumentIds.filter((id) => id !== doc.id) }))
         : editor.surveyFindings,
+      requirements: exists
+        ? editor.requirements.map((requirement) => (requirement.sourceDocumentId === doc.id ? { ...requirement, sourceDocumentId: null } : requirement))
+        : editor.requirements,
     });
   };
+
+  // An upload refreshes the evidence list, nothing else. It used to reload the whole study, which
+  // unmounted the form and rebuilt it from the server: a second upload silently unticked the first
+  // file, and anything typed but not yet saved was gone.
+  const refreshDocuments = useCallback(async () => {
+    const res = await fetch(evidenceEndpoint, { cache: 'no-store' }).catch(() => null);
+    if (!res?.ok) return;
+    const docs = await res.json().catch(() => []);
+    setDocuments(Array.isArray(docs) ? docs as DocRow[] : []);
+  }, [evidenceEndpoint]);
 
   const uploadEvidence = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -289,7 +302,7 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
         : result as DocRow;
       setEvidenceTitle(''); setEvidenceFile(null); if (evidenceInput.current) evidenceInput.current.value = '';
       setNotice(`Study evidence uploaded and linked to this ${recordLabel}. Select it below to freeze it into the study revision.`);
-      await load();
+      await refreshDocuments();
       if (createdDocument?.id) {
         setDocuments((current) => [createdDocument, ...current.filter((item) => item.id !== createdDocument.id)]);
       }
@@ -309,7 +322,7 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
       const result = await response.json().catch(() => ({}));
       if (!response.ok) { setError(messageOf(result, `Revision upload refused (${response.status})`)); return; }
       setNotice(`Revision ${result.version} uploaded for ${document.title}. Re-select the file before saving if this study must use the new revision.`);
-      await load();
+      await refreshDocuments();
       if (typeof result.version === 'number') {
         setDocuments((current) => current.map((item) => item.id === document.id ? { ...item, currentVersion: result.version } : item));
       }
@@ -404,6 +417,10 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
                   <select aria-label={`Compliance ${index + 1}`} style={st.input} value={row.compliance} onChange={(e) => setEditor({ ...editor, requirements: editor.requirements.map((item, i) => i === index ? { ...item, compliance: e.target.value as Compliance } : item) })}><option value="unassessed">Not assessed</option><option value="compliant">Compliant</option><option value="partial">Partially compliant</option><option value="deviation">Deviation</option><option value="not_applicable">Not applicable</option></select>
                 </div>
                 {row.sourceRequirementId && <p style={st.linked}>Linked from Sales intake · {row.sourceRequirementId.slice(0, 8)}</p>}
+                <select aria-label={`Requirement source document ${index + 1}`} style={st.input} value={row.sourceDocumentId ?? ''} onChange={(e) => setEditor({ ...editor, requirements: editor.requirements.map((item, i) => i === index ? { ...item, sourceDocumentId: e.target.value || null } : item) })}>
+                  <option value="">{editor.evidence.length ? 'Source document — select a frozen evidence file' : 'Select a document as study evidence to cite it here'}</option>
+                  {editor.evidence.map((doc) => <option key={doc.documentId} value={doc.documentId}>{doc.title} · rev {doc.revision || '—'}</option>)}
+                </select>
                 <input aria-label={`Requirement statement ${index + 1}`} style={st.input} value={row.statement} readOnly={Boolean(row.sourceRequirementId)} onChange={(e) => setEditor({ ...editor, requirements: editor.requirements.map((item, i) => i === index ? { ...item, statement: e.target.value } : item) })} placeholder="Requirement statement" />
                 <div style={st.grid2}>
                   <input aria-label={`Acceptance criteria ${index + 1}`} style={st.input} value={row.acceptanceCriteria} onChange={(e) => setEditor({ ...editor, requirements: editor.requirements.map((item, i) => i === index ? { ...item, acceptanceCriteria: e.target.value } : item) })} placeholder="Acceptance criteria" />
@@ -443,11 +460,15 @@ function DirectTechnicalStudyWorkspace({ opportunityId, tenderId, currentUserId 
             {editor.clarifications.map((row, index) => (
               <div key={row.id || index} style={st.stackRow}>
                 <div style={st.grid3}>
-                  <input style={st.input} value={row.question} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, question: e.target.value } : item) })} placeholder="Question / clarification" />
-                  <input style={st.input} value={row.requestedFrom} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, requestedFrom: e.target.value } : item) })} placeholder="Requested from" />
-                  <select style={st.input} value={row.status} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, status: e.target.value as ClarificationRow['status'] } : item) })}><option value="open">Open</option><option value="answered">Answered</option><option value="closed">Closed</option></select>
+                  <input aria-label={`Clarification ${index + 1}`} style={st.input} value={row.question} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, question: e.target.value } : item) })} placeholder="Question / clarification" />
+                  <input aria-label={`Clarification requested from ${index + 1}`} style={st.input} value={row.requestedFrom} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, requestedFrom: e.target.value } : item) })} placeholder="Requested from" />
+                  <select aria-label={`Clarification status ${index + 1}`} style={st.input} value={row.status} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, status: e.target.value as ClarificationRow['status'] } : item) })}><option value="open">Open</option><option value="answered">Answered</option><option value="closed">Closed</option></select>
                 </div>
-                <div style={st.grid2}><input style={st.input} value={row.answer} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, answer: e.target.value } : item) })} placeholder="Answer" /><input style={st.input} value={row.reference} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, reference: e.target.value } : item) })} placeholder="Client / consultant reference" /></div>
+                <div style={st.grid2}><input aria-label={`Clarification answer ${index + 1}`} style={st.input} value={row.answer} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, answer: e.target.value } : item) })} placeholder="Answer" /><input aria-label={`Clarification reference ${index + 1}`} style={st.input} value={row.reference} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, reference: e.target.value } : item) })} placeholder="Client / consultant reference" /></div>
+                <select aria-label={`Clarification requirement ${index + 1}`} style={st.input} value={row.requirementRef ?? ''} onChange={(e) => setEditor({ ...editor, clarifications: editor.clarifications.map((item, i) => i === index ? { ...item, requirementRef: e.target.value } : item) })}>
+                  <option value="">Raised against — select a requirement by its source</option>
+                  {editor.requirements.filter((requirement) => requirement.sourceRef.trim()).map((requirement) => <option key={requirement.id || requirement.sourceRef} value={requirement.sourceRef}>{requirement.sourceRef} · {requirement.statement.slice(0, 60)}</option>)}
+                </select>
                 <button style={st.remove} onClick={() => setEditor({ ...editor, clarifications: editor.clarifications.filter((_, i) => i !== index) })}>Remove clarification</button>
               </div>
             ))}
@@ -518,7 +539,11 @@ function ReadOnlyStudy({ study }: { study: Study }) {
     <p>{study.scopeSummary}</p>
     <div style={st.summaryGrid}><b>{study.systems.length}<small> systems</small></b><b>{study.requirements.length}<small> requirements</small></b><b>{study.surveyFindings.length}<small> survey findings</small></b><b>{study.clarifications.length}<small> clarifications</small></b><b>{study.deviations.length}<small> deviations</small></b><b>{study.evidence.length}<small> evidence files</small></b></div>
     {study.evidence.length > 0 && <div style={st.docGrid}>{study.evidence.map((document) => <div key={`${document.documentId}:${document.revision}`} style={st.doc}><span><b>{document.title}</b><br /><small>{document.kind.replaceAll('_', ' ')} · frozen revision {document.revision}</small><br /><DocumentFileLink documentId={document.documentId} title={document.title} version={Number(document.revision)} label="Open frozen revision" /></span></div>)}</div>}
-    {study.requirements.length > 0 && <table style={st.table}><thead><tr><th>Requirement</th><th>Source</th><th>Assessment</th><th>Response</th></tr></thead><tbody>{study.requirements.map((row) => <tr key={row.id}><td>{row.statement}</td><td>{row.sourceRef || '—'}</td><td>{row.compliance.replace('_', ' ')}</td><td>{row.response || '—'}</td></tr>)}</tbody></table>}
+    {study.requirements.length > 0 && <table style={st.table} aria-label="Assessed requirements"><thead><tr><th>Requirement</th><th>Category</th><th>Source</th><th>Source document</th><th>Assessment</th><th>Response</th></tr></thead><tbody>{study.requirements.map((row) => {
+      const cited = row.sourceDocumentId ? study.evidence.find((item) => item.documentId === row.sourceDocumentId) : undefined;
+      return <tr key={row.id}><td>{row.statement}</td><td>{row.category === 'authority' ? 'government / authority' : row.category}</td><td>{row.sourceRef || '—'}</td><td>{cited ? <span>{cited.title} · rev {cited.revision} <DocumentFileLink documentId={cited.documentId} title={cited.title} version={Number(cited.revision)} label="Open source revision" /></span> : '—'}</td><td>{row.compliance.replace('_', ' ')}</td><td>{row.response || '—'}</td></tr>;
+    })}</tbody></table>}
+    {study.clarifications.length > 0 && <table style={st.table} aria-label="Clarifications"><thead><tr><th>Question</th><th>Raised against</th><th>Status</th><th>Answer</th></tr></thead><tbody>{study.clarifications.map((row, index) => <tr key={row.id || index}><td>{row.question}</td><td>{row.requirementRef || '—'}</td><td>{row.status}</td><td>{row.answer || '—'}</td></tr>)}</tbody></table>}
     {study.surveyFindings.length > 0 && <table style={st.table} aria-label="Site survey findings"><thead><tr><th>Area</th><th>Observation</th><th>Impact</th><th>Evidence</th></tr></thead><tbody>{study.surveyFindings.map((row, index) => <tr key={row.id || index}><td>{row.area}</td><td>{row.observation}</td><td>{row.impact || '—'}</td><td>{row.evidenceDocumentIds.length === 0 ? '—' : row.evidenceDocumentIds.map((id) => {
       const frozen = study.evidence.find((item) => item.documentId === id);
       return frozen ? <span key={id}>{frozen.title} · rev {frozen.revision} <DocumentFileLink documentId={id} title={frozen.title} version={Number(frozen.revision)} label="Open cited revision" /></span> : null;

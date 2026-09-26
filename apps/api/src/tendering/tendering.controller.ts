@@ -140,7 +140,11 @@ export class TenderingController {
   }
 
   private async canonicalizeTenderEvidence(tenderId: string, content: TechnicalStudyContent): Promise<TechnicalStudyContent> {
-    const ids = new Set([...content.evidence.map((item) => item.documentId), ...content.surveyFindings.flatMap((item) => item.evidenceDocumentIds)]);
+    const ids = new Set([
+      ...content.evidence.map((item) => item.documentId),
+      ...content.surveyFindings.flatMap((item) => item.evidenceDocumentIds),
+      ...content.requirements.map((item) => item.sourceDocumentId).filter((id): id is string => Boolean(id)),
+    ]);
     const documents = new Map<string, Awaited<ReturnType<DmsService['getFor']>>>();
     for (const documentId of ids) {
       const resolved = await this.dms.getFor(documentId, this.documentActor());

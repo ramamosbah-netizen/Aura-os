@@ -9,9 +9,9 @@ interface TechnicalProposalSource {
     id: string; revisionNo: number; title: string; inputRevision: string; reviewedAt: string | null;
     scopeSummary: string;
     systems: Array<{ discipline: string; name: string; designBasis: string; interfaces: string[] }>;
-    requirements: Array<{ category: string; statement: string; acceptanceCriteria: string; sourceRef: string; compliance: string; response: string }>;
+    requirements: Array<{ category: string; statement: string; acceptanceCriteria: string; sourceRef: string; sourceDocumentId?: string | null; compliance: string; response: string }>;
     surveyFindings: Array<{ area: string; observation: string; impact: string; evidenceDocumentIds?: string[] }>;
-    clarifications: Array<{ question: string; answer: string; status: string; reference: string }>;
+    clarifications: Array<{ question: string; answer: string; status: string; reference: string; requirementRef?: string }>;
     deviations: Array<{ requirementRef: string; description: string; impact: string; proposedResolution: string; status: string }>;
     assumptions: string[]; exclusions: string[];
     evidence: Array<{ documentId: string; title: string; kind: string; revision: string }>;
@@ -136,6 +136,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     ['Acceptance criteria', requirement.acceptanceCriteria],
     ['Response', requirement.response],
     ['Source', requirement.sourceRef],
+    ...(() => {
+      const doc = requirement.sourceDocumentId ? source.study.evidence.find((item) => item.documentId === requirement.sourceDocumentId) : undefined;
+      return doc ? [['Source document', `${doc.title} (rev ${doc.revision || '-'})`] as [string, string]] : [];
+    })(),
   ]);
 
   if (source.study.surveyFindings.length) {
@@ -151,7 +155,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (source.study.clarifications.length) {
     heading('Clarifications');
     for (const clarification of source.study.clarifications) record(`${label(clarification.status)} · ${clarification.reference || 'No reference'}`, [
-      ['Question', clarification.question], ['Answer', clarification.answer || 'No answer recorded'],
+      ['Question', clarification.question], ...(clarification.requirementRef ? [['Requirement', clarification.requirementRef] as [string, string]] : []), ['Answer', clarification.answer || 'No answer recorded'],
     ]);
   }
   if (source.study.deviations.length) {

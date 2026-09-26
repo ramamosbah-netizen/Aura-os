@@ -56,7 +56,7 @@
 | Pre-Sales / Estimator | STU-01 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | STU-02 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | STU-03 | COMPLETE | UNVERIFIED |
-| Pre-Sales / Estimator | STU-04 | PARTIAL | UNVERIFIED |
+| Pre-Sales / Estimator | STU-04 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | STU-05 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | STU-06 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | STU-07 | UNVERIFIED | UNVERIFIED |
@@ -119,7 +119,7 @@
 | Design / Technical Engineer | STU-01 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | STU-02 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | STU-03 | COMPLETE | UNVERIFIED |
-| Design / Technical Engineer | STU-04 | PARTIAL | UNVERIFIED |
+| Design / Technical Engineer | STU-04 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | STU-05 | PARTIAL | UNVERIFIED |
 | Design / Technical Engineer | STU-06 | COMPLETE | UNVERIFIED |
 | Design / Technical Engineer | STU-07 | UNVERIFIED | UNVERIFIED |
@@ -400,7 +400,7 @@
 | Technical Manager | STU-01 | COMPLETE | UNVERIFIED |
 | Technical Manager | STU-02 | COMPLETE | UNVERIFIED |
 | Technical Manager | STU-03 | COMPLETE | UNVERIFIED |
-| Technical Manager | STU-04 | PARTIAL | UNVERIFIED |
+| Technical Manager | STU-04 | COMPLETE | UNVERIFIED |
 | Technical Manager | STU-05 | PARTIAL | UNVERIFIED |
 | Technical Manager | STU-06 | COMPLETE | UNVERIFIED |
 | Technical Manager | STU-07 | UNVERIFIED | UNVERIFIED |

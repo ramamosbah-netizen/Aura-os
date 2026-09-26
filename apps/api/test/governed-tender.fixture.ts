@@ -39,15 +39,22 @@ export function grantTenderTeam(app: INestApplication, tenantId: string): void {
   }
 }
 
+/** One BOQ item's resource sheet — the supply price is the material component's unit cost. */
+export const tenderPricingSheet = (supplyUnitPrice: number) => ({
+  resources: {
+    supplyUnitPrice, technician: { count: 2, hours: 40, rate: 55 }, engineer: { count: 0, hours: 0, rate: 0 },
+    projectManager: { count: 0, hours: 0, rate: 0 }, transport: 0, wastagePercent: 0, accessories: 0, subcontract: 0, equipmentRent: 0, otherDirect: 0,
+  },
+  indirectPercent: 4, overheadPercent: 8, riskPercent: 3, profitPercent: 15,
+});
+
+/** Re-price one BOQ item on the tender's pricing sheet, as the Estimator — the raw response, for refusals. */
+export const repriceTenderItem = (http: Http, tenderId: string, itemId: string, supplyUnitPrice: number) =>
+  http.post(`/api/v1/tendering/tenders/${tenderId}/pricing/items/${itemId}`).set('x-e2e-actor', TENDER_TEAM.estimator).send(tenderPricingSheet(supplyUnitPrice));
+
 /** Price one BOQ item on the tender's pricing sheet, as the Estimator. Writes the selling rate back. */
 export async function priceTenderItem(http: Http, tenderId: string, itemId: string, supplyUnitPrice: number): Promise<void> {
-  await http.post(`/api/v1/tendering/tenders/${tenderId}/pricing/items/${itemId}`).set('x-e2e-actor', TENDER_TEAM.estimator).send({
-    resources: {
-      supplyUnitPrice, technician: { count: 2, hours: 40, rate: 55 }, engineer: { count: 0, hours: 0, rate: 0 },
-      projectManager: { count: 0, hours: 0, rate: 0 }, transport: 0, wastagePercent: 0, accessories: 0, subcontract: 0, equipmentRent: 0, otherDirect: 0,
-    },
-    indirectPercent: 4, overheadPercent: 8, riskPercent: 3, profitPercent: 15,
-  }).expect(201);
+  await repriceTenderItem(http, tenderId, itemId, supplyUnitPrice).expect(201);
 }
 
 /**
@@ -80,18 +87,21 @@ export async function governTenderBasis(
   return { itemId: item.id };
 }
 
+/** Generate the tender's offer from the priced BOQ, as the Estimator — a draft (EST-16: its Rev 0). */
+export async function generateTenderOffer(http: Http, tenderId: string): Promise<{ id: string; quoteNumber: string; status: string }> {
+  return (await http.post(`/api/v1/tendering/tenders/${tenderId}/quotation`).set('x-e2e-actor', TENDER_TEAM.estimator).send({}).expect(201)).body;
+}
+
 /**
- * Generate the tender's offer from the priced BOQ, satisfy its checklist, submit it for review and
- * approve it — which locks the Commercial Baseline the submission and award read.
+ * Satisfy the offer's evidence checklist so it may be approved.
  *
  * VENDOR_QUOTE on an offer raised from a tender is COMPUTED from the tender's governed supplier
  * quotations and cannot be typed in (409). These tenders are never put to suppliers — the supplier
  * path is proved in apps/web/e2e/tender-real-supply-path.spec.ts — so it takes the governed
  * exception: a reasoned waiver by the Commercial Manager, who is not the offer's preparer.
  */
-export async function approveTenderOffer(http: Http, tenderId: string): Promise<{ quotationId: string; baselineId: string; baselineTotal: number }> {
-  const offer = (await http.post(`/api/v1/tendering/tenders/${tenderId}/quotation`).set('x-e2e-actor', TENDER_TEAM.estimator).send({}).expect(201)).body as { id: string };
-  const checklist = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${offer.id}`).expect(200)).body as {
+export async function satisfyOfferChecklist(http: Http, quotationId: string): Promise<void> {
+  const checklist = (await http.get(`/api/v1/document-requirements?entityType=crm.quotation&entityId=${quotationId}`).expect(200)).body as {
     requirements: Array<{ id: string; type: string; requiredCount: number }>;
   };
   for (const requirement of checklist.requirements) {
@@ -103,10 +113,19 @@ export async function approveTenderOffer(http: Http, tenderId: string): Promise<
     }
     for (let i = 0; i < requirement.requiredCount; i++) {
       await http.post(`/api/v1/document-requirements/${requirement.id}/evidence`)
-        .send({ type: 'DOCUMENT_ID', reference: `${requirement.type}-${offer.id.slice(0, 8)}-${i + 1}` })
+        .send({ type: 'DOCUMENT_ID', reference: `${requirement.type}-${quotationId.slice(0, 8)}-${i + 1}` })
         .expect(201);
     }
   }
+}
+
+/**
+ * Generate the tender's offer, satisfy its checklist, submit it for review and approve it — which
+ * locks the Commercial Baseline the submission and award read.
+ */
+export async function approveTenderOffer(http: Http, tenderId: string): Promise<{ quotationId: string; baselineId: string; baselineTotal: number }> {
+  const offer = await generateTenderOffer(http, tenderId);
+  await satisfyOfferChecklist(http, offer.id);
   await http.patch(`/api/v1/crm/quotations/${offer.id}/status`).send({ action: 'submit_review' }).expect(200);
   await http.patch(`/api/v1/crm/quotations/${offer.id}/status`).send({ action: 'approve' }).expect(200);
   const baseline = (await http.get(`/api/v1/crm/quotations/${offer.id}/baseline`).expect(200)).body as { id: string; total: number };

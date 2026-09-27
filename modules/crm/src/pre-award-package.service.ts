@@ -167,6 +167,37 @@ export class PreAwardPackageService {
     return approved;
   }
 
+  /**
+   * The study a DIRECT OFFER was priced from — not whichever study is approved today. The offer's
+   * own pricing sheet names its estimate, the estimate its scope basis, and the basis the study it
+   * was projected from. `offerChain` is the offer and then its ancestors: a revision copied in CRM
+   * has no sheet of its own, so the one it was copied from is followed. Null when the chain does
+   * not lead to a study — never a guess.
+   *
+   * EST-18: resolving "the approved study" instead made an old offer's document cite the scope of a
+   * study approved after it was issued.
+   */
+  async studyBehindOffer(tenantId: Id, opportunityId: Id, offerChain: Id[]): Promise<TechnicalStudyRevision | null> {
+    const pkg = await this.store.getByOpportunity(tenantId, opportunityId);
+    if (!pkg) return null;
+    for (const quotationId of offerChain) {
+      const sheet = (await this.pricing.list({ tenantId, packageId: pkg.id, quotationId })).find((row) => row.estimateRevisionId);
+      if (!sheet) continue;
+      const estimate = (await this.store.listEstimates(tenantId, pkg.id)).find((row) => row.id === sheet.estimateRevisionId);
+      const basis = estimate ? (await this.store.listBasis(tenantId, pkg.id)).find((row) => row.id === estimate.basisRevisionId) : undefined;
+      if (!basis) return null;
+      return (await this.store.listStudies(tenantId, pkg.id)).find((study) => study.id === basis.sourceId) ?? null;
+    }
+    return null;
+  }
+
+  /** The approved study a TENDER's offer rests on, or null. Read-only, like the direct one. */
+  async approvedStudyForTenderOrNull(tenantId: Id, tenderId: Id): Promise<TechnicalStudyRevision | null> {
+    const pkg = await this.store.getByTender(tenantId, tenderId);
+    if (!pkg) return null;
+    return (await this.store.listStudies(tenantId, pkg.id)).filter((study) => study.status === 'approved').at(-1) ?? null;
+  }
+
   /** Resolve Tender study authority without creating an empty package during a failed submission. */
   async approvedTechnicalStudyForTender(tenantId: Id, tenderId: Id): Promise<TechnicalStudyRevision> {
     const pkg = await this.store.getByTender(tenantId, tenderId);

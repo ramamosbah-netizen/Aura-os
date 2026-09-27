@@ -38,6 +38,27 @@ describe('customer quotation PDF BFF', () => {
     expect(apiFetchMock).toHaveBeenNthCalledWith(2, 'http://api.test/api/v1/crm/quotations/q-1/document-identity', {
       headers: { authorization: 'Bearer session-token' }, cache: 'no-store',
     });
+    // EST-18: the customer-facing basis (study scope, lineage) is read under the same session.
+    expect(apiFetchMock).toHaveBeenNthCalledWith(3, 'http://api.test/api/v1/crm/quotations/q-1/proposal-basis', {
+      headers: { authorization: 'Bearer session-token' }, cache: 'no-store',
+    });
+  });
+
+  it('marks a revision that is not approved for issue on its face', async () => {
+    apiFetchMock
+      .mockResolvedValueOnce(Response.json({
+        quoteNumber: 'QT-2', revision: 1, customerName: 'Customer', issueDate: '2026-09-27', validUntil: null, status: 'draft',
+        subtotal: 100, vatTotal: 5, total: 105, lines: [{ description: 'Camera', quantity: 1, unit: 'no', unitPrice: 100, vatRate: 5, lineNet: 100 }],
+      }))
+      .mockResolvedValueOnce(Response.json({
+        configured: true, name: 'Company', legalName: 'Company LLC', trn: '', address: '', phone: '', email: '', website: '', currency: 'AED',
+      }))
+      .mockResolvedValueOnce(Response.json({ status: 'draft', supersedes: { quoteNumber: 'QT-2', revision: 0, reason: 'Validity' }, supersededBy: null, technicalBasis: null, issues: [] }));
+
+    const response = await call();
+    expect(response.status).toBe(200);
+    const bytes = Buffer.from(await response.arrayBuffer());
+    expect(bytes.subarray(0, 5).toString('ascii')).toBe('%PDF-');
   });
 
   it.each([403, 404])('preserves an upstream %s refusal and emits no PDF', async (status) => {

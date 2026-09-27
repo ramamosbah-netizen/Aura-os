@@ -86,7 +86,7 @@
 | Pre-Sales | EST-15 | PARTIAL |
 | Pre-Sales | EST-16 | COMPLETE |
 | Pre-Sales | EST-17 | PARTIAL |
-| Pre-Sales | EST-18 | PARTIAL |
+| Pre-Sales | EST-18 | COMPLETE |
 | Pre-Sales | EST-19 | PARTIAL |
 | Pre-Sales | SUP-01 | COMPLETE |
 | Pre-Sales | SUP-02 | UNVERIFIED |

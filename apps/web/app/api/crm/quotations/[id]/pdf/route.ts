@@ -30,6 +30,37 @@ interface Quotation {
   lines: QuoteLine[];
 }
 
+/** EST-18 — what the customer documents rest on (GET /crm/quotations/:id/proposal-basis). Customer-facing only. */
+interface ProposalBasis {
+  status: string;
+  supersedes: { quoteNumber: string; revision: number; reason: string | null } | null;
+  supersededBy: { quoteNumber: string; revision: number; status: string } | null;
+  technicalBasis: {
+    reference: string; title: string; inputRevision: string; approvedAt: string | null; scopeSummary: string;
+    systems: Array<{ discipline: string; name: string; designBasis: string }>;
+    deviations: Array<{ requirementRef: string; description: string; resolution: string }>;
+    clarifications: Array<{ reference: string; question: string; answer: string }>;
+    assumptions: string[]; exclusions: string[];
+  } | null;
+}
+
+/** Statuses in which this revision may be in the customer's hands as a valid offer. */
+const ISSUABLE = new Set(['approved', 'sent', 'under_negotiation', 'accepted']);
+
+/**
+ * What the page says about whether this revision is a valid offer. A draft or a revision under
+ * review is not approved for issue (nothing reaches a customer unapproved); a superseded revision
+ * names what replaced it; a closed one says it is closed.
+ */
+function statusBanner(quotation: Quotation, basis: ProposalBasis | null): string | null {
+  if (quotation.status === 'revised') {
+    return basis?.supersededBy ? `SUPERSEDED BY REV ${basis.supersededBy.revision} - NOT VALID FOR ACCEPTANCE` : 'SUPERSEDED - NOT VALID FOR ACCEPTANCE';
+  }
+  if (quotation.status === 'draft' || quotation.status === 'internal_review') return 'DRAFT - NOT APPROVED FOR ISSUE';
+  if (!ISSUABLE.has(quotation.status)) return `${quotation.status.replaceAll('_', ' ').toUpperCase()} - NOT VALID FOR ACCEPTANCE`;
+  return null;
+}
+
 interface DocumentIdentity {
   name: string;
   configured: boolean;
@@ -50,9 +81,13 @@ const safeFilename = (value: string): string => value.replace(/[^a-zA-Z0-9._-]+/
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const headers = await authHeader();
-  const [quotationResponse, identityResponse] = await Promise.all([
+  const [quotationResponse, identityResponse, basisResponse] = await Promise.all([
     apiFetch(`${apiBase()}/api/v1/crm/quotations/${encodeURIComponent(id)}`, { headers, cache: 'no-store' }),
     apiFetch(`${apiBase()}/api/v1/crm/quotations/${encodeURIComponent(id)}/document-identity`, { headers, cache: 'no-store' }),
+    // Optional to the document: an unreadable basis leaves it printable without the basis.
+    Promise.resolve()
+      .then(() => apiFetch(`${apiBase()}/api/v1/crm/quotations/${encodeURIComponent(id)}/proposal-basis`, { headers, cache: 'no-store' }))
+      .then((response) => response ?? null).catch(() => null),
   ]);
   if (!quotationResponse.ok) {
     return Response.json(await quotationResponse.json().catch(() => ({ message: 'Quotation unavailable' })), { status: quotationResponse.status });
@@ -63,6 +98,10 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   const quotation = await quotationResponse.json() as Quotation;
   const identity = await identityResponse.json() as DocumentIdentity;
+  // The offer still prints without its basis (an older record, a transient read); what it cannot do
+  // is print a basis it did not read.
+  const basis = basisResponse?.ok ? await basisResponse.json().catch(() => null) as ProposalBasis | null : null;
+  const technical = basis?.technicalBasis ?? null;
   if (!identity.configured) {
     return Response.json(
       { message: 'Configure the legal company name in Administration before generating customer documents.' },
@@ -81,7 +120,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     y = 16;
   };
   const ensure = (height: number): void => { if (y + height > pageHeight - 20) addPage(); };
-  const text = (value: string, x: number, opts: { size?: number; bold?: boolean; align?: 'left' | 'right' } = {}): void => {
+  const text = (value: string, x: number, opts: { size?: number; bold?: boolean; align?: 'left' | 'right' | 'center' } = {}): void => {
     pdf.setFont('helvetica', opts.bold ? 'bold' : 'normal');
     pdf.setFontSize(opts.size ?? 9);
     pdf.text(value, x, y, { align: opts.align ?? 'left' });
@@ -106,6 +145,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   pdf.line(left, y, right, y);
   y += 7;
 
+  const banner = statusBanner(quotation, basis);
+  if (banner) {
+    pdf.setFillColor(180, 35, 45);
+    pdf.rect(left, y - 5, right - left, 8, 'F');
+    pdf.setTextColor(255, 255, 255);
+    text(banner, pageWidth / 2, { size: 10, bold: true, align: 'center' });
+    pdf.setTextColor(25, 30, 40);
+    y += 8;
+  }
+  if (basis?.supersedes) {
+    const why = basis.supersedes.reason ? ` - ${basis.supersedes.reason}` : '';
+    paragraph(`Revision ${quotation.revision}: supersedes ${basis.supersedes.quoteNumber} Rev ${basis.supersedes.revision}${why}`);
+  }
+
   text('QUOTE TO', left, { size: 8, bold: true });
   y += 5;
   text(quotation.customerName, left, { size: 11, bold: true });
@@ -114,6 +167,20 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (quotation.validUntil) text(`Valid until: ${quotation.validUntil}`, right, { align: 'right' });
   if (quotation.subject) { text('Subject', left, { size: 8, bold: true }); y += 4; paragraph(quotation.subject); }
   y += 3;
+
+  // EST-18 / J1-10 — THE ENGINEERING SCOPE the price is for, from the approved technical study it
+  // rests on. The offer used to print its lines and its money and nothing of what was engineered.
+  const heading = (label: string): void => { ensure(12); y += 2; text(label, left, { size: 10, bold: true }); y += 5; };
+  if (technical) {
+    heading('Technical basis');
+    paragraph(`Approved technical study ${technical.reference} - ${technical.title} - on client input ${technical.inputRevision}${technical.approvedAt ? `, approved ${technical.approvedAt.slice(0, 10)}` : ''}.`);
+    if (technical.scopeSummary.trim()) { heading('Scope of works'); paragraph(technical.scopeSummary); }
+    if (technical.systems.length) {
+      heading('Systems');
+      for (const system of technical.systems) paragraph(`- ${system.name}${system.discipline ? ` (${system.discipline})` : ''}${system.designBasis ? `: ${system.designBasis}` : ''}`, 2);
+    }
+    y += 2;
+  }
 
   const widths = { description: 90, quantity: 18, unit: 17, unitPrice: 28, net: 30 };
   const header = (): void => {
@@ -155,11 +222,17 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     y += 5;
   }
 
+  // The offer's own exclusions and the study's, once each.
+  const exclusions = [...(quotation.exclusions ?? []), ...(technical?.exclusions ?? [])]
+    .filter((item, index, all) => item.trim() && all.findIndex((other) => other.trim().toLowerCase() === item.trim().toLowerCase()) === index);
   const sections: Array<[string, string]> = [
+    ['Deviations from the specification', (technical?.deviations ?? []).map((d) => `- ${d.requirementRef ? `${d.requirementRef}: ` : ''}${d.description}${d.resolution ? ` - ${d.resolution}` : ''}`).join('\n')],
+    ['Clarifications', (technical?.clarifications ?? []).map((c) => `- ${c.reference ? `${c.reference}: ` : ''}${c.question} - ${c.answer}`).join('\n')],
+    ['Assumptions', (technical?.assumptions ?? []).map((item) => `- ${item}`).join('\n')],
+    ['Exclusions', exclusions.map((item) => `- ${item}`).join('\n')],
     ['Payment conditions', quotation.paymentConditions || ''],
     ['Delivery terms', quotation.deliveryTerms || ''],
     ['Terms', quotation.terms || ''],
-    ['Exclusions', (quotation.exclusions ?? []).map((item) => `- ${item}`).join('\n')],
   ];
   for (const [label, value] of sections) {
     if (!value.trim()) continue;

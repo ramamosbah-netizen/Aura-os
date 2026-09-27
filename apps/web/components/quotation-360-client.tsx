@@ -151,7 +151,20 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   const pastValidity = isOpen && !!q.validUntil && q.validUntil < today;
 
   // ── Lifecycle actions (same API as the register page) ───────────────────────
-  const act = async (action: string) => {
+  // EST-18 — issuing an offer records who received it and how; the send waits for that record.
+  const [issuing, setIssuing] = useState<{ recipient: string; channel: string } | null>(null);
+  const [basis, setBasis] = useState<{
+    supersedes: { quoteNumber: string; revision: number; reason: string | null } | null;
+    issues: Array<{ at: string; by: string | null; recipient: string | null; channel: string | null }>;
+  } | null>(null);
+  useEffect(() => {
+    let live = true;
+    void fetch(`/api/crm/quotations/${encodeURIComponent(q.id)}/proposal-basis`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null)).then((b) => { if (live) setBasis(b); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [q.id, q.status]);
+  const startIssue = () => setIssuing({ recipient: q.contactName ?? '', channel: 'email' });
+  const act = async (action: string, extra: Record<string, unknown> = {}) => {
     if ((action === 'reject' || action === 'cancel' || action === 'expire') && typeof window !== 'undefined') {
       const label = action === 'reject' ? 'reject' : action === 'cancel' ? 'cancel' : 'expire';
       if (!window.confirm(`Are you sure you want to ${label} this quotation?`)) return;
@@ -159,7 +172,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
     setBusy(true); setErr(null); setMsg(null);
     try {
       const res = await fetch(`/api/crm/quotations/${q.id}/status`, {
-        method: 'PATCH', headers: { 'content-type': 'application/json', 'Idempotency-Key': operationKey(`status:${action}`) }, body: JSON.stringify({ action }),
+        method: 'PATCH', headers: { 'content-type': 'application/json', 'Idempotency-Key': operationKey(`status:${action}`) }, body: JSON.stringify({ action, ...extra }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
@@ -209,7 +222,17 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
         <ActionButton kind="primary" disabled={busy} onClick={() => act('submit_review')}>Submit for review →</ActionButton>
       )}
       {q.status === 'internal_review' && allowed.approve && <ActionButton kind="primary" disabled={busy} onClick={() => act('approve')}>Approve ✓</ActionButton>}
-      {q.status === 'approved' && allowed.send && <ActionButton kind="primary" disabled={busy} onClick={() => act('send')}>Record as sent</ActionButton>}
+      {q.status === 'approved' && allowed.send && !issuing && <ActionButton kind="primary" disabled={busy} onClick={startIssue}>Record as sent</ActionButton>}
+      {q.status === 'approved' && allowed.send && issuing && (
+        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }} data-testid="issue-form">
+          <input aria-label="Issued to" placeholder="Recipient at the customer" value={issuing.recipient} onChange={(e) => setIssuing({ ...issuing, recipient: e.target.value })} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }} />
+          <select aria-label="Issue channel" value={issuing.channel} onChange={(e) => setIssuing({ ...issuing, channel: e.target.value })} style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--bg)', color: 'var(--text)' }}>
+            <option value="email">Email</option><option value="portal">Customer portal</option><option value="hand_delivery">Hand delivery</option><option value="courier">Courier</option>
+          </select>
+          <ActionButton kind="primary" disabled={busy || !issuing.recipient.trim()} onClick={() => { void act('send', { recipient: issuing.recipient.trim(), channel: issuing.channel }).then(() => setIssuing(null)); }}>Record issue</ActionButton>
+          <ActionButton kind="ghost" disabled={busy} onClick={() => setIssuing(null)}>Cancel</ActionButton>
+        </span>
+      )}
       {q.status === 'sent' && allowed.negotiate && <ActionButton kind="ghost" disabled={busy} onClick={() => act('negotiate')}>Start negotiation</ActionButton>}
       {(q.status === 'sent' || q.status === 'under_negotiation') && (
         <>
@@ -272,7 +295,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       tone: 'good',
       title: allowed.send ? 'Ready for customer submission' : 'Approved — waiting for Sales',
       detail: allowed.send ? 'Download the approved PDF, send it through the agreed channel, then record it as sent.' : 'Sales must submit the approved document to the customer and record the submission.',
-      ...(allowed.send ? { action: { label: 'Record as sent', onClick: () => void act('send') } } : {}),
+      ...(allowed.send ? { action: { label: 'Record as sent', onClick: startIssue } } : {}),
     });
   }
   if (pastValidity) {
@@ -343,7 +366,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
   if (allowed.convertToContract && q.status === 'accepted' && !q.convertedContractId) nba = { label: '→ Convert to contract', hint: 'award the quote', onClick: () => void toContract() };
   else if (q.status === 'draft' && allowed.submitReview) nba = { label: 'Submit for review', hint: 'send to Commercial Management', onClick: () => void act('submit_review') };
   else if (q.status === 'internal_review' && allowed.approve) nba = { label: 'Approve', hint: 'locks the commercial baseline', onClick: () => void act('approve') };
-  else if (q.status === 'approved' && allowed.send) nba = { label: 'Record as sent', hint: 'after customer submission', onClick: () => void act('send') };
+  else if (q.status === 'approved' && allowed.send) nba = { label: 'Record as sent', hint: 'after customer submission', onClick: startIssue };
   else if (pastValidity && allowed.expire) nba = { label: 'Record expired', hint: `valid until ${q.validUntil}`, onClick: () => void act('expire') };
   else if ((q.status === 'rejected' || q.status === 'expired') && allowed.revise) nba = { label: 'Revise ↺', hint: `supersede Rev ${q.revision}`, onClick: () => void revise() };
   else if ((q.status === 'sent' || q.status === 'under_negotiation') && allowed.negotiate) nba = { label: 'Record negotiation', hint: 'customer response received', onClick: () => void act('negotiate') };
@@ -425,6 +448,16 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
       {tab === 'overview' && (
         <div style={{ display: 'grid', gap: 14 }}>
+          {basis && (basis.supersedes || basis.issues.length > 0) && (
+            <RecordCard title="Customer issues">
+              <div data-testid="customer-issues" style={{ display: 'grid', gap: 4, fontSize: 13 }}>
+                {basis.supersedes && <span>Supersedes {basis.supersedes.quoteNumber} Rev {basis.supersedes.revision}{basis.supersedes.reason ? ` — ${basis.supersedes.reason}` : ''}</span>}
+                {basis.issues.map((issue, index) => (
+                  <span key={`${issue.at}:${index}`}>Rev {q.revision} issued {issue.at.slice(0, 10)}{issue.recipient ? ` to ${issue.recipient}` : ''}{issue.channel ? ` by ${issue.channel.replace('_', ' ')}` : ''}{issue.by ? ` — recorded by ${issue.by}` : ''}</span>
+                ))}
+              </div>
+            </RecordCard>
+          )}
           <RecordCard title="Line items">
             <div style={{ overflowX: 'auto' }}>
               <table style={st.table}>

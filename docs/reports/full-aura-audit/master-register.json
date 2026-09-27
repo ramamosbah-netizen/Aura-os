@@ -1056,7 +1056,7 @@
       "stages": [
         "Pre-Sales"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Estimation core / Tender estimate / CRM pricing",
       "evidence": [
         "N-EST",
@@ -1065,17 +1065,17 @@
       "source": "shared/src/domain/estimation-core.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "PARTIAL",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh submission proof retained method, reference, addenda, actor and frozen value, appended resubmissions and prevented a later BOQ edit from rewriting the submitted offer. An actual branded technical/commercial document was not generated.",
-      "acceptanceProof": "Generate, approve, issue and download branded technical/commercial proposal PDFs from the frozen study/estimate, with exclusions, revisions and customer communication lineage."
+      "currentBehavior": "THE CUSTOMER PROPOSAL IS GENERATED FROM THE FROZEN STUDY AND ESTIMATE, APPROVED, ISSUED AND DOWNLOADED, AND IT SAYS WHAT IT IS. Measured before: the customer offer PDF printed branding, lines, totals and terms but NOTHING of the engineering scope it priced (J1-10), no revision lineage, and the same face whether the revision was a draft, approved or superseded; an issue to the customer recorded no recipient or channel; a direct revision could not record why it was raised. Built: (1) the offer document prints the TECHNICAL BASIS — the study the offer was actually priced from, read along the offer's own chain (pricing sheet → estimate → scope basis → study; a copied revision follows its parent), never 'whichever study is approved today' (measured: resolving the current study made an old offer cite a study approved after it) — with the scope of works, systems and design basis, accepted deviations with their resolution (their internal impact note stays internal), answered clarifications, assumptions, and the offer's and study's exclusions once each; (2) a revision says what it supersedes and why, a superseded one says so, and a draft says it is not approved for issue; (3) issuing records who received it and how (recipient, channel, by whom, when) on the send event, shown on the offer as its customer issues; (4) a direct CRM revision keeps the reason it was raised. The tender technical proposal (J1-06) prints the approved study for the tender route.",
+      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (customer-proposal-output.spec.ts), shipped roles, on a governed direct offer (Pre-Sales study approved by the Technical Manager, scope and estimate approved by the Sales Manager, pricing frozen): the draft PDF reads 'DRAFT - NOT APPROVED FOR ISSUE'; the offer is approved (checklist waived by the Commercial Manager); Sales records the issue ON SCREEN with the recipient and channel and the offer shows it; the PDF is the file the page's own Download button returns, and its bytes are parsed: company legal name and TRN, customer, quote number and revision, the priced line, totals, technical basis S-001, scope of works, systems and design basis, the accepted deviation and its resolution, the clarification, assumptions, exclusions (a shared one printed once), payment and delivery terms; NO internal cost vocabulary (cost, margin, markup, overhead, contingency, profit, build-up, labour rate, unit cost) and not the deviation's internal note. Revised with a reason, Rev 1 reads 'supersedes … Rev 0 - <reason>' and Rev 0 reads 'SUPERSEDED BY REV 1'. A study S-002 approved afterwards does not change Rev 0's document (still S-001 and its scope). A viewer is refused the PDF and its basis (403). The downloaded PDF was also opened and read as a rendered page. Unit: the PDF route (4, including a draft banner and the basis read under the same session). Regressions green: wave2-offer-output and wave2-quotation-role-workflow (their sends now record the recipient), approved-scope-quantity, tender-offer-revisions, tender-offer-review-award, journey-signal-to-close, sales-enquiry-intake. STATED: (a) the issued document is regenerated from the frozen offer and its study chain on each download — the exact bytes sent are not filed as a controlled copy; (b) a TENDER offer's document cites the tender's currently approved study, not a chain frozen at issue; (c) the issue channel's server-side validation is not asserted in a test; (d) wave2-quotation-role-workflow failed once in a combined run (Rev 1's total equal to Rev 0's) and passed alone and in two later combined runs — recorded as an intermittent failure, not diagnosed."
     },
     {
       "id": "EST-19",
@@ -5870,7 +5870,7 @@
         "browser": "PARTIAL",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "WRONG BEHAVIOUR CORRECTED ON THE TENDER STUDY; the capability stays PARTIAL. The canonical tender drawing upload no longer returns 500: the DMS stores real bytes through its storage adapter, versions them, serves each version, refuses a file by its sniffed content per category, enforces 25 MB, and keeps ownership on the persisted record whatever the caller names (proved end to end in tender-study-signoff.spec.ts — see STU-03). STILL MISSING: (a) VIRUS / MALWARE SCANNING — there is none anywhere in the code base, and the acceptance names 'size/type/virus rules'; which scanner, and where it runs, is an owner decision not yet made. (b) The same upload / version / preview / download proof in each other operational workspace the capability's roles work in.",
+      "currentBehavior": "WRONG BEHAVIOUR CORRECTED ON THE TENDER STUDY; the capability stays PARTIAL. The canonical tender drawing upload no longer returns 500: the DMS stores real bytes through its storage adapter, versions them, serves each version, refuses a file by its sniffed content per category, enforces 25 MB, and keeps ownership on the persisted record whatever the caller names (proved end to end in tender-study-signoff.spec.ts — see STU-03). STILL MISSING: (a) VIRUS / MALWARE SCANNING — there is none anywhere in the code base, and the acceptance names 'size/type/virus rules'; which scanner, and where it runs, is an owner decision not yet made. (b) The same upload / version / preview / download proof in each other operational workspace the capability's roles work in. OWNER DECISION (2026-09-27): virus scanning is to be ClamAV as a centralized, server-side, fail-closed service — an upload is refused when the scanner is unavailable or errors, never stored unscanned. NOT YET IMPLEMENTED OR PROVED; the capability stays PARTIAL until it is.",
       "acceptanceProof": "Upload real files in each operational workspace, persist bytes/metadata/version, reload/preview/download, enforce size/type/virus rules and preserve canonical ownership. MET so far for the tender technical study only, without virus scanning."
     },
     {
@@ -7158,7 +7158,7 @@
       "id": "J1-06",
       "classification": "PARTIAL",
       "originalClassification": "INCOMPLETE",
-      "currentBehavior": "THREE OF FOUR CLAUSES MET, one open on an owner decision. Drawings and specifications revisions (STU-03), compliance and deviations (STU-06) and study review and sign-off (STU-08) are COMPLETE on the tender route and proved in a browser against PostgreSQL by Pre-Sales and the Technical Manager (tender-study-signoff.spec.ts): upload, revision, preview and download of real files; a deviation assessed but not recorded refused until it is; the study reaching the reviewer's My Work and the return reaching the author's; approval on screen; the frozen evidence revision kept after a later issue; the take-off opening only on the approved study; the technical proposal printing it. The 500 the finding recorded is gone. OPEN: the fourth clause, XOP-09's 'enforce size/type/virus rules' — size (25 MB, 413) and type (sniffed content, refused on screen) are enforced, but NO VIRUS / MALWARE SCANNING EXISTS, and choosing one is the owner's decision.",
+      "currentBehavior": "THREE OF FOUR CLAUSES MET, one open on an owner decision. Drawings and specifications revisions (STU-03), compliance and deviations (STU-06) and study review and sign-off (STU-08) are COMPLETE on the tender route and proved in a browser against PostgreSQL by Pre-Sales and the Technical Manager (tender-study-signoff.spec.ts): upload, revision, preview and download of real files; a deviation assessed but not recorded refused until it is; the study reaching the reviewer's My Work and the return reaching the author's; approval on screen; the frozen evidence revision kept after a later issue; the take-off opening only on the approved study; the technical proposal printing it. The 500 the finding recorded is gone. OPEN: the fourth clause, XOP-09's 'enforce size/type/virus rules' — size (25 MB, 413) and type (sniffed content, refused on screen) are enforced, but NO VIRUS / MALWARE SCANNING EXISTS, and choosing one is the owner's decision. OWNER DECISION (2026-09-27): ClamAV as a centralized, server-side, fail-closed virus scanning service. Implementation and proof are still required; J1-06 stays OPEN until the fourth clause is proved.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-06; FRESH apps/web/e2e/tender-study-signoff.spec.ts (Auth-ON, PostgreSQL, 2026-09-26); FRESH modules/crm/src/technical-study.service.test.ts; FRESH apps/api/src/work-items/work-items.service.test.ts",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
@@ -7294,13 +7294,13 @@
     },
     {
       "id": "J1-10",
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "originalClassification": "INCOMPLETE",
       "currentBehavior": "commercial output صحيح حسابيًا، لكنه يستبدل وصف study بنص هامش داخلي وبند واحد دون عرض النطاق الهندسي.",
       "evidence": "REUSED 2026-09-13-j1-enquiry-to-approved-offer.md J1-10",
       "sourceReport": "2026-09-13-j1-enquiry-to-approved-offer.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "EST-18"
       ],
@@ -7316,7 +7316,7 @@
       "expectedOperationalBehavior": "Customer technical and commercial proposal works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Wave 1: approved study/commercial basis",
-      "acceptanceProof": "Generate, approve, issue and download branded technical/commercial proposal PDFs from the frozen study/estimate, with exclusions, revisions and customer communication lineage."
+      "acceptanceProof": "MET. THE FINDING: the commercial output was arithmetically right but showed no engineering scope — a single line and internal text in place of the study. NOW the customer proposal prints the scope it prices from the study it was actually priced from (technical basis, scope of works, systems and design basis, deviations with resolutions, clarifications, assumptions, exclusions) beside the priced lines and terms, carries no internal cost vocabulary, states its revision lineage and whether it is approved for issue, and is issued on screen with its recipient and channel recorded. Proved from the downloaded PDF's bytes in customer-proposal-output.spec.ts (browser, Auth-ON, PostgreSQL). See EST-18 for what is stated as not covered."
     },
     {
       "id": "J1-11",
@@ -9155,8 +9155,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 51,
-      "PARTIAL": 74,
+      "COMPLETE": 52,
+      "PARTIAL": 73,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

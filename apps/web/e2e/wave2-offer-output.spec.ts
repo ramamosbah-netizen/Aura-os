@@ -261,6 +261,8 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   // governed estimate — Quotation 360 sends the reviser there rather than copying the figures.
   await page.goto(`/crm/quotations/${quote.id}`);
   await page.getByRole('button', { name: 'Record as sent' }).first().click();
+  await page.getByLabel('Issued to').fill('Customer procurement');
+  await page.getByRole('button', { name: 'Record issue' }).click();
   await expect(page.getByText('Sent', { exact: true }).first()).toBeVisible();
   await page.getByRole('button', { name: 'Start negotiation' }).first().click();
   await expect(page.getByText('Under negotiation', { exact: true }).first()).toBeVisible();
@@ -377,6 +379,8 @@ test('downloads governed Tender pricing and technical outputs from their clear w
   await expect(page.getByText('Rev 0', { exact: true })).toBeVisible();
   await expect(page.getByText('Rev 1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Record as sent' }).first().click();
+  await page.getByLabel('Issued to').fill('Customer procurement');
+  await page.getByRole('button', { name: 'Record issue' }).click();
   await expect(page.getByText('Sent', { exact: true }).first()).toBeVisible();
 
   // Submission and award accept no caller-selected quotation/baseline fields. The controller strips

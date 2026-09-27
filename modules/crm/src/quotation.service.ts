@@ -45,6 +45,20 @@ export interface CommercialPricingSummaryRow {
  * Quotation service — owns `aura_crm_quotations`, emits `crm.quotation.*` on the spine.
  * The pre-sales quote that precedes a Contract / Customer Invoice.
  */
+/** How an offer reached the customer (EST-18). Optional on the API so older callers still send. */
+export interface QuotationIssueInput {
+  recipient?: string | null;
+  channel?: QuotationIssueChannel | null;
+}
+export const QUOTATION_ISSUE_CHANNELS = ['email', 'portal', 'hand_delivery', 'courier'] as const;
+export type QuotationIssueChannel = typeof QUOTATION_ISSUE_CHANNELS[number];
+
+export interface ProposalLineage {
+  supersedes: { quoteNumber: string; revision: number; reason: string | null } | null;
+  supersededBy: { quoteNumber: string; revision: number; status: string } | null;
+  issues: Array<{ at: string; by: string | null; recipient: string | null; channel: string | null }>;
+}
+
 @Injectable()
 export class QuotationService {
   private readonly logger = new Logger('CrmQuotation');
@@ -139,7 +153,7 @@ export class QuotationService {
     return updated;
   }
 
-  async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null, reason?: string): Promise<Quotation> {
+  async changeStatus(id: Id, action: QuotationAction, actorId: Id | null = null, reason?: string, issue?: QuotationIssueInput): Promise<Quotation> {
     let baselineInserted = false;
     let baseline: CommercialBaseline | null = null;
     let source!: Quotation;
@@ -182,7 +196,12 @@ export class QuotationService {
         type: eventType,
         tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
         aggregateType: 'crm.quotation', aggregateId: id,
-        payload: { quoteNumber: q.quoteNumber, total: q.total, status: updated.status, action },
+        payload: {
+          quoteNumber: q.quoteNumber, total: q.total, status: updated.status, action,
+          // EST-18 — what reached the customer, and how: the issue record lives on the event that
+          // sent it, as the lead's assignment history lives on its events.
+          ...(action === 'send' ? { revision: q.revision, recipient: issue?.recipient?.trim() || null, channel: issue?.channel ?? null } : {}),
+        },
       })];
       const existing = action === 'approve' ? await this.baselines.getByQuotation(updated.tenantId, updated.id) : null;
       baseline = action === 'approve' && !existing ? makeCommercialBaseline(updated, actor) : null;
@@ -261,6 +280,34 @@ export class QuotationService {
   }
 
   /** Every time this offer was sent back, and why. Empty when it never was. */
+  /**
+   * EST-18 — the revision lineage and the customer issues of one offer, for the documents that go to
+   * the customer: which revision this one supersedes and why, what superseded it, and every time it
+   * was issued (by whom, when, to whom, how).
+   */
+  async proposalLineage(tenantId: Id, id: Id): Promise<ProposalLineage> {
+    const q = assertSameTenant(await this.store.get(id), tenantId, 'quotation', id);
+    const chain = await this.store.list({ tenantId, quoteNumber: q.quoteNumber, limit: 100 });
+    const parent = q.parentQuotationId ? chain.find((row) => row.id === q.parentQuotationId) ?? null : null;
+    const child = chain.find((row) => row.parentQuotationId === q.id) ?? null;
+    const reason = parent
+      ? (await this.listReviewDecisions(tenantId, parent.id)).filter((d) => d.outcome === 'revised').at(-1)?.reason ?? null
+      : null;
+    const sent = await this.events.list({ tenantId, type: QUOTATION_EVENT.sent, aggregateId: q.id });
+    return {
+      supersedes: parent ? { quoteNumber: parent.quoteNumber, revision: parent.revision, reason } : null,
+      supersededBy: child ? { quoteNumber: child.quoteNumber, revision: child.revision, status: child.status } : null,
+      issues: sent.map((e) => {
+        const p = (e.payload ?? {}) as Record<string, unknown>;
+        return {
+          at: e.occurredAt, by: e.actorId ?? null,
+          recipient: typeof p.recipient === 'string' ? p.recipient : null,
+          channel: typeof p.channel === 'string' ? p.channel : null,
+        };
+      }),
+    };
+  }
+
   listReviewDecisions(tenantId: Id, quotationId: Id): Promise<QuotationReviewDecision[]> {
     return this.reviews ? this.reviews.listByQuotation(tenantId, quotationId) : Promise.resolve([]);
   }

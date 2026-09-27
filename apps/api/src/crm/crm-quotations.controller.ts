@@ -6,6 +6,7 @@ import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldVa
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
   analysePricing, type LineRefs, type SheetLineForAdvice,
+  PreAwardPackageService, QUOTATION_ISSUE_CHANNELS, type QuotationIssueChannel,
 } from '@aura/crm';
 import { MarketItemService } from '@aura/market-intelligence';
 import { type Contract, ContractService } from '@aura/contracts';
@@ -101,6 +102,7 @@ export class CrmQuotationsController {
     private readonly companies: CompaniesService,
     private readonly settings: SettingsService,
     private readonly access: AccessService,
+    private readonly packages: PreAwardPackageService,
   ) {}
 
   private accessTarget(q: Pick<Quotation, 'tenantId' | 'companyId'>, permission: string) {
@@ -169,10 +171,12 @@ export class CrmQuotationsController {
   /** Supersede this quotation (status 'revised') and draft Rev n+1 with the same number, lines and terms. */
   @Permissions('crm.quotation.update')
   @Post(':id/revise')
-  async revise(@Param('id') id: string): Promise<Quotation> {
+  async revise(@Param('id') id: string, @Body() dto?: { reason?: string }): Promise<Quotation> {
     // Preserve the shared error taxonomy: inaccessible quotes remain 404 and infrastructure
     // failures remain 5xx instead of every failure being flattened into a misleading 400.
-    return await this.quotations.revise(id);
+    // EST-18: the reason a customer revision was raised is kept with it, and the next revision's
+    // documents say what they supersede and why.
+    return await this.quotations.revise(id, this.tenant.get().actorId ?? null, { reason: dto?.reason?.trim() || undefined });
   }
 
   @Permissions('crm.quotation.create')
@@ -583,10 +587,13 @@ export class CrmQuotationsController {
   @Permissions('crm.quotation.read')
   async changeStatus(
     @Param('id') id: string,
-    @Body() dto: { action: QuotationAction; reason?: string },
+    @Body() dto: { action: QuotationAction; reason?: string; recipient?: string; channel?: QuotationIssueChannel },
   ): Promise<Quotation> {
     if (!QUOTATION_ACTIONS.includes(dto?.action)) {
       throw new BadRequestException(`action must be one of ${QUOTATION_ACTIONS.join(', ')}`);
+    }
+    if (dto.channel != null && !(QUOTATION_ISSUE_CHANNELS as readonly string[]).includes(dto.channel)) {
+      throw new BadRequestException(`channel must be one of ${QUOTATION_ISSUE_CHANNELS.join(', ')}`);
     }
     // Asked here as well as in the domain, so the person pressing the button is told before the
     // transaction opens rather than after it refuses.
@@ -599,7 +606,58 @@ export class CrmQuotationsController {
     if (actorId) this.access.assert(actorId, this.accessTarget(q, QUOTATION_ACTION_PERMISSION[dto.action]));
     // Pass the actor so approval records who locked the commercial baseline (R3 governance), and
     // so a send-back records who sent it back.
+    // Only an issue carries its recipient and channel (EST-18); every other action keeps its call.
+    if (dto.action === 'send') {
+      return await this.quotations.changeStatus(id, dto.action, actorId, dto.reason, { recipient: dto.recipient ?? null, channel: dto.channel ?? null });
+    }
     return await this.quotations.changeStatus(id, dto.action, actorId, dto.reason);
+  }
+
+  /**
+   * EST-18 — what the CUSTOMER documents of this offer rest on: the approved technical study (its
+   * scope, systems, accepted deviations, answered clarifications, assumptions and exclusions), the
+   * revision lineage, and every issue to the customer. Customer-facing fields only — no cost, rate,
+   * margin or build-up — because this is read to print what goes to the customer, and it is read by
+   * whoever may read the offer.
+   */
+  @Permissions('crm.quotation.read')
+  @Get(':id/proposal-basis')
+  async proposalBasis(@Param('id') id: string) {
+    const tenantId = this.tenant.get().tenantId;
+    const q = await this.quotations.get(id);
+    if (!q || q.tenantId !== tenantId) throw new NotFoundException(`quotation ${id} not found`);
+    // The offer and its ancestors, newest first — the chain the direct route's study is read along.
+    const revisions = await this.quotations.listRevisions(tenantId, id);
+    const chain: string[] = [];
+    for (let at: Quotation | undefined = q; at && !chain.includes(at.id); at = revisions.find((r) => r.id === at!.parentQuotationId)) chain.push(at.id);
+    const [lineage, study] = await Promise.all([
+      this.quotations.proposalLineage(tenantId, id),
+      // A tender offer rests on the tender's approved study (its revisions are regenerated from the
+      // tender, EST-16); a direct offer on the study its own pricing chain was projected from.
+      q.sourceTenderId ? this.packages.approvedStudyForTenderOrNull(tenantId, q.sourceTenderId)
+        : q.sourceOpportunityId ? this.packages.studyBehindOffer(tenantId, q.sourceOpportunityId, chain)
+          : Promise.resolve(null),
+    ]);
+    return {
+      status: q.status,
+      ...lineage,
+      technicalBasis: study ? {
+        reference: `S-${String(study.revisionNo).padStart(3, '0')}`,
+        title: study.title,
+        inputRevision: study.inputRevision,
+        approvedAt: study.reviewedAt,
+        scopeSummary: study.scopeSummary,
+        systems: study.systems.map((s) => ({ discipline: s.discipline, name: s.name, designBasis: s.designBasis })),
+        // What the company departs from, and how it resolves it — the deviation's internal impact
+        // assessment stays internal.
+        deviations: study.deviations.filter((d) => d.status === 'accepted')
+          .map((d) => ({ requirementRef: d.requirementRef, description: d.description, resolution: d.proposedResolution })),
+        clarifications: study.clarifications.filter((c) => c.status !== 'open' && c.answer.trim())
+          .map((c) => ({ reference: c.reference, question: c.question, answer: c.answer })),
+        assumptions: study.assumptions,
+        exclusions: study.exclusions,
+      } : null,
+    };
   }
 
   /** Every time this offer was returned for revision, and why. Append-only, oldest first. */

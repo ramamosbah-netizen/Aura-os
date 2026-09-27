@@ -132,6 +132,8 @@ test('Estimator prepares, Commercial approves, and Sales submits without seeing 
     expect(salesPricing.status()).toBe(403);
     await expect(sales.page.getByRole('button', { name: 'Record as sent' }).first()).toBeVisible();
     await sales.page.getByRole('button', { name: 'Record as sent' }).first().click();
+    await sales.page.getByLabel('Issued to').fill('Customer procurement');
+    await sales.page.getByRole('button', { name: 'Record issue' }).click();
     await expect(sales.page.getByText('Sent', { exact: true }).first()).toBeVisible();
     await expect(sales.page.getByRole('button', { name: 'Start negotiation' })).toBeVisible();
     await sales.page.getByRole('button', { name: 'Start negotiation' }).click();
@@ -258,6 +260,8 @@ test('Estimator prepares, Commercial approves, and Sales submits without seeing 
     await expect(sales.page.getByText('Rev 0', { exact: true })).toBeVisible();
     await expect(sales.page.getByText('Rev 1', { exact: true })).toBeVisible();
     await sales.page.getByRole('button', { name: 'Record as sent' }).first().click();
+    await sales.page.getByLabel('Issued to').fill('Customer procurement');
+    await sales.page.getByRole('button', { name: 'Record issue' }).click();
     await expect(sales.page.getByText('Sent', { exact: true }).first()).toBeVisible();
     await sales.page.getByRole('button', { name: 'Record accepted ✓' }).click();
     await expect(sales.page.getByText('Accepted', { exact: true }).first()).toBeVisible();

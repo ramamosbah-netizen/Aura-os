@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, type HealthSignal, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type AccessTarget, type HealthSignal, type Id, type OrgLevel, type Page, type PageParams, makeEvent, businessDate } from '@aura/shared';
 import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
@@ -557,7 +557,7 @@ export class HseService {
    * These thresholds are HSE's, and HSE changes them here. Projects will report whatever this
    * returns without reinterpreting it.
    */
-  async readProjectHseHealth(tenantId: Id, projectId: Id, today = new Date().toISOString().slice(0, 10)): Promise<HealthSignal> {
+  async readProjectHseHealth(tenantId: Id, projectId: Id, today = businessDate()): Promise<HealthSignal> {
     const href = `/project/${encodeURIComponent(projectId)}/workspace/hse`;
     const [incidents, capas] = await Promise.all([this.listIncidents(tenantId), this.listCapas(tenantId)]);
 

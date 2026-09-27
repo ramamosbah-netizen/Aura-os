@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from 'react';
 import type { CommQuotation, CommContract, CommercialPricingSummaryRow } from './commercial-workspace';
+import { businessDateInputValue, businessDateInDays } from '@/lib/locale';
 
 // Portfolio-level financials and risk — the aggregate view. Quotation 360 answers
 // "what is this quote worth"; this answers "what is the desk carrying, and what is
@@ -13,8 +14,8 @@ import type { CommQuotation, CommContract, CommercialPricingSummaryRow } from '.
 const aed = (n: number): string => 'AED ' + (n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
 const OPEN = ['draft', 'internal_review', 'approved', 'sent', 'under_negotiation'];
 
-const today = (): string => new Date().toISOString().slice(0, 10);
-const inDays = (n: number): string => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+const today = (): string => businessDateInputValue();
+const inDays = (n: number): string => businessDateInDays(n);
 const daysSince = (iso: string): number => {
   const ms = Date.now() - new Date(iso).getTime();
   return Number.isNaN(ms) ? 0 : Math.max(0, Math.floor(ms / 86400000));

@@ -1,4 +1,4 @@
-import { type Id, type EstimationLineInput, newId, mulMoney, vatOf, sumMoney, addMoney } from '@aura/shared';
+import { type Id, type EstimationLineInput, newId, mulMoney, vatOf, sumMoney, addMoney, businessDate } from '@aura/shared';
 // quotation-pricing has only a type-only dep back on this file, so this value
 // import is one-way at runtime — no cycle.
 import { type QuotationPricingInput, emptyPricingLine } from './quotation-pricing';
@@ -400,7 +400,7 @@ export function reviseQuotation(
   if (!allowed) {
     throw new Error(`cannot revise from status ${q.status} — must be sent, under negotiation, rejected or expired`);
   }
-  const issueDate = options.issueDate ?? new Date().toISOString().slice(0, 10);
+  const issueDate = options.issueDate ?? businessDate();
   const next = makeQuotation({
     tenantId: q.tenantId,
     companyId: q.companyId,

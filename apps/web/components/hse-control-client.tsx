@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import EmptyState from './ui/empty-state';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue } from '@/lib/locale';
 import { HSE_PATH, HSE_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 
@@ -129,7 +129,7 @@ export default function HseControlClient({
   const trainingRecords = initialTrainingRecords;
   const [error, setError] = useState<string | null>(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = businessDateInputValue();
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
   // A permit cannot be approved without an approved assessment, so offer them at request time.
   const riskAssessmentOptions = riskAssessments.map((r) => ({ value: r.id, label: `${r.reference} — ${r.activity}` }));

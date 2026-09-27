@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { CircleAlert, CircleCheck, CircleHelp, Flag, TriangleAlert } from 'lucide-react';
 import styles from './milestones-panel.module.css';
+import { businessDateInputValue } from '@/lib/locale';
 
 /**
  * The points in this programme where something must be TRUE (PLN-04).
@@ -131,7 +132,7 @@ export default function MilestonesPanel({ projectId, tasks = [], members = [] }:
       const response = await fetch(`/api/projects/milestones/${id}/achievement`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ on: new Date().toISOString().slice(0, 10) }),
+        body: JSON.stringify({ on: businessDateInputValue() }),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(result?.message || result?.error || 'Could not record the achievement');

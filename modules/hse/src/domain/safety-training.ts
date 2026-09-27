@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { businessDate } from '@aura/shared';
 
 export interface SafetyTrainingRecord {
   id: string;
@@ -36,7 +37,7 @@ export function makeSafetyTrainingRecord(input: NewSafetyTrainingRecord): Safety
   let status: 'valid' | 'expired' = 'valid';
   if (input.cardExpiry) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(input.cardExpiry)) throw new Error('cardExpiry must be YYYY-MM-DD');
-    const today = new Date().toISOString().split('T')[0];
+    const today = businessDate();
     if (input.cardExpiry < today) {
       status = 'expired';
     }

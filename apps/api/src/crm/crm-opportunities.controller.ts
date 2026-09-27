@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, NotFoundException, Param, P
 import { IsIn, IsNumber, IsObject, IsOptional, IsString, Max, Min, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 import { TenantContext, ParseUuidOr404Pipe, AccessService } from '@aura/core';
-import { FORECAST_CATEGORIES, EXECUTION_TYPES, QUALIFICATION_KEYS, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence, type QualificationKey, type QualificationPatch, type QualificationStatus, type QualificationSource, type QualificationView } from '@aura/shared';
+import { FORECAST_CATEGORIES, EXECUTION_TYPES, QUALIFICATION_KEYS, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence, type QualificationKey, type QualificationPatch, type QualificationStatus, type QualificationSource, type QualificationView, businessDate } from '@aura/shared';
 import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationApprovalPolicyService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
@@ -226,7 +226,7 @@ export class CrmOpportunitiesController {
       accountId: opp.accountId,
       sourceOpportunityId: opp.id,
       ownerId: opp.ownerId ?? null,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: businessDate(),
       lines: [{ description: opp.title, quantity: 1, unitPrice: opp.value, vatRate: 5 }],
       createdBy: ctx.actorId,
     });

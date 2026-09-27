@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type Id, type OrgLevel, type Page, type PageParams, makeEvent, businessDate } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, UsersService } from '@aura/core';
 
 import { type Employee, makeEmployee } from './domain/employee';
@@ -366,7 +366,7 @@ export class HrService {
     return computeLeaveBalance({
       annualDays,
       joinedDate: emp.joinedDate,
-      asOf: asOf ?? new Date().toISOString().slice(0, 10),
+      asOf: asOf ?? businessDate(),
       leaves: leaves.map((l) => ({ startDate: l.startDate, endDate: l.endDate, status: l.status })),
     });
   }
@@ -791,7 +791,7 @@ export class HrService {
   /** Visa / work-permit documents expired or expiring within `withinDays`, soonest first. */
   async documentExpiry(tenantId: string, withinDays = 90, asOf?: string): Promise<DocumentExpiryReport> {
     const employees = await this.employeeStore.findByTenant(tenantId);
-    return buildDocumentExpiryReport(employees, asOf ?? new Date().toISOString().slice(0, 10), withinDays);
+    return buildDocumentExpiryReport(employees, asOf ?? businessDate(), withinDays);
   }
 
   // ── Performance appraisals ──────────────────────────────────────────────────

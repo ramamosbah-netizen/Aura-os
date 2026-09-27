@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, businessDate } from '@aura/shared';
 
 /**
  * Expense Claim — an employee reimbursement request. Lifecycle:
@@ -129,7 +129,7 @@ export function reimburseClaim(
     ...claim,
     status: 'reimbursed',
     reimbursedBy,
-    reimbursedDate: reimbursedDate ?? new Date().toISOString().slice(0, 10),
+    reimbursedDate: reimbursedDate ?? businessDate(),
   };
 }
 

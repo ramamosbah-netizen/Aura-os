@@ -7,7 +7,7 @@ import ExportButton from './export-button';
 import RelationshipAlerts from './relationship-alerts';
 import AuraTabLink from './aura-tab-link';
 import { isPersonalExecutableActivity, myWorkActivityHref } from '@/lib/activity-navigation';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue, businessDateInDays } from '@/lib/locale';
 
 // Sales · All Activity Register — every interaction and to-do on the deal chain (call, email,
 // meeting, note, task), agenda-grouped by urgency: Overdue → Today → This week →
@@ -104,8 +104,8 @@ export default function ActivitiesClient({ initialActivities, accounts, contacts
   const [query, setQuery] = useState(initialSearch);
   const [completing, setCompleting] = useState<{ id: string; outcome: string; fuOn: boolean; fuType: string; fuSubject: string; fuDate: string } | null>(null);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const today = businessDateInputValue();
+  const weekEnd = businessDateInDays(7);
 
   const kpi = useMemo(() => {
     // Headline counts respect the saved-view SCOPE (related type) but not the transient type/text refinements.

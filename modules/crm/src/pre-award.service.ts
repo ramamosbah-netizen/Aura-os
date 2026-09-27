@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { QuotationApprovalPolicyService } from './quotation-approval-policy.service';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, makeEvent, businessDate } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
   type Requirement, type NewRequirement, type RequirementPriority, type RequirementStatus, makeRequirement,
@@ -151,7 +151,7 @@ export class PreAwardService {
       accountId: opts.accountId ?? null,
       sourceOpportunityId: s.opportunityId,
       quoteNumber: `QT-S-${s.id.slice(0, 8)}`,
-      issueDate: new Date().toISOString().slice(0, 10),
+      issueDate: businessDate(),
       lines: scopeLinesToQuotationLines(s),
       createdBy: opts.actorId ?? null,
     });

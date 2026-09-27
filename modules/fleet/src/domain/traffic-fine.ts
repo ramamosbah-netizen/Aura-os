@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { businessDate } from '@aura/shared';
 
 /**
  * Traffic Fine — a UAE traffic violation charged against a fleet vehicle. Black points (UAE: 0–24)
@@ -136,7 +137,7 @@ export function payFine(fine: TrafficFine, paidDate?: string): TrafficFine {
   return {
     ...fine,
     status: 'paid',
-    paidDate: paidDate ?? new Date().toISOString().slice(0, 10),
+    paidDate: paidDate ?? businessDate(),
     updatedAt: new Date().toISOString(),
   };
 }

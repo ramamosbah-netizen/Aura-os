@@ -6,6 +6,7 @@ import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
 import { EntityForm } from './form-engine';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface Employee {
   id: string;
@@ -88,7 +89,7 @@ export default function HrControlClient({
   const payrollRuns = initialPayrollRuns;
   const [error, setError] = useState<string | null>(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = businessDateInputValue();
   const employeeOptions = employees.map((p) => ({ value: p.id, label: `${p.firstName} ${p.lastName} (${p.role})` }));
 
   // Helper: check if a date is within 30 days or passed

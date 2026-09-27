@@ -1,7 +1,7 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, Inject, NotFoundException, Optional, Param, Patch, Post, Query, ServiceUnavailableException } from '@nestjs/common';
 import { IsArray, IsBoolean, IsIn, IsNumber, IsOptional, IsString } from 'class-validator';
 import { AccessService, TenantContext, ParseUuidOr404Pipe, Permissions, SelfScoped, CalendarService } from '@aura/core';
-import { parsePageParams, type OrgLevel, type Page, type ProjectHealth, type RiskImpact, type RiskLikelihood } from '@aura/shared';
+import { parsePageParams, type OrgLevel, type Page, type ProjectHealth, type RiskImpact, type RiskLikelihood, businessDate } from '@aura/shared';
 import {
   type Project,
   type ProjectStatus,
@@ -858,7 +858,7 @@ export class ProjectsController {
     return this.schedule.delayImpact({
       tenantId: ctx.tenantId,
       projectId: delay.projectId,
-      today: new Date().toISOString().slice(0, 10),
+      today: businessDate(),
       delay: {
         id: delay.id, claimedDays: delay.delayDays, startDate: delay.startDate,
         endDate: delay.endDate, affectedTaskIds: delay.affectedTaskIds,
@@ -1128,7 +1128,7 @@ export class ProjectsController {
   }> {
     const found = await this.projects.get(id);
     if (!found) throw new NotFoundException(`project ${id} not found`);
-    const asOf = new Date().toISOString().slice(0, 10);
+    const asOf = businessDate();
     const [risks, issues, riskSummary, issueSummary] = await Promise.all([
       this.risks.list({ projectId: id }),
       this.issues.list({ projectId: id }),
@@ -1583,7 +1583,7 @@ export class ProjectsController {
       tenantId: ctx.tenantId,
       projectId,
       weeks: Number(weeks ?? 3),
-      today: new Date().toISOString().slice(0, 10),
+      today: businessDate(),
       commitments,
     });
   }
@@ -1651,7 +1651,7 @@ export class ProjectsController {
     const schedules = projectId?.trim() ? all.filter((plan) => plan.projectId === projectId.trim()) : all;
     // One "today" for the whole read, so two activities on the same screen are never rated against
     // different days because the clock moved between them.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     return Promise.all(schedules.map(async (plan) => {
       const [progress, output, calendar] = await Promise.all([
         this.schedule.progressOf(plan), this.schedule.outputOf(plan, today), this.schedule.calendarOf(plan, today),
@@ -1743,7 +1743,7 @@ export class ProjectsController {
   @Get('schedules/:projectId/forecast')
   async forecast(@Param('projectId') projectId: string): Promise<ForecastCompletion> {
     return this.schedule.forecast(
-      this.tenant.get().tenantId, projectId, new Date().toISOString().slice(0, 10),
+      this.tenant.get().tenantId, projectId, businessDate(),
     );
   }
 
@@ -1767,7 +1767,7 @@ export class ProjectsController {
   @Get('schedules/:projectId/milestones')
   async listMilestones(@Param('projectId') projectId: string): Promise<MilestoneView[]> {
     return this.milestones.viewsFor(
-      this.tenant.get().tenantId, projectId, new Date().toISOString().slice(0, 10),
+      this.tenant.get().tenantId, projectId, businessDate(),
     );
   }
 
@@ -1807,7 +1807,7 @@ export class ProjectsController {
     const ctx = this.tenant.get();
     return this.milestones.achieve({
       tenantId: ctx.tenantId, id, on: dto?.on, note: dto?.note ?? null,
-      actorId: ctx.actorId, today: new Date().toISOString().slice(0, 10),
+      actorId: ctx.actorId, today: businessDate(),
     });
   }
 
@@ -1821,7 +1821,7 @@ export class ProjectsController {
     const ctx = this.tenant.get();
     return this.milestones.withdraw({
       tenantId: ctx.tenantId, id, reason: dto?.reason,
-      actorId: ctx.actorId, today: new Date().toISOString().slice(0, 10),
+      actorId: ctx.actorId, today: businessDate(),
     });
   }
 

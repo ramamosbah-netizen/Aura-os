@@ -1,4 +1,4 @@
-import { type Id, newId, moneyNumber as round2 } from '@aura/shared';
+import { type Id, newId, moneyNumber as round2, businessDate } from '@aura/shared';
 
 /**
  * Staff Advance / salary loan — an employee borrows against future salary, repaid in installments
@@ -100,7 +100,7 @@ export function disburseAdvance(
   if (disbursedBy && a.approvedBy && disbursedBy === a.approvedBy) {
     throw new Error('the person who approved this advance may not release their own approval for payment — approving and paying are two signatures');
   }
-  return { ...a, status: 'disbursed', disbursedBy, disbursedDate: disbursedDate ?? new Date().toISOString().slice(0, 10) };
+  return { ...a, status: 'disbursed', disbursedBy, disbursedDate: disbursedDate ?? businessDate() };
 }
 
 /** Record an installment repayment; settles the advance once fully repaid. */

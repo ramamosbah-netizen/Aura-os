@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent, businessDate } from '@aura/shared';
 import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
@@ -796,7 +796,7 @@ export class DocControlService {
       if (priorIssued) await this.revisionStore.save(supersedeDocument(priorIssued), handle);
       if (entry) {
         await this.registerStore.save(
-          { ...entry, currentRevision: issued.revision, status: statusAfterIssue(entry.status), revisionDate: new Date().toISOString().slice(0, 10), updatedAt: new Date().toISOString() },
+          { ...entry, currentRevision: issued.revision, status: statusAfterIssue(entry.status), revisionDate: businessDate(), updatedAt: new Date().toISOString() },
           handle,
         );
       }

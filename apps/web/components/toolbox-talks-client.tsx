@@ -4,6 +4,7 @@ import ProjectPicker from './ui/project-picker';
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface ToolboxTalk {
   id: string;
@@ -16,7 +17,7 @@ interface ToolboxTalk {
   notes: string;
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function ToolboxTalksClient({ initialTalks }: { initialTalks: ToolboxTalk[] }) {
   const [talks, setTalks] = useState(initialTalks);

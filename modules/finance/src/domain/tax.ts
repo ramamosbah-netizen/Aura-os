@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, businessDate } from '@aura/shared';
 
 // ── VAT / Tax Engine ───────────────────────────────────────────────────────
 // Configurable tax codes with automatic tax line computation on invoices.
@@ -39,7 +39,7 @@ export function makeTaxCode(input: NewTaxCode): TaxCode {
     rate: Number(input.rate),
     taxType: input.taxType ?? 'output',
     isActive: true,
-    effectiveFrom: input.effectiveFrom ?? new Date().toISOString().slice(0, 10),
+    effectiveFrom: input.effectiveFrom ?? businessDate(),
     effectiveTo: input.effectiveTo ?? null,
     createdAt: new Date().toISOString(),
   };

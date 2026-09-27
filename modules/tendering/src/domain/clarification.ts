@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, businessDate } from '@aura/shared';
 
 // Tendering domain — framework-free. T4 (vision §2.2 register depth): the Q&A and change
 // traffic between register and submission. Two kinds share one record shape:
@@ -71,7 +71,7 @@ export function makeTenderClarification(input: NewTenderClarification): TenderCl
     reference: input.reference?.trim() || null,
     title: input.title.trim(),
     body: input.body?.trim() || null,
-    issuedAt: input.issuedAt || new Date().toISOString().slice(0, 10),
+    issuedAt: input.issuedAt || businessDate(),
     responseDue: input.responseDue ?? null,
     answer: null,
     answeredAt: null,

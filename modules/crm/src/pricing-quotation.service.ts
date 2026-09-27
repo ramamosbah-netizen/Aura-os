@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner, NullTxRunner } from '@aura/core';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, makeEvent, businessDate } from '@aura/shared';
 import {
   type Quotation, makeQuotation, QUOTATION_EVENT,
 } from './domain/quotation';
@@ -96,7 +96,7 @@ export class PricingQuotationService {
 
     // (4) Money provenance: the quote's lines + totals come ONLY from this frozen sheet.
     const lineDrafts = quotationLinesFromSheet(sheet);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
 
     const quote = base
       ? makeQuotation({

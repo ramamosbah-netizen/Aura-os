@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface Contract { id: string; contractNumber: string; clientName: string }
 interface PpmSchedule {
@@ -22,7 +23,7 @@ export default function PpmClient({ initialSchedules, contracts }: { initialSche
   const [contractId, setContractId] = useState('');
   const [taskDescription, setTask] = useState('');
   const [frequency, setFrequency] = useState('quarterly');
-  const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(businessDateInputValue());
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 

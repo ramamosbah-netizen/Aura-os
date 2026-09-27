@@ -3,6 +3,8 @@
 // it is unit-testable and so slice P5 (the AI context assembler) can reuse the same derivation for
 // the assistant's grounding rather than inventing a parallel one.
 
+import { businessDateInputValue } from '@/lib/locale';
+
 export type Tone = 'good' | 'bad' | 'accent' | 'muted';
 
 export interface DigestKpi {
@@ -47,7 +49,7 @@ export function computeDigest(d: AreaData): ProjectDigest {
   const ncrMajorOpen = ncrOpen.filter((r) => /major|critical|high/i.test(s(r.severity)));
   const commissioned = d.commissioning.filter((r) => s(r.status) === 'commissioned').length;
   const commissioningFailed = d.commissioning.filter((r) => /failed/i.test(s(r.status)));
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDateInputValue();
   const permitsExpired = d.permits.filter((r) => s(r.validTo) && s(r.validTo).slice(0, 10) < today && s(r.status) !== 'closed');
   const permitsActive = d.permits.filter((r) => /approved|active|open/i.test(s(r.status))).length;
   const reportsAwaiting = d.dailyReports.filter((r) => /submitted|under_review/i.test(s(r.status)));

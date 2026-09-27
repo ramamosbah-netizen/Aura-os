@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface PostDatedCheque {
   id: string;
@@ -23,7 +24,7 @@ type Action = 'deposit' | 'clear' | 'bounce' | 'represent' | 'cancel';
 const statusColor: Record<string, string> = {
   pending: 'var(--accent)', deposited: 'var(--accent)', cleared: 'var(--good)', bounced: 'var(--bad)', cancelled: 'var(--muted)',
 };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 function daysTo(maturity: string): number {
   return Math.round((Date.parse(`${maturity}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 86_400_000);

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, type PageParams, type Currency, makeEvent, moneyNumber } from '@aura/shared';
+import { type Id, type PageParams, type Currency, makeEvent, moneyNumber, businessDate } from '@aura/shared';
 import { EVENT_STORE, type EventStore, ExchangeRateService, TenantContext } from '@aura/core';
 import {
   CUSTOMER_INVOICE_EVENT,
@@ -249,7 +249,7 @@ export class CustomerInvoiceService {
   /** FX revaluation — unrealized gain/loss on open foreign-currency AR at current rates. */
   async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
     const all = await this.store.list({ tenantId, limit: 1000 });
-    const on = asOf ?? new Date().toISOString().slice(0, 10);
+    const on = asOf ?? businessDate();
     /**
      * The CURRENT rate is resolved AT THE REVALUATION DATE, not at today (FX-01), and a currency
      * with no governed rate at that date maps to null so its invoices come back unresolved rather
@@ -275,6 +275,6 @@ export class CustomerInvoiceService {
   /** AR aging — outstanding receivables bucketed by overdue age, as of `asOf` (default today). */
   async aging(tenantId: string, asOf?: string): Promise<ArAgingReport> {
     const all = await this.store.list({ tenantId, limit: 1000 });
-    return buildArAging(all, asOf ?? new Date().toISOString().slice(0, 10));
+    return buildArAging(all, asOf ?? businessDate());
   }
 }

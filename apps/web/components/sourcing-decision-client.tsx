@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+import { businessDateInputValue } from '@/lib/locale';
 
 /**
  * SUP-13 and SUP-14 on screen — the sourcing decision, and the award it produces.
@@ -117,7 +118,7 @@ function amount(n: number, currency: string | null): string {
 }
 
 export default function SourcingDecisionClient({ rfqId }: { rfqId: string }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDateInputValue();
   const [comparisonDate, setComparisonDate] = useState(today);
   const [data, setData] = useState<Assembled | null>(null);
   const [live, setLive] = useState<Live | null>(null);

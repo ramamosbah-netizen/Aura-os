@@ -2,6 +2,7 @@
 
 import { type CSSProperties, type FormEvent, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { businessDateInputValue } from '@/lib/locale';
 
 // Capture, without leaving the day. The second half of making My Day a command
 // centre rather than a dashboard: you could not previously write anything down
@@ -35,7 +36,7 @@ export default function MyDayQuickAdd({ assigneeId }: { assigneeId: string | nul
   const router = useRouter();
   const [type, setType] = useState<ActivityType>('task');
   const [subject, setSubject] = useState('');
-  const [dueDate, setDueDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dueDate, setDueDate] = useState(() => businessDateInputValue());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [, startRefresh] = useTransition();

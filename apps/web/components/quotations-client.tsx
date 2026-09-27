@@ -5,6 +5,7 @@ import EmptyState from './ui/empty-state';
 import { useRouter } from 'next/navigation';
 import ExportButton from './export-button';
 import QuotationCreate from './quotation-create';
+import { businessDateInputValue, businessDateInDays } from '@/lib/locale';
 
 // CRM · Quotations — a real deal-chain member, not a proto-invoice. Lifecycle:
 //   Draft → Internal Review → Approved → Sent → Under Negotiation →
@@ -73,8 +74,8 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
     const open = quotes.filter((q) => ['sent', 'under_negotiation'].includes(q.status));
     const accepted = quotes.filter((q) => q.status === 'accepted');
     const lost = quotes.filter((q) => LOST_STATUSES.includes(q.status));
-    const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
-    const today = new Date().toISOString().slice(0, 10);
+    const soon = businessDateInDays(7);
+    const today = businessDateInputValue();
     const expiring = quotes.filter((q) => OPEN_STATUSES.includes(q.status) && q.validUntil && q.validUntil >= today && q.validUntil <= soon);
     const decided = accepted.length + lost.length;
     return {
@@ -121,8 +122,8 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
     } catch (e) { setError((e as Error).message); }
   };
 
-  const today = new Date().toISOString().slice(0, 10);
-  const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const today = businessDateInputValue();
+  const soon = businessDateInDays(7);
 
   return (
     <>

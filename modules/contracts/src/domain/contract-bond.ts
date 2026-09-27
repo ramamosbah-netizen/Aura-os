@@ -1,4 +1,4 @@
-import { daysUntil, type Id, isOnExpiryWatchlist, newId, moneyNumber } from '@aura/shared';
+import { daysUntil, type Id, isOnExpiryWatchlist, newId, moneyNumber, businessDate } from '@aura/shared';
 
 // Contracts domain — framework-free. A Bond/Guarantee is a bank instrument
 // securing a contract obligation: performance bond, advance-payment guarantee,
@@ -82,7 +82,7 @@ export function applyBondAction(b: ContractBond, action: BondAction): ContractBo
 }
 
 /** Active bonds whose expiry falls within the window (or already passed). */
-export function expiringBonds(bonds: ContractBond[], withinDays: number, today = new Date().toISOString().slice(0, 10)): ContractBond[] {
+export function expiringBonds(bonds: ContractBond[], withinDays: number, today = businessDate()): ContractBond[] {
   // Was a string comparison against a computed limit date — the same question as every other
   // watch-list in the platform, asked a fourth way. Now counts days like the rest.
   return bonds.filter(

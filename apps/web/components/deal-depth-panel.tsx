@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { businessDateInputValue } from '@/lib/locale';
 
 // Deal Depth — the Opportunity 360 execution layer: the buying committee (with coverage
 // scoring), our deal team, and the promises made either way (with overdue surfacing).
@@ -41,7 +42,7 @@ const STATE_META: Record<string, { dot: string; label: string; color: string }> 
   // congratulation nor an alarm.
   CLOSED: { dot: '🏁', label: 'Closed', color: 'var(--muted)' },
 };
-const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < new Date().toISOString().slice(0, 10);
+const isOverdue = (c: Commitment): boolean => c.status === 'OPEN' && !!c.dueAt && c.dueAt.slice(0, 10) < businessDateInputValue();
 
 export default function DealDepthPanel({ opportunityId }: { opportunityId: string }) {
   const [depth, setDepth] = useState<Depth | null>(null);

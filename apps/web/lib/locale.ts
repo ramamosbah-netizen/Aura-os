@@ -48,3 +48,12 @@ export function businessDateInputValue(at: Date = new Date()): string {
   const value = Object.fromEntries(parts.map((part) => [part.type, part.value]));
   return `${value.year}-${value.month}-${value.day}`;
 }
+
+/**
+ * The business date `days` days from now — "due within a week", "expiring within 30 days". The
+ * UAE keeps no daylight saving, so a day is 24 hours. The server's twin is `businessDateInDays` in
+ * @aura/shared, held to the same answer by locale.test.ts.
+ */
+export function businessDateInDays(days: number, from: Date = new Date()): string {
+  return businessDateInputValue(new Date(from.getTime() + days * 86_400_000));
+}

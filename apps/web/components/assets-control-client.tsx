@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface Asset {
   id: string;
@@ -55,7 +56,7 @@ export default function AssetsControlClient({
   const [activeTab, setActiveTab] = useState<'assets' | 'maintenance' | 'inspections'>('assets');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = businessDateInputValue();
   const assetOptions = assets.map((a) => ({ value: a.id, label: `${a.name} (${a.serialNumber})` }));
 
   const handleDeleteAsset = async (id: string) => {

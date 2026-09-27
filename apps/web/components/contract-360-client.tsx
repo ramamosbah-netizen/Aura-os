@@ -3,7 +3,7 @@
 import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue, businessDateInDays } from '@/lib/locale';
 
 // Contract 360 — where the deal chain closes. One page for the awarded
 // contract's whole commercial life: workflow (Activate/Sign → the reactor
@@ -143,8 +143,8 @@ export default function Contract360Client({ contract }: { contract: Contract }) 
 
   useEffect(() => { void load(); }, [load]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const today = businessDateInputValue();
+  const soon = businessDateInDays(30);
 
   const stats = useMemo(() => {
     const openObl = obligations.filter((o) => o.status === 'open' || o.status === 'in_progress');

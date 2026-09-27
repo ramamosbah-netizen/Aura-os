@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
+import { businessDateInputValue } from '@/lib/locale';
 
 export interface Calibration {
   id: string;
@@ -20,7 +21,7 @@ export interface Calibration {
 
 const statusColor: Record<string, string> = { valid: 'var(--good)', due_soon: 'var(--warn)', expired: 'var(--bad)' };
 const statusLabel: Record<string, string> = { valid: 'valid', due_soon: 'due soon', expired: 'expired' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function CalibrationClient({ initial }: { initial: Calibration[] }) {
   const [rows, setRows] = useState(initial);

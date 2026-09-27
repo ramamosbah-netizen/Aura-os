@@ -1,6 +1,6 @@
 import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Header, Inject, NotFoundException, Param, Post, StreamableFile } from '@nestjs/common';
 import { DOCUMENT_REQUIREMENT_STORE, NumberingService, ParseUuidOr404Pipe, Permissions, SettingsService, TenantContext, type DocumentRequirementStore } from '@aura/core';
-import { COMMERCIAL_EVIDENCE_TEMPLATE, admitCurrency, makeDocumentRequirement, toCsv } from '@aura/shared';
+import { COMMERCIAL_EVIDENCE_TEMPLATE, admitCurrency, makeDocumentRequirement, toCsv, businessDate } from '@aura/shared';
 import {
   EstimateService,
   EstimateSourcingService,
@@ -707,7 +707,7 @@ export class TenderPricingController {
     const baseCurrency = (await this.settings.get(ctx.tenantId, 'finance.defaultCurrency').catch(() => null))?.trim() || 'AED';
     const admitted = admitCurrency(baseCurrency);
     if (!admitted.admissible) throw new ConflictException(admitted.detail);
-    const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
+    const date = (comparisonDate ?? businessDate()).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new BadRequestException('comparisonDate must be a date in YYYY-MM-DD form');
     const compared = await this.comparison.compareRequirement(ctx.tenantId, requirement.id, { baseCurrency: admitted.currency, comparisonDate: date });
     const row = compared.offers.find((o) => o.quotationLineId === quotationLineId);
@@ -881,7 +881,7 @@ export class TenderPricingController {
         customerName: tender.accountName ?? tender.title,
         accountId: tender.accountId,
         sourceTenderId: tender.id,
-        issueDate: new Date().toISOString().slice(0, 10),
+        issueDate: businessDate(),
         validUntil: dto?.validUntil ?? null,
         lines,
         estimation,

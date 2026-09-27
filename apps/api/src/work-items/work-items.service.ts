@@ -20,6 +20,7 @@ import {
   type ResourceAssignmentView,
   type ResourcePool,
 } from '@aura/projects';
+import { businessDate } from '@aura/shared';
 
 export type WorkItemStatus = 'todo' | 'in_progress' | 'waiting' | 'blocked' | 'done' | 'cancelled';
 export type WorkItemPriority = 'critical' | 'high' | 'medium' | 'low' | 'normal';
@@ -109,7 +110,7 @@ function derivedPriority(dueAt: string | null, source?: 'high' | 'major' | 'medi
   if (source === 'minor' || source === 'low') return 'low';
   const due = dateOnly(dueAt);
   if (!due) return 'normal';
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDate();
   if (due < today) return 'high';
   if (due === today) return 'medium';
   return 'normal';
@@ -283,7 +284,7 @@ export class WorkItemsService {
     const employee = await this.hr.findEmployeeByAccount(tenantId, actorId);
     if (!employee) return { employee: null, items: [], beyondHorizon: 0 };
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     const horizon = addDays(today, ALLOCATION_LOOK_AHEAD_DAYS);
     const window = { from: today, to: addDays(today, 3650) };
 
@@ -645,7 +646,7 @@ export class WorkItemsService {
       actorId,
     });
     const project = await this.projects.get(answered.booking.projectId);
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     if (answered.booking.resource.resourceType !== 'employee') {
       const custody = await this.resourceCatalog.custodianResources(tenantId, employee.id);
       const held = custody.find((item) =>

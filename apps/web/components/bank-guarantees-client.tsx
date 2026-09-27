@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface BankGuarantee {
   id: string;
@@ -19,7 +20,7 @@ interface BankGuarantee {
 
 const TYPES = ['tender', 'performance', 'advance_payment', 'retention', 'other'];
 const statusColor: Record<string, string> = { active: 'var(--accent)', released: 'var(--good)', claimed: 'var(--bad)', expired: 'var(--muted)' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 function daysTo(expiry: string): number {
   return Math.round((Date.parse(`${expiry}T00:00:00Z`) - Date.parse(`${today()}T00:00:00Z`)) / 86_400_000);

@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useState } from 'react';
+import { businessDateInputValue } from '@/lib/locale';
 
 export interface ExportColumn { key: string; label?: string }
 
@@ -19,7 +20,7 @@ interface ExportProps {
 // the .xls (SpreadsheetML-as-HTML) are built from the same rows/columns, and print opens a styled
 // window. Adopted across every register so reporting is uniform, not per-module one-offs.
 
-const stamp = (): string => new Date().toISOString().slice(0, 10);
+const stamp = (): string => businessDateInputValue();
 const esc = (v: unknown): string => (v == null ? '' : String(v));
 const htmlEsc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional, type OnModuleInit } from '@nestjs/common';
-import { type Id, makeEvent, newId, diffFields, moneyNumber } from '@aura/shared';
+import { type Id, makeEvent, newId, diffFields, moneyNumber, businessDate } from '@aura/shared';
 import { CommandBus, EVENT_STORE, type EventStore, NumberingService, AuditService, TX_RUNNER, type TxRunner, ExchangeRateService, AccessService, TenantContext } from '@aura/core';
 import type { Currency } from '@aura/shared';
 import { FINANCE_EVENT, type Invoice, type InvoiceStatus, type NewInvoice, makeInvoice } from './domain/invoice';
@@ -286,13 +286,13 @@ export class InvoiceService implements OnModuleInit {
   /** AP aging — approved-but-unpaid supplier liability bucketed by invoice-date age. */
   async aging(tenantId: string, asOf?: string): Promise<ApAgingReport> {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
-    return buildApAging(all, asOf ?? new Date().toISOString().slice(0, 10));
+    return buildApAging(all, asOf ?? businessDate());
   }
 
   /** FX revaluation — unrealized gain/loss on open foreign-currency AP at current rates. */
   async fxRevaluation(tenantId: string, asOf?: string, baseCurrency = 'AED') {
     const all = await this.store.list({ tenantId, status: 'approved', limit: 1000 });
-    const on = asOf ?? new Date().toISOString().slice(0, 10);
+    const on = asOf ?? businessDate();
     /**
      * The CURRENT rate is resolved AT THE REVALUATION DATE, not at today (FX-01). A period-end
      * revaluation as of 30 June must use June's governed rate; reading today's was the old

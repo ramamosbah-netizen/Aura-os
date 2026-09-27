@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, Optional, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { Pool } from 'pg';
-import { type Id, makeEvent } from '@aura/shared';
+import { type Id, makeEvent, businessDate } from '@aura/shared';
 import { EVENT_STORE, type EventStore, PG_POOL, AuditService } from '@aura/core';
 import {
   clearActivityProgressOverride, overrideActivityProgress, resolveActivityProgress,
@@ -769,7 +769,7 @@ export class ScheduleService {
 
     // The basis as it stands NOW, so a programme that moved under the proposal is caught even when
     // every task id still matches.
-    const interval = this.horizon(schedule, schedule.tasks[0]?.plannedStart ?? new Date().toISOString().slice(0, 10));
+    const interval = this.horizon(schedule, schedule.tasks[0]?.plannedStart ?? businessDate());
     const calendar = this.projectCalendar
       ? await this.projectCalendar.forProject(tenantId, schedule.projectId, interval)
       : null;

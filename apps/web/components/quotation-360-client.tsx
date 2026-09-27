@@ -19,6 +19,7 @@ import {
   useTab, type Tone, type KpiItem, type Insight, type TabDef, type MetaItem,
   type HealthState, type NextBestAction,
 } from './crm/record-shell';
+import { businessDateInputValue, businessDateInDays } from '@/lib/locale';
 
 // Quotation 360 — the commercial document command center on the shared CRM
 // record-shell: Header + lifecycle Actions, KPIs (value/margin/validity), fixed
@@ -145,8 +146,8 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
     };
   }, [pricingView]);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const today = businessDateInputValue();
+  const soon = businessDateInDays(7);
   const isOpen = OPEN_STATUSES.includes(q.status);
   const expiresSoon = isOpen && !!q.validUntil && q.validUntil >= today && q.validUntil <= soon;
   const pastValidity = isOpen && !!q.validUntil && q.validUntil < today;

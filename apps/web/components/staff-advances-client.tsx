@@ -3,6 +3,7 @@
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface Employee { id: string; firstName?: string; lastName?: string; name?: string }
 interface StaffAdvance {
@@ -17,7 +18,7 @@ interface StaffAdvance {
 }
 
 const statusColor: Record<string, string> = { requested: 'var(--warn)', approved: 'var(--accent)', rejected: 'var(--bad)', disbursed: 'var(--accent)', settled: 'var(--good)' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function StaffAdvancesClient({ initialAdvances, employees }: { initialAdvances: StaffAdvance[]; employees: Employee[] }) {
   const [advances, setAdvances] = useState(initialAdvances);

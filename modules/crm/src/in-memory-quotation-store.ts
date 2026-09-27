@@ -1,5 +1,5 @@
 import type { Id, Page, PageParams } from '@aura/shared';
-import { paginate } from '@aura/shared';
+import { paginate, businessDate, businessDateInDays } from '@aura/shared';
 import type { TxHandle } from '@aura/core';
 import type { Quotation } from './domain/quotation';
 import type { QuotationFilter, QuotationStore, QuotationSummary } from './quotation-store';
@@ -67,8 +67,8 @@ export class InMemoryQuotationStore implements QuotationStore {
     const count = (statuses: string[]) => quotes.filter((q) => statuses.includes(q.status)).length;
     const accepted = count(['accepted']);
     const lost = count(['rejected', 'expired', 'cancelled']);
-    const today = new Date().toISOString().slice(0, 10);
-    const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const today = businessDate();
+    const soon = businessDateInDays(7);
     const stage = (statuses: string[]) => ({ count: count(statuses), value: value(statuses) });
     return {
       total: quotes.length,

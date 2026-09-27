@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { businessDate } from '@aura/shared';
 
 // Quality domain — framework-free. A Calibration record tracks a measuring instrument's
 // calibration certificate and its validity window, so QA can prove equipment used on site
@@ -44,7 +45,7 @@ export interface NewCalibration {
 
 /** Validity relative to `asOf` (default today): expired if past due, due_soon within 30 days. */
 export function calibrationStatus(dueDate: string, asOf?: string): CalibrationStatus {
-  const now = asOf ?? new Date().toISOString().slice(0, 10);
+  const now = asOf ?? businessDate();
   const due = dueDate.slice(0, 10);
   if (due < now) return 'expired';
   const soon = new Date(now);

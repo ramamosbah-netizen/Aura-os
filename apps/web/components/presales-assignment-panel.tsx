@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface Entry { version: number; act: string; actorId: string; at: string; note: string | null }
 export interface PreSalesAssignmentView {
@@ -13,7 +14,7 @@ interface Candidate { userId: string; displayName?: string }
 const STATUS: Record<PreSalesAssignmentView['status'], string> = {
   assigned: 'Awaiting the engineer', accepted: 'Accepted — study in progress', declined: 'Declined — back with Sales', completed: 'Completed — study approved',
 };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 /**
  * The Pre-Sales study assignment on a direct opportunity (STU-01, the owner's decision of

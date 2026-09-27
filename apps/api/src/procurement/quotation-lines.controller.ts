@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Query,
 import * as XLSX from 'xlsx';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { type LineDiscountBasis, CommercialComparisonService, QuotationLineService, type QuotationLine } from '@aura/procurement';
-import { admitCurrency } from '@aura/shared';
+import { admitCurrency, businessDate } from '@aura/shared';
 
 /**
  * What a supplier offered, item by item (Wave 4 supplier-decision spine).
@@ -78,7 +78,7 @@ export class QuotationLinesController {
    * screen can open somewhere sensible, and whatever is used travels back on every value.
    */
   private comparisonContext(comparisonDate?: string, baseCurrency?: string) {
-    const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
+    const date = (comparisonDate ?? businessDate()).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException('comparisonDate must be a date in YYYY-MM-DD form');
     }

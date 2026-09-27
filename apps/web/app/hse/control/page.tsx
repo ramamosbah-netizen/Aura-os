@@ -7,6 +7,7 @@ import ProjectScopeFilter from '../../../components/project-scope-filter';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../../components/delivery-workspace-summary';
 import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
 import { HSE_PATH, HSE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
+import { businessDateInputValue } from '@/lib/locale';
 
 export const dynamic = 'force-dynamic';
 
@@ -117,11 +118,11 @@ export default async function HseControlPage({
   const metrics: WorkspaceMetric[] = [
     { label: 'Needs action', value: [incidents, permits, capas].some((rows) => rows === null) ? null : (open(incidents, ['closed']) ?? 0) + (open(permits, ['closed', 'expired']) ?? 0) + (open(capas, ['completed']) ?? 0), hint: 'Open safety decisions', tone: 'critical' },
     { label: 'Active permits', value: open(permits, ['closed', 'expired']), hint: 'Permits currently in force', tone: 'accent' },
-    { label: 'Expiring today', value: permits === null ? null : permits.filter((row) => row.validTo.slice(0, 10) === new Date().toISOString().slice(0, 10) && row.status !== 'closed').length, hint: 'Permit expiry evidence', tone: 'warning' },
+    { label: 'Expiring today', value: permits === null ? null : permits.filter((row) => row.validTo.slice(0, 10) === businessDateInputValue() && row.status !== 'closed').length, hint: 'Permit expiry evidence', tone: 'warning' },
     { label: 'Critical actions', value: capas === null ? null : capas.filter((row) => row.status !== 'completed').length, hint: 'Corrective actions in progress', tone: 'warning' },
   ];
   const attention: WorkspaceAttention[] | null = [incidents, permits, capas].some((rows) => rows === null) ? null : [
-    ...(permits ?? []).filter((row) => row.status !== 'closed' && row.validTo.slice(0, 10) <= new Date().toISOString().slice(0, 10)).slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · permit`, detail: `Expires ${row.validTo.slice(0, 10)}`, href: '/hse/permits', tone: 'critical' as const })),
+    ...(permits ?? []).filter((row) => row.status !== 'closed' && row.validTo.slice(0, 10) <= businessDateInputValue()).slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · permit`, detail: `Expires ${row.validTo.slice(0, 10)}`, href: '/hse/permits', tone: 'critical' as const })),
     ...(capas ?? []).filter((row) => row.status !== 'completed').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · corrective action`, detail: `${row.dueDate} · ${row.actionRequired}`, href: '/hse/control', tone: 'warning' as const })),
     ...(incidents ?? []).filter((row) => row.status !== 'closed').slice(0, 2).map((row) => ({ id: row.id, label: `${row.projectName ?? 'Project'} · safety event`, detail: `${row.severity.toUpperCase()} · investigation open`, href: '/hse/control', tone: row.severity === 'fatal' || row.severity === 'major' ? 'critical' as const : 'warning' as const })),
   ];

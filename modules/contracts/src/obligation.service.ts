@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull } from '@aura/shared';
+import { assertSameTenant, type Id, makeEvent, type PageParams, sameTenantOrNull, businessDate } from '@aura/shared';
 import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   OBLIGATION_EVENT,
@@ -80,7 +80,7 @@ export class ObligationService {
 
   /** Open obligations that are overdue or due within `withinDays` — the reminder feed. */
   async dueSoon(tenantId: Id, withinDays = 14, asOf?: string): Promise<ContractObligation[]> {
-    const now = asOf ?? new Date().toISOString().slice(0, 10);
+    const now = asOf ?? businessDate();
     const horizon = new Date(now);
     horizon.setDate(horizon.getDate() + withinDays);
     const horizonStr = horizon.toISOString().slice(0, 10);

@@ -5,6 +5,7 @@ import ProjectPicker from './ui/project-picker';
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import type { PickerProject } from './ui/project-picker';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface SiteInstruction {
   id: string;
@@ -20,7 +21,7 @@ interface SiteInstruction {
 }
 
 const statusColor: Record<string, string> = { open: 'var(--warn)', acknowledged: 'var(--accent)', closed: 'var(--good)' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function SiteInstructionsClient({ initialInstructions, initialProjectId = '', projects, projectsUnavailable = false }: { initialInstructions: SiteInstruction[]; initialProjectId?: string; projects?: PickerProject[]; projectsUnavailable?: boolean }) {
   const [items, setItems] = useState(initialInstructions);

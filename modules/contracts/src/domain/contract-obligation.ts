@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, businessDate } from '@aura/shared';
 
 // Contracts domain — framework-free. A ContractObligation is a tracked deliverable / milestone /
 // compliance commitment under a contract (e.g. "submit programme within 14 days", "provide
@@ -72,7 +72,7 @@ export function setObligationStatus(o: ContractObligation, status: ObligationSta
   return {
     ...o,
     status,
-    completedDate: CLOSED.includes(status) ? (on ?? new Date().toISOString().slice(0, 10)) : o.completedDate,
+    completedDate: CLOSED.includes(status) ? (on ?? businessDate()) : o.completedDate,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -80,7 +80,7 @@ export function setObligationStatus(o: ContractObligation, status: ObligationSta
 /** True when an open obligation is past its due date (a breach risk / actual breach). */
 export function isOverdue(o: ContractObligation, asOf?: string): boolean {
   if (CLOSED.includes(o.status)) return false;
-  const now = asOf ?? new Date().toISOString().slice(0, 10);
+  const now = asOf ?? businessDate();
   return o.dueDate < now;
 }
 

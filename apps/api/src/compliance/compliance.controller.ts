@@ -1,7 +1,7 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
 import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, businessDate } from '@aura/shared';
 import {
   COMPLIANCE_SCOPES,
   COVERAGE_MODES,
@@ -173,7 +173,7 @@ export class ComplianceController {
    */
   @Get('renewals')
   renewals(@Query('asOf') asOf?: string, @Query('withinDays') withinDays?: string) {
-    const on = asOf ?? new Date().toISOString().slice(0, 10);
+    const on = asOf ?? businessDate();
     return this.service.renewalWatchlist(this.tenant.get().tenantId, on, Number(withinDays) || 90);
   }
 

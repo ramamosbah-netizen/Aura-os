@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
+import { type Id, type OrgLevel, makeEvent, type Page, type PageParams, businessDate } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import QRCode from 'qrcode';
@@ -278,7 +278,7 @@ export class AssetsService {
       usefulLifeMonths: params.usefulLifeMonths,
       method: params.method,
       purchaseDate: asset.purchaseDate,
-      asOf: params.asOf ?? new Date().toISOString().slice(0, 10),
+      asOf: params.asOf ?? businessDate(),
     });
   }
 

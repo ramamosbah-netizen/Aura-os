@@ -5,6 +5,7 @@ import AssetPicker from './ui/asset-picker';
 import { type CSSProperties, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import ExportButton from './export-button';
+import { businessDateInputValue } from '@/lib/locale';
 
 export interface AssetDisposal {
   id: string;
@@ -20,7 +21,7 @@ export interface AssetDisposal {
 }
 
 const METHODS = ['sale', 'scrap', 'write_off', 'trade_in', 'donation'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 const aed = (n: number) => `AED ${Math.round(n).toLocaleString()}`;
 
 export default function AssetDisposalClient({ initial }: { initial: AssetDisposal[] }) {

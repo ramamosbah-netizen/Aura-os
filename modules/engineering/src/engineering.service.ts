@@ -1,5 +1,5 @@
 import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull, businessDate } from '@aura/shared';
 import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import {
@@ -806,7 +806,7 @@ export class EngineeringService {
   async readProjectEngineeringDeliveryImpact(
     tenantId: Id,
     projectId: Id,
-    today = new Date().toISOString().slice(0, 10),
+    today = businessDate(),
   ): Promise<HealthSignal> {
     const href = `/project/${encodeURIComponent(projectId)}/workspace/engineering`;
 

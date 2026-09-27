@@ -3,7 +3,7 @@ import {
   DerivedEvidenceRegistry, ParseUuidOr404Pipe, Permissions, SettingsService, TenantContext,
   type DerivedEvidenceProvider, type DerivedEvidenceVerdict,
 } from '@aura/core';
-import { admitCurrency, type DocumentEvidence } from '@aura/shared';
+import { admitCurrency, type DocumentEvidence, businessDate } from '@aura/shared';
 import { EstimateService, TenderService } from '@aura/tendering';
 import { QuotationService } from '@aura/crm';
 import {
@@ -135,7 +135,7 @@ export class TenderSourcingCoverageService implements DerivedEvidenceProvider, O
   }
 
   async forTender(tenantId: string, tenderId: string, comparisonDate?: string): Promise<TenderSupplyCoverage> {
-    const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
+    const date = (comparisonDate ?? businessDate()).trim();
     const configured = (await this.settings.get(tenantId, 'finance.defaultCurrency').catch(() => null))?.trim() || 'AED';
     const admitted = admitCurrency(configured);
     // A tenant whose base currency cannot be admitted has no comparison to count — say so, never guess.

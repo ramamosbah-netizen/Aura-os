@@ -9,6 +9,7 @@ import EmptyState from './ui/empty-state';
 import SiteInstructionsClient from './site-instructions-client';
 import { SITE_PATH, SITE_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
+import { businessDateInputValue } from '@/lib/locale';
 
 type SiteSection = (typeof SITE_SECTIONS)[number]['id'];
 const SECTION_IDS = SITE_SECTIONS.map((section) => section.id) as SiteSection[];
@@ -154,7 +155,7 @@ export default function SiteControlClient({
   const labourAllocations = initialLabourAllocations;
   const [error, setError] = useState<string | null>(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = businessDateInputValue();
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
 
   const handleSubmitDailyReport = async (id: string) => {

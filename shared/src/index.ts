@@ -2,6 +2,7 @@
 export * from './domain/id';
 export * from './domain/change-diff';
 export * from './domain/money';
+export * from './domain/business-date';
 export * from './domain/cdm';
 export * from './dimensions/discipline';
 export * from './dimensions/elv-system-discipline';

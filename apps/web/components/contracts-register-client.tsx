@@ -4,7 +4,7 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ContractCreate from './contract-create';
 import NextBestActionBanner from './ui/next-best-action-banner';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInDays } from '@/lib/locale';
 
 // Contracts register — every awarded contract with its lifecycle, its chain
 // (tender ← contract → project) and the commercial watchpoints (bonds expiring,
@@ -46,7 +46,7 @@ export default function ContractsRegisterClient({ contracts, bonds, projects, wo
   const [statusFilter, setStatusFilter] = useState('');
   const [sort, setSort] = useState<'createdAt' | 'title' | 'value'>('createdAt');
 
-  const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const soon = businessDateInDays(30);
 
   const projectByContract = useMemo(() => {
     const m = new Map<string, ProjectLite>();

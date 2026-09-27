@@ -1,7 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { TenantContext } from '@aura/core';
 import { ActivityService, ContactService, OpportunityService, ATTENTION_THRESHOLDS, lastActivityByRecord, isQuiet } from '@aura/crm';
-import { type Opportunity, buyingJourneyAlignment, rollupByCategory, moneyNumber as r2 } from '@aura/shared';
+import { type Opportunity, buyingJourneyAlignment, rollupByCategory, moneyNumber as r2, businessDate } from '@aura/shared';
 
 // Sales Pipeline Command Center — the sales manager's cockpit. Turns the raw
 // opportunity list into portfolio KPIs, a weighted forecast, pipeline aging,
@@ -132,7 +132,7 @@ export class PipelineCommandController {
     })).sort((a, b) => b.weighted - a.weighted);
 
     // At-risk deals + rule-based recommendations.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     const atRisk: AtRisk[] = [];
     for (const o of open) {
       const last = lastActivity.get(o.id) ?? null;

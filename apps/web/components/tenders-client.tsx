@@ -4,7 +4,7 @@ import { type CSSProperties, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import TenderCreate, { TenderEdit } from './tender-create';
 import TenderAwardDialog from './tender-award-dialog';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue, businessDateInDays } from '@/lib/locale';
 import registerStyles from '../app/tendering/tenders/tenders-register.module.css';
 
 // Tendering · Tenders — the bid register. Every tender shows its urgency
@@ -52,8 +52,8 @@ export default function TendersClient({ tenders, accounts, sheets, quotations, c
   const [statusFilter, setStatusFilter] = useState('');
   const [sourceFilter, setSourceFilter] = useState('');
 
-  const today = new Date().toISOString().slice(0, 10);
-  const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+  const today = businessDateInputValue();
+  const soon = businessDateInDays(7);
 
   const sheetByTender = useMemo(() => new Map(sheets.map((s) => [s.tenderId, s])), [sheets]);
   const quotesByTender = useMemo(() => {

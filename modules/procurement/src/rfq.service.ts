@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull, businessDate } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   RFQ_EVENT,
@@ -163,7 +163,7 @@ export class RfqService {
   async readProjectProcurementSourcingReadiness(
     tenantId: Id,
     projectId: Id,
-    today = new Date().toISOString().slice(0, 10),
+    today = businessDate(),
   ): Promise<HealthSignal> {
     const href = `/procurement/rfqs?projectId=${encodeURIComponent(projectId)}`;
     if (!this.requests) {

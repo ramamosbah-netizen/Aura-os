@@ -1,7 +1,7 @@
 import { Controller, Get, Header, Inject, NotFoundException, Optional, Param, Query, StreamableFile } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import { ParseUuidOr404Pipe, PG_POOL, TenantContext } from '@aura/core';
-import { parsePageParams } from '@aura/shared';
+import { parsePageParams, businessDate } from '@aura/shared';
 import type { Pool } from 'pg';
 import {
   AccountService,
@@ -141,7 +141,7 @@ export class Account360Controller {
       this.invoices.list({ tenantId, limit: 5000 }),
     ]);
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     const staleBefore = new Date(Date.now() - 60 * 86400000).toISOString();
 
     return accounts.map((a) => {
@@ -358,7 +358,7 @@ export class Account360Controller {
     // Primary contact first — the 360 header shows contacts[0] as the main contact.
     contacts.sort((a, b) => Number(b.isPrimary) - Number(a.isPrimary));
     const accInvoices = allInvoices.filter((i) => (i.accountId === account.id || (!i.accountId && i.customerName === account.name)) && i.status !== 'cancelled');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     const receivables = {
       invoiced: r2(accInvoices.reduce((s, i) => s + i.total, 0)),
       paid: r2(accInvoices.reduce((s, i) => s + i.amountPaid, 0)),

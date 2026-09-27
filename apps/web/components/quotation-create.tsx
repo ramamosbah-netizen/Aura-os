@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { businessDateInputValue } from '@/lib/locale';
 
 // New quotation — step one of the two-step authoring flow.
 //
@@ -81,7 +82,7 @@ export default function QuotationCreate() {
           customerName: account.name,
           accountId: account.id,
           subject: subject.trim() || null,
-          issueDate: new Date().toISOString().slice(0, 10),
+          issueDate: businessDateInputValue(),
           lines: [{ description: 'To be priced from the sheet', quantity: 1, unitPrice: 0 }],
         }),
       });

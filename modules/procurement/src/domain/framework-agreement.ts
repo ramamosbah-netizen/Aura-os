@@ -1,4 +1,4 @@
-import { type Id, newId, moneyNumber as r2 } from '@aura/shared';
+import { type Id, newId, moneyNumber as r2, businessDate } from '@aura/shared';
 
 // Procurement domain — framework-free. A FrameworkAgreement (blanket agreement) locks a
 // supplier to agreed rates over a validity window with a ceiling value; call-off POs draw
@@ -146,7 +146,7 @@ export function remainingValue(fa: FrameworkAgreement): number {
 }
 
 /** Within the validity window (inclusive)? `today` is YYYY-MM-DD. */
-export function isWithinValidity(fa: FrameworkAgreement, today: string = new Date().toISOString().slice(0, 10)): boolean {
+export function isWithinValidity(fa: FrameworkAgreement, today: string = businessDate()): boolean {
   return today >= fa.validFrom && today <= fa.validTo;
 }
 

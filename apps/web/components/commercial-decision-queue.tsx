@@ -4,6 +4,7 @@ import { type CSSProperties, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { CommQuotation, CommContract } from './commercial-workspace';
 import DecisionReadiness, { readinessFor, type EvidenceDoc, type StoredRequirement } from './decision-readiness';
+import { businessDateInputValue } from '@/lib/locale';
 
 // The Decision Queue — list on the left, preview on the right, prioritize without owning the
 // quotation command. Approval/cancellation are executed on the canonical Quotation 360 record.
@@ -26,7 +27,7 @@ function daysOpen(iso: string): number {
 /** Deterministic, evidence-only flags. Nothing here is inferred or scored. */
 function flagsFor(q: CommQuotation): string[] {
   const f: string[] = [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDateInputValue();
   if (!q.validUntil) f.push('no validity date');
   else if (q.validUntil < today) f.push('validity lapsed');
   if (!q.lines?.length) f.push('no lines');

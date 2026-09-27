@@ -129,7 +129,7 @@
         "handoff": "COMPLETE"
       },
       "currentBehavior": "AN OWNER AND DUE DATES ARE SET ON THE ENQUIRY, THE ASSIGNEE RECEIVES THE WORK ONCE, AND OVERDUE WORK IS VISIBLE. Four defects measured and corrected: (1) NO LEAD COULD BE ASSIGNED ON SCREEN — the Lead 360 assign control called two web routes that did not exist (assignable users, assign), received nothing and hid itself; they exist now. (2) THE ASSIGNMENT WAS A BROADCAST — 'Lead assigned' was raised with no recipient, so every user in the tenant received somebody else's work; it is now addressed to the new owner, read from the event's own payload (toAssignedTo), and the CRM escalation sweep addresses its escalations to their owner or assignee too. (3) EVERYONE SAW EVERYONE'S PERSONAL NOTIFICATIONS — the PostgreSQL notification list ignored the user filter that the in-memory store and the unread count both applied, so a notice addressed to one user was listed to all; the list now filters. (4) NO DUE DATE COULD BE SET ON AN ENQUIRY — its one-click outcomes wrote undated tasks, so nothing on a lead could fall due or become overdue; the enquiry now schedules dated follow-ups, shows them overdue, and states the escalation rule (overdue follow-ups turn high priority in My Work and the CRM escalation sweep notifies the assignee; a lead with no first response inside its SLA is escalated to its owner).",
-      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (sales-enquiry-intake.spec.ts), shipped roles: the Sales Manager captures the enquiry on screen and assigns it to u-e2e-sales; the rep is notified once and schedules, sees overdue, and completes dated follow-ups on the enquiry; files the client specification and its revision 2; the enquiry is converted and assigned; Pre-Sales receives the context, the document and the history; the reviewer reads the document; the estimator is refused it. INT-03 specifically: the Sales Manager assigns on screen with a reason; the rep has exactly one 'Lead assigned to you', addressed to them, and another user has none; a follow-up scheduled yesterday shows 'Overdue' on the enquiry and exactly one high-priority item on the rep's My Work. Unit: notifications-subscriber.test.ts (2), notification-store.test.ts (2). STATED: the escalation sweep (POST /crm/automation/run) is operator-triggered and was not run in the proof; dates are calendar dates compared in UTC, and behaviour for a non-UTC working day is not proved."
+      "acceptanceProof": "Browser, Auth-ON, migrated PostgreSQL (sales-enquiry-intake.spec.ts), shipped roles: the Sales Manager captures the enquiry on screen and assigns it to u-e2e-sales; the rep is notified once and schedules, sees overdue, and completes dated follow-ups on the enquiry; files the client specification and its revision 2; the enquiry is converted and assigned; Pre-Sales receives the context, the document and the history; the reviewer reads the document; the estimator is refused it. INT-03 specifically: the Sales Manager assigns on screen with a reason; the rep has exactly one 'Lead assigned to you', addressed to them, and another user has none; a follow-up scheduled yesterday shows 'Overdue' on the enquiry and exactly one high-priority item on the rep's My Work. Unit: notifications-subscriber.test.ts (2), notification-store.test.ts (2). STATED: the escalation sweep (POST /crm/automation/run) is operator-triggered and was not run in the proof; dates are calendar dates compared in UTC, and behaviour for a non-UTC working day is not proved. UPDATE (2026-09-27): the follow-up form's default date and My Work's overdue checks now use the Dubai business date rather than the UTC date (the J4-02 sweep); the statement above stands — behaviour for a follow-up across the midnight window is NOT proved end to end, and the escalation sweep remains unexecuted in any proof."
     },
     {
       "id": "INT-04",
@@ -2860,7 +2860,7 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh browser proof listed a persisted daily report and drove Draft → Submitted → Under Review → Rejected → corrected/resubmitted → Approved; the approved record became locked.",
+      "currentBehavior": "Fresh browser proof listed a persisted daily report and drove Draft → Submitted → Under Review → Rejected → corrected/resubmitted → Approved; the approved record became locked. BUSINESS DATE (J4-02, 2026-09-27): the report's default date is the day it is in Dubai, proved in the browser with the clock frozen at 00:30 Dubai time — shown, saved and read back as that day (site-business-date.spec.ts). The rest of this capability's acceptance is unchanged.",
       "acceptanceProof": "Create the full diary in the UI, persist real attachments/signatures and generate the controlled printable report under representative roles."
     },
     {
@@ -5561,7 +5561,7 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh My Work/My Day browser proof rendered cross-module dated work and attention sources. Editing, timezone boundaries and overdue escalation were not exercised.",
+      "currentBehavior": "Fresh My Work/My Day browser proof rendered cross-module dated work and attention sources. Editing, timezone boundaries and overdue escalation were not exercised. BUSINESS DATE (2026-09-27): every place a 'now' became a calendar date — 80 of them, web and server: defaults, 'as of', 'due within', 'is it overdue', My Work's overdue checks — now uses the company's day (Asia/Dubai, the zone the screens already display) instead of the UTC date, through one helper each side held together by a parity test. Proved at the boundary in unit tests and on the site diary in the browser; due-date editing, overdue escalation and the midnight window on each other screen are NOT exercised, so this stays PARTIAL. The tenant's locale.timezone setting is still not read by anything.",
       "acceptanceProof": "Set and change governed due dates, prove timezone/overdue rules and trace each item back to the canonical source."
     },
     {
@@ -7715,13 +7715,13 @@
     },
     {
       "id": "J4-02",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "WRONG BEHAVIOR",
       "currentBehavior": "تاريخ اليوم الافتراضي UTC يسبق تاريخ دبي بعد منتصف الليل.",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J4-02",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "SIT-03"
       ],
@@ -7737,7 +7737,7 @@
       "expectedOperationalBehavior": "Daily report works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Create the full diary in the UI, persist real attachments/signatures and generate the controlled printable report under representative roles."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING: the site diary's default date was the UTC date, which is still yesterday from 00:00 to 04:00 in the UAE, so a report written after midnight defaulted to the day before. The daily report screen had already been moved to the Dubai business date (businessDateInputValue); nothing had proved it, and the same UTC 'today' was still in 79 other places. NOW: proved in the browser with the page's clock frozen at 00:30 on the 14th in Dubai (20:30 on the 13th in UTC), after hydration — the form's own reset defaults to 2026-09-14, and the report is saved and read back from the API on the 14th beside one deliberately dated the 10th (site-business-date.spec.ts). The defect was also removed everywhere it existed: one business-date helper on the server (@aura/shared businessDate/businessDateInDays) and its web twin, held to one zone and one answer by a parity test, replace every 'now' turned into a date — 80 call sites across the web and the modules (defaults, 'as of' dates for AR/AP ageing, obligation and expiry checks, 'due within' windows, My Work's overdue checks). Unit proofs at the boundary: the helper either side of midnight in Dubai and across year end, web/server parity, and a site survey recorded at 00:30 Dubai time dated that day. Full check 78/78; browser regressions green: site-execution, sales-enquiry-intake, my-work-dashboard, domain-hse-project-context, customer-proposal-output, wave2-quotation-role-workflow, quotation-approval-policy, tender-submission-gate. STATED: (a) the zone is pinned to Asia/Dubai as the screens already are; the tenant's locale.timezone setting is stored and read by nothing; (b) the other 79 screens and services are proved at the helper boundary, not each in a browser at midnight; (c) where 'today' is compared with a TIMESTAMP cut to its UTC date, the two sides can still disagree for up to four hours near midnight; (d) the follow-up due-date behaviour across midnight stays UNPROVEN (INT-03)."
     },
     {
       "id": "J4-03",

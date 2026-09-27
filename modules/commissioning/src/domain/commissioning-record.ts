@@ -1,4 +1,4 @@
-import { type Id, newId, ELV_SYSTEMS, type ElvSystem, toElvSystem } from '@aura/shared';
+import { type Id, newId, ELV_SYSTEMS, type ElvSystem, toElvSystem, businessDate } from '@aura/shared';
 
 // Commissioning domain — framework-free. A CommissioningRecord tracks the Test &
 // Commissioning (T&C) of one ELV system (or sub-system) on a project: the step that
@@ -128,7 +128,7 @@ export function recordTest(
     pointsTotal: total,
     pointsPassed: passed,
     status: allPassed ? 'tested' : 'in_progress',
-    testDate: patch.testDate ?? rec.testDate ?? new Date().toISOString().slice(0, 10),
+    testDate: patch.testDate ?? rec.testDate ?? businessDate(),
     remarks: patch.remarks ?? rec.remarks,
     updatedAt: new Date().toISOString(),
   };

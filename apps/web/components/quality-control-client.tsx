@@ -9,6 +9,7 @@ import EmptyState from './ui/empty-state';
 import Pager, { usePaged } from '@/components/ui/pager';
 import { QUALITY_PATH, QUALITY_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
+import { businessDateInputValue } from '@/lib/locale';
 
 type QualitySection = (typeof QUALITY_SECTIONS)[number]['id'];
 const SECTION_IDS = QUALITY_SECTIONS.map((section) => section.id) as QualitySection[];
@@ -135,7 +136,7 @@ export default function QualityControlClient({
   // Inline action state (for comments on IR approval/rejection)
   const [commentsInput, setCommentsInput] = useState<{ [id: string]: string }>({});
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = businessDateInputValue();
   const projectOptions = projects.map((p) => ({ value: p.id, label: p.title }));
 
   const handleUpdateChecklistStatus = async (

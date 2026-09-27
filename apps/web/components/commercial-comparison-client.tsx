@@ -1,6 +1,7 @@
 'use client';
 
 import { type CSSProperties, useCallback, useEffect, useState } from 'react';
+import { businessDateInputValue } from '@/lib/locale';
 
 /**
  * SUP-06 on screen — comparable facts, and nothing pretending to be a decision.
@@ -91,7 +92,7 @@ function Unknown({ value, testId }: { value: Value; testId: string }) {
 }
 
 export default function CommercialComparisonClient({ prLineId }: { prLineId: string }) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = businessDateInputValue();
   const [comparisonDate, setComparisonDate] = useState(today);
   const [data, setData] = useState<Comparison | null>(null);
   const [err, setErr] = useState<string | null>(null);

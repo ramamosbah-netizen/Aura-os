@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent, businessDate } from '@aura/shared';
 import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   POST_DATED_CHEQUE_EVENT,
@@ -15,7 +15,7 @@ import {
 import { POST_DATED_CHEQUE_STORE, type PostDatedChequeFilter, type PostDatedChequeStore } from './post-dated-cheque-store';
 import { assertSameTenant } from './domain/tenant-guard';
 
-const today = (): string => new Date().toISOString().slice(0, 10);
+const today = (): string => businessDate();
 
 /**
  * Post-dated cheque (PDC) service — owns `aura_finance_post_dated_cheques`, emits

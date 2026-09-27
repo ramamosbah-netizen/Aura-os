@@ -2,6 +2,7 @@
 
 import { type CSSProperties, useState } from 'react';
 import EmptyState from './ui/empty-state';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface PettyCashFund {
   id: string;
@@ -21,7 +22,7 @@ interface Transaction {
 }
 
 const CATEGORIES = ['office', 'travel', 'fuel', 'materials', 'refreshments', 'other'];
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function PettyCashClient({ initialFunds }: { initialFunds: PettyCashFund[] }) {
   const [funds, setFunds] = useState(initialFunds);

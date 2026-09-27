@@ -7,6 +7,7 @@ import type {
   ResourceAvailabilityProvider,
   ResourceRef,
 } from '@aura/projects';
+import { businessDate } from '@aura/shared';
 
 /**
  * The application-layer binding of §22's availability port to the registers that own the answer.
@@ -54,7 +55,7 @@ export class ResourceAvailabilityFromRegisters implements ResourceAvailabilityPr
 
     // Today, not the interval's start: an undated "out of service" is a statement about now and
     // everything after it, and saying it about days already past would rewrite history.
-    const today = new Date().toISOString().slice(0, 10);
+    const today = businessDate();
     const openEnd = { from: today > interval.from ? today : interval.from, to: interval.to };
     const overlaps = (from: string, to: string): boolean => from <= interval.to && to >= interval.from;
 

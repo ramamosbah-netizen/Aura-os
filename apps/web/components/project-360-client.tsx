@@ -4,7 +4,7 @@ import { activityProgress, progressSource, type ProgressBearingSchedule } from '
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import ProjectTeam from './project-team';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue } from '@/lib/locale';
 import AuraDataTable, { type AuraColumn } from './ui/aura-data-table';
 import { DataDegradedNotice } from './ui/data-state';
 import {
@@ -1740,7 +1740,7 @@ function ClosePanel({
                     onClick={() => void call(
                       `/api/projects/closeouts/${closeout.id}/finalize`,
                       'POST',
-                      { handoverDate: new Date().toISOString().slice(0, 10) },
+                      { handoverDate: businessDateInputValue() },
                       'Closeout finalized — now complete the project to close the contract.',
                     )}
                   >

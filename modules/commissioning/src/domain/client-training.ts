@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, businessDate } from '@aura/shared';
 
 /**
  * Client training and demonstration (TC-GATE-5).
@@ -109,7 +109,7 @@ export function completeTraining(
     attendees: input.attendees.trim(),
     trainer: input.trainer?.trim() || session.trainer,
     demonstrationCompleted: input.demonstrationCompleted ?? session.demonstrationCompleted,
-    sessionDate: input.sessionDate?.trim() || session.sessionDate || new Date().toISOString().slice(0, 10),
+    sessionDate: input.sessionDate?.trim() || session.sessionDate || businessDate(),
     updatedAt: new Date().toISOString(),
   };
 }

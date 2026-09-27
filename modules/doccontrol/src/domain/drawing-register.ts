@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { businessDate } from '@aura/shared';
 
 /**
  * Drawing / Document Register — the controlled register of every drawing and document on a
@@ -96,7 +97,7 @@ export function reviseRegisterEntry(entry: DrawingRegisterEntry, revision: strin
     ...entry,
     currentRevision: revision.trim(),
     status,
-    revisionDate: revisionDate ?? new Date().toISOString().slice(0, 10),
+    revisionDate: revisionDate ?? businessDate(),
     updatedAt: new Date().toISOString(),
   };
 }

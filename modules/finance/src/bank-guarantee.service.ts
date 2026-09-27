@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
+import { type Id, type Page, type PageParams, makeEvent, businessDate } from '@aura/shared';
 import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import {
   BANK_GUARANTEE_EVENT,
@@ -88,7 +88,7 @@ export class BankGuaranteeService {
 
   /** Active guarantees expiring within `withinDays` — the treasury watch-list. */
   async expiringSoon(tenantId: string, withinDays = 30): Promise<BankGuarantee[]> {
-    const asOf = new Date().toISOString().slice(0, 10);
+    const asOf = businessDate();
     const all = await this.store.list({ tenantId, status: 'active', limit: 500 });
     return all.filter((g) => isExpiringSoon(g, asOf, withinDays));
   }

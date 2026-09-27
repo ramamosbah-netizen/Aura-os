@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Param, Post, Query } from '
 import { IsArray, IsIn, IsOptional, IsString } from 'class-validator';
 import { Permissions, TenantContext, ParseUuidOr404Pipe } from '@aura/core';
 import { SourcingAwardService, SourcingRecommendationService, RECOMMENDATION_REASONS, type RecommendationReasonCode } from '@aura/procurement';
-import { admitCurrency } from '@aura/shared';
+import { admitCurrency, businessDate } from '@aura/shared';
 
 /**
  * SUP-13 — the governed sourcing recommendation.
@@ -48,7 +48,7 @@ export class SourcingRecommendationController {
   ) {}
 
   private context(comparisonDate?: string, baseCurrency?: string) {
-    const date = (comparisonDate ?? new Date().toISOString().slice(0, 10)).trim();
+    const date = (comparisonDate ?? businessDate()).trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       throw new BadRequestException('comparisonDate must be a date in YYYY-MM-DD form');
     }

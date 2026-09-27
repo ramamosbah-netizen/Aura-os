@@ -1,4 +1,4 @@
-import { type Id, newId } from '@aura/shared';
+import { type Id, newId, businessDate } from '@aura/shared';
 
 export type SurveyStatus = 'draft' | 'completed' | 'cancelled';
 
@@ -56,7 +56,7 @@ export function makeSiteSurvey(input: NewSiteSurvey): SiteSurvey {
     contactName: input.contactName?.trim() || null,
     scopeNotes: input.scopeNotes.trim(),
     estimatedValue: Number.isFinite(input.estimatedValue) ? Number(input.estimatedValue) : 0,
-    surveyDate: input.surveyDate || new Date().toISOString().slice(0, 10),
+    surveyDate: input.surveyDate || businessDate(),
     photos: input.photos || [],
     status: input.status || 'completed',
     createdBy: input.createdBy ?? null,

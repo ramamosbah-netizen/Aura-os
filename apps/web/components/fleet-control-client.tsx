@@ -5,7 +5,7 @@ import EmptyState from './ui/empty-state';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import CreateDrawer from './ui/create-drawer';
-import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue } from '@/lib/locale';
 
 interface Vehicle {
   id: string;
@@ -80,7 +80,7 @@ export default function FleetControlClient({
   const maintenance = initialMaintenance;
   const [error, setError] = useState<string | null>(null);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = businessDateInputValue();
   const vehicleOptions = vehicles.map((v) => ({ value: v.id, label: `${v.make} ${v.model} (${v.plateNumber})` }));
   const driverOptions = employees.map((emp) => ({ value: emp.id, label: `${emp.firstName} ${emp.lastName} (${emp.role})` }));
 

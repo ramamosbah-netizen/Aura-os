@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type CSSProperties } from 'react';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface FollowUp {
   id: string; type: string; subject: string; status: 'open' | 'in_progress' | 'completed' | 'cancelled';
@@ -12,7 +13,7 @@ const TYPES: Array<[string, string]> = [
   ['email', 'Email'], ['whatsapp', 'WhatsApp'], ['task', 'Task'],
 ];
 const label = (type: string) => TYPES.find(([value]) => value === type)?.[1] ?? type.replace('_', ' ');
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 const live = (f: FollowUp) => f.status === 'open' || f.status === 'in_progress';
 
 /**

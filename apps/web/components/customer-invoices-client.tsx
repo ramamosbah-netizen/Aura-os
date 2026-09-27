@@ -8,6 +8,7 @@ import SaveViewButton from './save-view-button';
 import { CURRENCIES } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import NextBestActionBanner from './ui/next-best-action-banner';
+import { businessDateInputValue } from '@/lib/locale';
 
 interface Line {
   description: string;
@@ -33,7 +34,7 @@ interface CustomerInvoice {
 }
 
 const badgeKind: Record<string, string> = { draft: 'badge', issued: 'badge badge-accent', partially_paid: 'badge badge-warn', paid: 'badge badge-good', cancelled: 'badge badge-bad' };
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => businessDateInputValue();
 
 export default function CustomerInvoicesClient({ initialInvoices }: { initialInvoices: CustomerInvoice[] }) {
   const router = useRouter();

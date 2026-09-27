@@ -22,7 +22,7 @@ import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccoun
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
 import { GoodsReceiptService } from '@aura/inventory';
-import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney, newId } from '@aura/shared';
+import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney, newId, businessDate } from '@aura/shared';
 
 /**
  * Cross-module event subscriber — the reactor that wires the deal chain.
@@ -1015,7 +1015,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           invoiceNumber,
           customerName: account.name?.trim() || 'Client',
           contractRef: contractId,
-          issueDate: new Date().toISOString().slice(0, 10),
+          issueDate: businessDate(),
           lines: [
             {
               description: `Interim Payment Certificate ${reference} — work certified to date`,
@@ -1807,7 +1807,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
           invoiceNumber: `AR-AMC-${orderNumber}-${e.aggregateId.slice(0, 8)}`,
           customerName: clientName,
           contractRef: contractId,
-          issueDate: new Date().toISOString().slice(0, 10),
+          issueDate: businessDate(),
           lines: [
             { description: `AMC service visit ${orderNumber}`, quantity: 1, unitPrice: cost, vatRate: 5 },
           ],

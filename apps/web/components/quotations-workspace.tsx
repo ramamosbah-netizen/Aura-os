@@ -4,6 +4,7 @@ import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from
 import EmptyState from './ui/empty-state';
 import QuotationsClient from './quotations-client';
 import QuotationCreate from './quotation-create';
+import { businessDateInputValue, businessDateInDays } from '@/lib/locale';
 
 // Quotations OS — Overview is the decision cockpit; the separate Register owns operational work.
 // Register List/Board views are URL-backed and use tenant-scoped paged data. Overview analytics use
@@ -135,8 +136,8 @@ export default function QuotationsWorkspace({ initialPage, initialSummary, initi
     const open = by(['sent', 'under_negotiation', 'negotiation']);
     const accepted = by(['accepted']);
     const lost = by(['rejected', 'expired', 'cancelled']);
-    const today = new Date().toISOString().slice(0, 10);
-    const soon = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+    const today = businessDateInputValue();
+    const soon = businessDateInDays(7);
     const expiring = quotes.filter((q) => ['sent', 'under_negotiation', 'negotiation', 'approved'].includes(q.status) && q.validUntil && q.validUntil >= today && q.validUntil <= soon);
     const decided = accepted.length + lost.length;
     const pendingApproval = by(['internal_review']);

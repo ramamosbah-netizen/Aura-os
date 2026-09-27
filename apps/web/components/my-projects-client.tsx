@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import Pager, { usePaged } from '@/components/ui/pager';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import Pager, { type PagerState } from '@/components/ui/pager';
 import EmptyState from '@/components/ui/empty-state';
+import { MY_PROJECTS_PAGE_SIZE } from '@/lib/my-projects';
 
 /**
  * My Projects — the entry point to project work.
@@ -40,50 +41,95 @@ function statusStyle(status: string): CSSProperties {
   return { ...base, background: 'var(--info-soft)', color: 'var(--info)' };
 }
 
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
+
 export default function MyProjectsClient({ initial }: { initial: MyProjectsPage | null }) {
   const [data, setData] = useState<MyProjectsPage | null>(initial);
+  /** The page on screen: which search it answers and where it starts. */
+  const [shown, setShown] = useState({ q: '', page: 0 });
+  /** The page asked for. It becomes `shown` only when its answer arrives. */
+  const [request, setRequest] = useState({ q: '', page: 0 });
+  /** How many projects this caller can access at all — known from any unsearched answer. */
+  const [accessTotal, setAccessTotal] = useState<number | null>(initial?.total ?? null);
   const [loading, setLoading] = useState(initial === null);
+  const [fetching, setFetching] = useState(false);
   const [failed, setFailed] = useState(false);
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    if (initial !== null) return;
-    let live = true;
-    // Only runs when the server render could not reach the API — a genuine loading state rather
-    // than a spinner shown on every visit for the look of it.
-    void (async () => {
-      try {
-        const res = await fetch('/api/projects/mine', { cache: 'no-store' });
-        if (!res.ok) throw new Error(String(res.status));
-        if (live) setData((await res.json()) as MyProjectsPage);
-      } catch {
-        if (live) setFailed(true);
-      } finally {
-        if (live) setLoading(false);
-      }
-    })();
-    return () => { live = false; };
-  }, [initial]);
+  const latest = useRef(0);
+  // The server already rendered the first unsearched page; asking for it again would be a round
+  // trip for nothing. Only when it could not reach the API does the screen ask on its own.
+  const skipFirst = useRef(initial !== null);
 
   /**
-   * Search is local to the page that was returned. The API also searches the authorised set — this
-   * narrows what is already on screen and never reaches for more, so it cannot show a project the
-   * server did not send. For a caller with more projects than one page, the API's own `q` is the
-   * one that matters, and the count below says which set is being searched.
+   * EVERY SEARCH AND EVERY PAGE IS THE API'S (J2-01). The screen used to filter and page the first
+   * page it had been sent: with 1,860 projects it searched 50 of them, a project past the 50th was
+   * unfindable, and "no match — you have access to 50" understated the caller's access by 1,810.
+   * The API already searches, counts and pages the AUTHORISED set; the screen now asks it, and
+   * every number shown is a total the server computed.
+   *
+   * Answers can arrive out of order (typing is faster than the network), so only the answer to the
+   * latest request is kept.
    */
+  const load = useCallback(async (q: string, pageIndex: number) => {
+    const ticket = ++latest.current;
+    setFetching(true);
+    try {
+      const params = new URLSearchParams({ limit: String(MY_PROJECTS_PAGE_SIZE), offset: String(pageIndex * MY_PROJECTS_PAGE_SIZE) });
+      if (q) params.set('q', q);
+      const res = await fetch(`/api/projects/mine?${params.toString()}`, { cache: 'no-store' });
+      if (!res.ok) throw new Error(String(res.status));
+      const next = (await res.json()) as MyProjectsPage;
+      if (ticket !== latest.current) return;
+      setData(next);
+      setShown({ q, page: pageIndex });
+      setFailed(false);
+      if (!q) setAccessTotal(next.total);
+    } catch {
+      if (ticket === latest.current) setFailed(true);
+    } finally {
+      if (ticket === latest.current) { setFetching(false); setLoading(false); }
+    }
+  }, []);
+
+  // A new search starts on page one; typing is debounced so each keystroke is not a request.
+  useEffect(() => {
+    const q = query.trim();
+    const timer = setTimeout(() => setRequest((r) => (r.q === q ? r : { q, page: 0 })), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  useEffect(() => {
+    if (skipFirst.current) { skipFirst.current = false; return; }
+    void load(request.q, request.page);
+  }, [request, load]);
+
   const projects = data?.items ?? [];
-  const matches = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return projects;
-    return projects.filter((p) => `${p.title} ${p.reference ?? ''} ${p.accountName ?? ''}`.toLowerCase().includes(q));
-  }, [projects, query]);
-  const page = usePaged(matches);
+  const total = data?.total ?? 0;
+  const pages = Math.max(1, Math.ceil(total / MY_PROJECTS_PAGE_SIZE));
+
+  // A page past the end (the set shrank since it was counted) steps back to the last real page
+  // rather than showing an empty list that reads as "none".
+  useEffect(() => {
+    if (!fetching && projects.length === 0 && total > 0 && shown.page > 0) setRequest({ q: shown.q, page: pages - 1 });
+  }, [fetching, projects.length, total, shown, pages]);
+
+  const pager: PagerState = {
+    page: shown.page,
+    pages,
+    from: projects.length === 0 ? 0 : shown.page * MY_PROJECTS_PAGE_SIZE + 1,
+    to: shown.page * MY_PROJECTS_PAGE_SIZE + projects.length,
+    total,
+    hasPrev: shown.page > 0,
+    hasNext: shown.page + 1 < pages,
+    prev: () => setRequest({ q: shown.q, page: Math.max(0, shown.page - 1) }),
+    next: () => setRequest({ q: shown.q, page: Math.min(pages - 1, shown.page + 1) }),
+  };
 
   if (loading) {
     return <div style={st.notice} data-testid="my-projects-loading">Loading your projects…</div>;
   }
 
-  if (failed || !data) {
+  if (!data) {
     // Distinguished from "you have none": one is a fault, the other is an answer, and a screen that
     // conflates them tells a user they have no work when the server is simply down.
     return (
@@ -94,7 +140,7 @@ export default function MyProjectsClient({ initial }: { initial: MyProjectsPage 
     );
   }
 
-  if (data.scope === 'none' || projects.length === 0) {
+  if (data.scope === 'none' || accessTotal === 0) {
     return (
       <div data-testid="my-projects-empty">
         <EmptyState
@@ -116,14 +162,13 @@ export default function MyProjectsClient({ initial }: { initial: MyProjectsPage 
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your projects"
+          placeholder="Search your projects by title or reference"
+          aria-label="Search your projects"
           style={st.search}
           data-testid="my-projects-search"
         />
-        <span style={st.count} data-testid="my-projects-count">
-          {matches.length === projects.length
-            ? `${data.total} project${data.total === 1 ? '' : 's'}`
-            : `${matches.length} of ${projects.length} shown`}
+        <span style={st.count} data-testid="my-projects-count" aria-live="polite">
+          {shown.q ? `${plural(total, 'match', 'matches')} for “${shown.q}”` : plural(total, 'project', 'projects')}
         </span>
         {/* Said plainly rather than implied by the row count: a reader should know whether they are
             looking at their own projects or the whole organisation's. */}
@@ -132,14 +177,21 @@ export default function MyProjectsClient({ initial }: { initial: MyProjectsPage 
         </span>
       </div>
 
-      {matches.length === 0 ? (
+      {failed && (
+        <div style={{ ...st.error, marginBottom: 12 }} role="alert" data-testid="my-projects-search-failed">
+          The search could not be completed. This is a fault, not an empty result — the list below is the last one read.
+        </div>
+      )}
+
+      {projects.length === 0 && shown.q ? (
         <div style={st.notice} data-testid="my-projects-no-match">
-          No project matches “{query.trim()}”. You have access to {projects.length}.
+          No project matches “{shown.q}”
+          {accessTotal !== null ? ` among the ${plural(accessTotal, 'project', 'projects')} you can access.` : '.'}
         </div>
       ) : (
         <>
-          <ul style={st.list} data-testid="my-projects-list">
-            {page.slice.map((p) => (
+          <ul style={{ ...st.list, opacity: fetching ? 0.6 : 1 }} data-testid="my-projects-list" aria-busy={fetching}>
+            {projects.map((p) => (
               <li key={p.id} style={st.card} data-testid={`my-project-${p.id}`}>
                 <a href={`/project/${p.id}`} style={st.link} data-testid={`my-project-open-${p.id}`}>
                   <span style={st.head}>
@@ -155,7 +207,7 @@ export default function MyProjectsClient({ initial }: { initial: MyProjectsPage 
               </li>
             ))}
           </ul>
-          <Pager state={page} label="projects" testId="my-projects-pager" />
+          <Pager state={pager} label="projects" testId="my-projects-pager" />
         </>
       )}
     </>

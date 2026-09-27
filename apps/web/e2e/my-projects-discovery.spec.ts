@@ -90,9 +90,11 @@ test.describe('My Projects — governed discovery', () => {
     expect(all.items.map((i) => i.id), 'an ungranted project is absent from the page entirely').not.toContain(c.id);
 
     // ── Membership WITHOUT the functional permission grants no discovery ─────────────────────────
-    // QA/QC is a real project role and carries no `projects.*` at all. Being on the project is not
-    // the same as being allowed to read it, and over-reporting here would be the easy mistake.
-    await post(`/projects/${c.id}/members`, { userId: MEMBER, roleId: 'r-qa-qc' });
+    // The Planning Engineer is a real project role holding project-scoped permissions (schedule,
+    // milestones, delays) but not `projects.project.read`. Being on the project is not the same as
+    // being allowed to read it, and over-reporting here would be the easy mistake. (This used QA/QC
+    // until QA/QC was given read access to projects on 2026-09-14, which made it the wrong witness.)
+    await post(`/projects/${c.id}/members`, { userId: MEMBER, roleId: 'r-planning-engineer' });
     expect(
       (await mine(member!)).items.map((i) => i.id),
       'a project grant whose role cannot read projects must not make it discoverable',
@@ -101,7 +103,9 @@ test.describe('My Projects — governed discovery', () => {
     // ── Search runs over the AUTHORISED set, not the tenant then filtered ────────────────────────
     const found = await mine(member!, '?q=BETA');
     expect(ours(found)).toEqual([`Mine ${run} BETA`]);
-    const hidden = await mine(member!, '?q=GAMMA');
+    // Scoped to THIS run's GAMMA: an earlier run's GAMMA may be legitimately visible to the shared
+    // identity (its grants accumulate), and an unscoped count would be measuring that instead.
+    const hidden = await mine(member!, `?q=${encodeURIComponent(`Mine ${run} GAMMA`)}`);
     expect(ours(hidden), 'searching for a project they cannot see finds nothing').toEqual([]);
     expect(hidden.total, 'and the COUNT reflects the authorised set, not the tenant').toBe(0);
 
@@ -145,5 +149,67 @@ test.describe('My Projects — governed discovery', () => {
     const search = await request.get(`${V1}/projects/projects/mine?q=Org ${run}`, { headers: { Authorization: admin! } });
     const hits = (await search.json()) as MinePage;
     expect(hits.items.map((i) => i.id), 'a project nobody made them a member of').toContain(project.id);
+  });
+
+  /**
+   * J2-01 — THE SCREEN SEARCHES AND PAGES THE WHOLE AUTHORISED SET, NOT THE FIRST PAGE IT WAS SENT.
+   *
+   * The finding: with 1,860 projects the screen searched and paged the first 50, and its no-match
+   * text said "You have access to 50". Proved by pushing a project out of the old window: the target
+   * is created FIRST and 55 newer projects after it (the list is newest first), so it is past the
+   * 50th row — and the screen still finds it, counts what the server counts, and pages through all.
+   */
+  test('J2-01: the screen searches and pages the whole authorised set', async ({ page, request }) => {
+    const admin = apiAuthHeaders().Authorization;
+    test.skip(!admin, 'auth is off for this run');
+    const H = { 'content-type': 'application/json', Authorization: admin! };
+    const run = Date.now().toString().slice(-6);
+    const create = async (title: string, reference: string) => {
+      const res = await request.post(`${V1}/projects/projects`, { headers: H, data: { title, reference } });
+      expect(res.ok(), await res.text()).toBe(true);
+      return (await res.json()) as { id: string };
+    };
+    const target = await create(`J201 ${run} Harbour Target`, `J2-${run}-T`);
+    for (let i = 1; i <= 55; i += 1) await create(`J201 ${run} Filler ${String(i).padStart(2, '0')}`, `J2-${run}-${i}`);
+
+    const mine = async (qs = ''): Promise<MinePage> => (await (await request.get(`${V1}/projects/projects/mine${qs}`, { headers: { Authorization: admin! } })).json()) as MinePage;
+    const everything = (await mine('?limit=1')).total;
+    expect((await mine('?limit=50')).items.map((i) => i.id), 'the target is past the old 50-row window').not.toContain(target.id);
+
+    await page.goto('/my-projects');
+    const count = page.getByTestId('my-projects-count');
+    const info = page.getByTestId('my-projects-pager-info');
+    await expect(count).toHaveText(`${everything} projects`);
+    await expect(info).toHaveText(`1–20 of ${everything} projects · page 1 of ${Math.ceil(everything / 20)}`);
+    await expect(page.getByTestId(`my-project-${target.id}`)).toHaveCount(0);
+
+    // The target, found by title and by reference, though it was never on a page the screen was sent.
+    const search = page.getByTestId('my-projects-search');
+    await search.fill(`${run} Harbour Target`);
+    await expect(count).toHaveText(`1 match for “${run} Harbour Target”`);
+    await expect(page.getByTestId(`my-project-${target.id}`)).toBeVisible();
+    await search.fill(`J2-${run}-T`);
+    await expect(count).toHaveText(`1 match for “J2-${run}-T”`);
+    await expect(page.getByTestId(`my-project-${target.id}`)).toBeVisible();
+
+    // A search spanning pages is paged by the server: 56 matches, three pages, the last holds 16.
+    await search.fill(`J201 ${run}`);
+    await expect(count).toHaveText(`56 matches for “J201 ${run}”`);
+    await expect(info).toHaveText('1–20 of 56 projects · page 1 of 3');
+    await page.getByTestId('my-projects-pager-next').click();
+    await expect(info).toHaveText('21–40 of 56 projects · page 2 of 3');
+    await page.getByTestId('my-projects-pager-next').click();
+    await expect(info).toHaveText('41–56 of 56 projects · page 3 of 3');
+    await expect(page.getByTestId('my-projects-list').locator('li')).toHaveCount(16);
+    await expect(page.getByTestId(`my-project-${target.id}`), 'the oldest of the 56, on the last page').toBeVisible();
+
+    // No match states the caller's whole access, not the length of a page.
+    await search.fill(`zz-no-such-${run}`);
+    await expect(page.getByTestId('my-projects-no-match')).toHaveText(`No project matches “zz-no-such-${run}” among the ${everything} projects you can access.`);
+
+    // Clearing the search returns to everything, on page one.
+    await search.fill('');
+    await expect(count).toHaveText(`${everything} projects`);
+    await expect(info).toHaveText(`1–20 of ${everything} projects · page 1 of ${Math.ceil(everything / 20)}`);
   });
 });

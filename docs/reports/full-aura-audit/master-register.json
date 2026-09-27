@@ -5684,7 +5684,7 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh browser proof searched drawing projects/conversations and exposed decision-queue search. Complete authorized dataset behavior was not established.",
+      "currentBehavior": "Fresh browser proof searched drawing projects/conversations and exposed decision-queue search. Complete authorized dataset behavior was not established. MY PROJECTS (J2-01, 2026-09-27): the screen searches the whole authorised set by title and reference through the API — a project pushed past the old 50-row window by 55 newer ones is found, and the count is the server's total (my-projects-discovery.spec.ts). The other registers are not re-proved by this.",
       "acceptanceProof": "Search beyond the first server page across every major register, return only authorized records and prove stable totals."
     },
     {
@@ -5808,7 +5808,7 @@
         "browser": "NOT_AUDITED",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Shared table components implement page/page-size and several registers page locally or by query; fresh drawing proof also encountered a 20-project register boundary. Full authorized population, stable server totals and next-page browser proof remain unverified.",
+      "currentBehavior": "Shared table components implement page/page-size and several registers page locally or by query; fresh drawing proof also encountered a 20-project register boundary. Full authorized population, stable server totals and next-page browser proof remain unverified. MY PROJECTS (J2-01, 2026-09-27): server-paged, 20 a page, first/middle/last pages of a 56-row search navigated on screen with the server's totals; the unsearched list shows the tenant total, not a page length (my-projects-discovery.spec.ts). Export and the other registers are not re-proved by this.",
       "acceptanceProof": "Navigate first/middle/last pages beyond default limits with stable sort/filter totals, no duplicates/omissions and complete authorized export."
     },
     {
@@ -7420,13 +7420,13 @@
     },
     {
       "id": "J2-01",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "WRONG BEHAVIOR",
       "currentBehavior": "My Projects يبحث ويصفّح أول 50 فقط، مع total=1860؛ يضلل البحث ونص «You have access to 50».",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J2-01",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "XOP-06",
         "XOP-08"
@@ -7473,7 +7473,7 @@
       "expectedOperationalBehavior": "Full dataset search works with canonical inputs, governed permissions and usable handoff; Pagination works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Search beyond the first server page across every major register, return only authorized records and prove stable totals.; Navigate first/middle/last pages beyond default limits with stable sort/filter totals, no duplicates/omissions and complete authorized export."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING: My Projects searched and paged only the first 50 projects it had been sent (total 1,860), so a project past the 50th could not be found, and its no-match text said 'You have access to 50'. NOW every search and every page is the API's, over the authorised set: 20 a page, the count and the pager are the server's totals, only the answer to the latest request is kept, and no match states the caller's whole access. Proved in the browser as an organisation-level reader against PostgreSQL (my-projects-discovery.spec.ts): a target project is created and then 55 newer ones, so it is past the old 50-row window (asserted on the API's first page); the screen shows the tenant total and '1–20 of N'; the target is found by title and by reference; a 56-match search pages 1–20, 21–40, 41–56 with the target on the last page; a search with no match reads 'among the N projects you can access'; clearing it returns to the total. The member-scope proof in the same spec is repaired, not weakened: it used QA/QC as the role that cannot read projects, which stopped being true on 2026-09-14 (QA/QC was given projects read), so it now uses the Planning Engineer, and a search that counted other runs' projects is scoped to its own run. Repeated twice."
     },
     {
       "id": "J2-02",

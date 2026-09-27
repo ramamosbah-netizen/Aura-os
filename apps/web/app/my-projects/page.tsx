@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import MyProjectsClient, { type MyProjectsPage } from '@/components/my-projects-client';
 import AuraTabAnchor from '@/components/aura-tab-anchor';
+import { MY_PROJECTS_PAGE_SIZE } from '@/lib/my-projects';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ export const dynamic = 'force-dynamic';
  * same authorisation.
  */
 export default async function MyProjectsPage() {
-  const page = await getJson<MyProjectsPage>('/api/projects/mine');
+  const page = await getJson<MyProjectsPage>(`/api/projects/mine?limit=${MY_PROJECTS_PAGE_SIZE}&offset=0`);
 
   return (
     <div style={st.page}>

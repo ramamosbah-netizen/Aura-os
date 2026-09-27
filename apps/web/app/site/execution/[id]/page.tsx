@@ -36,6 +36,9 @@ export default async function SiteReport360({ params }: { params: Promise<{ id: 
       <div style={st.crumbs}>
         <a href="/site/execution" style={st.crumbLink}>Site Execution</a>
         <span style={st.crumbSep}>/</span>
+        {/* Back to the report's own project (J4-04), not to every project's diary. */}
+        <a href={`/site/execution?projectId=${encodeURIComponent(report.projectId)}`} style={st.crumbLink} data-testid="report-project-crumb">{report.projectName ?? 'Project'}</a>
+        <span style={st.crumbSep}>/</span>
         <span>{report.reportNumber}</span>
       </div>
 

@@ -2924,7 +2924,7 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh browser proof retained the supervisor rejection reason, allowed correction/resubmission, approved the report and refused an illegal post-approval transition with 409.",
+      "currentBehavior": "Fresh browser proof retained the supervisor rejection reason, allowed correction/resubmission, approved the report and refused an illegal post-approval transition with 409. REACH (J4-04, 2026-09-27): the daily report register now opens each saved report on its 360, where the review happens — a reviewer holding r-pm on the project opened a submitted report FROM THE REGISTER, started the review and rejected it with a reason; the preparer found it from the register again, read the reason and resubmitted (site-report-register-reach.spec.ts). The approval identity on the approved record is still not asserted in any proof, so this stays PARTIAL.",
       "acceptanceProof": "Named Site Engineer and supervisor execute the lifecycle with project/functional denial cases and an auditable approval identity."
     },
     {
@@ -7767,13 +7767,13 @@
     },
     {
       "id": "J4-04",
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "originalClassification": "DISCONNECTED",
       "currentBehavior": "Site diary register يتيح Submit/Print ولا يفتح Report 360 للمراجعة والتصحيح؛ مسار site/execution العام موجود لكنه يتجاهل projectId.",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J4-04",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "SIT-05"
       ],
@@ -7789,7 +7789,7 @@
       "expectedOperationalBehavior": "Supervisor review and correction works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Named Site Engineer and supervisor execute the lifecycle with project/functional denial cases and an auditable approval identity."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING: the site diary register offered Submit and Print but did not open the report's 360 for review and correction, and the general /site/execution route ignored the projectId a project's Site area links it with. NOW each saved report in the register opens its 360 (a report still queued offline has no record to open and gets no link); /site/execution named with a project reads that project's reports at the API and reads the project by id — the shapes a project member's grant can authorise — names the project, links to its daily reports and to all projects, and says 'could not be loaded' rather than 'no reports' when the Site service does not answer; the 360's crumb returns to the report's own project. Proved in the browser, Auth-ON, PostgreSQL, on two projects (site-report-register-reach.spec.ts): a member of one project opening its progress sees only its report, not the other project's; as the reviewer (r-pm on the project) they open a submitted report FROM THE REGISTER, start the review and reject it with a reason, and the crumb returns them to that project's progress; the preparer then opens the same report from the register, reads the reason and resubmits. No page errors on the reviewer's route. Regressions green: site-execution, domain-site-project-context, site-evidence-round-trip, site-business-date."
     },
     {
       "id": "J5-01",

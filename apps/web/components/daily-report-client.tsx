@@ -318,6 +318,13 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
                       📎{i + 1}
                     </a>
                   ))}
+                  {/* THE REPORT ITSELF (J4-04). Review, rejection with its reason, correction and
+                      approval all happen on the report's 360 — the register could submit and print
+                      a report but not open it, so a rejected report could not be found to correct.
+                      A report still queued offline has no server record to open yet. */}
+                  {!(r.id.startsWith('offline-') || r.id.startsWith('client-')) && (
+                    <a href={`/site/execution/${r.id}`} data-testid={`open-report-${r.id}`} style={{ marginRight: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>Open →</a>
+                  )}
                   {r.status === 'draft' && <Button size="sm" tone="neutral" onClick={() => submit(r.id)}>Submit</Button>}
                   <a href={`/site/daily-reports/${r.id}/print`} target="_blank" rel="noopener noreferrer" style={{ marginLeft: 8, color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }} title="Print Daily Report (PDF)">🖨</a>
                 </Td>

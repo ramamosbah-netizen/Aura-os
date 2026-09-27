@@ -28,10 +28,28 @@ function statusStyle(status: string): CSSProperties {
   };
   return { ...base, ...(map[status] ?? map.draft) };
 }
-const fmt = (iso: string): string => new Date(iso).toLocaleDateString();
+interface Project {
+  id: string;
+  title: string;
+  reference?: string | null;
+}
 
-export default async function SiteExecutionPage() {
-  const reports = (await getJson<DailyReport[]>('/api/site/daily-reports')) ?? [];
+export default async function SiteExecutionPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  const { projectId } = await searchParams;
+  /**
+   * THE PROJECT A WORKSPACE OPENED THIS FROM (J4-04). A project's Site area links here with
+   * `?projectId=`, and the page used to ignore it and list every project's reports — so "Progress"
+   * inside one project showed the whole tenant's diary. It is scoped at the API, as the daily
+   * report register is, and the project is read by id: the shape a project member's grant can
+   * authorise, where the tenant-wide list is refused to them.
+   */
+  const scope = projectId ? `?projectId=${encodeURIComponent(projectId)}` : '';
+  const [loaded, project] = await Promise.all([
+    getJson<DailyReport[]>(`/api/site/daily-reports${scope}`),
+    projectId ? getJson<Project>(`/api/projects/projects/${encodeURIComponent(projectId)}`) : Promise.resolve(null),
+  ]);
+  const reports = (loaded ?? []).filter((r) => !projectId || r.projectId === projectId);
+  const projectLabel = project ? `${project.reference ? `${project.reference} · ` : ''}${project.title}` : projectId ?? null;
   const weekAgo = Date.now() - 7 * 864e5;
   const thisWeek = reports.filter((r) => new Date(r.date).getTime() >= weekAgo).length;
   const approved = reports.filter((r) => r.status === 'approved').length;
@@ -48,6 +66,18 @@ export default async function SiteExecutionPage() {
         Approved, with an immutable audit trail.
       </p>
 
+      <div style={st.scope} data-testid="execution-scope">
+        {projectId ? (
+          <>
+            <span>Project: <strong>{projectLabel}</strong></span>
+            <a href={`/site/daily-reports?projectId=${encodeURIComponent(projectId)}`} style={st.open}>Daily reports for this project</a>
+            <a href="/site/execution" style={st.open}>All projects →</a>
+          </>
+        ) : (
+          <span>All projects you can see</span>
+        )}
+      </div>
+
       <div style={st.kpis}>
         <Kpi label="Reports this week" value={thisWeek} />
         <Kpi label="Approved" value={approved} tone="good" />
@@ -56,8 +86,12 @@ export default async function SiteExecutionPage() {
       </div>
 
       <h2 style={st.h2}>Daily Reports</h2>
-      {rows.length === 0 ? (
-        <div style={st.empty} data-testid="reports-empty">No daily reports yet.</div>
+      {loaded === null ? (
+        // A fault, not an empty diary: saying "no reports" when the Site service did not answer would
+        // tell a site team their records are missing.
+        <div style={st.empty} role="alert" data-testid="reports-unavailable">Daily reports could not be loaded. Retry when the Site service is available.</div>
+      ) : rows.length === 0 ? (
+        <div style={st.empty} data-testid="reports-empty">{projectId ? 'No daily reports for this project yet.' : 'No daily reports yet.'}</div>
       ) : (
         <div style={st.tableWrap}>
           <table style={st.table} data-testid="reports-table">
@@ -110,4 +144,5 @@ const st = {
   tdCode: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)', fontWeight: 600, fontFamily: 'var(--mono, ui-monospace, monospace)' } as CSSProperties,
   tdMuted: { padding: '11px 14px', borderBottom: '1px solid var(--border, #f1f5f9)', color: 'var(--muted)' } as CSSProperties,
   open: { color: 'var(--accent, #2563eb)', textDecoration: 'none', fontWeight: 600 } as CSSProperties,
+  scope: { display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap', fontSize: 13.5, margin: '0 0 18px' } as CSSProperties,
 };

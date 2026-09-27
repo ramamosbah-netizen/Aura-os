@@ -526,4 +526,7 @@ export const QUOTATION_EVENT = {
   /** A never-submitted draft took the estimate's current figures in place (EST-16). */
   refreshed: 'crm.quotation.refreshed',
   updated: 'crm.quotation.updated',
+  /** EST-17 — an approval started under a company policy version, and each step decided in it. */
+  approvalStarted: 'crm.quotation.approval_started',
+  stepApproved: 'crm.quotation.step_approved',
 } as const;

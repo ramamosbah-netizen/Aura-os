@@ -61,6 +61,14 @@ export const ADMIN_SECTIONS: AdminSection[] = [
     group: 'Governance',
   },
   {
+    key: 'company-policies',
+    href: '/admin/settings/company-policies',
+    glyph: '📜',
+    title: 'Company Policies',
+    desc: 'Versioned company rules the server enforces — quotation approval first.',
+    group: 'Governance',
+  },
+  {
     key: 'workspace',
     href: '/admin/workspace',
     glyph: '🛠',

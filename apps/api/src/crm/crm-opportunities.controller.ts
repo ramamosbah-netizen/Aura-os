@@ -3,7 +3,7 @@ import { IsIn, IsNumber, IsObject, IsOptional, IsString, Max, Min, ValidateNeste
 import { Type } from 'class-transformer';
 import { TenantContext, ParseUuidOr404Pipe, AccessService } from '@aura/core';
 import { FORECAST_CATEGORIES, EXECUTION_TYPES, QUALIFICATION_KEYS, parsePageParams, type ForecastCategory, type Opportunity, type OpportunityStage, type ExecutionType, type BuyingStage, type PursuitDecision, type PursuitDimensions, type StageEvidence, type QualificationKey, type QualificationPatch, type QualificationStatus, type QualificationSource, type QualificationView } from '@aura/shared';
-import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
+import { type Quotation, AccountService, ContactService, OpportunityService, PreAwardPackageService, PricingQuotationService, QuotationApprovalPolicyService, QuotationService, quotationReadiness, quotationReadinessMessage } from '@aura/crm';
 import { TenderService, type Tender } from '@aura/tendering';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 
@@ -125,6 +125,7 @@ export class CrmOpportunitiesController {
     private readonly pricingQuotations: PricingQuotationService,
     private readonly access: AccessService,
     private readonly tenant: TenantContext,
+    private readonly policies: QuotationApprovalPolicyService,
   ) {}
 
   /**
@@ -214,7 +215,9 @@ export class CrmOpportunitiesController {
     }
 
     // LEGACY ungoverned deal — there is no pricing sheet to quote from, so keep the old headline
-    // behaviour: a single line at the opportunity's value.
+    // behaviour: a single line at the opportunity's value. J1-09 / EST-17: company policy may
+    // forbid it for new deals.
+    await this.policies.assertManualQuotingAllowed(ctx.tenantId);
     return this.quotations.create({
       tenantId: ctx.tenantId,
       companyId: opp.companyId,

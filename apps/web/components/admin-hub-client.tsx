@@ -17,6 +17,7 @@ const KEYWORDS: Record<string, string> = {
   security: 'auth lockout mfa totp sso entra jwks pii encryption posture password policy',
   workflows: 'workflow approval states transitions instances definition engine',
   'approval-matrix': 'approve threshold band value limit purchase',
+  'company-policies': 'quotation offer approval policy sequence threshold executive technical commercial sales manual vat segregation',
   workspace: 'sidebar functions visibility role workspace what users see',
   settings: 'key value tenant raw config',
   modules: 'enable disable module on off feature app crm finance hide turn',

@@ -6,6 +6,7 @@ import Timeline from './timeline';
 import { QuotationNegotiationPanel } from './negotiation-tab';
 import QuotationApprovalReadiness from './quotation-approval-readiness';
 import QuotationReviewDecision from './quotation-review-decision';
+import QuotationApprovalRoute from './quotation-approval-route';
 import QuotationRevisionCompare from './quotation-revision-compare';
 import QuotationDocumentsPanel from './quotation-documents-panel';
 import type { AssessmentInput } from '@aura/shared';
@@ -163,6 +164,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       .then((r) => (r.ok ? r.json() : null)).then((b) => { if (live) setBasis(b); }).catch(() => undefined);
     return () => { live = false; };
   }, [q.id, q.status]);
+  const [approvalTick, setApprovalTick] = useState(0);
   const startIssue = () => setIssuing({ recipient: q.contactName ?? '', channel: 'email' });
   const act = async (action: string, extra: Record<string, unknown> = {}) => {
     if ((action === 'reject' || action === 'cancel' || action === 'expire') && typeof window !== 'undefined') {
@@ -176,6 +178,10 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
+      // Under a company approval policy (EST-17) an approval may record one step and leave the offer
+      // in review for the next approver.
+      if (action === 'approve' && data.status === 'internal_review') setMsg('Your approval is recorded for your step. The offer now waits on the next approver.');
+      setApprovalTick((n) => n + 1);
       router.refresh();
     } catch (e) { setErr((e as Error).message); } finally { setBusy(false); }
   };
@@ -580,6 +586,7 @@ export default function Quotation360Client({ quotation: q, revisions, pricingVie
 
       {tab === 'approval' && (
         <RecordCard title="Approval context">
+          <QuotationApprovalRoute quotationId={q.id} refreshKey={approvalTick} />
           <QuotationApprovalReadiness quotationId={q.id} sourceTenderId={q.sourceTenderId} enforced={q.approvalReadinessMode !== 'legacy'} onAttach={() => setTab('documents')} />
           <QuotationReviewDecision quotationId={q.id} status={q.status} canDecide={allowed.approve} />
         </RecordCard>

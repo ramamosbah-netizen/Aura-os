@@ -1,4 +1,5 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { QuotationApprovalPolicyService } from './quotation-approval-policy.service';
 import { type Id, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import {
@@ -30,6 +31,8 @@ export class PreAwardService {
     // `generateQuotation` never ran, so a governed deal could be quoted from an approved scope with no
     // approved estimate and no frozen pricing — the very bypass that gate says it closes.
     @Optional() @Inject(PreAwardPackageService) private readonly packages: PreAwardPackageService | null = null,
+    // EST-17 — explicit token, for the reason written above.
+    @Optional() @Inject(QuotationApprovalPolicyService) private readonly policies: QuotationApprovalPolicyService | null = null,
   ) {}
 
   // ── Requirements ──
@@ -129,12 +132,13 @@ export class PreAwardService {
     // deal, a quotation can only be raised through the approved Scope + Estimate + frozen Pricing chain.
     // This closes the old discovery bypass (approved SolutionScope → quote) for governed deals; legacy
     // deals with no package stay grandfathered.
-    if (this.packages) {
-      const gov = await this.packages.governance(s.tenantId, s.opportunityId);
-      if (gov.governed && !(gov.scopeApproved && gov.estimateApproved && gov.pricingFrozen)) {
-        throw new Error('only a deal with an approved Scope, approved Estimate and frozen Pricing can be quoted — complete the Pre-Award chain first');
-      }
+    const gov = this.packages ? await this.packages.governance(s.tenantId, s.opportunityId) : null;
+    if (gov?.governed && !(gov.scopeApproved && gov.estimateApproved && gov.pricingFrozen)) {
+      throw new Error('only a deal with an approved Scope, approved Estimate and frozen Pricing can be quoted — complete the Pre-Award chain first');
     }
+    // J1-09 / EST-17 — quoting an ungoverned deal from a solution scope bypasses the study, estimate
+    // and pricing; company policy may forbid it for new deals.
+    if (!gov?.governed && !s.generatedQuotationId) await this.policies?.assertManualQuotingAllowed(s.tenantId);
 
     if (s.generatedQuotationId) {
       const existing = await this.quotations.get(s.generatedQuotationId);

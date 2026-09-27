@@ -89,6 +89,8 @@ import { InstalledBaseService } from './installed-base.service';
 
 import { LeadConversionService } from './lead-conversion.service';
 import { PreSalesAssignmentService } from './presales-assignment.service';
+import { QuotationApprovalPolicyService } from './quotation-approval-policy.service';
+import { CRM_COMPANY_POLICY_STORE, CRM_QUOTATION_APPROVAL_RUN_STORE, InMemoryCompanyPolicyStore, InMemoryQuotationApprovalRunStore, PostgresCompanyPolicyStore, PostgresQuotationApprovalRunStore } from './company-policy-store';
 import { CRM_PRESALES_ASSIGNMENT_STORE, InMemoryPreSalesAssignmentStore, PostgresPreSalesAssignmentStore } from './presales-assignment-store';
 
 /**
@@ -132,6 +134,17 @@ import { CRM_PRESALES_ASSIGNMENT_STORE, InMemoryPreSalesAssignmentStore, Postgre
         pool ? new PostgresPreSalesAssignmentStore(pool) : new InMemoryPreSalesAssignmentStore(),
     },
     PreSalesAssignmentService,
+    {
+      provide: CRM_COMPANY_POLICY_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? new PostgresCompanyPolicyStore(pool) : new InMemoryCompanyPolicyStore()),
+    },
+    {
+      provide: CRM_QUOTATION_APPROVAL_RUN_STORE,
+      inject: [PG_POOL],
+      useFactory: (pool: Pool | null) => (pool ? new PostgresQuotationApprovalRunStore(pool) : new InMemoryQuotationApprovalRunStore()),
+    },
+    QuotationApprovalPolicyService,
     {
       provide: CRM_PRE_AWARD_PACKAGE_STORE,
       inject: [PG_POOL],
@@ -247,6 +260,6 @@ import { CRM_PRESALES_ASSIGNMENT_STORE, InMemoryPreSalesAssignmentStore, Postgre
     ScopeAssistService,
     LeadConversionService,
   ],
-  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, PricingQuotationService, ScopeAssistService, LeadConversionService, PreSalesAssignmentService],
+  exports: [PricingSheetService, AccountService, AccountRelationshipService, InstalledBaseService, CampaignService, LeadService, OpportunityService, QuotationService, ContactService, ActivityService, SignalService, OpportunityDepthService, ForecastSnapshotService, PreAwardService, PreAwardPackageService, PricingQuotationService, ScopeAssistService, LeadConversionService, PreSalesAssignmentService, QuotationApprovalPolicyService],
 })
 export class CrmModule {}

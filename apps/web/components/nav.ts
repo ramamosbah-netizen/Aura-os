@@ -270,6 +270,7 @@ export const NAV: NavGroup[] = [
       { label: 'Admin Center', href: '/admin', glyph: '🛠', desc: 'Governance, configuration, integrations & observability' },
       { label: 'Roles & Access', href: '/admin/access', glyph: '🔑', desc: 'Roles & permission grants — what the API guard enforces' },
       { label: 'Approval Matrix', href: '/admin/approval-matrix', glyph: '✔', desc: 'Ordered approval rules per entity type' },
+      { label: 'Company Policies', href: '/admin/settings/company-policies', glyph: '📜', desc: 'Versioned company rules — quotation approval' },
       { label: 'Webhooks', href: '/admin/webhooks', glyph: '🪝', desc: 'Outbound webhook subscriptions & delivery log' },
       { label: 'Feature Flags', href: '/admin/feature-flags', glyph: '🚩', desc: 'Toggle staged capabilities + per-tenant overrides' },
       { label: 'Connectors', href: '/admin/connectors', glyph: '🔌', desc: 'External-system integration connectors' },

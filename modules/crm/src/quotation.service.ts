@@ -1,5 +1,8 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { assertSameTenant, decisionReadiness, diffFields, estimateLine, type DocumentRequirement, type DomainEvent, type EstimationLineInput, type Id, makeEvent, sameTenantOrNull } from '@aura/shared';
+import { QuotationApprovalPolicyService } from './quotation-approval-policy.service';
+import { CRM_QUOTATION_APPROVAL_RUN_STORE, type QuotationApprovalRun, type QuotationApprovalRunStore, type StepApprovalRecord } from './company-policy-store';
+import { type OfferFacts, QUOTATION_APPROVAL_POLICY_KEY, QUOTATION_APPROVE_PERMISSION, approvalProgress, planQuotationApproval } from './domain/quotation-approval-policy';
+import { assertSameTenant, decisionReadiness, diffFields, estimateLine, type DocumentRequirement, type DomainEvent, type EstimationLineInput, type Id, makeEvent, newId, sameTenantOrNull } from '@aura/shared';
 import { DOCUMENT_REQUIREMENT_STORE, DerivedEvidenceRegistry, EVENT_STORE, TX_RUNNER, type DocumentRequirementStore, type EventStore, type TxHandle, type TxRunner, AccessService, TenantContext } from '@aura/core';
 import {
   QUOTATION_EVENT,
@@ -78,6 +81,10 @@ export class QuotationService {
     // Evidence that is COMPUTED rather than attached — for a tender offer, its supplier quotations.
     // Explicit token: an @Optional() union without one reflects as Object and arrives as null.
     @Optional() @Inject(DerivedEvidenceRegistry) private readonly derivedEvidence: DerivedEvidenceRegistry | null = null,
+    // EST-17 — the tenant's quotation approval policy and the approval runs it produces. Optional so
+    // the no-DB harness boots; with no active policy an offer is approved as before, in one step.
+    @Optional() @Inject(QuotationApprovalPolicyService) private readonly policies: QuotationApprovalPolicyService | null = null,
+    @Optional() @Inject(CRM_QUOTATION_APPROVAL_RUN_STORE) private readonly runs: QuotationApprovalRunStore | null = null,
   ) {}
 
   /** Keep the no-DB test/dev path usable while making PostgreSQL writes atomic in production. */
@@ -158,6 +165,7 @@ export class QuotationService {
     let baseline: CommercialBaseline | null = null;
     let source!: Quotation;
     let updated!: Quotation;
+    let stepOnly = false;
     const actor = this.actor(actorId);
     await this.runAtomic(async (handle) => {
       const boundTenant = this.tenant?.boundTenantId();
@@ -166,8 +174,35 @@ export class QuotationService {
         : await this.store.get(id);
       const q = assertSameTenant(locked, boundTenant, 'quotation', id);
       source = q;
-      // Segregation of duties: the preparer cannot approve their own quotation.
-      if (action === 'approve' && actor && q.createdBy && actor === q.createdBy) {
+
+      // EST-17 — an approval started under a company policy follows THAT version's plan.
+      const run = this.runs ? await this.runs.openRunFor(q.tenantId, q.id) : null;
+      if (action === 'approve' && run) {
+        const step = await this.approveStep(handle, q, run, actor);
+        if (!step.complete) {
+          stepOnly = true;
+          updated = q;
+          await this.appendEvents(handle, [makeEvent({
+            type: QUOTATION_EVENT.stepApproved, tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
+            aggregateType: 'crm.quotation', aggregateId: q.id,
+            payload: { quoteNumber: q.quoteNumber, revision: q.revision, policyVersion: run.policyVersion, stepId: step.stepId, next: step.next },
+          })]);
+          return;
+        }
+        await this.runs!.saveRun(handle, { ...run, status: 'completed', closedAt: new Date().toISOString() });
+      } else if (action === 'approve' && this.policies) {
+        const active = await this.policies.active(q.tenantId);
+        if (active && q.status === 'draft') {
+          throw new Error(`${q.quoteNumber} can only be approved after it is submitted for review — company policy (quotation approval version ${active.version}) approves offers in steps`);
+        }
+      }
+      if (run && (action === 'return_for_revision' || action === 'cancel' || action === 'expire')) {
+        await this.runs!.saveRun(handle, { ...run, status: action === 'return_for_revision' ? 'returned' : 'closed', closedAt: new Date().toISOString() });
+      }
+
+      // Segregation of duties: the preparer cannot approve their own quotation (a policy-governed
+      // approval applied its own version's rule in approveStep).
+      if (action === 'approve' && !run && actor && q.createdBy && actor === q.createdBy) {
         throw new Error(`access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties requires a different approver`);
       }
       /**
@@ -182,7 +217,7 @@ export class QuotationService {
       if (action === 'return_for_revision' && !reason?.trim()) {
         throw new Error('returning an offer for revision requires a reason — the estimator has to know what to change');
       }
-      if (action === 'approve' && actor) {
+      if (action === 'approve' && !run && actor) {
         this.access.assertApprovalAuthority(
           actor,
           { permission: 'crm.quotation.approve', orgPath: [{ level: 'tenant', id: q.tenantId }], amount: q.total },
@@ -191,6 +226,8 @@ export class QuotationService {
       }
       const decidedOn = action === 'approve' ? await this.assertApprovalReadiness(q) : [];
       updated = applyQuotationAction(q, action);
+      // Submitting for review STARTS the approval under the policy active now, pinned to its version.
+      if (action === 'submit_review') await this.startApprovalRun(handle, q, actor);
       const eventType = action === 'send' ? QUOTATION_EVENT.sent : action === 'accept' ? QUOTATION_EVENT.accepted : QUOTATION_EVENT.statusChanged;
       const events: DomainEvent[] = [makeEvent({
         type: eventType,
@@ -230,6 +267,10 @@ export class QuotationService {
         : events;
       await this.appendEvents(handle, committedEvents);
     });
+    if (stepOnly) {
+      this.logger.log(`Quotation ${source.quoteNumber} (rev ${source.revision}) step approved by ${actor}`);
+      return updated;
+    }
     this.logger.log(`Quotation ${source.quoteNumber} (rev ${source.revision}) ${action} → ${updated.status}`);
 
     // Governance (R3): approval locks the immutable Commercial Baseline — the approved-price snapshot
@@ -239,6 +280,96 @@ export class QuotationService {
       this.logger.log(`Commercial baseline locked for ${updated.quoteNumber}: total ${lockedBaseline.total} (${lockedBaseline.id})`);
     }
     return updated;
+  }
+
+  /** The facts a policy plans on, read from the offer itself. */
+  private offerFacts(q: Quotation): OfferFacts {
+    const pricing = q.estimation && q.estimation.length > 0 ? computeEstimationPricing(q.lines, q.estimation) : computeQuotationPricing(q.lines, q.pricing);
+    return {
+      net: q.subtotal, gross: q.total,
+      marginPercent: pricing.totalCost > 0 ? pricing.marginPercent : null,
+      // An offer carries no discount of its own yet: a discount trigger has nothing to read.
+      discountPercent: null,
+      manual: !q.sourceTenderId && !(q.estimation && q.estimation.length > 0),
+    };
+  }
+
+  private async startApprovalRun(handle: TxHandle | null, q: Quotation, actor: Id | null): Promise<void> {
+    if (!this.policies || !this.runs) return;
+    const active = await this.policies.active(q.tenantId);
+    if (!active) return;
+    const { amount, steps } = planQuotationApproval(active.policy, this.offerFacts(q));
+    if (steps.length === 0) return; // nothing this policy asks of an offer this size: approved as before
+    const stale = await this.runs.openRunFor(q.tenantId, q.id);
+    if (stale) await this.runs.saveRun(handle, { ...stale, status: 'closed', closedAt: new Date().toISOString() });
+    const run: QuotationApprovalRun = {
+      id: newId(), tenantId: q.tenantId, quotationId: q.id, policyKey: QUOTATION_APPROVAL_POLICY_KEY, policyVersion: active.version,
+      amount, amountBasis: active.policy.amountBasis, currency: active.policy.currency, plan: steps,
+      status: 'open', startedBy: actor ?? 'system', startedAt: new Date().toISOString(), closedAt: null,
+    };
+    await this.runs.saveRun(handle, run);
+    await this.appendEvents(handle, [makeEvent({
+      type: QUOTATION_EVENT.approvalStarted, tenantId: q.tenantId, companyId: q.companyId, actorId: actor,
+      aggregateType: 'crm.quotation', aggregateId: q.id,
+      payload: { quoteNumber: q.quoteNumber, revision: q.revision, policyVersion: active.version, amount, amountBasis: active.policy.amountBasis, steps: steps.map((s) => s.id) },
+    })]);
+  }
+
+  /**
+   * One approver's decision on the step their ROLE is due for, under the run's own policy version.
+   * Refused: a step out of sequence or for another role, the preparer (where the version requires
+   * it), a second step by the same person (where it requires that), and anyone without the approve
+   * permission or approval limit — a policy names roles, it never grants authority.
+   */
+  private async approveStep(handle: TxHandle | null, q: Quotation, run: QuotationApprovalRun, actor: Id | null) {
+    if (!actor) throw new Error('access denied: a signed-in approver is required');
+    if (q.status !== 'internal_review') throw new Error(`${q.quoteNumber} is ${q.status}; only an offer in review can be approved`);
+    const policy = await this.policies!.pinned(q.tenantId, run.policyVersion);
+    const decisions = await this.runs!.listDecisions(q.tenantId, run.id);
+    const progress = approvalProgress(run.plan, decisions);
+    if (policy.segregationOfDuties.preparerMayNotApprove && q.createdBy && actor === q.createdBy) {
+      throw new Error(`access denied: the preparer of quotation ${q.quoteNumber} cannot approve their own quotation — segregation of duties (approval policy version ${run.policyVersion}) requires a different approver`);
+    }
+    if (policy.segregationOfDuties.oneStepPerApprover) {
+      const earlier = decisions.find((d) => d.approverId === actor);
+      if (earlier) {
+        const label = run.plan.find((s) => s.id === earlier.stepId)?.label ?? earlier.stepId;
+        throw new Error(`access denied: ${actor} has already approved the ${label} step of ${q.quoteNumber} — approval policy version ${run.policyVersion} requires a different approver for each step`);
+      }
+    }
+    const step = progress.open.find((s) => this.policies!.holdsRole(q.tenantId, actor, s.role));
+    if (!step) {
+      throw new Error(`access denied: ${q.quoteNumber} is waiting on ${progress.open.map((s) => `${s.label} (${s.role})`).join(', ')} under approval policy version ${run.policyVersion}, and ${actor} does not hold that role`);
+    }
+    this.access.assertApprovalAuthority(
+      actor,
+      { permission: QUOTATION_APPROVE_PERMISSION, orgPath: [{ level: 'tenant', id: q.tenantId }], amount: run.amount },
+      `quotation ${q.quoteNumber} ${step.label} approval`,
+    );
+    const record: StepApprovalRecord = { id: newId(), tenantId: q.tenantId, runId: run.id, stepId: step.id, approverId: actor, decidedAt: new Date().toISOString() };
+    await this.runs!.appendDecision(handle, record);
+    const after = approvalProgress(run.plan, [...decisions, record]);
+    return { complete: after.complete, stepId: step.id, next: after.open.map((s) => s.label) };
+  }
+
+  /** Where this offer's approval stands under the policy version it started with (for the screen). */
+  async approvalStatus(tenantId: Id, id: Id) {
+    const q = assertSameTenant(await this.store.get(id), tenantId, 'quotation', id);
+    if (!this.runs) return { quotationId: q.id, runs: [] };
+    const runs = await this.runs.listRuns(tenantId, q.id);
+    return {
+      quotationId: q.id,
+      runs: await Promise.all(runs.map(async (run) => {
+        const decisions = await this.runs!.listDecisions(tenantId, run.id);
+        const progress = approvalProgress(run.plan, decisions);
+        return {
+          id: run.id, policyVersion: run.policyVersion, status: run.status, amount: run.amount, amountBasis: run.amountBasis,
+          currency: run.currency, startedAt: run.startedAt, startedBy: run.startedBy, closedAt: run.closedAt,
+          waitingOn: run.status === 'open' ? progress.open.map((s) => ({ id: s.id, label: s.label, role: s.role })) : [],
+          steps: progress.steps.map((s) => ({ ...s, decisions: decisions.filter((d) => d.stepId === s.id).map((d) => ({ approverId: d.approverId, decidedAt: d.decidedAt })) })),
+        };
+      })),
+    };
   }
 
   /**

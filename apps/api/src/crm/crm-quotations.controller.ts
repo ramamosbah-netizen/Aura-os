@@ -6,7 +6,7 @@ import { applyFormOverrides, assertFormValid, parsePageParams, pickCustomFieldVa
 import {
   QUOTATION_ACTIONS, type Quotation, type QuotationAction, type NewQuotationLine, QuotationService,
   analysePricing, type LineRefs, type SheetLineForAdvice,
-  PreAwardPackageService, QUOTATION_ISSUE_CHANNELS, type QuotationIssueChannel,
+  PreAwardPackageService, QUOTATION_ISSUE_CHANNELS, type QuotationIssueChannel, QuotationApprovalPolicyService,
 } from '@aura/crm';
 import { MarketItemService } from '@aura/market-intelligence';
 import { type Contract, ContractService } from '@aura/contracts';
@@ -103,6 +103,7 @@ export class CrmQuotationsController {
     private readonly settings: SettingsService,
     private readonly access: AccessService,
     private readonly packages: PreAwardPackageService,
+    private readonly policies: QuotationApprovalPolicyService,
   ) {}
 
   private accessTarget(q: Pick<Quotation, 'tenantId' | 'companyId'>, permission: string) {
@@ -203,6 +204,8 @@ export class CrmQuotationsController {
     if (!dto?.customerName?.trim()) throw new BadRequestException('customerName is required');
     if (!dto?.issueDate) throw new BadRequestException('issueDate is required');
     if (!Array.isArray(dto?.lines) || dto.lines.length === 0) throw new BadRequestException('at least one line item is required');
+    // J1-09 / EST-17 — a free-form offer is a manual quotation; company policy may forbid it for new deals.
+    await this.policies.assertManualQuotingAllowed(ctx.tenantId);
     const refs = await this.references.validate({
       accountId: dto.accountId ?? null,
       sourceOpportunityId: dto.sourceOpportunityId ?? null,
@@ -658,6 +661,16 @@ export class CrmQuotationsController {
         exclusions: study.exclusions,
       } : null,
     };
+  }
+
+  /** EST-17 — where this offer's approval stands, under the policy version it started with. */
+  @Permissions('crm.quotation.read')
+  @Get(':id/approval')
+  async approval(@Param('id') id: string) {
+    const tenantId = this.tenant.get().tenantId;
+    const q = await this.quotations.get(id);
+    if (!q || q.tenantId !== tenantId) throw new NotFoundException(`quotation ${id} not found`);
+    return this.quotations.approvalStatus(tenantId, id);
   }
 
   /** Every time this offer was returned for revision, and why. Append-only, oldest first. */

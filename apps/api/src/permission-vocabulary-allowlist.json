@@ -14,6 +14,7 @@
     "admin.modules.manage",
     "admin.notifications.manage",
     "admin.numbering.manage",
+    "admin.policies.manage",
     "admin.security.manage",
     "admin.settings.manage",
     "admin.users.manage",

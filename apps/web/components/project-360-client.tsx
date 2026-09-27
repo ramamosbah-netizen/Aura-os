@@ -89,7 +89,12 @@ interface DelayImpact {
 }
 interface EotClaim { id: string; title: string; submittedDays: number; approvedDays: number; status: string; createdAt: string; justification?: string | null; delayEventIds?: string[]; }
 interface CloseoutItem { label: string; done: boolean; }
-interface Closeout { id: string; status: string; items: CloseoutItem[]; handoverDate: string | null; dlpEndDate: string | null; }
+/**
+ * The closeout's lifecycle as the Projects domain stores it (CloseoutStatus): in_progress → completed.
+ * Typed as the union, not a string, so a check for a status the domain never writes — the screen
+ * tested for 'finalized' and so never saw a finished closeout (J6-02) — fails to compile.
+ */
+interface Closeout { id: string; status: 'in_progress' | 'completed'; items: CloseoutItem[]; handoverDate: string | null; dlpEndDate: string | null; }
 interface Evm {
   budgetAtCompletion: number | null;
   plannedValue: number | null;
@@ -439,7 +444,7 @@ export default function Project360Client({ project, initialTab }: { project: Pro
     closeoutExists: closeout !== null,
     closeoutItems: closeout?.items.length ?? 0,
     closeoutDone,
-    closeoutFinalized: closeout?.status === 'finalized',
+    closeoutFinalized: closeout?.status === 'completed',
   }), [project.status, wbs, cbs, evm, variations, delays, eots, closeout, closeoutDone]);
 
   const assessment = useMemo(() => assessProject(evaluateProjectRules(facts), facts), [facts]);
@@ -1711,7 +1716,7 @@ function ClosePanel({
           ) : (
             <>
               <div style={{ display: 'flex', gap: 14, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-                <span className={closeout.status === 'finalized' ? 'badge badge-good' : 'badge'}>{closeout.status}</span>
+                <span className={closeout.status === 'completed' ? 'badge badge-good' : 'badge'} data-testid="closeout-status">{closeout.status === 'completed' ? 'Finalized' : 'In progress'}</span>
                 <span style={st.muted}>{closeoutDone}/{closeout.items.length} items done</span>
                 {closeout.handoverDate && <span style={st.muted}>Handover {closeout.handoverDate}</span>}
                 {closeout.dlpEndDate && <span style={st.muted}>DLP until {closeout.dlpEndDate}</span>}
@@ -1722,14 +1727,14 @@ function ClosePanel({
                   <input
                     type="checkbox"
                     checked={item.done}
-                    disabled={busy || closeout.status === 'finalized'}
+                    disabled={busy || closeout.status === 'completed'}
                     onChange={(e) => void call(`/api/projects/closeouts/${closeout.id}/items/${i}`, 'PATCH', { done: e.target.checked })}
                   />
                   <span style={item.done ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{item.label}</span>
                 </label>
               ))}
 
-              {closeout.status !== 'finalized' && (
+              {closeout.status !== 'completed' && (
                 <div style={{ marginTop: 12 }}>
                   <ActionButton
                     // Disabled on the SAME verdict the server enforces, so the button is not a

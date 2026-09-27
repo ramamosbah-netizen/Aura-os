@@ -118,7 +118,7 @@ test('the closeout panel shows a state and a reason per domain, not one badge', 
  * later — "why was this project allowed to close?". A verdict that lives only in the request which
  * produced it cannot answer it.
  */
-test('a clean project closes, and the permitting verdict is kept as evidence', async ({ request }) => {
+test('a clean project closes, and the permitting verdict is kept as evidence', async ({ page, request }) => {
   const projectId = await project(request, 'Closeout clean');
   const closeoutId = await tickedCloseout(request, projectId);
 
@@ -170,6 +170,19 @@ test('a clean project closes, and the permitting verdict is kept as evidence', a
   const finalized = await request.post(`/api/projects/closeouts/${closeoutId}/finalize`, { data: { handoverDate: '2026-09-30' } });
   expect(finalized.ok(), 'a project whose domains all report clean must be closable').toBe(true);
   expect(((await finalized.json()) as { status: string }).status).toBe('completed');
+
+  // J6-02 — the screen knows it is finished. It used to test for a 'finalized' status the domain never
+  // writes (the stored state is 'completed'), so a finished closeout still offered its checklist and
+  // "Finalize closeout", each of which the server then refused.
+  await page.goto(`/project/${projectId}`, { waitUntil: 'domcontentloaded' });
+  await page.getByRole('tab', { name: /^Closeout/ }).click();
+  await expect(page.getByTestId('closeout-status')).toHaveText('Finalized');
+  await expect(page.getByText('Handover 2026-09-30')).toBeVisible();
+  const boxes = page.getByTestId('project-closeout-panel').locator('input[type="checkbox"]');
+  const count = await boxes.count();
+  expect(count, 'the checklist is shown').toBeGreaterThan(0);
+  for (let i = 0; i < count; i += 1) await expect(boxes.nth(i), 'a finished checklist is locked').toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Finalize closeout' }), 'nothing left to finalize').toHaveCount(0);
 
   // The stamped evidence is asserted separately, against the event store itself: apps/web exposes
   // no events route, and inventing one for a test would be building product to make a proof pass.

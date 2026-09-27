@@ -4238,7 +4238,7 @@
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Fresh browser proof refused closeout for blocking or unreadable domains, displayed each authority/reason, retained the permitting verdict and allowed a clean project to close. Final account, contract release and full project-to-AMC handoff remain unproven.",
+      "currentBehavior": "Fresh browser proof refused closeout for blocking or unreadable domains, displayed each authority/reason, retained the permitting verdict and allowed a clean project to close. Final account, contract release and full project-to-AMC handoff remain unproven. SCREEN STATE (J6-02, 2026-09-27): the Project 360 now reads the closeout's stored final state ('completed') instead of a 'finalized' the domain never writes — a finished closeout shows as Finalized with its handover date, its checklist locked and no Finalize action (closeout-readiness.spec.ts). Final account, contract release and the project-to-AMC hand-off remain unproven, so this stays PARTIAL.",
       "acceptanceProof": "Close only when every canonical authority, final account and client acceptance is satisfied; freeze the dossier, close contract/project once and activate linked service obligations."
     },
     {
@@ -7875,13 +7875,13 @@
     },
     {
       "id": "J6-02",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "WRONG BEHAVIOR",
       "currentBehavior": "واجهة closeout تختبر finalized، بينما الحالة المحفوظة completed؛ شروط إقفال أزرار التعديل/الإعادة لا تطابق الحالة النهائية.",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J6-02",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "HO-11"
       ],
@@ -7899,7 +7899,7 @@
       "expectedOperationalBehavior": "Closeout versus project completion works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Close only when every canonical authority, final account and client acceptance is satisfied; freeze the dossier, close contract/project once and activate linked service obligations."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING: the closeout screen tested for 'finalized' while the stored final state is 'completed', so the lock conditions on the edit and finalize controls never matched the final state. Consequences measured in the code: after finalization the checklist stayed editable and 'Finalize closeout' stayed offered — and enabled while readiness held — each refused by the server; the badge showed a raw status; and the project-assessment fact closeoutFinalized was always false, so a closed project could still be read as 'ready to close' and its health band never reported Closed. NOW the screen reads the domain's own state, typed as the domain's union (in_progress | completed) so a check for a state the domain never writes fails to compile. Proved in the browser on a project whose domains all report clean (closeout-readiness.spec.ts, the clean-close test extended): after finalization the closeout reads Finalized with its handover date, every checklist box is locked, and there is no Finalize action. The other three closeout-readiness tests and the signal-to-close and T&C-handover journeys stay green."
     },
     {
       "id": "UX-01",

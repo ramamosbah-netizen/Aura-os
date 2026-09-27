@@ -5,6 +5,7 @@ import { AccessService, AuthService, TenantContext } from '@aura/core';
 import request from 'supertest';
 import { it, expect } from 'vitest';
 import { AppModule } from '../src/app.module';
+import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
 
 it('enforces governed PO approval, supplier and partial-receipt integrity', async () => {
   const previousSecret = process.env.AUTH_JWT_SECRET;
@@ -12,6 +13,8 @@ it('enforces governed PO approval, supplier and partial-receipt integrity', asyn
   const app = await NestFactory.create(AppModule, { logger: ['error'] });
   app.setGlobalPrefix('api/v1');
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidUnknownValues: false }));
+  // As main.ts does: domain refusals are classified by the platform's taxonomy, not by each route.
+  app.useGlobalFilters(new AllExceptionsFilter());
   const tenant = app.get(TenantContext);
   const auth = app.get(AuthService);
   const access = app.get(AccessService);

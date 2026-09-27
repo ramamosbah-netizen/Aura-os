@@ -1,6 +1,6 @@
 # Pinned verification queue
 
-37 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
+36 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
 
 ## Closure updates
 
@@ -23,7 +23,6 @@ Wave 3 is **CLOSED / VERIFIED** for its bounded journey, proved iteration by ite
 | SUP-10 | Payment terms | Procurement Manager / Buyer; Technical Manager; Commercial Manager / QS | Procurement; Pre-Sales | Procurement RFQ | N-RFQ | Representative Procurement Manager / Buyer, Technical Manager, Commercial Manager / QS role executes Payment terms in the canonical Procurement RFQ context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SUP-11 | Warranty | Procurement Manager / Buyer; Technical Manager; Commercial Manager / QS | Procurement; Pre-Sales | Procurement RFQ | N-RFQ | Representative Procurement Manager / Buyer, Technical Manager, Commercial Manager / QS role executes Warranty in the canonical Procurement RFQ context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SUP-12 | Quotation validity | Procurement Manager / Buyer; Technical Manager; Commercial Manager / QS | Procurement; Pre-Sales | Procurement RFQ | N-RFQ | Representative Procurement Manager / Buyer, Technical Manager, Commercial Manager / QS role executes Quotation validity in the canonical Procurement RFQ context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
-| BUY-02 | Supplier approval | Procurement Manager / Buyer; Storekeeper | Procurement | Procurement / Inventory | R-J26 | Representative Procurement Manager / Buyer, Storekeeper role executes Supplier approval in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | BUY-03 | RFQ dispatch | Procurement Manager / Buyer; Storekeeper | Procurement | Procurement / Inventory | R-J26 | Representative Procurement Manager / Buyer, Storekeeper role executes RFQ dispatch in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SIT-01 | Daily work allocation | Site Engineer; Project Engineer | Site; Progress | Site | R-J26 | Representative Site Engineer, Project Engineer role executes Daily work allocation in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SIT-06 | Site report print | Site Engineer; Project Engineer | Site; Progress | Site | R-J26 | Representative Site Engineer, Project Engineer role executes Site report print in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |

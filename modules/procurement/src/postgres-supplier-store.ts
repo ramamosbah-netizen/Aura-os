@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
+import { isUuid } from '@aura/core';
 import type { Supplier } from './domain/supplier';
 import type { SupplierFilter, SupplierStore } from './supplier-store';
 
@@ -62,6 +63,10 @@ export class PostgresSupplierStore implements SupplierStore {
   }
 
   async get(id: Id): Promise<Supplier | null> {
+    // A malformed id names no supplier: answered as absent, as the in-memory store and the
+    // platform's ParseUuidOr404Pipe do, rather than letting PostgreSQL's uuid parse error reach the
+    // caller as a 400 carrying database text (J3-04).
+    if (!isUuid(id)) return null;
     const res = await this.pool.query<Row>(`SELECT ${COLS} FROM public.aura_procurement_suppliers WHERE id = $1`, [id]);
     return res.rows.length ? rowTo(res.rows[0]) : null;
   }

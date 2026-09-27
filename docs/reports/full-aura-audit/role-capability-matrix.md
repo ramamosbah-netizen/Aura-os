@@ -611,7 +611,7 @@
 | Procurement Manager / Buyer | SUP-13 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-14 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-01 | COMPLETE | UNVERIFIED |
-| Procurement Manager / Buyer | BUY-02 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | BUY-02 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-03 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-04 | WRONG_BEHAVIOR | UNVERIFIED |
 | Procurement Manager / Buyer | BUY-05 | COMPLETE | UNVERIFIED |
@@ -670,7 +670,7 @@
 | Procurement Manager / Buyer | MGT-14 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-15 | WRONG_BEHAVIOR | UNVERIFIED |
 | Storekeeper | BUY-01 | COMPLETE | UNVERIFIED |
-| Storekeeper | BUY-02 | UNVERIFIED | UNVERIFIED |
+| Storekeeper | BUY-02 | PARTIAL | UNVERIFIED |
 | Storekeeper | BUY-03 | UNVERIFIED | UNVERIFIED |
 | Storekeeper | BUY-04 | WRONG_BEHAVIOR | UNVERIFIED |
 | Storekeeper | BUY-05 | COMPLETE | UNVERIFIED |

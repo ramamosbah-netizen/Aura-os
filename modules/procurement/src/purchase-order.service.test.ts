@@ -57,7 +57,7 @@ async function harness(actorId: string | null = null, orderedQuantity: number | 
     undefined,
     tenant,
   );
-  return { svc, appended, po, supplierStore };
+  return { svc, appended, po, supplierStore, store };
 }
 
 // G-12 — the last uncovered value mutation in the audit trail. The PO event recorded only the new
@@ -122,6 +122,34 @@ describe('PurchaseOrderService — governed supplier and status boundaries', () 
     const { svc, po } = await harness();
     await expect(svc.update(po.id, { supplierId: 'missing-supplier' })).rejects.toThrow(/not found/);
     await expect(svc.update(po.id, { supplierId: 'sup-pending' })).rejects.toThrow(/not approved/);
+  });
+
+  /**
+   * J3-04 — an approved order to one supplier, re-pointed at another approved supplier, would ride
+   * an approval and a commitment neither of which was given to it.
+   */
+  it('fixes the supplier once the order leaves draft — even another approved supplier is refused', async () => {
+    const { svc, store, po } = await harness();
+    for (const status of ['pending_approval', 'approved', 'issued', 'partially_received', 'received', 'closed', 'cancelled'] as const) {
+      const id = `po-${status}`;
+      await store.create({ ...po, id, status });
+      await expect(svc.update(id, { supplierId: 'sup-2' }), status).rejects.toThrow(/can only be changed while it is a draft/);
+      await expect(svc.update(id, { supplierId: null }), `${status}: unbinding is a change too`).rejects.toThrow(/can only be changed while it is a draft/);
+      // Not a change of supplier: the descriptive fields, and the same supplier's name re-read from the master.
+      await expect(svc.update(id, { title: `Renamed while ${status}` })).resolves.toMatchObject({ supplierId: 'sup-1' });
+      await expect(svc.update(id, { supplierId: 'sup-1', supplierName: 'Typed name' })).resolves.toMatchObject({ supplierId: 'sup-1', supplierName: 'Hikvision MEA' });
+    }
+    // A missing supplier is still reported as missing, whatever the order's state.
+    await expect(svc.update('po-issued', { supplierId: 'missing-supplier' })).rejects.toThrow(/not found/);
+    // While it is a draft the buyer may still choose.
+    await expect(svc.update(po.id, { supplierId: 'sup-2' })).resolves.toMatchObject({ supplierId: 'sup-2', supplierName: 'Dahua Gulf' });
+  });
+
+  it('treats a free-text supplier name as the supplier on an order with no master record', async () => {
+    const { svc, store, po } = await harness();
+    await store.create({ ...po, id: 'po-legacy', supplierId: null, supplierName: 'Old Vendor LLC', status: 'issued' });
+    await expect(svc.update('po-legacy', { supplierName: 'Another Vendor LLC' })).rejects.toThrow(/can only be changed while it is a draft/);
+    await expect(svc.update('po-legacy', { title: 'Legacy order, renamed' })).resolves.toMatchObject({ supplierName: 'Old Vendor LLC' });
   });
 
   /**

@@ -2563,7 +2563,7 @@
       "stages": [
         "Procurement"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Procurement / Inventory",
       "evidence": [
         "R-J26"
@@ -2571,15 +2571,16 @@
       "source": "apps/api/test/depth-audit-probe.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
         "permissions": "UNVERIFIED",
         "ui": "UNVERIFIED",
         "actualOutput": "UNVERIFIED",
         "browser": "NOT_AUDITED",
         "handoff": "UNVERIFIED"
       },
+      "currentBehavior": "THE ORDER SIDE OF SUPPLIER APPROVAL IS PROVED; ADMISSION ITSELF IS NOT. An order bound to a supplier must reference one that exists in the tenant and is admitted to the master, on create AND on every edit (a malformed or unknown id is 404, a pending supplier 409), and its snapshot name is taken from the master. Once the order leaves draft its supplier is fixed: re-pointing it at another admitted supplier, or unbinding it, is refused 409 with 'cancel it and raise a new order' (J3-04). Proved against PostgreSQL by the Buyer (po-supplier-fixed.spec.ts) and in unit tests over every status. NOT PROVED: the Procurement Manager's admission and suspension of a supplier on screen, the Buyer's refusal to admit (procurement.supplier.status), and what happens to open orders when a supplier is suspended.",
       "acceptanceProof": "Representative Procurement Manager / Buyer, Storekeeper role executes Supplier approval in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
     },
     {
@@ -7606,13 +7607,13 @@
     },
     {
       "id": "J3-04",
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "originalClassification": "WRONG BEHAVIOR",
       "currentBehavior": "تعديل المورد إلى missing-supplier يُحفظ.",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J3-04",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "BUY-02"
       ],
@@ -7627,7 +7628,7 @@
       "expectedOperationalBehavior": "Supplier approval works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Representative Procurement Manager / Buyer, Storekeeper role executes Supplier approval in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING (depth audit, finding 4): supplier validation ran on create and not on edit — re-pointing an order at 'missing-supplier' was saved — and it asked for existence, tenant and approval state to be validated on changes and for the changes permitted after issue to be defined. NOW every supplier change is validated (existence, tenant, admitted to the master), and the rule after issue is defined: THE SUPPLIER OF AN ORDER IS FIXED ONCE IT LEAVES DRAFT — an approver approved it to that supplier and an issued order is a commitment that supplier holds, so moving it is cancel-and-re-raise; the title and reference stay correctable, and re-reading the same supplier's name from the master is not a change. Measured before the rule: a part-received order could be moved to a different ADMITTED supplier with a 200. Two defects found on the way are corrected: the route caught every domain refusal and answered 400 for anything that was not 'not found', bypassing the platform's error taxonomy (a state conflict told the caller to fix their request), and the PostgreSQL supplier store let a malformed id reach the database, returning its uuid parse error as a 400 where the in-memory store answered 404. Proved against the running API and PostgreSQL by the Buyer (po-supplier-fixed.spec.ts, repeated twice): while draft a missing supplier is 404, a pending one 409, and the Buyer may choose between two admitted suppliers (the snapshot name comes from the master, not the request); once issued, another admitted supplier and unbinding are each refused 409 in words that say what to do, a missing supplier is still 404, the title can be corrected, the stored order keeps its supplier, and the order page names the supplier it was issued to and not the other. Unit tests cover every status from pending approval to cancelled and a legacy order with a free-text supplier. The depth-audit probe now installs the production exception filter, which it lacked. Regressions green: procurement-order-receipt, procurement-requisition-decision, sourcing-award, tender-real-supply-path, commercial-comparison."
     },
     {
       "id": "J3-05",
@@ -9156,7 +9157,7 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 53,
-      "PARTIAL": 72,
+      "PARTIAL": 73,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9165,7 +9166,7 @@
       "DISCONNECTED": 8,
       "WRONG_BEHAVIOR": 6,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 37,
+      "UNVERIFIED": 36,
       "NOT_AUDITED": 0
     },
     "gaps": 69,

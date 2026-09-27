@@ -168,18 +168,16 @@ export class ProcurementController {
   @Permissions('procurement.po.update')
   @Patch('purchase-orders/:id')
   async updatePo(@Param('id') id: string, @Body() dto: UpdatePurchaseOrderDto): Promise<PurchaseOrder> {
-    try {
-      return await this.pos.update(id, {
-        title: dto.title,
-        reference: dto.reference,
-        supplierId: dto.supplierId,
-        supplierName: dto.supplierName,
-      });
-    } catch (e) {
-      const msg = (e as Error).message;
-      if (msg.includes('not found')) throw new NotFoundException(msg);
-      throw new BadRequestException(msg);
-    }
+    // The domain's refusals go to the platform's error taxonomy like every other route's. This used
+    // to catch them and answer 400 for anything that was not "not found", which turned a state
+    // conflict — an issued order's supplier, a supplier not admitted to the master — into "fix your
+    // request", advice that cannot be followed (J3-04).
+    return this.pos.update(id, {
+      title: dto.title,
+      reference: dto.reference,
+      supplierId: dto.supplierId,
+      supplierName: dto.supplierName,
+    });
   }
 
   @Permissions('procurement.po.view')

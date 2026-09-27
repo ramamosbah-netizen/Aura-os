@@ -401,7 +401,7 @@
 | Procurement | SUP-13 | COMPLETE |
 | Procurement | SUP-14 | COMPLETE |
 | Procurement | BUY-01 | COMPLETE |
-| Procurement | BUY-02 | UNVERIFIED |
+| Procurement | BUY-02 | PARTIAL |
 | Procurement | BUY-03 | UNVERIFIED |
 | Procurement | BUY-04 | WRONG_BEHAVIOR |
 | Procurement | BUY-05 | COMPLETE |

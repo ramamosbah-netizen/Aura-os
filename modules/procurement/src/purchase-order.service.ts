@@ -275,7 +275,22 @@ export class PurchaseOrderService implements OnModuleInit {
       if (!isApproved(supplier)) throw new Error(`supplier ${supplier.name} is not approved (status ${supplier.status})`);
       normalized = { ...patch, supplierName: supplier.name };
     }
-    const defined = Object.fromEntries(Object.entries(normalized).filter(([, v]) => v !== undefined));
+    const defined = Object.fromEntries(Object.entries(normalized).filter(([, v]) => v !== undefined)) as Partial<PurchaseOrder>;
+    /**
+     * J3-04 — THE SUPPLIER OF AN ORDER IS FIXED ONCE IT LEAVES DRAFT. An approver approves an order
+     * to a supplier, and an issued order is a commitment that supplier holds; re-pointing it at
+     * another vendor afterwards — even an approved one — would ride that approval and that
+     * commitment without either having been given. Measured: a part-received order could be moved
+     * to a different approved supplier with a 200. Re-reading the SAME supplier's name from the
+     * master is not a change of supplier and stays allowed; so do the title and reference.
+     * Changing supplier is: cancel, then raise a new order.
+     */
+    const nextSupplierId = 'supplierId' in defined ? defined.supplierId ?? null : existing.supplierId;
+    const nextSupplierName = 'supplierName' in defined ? defined.supplierName ?? null : existing.supplierName;
+    const changesSupplier = nextSupplierId !== existing.supplierId || (!existing.supplierId && nextSupplierName !== existing.supplierName);
+    if (changesSupplier && existing.status !== 'draft') {
+      throw new Error(`the supplier of a purchase order can only be changed while it is a draft — ${existing.reference ?? existing.title} is ${existing.status.replace(/_/g, ' ')}; cancel it and raise a new order to buy from another supplier`);
+    }
     const updated: PurchaseOrder = { ...existing, ...defined };
     // Audit trail (P1-2 / gap register G-12): capture the field-level before→after so the timeline
     // can answer "who re-pointed this PO at a different supplier, and from whom" — previously the

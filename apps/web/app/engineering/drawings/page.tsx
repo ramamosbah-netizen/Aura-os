@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import DrawingsByProject, { type DrawingRow, type ProjectRef } from '@/components/engineering-drawings-by-project';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +25,12 @@ export default async function DrawingRegisterPage({ searchParams }: { searchPara
     getJson<ProjectRef[]>('/api/projects/projects'),
   ]);
   const drawings = projectId ? (data ?? []).filter((d) => d.projectId === projectId) : (data ?? []);
+  const engineeringHref = projectId ? `/engineering?projectId=${encodeURIComponent(projectId)}` : '/engineering';
 
   return (
     <div style={st.page}>
       <div style={st.crumbs}>
-        <a href="/engineering" style={st.crumbLink}>Engineering</a>
+        <a href={engineeringHref} style={st.crumbLink}>Engineering</a>
         <span style={st.crumbSep}>/</span>
         <span>Drawing Register</span>
       </div>
@@ -39,9 +41,11 @@ export default async function DrawingRegisterPage({ searchParams }: { searchPara
         → Closed — and every transition is recorded. Open a project to work inside it.
       </p>
 
+      <ProjectScopeBanner projectId={projectId} allHref="/engineering/drawings" title={(projects ?? []).find((p) => p.id === projectId)?.title} />
+
       {drawings.length === 0 ? (
         <div style={st.empty} data-testid="register-empty">
-          No drawings yet. Create one from the <a href="/engineering" style={st.crumbLink}>Engineering</a> workspace.
+          {projectId ? 'No drawings on this project yet.' : 'No drawings yet.'} Create one from the <a href={engineeringHref} style={st.crumbLink}>Engineering</a> workspace.
         </div>
       ) : (
         <DrawingsByProject drawings={drawings} projects={projects ?? []} scopedProjectId={projectId ?? null} />

@@ -8,6 +8,7 @@ import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric
 import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
 import { HSE_PATH, HSE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
 import { businessDateInputValue } from '@/lib/locale';
+import { workspaceProject } from '@/lib/project-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,12 +97,12 @@ interface RiskAssessmentLite {
 export default async function HseControlPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string; section?: string }>;
+  searchParams?: Promise<{ project?: string; projectId?: string; section?: string }>;
 }) {
   // The project lives in the URL and is applied on the SERVER: rows for other projects are
   // never sent to the browser. Hiding them client-side would leave the same data on the wire.
   const filters = (await searchParams) ?? {};
-  const project = filters.project ?? '';
+  const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
   const [incidents, permits, capas, trainingRecords, projects, riskAssessments] = await Promise.all([
@@ -139,6 +140,9 @@ export default async function HseControlPage({
       <ProjectScopeFilter projects={projects ?? []} selected={project} path={HSE_PATH} />
 
       <HseControlClient
+        // UX-01: a project switch is a different dataset. The client seeds its lists from these props
+        // once, so without a key the filter would name the new project over the old project's rows.
+        key={project || 'all-projects'}
         initialIncidents={incidents ?? []}
         initialPermits={permits ?? []}
         initialCapas={capas ?? []}

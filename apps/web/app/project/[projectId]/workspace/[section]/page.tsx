@@ -25,8 +25,13 @@ type Section = {
   owner: string;
   description: string;
   sources: Array<{ label: string; endpoint: string }>;
-  capabilities: Array<{ label: string; description: string; href: string }>;
-  actions: Array<{ label: string; href: string }>;
+  /**
+   * `wide` — the owning page has no project scope yet (company-wide registers, the personal
+   * approvals inbox), so the link carries no projectId and the card SAYS it opens all projects.
+   * `~/x` — a page under this project's own route, /project/:id/x.
+   */
+  capabilities: Array<{ label: string; description: string; href: string; wide?: true }>;
+  actions: Array<{ label: string; href: string; wide?: true }>;
 };
 
 const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities' | 'actions'> & Partial<Pick<Section, 'sources' | 'capabilities' | 'actions'>>> = {
@@ -35,11 +40,11 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
     sources: [{ label: 'Project record', endpoint: 'project' }],
     capabilities: [
       { label: 'Setup & scope', description: 'Project identity, scope and contract context', href: '#project-setup' },
-      { label: 'Team & resources', description: 'Project organization and ownership', href: '/team' },
+      { label: 'Team & resources', description: 'Project organization and ownership', href: '~/team' },
       { label: 'Systems & disciplines', description: 'Use the project lens to focus delivery', href: '' },
-      { label: 'Project information', description: 'Controlled project context and key dates', href: '/documents' },
+      { label: 'Project information', description: 'Controlled project context and key dates', href: '~/documents' },
     ],
-    actions: [{ label: 'Open project setup', href: '#project-setup' }, { label: 'Open team', href: '/team' }],
+    actions: [{ label: 'Open project setup', href: '#project-setup' }, { label: 'Open team', href: '~/team' }],
   },
   plan: {
     label: 'Plan & Control', owner: 'Projects', description: 'Coordinate schedule, WBS, progress, risk and governed changes.',
@@ -78,11 +83,11 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
     ],
     capabilities: [
       { label: 'Purchase requests', description: 'Material requirements and approvals', href: '/procurement/purchase-requests' },
-      { label: 'RFQs & quotations', description: 'Supplier enquiries and responses', href: '/procurement/rfqs' },
+      { label: 'RFQs & quotations', description: 'Supplier enquiries and responses', href: '/procurement/rfqs', wide: true },
       { label: 'Purchase orders', description: 'Approved commitments and status', href: '/procurement/purchase-orders' },
-      { label: 'Suppliers', description: 'Supplier records and performance context', href: '/procurement/suppliers' },
+      { label: 'Suppliers', description: 'Supplier records and performance context', href: '/procurement/suppliers', wide: true },
     ],
-    actions: [{ label: 'Material requirement', href: '/procurement/purchase-requests' }, { label: 'Open RFQ workspace', href: '/procurement/rfqs' }],
+    actions: [{ label: 'Material requirement', href: '/procurement/purchase-requests' }, { label: 'Open RFQ workspace', href: '/procurement/rfqs', wide: true }],
   },
   subcontracts: {
     label: 'Subcontracts', owner: 'Subcontracts', description: 'Tender and administer defined work packages after project award.',
@@ -90,10 +95,10 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
     capabilities: [
       { label: 'Packages & scope', description: 'Work package, BOQ and tender basis', href: '/subcontracts/subcontracts' },
       { label: 'Bidders & evaluation', description: 'Technical and commercial comparison', href: '/subcontracts/subcontracts' },
-      { label: 'Claims & certification', description: 'Progress, certification and payment context', href: '/subcontracts/claims' },
-      { label: 'Variations', description: 'Subcontract change and claim records', href: '/subcontracts/variations' },
+      { label: 'Claims & certification', description: 'Progress, certification and payment context', href: '/subcontracts/claims', wide: true },
+      { label: 'Variations', description: 'Subcontract change and claim records', href: '/subcontracts/variations', wide: true },
     ],
-    actions: [{ label: 'New package / RFQ', href: '/subcontracts/subcontracts' }, { label: 'Open claims', href: '/subcontracts/claims' }],
+    actions: [{ label: 'New package / RFQ', href: '/subcontracts/subcontracts' }, { label: 'Open claims', href: '/subcontracts/claims', wide: true }],
   },
   site: {
     label: 'Site', owner: 'Site', description: 'Coordinate field instructions, daily reporting, progress and site evidence.',
@@ -144,7 +149,7 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
       { label: 'Project controls', description: 'Cost Ledger, quantities and commercial controls', href: '/controls?tab=cost' },
       { label: 'Changes & claims', description: 'Governed project variations and claims', href: '/controls?tab=variations' },
       { label: 'Certifications', description: 'Contract certificates and billing context', href: '/contracts/certificates' },
-      { label: 'Finance context', description: 'Open the canonical finance workspace', href: '/finance/dashboard' },
+      { label: 'Finance context', description: 'Open the canonical finance workspace', href: '/finance/dashboard', wide: true },
     ],
     actions: [{ label: 'Variation', href: '/controls?tab=variations' }, { label: 'Open cost controls', href: '/controls?tab=cost' }],
   },
@@ -153,7 +158,7 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
     sources: [{ label: 'Document register', endpoint: '/api/doccontrol/register' }, { label: 'Submittals', endpoint: '/api/doccontrol/submittals' }, { label: 'Transmittals', endpoint: '/api/doccontrol/transmittals' }],
     capabilities: [
       { label: 'Document register', description: 'Controlled records, revisions and status', href: '/doccontrol/register' },
-      { label: 'Project documents', description: 'Project-scoped evidence and files', href: '/documents' },
+      { label: 'Project documents', description: 'Project-scoped evidence and files', href: '~/documents' },
       { label: 'Technical documents', description: 'Engineering-owned document context', href: '/engineering' },
       { label: 'Document history', description: 'Revision and audit context', href: '/doccontrol/register' },
     ],
@@ -163,11 +168,11 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
     label: 'Approvals & Actions', owner: 'Canonical approvals', description: 'See decisions and action state for this project without creating a second approval engine.',
     sources: [{ label: 'Decision inbox', endpoint: '/api/inbox' }],
     capabilities: [
-      { label: 'Pending approvals', description: 'Project decisions waiting for action', href: '/my-work/approvals' },
-      { label: 'Project actions', description: 'Contextual work raised by project records', href: '/my-work/approvals' },
-      { label: 'Decision history', description: 'Completed and returned decisions', href: '/my-work/approvals' },
+      { label: 'Pending approvals', description: 'Your decisions waiting for action', href: '/my-work/approvals', wide: true },
+      { label: 'Project actions', description: 'Work raised to you by records', href: '/my-work/approvals', wide: true },
+      { label: 'Decision history', description: 'Completed and returned decisions', href: '/my-work/approvals', wide: true },
     ],
-    actions: [{ label: 'Open project approvals', href: '/my-work/approvals' }],
+    actions: [{ label: 'Open my approvals', href: '/my-work/approvals', wide: true }],
   },
   testing: {
     label: 'Testing & Commissioning', owner: 'Commissioning', description: 'Track systems, tests, failures, retests and commissioning evidence.',
@@ -197,15 +202,23 @@ const sections: Record<string, Omit<Section, 'slug' | 'sources' | 'capabilities'
     capabilities: [
       { label: 'Project activity', description: 'Recent changes across owning domains', href: '#' },
       { label: 'Documents history', description: 'Document revisions and events', href: '/doccontrol/register' },
-      { label: 'Decision history', description: 'Approval and action history', href: '/my-work/approvals' },
+      { label: 'Decision history', description: 'Approval and action history', href: '/my-work/approvals', wide: true },
     ],
-    actions: [{ label: 'Open document history', href: '/doccontrol/register' }, { label: 'Open decision history', href: '/my-work/approvals' }],
+    actions: [{ label: 'Open document history', href: '/doccontrol/register' }, { label: 'Open decision history', href: '/my-work/approvals', wide: true }],
   },
 };
 
-function contextHref(href: string, projectId: string): string {
+/**
+ * UX-01 — the project leaves with the engineer. Every owning page reached from here reads
+ * `?projectId=` (the global delivery workspaces read it alongside their own `?project=`), asks the
+ * API for that project only, and names the project on screen. A `wide` page has no project scope,
+ * so it gets no projectId — a parameter the page would silently drop is a promise the link breaks.
+ */
+function contextHref(href: string, projectId: string, wide?: boolean): string {
+  if (wide) return href;
   if (!href || href === '#') return `/project/${encodeURIComponent(projectId)}`;
   if (href.startsWith('#')) return `/project/${encodeURIComponent(projectId)}${href}`;
+  if (href.startsWith('~/')) return `/project/${encodeURIComponent(projectId)}/${href.slice(2)}`;
   if (href.includes('?')) return `${href}&projectId=${encodeURIComponent(projectId)}`;
   return `${href}?projectId=${encodeURIComponent(projectId)}`;
 }
@@ -278,7 +291,7 @@ export default async function ProjectSectionDashboardPage({
           <p>{section.description}</p>
           <div className={styles.contextLine}><span>{projectTitle}</span><b>·</b><span>{section.owner}</span><b>·</b><span>Project context preserved</span></div>
         </div>
-        <div className={styles.heroActions}><span className={styles.sourceBadge}>{sourceState}</span>{section.actions[0] ? <Link className={styles.primaryAction} href={contextHref(section.actions[0].href, projectId)}>{section.actions[0].label}<ArrowRight size={14} aria-hidden /></Link> : null}</div>
+        <div className={styles.heroActions}><span className={styles.sourceBadge}>{sourceState}</span>{section.actions[0] ? <Link className={styles.primaryAction} href={contextHref(section.actions[0].href, projectId, section.actions[0].wide)}>{section.actions[0].label}<ArrowRight size={14} aria-hidden /></Link> : null}</div>
       </header>
 
       {query.discipline ? (
@@ -301,7 +314,7 @@ export default async function ProjectSectionDashboardPage({
 
       <section className={styles.capabilityPanel} aria-label={`${section.label} capabilities`}>
         <div className={styles.sectionHeading}><div><span className={styles.kicker}>WORKSPACE</span><h2>Manage {section.label.toLowerCase()}</h2></div><span className={styles.sectionHint}>Open the canonical owner with this project context</span></div>
-        <div className={styles.capabilityGrid}>{section.capabilities.map((capability) => <Link key={capability.label} href={contextHref(capability.href, projectId)} className={styles.capabilityCard}><span className={styles.cardArrow}><ExternalLink size={14} aria-hidden /></span><strong>{capability.label}</strong><small>{capability.description}</small></Link>)}</div>
+        <div className={styles.capabilityGrid}>{section.capabilities.map((capability) => <Link key={capability.label} href={contextHref(capability.href, projectId, capability.wide)} className={styles.capabilityCard} data-testid={`capability-${capability.label}`} data-scope={capability.wide ? 'all-projects' : 'project'}><span className={styles.cardArrow}>{capability.wide ? <em className={styles.wideTag}>All projects</em> : null}<ExternalLink size={14} aria-hidden /></span><strong>{capability.label}</strong><small>{capability.description}</small></Link>)}</div>
       </section>
 
       <section className={styles.activityPanel} aria-label={`${section.label} recent activity`}>

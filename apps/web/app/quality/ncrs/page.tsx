@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 import NcrClient, { type Ncr } from '../../../components/ncr-client';
 
 export const dynamic = 'force-dynamic';
@@ -23,6 +24,7 @@ export default async function NcrPage({ searchParams }: { searchParams: Promise<
         cause and correction, then move it through <b>raised → corrected → closed</b>. Major NCRs stay
         flagged until the correction is verified and the report is closed.
       </p>
+      <ProjectScopeBanner projectId={projectId} allHref="/quality/ncrs" />
       <section style={{ marginTop: 10 }}>
         {ncrs === null ? <p style={st.muted}>API offline.</p> : <NcrClient initial={rows ?? []} initialProjectId={projectId} />}
       </section>

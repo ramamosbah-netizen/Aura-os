@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition, type CSSProperties, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { workspaceProjectUrl } from '@/lib/project-scope';
 import { useHydrated } from '@/lib/use-hydrated';
 import { COMMISSIONING_PATH, COMMISSIONING_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
@@ -148,10 +149,7 @@ export default function CommissioningWorkspaceClient({
 
   /** Changing project changes the DATA, so this is a real navigation, with a visible pending state. */
   function chooseProject(projectId: string): void {
-    const next = new URLSearchParams(searchParams.toString());
-    if (projectId) next.set('project', projectId); else next.delete('project');
-    const query = next.toString();
-    startSwitch(() => router.push(query ? `${COMMISSIONING_PATH}?${query}` : COMMISSIONING_PATH));
+    startSwitch(() => router.push(workspaceProjectUrl(COMMISSIONING_PATH, searchParams, projectId)));
   }
 
   const systems = view?.systems ?? [];

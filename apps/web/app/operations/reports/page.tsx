@@ -4,6 +4,7 @@ import { getJson } from '@/lib/api';
 import DeliveryOperationsWorkspaceHeader from '@/components/delivery-operations-workspace-header';
 import ProjectScopeFilter from '@/components/project-scope-filter';
 import styles from './operations-reports.module.css';
+import { workspaceProject } from '@/lib/project-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +15,13 @@ const value = (n: number | null) => n === null ? 'Unavailable' : String(n);
 export default async function DeliveryOperationsReportsPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string }>;
+  searchParams?: Promise<{ project?: string; projectId?: string }>;
 }) {
   // Scoped on the SERVER, like every other delivery workspace. `/api/projects/projects` stays whole
   // on purpose: it is what the selector offers, and "Projects in delivery" is a portfolio count that
   // would be meaningless narrowed to the one project already named in the picker.
   const filters = (await searchParams) ?? {};
-  const project = filters.project ?? '';
+  const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
   const [projects, drawings, rfis, reports, ncrs, permits, commissioning] = await Promise.all([

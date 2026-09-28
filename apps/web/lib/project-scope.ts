@@ -83,6 +83,38 @@ export function buildScopeUrl(
   return qs ? `${pathname}?${qs}` : pathname;
 }
 
+/**
+ * UX-01 — THE PROJECT A GLOBAL DELIVERY WORKSPACE IS SCOPED TO, WHICHEVER NAME CARRIED IT.
+ *
+ * The delivery workspaces outside the /project route (Engineering, Site / Quality / HSE control,
+ * Testing & Commissioning, Handover, delivery reports) write their own filter as `?project=`. Every
+ * link INTO them from a project — the Project 360 workspace cards, the registers' "for this project"
+ * links — carries the canonical `?projectId=`. Reading only `project` meant an engineer who left a
+ * project's workspace landed on the global page showing "All projects" over every project's rows:
+ * the context badge they had just seen did not survive the click.
+ *
+ * `project` wins when both are present, because it is what this workspace's own filter wrote last.
+ */
+export function workspaceProject(query: { project?: string | string[]; projectId?: string | string[] } | null | undefined): string {
+  const first = (value: string | string[] | undefined): string => (Array.isArray(value) ? value[0] ?? '' : value ?? '').trim();
+  return first(query?.project) || first(query?.projectId);
+}
+
+/**
+ * The URL a workspace's project filter navigates to. Writes `?project=` and removes `?projectId=`,
+ * so choosing another project — or "All projects" — can never leave the project the user arrived
+ * with still scoping the page underneath a filter that no longer names it. Other params (section,
+ * filter) are kept.
+ */
+export function workspaceProjectUrl(path: string, search: { toString(): string }, projectId: string): string {
+  const next = new URLSearchParams(search.toString());
+  next.delete('projectId');
+  if (projectId) next.set('project', projectId);
+  else next.delete('project');
+  const qs = next.toString();
+  return qs ? `${path}?${qs}` : path;
+}
+
 /** The structured payload handed to the AI — IDs and scope, never display text. */
 export interface ProjectAIContext {
   projectId: string | null;

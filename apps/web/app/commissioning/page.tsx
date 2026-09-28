@@ -8,6 +8,7 @@ import CommissioningWorkspaceClient, {
 } from '../../components/commissioning-workspace-client';
 import type { QualityEvidence } from '../../components/commissioning-gate3-sections';
 import type { ChecklistCoverageView } from '../../components/commissioning-checklist-binding';
+import { workspaceProject } from '@/lib/project-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +23,10 @@ export const dynamic = 'force-dynamic';
 export default async function CommissioningPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string; section?: string; filter?: string }>;
+  searchParams?: Promise<{ project?: string; projectId?: string; section?: string; filter?: string }>;
 }) {
   const filters = (await searchParams) ?? {};
-  const project = filters.project ?? '';
+  const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
   const [view, projects, punch, devices, qualityEvidence, checklistCoverage] = await Promise.all([
@@ -69,6 +70,9 @@ export default async function CommissioningPage({
       <DeliveryOperationsWorkspaceHeader active="commissioning" title="Testing & commissioning workspace" description="Turn installed systems into accepted systems through test plans, point results, witnessed sign-off and commissioning evidence." />
       <DeliveryWorkspaceSummary eyebrow="TESTING & COMMISSIONING" title="Commissioning operating picture" description="Move systems from ready to test through witnessed testing, retest and final commissioning." metrics={metrics} attention={attention} emptyMessage="No system is blocked from commissioning." />
       <CommissioningWorkspaceClient
+        // UX-01: a project switch is a different dataset. The client seeds its lists from these props
+        // once, so without a key the filter would name the new project over the old project's rows.
+        key={project || 'all-projects'}
         projects={projects ?? []}
         view={view}
         punch={punch}

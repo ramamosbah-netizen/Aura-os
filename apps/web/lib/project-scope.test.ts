@@ -1,5 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import { readProjectScope, buildScopeUrl, toAIContext, EMPTY_SCOPE, ELV_DISCIPLINES } from './project-scope';
+import { readProjectScope, buildScopeUrl, toAIContext, EMPTY_SCOPE, ELV_DISCIPLINES, workspaceProject, workspaceProjectUrl } from './project-scope';
+
+describe('UX-01 — a global workspace keeps the project it was opened with', () => {
+  it('reads the canonical projectId a project link sends', () => {
+    expect(workspaceProject({ projectId: 'P-1' })).toBe('P-1');
+  });
+  it('reads the workspace filter’s own project param, which wins when both are present', () => {
+    expect(workspaceProject({ project: 'P-2' })).toBe('P-2');
+    expect(workspaceProject({ project: 'P-2', projectId: 'P-1' })).toBe('P-2');
+  });
+  it('is empty — all projects — when neither is present or both are blank', () => {
+    expect(workspaceProject({})).toBe('');
+    expect(workspaceProject(undefined)).toBe('');
+    expect(workspaceProject({ project: ' ', projectId: '' })).toBe('');
+  });
+  it('takes the first value of a repeated param', () => {
+    expect(workspaceProject({ projectId: ['P-1', 'P-9'] })).toBe('P-1');
+  });
+  it('choosing another project drops the arrival projectId and keeps the other params', () => {
+    expect(workspaceProjectUrl('/engineering', sp('projectId=P-1&section=rfis'), 'P-2')).toBe('/engineering?section=rfis&project=P-2');
+  });
+  it('choosing "All projects" clears both names, so the arrival project cannot keep scoping the page', () => {
+    expect(workspaceProjectUrl('/handover', sp('projectId=P-1'), '')).toBe('/handover');
+    expect(workspaceProjectUrl('/handover', sp('project=P-2&projectId=P-1&section=training'), '')).toBe('/handover?section=training');
+  });
+});
 
 const sp = (q = '') => new URLSearchParams(q);
 

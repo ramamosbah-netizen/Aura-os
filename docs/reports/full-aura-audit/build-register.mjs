@@ -1228,6 +1228,12 @@ Object.assign(prior.find(g=>g.id==='J1-06'),{
  acceptanceProof:"MET ON ALL FOUR CLAUSES. Drawings and specifications revisions (STU-03), compliance and deviations (STU-06) and study review and sign-off (STU-08) were proved on the tender route in the browser against PostgreSQL (tender-study-signoff.spec.ts); the fourth clause, XOP-09's size/type/VIRUS rules, is now met: size (25 MB) and type (sniffed content) were enforced, and VIRUS SCANNING \u2014 the owner's decision of 2026-09-27, ClamAV, central, server-side, fail-closed \u2014 is built in the one DMS write path every upload passes. Proved on the tender study screen by Pre-Sales against a running ClamAV daemon (upload-virus-scan.spec.ts): the EICAR test file is refused on screen with the signature named and is never stored; an ordinary specification note is stored and downloads byte-identical. An unreachable scanner refuses the upload (503) and stores nothing (virus-scanning.e2e-spec.ts, Auth ON). The study sign-off proof itself passes through the scanner unchanged. STATED: CI's PostgreSQL job now declares a ClamAV service but has not run it (nothing pushed); a deployment without CLAMAV_HOST refuses every upload by design.",
 });
 
+/** UX-01 CLOSED (2026-09-28) \u2014 the project context survives the click; ENG-02, TC-11 and HO-06 keep their own layers. */
+Object.assign(prior.find(g=>g.id==='UX-01'),{
+ classification:'COMPLETE', status:'CLOSED_VERIFIED',
+ acceptanceProof:"MET. The project leaves the Project 360 workspace with the engineer. (1) THE GLOBAL WORKSPACES READ THE CANONICAL projectId: Engineering, Site / Quality / HSE control, Testing & Commissioning, Handover and the delivery reports read `?projectId=` alongside their own filter's `?project=` (one shared reader, workspaceProject), and their project filter shows the project they were opened for. (2) CHOOSING ANOTHER PROJECT, OR ALL PROJECTS, DROPS THE ARRIVAL projectId (one shared writer, workspaceProjectUrl, used by the shared filter and by Commissioning's and Handover's own pickers), so the arrival project cannot go on scoping a page under a filter that no longer names it. (3) HSE PERMITS are asked of the API for the project the link carries (the API always accepted it; the page dropped it), and unscoped, each row names its project. (4) EVERY SCOPED REGISTER SAYS WHICH PROJECT: a scope banner (project named from Projects, with Project 360 and All projects links) on site instructions, daily reports, NCRs, snags, risk assessments, toolbox talks, permits, the document register and the drawing register \u2014 the rows were already scoped, the page did not say so. (5) EVERY PROJECT 360 CARD EITHER CARRIES THE PROJECT OR SAYS, ON THE CARD, THAT IT OPENS ALL PROJECTS: RFQs & quotations, suppliers, subcontract claims and variations, the finance dashboard and the personal approvals inbox have no project scope, so they no longer carry a projectId they would drop; 'Project documents' and 'Project information' now open the project's own documents area. DEFECT FOUND AND FIXED ON THE WAY: the Engineering client seeded its lists from props once, so switching project in its filter named the new project over the OLD project's RFIs (reproduced in the browser before the fix); the same pattern sat under Site control (nested instructions) and Handover (packages). Each workspace's client is now keyed by project, so a switch re-reads the project's rows. PROVED in the browser against the running API and PostgreSQL (project-context-carry.spec.ts, 3/3): every card on all 13 Project 360 sections checked \u2014 project-scoped cards carry this project, all-projects cards carry none and say so; all 25 distinct pages a project card reaches opened below 400 \u2014 22 owner pages shown to name THIS project (filter value, scope banner, context panel or heading; a project with no contract is told so on certificates), the legacy controls link landing inside the project, and the project's own documents and overview routes; Engineering RFIs, HSE permits and NCRs seeded on two projects read as the admin who can see both, so the other project's absence is the scope and not a permission; switching the Engineering and Quality filters shows the other project's rows and not the first's, clearing restores all projects, and neither projectId nor project survives the clear (Handover's picker likewise). Unit: the reader and writer (project-scope.test.ts, 21). STATED, NOT FIXED: RFQs carry no project of their own (only a purchase request) and subcontract claims and variations only a subcontract, so their project scope needs API work and is not claimed; the member-scoped refusal of unscoped reads is the domain-*-project-context specs' proof and was re-run, not re-derived; the data switch was asserted on Engineering and Quality, and the same key protects Site, HSE, Commissioning and Handover by construction, not by a separate assertion.",
+});
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));
@@ -1284,6 +1290,101 @@ write('cross-cutting-matrix.md',`# Cross-cutting capabilities\n\n${table(['ID','
 const verificationRows=caps.filter(c=>c.classification==='UNVERIFIED');
 write('verification-queue.md',`# Pinned verification queue\n\n${verificationRows.length} capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.\n\n## Closure updates\n\nThe bounded Direct/Tender study-to-offer gate is verified in [the Wave 2 closure report](./wave-2-progress-report.md). Its maker/checker, revision, final output and frozen award-basis proof does not remove the supplier comparison leaves sequenced with Wave 4.\n\nWave 3 is **CLOSED / VERIFIED** for its bounded journey, proved iteration by iteration and then at wave level in [the Wave 3 progress report](./wave-3-progress-report.md). All six proofs the roadmap pinned to this wave are closed — AWD-06, PLN-04, ENG-03, ENG-04, ENG-05 and ENG-06, every one an engineering / document-control row — so no capability remains for it. The wave was NOT closed on that arithmetic: the capability count was one input to a wave-level closure proof that met **seven of seven exit-gate clauses**, each with a named carrier and Auth-ON evidence bound to a running API postdating every built package. Closing the wave closes nothing beyond it: 163 of 180 leaves are not COMPLETE, Waves 4-10 are untouched, and AURA overall remains open, not functionally complete and not Production Ready. Historical findings J2-02 and J2-03 are closed with AWD-05. Gap records F-07 and F-08 remain **OPEN**, and an earlier remainder audit was wrong to call them discharged: it measured them against a phrase that appears in neither record. Their own frozen acceptance proof asks for cost continuity through the same activity identity (F-07) and the HR/Fleet availability bridge (F-08), and both are still open — which is exactly why PLN-01 and PLN-06 stay PARTIAL. A record is discharged by its own acceptance proof or not at all. Neither record is a Wave 3 exit-gate clause, so both are carried forward as open rather than netted against the gate. ENG-03 and ENG-04 are investigation-first under programme rule 8: both already have stores and routes, and two independent submittal registers exist, so the canonical authority must be decided before anything is built.\n\n${table(['ID','Capability','Roles','Stages','Authority','Current evidence boundary','Acceptance proof'],verificationRows.map(c=>[c.id,c.capability,c.roles.join('; '),c.stages.join('; '),c.authority,c.currentBehavior??c.evidence.join('; '),c.acceptanceProof]))}`);
 write('reconciliation.json',JSON.stringify({capabilities:caps.length,capabilityStatus:count(caps),gapRecords:gaps.length,priorFindingIds:prior.map(g=>g.id),newFindingIds:additions.map(g=>g.id),freshDefectIds:defects.map(g=>g.id),rolePairs:roleRows.length,journeyPairs:journeyRows.length,pageTemplates:files.length,newPageAudited:Object.keys(livePages).length,newPageNotAudited:files.length-Object.keys(livePages).length,newTestsPassed:563,newTestsFailed:3,newTestFilesExecuted:89,scopeFrozen:true},null,2));
+const configurationCandidates=[
+ {
+  "id": "CC-01",
+  "rule": "The business day is Dubai's: every 'today', due date and business date is computed in Asia/Dubai.",
+  "where": "shared/src/domain/business-date.ts (BUSINESS_TIME_ZONE); web twin apps/web/lib/locale.ts",
+  "category": "system-configuration",
+  "state": "hardcoded",
+  "foundBy": "J4-02",
+  "note": "Right for JEET; a company or branch in another zone would get Dubai's day. Belongs to company/branch settings with effective dates. The non-UTC due-date behaviour stays recorded as unproven."
+ },
+ {
+  "id": "CC-02",
+  "rule": "An upload may be at most 25 MB.",
+  "where": "FileInterceptor limits repeated 10 times across 6 API controllers (commissioning, crm-leads, pre-award-package, quality, site, tendering)",
+  "category": "system-configuration",
+  "state": "hardcoded",
+  "foundBy": "J1-06",
+  "note": "A company setting under a platform ceiling. Ten copies of one literal can already drift; one source is owed before it becomes configurable."
+ },
+ {
+  "id": "CC-03",
+  "rule": "Every upload is virus-scanned, and no verdict means no upload (fail-closed).",
+  "where": "core/src/dms/virus-scanner.ts, DmsService.createDocument / addVersion",
+  "category": "platform-invariant",
+  "state": "invariant-by-design",
+  "foundBy": "J1-06",
+  "note": "An administrator may not switch scanning off. The scanner host is deployment configuration, not company configuration."
+ },
+ {
+  "id": "CC-04",
+  "rule": "A handover that states no warranty period opens a 12-month AMC.",
+  "where": "apps/api/src/events/handover-amc-subscriber.ts (warrantyMonths ?? 12)",
+  "category": "company-policy",
+  "state": "hardcoded",
+  "foundBy": "J6-01",
+  "note": "The default warranty / defects-liability period is a company (or contract) term."
+ },
+ {
+  "id": "CC-05",
+  "rule": "A customer invoice without a VAT rate is charged 5%.",
+  "where": "modules/finance/src/domain/customer-invoice.ts (vatRate default 5)",
+  "category": "system-configuration",
+  "state": "hardcoded",
+  "foundBy": "J5-01",
+  "note": "Tax jurisdiction and rate by company, with effective dates. See VAT-BASIS-01 for the separate bid-inclusive / award-exclusive basis defect."
+ },
+ {
+  "id": "CC-06",
+  "rule": "Money is AED: the currency literal 'AED' appears in at least 26 non-test source files.",
+  "where": "modules/, core/, apps/api/src (grep 'AED', 2026-09-28)",
+  "category": "system-configuration",
+  "state": "hardcoded",
+  "foundBy": "EST-17 / J5-02",
+  "note": "Base currency is company configuration; multi-currency is a separate decision, not implied."
+ },
+ {
+  "id": "CC-07",
+  "rule": "The System Administrator role holds every permission ('*'), business approvals included.",
+  "where": "core/src/identity/standard-elv-roles.ts (r-admin)",
+  "category": "permission",
+  "state": "hardcoded",
+  "foundBy": "SEC-01 review, 2026-09-28",
+  "note": "Conflicts with the owner's principle 'system administration \u2260 business authority'. Removing it is a deliberate migration with a break-glass design, not a quiet edit."
+ },
+ {
+  "id": "CC-08",
+  "rule": "Who approves a quotation, in what order, above which amount.",
+  "where": "modules/crm/src/domain/quotation-approval-policy.ts; /admin/settings/company-policies/quotation-approval",
+  "category": "workflow",
+  "state": "configurable",
+  "foundBy": "EST-17",
+  "note": "Already a versioned company policy \u2014 the reference shape for Admin Center Level 1. The owner's default (TM \u2192 Commercial \u2192 Sales) stays a DRAFT until the Executive amount is decided."
+ },
+ {
+  "id": "CC-09",
+  "rule": "A purchase order's supplier is fixed once the order leaves draft.",
+  "where": "modules/procurement/src/purchase-order.service.ts (update)",
+  "category": "platform-invariant",
+  "state": "invariant-by-design",
+  "foundBy": "J3-04",
+  "note": "Commitment integrity: a company may add approvals before issue, not reopen an issued commitment to another supplier."
+ },
+ {
+  "id": "CC-10",
+  "rule": "An IPC is valued as \u03a3 certified quantity \u00d7 the frozen awarded rate; the QS types quantities only.",
+  "where": "modules/contracts (J5-02 applyMeasuredWork, frozen_item_key)",
+  "category": "platform-invariant",
+  "state": "invariant-by-design",
+  "foundBy": "J5-02",
+  "note": "Owner decision 2026-09-28. 'Configuration changes \u2260 historical changes': the rate is the one frozen at award, whatever changes later."
+ }
+];
+write('configuration-candidates.json',JSON.stringify({date:'2026-09-28',rule:'Owner, 2026-09-28: AURA is JEET-first but multi-company-ready. Every hardcoded business rule found while closing a gap is logged here and classified; nothing here is built yet.',categories:['platform-invariant','company-policy','workflow','permission','evidence-requirement','system-configuration'],candidates:configurationCandidates},null,2));
+write('configuration-candidates.md',`# Configuration candidates\n\nOwner, 2026-09-28: AURA is JEET-first but multi-company-ready. Every hardcoded business rule found while closing a gap is logged here and classified \u2014 platform invariant, company policy, workflow, permission, evidence requirement or system configuration. A platform invariant is listed so that it is NOT made configurable. Nothing here is built yet; this is the Admin Center's requirements, collected on the way. UX-01 found no hardcoded business rule.\n\n${table(['ID','Rule','Category','State','Found by','Where','Note'],configurationCandidates.map(c=>[c.id,c.rule,c.category,c.state,c.foundBy,c.where,c.note]))}`);
+if(new Set(configurationCandidates.map(c=>c.id)).size!==configurationCandidates.length)throw new Error('Duplicate configuration candidate');
 if(prior.length!==34||new Set(gaps.map(g=>g.id)).size!==gaps.length)throw new Error('Gap reconciliation failed');
 if(caps.some(c=>!statuses.includes(c.classification)))throw new Error('Invalid classification');
 console.log(JSON.stringify({capabilities:caps.length,gaps:gaps.length,rolePairs:roleRows.length,journeyPairs:journeyRows.length,pages:files.length}));

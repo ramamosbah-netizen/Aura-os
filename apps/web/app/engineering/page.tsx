@@ -4,6 +4,7 @@ import EngineeringClient, { type Drawing } from '../../components/engineering-cl
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import ProjectScopeFilter from '../../components/project-scope-filter';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
+import { workspaceProject } from '@/lib/project-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,13 +121,13 @@ interface BimModel {
 export default async function EngineeringPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string; section?: string }>;
+  searchParams?: Promise<{ project?: string; projectId?: string; section?: string }>;
 }) {
   // The project lives in the URL, so it survives a reload, a pasted link and a reopened AURA tab —
   // and, more importantly, it is applied on the SERVER: the rows for other projects are never sent.
   // A picker that hid them in the browser would leave the same data on the wire.
   const filters = (await searchParams) ?? {};
-  const project = filters.project ?? '';
+  const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
   const [drawings, rfis, submittals, designChanges, documents, technicalQueries, bimModels, docTypes, projects, tenders] = await Promise.all([
@@ -153,6 +154,9 @@ export default async function EngineeringPage({
       <ProjectScopeFilter projects={projects ?? []} selected={project} path="/engineering" />
 
       <EngineeringClient
+        // UX-01: a project switch is a different dataset. The client seeds its lists from these props
+        // once, so without a key the filter would name the new project over the old project's rows.
+        key={project || 'all-projects'}
         scopedProjectId={project}
         initialDrawings={drawings ?? []}
         initialRfis={rfis ?? []}

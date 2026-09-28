@@ -8,6 +8,7 @@ import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric
 import SuiteShortcutGrid from '../../../components/suite-shortcut-grid';
 import ProjectScopeFilter from '../../../components/project-scope-filter';
 import { SITE_PATH, SITE_SECTIONS, sectionShortcuts } from '@/lib/workspace-sections';
+import { workspaceProject } from '@/lib/project-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -124,12 +125,12 @@ interface ProjectSchedule extends ProgressBearingSchedule {
 export default async function SiteControlPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string; section?: string }>;
+  searchParams?: Promise<{ project?: string; projectId?: string; section?: string }>;
 }) {
   // The project lives in the URL and is applied on the SERVER: rows for other projects are never
   // sent to the browser. A picker that hid them client-side would leave the same data on the wire.
   const filters = (await searchParams) ?? {};
-  const project = filters.project ?? '';
+  const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
   const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects, instructions] = await Promise.all([
@@ -175,6 +176,9 @@ export default async function SiteControlPage({
       <ProjectScopeFilter projects={projects ?? []} selected={project} path={SITE_PATH} />
 
       <SiteControlClient
+        // UX-01: a project switch is a different dataset. The client seeds its lists from these props
+        // once, so without a key the filter would name the new project over the old project's rows.
+        key={project || 'all-projects'}
         initialDailyReports={dailyReports ?? []}
         initialDelayLogs={delayLogs ?? []}
         initialMaterialConsumption={materialConsumption ?? []}

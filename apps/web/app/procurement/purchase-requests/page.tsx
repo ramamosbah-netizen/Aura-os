@@ -55,7 +55,7 @@ export default async function PurchaseRequestsPage({ searchParams }: { searchPar
       </p>
 
       {scopedProjectId && (
-        <div style={st.context}>
+        <div style={st.context} data-testid="project-context">
           <div>
             <span style={st.contextEyebrow}>Project context</span>
             <strong>{project?.title ?? 'Project unavailable'}</strong>

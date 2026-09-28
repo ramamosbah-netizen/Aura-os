@@ -7,6 +7,7 @@ import DeliveryOperationsWorkspaceHeader from '@/components/delivery-operations-
 import SuiteShortcutGrid from '@/components/suite-shortcut-grid';
 import type { SuiteShortcut } from '@/components/suite-dashboard-shell';
 import styles from './delivery-operations-overview.module.css';
+import { workspaceProject } from '@/lib/project-scope';
 
 // Discipline shortcuts — the same tone-coloured card grid Sales uses at the foot of its cockpit,
 // so a reader can jump straight into a discipline workspace from the overview.
@@ -42,9 +43,9 @@ const displayCount = (value: number | null): string => value === null ? 'Unavail
 interface AttentionItem { projectId: string | null; label: string; detail: string; href: string; discipline: Exclude<Discipline, 'all'>; tone: 'critical' | 'attention' }
 interface ActionItem { label: string; description: string; href: string; icon: LucideIcon }
 
-export default async function DeliveryOperationsOverviewPage({ searchParams }: { searchParams?: Promise<{ project?: string; discipline?: string; q?: string }> }) {
+export default async function DeliveryOperationsOverviewPage({ searchParams }: { searchParams?: Promise<{ project?: string; projectId?: string; discipline?: string; q?: string }> }) {
   const filters = (await searchParams) ?? {};
-  const selectedProject = filters.project ?? '';
+  const selectedProject = workspaceProject(filters);
   const selectedDiscipline: Discipline = ['engineering', 'site', 'quality', 'hse', 'commissioning'].includes(filters.discipline ?? '') ? filters.discipline as Discipline : 'all';
   const query = (filters.q ?? '').trim().toLowerCase();
 

@@ -2,6 +2,7 @@
 
 import { useCallback, useTransition, type CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { workspaceProjectUrl } from '@/lib/project-scope';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
 import { HANDOVER_PATH, HANDOVER_SECTIONS } from '@/lib/workspace-sections';
 import HandoverClient from './handover-client';
@@ -52,10 +53,7 @@ export default function HandoverWorkspaceClient({
 
   /** Changing project changes the DATA, so this is a real navigation with a visible pending state. */
   function chooseProject(projectId: string): void {
-    const next = new URLSearchParams(searchParams.toString());
-    if (projectId) next.set('project', projectId); else next.delete('project');
-    const query = next.toString();
-    startSwitch(() => router.push(query ? `${HANDOVER_PATH}?${query}` : HANDOVER_PATH));
+    startSwitch(() => router.push(workspaceProjectUrl(HANDOVER_PATH, searchParams, projectId)));
   }
 
   return (

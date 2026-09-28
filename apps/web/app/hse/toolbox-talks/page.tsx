@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 import ToolboxTalksClient from '../../../components/toolbox-talks-client';
 
 export const dynamic = 'force-dynamic';
@@ -30,6 +31,7 @@ export default async function ToolboxTalksPage({ searchParams }: { searchParams:
         and attendee headcount. The audit-trail HSE compliance asks for. Record today&apos;s talk and review
         the history.
       </p>
+      <ProjectScopeBanner projectId={projectId} allHref="/hse/toolbox-talks" />
       <section style={{ marginTop: 10 }}>
         {talks === null ? <p style={st.muted}>API offline.</p> : <ToolboxTalksClient initialTalks={talks ?? []} />}
       </section>

@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 import RiskAssessmentClient, { type RiskAssessment } from '../../../components/risk-assessment-client';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ export default async function RiskAssessmentPage({ searchParams }: { searchParam
         likelihood × severity (1–5), record the controls, then re-score the residual risk. The
         assessment carries the highest residual band and must be <b>approved</b> before the task begins.
       </p>
+      <ProjectScopeBanner projectId={projectId} allHref="/hse/risk-assessments" />
       <section style={{ marginTop: 10 }}>
         {ras === null ? <p style={st.muted}>API offline.</p> : <RiskAssessmentClient initial={ras ?? []} />}
       </section>

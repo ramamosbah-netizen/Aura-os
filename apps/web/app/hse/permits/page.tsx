@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { fetchJson } from '@/lib/api';
 import DataStateNotice from '@/components/ui/data-state';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,8 +61,13 @@ function isOverdue(p: Permit): boolean {
   return !Number.isNaN(to) && to < Date.now() && (p.status === 'approved' || p.status === 'requested');
 }
 
-export default async function PermitRegisterPage() {
-  const result = await fetchJson<Permit[]>('/api/hse/ptws');
+export default async function PermitRegisterPage({ searchParams }: { searchParams: Promise<{ projectId?: string }> }) {
+  // UX-01: the Project 360 HSE card links here with ?projectId=, and the register used to drop it —
+  // every project's permits under the project's own context. Carried to the API (which has always
+  // accepted it), so the other projects' permits never reach the page.
+  const scoped = (await searchParams).projectId?.trim() || '';
+  const result = await fetchJson<Permit[]>(`/api/hse/ptws${scoped ? `?projectId=${encodeURIComponent(scoped)}` : ''}`);
+  const hseHref = scoped ? `/hse/control?projectId=${encodeURIComponent(scoped)}` : '/hse/control';
   // A failed or refused read must not render as "no permits" — on a safety register that reads as
   // "nothing is authorised right now", which is the opposite of what an unknown state means.
   if (!result.ok) {
@@ -79,11 +85,13 @@ export default async function PermitRegisterPage() {
     (a, b) => rank(a.status) - rank(b.status) || a.validFrom.localeCompare(b.validFrom),
   );
   const overdue = rows.filter(isOverdue).length;
+  // Unscoped, the register spans projects, so each row names its project; scoped, the banner does.
+  const columns = [...(scoped ? [] : ['Project']), 'Type', 'Description', 'Valid from', 'Valid to', 'Risk assessment', 'Status', ''];
 
   return (
     <div style={st.page}>
       <div style={st.crumbs}>
-        <a href="/hse/control" style={st.crumbLink}>HSE</a>
+        <a href={hseHref} style={st.crumbLink}>HSE</a>
         <span style={st.crumbSep}>/</span>
         <span>Permit Register</span>
       </div>
@@ -95,6 +103,8 @@ export default async function PermitRegisterPage() {
         is inside its validity window. Open a permit to drive its workflow.
       </p>
 
+      <ProjectScopeBanner projectId={scoped} allHref="/hse/permits" />
+
       {overdue > 0 ? (
         <div style={st.warn} data-testid="permits-overdue">
           ⚠ {overdue} live permit{overdue === 1 ? '' : 's'} past the end of its validity window. An open
@@ -104,21 +114,22 @@ export default async function PermitRegisterPage() {
 
       {rows.length === 0 ? (
         <div style={st.empty} data-testid="permit-register-empty">
-          No permits yet. Raise one from the <a href="/hse/control" style={st.crumbLink}>HSE Control</a> workspace.
+          {scoped ? 'No permits on this project yet.' : 'No permits yet.'} Raise one from the <a href={hseHref} style={st.crumbLink}>HSE Control</a> workspace.
         </div>
       ) : (
         <div style={st.tableWrap}>
           <table style={st.table} data-testid="permit-register">
             <thead>
               <tr>
-                {['Type', 'Description', 'Valid from', 'Valid to', 'Risk assessment', 'Status', ''].map((h) => (
+                {columns.map((h) => (
                   <th key={h} style={st.th}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {rows.map((p) => (
-                <tr key={p.id} style={p.status === 'closed' || p.status === 'expired' ? st.rowMuted : undefined}>
+                <tr key={p.id} style={p.status === 'closed' || p.status === 'expired' ? st.rowMuted : undefined} data-testid={`permit-row-${p.id}`}>
+                  {scoped ? null : <td style={st.tdMuted} data-testid={`permit-project-${p.id}`}>{p.projectName ?? p.projectId}</td>}
                   <td style={st.tdCode}>{TYPE_LABEL[p.permitType] ?? p.permitType}</td>
                   <td style={st.td}>{p.description}</td>
                   <td style={st.tdMuted}>{fmt(p.validFrom)}</td>

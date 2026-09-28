@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 import SnagClient, { type Snag } from '../../../components/snag-client';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ export default async function SnagPage({ searchParams }: { searchParams: Promise
         Move each item <b>open → resolved → closed</b>; high-severity snags stay flagged until closed so
         nothing outstanding slips through handover.
       </p>
+      <ProjectScopeBanner projectId={projectId} allHref="/quality/snags" />
       <section style={{ marginTop: 10 }}>
         {snags === null ? <p style={st.muted}>API offline.</p> : <SnagClient initial={snags ?? []} />}
       </section>

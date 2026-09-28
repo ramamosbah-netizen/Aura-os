@@ -62,7 +62,7 @@ export default async function SubcontractsPage({
       </p>
 
       {projectId && (
-        <section style={st.contextPanel} aria-label="Project context">
+        <section style={st.contextPanel} aria-label="Project context" data-testid="project-context">
           <div>
             <span style={st.contextKicker}>Project context</span>
             <strong>{project?.title ?? 'Selected project'}</strong>

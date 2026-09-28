@@ -8,6 +8,7 @@ import type { SpareRow } from '../../components/handover-spares';
 import AuraTabAnchor from '../../components/aura-tab-anchor';
 import DeliveryOperationsWorkspaceHeader from '../../components/delivery-operations-workspace-header';
 import DeliveryWorkspaceSummary, { type WorkspaceAttention, type WorkspaceMetric } from '../../components/delivery-workspace-summary';
+import { workspaceProject } from '@/lib/project-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,10 +43,10 @@ interface WorkspaceView { systems: { record: { id: string; code: string; title: 
 export default async function HandoverPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ project?: string; section?: string }>;
+  searchParams?: Promise<{ project?: string; projectId?: string; section?: string }>;
 }) {
   const filters = (await searchParams) ?? {};
-  const project = filters.project ?? '';
+  const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
   const [packages, projects, workspace, omItems, trainingSessions, defects, spares] = await Promise.all([
@@ -103,6 +104,9 @@ export default async function HandoverPage({
       <DeliveryOperationsWorkspaceHeader active="handover" title="Handover workspace" description="Assemble the acceptance package, track outstanding deliverables and record the governed client handover that closes delivery." />
       <DeliveryWorkspaceSummary eyebrow="HANDOVER OPERATIONS" title="Handover operating picture" description="See which acceptance packages are ready, blocked or waiting for a decision before close-out." metrics={metrics} attention={attention} emptyMessage="No handover exceptions are open for the available packages." />
       <HandoverWorkspaceClient
+        // UX-01: a project switch is a different dataset. The client seeds its lists from these props
+        // once, so without a key the filter would name the new project over the old project's rows.
+        key={project || 'all-projects'}
         packages={packages ?? []}
         projects={projects ?? []}
         systems={systems}

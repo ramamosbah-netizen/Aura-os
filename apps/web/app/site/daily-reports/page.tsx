@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 import DailyReportClient, { type DailyReport, type LabourAllocation } from '../../../components/daily-report-client';
 
 export const dynamic = 'force-dynamic';
@@ -46,6 +47,7 @@ export default async function DailyReportsPage({ searchParams }: { searchParams:
         record that backs progress claims and delay evidence. Log the labour return by trade below;
         man-hours roll up for productivity and payment.
       </p>
+      <ProjectScopeBanner projectId={projectId} allHref="/site/daily-reports" title={current?.title} />
       <section style={{ marginTop: 10 }}>
         {reports === null ? <p style={st.muted}>Daily reports could not be loaded. Retry when the Site service is available.</p> : <DailyReportClient reports={scopedReports ?? []} labour={scopedLabour ?? []} initialProjectId={projectId} projects={projectOptions} projectsUnavailable={!projectId && projects === null} />}
       </section>

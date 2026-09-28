@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 import SiteInstructionsClient from '../../../components/site-instructions-client';
 
 export const dynamic = 'force-dynamic';
@@ -45,6 +46,7 @@ export default async function SiteInstructionsPage({ searchParams }: { searchPar
         Formal site instructions (SI) issued by the consultant/engineer — tracked open → acknowledged →
         closed. Flag cost and/or time implications so they can be escalated to a variation or EOT claim.
       </p>
+      <ProjectScopeBanner projectId={projectId} allHref="/site/instructions" title={current?.title} />
       <section style={{ marginTop: 10 }}>
         {instructions === null ? <p style={st.muted}>Site instructions could not be loaded. Retry when the Site service is available.</p> : <SiteInstructionsClient initialInstructions={rows ?? []} initialProjectId={projectId} projects={projectOptions} projectsUnavailable={!projectId && projects === null} />}
       </section>

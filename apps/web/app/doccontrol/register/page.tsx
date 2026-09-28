@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
+import ProjectScopeBanner from '@/components/project-scope-banner';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,6 +55,8 @@ export default async function DocumentRegisterPage({ searchParams }: { searchPar
         governed lifecycle — Draft → Submitted → Under Review → Approved → Issued → Superseded — with
         immutable revision history. Open a document to drive its approval workflow.
       </p>
+
+      <ProjectScopeBanner projectId={projectId} allHref="/doccontrol/register" />
 
       {rows.length === 0 ? (
         <div style={st.empty} data-testid="register-empty">No documents yet.</div>

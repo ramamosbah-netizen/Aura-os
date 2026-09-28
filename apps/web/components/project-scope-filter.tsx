@@ -4,12 +4,13 @@ import { useTransition } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useHydrated } from '@/lib/use-hydrated';
+import { workspaceProjectUrl } from '@/lib/project-scope';
 
 /**
  * The project a delivery workspace is scoped to.
  *
- * WHAT THIS IS, AND WHAT IT IS NOT. It is a FILTER, not a permission. It writes `?project=` and the
- * page turns that into `?projectId=` on the API, so the narrowing happens on the SERVER and the rows
+ * WHAT THIS IS, AND WHAT IT IS NOT. It is a FILTER, not a permission. It writes `?project=` (and
+ * drops an arrival `?projectId=`, UX-01) and the page turns that into `?projectId=` on the API, so the narrowing happens on the SERVER and the rows
  * for other projects never reach the browser. That matters: a selector that hid rows client-side
  * would leave the same data on the wire, readable from the API or devtools, while the page looked
  * restricted — a control that reads as a guarantee and is not one.
@@ -45,11 +46,7 @@ export default function ProjectScopeFilter({
 
   /** Changing project changes the DATA, so this is a real navigation, with a visible pending state. */
   function choose(projectId: string): void {
-    const next = new URLSearchParams(searchParams.toString());
-    if (projectId) next.set('project', projectId);
-    else next.delete('project');
-    const query = next.toString();
-    startSwitch(() => router.push(query ? `${path}?${query}` : path));
+    startSwitch(() => router.push(workspaceProjectUrl(path, searchParams, projectId)));
   }
 
   return (

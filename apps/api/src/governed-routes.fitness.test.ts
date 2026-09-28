@@ -141,7 +141,10 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     // Asserting they are absent from the derived set would be asserting the wrong thing.
     const rows = scanRoutes() as Array<{ derived: string; held: string }>;
     for (const named of ['amc.work-order.cancel', 'amc.contract.terminate', 'assets.disposal.create',
-      'fleet.fine.pay', 'intelligence.proposal.execute']) {
+      'fleet.fine.pay', 'intelligence.proposal.execute',
+      // Stage 4, wave G (2026-09-28): named on the roles that already reached them. These three were
+      // this test's wildcard-only canaries until then.
+      'inventory.stock.reorder', 'builder.form.create', 'crm.opportunity.delete']) {
       const row = rows.find((r) => r.derived === named);
       expect(row, `${named} must still be a route this scan sees`).toBeDefined();
       expect(row!.held, `${named} must be NAMED by a role, not merely reached by a wildcard`).toBe('named');
@@ -150,10 +153,13 @@ describe('SEC-01 — no NEW route manufactures a business fact under an unnamed 
     // And three still in this state, chosen from modules with no wave in the current plan, so they
     // are not about to stop being true.
     // STAGE 3 IS OVER, so there is no governing verb left to use as a canary — the last three named
-    // here were all governed by wave F. These are ordinary mutating routes that remain wildcard-only
-    // and are stage-4 work; if the scan stops seeing them it is broken, not the codebase fixed.
-    for (const known of ['inventory.stock.reorder', 'builder.form.create', 'crm.opportunity.delete']) {
+    // here were all governed by wave F. Stage 4's wave G then named the three mutating canaries that
+    // stood here, and every mutating route still wildcard-only is either an open owner decision or
+    // an inbound webhook — the next remediation, which a canary must never be chosen from. So these
+    // are READS that only a wildcard reaches, in modules no wave touches: liveness, not debt.
+    for (const known of ['audit.audit.read', 'search.search.read', 'market-intelligence.knowledge.read']) {
       expect(derived, `${known} must still be found — if it is not, this guard is blind`).toContain(known);
+      expect(rows.find((r) => r.derived === known)!.held, `${known} is expected to be wildcard-only`).toBe('wildcard-only');
     }
   });
 });

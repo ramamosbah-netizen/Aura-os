@@ -27,6 +27,15 @@ export interface StandardElvRole extends Role {
  */
 const STAFF_BASE = [
   'comms.*', 'work-items.*', 'notifications.*', 'inbox.*', 'documents.*.read',
+  // SEC-01 STAGE 4 (2026-09-28) — the user's OWN work items and notifications, named although the two
+  // wildcards above already reach them, so the vocabulary says what a staff member does here.
+  'work-items.work-item.create', 'work-items.work-item.update', 'work-items.work-item.delete',
+  'work-items.reschedule.create', 'work-items.reminder.sync', 'notifications.read.update',
+  // SAVED VIEWS AND FAVOURITES. Reachable by the System Administrator ONLY until now, so nobody else
+  // could save a filtered view or favourite a page — or even list them, which the favourite button
+  // does first. Personal, not authority: a view is saved as the caller's own, only its owner may
+  // delete it, and the list returns tenant-wide views plus the caller's own, never a colleague's.
+  'views.view.read', 'views.view.create', 'views.view.delete', 'views.favorite.create',
   'intelligence.chat.create', 'intelligence.insight.create', 'intelligence.proposal.create',
   // …and the list of what has been proposed. Wave F granted `proposal.create` and stopped there,
   // so 24 roles could raise a proposal and were then refused the register it lands in — the same
@@ -566,6 +575,77 @@ const salesOpportunityPermissions = [
   'crm.opportunity.status',
 ] as const;
 
+/**
+ * SEC-01 STAGE 4 (2026-09-28) — NAMED ON THE ROLES THAT ALREADY REACH THEM.
+ *
+ * Each permission below is derived by a route that manufactures a business fact, and until now no role
+ * NAMED it: it was reachable only through a wildcard the role already carries (given per list). Naming
+ * it changes nobody's authority — the same roles could do the same acts yesterday — but it turns
+ * "reachable" into "governed": the route leaves route-permission-allowlist.json, and a later narrowing
+ * of the wildcard cannot silently take the act away.
+ *
+ * THE WILDCARDS STAY. Narrowing `crm.*`, `inventory.*` or `finance.budget.*` means enumerating their
+ * reads as well, which is a separate step and not claimed here.
+ *
+ * DELIBERATELY ABSENT: the 52 routes under the owner's open decisions D-01…D-13
+ * (docs/reports/full-aura-audit/sec-01-stage-4-authority-draft.md) — payments, journals, bank
+ * reconciliation, VAT filing, guarantee/cheque status, engineering review, RFI answers, variation
+ * status, closeout finalisation, delay status, project status, WBS baseline, cash-flow forecasts,
+ * delivery-item maps, compliance, the ELV device register, generic documents, estimation / AI and the
+ * Sales-Manager-only pre-award acts. None of those names appears below; they wait for the owner.
+ */
+/** Lead work — reached today by `crm.lead.*` (Sales) and `crm.*` (Sales Manager). */
+const SEC01_LEAD_WORK = [
+  'crm.lead.create', 'crm.lead.update', 'crm.lead.assign', 'crm.lead.qualification',
+  'crm.lead.accept', 'crm.lead.convert',
+] as const;
+/** Reached today by `crm.*` on the Sales Manager alone. Whether Sales should also hold any is not decided here. */
+const SEC01_SALES_MANAGER_WORK = [
+  'crm.account.delete', 'crm.account.installed-base', 'crm.account.scan', 'crm.account.relationships',
+  'crm.campaign.create', 'crm.campaign.status', 'crm.campaign.results', 'crm.automation.run',
+  'crm.market-item.create', 'crm.market-item.delete', 'crm.market-item.seed',
+  'crm.meeting-summary.create', 'crm.opportunity.delete', 'crm.opportunity.email-draft',
+  'crm.opportunity.accept', 'crm.opportunity.generate', 'crm.opportunity.snapshot',
+] as const;
+/** Finance operations and master data — reached today by `finance.<entity>.*` on Finance. */
+const SEC01_FINANCE_WORK = [
+  'finance.account.create', 'finance.account.import', 'finance.cost-center.create', 'finance.profit-center.create',
+  'finance.tax-code.create', 'finance.fx.rates', 'finance.budget.create', 'finance.budget.delete', 'finance.budget.restore',
+  'finance.petty-cash.create', 'finance.petty-cash.transactions', 'finance.bank-guarantee.create',
+  'finance.post-dated-cheque.create', 'finance.bank-transaction.import', 'finance.bank-transaction.auto-match',
+] as const;
+/** Cost breakdown and variation raising — reached today by `projects.cb.*` / `projects.variation.*` (PM, Commercial). */
+const SEC01_COST_AND_VARIATION_WORK = ['projects.cb.create', 'projects.cb.update', 'projects.cb.delete', 'projects.variation.create'] as const;
+/** Issues and risks — reached today by `projects.issue.*` / `projects.risk.*` (PM, Project Engineer). */
+const SEC01_ISSUE_AND_RISK_WORK = ['projects.issue.create', 'projects.issue.update', 'projects.risk.create', 'projects.risk.update'] as const;
+/** WBS and delay logging — reached today by `projects.wb.*` / `projects.delay.*` (PM, Planning Engineer). */
+const SEC01_WBS_AND_DELAY_WORK = ['projects.wb.create', 'projects.wb.progress', 'projects.delay.create'] as const;
+/** Reached today by the PM's project entity wildcards alone. */
+const SEC01_PM_ONLY_WORK = ['projects.schedule.create', 'projects.closeout.create', 'projects.closeout.items'] as const;
+/** The store's work — reached today by `inventory.*` on the Storekeeper. */
+const SEC01_STORE_WORK = [
+  'inventory.material.create', 'inventory.material.update', 'inventory.location.create', 'inventory.location.active',
+  'inventory.stock.create', 'inventory.stock.movements', 'inventory.stock.reorder', 'inventory.stock.uom',
+  'inventory.grn.create', 'inventory.transfer.create',
+  'inventory.serial.create', 'inventory.serial.install', 'inventory.serial.return', 'inventory.serial.fault',
+] as const;
+/** Engineering AUTHORSHIP — reached today by `engineering.*.create` (Technical Engineer) and `engineering.*` (Technical Manager). Review is D-04. */
+const SEC01_ENGINEERING_AUTHORING = [
+  'engineering.drawing.create', 'engineering.submittal.create', 'engineering.document.create',
+  'engineering.design-change.create', 'engineering.bim-model.create', 'engineering.rfi.create',
+] as const;
+/**
+ * SYSTEM ADMINISTRATION, named on the System Administrator, who reaches it today through `*`: the form
+ * and approval builder, templates, workspace configuration, integration webhooks and event emission.
+ * Configuring the system is this role's job; it is not business authority, and nothing here approves
+ * a business act.
+ */
+const SEC01_ADMINISTRATION = [
+  'builder.approval.create', 'builder.approval.evaluate', 'builder.entity.create', 'builder.form.create', 'builder.form.validate',
+  'templates.template.create', 'templates.template.update', 'templates.template.delete',
+  'workspace.config.update', 'integration.webhook.create', 'integration.webhook.update', 'events.event.create',
+] as const;
+
 export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
   {
     id: 'r-sales',
@@ -573,7 +653,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Owns enquiries, leads, opportunities, follow-ups and approved customer offer submission.',
     assignmentScope: 'tenant',
     permissions: [
-      'crm.lead.*', 'crm.lead-assignment.receive', ...salesOpportunityPermissions, 'crm.activity.*', 'crm.signal.*',
+      'crm.lead.*', ...SEC01_LEAD_WORK, 'crm.lead-assignment.receive', ...salesOpportunityPermissions, 'crm.activity.*', 'crm.signal.*',
       // Captured customer requirements (J1-07). This is an AUTHORITY CHANGE, not a rename: the capture
       // routes previously derived `crm.opportunity.requirements`, which no role named, so recording what
       // the customer asked for was reachable only by a wildcard holder — a Sales Manager or an admin.
@@ -613,7 +693,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Reviews the pipeline, approves commercial offers and governs tender Bid/No-Bid amendments.',
     assignmentScope: 'tenant',
     permissions: [
-      'crm.*',
+      'crm.*', ...SEC01_LEAD_WORK, ...SEC01_SALES_MANAGER_WORK,
       // `tendering.*` USED TO BE HERE. One pattern covering preparation, the submission of a priced
       // offer to a customer, and the capture of an award that creates a Contract — and, more to the
       // point, covering every tendering act added after it was written.
@@ -680,7 +760,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Produces drawings, RFIs, submittals, technical queries and design revisions for assigned work.',
     assignmentScope: 'tenant-or-project',
     permissions: [
-      'engineering.*.read', 'engineering.*.create', 'engineering.*.update',
+      'engineering.*.read', 'engineering.*.create', 'engineering.*.update', ...SEC01_ENGINEERING_AUTHORING,
       'engineering.drawing.submit', 'engineering.drawing.revise',
       // RELEASE, NOT TRANSMIT. This act hands an approved drawing to the site team who take an
       // `engineering_release` responsibility for it; it conveys nothing outside the business. It was
@@ -745,7 +825,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // `schedule.progress-override` does: the person who maintains the figure must not also be the
       // one who declares it true.
       'projects.milestone.read', 'projects.milestone.create',
-      'projects.delay.*', readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
+      'projects.delay.*', ...SEC01_WBS_AND_DELAY_WORK, readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
     ],
   },
   {
@@ -754,7 +834,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Coordinates technical, site, quality and material work inside an assigned project.',
     assignmentScope: 'project',
     permissions: [
-      'projects.*.read', 'projects.issue.*', 'projects.risk.*', PROJECT_RESPONSIBILITY_WORK,
+      'projects.*.read', 'projects.issue.*', 'projects.risk.*', ...SEC01_ISSUE_AND_RISK_WORK, 'engineering.rfi.create', PROJECT_RESPONSIBILITY_WORK,
       // Also on the raising side of a technical query: accepts an answer as adequate, never gives one.
       'engineering.*.read', 'engineering.rfi.*', 'engineering.tq.close', 'site.*.read', 'quality.*.read',
       // Also on the proposing side of a material approval; decides none.
@@ -773,7 +853,8 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Owns project delivery, risk, programme, cost control, variations and delivery approvals.',
     assignmentScope: 'project',
     permissions: [
-      ...PROJECTS_DELIVERY, readOnly('projects'), 'contracts.certificate.create', 'contracts.certificate.update',
+      ...PROJECTS_DELIVERY, ...SEC01_COST_AND_VARIATION_WORK, ...SEC01_ISSUE_AND_RISK_WORK, ...SEC01_WBS_AND_DELAY_WORK, ...SEC01_PM_ONLY_WORK,
+      readOnly('projects'), 'contracts.certificate.create', 'contracts.certificate.update',
       // RAISES a subcontractor application and instructs a variation for work on their own project,
       // and CERTIFIES NEITHER. That separation is the point: the person who says the work was done is
       // not the person who accepts the account of it. `subcontracts.claim.certify` and
@@ -806,7 +887,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.scope.read', 'crm.scope.approve', 'crm.requirement.read',
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
-      'engineering.*', 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
+      'engineering.*', ...SEC01_ENGINEERING_AUTHORING, 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
       // NAMED, though `engineering.*` already reaches it (SEC-01). The technical verdict on each
       // supplier line is the act a tender's supplier prices depend on — a quote judged
       // non-compliant is not a market alternative — and an authority this consequential should be
@@ -839,7 +920,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'tendering.internal-pricing.access',
       // `contracts.*` USED TO BE HERE.
       ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY, ...CONTRACTS_REGISTER_READ,
-      'projects.variation.*', 'projects.cb.*', PROJECT_RESPONSIBILITY_WORK,
+      'projects.variation.*', 'projects.cb.*', ...SEC01_COST_AND_VARIATION_WORK, PROJECT_RESPONSIBILITY_WORK,
       // PREPARES AND SUBMITS an extension-of-time claim, and does NOT determine it. Before this the
       // role named `projects.eot-claim.*` — both sides of the exchange — and could exercise
       // NEITHER, because the service asserted `projects.project.update` for every act in that file
@@ -923,7 +1004,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // NAMED, not merely reached. `inventory.serial.issue` moves a serialised unit out of the store
       // against a project; it was covered by `inventory.*` and named by nobody, which is the whole
       // distinction this programme draws between "reachable" and "governed".
-      'inventory.*', 'inventory.serial.issue',
+      'inventory.*', 'inventory.serial.issue', ...SEC01_STORE_WORK,
       ...ASSETS_REGISTER, 'procurement.po.view', readOnly('procurement'), readOnly('projects'), PROJECT_RESPONSIBILITY_WORK, readOnly('assets'), ...STAFF_BASE],
   },
   {
@@ -958,7 +1039,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // `finance.*` USED TO BE HERE, and declaring the two period permissions would have changed
       // nothing while it was: a wildcard matches every name in the module, including the ones nobody
       // chose to grant. Running the department and closing the books were one permission.
-      ...FINANCE_OPERATIONS,
+      ...FINANCE_OPERATIONS, ...SEC01_FINANCE_WORK,
       ...FINANCE_AR_OPERATIONS,
       'finance.period.read', // sees which periods are closed; cannot close or reopen one
       // RELEASES a certified subcontractor claim for payment, and certifies nothing. It already held
@@ -1159,7 +1240,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'System Administrator',
     description: 'Administers the platform, users, configuration and access.',
     assignmentScope: 'tenant',
-    permissions: ['*'],
+    permissions: ['*', ...SEC01_ADMINISTRATION],
   },
   {
     id: 'r-client',

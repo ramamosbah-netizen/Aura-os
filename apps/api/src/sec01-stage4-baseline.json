@@ -1,0 +1,1478 @@
+{
+  "recordedAt": "2026-09-28",
+  "note": "SEC-01 stage 4 baseline, frozen BEFORE wave G: for each of the 151 routes that were on route-permission-allowlist.json, the permission it derives, which non-admin roles reached it then, and the group the owner-reviewed draft put it in (docs/reports/full-aura-audit/sec-01-stage-4-authority-draft.md). sec01-stage4.fitness.test.ts holds the roles to this record: a named route keeps exactly these holders, and an owner-decision permission stays named by NOBODY until the owner decides it. Change an entry only with the owner decision that changes it.",
+  "routes": [
+    {
+      "route": "DELETE crm/accounts/:id/installed-base/:itemId",
+      "derived": "crm.account.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "DELETE crm/accounts/:id/relationships/:relId",
+      "derived": "crm.account.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "DELETE crm/market-items/:id",
+      "derived": "crm.market-item.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "DELETE crm/opportunities/:id/deal-team/:mid",
+      "derived": "crm.opportunity.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "DELETE crm/opportunities/:id/stakeholders/:sid",
+      "derived": "crm.opportunity.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "DELETE documents/:id/permissions/:permissionId",
+      "derived": "documents.permission.delete",
+      "group": "owner-decision",
+      "decision": "D-11",
+      "holdersBefore": []
+    },
+    {
+      "route": "DELETE finance/budgets/:id",
+      "derived": "finance.budget.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "DELETE projects/cbs/:id",
+      "derived": "projects.cb.delete",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "DELETE templates/:id",
+      "derived": "templates.template.delete",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "DELETE views/:id",
+      "derived": "views.view.delete",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "DELETE work-items/:source/:id",
+      "derived": "work-items.work-item.delete",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/accounts/:id/installed-base/:itemId",
+      "derived": "crm.account.installed-base",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/campaigns/:id/results",
+      "derived": "crm.campaign.results",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/campaigns/:id/status",
+      "derived": "crm.campaign.status",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/leads/:id",
+      "derived": "crm.lead.update",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales",
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/leads/:id/assign",
+      "derived": "crm.lead.assign",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales",
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/leads/:id/qualification",
+      "derived": "crm.lead.qualification",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales",
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/opportunities/:id/pre-award-package/estimate/:estimateId/build-ups",
+      "derived": "crm.opportunity.build-ups",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/opportunities/:id/pre-award-package/pricing/:sheetId/policy",
+      "derived": "crm.opportunity.policy",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH crm/opportunities/:id/pre-award-package/scope/:basisId/lines",
+      "derived": "crm.opportunity.lines",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "PATCH elv/devices/:id",
+      "derived": "elv.device.update",
+      "group": "owner-decision",
+      "decision": "D-10",
+      "holdersBefore": []
+    },
+    {
+      "route": "PATCH finance/bank-guarantees/:id/status",
+      "derived": "finance.bank-guarantee.status",
+      "group": "owner-decision",
+      "decision": "D-03",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "PATCH finance/post-dated-cheques/:id/status",
+      "derived": "finance.post-dated-cheque.status",
+      "group": "owner-decision",
+      "decision": "D-03",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "PATCH finance/vat-returns/:id/status",
+      "derived": "finance.vat-return.status",
+      "group": "owner-decision",
+      "decision": "D-02",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "PATCH integration/webhooks/:id",
+      "derived": "integration.webhook.update",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "PATCH inventory/materials/:id",
+      "derived": "inventory.material.update",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PATCH inventory/stock/:id/reorder",
+      "derived": "inventory.stock.reorder",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PATCH inventory/stock/:id/uom",
+      "derived": "inventory.stock.uom",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PATCH notifications/:id/read",
+      "derived": "notifications.read.update",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PATCH projects/cbs/:id",
+      "derived": "projects.cb.update",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "PATCH projects/closeouts/:id/items/:index",
+      "derived": "projects.closeout.items",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm"
+      ]
+    },
+    {
+      "route": "PATCH projects/delays/:id/status",
+      "derived": "projects.delay.status",
+      "group": "owner-decision",
+      "decision": "D-07",
+      "holdersBefore": [
+        "r-planning-engineer",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "PATCH projects/issues/:id",
+      "derived": "projects.issue.update",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm",
+        "r-project-engineer"
+      ]
+    },
+    {
+      "route": "PATCH projects/projects/:id/status",
+      "derived": "projects.project.status",
+      "group": "owner-decision",
+      "decision": "D-08",
+      "holdersBefore": []
+    },
+    {
+      "route": "PATCH projects/risks/:id",
+      "derived": "projects.risk.update",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm",
+        "r-project-engineer"
+      ]
+    },
+    {
+      "route": "PATCH projects/variations/:id/status",
+      "derived": "projects.variation.status",
+      "group": "owner-decision",
+      "decision": "D-06",
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "PATCH projects/wbs/:id/progress",
+      "derived": "projects.wb.progress",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-planning-engineer",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "PATCH work-items/:source/:id",
+      "derived": "work-items.work-item.update",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST ai/complete",
+      "derived": "ai.complete.create",
+      "group": "owner-decision",
+      "decision": "D-12",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST builder/approvals",
+      "derived": "builder.approval.create",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST builder/approvals/:entityType/evaluate",
+      "derived": "builder.approval.evaluate",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST builder/entities",
+      "derived": "builder.entity.create",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST builder/forms",
+      "derived": "builder.form.create",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST builder/forms/:formKey/validate",
+      "derived": "builder.form.validate",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST compliance/authorities",
+      "derived": "compliance.authority.create",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST compliance/cases",
+      "derived": "compliance.case.create",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST compliance/cases/:id/certificates",
+      "derived": "compliance.case.certificates",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST compliance/cases/:id/decisions",
+      "derived": "compliance.case.decisions",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST compliance/cases/:id/inspections",
+      "derived": "compliance.case.inspections",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST compliance/cases/:id/submissions",
+      "derived": "compliance.case.submissions",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST crm/accounts/:id/installed-base",
+      "derived": "crm.account.installed-base",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/accounts/:id/installed-base/scan",
+      "derived": "crm.account.scan",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/accounts/:id/relationships",
+      "derived": "crm.account.relationships",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/automation/run",
+      "derived": "crm.automation.run",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/campaigns",
+      "derived": "crm.campaign.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/leads",
+      "derived": "crm.lead.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales",
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/leads/:id/accept",
+      "derived": "crm.lead.accept",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales",
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/leads/:id/convert",
+      "derived": "crm.lead.convert",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales",
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/market-items",
+      "derived": "crm.market-item.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/market-items/seed",
+      "derived": "crm.market-item.seed",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/meeting-summary",
+      "derived": "crm.meeting-summary.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/email-draft",
+      "derived": "crm.opportunity.email-draft",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/outcome/override",
+      "derived": "crm.opportunity.override",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/estimate",
+      "derived": "crm.opportunity.estimate",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/open",
+      "derived": "crm.opportunity.open",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/pricing/open",
+      "derived": "crm.opportunity.open",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/pricing/preview",
+      "derived": "crm.opportunity.preview",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/pricing/revision",
+      "derived": "crm.opportunity.revision",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/scope",
+      "derived": "crm.opportunity.scope",
+      "group": "owner-decision",
+      "decision": "D-13",
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/scope-assist/:proposalId/accept",
+      "derived": "crm.opportunity.accept",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/:id/scope-assist/generate",
+      "derived": "crm.opportunity.generate",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST crm/opportunities/forecast/snapshot",
+      "derived": "crm.opportunity.snapshot",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-sales-manager"
+      ]
+    },
+    {
+      "route": "POST documents",
+      "derived": "documents.document.create",
+      "group": "owner-decision",
+      "decision": "D-11",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST documents/:id/share",
+      "derived": "documents.share.create",
+      "group": "owner-decision",
+      "decision": "D-11",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST documents/:id/versions",
+      "derived": "documents.version.create",
+      "group": "owner-decision",
+      "decision": "D-11",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST elv/devices",
+      "derived": "elv.device.create",
+      "group": "owner-decision",
+      "decision": "D-10",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST engineering/bim-models",
+      "derived": "engineering.bim-model.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/design-changes",
+      "derived": "engineering.design-change.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/documents",
+      "derived": "engineering.document.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/drawings",
+      "derived": "engineering.drawing.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/drawings/:id/review",
+      "derived": "engineering.drawing.review",
+      "group": "owner-decision",
+      "decision": "D-04",
+      "holdersBefore": [
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/drawings/:id/start-review",
+      "derived": "engineering.drawing.start-review",
+      "group": "owner-decision",
+      "decision": "D-04",
+      "holdersBefore": [
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/rfis",
+      "derived": "engineering.rfi.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-project-engineer",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST engineering/submittals",
+      "derived": "engineering.submittal.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST estimation/line",
+      "derived": "estimation.line.create",
+      "group": "owner-decision",
+      "decision": "D-12",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST events",
+      "derived": "events.event.create",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST finance/accounts",
+      "derived": "finance.account.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/accounts/import",
+      "derived": "finance.account.import",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/bank-guarantees",
+      "derived": "finance.bank-guarantee.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/bank-transactions/:id/reconcile",
+      "derived": "finance.bank-transaction.reconcile",
+      "group": "owner-decision",
+      "decision": "D-01",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/bank-transactions/:id/unreconcile",
+      "derived": "finance.bank-transaction.unreconcile",
+      "group": "owner-decision",
+      "decision": "D-01",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/bank-transactions/auto-match",
+      "derived": "finance.bank-transaction.auto-match",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/bank-transactions/import",
+      "derived": "finance.bank-transaction.import",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/budgets",
+      "derived": "finance.budget.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/budgets/:id/restore",
+      "derived": "finance.budget.restore",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/cost-centers",
+      "derived": "finance.cost-center.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/fx/rates",
+      "derived": "finance.fx.rates",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/journals",
+      "derived": "finance.journal.create",
+      "group": "owner-decision",
+      "decision": "D-01",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/payments",
+      "derived": "finance.payment.create",
+      "group": "owner-decision",
+      "decision": "D-01",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/petty-cash",
+      "derived": "finance.petty-cash.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/petty-cash/:id/transactions",
+      "derived": "finance.petty-cash.transactions",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/post-dated-cheques",
+      "derived": "finance.post-dated-cheque.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/profit-centers",
+      "derived": "finance.profit-center.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/tax-codes",
+      "derived": "finance.tax-code.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST finance/vat-returns",
+      "derived": "finance.vat-return.create",
+      "group": "owner-decision",
+      "decision": "D-02",
+      "holdersBefore": [
+        "r-finance"
+      ]
+    },
+    {
+      "route": "POST fleet/telemetry/webhook",
+      "derived": "fleet.telemetry.webhook",
+      "group": "machine-inbound",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST integration/webhooks",
+      "derived": "integration.webhook.create",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST intelligence/calibrations/trigger",
+      "derived": "intelligence.calibration.trigger",
+      "group": "owner-decision",
+      "decision": "D-12",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST intelligence/pricing-sources",
+      "derived": "intelligence.pricing-source.create",
+      "group": "owner-decision",
+      "decision": "D-12",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST inventory/grns",
+      "derived": "inventory.grn.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST inventory/locations",
+      "derived": "inventory.location.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST inventory/materials",
+      "derived": "inventory.material.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST inventory/serials",
+      "derived": "inventory.serial.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST inventory/stock",
+      "derived": "inventory.stock.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST inventory/stock/:id/movements",
+      "derived": "inventory.stock.movements",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST inventory/transfers",
+      "derived": "inventory.transfer.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "POST projects/cashflow-forecasts",
+      "derived": "projects.cashflow-forecast.create",
+      "group": "owner-decision",
+      "decision": "D-08",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST projects/cbs",
+      "derived": "projects.cb.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST projects/closeouts",
+      "derived": "projects.closeout.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST projects/closeouts/:id/finalize",
+      "derived": "projects.closeout.finalize",
+      "group": "owner-decision",
+      "decision": "D-07",
+      "holdersBefore": [
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST projects/delays",
+      "derived": "projects.delay.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-planning-engineer",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST projects/delivery-item-maps",
+      "derived": "projects.delivery-item-map.create",
+      "group": "owner-decision",
+      "decision": "D-08",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST projects/issues",
+      "derived": "projects.issue.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm",
+        "r-project-engineer"
+      ]
+    },
+    {
+      "route": "POST projects/projects/:id/wbs-baseline",
+      "derived": "projects.project.wbs-baseline",
+      "group": "owner-decision",
+      "decision": "D-08",
+      "holdersBefore": []
+    },
+    {
+      "route": "POST projects/risks",
+      "derived": "projects.risk.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm",
+        "r-project-engineer"
+      ]
+    },
+    {
+      "route": "POST projects/schedules",
+      "derived": "projects.schedule.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST projects/variations",
+      "derived": "projects.variation.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST projects/wbs",
+      "derived": "projects.wb.create",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-planning-engineer",
+        "r-pm"
+      ]
+    },
+    {
+      "route": "POST templates",
+      "derived": "templates.template.create",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST views",
+      "derived": "views.view.create",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST views/favorite",
+      "derived": "views.favorite.create",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST whatsapp/webhook",
+      "derived": "whatsapp.webhook.create",
+      "group": "machine-inbound",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "POST work-items",
+      "derived": "work-items.work-item.create",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST work-items/:source/:id/:action",
+      "derived": "work-items.work-item.create",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST work-items/:source/:id/reschedule",
+      "derived": "work-items.reschedule.create",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "POST work-items/reminders/sync",
+      "derived": "work-items.reminder.sync",
+      "group": "staff-personal",
+      "decision": null,
+      "holdersBefore": [
+        "r-commercial-manager",
+        "r-commissioning-engineer",
+        "r-document-controller",
+        "r-estimator",
+        "r-executive",
+        "r-finance",
+        "r-finance-controller",
+        "r-handover-fm",
+        "r-hr",
+        "r-hr-manager",
+        "r-hse",
+        "r-planning-engineer",
+        "r-pm",
+        "r-pre-sales",
+        "r-procurement",
+        "r-procurement-manager",
+        "r-project-engineer",
+        "r-qa-qc",
+        "r-sales",
+        "r-sales-manager",
+        "r-service-manager",
+        "r-site-engineer",
+        "r-store",
+        "r-technical-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PUT compliance/cases/:id/status",
+      "derived": "compliance.case.status",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "PUT compliance/inspections/:inspectionId/outcome",
+      "derived": "compliance.inspection.outcome",
+      "group": "owner-decision",
+      "decision": "D-09",
+      "holdersBefore": []
+    },
+    {
+      "route": "PUT elv/devices/:id/commissioning",
+      "derived": "elv.device.commissioning",
+      "group": "owner-decision",
+      "decision": "D-10",
+      "holdersBefore": []
+    },
+    {
+      "route": "PUT elv/devices/:id/status",
+      "derived": "elv.device.status",
+      "group": "owner-decision",
+      "decision": "D-10",
+      "holdersBefore": []
+    },
+    {
+      "route": "PUT engineering/bim-models/:id/version",
+      "derived": "engineering.bim-model.version",
+      "group": "owner-decision",
+      "decision": "D-04",
+      "holdersBefore": [
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PUT engineering/design-changes/:id/decision",
+      "derived": "engineering.design-change.decision",
+      "group": "owner-decision",
+      "decision": "D-04",
+      "holdersBefore": [
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PUT engineering/documents/:id/transition",
+      "derived": "engineering.document.transition",
+      "group": "owner-decision",
+      "decision": "D-04",
+      "holdersBefore": [
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PUT engineering/rfis/:id/answer",
+      "derived": "engineering.rfi.answer",
+      "group": "owner-decision",
+      "decision": "D-05",
+      "holdersBefore": [
+        "r-project-engineer",
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PUT engineering/submittals/:id/status",
+      "derived": "engineering.submittal.status",
+      "group": "owner-decision",
+      "decision": "D-04",
+      "holdersBefore": [
+        "r-technical-manager"
+      ]
+    },
+    {
+      "route": "PUT inventory/locations/:id/active",
+      "derived": "inventory.location.active",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PUT inventory/serials/:id/fault",
+      "derived": "inventory.serial.fault",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PUT inventory/serials/:id/install",
+      "derived": "inventory.serial.install",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PUT inventory/serials/:id/return",
+      "derived": "inventory.serial.return",
+      "group": "name-on-current-holders",
+      "decision": null,
+      "holdersBefore": [
+        "r-store"
+      ]
+    },
+    {
+      "route": "PUT templates/:id",
+      "derived": "templates.template.update",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    },
+    {
+      "route": "PUT workspace/config",
+      "derived": "workspace.config.update",
+      "group": "stays-administration",
+      "decision": null,
+      "holdersBefore": []
+    }
+  ]
+}

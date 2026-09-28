@@ -1,0 +1,1872 @@
+{
+  "date": "2026-09-28",
+  "status": "DRAFT — for the owner; nothing here is applied",
+  "source": "apps/api/src/route-permission-allowlist.json (151 routes) × core/src/identity/standard-elv-roles.ts",
+  "summary": {
+    "name-on-current-holders": 75,
+    "staff-personal": 10,
+    "stays-administration": 12,
+    "machine-inbound": 2,
+    "owner-decision": 52
+  },
+  "decisions": [
+    {
+      "id": "D-01",
+      "title": "Finance authority acts — payments, journals, bank reconciliation",
+      "question": "Today the Finance role alone records a payment, posts a manual journal and reconciles or un-reconciles a bank line, each through an entity wildcard, with no second person. Keep that (the Finance role, by name), or require a checker (e.g. the Finance Controller) for some of them — and if so, above what amount?",
+      "routes": [
+        "POST finance/bank-transactions/:id/reconcile",
+        "POST finance/bank-transactions/:id/unreconcile",
+        "POST finance/journals",
+        "POST finance/payments"
+      ]
+    },
+    {
+      "id": "D-02",
+      "title": "VAT return — generate and change status (filing)",
+      "question": "Today the Finance role generates a VAT return and moves it to filed and to paid. Keep that, or reserve filing for the Finance Controller?",
+      "routes": [
+        "PATCH finance/vat-returns/:id/status",
+        "POST finance/vat-returns"
+      ]
+    },
+    {
+      "id": "D-03",
+      "title": "Bank guarantees and post-dated cheques — status changes",
+      "question": "Today the Finance role changes a bank guarantee's or post-dated cheque's status (a guarantee released or claimed; a cheque deposited, cleared, bounced or cancelled). Keep that, or require the Finance Controller?",
+      "routes": [
+        "PATCH finance/bank-guarantees/:id/status",
+        "PATCH finance/post-dated-cheques/:id/status"
+      ]
+    },
+    {
+      "id": "D-04",
+      "title": "Engineering review authority — drawings, submittals, design changes, documents, BIM versions",
+      "question": "Today only the Technical Manager (through engineering.*) reviews drawings, sets submittal status, decides design changes and moves engineering documents. Keep the Technical Manager alone, or add another reviewer (e.g. a Design Manager) — and must the reviewer differ from the author?",
+      "routes": [
+        "POST engineering/drawings/:id/review",
+        "POST engineering/drawings/:id/start-review",
+        "PUT engineering/bim-models/:id/version",
+        "PUT engineering/design-changes/:id/decision",
+        "PUT engineering/documents/:id/transition",
+        "PUT engineering/submittals/:id/status"
+      ]
+    },
+    {
+      "id": "D-05",
+      "title": "RFI answers",
+      "question": "Today the Project Engineer and the Technical Manager may both answer an RFI. Keep both?",
+      "routes": [
+        "PUT engineering/rfis/:id/answer"
+      ]
+    },
+    {
+      "id": "D-06",
+      "title": "Project variation status",
+      "question": "Today the Project Manager and the Commercial Manager may BOTH move a project variation's status, including approving it — one person could raise and approve. Keep, or split (PM raises/submits, Commercial Manager approves)?",
+      "routes": [
+        "PATCH projects/variations/:id/status"
+      ]
+    },
+    {
+      "id": "D-07",
+      "title": "Project closeout finalisation and delay status",
+      "question": "Today the PM alone finalises a closeout, and the Planning Engineer and PM set a delay's status. Keep?",
+      "routes": [
+        "PATCH projects/delays/:id/status",
+        "POST projects/closeouts/:id/finalize"
+      ]
+    },
+    {
+      "id": "D-08",
+      "title": "Acts NO business role can perform today — project status, WBS baseline, cash-flow forecast, delivery item maps",
+      "question": "Only the System Administrator can change a project's status, approve its WBS baseline, save a cash-flow forecast or create the delivery-item maps certified billing needs. Who should: the PM, the Planning Engineer, the Commercial Manager?",
+      "routes": [
+        "PATCH projects/projects/:id/status",
+        "POST projects/cashflow-forecasts",
+        "POST projects/delivery-item-maps",
+        "POST projects/projects/:id/wbs-baseline"
+      ]
+    },
+    {
+      "id": "D-09",
+      "title": "Authority approvals (Civil Defence, SIRA, utilities) — the compliance module",
+      "question": "Only the System Administrator can register an authority, open a compliance case, submit to it, schedule an inspection, record a decision or issue a certificate — the /compliance screen exists, but every act on it is refused for everyone else. Who owns authority approvals: the Document Controller, a Project Engineer, a dedicated Authority Approvals role?",
+      "routes": [
+        "POST compliance/authorities",
+        "POST compliance/cases",
+        "POST compliance/cases/:id/certificates",
+        "POST compliance/cases/:id/decisions",
+        "POST compliance/cases/:id/inspections",
+        "POST compliance/cases/:id/submissions",
+        "PUT compliance/cases/:id/status",
+        "PUT compliance/inspections/:inspectionId/outcome"
+      ]
+    },
+    {
+      "id": "D-10",
+      "title": "ELV device register",
+      "question": "Only the System Administrator can register an ELV device, change its status or link it to commissioning. Who should: the T&C Engineer, the Technical Engineer, the Store (on receipt)?",
+      "routes": [
+        "PATCH elv/devices/:id",
+        "POST elv/devices",
+        "PUT elv/devices/:id/commissioning",
+        "PUT elv/devices/:id/status"
+      ]
+    },
+    {
+      "id": "D-11",
+      "title": "Generic documents — upload, new version, share, revoke a share",
+      "question": "The generic document routes (outside each module's own upload screens) are System-Administrator-only. Should the Document Controller hold them — and may any staff member share a document they can already read?",
+      "routes": [
+        "DELETE documents/:id/permissions/:permissionId",
+        "POST documents",
+        "POST documents/:id/share",
+        "POST documents/:id/versions"
+      ]
+    },
+    {
+      "id": "D-12",
+      "title": "Estimation, pricing intelligence and AI completion",
+      "question": "Only the System Administrator can run a line estimate, record a pricing source, trigger calibration or call AI completion. Who should: the Estimator, Pre-Sales, the Executive? (AI access will later be an AI Center setting; this is the default until then.)",
+      "routes": [
+        "POST ai/complete",
+        "POST estimation/line",
+        "POST intelligence/calibrations/trigger",
+        "POST intelligence/pricing-sources"
+      ]
+    },
+    {
+      "id": "D-13",
+      "title": "Sales Manager–only CRM acts — outcome override, pricing policy, the pre-award package",
+      "question": "Only the Sales Manager (through crm.*) can override an opportunity outcome, set a pricing policy, or add an estimate / open pricing / add scope on the pre-award package. These routes are live: the commercial panel, the estimation workspace (build-ups) and package pricing (pricing policy) call them, so by the role catalogue an Estimator or Pre-Sales engineer working there is refused unless they also hold Sales Manager. Is that intended, or should the Estimator and Pre-Sales hold the estimate, build-up and scope acts? (Not yet reproduced in the browser — read from the catalogue.)",
+      "routes": [
+        "PATCH crm/opportunities/:id/pre-award-package/estimate/:estimateId/build-ups",
+        "PATCH crm/opportunities/:id/pre-award-package/pricing/:sheetId/policy",
+        "PATCH crm/opportunities/:id/pre-award-package/scope/:basisId/lines",
+        "POST crm/opportunities/:id/outcome/override",
+        "POST crm/opportunities/:id/pre-award-package/estimate",
+        "POST crm/opportunities/:id/pre-award-package/open",
+        "POST crm/opportunities/:id/pre-award-package/pricing/open",
+        "POST crm/opportunities/:id/pre-award-package/pricing/preview",
+        "POST crm/opportunities/:id/pre-award-package/pricing/revision",
+        "POST crm/opportunities/:id/pre-award-package/scope"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "route": "DELETE crm/accounts/:id/installed-base/:itemId",
+      "handler": "removeInstalled",
+      "file": "/apps/api/src/crm/crm-accounts.controller.ts",
+      "derived": "crm.account.delete",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.account.delete on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE crm/accounts/:id/relationships/:relId",
+      "handler": "unlink",
+      "file": "/apps/api/src/crm/crm-accounts.controller.ts",
+      "derived": "crm.account.delete",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.account.delete on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE crm/market-items/:id",
+      "handler": "remove",
+      "file": "/apps/api/src/market-intelligence/market-intelligence.controller.ts",
+      "derived": "crm.market-item.delete",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.market-item.delete on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE crm/opportunities/:id/deal-team/:mid",
+      "handler": "removeDealMember",
+      "file": "/apps/api/src/crm/opportunity-depth.controller.ts",
+      "derived": "crm.opportunity.delete",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.opportunity.delete on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE crm/opportunities/:id/stakeholders/:sid",
+      "handler": "removeStakeholder",
+      "file": "/apps/api/src/crm/opportunity-depth.controller.ts",
+      "derived": "crm.opportunity.delete",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.opportunity.delete on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE documents/:id/permissions/:permissionId",
+      "handler": "revokeShare",
+      "file": "/apps/api/src/documents/documents.controller.ts",
+      "derived": "documents.permission.delete",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-11",
+        "default": "no default — D-11 must name a role"
+      }
+    },
+    {
+      "route": "DELETE finance/budgets/:id",
+      "handler": "remove",
+      "file": "/apps/api/src/finance/budget.controller.ts",
+      "derived": "finance.budget.delete",
+      "today": "r-finance (finance.budget.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.budget.delete on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE projects/cbs/:id",
+      "handler": "deleteCbsNode",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.cb.delete",
+      "today": "r-pm (projects.cb.*), r-commercial-manager (projects.cb.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.cb.delete on r-pm, r-commercial-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "DELETE templates/:id",
+      "handler": "delete",
+      "file": "/apps/api/src/templates/templates.controller.ts",
+      "derived": "templates.template.delete",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name templates.template.delete on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "DELETE views/:id",
+      "handler": "remove",
+      "file": "/apps/api/src/views/views.controller.ts",
+      "derived": "views.view.delete",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name views.view.delete in STAFF_BASE — the user's own tasks, notifications and saved views (today NOBODY but the admin can save a view or favourite a page)"
+      }
+    },
+    {
+      "route": "DELETE work-items/:source/:id",
+      "handler": "remove",
+      "file": "/apps/api/src/work-items/work-items.controller.ts",
+      "derived": "work-items.work-item.delete",
+      "today": "r-sales (work-items.*), r-sales-manager (work-items.*), r-pre-sales (work-items.*), r-estimator (work-items.*), r-technical-engineer (work-items.*), r-site-engineer (work-items.*), r-planning-engineer (work-items.*), r-project-engineer (work-items.*), r-pm (work-items.*), r-technical-manager (work-items.*), r-commercial-manager (work-items.*), r-procurement (work-items.*), r-procurement-manager (work-items.*), r-store (work-items.*), r-qa-qc (work-items.*), r-hse (work-items.*), r-finance (work-items.*), r-finance-controller (work-items.*), r-commissioning-engineer (work-items.*), r-service-manager (work-items.*), r-handover-fm (work-items.*), r-hr (work-items.*), r-hr-manager (work-items.*), r-document-controller (work-items.*), r-executive (work-items.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name work-items.work-item.delete in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "PATCH crm/accounts/:id/installed-base/:itemId",
+      "handler": "patchInstalled",
+      "file": "/apps/api/src/crm/crm-accounts.controller.ts",
+      "derived": "crm.account.installed-base",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.account.installed-base on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH crm/campaigns/:id/results",
+      "handler": "results",
+      "file": "/apps/api/src/crm/campaigns.controller.ts",
+      "derived": "crm.campaign.results",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.campaign.results on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH crm/campaigns/:id/status",
+      "handler": "status",
+      "file": "/apps/api/src/crm/campaigns.controller.ts",
+      "derived": "crm.campaign.status",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.campaign.status on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH crm/leads/:id",
+      "handler": "update",
+      "file": "/apps/api/src/crm/crm-leads.controller.ts",
+      "derived": "crm.lead.update",
+      "today": "r-sales (crm.lead.*), r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.lead.update on r-sales, r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH crm/leads/:id/assign",
+      "handler": "assign",
+      "file": "/apps/api/src/crm/crm-leads.controller.ts",
+      "derived": "crm.lead.assign",
+      "today": "r-sales (crm.lead.*), r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.lead.assign on r-sales, r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH crm/leads/:id/qualification",
+      "handler": "assess",
+      "file": "/apps/api/src/crm/crm-leads.controller.ts",
+      "derived": "crm.lead.qualification",
+      "today": "r-sales (crm.lead.*), r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.lead.qualification on r-sales, r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH crm/opportunities/:id/pre-award-package/estimate/:estimateId/build-ups",
+      "handler": "updateEstimateBuildUps",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.build-ups",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.build-ups on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "PATCH crm/opportunities/:id/pre-award-package/pricing/:sheetId/policy",
+      "handler": "setPricingPolicy",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.policy",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.policy on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "PATCH crm/opportunities/:id/pre-award-package/scope/:basisId/lines",
+      "handler": "editScopeLines",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.lines",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.lines on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "PATCH elv/devices/:id",
+      "handler": "patch",
+      "file": "/apps/api/src/elv/elv-devices.controller.ts",
+      "derived": "elv.device.update",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-10",
+        "default": "no default — D-10 must name a role"
+      }
+    },
+    {
+      "route": "PATCH finance/bank-guarantees/:id/status",
+      "handler": "changeBankGuaranteeStatus",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.bank-guarantee.status",
+      "today": "r-finance (finance.bank-guarantee.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-03",
+        "default": "name finance.bank-guarantee.status on r-finance (unchanged holders) — pending D-03"
+      }
+    },
+    {
+      "route": "PATCH finance/post-dated-cheques/:id/status",
+      "handler": "changeChequeStatus",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.post-dated-cheque.status",
+      "today": "r-finance (finance.post-dated-cheque.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-03",
+        "default": "name finance.post-dated-cheque.status on r-finance (unchanged holders) — pending D-03"
+      }
+    },
+    {
+      "route": "PATCH finance/vat-returns/:id/status",
+      "handler": "setVatReturnStatus",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.vat-return.status",
+      "today": "r-finance (finance.vat-return.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-02",
+        "default": "name finance.vat-return.status on r-finance (unchanged holders) — pending D-02"
+      }
+    },
+    {
+      "route": "PATCH integration/webhooks/:id",
+      "handler": "setActive",
+      "file": "/apps/api/src/integration/integration.controller.ts",
+      "derived": "integration.webhook.update",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name integration.webhook.update on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "PATCH inventory/materials/:id",
+      "handler": "edit",
+      "file": "/apps/api/src/inventory/materials.controller.ts",
+      "derived": "inventory.material.update",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.material.update on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH inventory/stock/:id/reorder",
+      "handler": "setReorder",
+      "file": "/apps/api/src/inventory/stock.controller.ts",
+      "derived": "inventory.stock.reorder",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.stock.reorder on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH inventory/stock/:id/uom",
+      "handler": "setUom",
+      "file": "/apps/api/src/inventory/stock.controller.ts",
+      "derived": "inventory.stock.uom",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.stock.uom on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH notifications/:id/read",
+      "handler": "markRead",
+      "file": "/apps/api/src/notifications/notifications.controller.ts",
+      "derived": "notifications.read.update",
+      "today": "r-sales (notifications.*), r-sales-manager (notifications.*), r-pre-sales (notifications.*), r-estimator (notifications.*), r-technical-engineer (notifications.*), r-site-engineer (notifications.*), r-planning-engineer (notifications.*), r-project-engineer (notifications.*), r-pm (notifications.*), r-technical-manager (notifications.*), r-commercial-manager (notifications.*), r-procurement (notifications.*), r-procurement-manager (notifications.*), r-store (notifications.*), r-qa-qc (notifications.*), r-hse (notifications.*), r-finance (notifications.*), r-finance-controller (notifications.*), r-commissioning-engineer (notifications.*), r-service-manager (notifications.*), r-handover-fm (notifications.*), r-hr (notifications.*), r-hr-manager (notifications.*), r-document-controller (notifications.*), r-executive (notifications.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name notifications.read.update in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "PATCH projects/cbs/:id",
+      "handler": "updateCbsNode",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.cb.update",
+      "today": "r-pm (projects.cb.*), r-commercial-manager (projects.cb.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.cb.update on r-pm, r-commercial-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH projects/closeouts/:id/items/:index",
+      "handler": "setCloseoutItem",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.closeout.items",
+      "today": "r-pm (projects.closeout.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.closeout.items on r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH projects/delays/:id/status",
+      "handler": "updateDelayStatus",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.delay.status",
+      "today": "r-planning-engineer (projects.delay.*), r-pm (projects.delay.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-07",
+        "default": "name projects.delay.status on r-planning-engineer, r-pm (unchanged holders) — pending D-07"
+      }
+    },
+    {
+      "route": "PATCH projects/issues/:id",
+      "handler": "updateIssue",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.issue.update",
+      "today": "r-project-engineer (projects.issue.*), r-pm (projects.issue.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.issue.update on r-project-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH projects/projects/:id/status",
+      "handler": "changeProjectStatus",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.project.status",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-08",
+        "default": "no default — D-08 must name a role"
+      }
+    },
+    {
+      "route": "PATCH projects/risks/:id",
+      "handler": "updateRisk",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.risk.update",
+      "today": "r-project-engineer (projects.risk.*), r-pm (projects.risk.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.risk.update on r-project-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH projects/variations/:id/status",
+      "handler": "changeVariationStatus",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.variation.status",
+      "today": "r-pm (projects.variation.*), r-commercial-manager (projects.variation.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-06",
+        "default": "name projects.variation.status on r-pm, r-commercial-manager (unchanged holders) — pending D-06"
+      }
+    },
+    {
+      "route": "PATCH projects/wbs/:id/progress",
+      "handler": "updateWbsProgress",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.wb.progress",
+      "today": "r-planning-engineer (projects.wb.*), r-pm (projects.wb.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.wb.progress on r-planning-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "PATCH work-items/:source/:id",
+      "handler": "update",
+      "file": "/apps/api/src/work-items/work-items.controller.ts",
+      "derived": "work-items.work-item.update",
+      "today": "r-sales (work-items.*), r-sales-manager (work-items.*), r-pre-sales (work-items.*), r-estimator (work-items.*), r-technical-engineer (work-items.*), r-site-engineer (work-items.*), r-planning-engineer (work-items.*), r-project-engineer (work-items.*), r-pm (work-items.*), r-technical-manager (work-items.*), r-commercial-manager (work-items.*), r-procurement (work-items.*), r-procurement-manager (work-items.*), r-store (work-items.*), r-qa-qc (work-items.*), r-hse (work-items.*), r-finance (work-items.*), r-finance-controller (work-items.*), r-commissioning-engineer (work-items.*), r-service-manager (work-items.*), r-handover-fm (work-items.*), r-hr (work-items.*), r-hr-manager (work-items.*), r-document-controller (work-items.*), r-executive (work-items.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name work-items.work-item.update in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "POST ai/complete",
+      "handler": "complete",
+      "file": "/apps/api/src/ai/ai.controller.ts",
+      "derived": "ai.complete.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-12",
+        "default": "no default — D-12 must name a role"
+      }
+    },
+    {
+      "route": "POST builder/approvals",
+      "handler": "createApprovalMatrix",
+      "file": "/apps/api/src/builder/builder.controller.ts",
+      "derived": "builder.approval.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name builder.approval.create on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST builder/approvals/:entityType/evaluate",
+      "handler": "evaluateApproval",
+      "file": "/apps/api/src/builder/builder.controller.ts",
+      "derived": "builder.approval.evaluate",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name builder.approval.evaluate on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST builder/entities",
+      "handler": "registerEntity",
+      "file": "/apps/api/src/builder/builder.controller.ts",
+      "derived": "builder.entity.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name builder.entity.create on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST builder/forms",
+      "handler": "createForm",
+      "file": "/apps/api/src/builder/builder.controller.ts",
+      "derived": "builder.form.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name builder.form.create on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST builder/forms/:formKey/validate",
+      "handler": "validateFormData",
+      "file": "/apps/api/src/builder/builder.controller.ts",
+      "derived": "builder.form.validate",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name builder.form.validate on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST compliance/authorities",
+      "handler": "registerAuthority",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.authority.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "POST compliance/cases",
+      "handler": "openCase",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.case.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "POST compliance/cases/:id/certificates",
+      "handler": "issueCertificate",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.case.certificates",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "POST compliance/cases/:id/decisions",
+      "handler": "decide",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.case.decisions",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "POST compliance/cases/:id/inspections",
+      "handler": "scheduleInspection",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.case.inspections",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "POST compliance/cases/:id/submissions",
+      "handler": "submit",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.case.submissions",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "POST crm/accounts/:id/installed-base",
+      "handler": "addInstalled",
+      "file": "/apps/api/src/crm/crm-accounts.controller.ts",
+      "derived": "crm.account.installed-base",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.account.installed-base on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/accounts/:id/installed-base/scan",
+      "handler": "growthScan",
+      "file": "/apps/api/src/crm/crm-accounts.controller.ts",
+      "derived": "crm.account.scan",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.account.scan on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/accounts/:id/relationships",
+      "handler": "link",
+      "file": "/apps/api/src/crm/crm-accounts.controller.ts",
+      "derived": "crm.account.relationships",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.account.relationships on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/automation/run",
+      "handler": "run",
+      "file": "/apps/api/src/crm/automation.controller.ts",
+      "derived": "crm.automation.run",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.automation.run on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/campaigns",
+      "handler": "create",
+      "file": "/apps/api/src/crm/campaigns.controller.ts",
+      "derived": "crm.campaign.create",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.campaign.create on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/leads",
+      "handler": "create",
+      "file": "/apps/api/src/crm/crm-leads.controller.ts",
+      "derived": "crm.lead.create",
+      "today": "r-sales (crm.lead.*), r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.lead.create on r-sales, r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/leads/:id/accept",
+      "handler": "accept",
+      "file": "/apps/api/src/crm/crm-leads.controller.ts",
+      "derived": "crm.lead.accept",
+      "today": "r-sales (crm.lead.*), r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.lead.accept on r-sales, r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/leads/:id/convert",
+      "handler": "convert",
+      "file": "/apps/api/src/crm/crm-leads.controller.ts",
+      "derived": "crm.lead.convert",
+      "today": "r-sales (crm.lead.*), r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.lead.convert on r-sales, r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/market-items",
+      "handler": "create",
+      "file": "/apps/api/src/market-intelligence/market-intelligence.controller.ts",
+      "derived": "crm.market-item.create",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.market-item.create on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/market-items/seed",
+      "handler": "seed",
+      "file": "/apps/api/src/market-intelligence/market-intelligence.controller.ts",
+      "derived": "crm.market-item.seed",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.market-item.seed on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/meeting-summary",
+      "handler": "meetingSummary",
+      "file": "/apps/api/src/crm/deal-brief.controller.ts",
+      "derived": "crm.meeting-summary.create",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.meeting-summary.create on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/email-draft",
+      "handler": "emailDraft",
+      "file": "/apps/api/src/crm/deal-brief.controller.ts",
+      "derived": "crm.opportunity.email-draft",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.opportunity.email-draft on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/outcome/override",
+      "handler": "overrideOutcome",
+      "file": "/apps/api/src/crm/crm-opportunities.controller.ts",
+      "derived": "crm.opportunity.override",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.override on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/estimate",
+      "handler": "addEstimate",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.estimate",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.estimate on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/open",
+      "handler": "open",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.open",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.open on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/pricing/open",
+      "handler": "openPricing",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.open",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.open on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/pricing/preview",
+      "handler": "previewPricing",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.preview",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.preview on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/pricing/revision",
+      "handler": "openPricingRevision",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.revision",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.revision on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/pre-award-package/scope",
+      "handler": "addScope",
+      "file": "/apps/api/src/crm/pre-award-package.controller.ts",
+      "derived": "crm.opportunity.scope",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-13",
+        "default": "name crm.opportunity.scope on r-sales-manager (unchanged holders) — pending D-13"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/scope-assist/:proposalId/accept",
+      "handler": "accept",
+      "file": "/apps/api/src/crm/scope-assist.controller.ts",
+      "derived": "crm.opportunity.accept",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.opportunity.accept on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/:id/scope-assist/generate",
+      "handler": "generate",
+      "file": "/apps/api/src/crm/scope-assist.controller.ts",
+      "derived": "crm.opportunity.generate",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.opportunity.generate on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST crm/opportunities/forecast/snapshot",
+      "handler": "capture",
+      "file": "/apps/api/src/crm/forecast.controller.ts",
+      "derived": "crm.opportunity.snapshot",
+      "today": "r-sales-manager (crm.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name crm.opportunity.snapshot on r-sales-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST documents",
+      "handler": "create",
+      "file": "/apps/api/src/documents/documents.controller.ts",
+      "derived": "documents.document.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-11",
+        "default": "no default — D-11 must name a role"
+      }
+    },
+    {
+      "route": "POST documents/:id/share",
+      "handler": "share",
+      "file": "/apps/api/src/documents/documents.controller.ts",
+      "derived": "documents.share.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-11",
+        "default": "no default — D-11 must name a role"
+      }
+    },
+    {
+      "route": "POST documents/:id/versions",
+      "handler": "addVersion",
+      "file": "/apps/api/src/documents/documents.controller.ts",
+      "derived": "documents.version.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-11",
+        "default": "no default — D-11 must name a role"
+      }
+    },
+    {
+      "route": "POST elv/devices",
+      "handler": "register",
+      "file": "/apps/api/src/elv/elv-devices.controller.ts",
+      "derived": "elv.device.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-10",
+        "default": "no default — D-10 must name a role"
+      }
+    },
+    {
+      "route": "POST engineering/bim-models",
+      "handler": "registerBimModel",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.bim-model.create",
+      "today": "r-technical-engineer (engineering.*.create), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name engineering.bim-model.create on r-technical-engineer, r-technical-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST engineering/design-changes",
+      "handler": "createDesignChange",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.design-change.create",
+      "today": "r-technical-engineer (engineering.*.create), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name engineering.design-change.create on r-technical-engineer, r-technical-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST engineering/documents",
+      "handler": "createDocument",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.document.create",
+      "today": "r-technical-engineer (engineering.*.create), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name engineering.document.create on r-technical-engineer, r-technical-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST engineering/drawings",
+      "handler": "createDrawing",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.drawing.create",
+      "today": "r-technical-engineer (engineering.*.create), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name engineering.drawing.create on r-technical-engineer, r-technical-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST engineering/drawings/:id/review",
+      "handler": "reviewDrawing",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.drawing.review",
+      "today": "r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-04",
+        "default": "name engineering.drawing.review on r-technical-manager (unchanged holders) — pending D-04"
+      }
+    },
+    {
+      "route": "POST engineering/drawings/:id/start-review",
+      "handler": "startReviewDrawing",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.drawing.start-review",
+      "today": "r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-04",
+        "default": "name engineering.drawing.start-review on r-technical-manager (unchanged holders) — pending D-04"
+      }
+    },
+    {
+      "route": "POST engineering/rfis",
+      "handler": "createRfi",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.rfi.create",
+      "today": "r-technical-engineer (engineering.*.create), r-project-engineer (engineering.rfi.*), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name engineering.rfi.create on r-technical-engineer, r-project-engineer, r-technical-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST engineering/submittals",
+      "handler": "createSubmittal",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.submittal.create",
+      "today": "r-technical-engineer (engineering.*.create), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name engineering.submittal.create on r-technical-engineer, r-technical-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST estimation/line",
+      "handler": "estimate",
+      "file": "/apps/api/src/estimation/estimation.controller.ts",
+      "derived": "estimation.line.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-12",
+        "default": "no default — D-12 must name a role"
+      }
+    },
+    {
+      "route": "POST events",
+      "handler": "emit",
+      "file": "/apps/api/src/events/events.controller.ts",
+      "derived": "events.event.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name events.event.create on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST finance/accounts",
+      "handler": "createAccount",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.account.create",
+      "today": "r-finance (finance.account.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.account.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/accounts/import",
+      "handler": "importAccounts",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.account.import",
+      "today": "r-finance (finance.account.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.account.import on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/bank-guarantees",
+      "handler": "createBankGuarantee",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.bank-guarantee.create",
+      "today": "r-finance (finance.bank-guarantee.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.bank-guarantee.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/bank-transactions/:id/reconcile",
+      "handler": "reconcileManually",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.bank-transaction.reconcile",
+      "today": "r-finance (finance.bank-transaction.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-01",
+        "default": "name finance.bank-transaction.reconcile on r-finance (unchanged holders) — pending D-01"
+      }
+    },
+    {
+      "route": "POST finance/bank-transactions/:id/unreconcile",
+      "handler": "unreconcileBankTransaction",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.bank-transaction.unreconcile",
+      "today": "r-finance (finance.bank-transaction.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-01",
+        "default": "name finance.bank-transaction.unreconcile on r-finance (unchanged holders) — pending D-01"
+      }
+    },
+    {
+      "route": "POST finance/bank-transactions/auto-match",
+      "handler": "autoMatchBankTransactions",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.bank-transaction.auto-match",
+      "today": "r-finance (finance.bank-transaction.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.bank-transaction.auto-match on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/bank-transactions/import",
+      "handler": "importTransactions",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.bank-transaction.import",
+      "today": "r-finance (finance.bank-transaction.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.bank-transaction.import on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/budgets",
+      "handler": "create",
+      "file": "/apps/api/src/finance/budget.controller.ts",
+      "derived": "finance.budget.create",
+      "today": "r-finance (finance.budget.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.budget.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/budgets/:id/restore",
+      "handler": "restore",
+      "file": "/apps/api/src/finance/budget.controller.ts",
+      "derived": "finance.budget.restore",
+      "today": "r-finance (finance.budget.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.budget.restore on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/cost-centers",
+      "handler": "createCostCenter",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.cost-center.create",
+      "today": "r-finance (finance.cost-center.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.cost-center.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/fx/rates",
+      "handler": "setRate",
+      "file": "/apps/api/src/finance/fx.controller.ts",
+      "derived": "finance.fx.rates",
+      "today": "r-finance (finance.fx.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.fx.rates on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/journals",
+      "handler": "postJournal",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.journal.create",
+      "today": "r-finance (finance.journal.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-01",
+        "default": "name finance.journal.create on r-finance (unchanged holders) — pending D-01"
+      }
+    },
+    {
+      "route": "POST finance/payments",
+      "handler": "recordPayment",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.payment.create",
+      "today": "r-finance (finance.payment.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-01",
+        "default": "name finance.payment.create on r-finance (unchanged holders) — pending D-01"
+      }
+    },
+    {
+      "route": "POST finance/petty-cash",
+      "handler": "createPettyCashFund",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.petty-cash.create",
+      "today": "r-finance (finance.petty-cash.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.petty-cash.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/petty-cash/:id/transactions",
+      "handler": "recordPettyCashTx",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.petty-cash.transactions",
+      "today": "r-finance (finance.petty-cash.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.petty-cash.transactions on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/post-dated-cheques",
+      "handler": "createPostDatedCheque",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.post-dated-cheque.create",
+      "today": "r-finance (finance.post-dated-cheque.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.post-dated-cheque.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/profit-centers",
+      "handler": "createProfitCenter",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.profit-center.create",
+      "today": "r-finance (finance.profit-center.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.profit-center.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/tax-codes",
+      "handler": "createTaxCode",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.tax-code.create",
+      "today": "r-finance (finance.tax-code.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name finance.tax-code.create on r-finance — no change in who may act"
+      }
+    },
+    {
+      "route": "POST finance/vat-returns",
+      "handler": "generateVatReturn",
+      "file": "/apps/api/src/finance/finance.controller.ts",
+      "derived": "finance.vat-return.create",
+      "today": "r-finance (finance.vat-return.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-02",
+        "default": "name finance.vat-return.create on r-finance (unchanged holders) — pending D-02"
+      }
+    },
+    {
+      "route": "POST fleet/telemetry/webhook",
+      "handler": "recordTelemetry",
+      "file": "/apps/api/src/fleet/fleet.controller.ts",
+      "derived": "fleet.telemetry.webhook",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "machine-inbound",
+        "default": "not a role question: an inbound webhook must authenticate by signature, not by a user permission — separate security item"
+      }
+    },
+    {
+      "route": "POST integration/webhooks",
+      "handler": "register",
+      "file": "/apps/api/src/integration/integration.controller.ts",
+      "derived": "integration.webhook.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name integration.webhook.create on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST intelligence/calibrations/trigger",
+      "handler": "triggerCalibration",
+      "file": "/apps/api/src/intelligence/intelligence.controller.ts",
+      "derived": "intelligence.calibration.trigger",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-12",
+        "default": "no default — D-12 must name a role"
+      }
+    },
+    {
+      "route": "POST intelligence/pricing-sources",
+      "handler": "recordSource",
+      "file": "/apps/api/src/intelligence/intelligence.controller.ts",
+      "derived": "intelligence.pricing-source.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-12",
+        "default": "no default — D-12 must name a role"
+      }
+    },
+    {
+      "route": "POST inventory/grns",
+      "handler": "create",
+      "file": "/apps/api/src/inventory/inventory.controller.ts",
+      "derived": "inventory.grn.create",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.grn.create on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST inventory/locations",
+      "handler": "create",
+      "file": "/apps/api/src/inventory/locations.controller.ts",
+      "derived": "inventory.location.create",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.location.create on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST inventory/materials",
+      "handler": "create",
+      "file": "/apps/api/src/inventory/materials.controller.ts",
+      "derived": "inventory.material.create",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.material.create on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST inventory/serials",
+      "handler": "register",
+      "file": "/apps/api/src/inventory/serials.controller.ts",
+      "derived": "inventory.serial.create",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.serial.create on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST inventory/stock",
+      "handler": "createItem",
+      "file": "/apps/api/src/inventory/stock.controller.ts",
+      "derived": "inventory.stock.create",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.stock.create on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST inventory/stock/:id/movements",
+      "handler": "recordMovement",
+      "file": "/apps/api/src/inventory/stock.controller.ts",
+      "derived": "inventory.stock.movements",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.stock.movements on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST inventory/transfers",
+      "handler": "create",
+      "file": "/apps/api/src/inventory/transfer.controller.ts",
+      "derived": "inventory.transfer.create",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.transfer.create on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/cashflow-forecasts",
+      "handler": "saveCashflow",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.cashflow-forecast.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-08",
+        "default": "no default — D-08 must name a role"
+      }
+    },
+    {
+      "route": "POST projects/cbs",
+      "handler": "createCbsNode",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.cb.create",
+      "today": "r-pm (projects.cb.*), r-commercial-manager (projects.cb.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.cb.create on r-pm, r-commercial-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/closeouts",
+      "handler": "startCloseout",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.closeout.create",
+      "today": "r-pm (projects.closeout.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.closeout.create on r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/closeouts/:id/finalize",
+      "handler": "finalizeCloseout",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.closeout.finalize",
+      "today": "r-pm (projects.closeout.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-07",
+        "default": "name projects.closeout.finalize on r-pm (unchanged holders) — pending D-07"
+      }
+    },
+    {
+      "route": "POST projects/delays",
+      "handler": "createDelay",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.delay.create",
+      "today": "r-planning-engineer (projects.delay.*), r-pm (projects.delay.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.delay.create on r-planning-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/delivery-item-maps",
+      "handler": "createDeliveryItemMap",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.delivery-item-map.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-08",
+        "default": "no default — D-08 must name a role"
+      }
+    },
+    {
+      "route": "POST projects/issues",
+      "handler": "raiseIssue",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.issue.create",
+      "today": "r-project-engineer (projects.issue.*), r-pm (projects.issue.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.issue.create on r-project-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/projects/:id/wbs-baseline",
+      "handler": "approveWbsBaseline",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.project.wbs-baseline",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-08",
+        "default": "no default — D-08 must name a role"
+      }
+    },
+    {
+      "route": "POST projects/risks",
+      "handler": "raiseRisk",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.risk.create",
+      "today": "r-project-engineer (projects.risk.*), r-pm (projects.risk.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.risk.create on r-project-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/schedules",
+      "handler": "saveSchedule",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.schedule.create",
+      "today": "r-pm (projects.schedule.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.schedule.create on r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/variations",
+      "handler": "createVariation",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.variation.create",
+      "today": "r-pm (projects.variation.*), r-commercial-manager (projects.variation.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.variation.create on r-pm, r-commercial-manager — no change in who may act"
+      }
+    },
+    {
+      "route": "POST projects/wbs",
+      "handler": "createWbsNode",
+      "file": "/apps/api/src/projects/projects.controller.ts",
+      "derived": "projects.wb.create",
+      "today": "r-planning-engineer (projects.wb.*), r-pm (projects.wb.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name projects.wb.create on r-planning-engineer, r-pm — no change in who may act"
+      }
+    },
+    {
+      "route": "POST templates",
+      "handler": "create",
+      "file": "/apps/api/src/templates/templates.controller.ts",
+      "derived": "templates.template.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name templates.template.create on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "POST views",
+      "handler": "create",
+      "file": "/apps/api/src/views/views.controller.ts",
+      "derived": "views.view.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name views.view.create in STAFF_BASE — the user's own tasks, notifications and saved views (today NOBODY but the admin can save a view or favourite a page)"
+      }
+    },
+    {
+      "route": "POST views/favorite",
+      "handler": "favorite",
+      "file": "/apps/api/src/views/views.controller.ts",
+      "derived": "views.favorite.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name views.favorite.create in STAFF_BASE — the user's own tasks, notifications and saved views (today NOBODY but the admin can save a view or favourite a page)"
+      }
+    },
+    {
+      "route": "POST whatsapp/webhook",
+      "handler": "webhook",
+      "file": "/apps/api/src/comms/whatsapp/whatsapp.controller.ts",
+      "derived": "whatsapp.webhook.create",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "machine-inbound",
+        "default": "not a role question: an inbound webhook must authenticate by signature, not by a user permission — separate security item"
+      }
+    },
+    {
+      "route": "POST work-items",
+      "handler": "create",
+      "file": "/apps/api/src/work-items/work-items.controller.ts",
+      "derived": "work-items.work-item.create",
+      "today": "r-sales (work-items.*), r-sales-manager (work-items.*), r-pre-sales (work-items.*), r-estimator (work-items.*), r-technical-engineer (work-items.*), r-site-engineer (work-items.*), r-planning-engineer (work-items.*), r-project-engineer (work-items.*), r-pm (work-items.*), r-technical-manager (work-items.*), r-commercial-manager (work-items.*), r-procurement (work-items.*), r-procurement-manager (work-items.*), r-store (work-items.*), r-qa-qc (work-items.*), r-hse (work-items.*), r-finance (work-items.*), r-finance-controller (work-items.*), r-commissioning-engineer (work-items.*), r-service-manager (work-items.*), r-handover-fm (work-items.*), r-hr (work-items.*), r-hr-manager (work-items.*), r-document-controller (work-items.*), r-executive (work-items.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name work-items.work-item.create in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "POST work-items/:source/:id/:action",
+      "handler": "act",
+      "file": "/apps/api/src/work-items/work-items.controller.ts",
+      "derived": "work-items.work-item.create",
+      "today": "r-sales (work-items.*), r-sales-manager (work-items.*), r-pre-sales (work-items.*), r-estimator (work-items.*), r-technical-engineer (work-items.*), r-site-engineer (work-items.*), r-planning-engineer (work-items.*), r-project-engineer (work-items.*), r-pm (work-items.*), r-technical-manager (work-items.*), r-commercial-manager (work-items.*), r-procurement (work-items.*), r-procurement-manager (work-items.*), r-store (work-items.*), r-qa-qc (work-items.*), r-hse (work-items.*), r-finance (work-items.*), r-finance-controller (work-items.*), r-commissioning-engineer (work-items.*), r-service-manager (work-items.*), r-handover-fm (work-items.*), r-hr (work-items.*), r-hr-manager (work-items.*), r-document-controller (work-items.*), r-executive (work-items.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name work-items.work-item.create in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "POST work-items/:source/:id/reschedule",
+      "handler": "reschedule",
+      "file": "/apps/api/src/work-items/work-items.controller.ts",
+      "derived": "work-items.reschedule.create",
+      "today": "r-sales (work-items.*), r-sales-manager (work-items.*), r-pre-sales (work-items.*), r-estimator (work-items.*), r-technical-engineer (work-items.*), r-site-engineer (work-items.*), r-planning-engineer (work-items.*), r-project-engineer (work-items.*), r-pm (work-items.*), r-technical-manager (work-items.*), r-commercial-manager (work-items.*), r-procurement (work-items.*), r-procurement-manager (work-items.*), r-store (work-items.*), r-qa-qc (work-items.*), r-hse (work-items.*), r-finance (work-items.*), r-finance-controller (work-items.*), r-commissioning-engineer (work-items.*), r-service-manager (work-items.*), r-handover-fm (work-items.*), r-hr (work-items.*), r-hr-manager (work-items.*), r-document-controller (work-items.*), r-executive (work-items.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name work-items.reschedule.create in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "POST work-items/reminders/sync",
+      "handler": "dispatchDueReminders",
+      "file": "/apps/api/src/work-items/work-items.controller.ts",
+      "derived": "work-items.reminder.sync",
+      "today": "r-sales (work-items.*), r-sales-manager (work-items.*), r-pre-sales (work-items.*), r-estimator (work-items.*), r-technical-engineer (work-items.*), r-site-engineer (work-items.*), r-planning-engineer (work-items.*), r-project-engineer (work-items.*), r-pm (work-items.*), r-technical-manager (work-items.*), r-commercial-manager (work-items.*), r-procurement (work-items.*), r-procurement-manager (work-items.*), r-store (work-items.*), r-qa-qc (work-items.*), r-hse (work-items.*), r-finance (work-items.*), r-finance-controller (work-items.*), r-commissioning-engineer (work-items.*), r-service-manager (work-items.*), r-handover-fm (work-items.*), r-hr (work-items.*), r-hr-manager (work-items.*), r-document-controller (work-items.*), r-executive (work-items.*)",
+      "proposal": {
+        "kind": "staff-personal",
+        "default": "name work-items.reminder.sync in STAFF_BASE — the user's own tasks, notifications and saved views"
+      }
+    },
+    {
+      "route": "PUT compliance/cases/:id/status",
+      "handler": "changeStatus",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.case.status",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "PUT compliance/inspections/:inspectionId/outcome",
+      "handler": "recordInspection",
+      "file": "/apps/api/src/compliance/compliance.controller.ts",
+      "derived": "compliance.inspection.outcome",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-09",
+        "default": "no default — D-09 must name a role"
+      }
+    },
+    {
+      "route": "PUT elv/devices/:id/commissioning",
+      "handler": "link",
+      "file": "/apps/api/src/elv/elv-devices.controller.ts",
+      "derived": "elv.device.commissioning",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-10",
+        "default": "no default — D-10 must name a role"
+      }
+    },
+    {
+      "route": "PUT elv/devices/:id/status",
+      "handler": "changeStatus",
+      "file": "/apps/api/src/elv/elv-devices.controller.ts",
+      "derived": "elv.device.status",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-10",
+        "default": "no default — D-10 must name a role"
+      }
+    },
+    {
+      "route": "PUT engineering/bim-models/:id/version",
+      "handler": "newBimModelVersion",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.bim-model.version",
+      "today": "r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-04",
+        "default": "name engineering.bim-model.version on r-technical-manager (unchanged holders) — pending D-04"
+      }
+    },
+    {
+      "route": "PUT engineering/design-changes/:id/decision",
+      "handler": "decideDesignChange",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.design-change.decision",
+      "today": "r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-04",
+        "default": "name engineering.design-change.decision on r-technical-manager (unchanged holders) — pending D-04"
+      }
+    },
+    {
+      "route": "PUT engineering/documents/:id/transition",
+      "handler": "transitionDocument",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.document.transition",
+      "today": "r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-04",
+        "default": "name engineering.document.transition on r-technical-manager (unchanged holders) — pending D-04"
+      }
+    },
+    {
+      "route": "PUT engineering/rfis/:id/answer",
+      "handler": "answerRfi",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.rfi.answer",
+      "today": "r-project-engineer (engineering.rfi.*), r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-05",
+        "default": "name engineering.rfi.answer on r-project-engineer, r-technical-manager (unchanged holders) — pending D-05"
+      }
+    },
+    {
+      "route": "PUT engineering/submittals/:id/status",
+      "handler": "updateSubmittalStatus",
+      "file": "/apps/api/src/engineering/engineering.controller.ts",
+      "derived": "engineering.submittal.status",
+      "today": "r-technical-manager (engineering.*)",
+      "proposal": {
+        "kind": "owner-decision",
+        "decision": "D-04",
+        "default": "name engineering.submittal.status on r-technical-manager (unchanged holders) — pending D-04"
+      }
+    },
+    {
+      "route": "PUT inventory/locations/:id/active",
+      "handler": "setActive",
+      "file": "/apps/api/src/inventory/locations.controller.ts",
+      "derived": "inventory.location.active",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.location.active on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PUT inventory/serials/:id/fault",
+      "handler": "fault",
+      "file": "/apps/api/src/inventory/serials.controller.ts",
+      "derived": "inventory.serial.fault",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.serial.fault on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PUT inventory/serials/:id/install",
+      "handler": "install",
+      "file": "/apps/api/src/inventory/serials.controller.ts",
+      "derived": "inventory.serial.install",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.serial.install on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PUT inventory/serials/:id/return",
+      "handler": "returnToStock",
+      "file": "/apps/api/src/inventory/serials.controller.ts",
+      "derived": "inventory.serial.return",
+      "today": "r-store (inventory.*)",
+      "proposal": {
+        "kind": "name-on-current-holders",
+        "default": "name inventory.serial.return on r-store — no change in who may act"
+      }
+    },
+    {
+      "route": "PUT templates/:id",
+      "handler": "update",
+      "file": "/apps/api/src/templates/templates.controller.ts",
+      "derived": "templates.template.update",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name templates.template.update on r-admin — system administration, not business authority"
+      }
+    },
+    {
+      "route": "PUT workspace/config",
+      "handler": "updateConfig",
+      "file": "/apps/api/src/workspace/workspace.controller.ts",
+      "derived": "workspace.config.update",
+      "today": "r-admin only (*)",
+      "proposal": {
+        "kind": "stays-administration",
+        "default": "name workspace.config.update on r-admin — system administration, not business authority"
+      }
+    }
+  ]
+}

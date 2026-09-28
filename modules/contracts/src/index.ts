@@ -10,6 +10,7 @@ export * from './in-memory-payment-certificate-store';
 export * from './postgres-payment-certificate-store';
 export * from './payment-certificate.service';
 export * from './domain/ipc-line';
+export * from './ipc-valuation.port';
 export * from './ipc-line-store';
 export * from './in-memory-ipc-line-store';
 export * from './postgres-ipc-line-store';

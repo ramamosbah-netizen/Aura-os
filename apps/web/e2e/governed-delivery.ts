@@ -83,8 +83,11 @@ export async function createGovernedDelivery(
   // not award). The session user authors everything and approves none of it.
   const technical = await approver(request, 'technical', 'Governed fixture Technical Manager', 'r-technical-manager');
   const commercial = await approver(request, 'commercial', 'Governed fixture Sales Manager', 'r-sales-manager');
+  // The supplier-quote requirement is excused by a reasoned waiver, and only by someone who answers
+  // for the offer and is not its preparer: a Commercial Manager.
+  const waiver = await approver(request, 'waiver', 'Governed fixture Commercial Manager', 'r-commercial-manager');
   const cleanup = async () => {
-    await Promise.allSettled([technical, commercial].map((actor) =>
+    await Promise.allSettled([technical, commercial, waiver].map((actor) =>
       request.delete(`/api/admin/users/${encodeURIComponent(actor.id)}`, { timeout: 15_000 })));
   };
 
@@ -161,9 +164,19 @@ export async function createGovernedDelivery(
   const checklist = await get<{ requirements: Array<{ id: string; type: string; requiredCount: number }> }>(
     `/document-requirements?entityType=crm.quotation&entityId=${quotation.id}`);
   for (const requirement of checklist.requirements) {
+    // Supplier quotes are COMPUTED from governed supplier quotations and refuse hand-attached
+    // evidence; this fixture puts nothing to suppliers, so the row is waived with a reason — the only
+    // way the product lets that requirement be excused — by the Commercial Manager, who holds
+    // `documents.requirement.waive` and did not prepare the offer.
+    if (requirement.type === 'VENDOR_QUOTE') {
+      await post(`/document-requirements/${requirement.id}/waive`, {
+        reason: 'Governed delivery fixture: this tender was not put to suppliers; sourcing is proved elsewhere',
+      }, waiver.headers);
+      continue;
+    }
     for (let index = 0; index < requirement.requiredCount; index += 1) {
       await post(`/document-requirements/${requirement.id}/evidence`, {
-        type: requirement.type === 'VENDOR_QUOTE' ? 'EXTERNAL_REFERENCE' : 'DOCUMENT_ID',
+        type: 'DOCUMENT_ID',
         reference: `${title}-${requirement.type}-${index + 1}`,
       });
     }

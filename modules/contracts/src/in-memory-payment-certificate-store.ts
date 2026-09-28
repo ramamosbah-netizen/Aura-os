@@ -20,6 +20,12 @@ export class InMemoryPaymentCertificateStore implements PaymentCertificateStore 
     this.rows.set(cert.id, { ...cert });
   }
 
+  async revalueDraftWithClient(_tx: TxHandle | null, cert: PaymentCertificate): Promise<void> {
+    const current = await this.get(cert.id);
+    if (!current || current.status !== 'draft') throw new Error(`only a draft certificate can be revalued (certificate ${cert.id} is ${current?.status ?? 'missing'})`);
+    return this.update(cert);
+  }
+
   async updateWithClient(_tx: TxHandle | null, cert: PaymentCertificate): Promise<void> {
     return this.update(cert);
   }

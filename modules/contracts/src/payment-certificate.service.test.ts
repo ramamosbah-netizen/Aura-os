@@ -6,6 +6,7 @@ import { InMemoryIpcLineStore } from './in-memory-ipc-line-store';
 import { InMemoryContractStore } from './in-memory-contract-store';
 import { ContractService } from './contract.service';
 import { makeContract } from './domain/contract';
+import type { ClaimableItem, IpcValuationSource } from './ipc-valuation.port';
 
 // PaymentCertificateService sits directly on the money cycle — it computes retention, advance
 // recovery and the net payable, and its `certified` transition is what triggers the automatic AR
@@ -17,7 +18,7 @@ const events = () =>
 const access = { assert: () => {}, assertApprovalAuthority: () => {} } as unknown as AccessService;
 const commands = { register: () => {} } as unknown as never;
 
-async function harness(contractValue = 1_000_000, audit?: { log: ReturnType<typeof vi.fn> }) {
+async function harness(contractValue = 1_000_000, audit?: { log: ReturnType<typeof vi.fn> }, valuation?: IpcValuationSource) {
   const contractStore = new InMemoryContractStore();
   const contracts = new ContractService(contractStore, events(), tx, commands, access);
   // Seeded straight into the store: ContractService.create dispatches through the CommandBus,
@@ -34,6 +35,7 @@ async function harness(contractValue = 1_000_000, audit?: { log: ReturnType<type
     access,
     undefined,
     audit as any,
+    valuation ?? null,
   );
   return { svc, contract, eventStore, audit };
 }
@@ -133,19 +135,105 @@ describe('PaymentCertificateService — only one certificate open at a time', ()
   });
 });
 
+// ── J5-02: an awarded contract is valued by its measured lines (owner, 2026-09-28) ───────────────
+const item = (over: Partial<ClaimableItem> = {}): ClaimableItem => ({
+  frozenItemKey: 'TENDER|boq-rev|CAM-1', boqItemId: 'CAM-1', description: 'IP camera, 4MP dome', unit: 'no', rate: 1_000,
+  soldQuantity: 100, installed: 40, certified: 0, eligible: 40, blockedReason: null, ...over,
+});
+const awardOf = (items: ClaimableItem[]): IpcValuationSource => ({
+  basis: async () => ({ known: true, basis: { projectId: 'project-1', projectName: 'Marina Tower ELV', items } }),
+});
+const CABLE = item({ frozenItemKey: 'TENDER|boq-rev|CBL-1', boqItemId: 'CBL-1', description: 'Cat6 cable', unit: 'm', rate: 12, installed: 500, eligible: 500 });
+const measured = (valuation: IpcValuationSource = awardOf([item(), CABLE])) => harness(1_000_000, undefined, valuation);
+const open = (svc: PaymentCertificateService, contractId: string) => svc.create({ tenantId: 't1', contractId, retentionPercent: 10, retentionCapPercent: 5 });
+
+describe('PaymentCertificateService — measured valuation (J5-02)', () => {
+  it('values the certificate by its lines at the frozen awarded rate — the QS types quantities only', async () => {
+    const { svc, contract } = await measured();
+    const ipc = await open(svc, contract.id);
+    expect(ipc).toMatchObject({ valuation: 'measured', previousWorkDone: 0, cumulativeWorkDone: 0 });
+    const cams = await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 30 });
+    expect(cams).toMatchObject({ projectId: 'project-1', boqItemId: 'CAM-1', description: 'IP camera, 4MP dome', unit: 'no', rate: 1_000, amount: 30_000 });
+    await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CBL-1', quantity: 250 });
+    const revalued = (await svc.get(ipc.id))!;
+    // 30 × 1,000 + 250 × 12 = 33,000; 10% retention (under the 5% cap of 50,000) leaves 29,700.
+    expect(revalued).toMatchObject({ cumulativeWorkDone: 33_000, grossToDate: 33_000, retentionToDate: 3_300, netThisCertificate: 29_700 });
+  });
+
+  it('refuses a typed work-done figure on a contract valued by its lines', async () => {
+    const { svc, contract } = await measured();
+    await expect(svc.create({ tenantId: 't1', contractId: contract.id, cumulativeWorkDone: 500_000 }))
+      .rejects.toThrow(/cannot be typed for a contract valued by its measured lines/);
+  });
+
+  it('bounds a claim by what is installed less what is certified, across lines on the same certificate', async () => {
+    const { svc, contract } = await measured(awardOf([item({ installed: 40, certified: 15, eligible: 25 })]));
+    const ipc = await open(svc, contract.id);
+    await expect(svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 26 }))
+      .rejects.toThrow(/exceeds what is eligible .*40 no installed less 15 certified leaves 25/);
+    await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 20 });
+    await expect(svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 6 }))
+      .rejects.toThrow(/20 is already on IPC-001/);
+  });
+
+  it('refuses an item the award cannot value or the ledger cannot certify, and one the award does not hold', async () => {
+    const { svc, contract } = await measured(awardOf([item(), item({ frozenItemKey: 'K-UNMAPPED', description: 'PoE switch', blockedReason: 'it is mapped to a work package on the project' })]));
+    const ipc = await open(svc, contract.id);
+    await expect(svc.addLine({ certificateId: ipc.id, frozenItemKey: 'K-UNMAPPED', quantity: 1 }))
+      .rejects.toThrow(/PoE switch can only be claimed once it is mapped to a work package/);
+    await expect(svc.addLine({ certificateId: ipc.id, frozenItemKey: 'K-NOWHERE', quantity: 1 })).rejects.toThrow(/not found/);
+  });
+
+  it('takes lines only while the certificate is a draft', async () => {
+    const { svc, contract } = await measured();
+    const ipc = await open(svc, contract.id);
+    await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 1 });
+    await svc.changeStatus(ipc.id, 'submitted');
+    await expect(svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 1 }))
+      .rejects.toThrow(/only a draft certificate can take measured lines/);
+  });
+
+  it('builds the next certificate on the work the previous one certified', async () => {
+    const { svc, contract } = await measured();
+    const first = await open(svc, contract.id);
+    await svc.addLine({ certificateId: first.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 10 });
+    await svc.changeStatus(first.id, 'submitted');
+    await svc.changeStatus(first.id, 'certified');
+    const second = await open(svc, contract.id);
+    expect(second).toMatchObject({ previousWorkDone: 10_000, cumulativeWorkDone: 10_000, netThisCertificate: 0 });
+    await svc.addLine({ certificateId: second.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 5 });
+    // 15,000 to date, 1,500 retention → 13,500 net to date, less 9,000 certified before.
+    expect(await svc.get(second.id)).toMatchObject({ cumulativeWorkDone: 15_000, netThisCertificate: 4_500 });
+  });
+
+  it('keeps a typed figure for a contract whose award froze no priced items, and refuses lines there', async () => {
+    const { svc, contract } = await harness(1_000_000, undefined, { basis: async () => ({ known: true, basis: null }) });
+    await expect(svc.create({ tenantId: 't1', contractId: contract.id })).rejects.toThrow(/cumulativeWorkDone is required/);
+    const ipc = await svc.create({ tenantId: 't1', contractId: contract.id, cumulativeWorkDone: 100 });
+    expect(ipc.valuation).toBe('typed');
+    await expect(svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 1 }))
+      .rejects.toThrow(/can only be added to a certificate valued by them/);
+  });
+
+  it('refuses rather than guesses when the award or the ledger cannot be read', async () => {
+    const { svc, contract } = await harness(1_000_000, undefined, { basis: async () => ({ known: false, reason: 'the quantity ledger could not be reached' }) });
+    await expect(open(svc, contract.id)).rejects.toThrow(/could not be read: the quantity ledger could not be reached/);
+  });
+});
+
 describe('PaymentCertificateService — certified event line identity', () => {
-  it('carries each IPC line id into contracts.ipc.certified without collapsing lines', async () => {
-    const { svc, contract, eventStore } = await harness();
-    const ipc = await raise(svc, contract.id, 100);
-    const first = await svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-1', description: 'Cable', quantity: 4, unit: 'm', rate: 10 });
-    const second = await svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-2', description: 'Tray', quantity: 2, unit: 'm', rate: 20 });
+  it('carries each IPC line into contracts.ipc.certified with its frozen item, rate and amount', async () => {
+    const { svc, contract, eventStore } = await measured();
+    const ipc = await open(svc, contract.id);
+    const first = await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 4 });
+    const second = await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CBL-1', quantity: 2 });
     await svc.changeStatus(ipc.id, 'submitted');
     await svc.changeStatus(ipc.id, 'certified');
     const calls = (eventStore.appendWithClient as any).mock.calls;
     const emitted = calls.flatMap((call: any[]) => call[1] ?? []).find((event: any) => event.type === 'contracts.ipc.certified');
     expect(emitted.payload.lines).toEqual(expect.arrayContaining([
-      expect.objectContaining({ ipcLineId: first.id, projectId: 'project-1', boqItemId: 'BOQ-1', quantity: 4 }),
-      expect.objectContaining({ ipcLineId: second.id, projectId: 'project-1', boqItemId: 'BOQ-2', quantity: 2 }),
+      expect.objectContaining({ ipcLineId: first.id, projectId: 'project-1', boqItemId: 'CAM-1', frozenItemKey: 'TENDER|boq-rev|CAM-1', quantity: 4, rate: 1_000, amount: 4_000 }),
+      expect.objectContaining({ ipcLineId: second.id, projectId: 'project-1', boqItemId: 'CBL-1', frozenItemKey: 'TENDER|boq-rev|CBL-1', quantity: 2, rate: 12, amount: 24 }),
     ]));
   });
 
@@ -159,18 +247,11 @@ describe('PaymentCertificateService — certified event line identity', () => {
     expect(await svc.changeStatus(ipc.id, 'certified')).toEqual(certified);
   });
 
-  it('rejects a missing certification unit instead of defaulting evidence', async () => {
-    const { svc, contract } = await harness();
-    const ipc = await raise(svc, contract.id, 100);
-    await expect(svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-1', description: 'Cable', quantity: 1, unit: null }))
-      .rejects.toThrow(/unit is required/);
-  });
-
   it('records one tenant/actor/source audit for certification and none on replay', async () => {
     const audit = { log: vi.fn().mockResolvedValue(undefined) };
-    const { svc, contract } = await harness(1_000_000, audit);
-    const ipc = await raise(svc, contract.id, 100);
-    const line = await svc.addLine({ certificateId: ipc.id, projectId: 'project-1', boqItemId: 'BOQ-1', description: 'Cable', quantity: 2, unit: 'm', rate: 10 });
+    const { svc, contract } = await harness(1_000_000, audit, awardOf([item(), CABLE]));
+    const ipc = await open(svc, contract.id);
+    const line = await svc.addLine({ certificateId: ipc.id, frozenItemKey: 'TENDER|boq-rev|CBL-1', quantity: 2 });
     await svc.changeStatus(ipc.id, 'submitted');
     const certified = await svc.changeStatus(ipc.id, 'certified', 'certifier-1');
     await svc.changeStatus(ipc.id, 'certified', 'certifier-1');
@@ -183,3 +264,4 @@ describe('PaymentCertificateService — certified event line identity', () => {
     );
   });
 });
+

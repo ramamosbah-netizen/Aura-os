@@ -103,8 +103,8 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     await http.post('/api/v1/projects/delivery-item-maps').send({ projectId: project!.id, frozenItemKey: frozen.frozenItemKey, wbsNodeId: wbs.id }).expect(201);
     await http.post('/api/v1/site/installations').send({ projectId: project!.id, boqItemId: item.id, date: '2026-09-01', description: TITLE, quantity: 40, unit: 'nr' }).expect(201);
 
-    const certificate = (await http.post('/api/v1/contracts/certificates').set('x-e2e-actor', MAKER).send({ contractId: contract!.id, cumulativeWorkDone: 4000, reference: `C4-${tender.id}` }).expect(201)).body;
-    const line = (await http.post(`/api/v1/contracts/certificates/${certificate.id}/lines`).set('x-e2e-actor', MAKER).send({ projectId: project!.id, boqItemId: item.id, description: TITLE, quantity: 30, unit: 'nr', rate: 100 }).expect(201)).body;
+    const certificate = (await http.post('/api/v1/contracts/certificates').set('x-e2e-actor', MAKER).send({ contractId: contract!.id, reference: `C4-${tender.id}` }).expect(201)).body;
+    const line = (await http.post(`/api/v1/contracts/certificates/${certificate.id}/lines`).set('x-e2e-actor', MAKER).send({ frozenItemKey: frozen.frozenItemKey, quantity: 30 }).expect(201)).body;
     expect(line.id).toBeTruthy();
     await http.patch(`/api/v1/contracts/certificates/${certificate.id}/status`).set('x-e2e-actor', CERTIFIER).send({ status: 'certified' }).expect(200);
 

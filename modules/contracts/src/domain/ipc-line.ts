@@ -15,9 +15,12 @@ export interface IpcLine {
   projectId: Id;
   /** The BOQ (measured) item this line certifies — the Quantity Ledger key. */
   boqItemId: Id;
+  /** The frozen award item the line claims (J5-02). Null on lines entered before that existed. */
+  frozenItemKey: string | null;
   description: string;
   quantity: number;
   unit: string;
+  /** The frozen awarded unit rate — read from the award, never typed (J5-02). */
   rate: number;
   /** Gross measure for this line: quantity × rate. */
   amount: number;
@@ -30,6 +33,7 @@ export interface NewIpcLine {
   certificateId: Id;
   projectId: Id;
   boqItemId: Id;
+  frozenItemKey?: string | null;
   description: string;
   quantity: number;
   /** Authoritative unit from the frozen delivery item. Certification must not infer/default it. */
@@ -53,6 +57,7 @@ export function makeIpcLine(input: NewIpcLine): IpcLine {
     certificateId: input.certificateId,
     projectId: input.projectId,
     boqItemId: input.boqItemId,
+    frozenItemKey: input.frozenItemKey ?? null,
     description: input.description.trim(),
     quantity,
     unit: input.unit.trim(),

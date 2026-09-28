@@ -8,7 +8,8 @@ class CreateCertificateDto {
   @IsString() contractId!: string;
   @IsOptional() @IsString() periodStart?: string;
   @IsOptional() @IsString() periodEnd?: string;
-  @IsNumber() cumulativeWorkDone!: number;
+  /** Typed valuation only; a contract valued by its measured lines refuses it (J5-02). */
+  @IsOptional() @IsNumber() cumulativeWorkDone?: number;
   @IsOptional() @IsNumber() materialsOnSite?: number;
   @IsOptional() @IsNumber() retentionPercent?: number;
   @IsOptional() @IsNumber() retentionCapPercent?: number;
@@ -16,13 +17,20 @@ class CreateCertificateDto {
   @IsOptional() @IsString() reference?: string;
 }
 
+/**
+ * A measured line NAMES a frozen award item and a quantity (J5-02). The project, the unit, the rate
+ * and the description are the award's. The retired fields are still declared so that sending one is
+ * REFUSED rather than silently stripped by the whitelist pipe — a caller who typed a rate must be
+ * told it was not used.
+ */
 class AddIpcLineDto {
-  @IsString() projectId!: string;
-  @IsString() boqItemId!: string;
-  @IsString() description!: string;
+  @IsString() frozenItemKey!: string;
   @IsNumber() quantity!: number;
-  @IsString() unit!: string;
   @IsOptional() @IsNumber() rate?: number;
+  @IsOptional() @IsString() unit?: string;
+  @IsOptional() @IsString() projectId?: string;
+  @IsOptional() @IsString() boqItemId?: string;
+  @IsOptional() @IsString() description?: string;
 }
 
 const VALID: CertificateStatus[] = ['draft', 'submitted', 'certified', 'paid', 'rejected'];
@@ -38,7 +46,9 @@ export class PaymentCertificatesController {
   @Post()
   create(@Body() dto: CreateCertificateDto): Promise<PaymentCertificate> {
     if (!dto?.contractId) throw new BadRequestException('contractId is required');
-    if (!(Number(dto.cumulativeWorkDone) >= 0)) throw new BadRequestException('cumulativeWorkDone must be zero or positive');
+    if (dto.cumulativeWorkDone !== undefined && !(Number(dto.cumulativeWorkDone) >= 0)) {
+      throw new BadRequestException('cumulativeWorkDone must be zero or positive');
+    }
     const ctx = this.tenant.get();
     return this.certificates.create({
       tenantId: ctx.tenantId,
@@ -46,7 +56,7 @@ export class PaymentCertificatesController {
       contractId: dto.contractId,
       periodStart: dto.periodStart ?? null,
       periodEnd: dto.periodEnd ?? null,
-      cumulativeWorkDone: Number(dto.cumulativeWorkDone),
+      cumulativeWorkDone: dto.cumulativeWorkDone === undefined ? undefined : Number(dto.cumulativeWorkDone),
       materialsOnSite: dto.materialsOnSite,
       retentionPercent: dto.retentionPercent,
       retentionCapPercent: dto.retentionCapPercent,
@@ -81,6 +91,15 @@ export class PaymentCertificatesController {
     return this.certificates.getContractSummary(ctx.tenantId, contractId);
   }
 
+  /**
+   * What a certificate on this contract may claim: the frozen award items of its project, each with
+   * its unit, rate, installed and certified quantities and what is still eligible (J5-02).
+   */
+  @Get('claimable/:contractId')
+  claimable(@Param('contractId', ParseUuidOr404Pipe) contractId: string) {
+    return this.certificates.claimable(this.tenant.get().tenantId, contractId);
+  }
+
   @Get(':id')
   async get(@Param('id', ParseUuidOr404Pipe) id: string): Promise<PaymentCertificate> {
     const found = await this.certificates.get(id);
@@ -88,25 +107,18 @@ export class PaymentCertificatesController {
     return found;
   }
 
-  /** Add a valuation line (a BOQ item's certified quantity × rate) to a draft IPC. On certification
-   *  each line posts its quantity to the Quantity Ledger as the item's INVOICED position. */
+  /** Measure a frozen award item on a draft IPC. On certification each line posts its quantity to
+   *  the Quantity Ledger as the item's CERTIFIED position. */
   @Post(':id/lines')
   @Permissions('contracts.certificate.lines')
   addLine(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddIpcLineDto): Promise<IpcLine> {
-    if (!dto?.projectId) throw new BadRequestException('projectId is required');
-    if (!dto?.boqItemId) throw new BadRequestException('boqItemId is required');
-    if (!dto?.description?.trim()) throw new BadRequestException('description is required');
+    const typed = (['rate', 'unit', 'projectId', 'boqItemId', 'description'] as const).filter((k) => dto?.[k] !== undefined);
+    if (typed.length) {
+      throw new BadRequestException(`${typed.join(', ')} cannot be typed on a measured line — the project, unit, rate and description are the frozen award's; send frozenItemKey and quantity`);
+    }
+    if (!dto?.frozenItemKey?.trim()) throw new BadRequestException('frozenItemKey is required');
     if (!(Number(dto.quantity) > 0)) throw new BadRequestException('quantity must be positive');
-    if (!dto?.unit?.trim()) throw new BadRequestException('unit is required; certification unit evidence cannot be inferred');
-    return this.certificates.addLine({
-      certificateId: id,
-      projectId: dto.projectId,
-      boqItemId: dto.boqItemId,
-      description: dto.description,
-      quantity: Number(dto.quantity),
-      unit: dto.unit ?? null,
-      rate: dto.rate,
-    });
+    return this.certificates.addLine({ certificateId: id, frozenItemKey: dto.frozenItemKey.trim(), quantity: Number(dto.quantity) });
   }
 
   @Get(':id/lines')

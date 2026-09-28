@@ -605,4 +605,14 @@ export class QuantityLedgerService {
     const txns = await this.store.listForBoqItem(tenantId, boqItemId);
     return quantityPosition(boqItemId, txns);
   }
+
+  /**
+   * The same position within ONE project. Money is claimed per project: an item id that another
+   * project also carries must not lend this one its installed or certified quantities (J5-02).
+   * Uncapped, like `position` — a capped read summed is a wrong number, not a partial one.
+   */
+  async positionInProject(tenantId: string, projectId: string, boqItemId: string): Promise<QuantityPosition> {
+    const txns = (await this.store.listForBoqItem(tenantId, boqItemId)).filter((t) => t.projectId === projectId);
+    return quantityPosition(boqItemId, txns);
+  }
 }

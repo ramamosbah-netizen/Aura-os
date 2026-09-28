@@ -19,6 +19,11 @@ export interface PaymentCertificateStore {
   update(cert: PaymentCertificate): Promise<void>;
   /** Update on a caller-owned transaction (atomic with its event); null tx falls back to update. */
   updateWithClient(tx: TxHandle | null, cert: PaymentCertificate): Promise<void>;
+  /**
+   * Write a DRAFT certificate's recomputed value (J5-02: its measured lines changed). Refuses a
+   * certificate that is no longer a draft — a submitted or certified value is not rewritten.
+   */
+  revalueDraftWithClient(tx: TxHandle | null, cert: PaymentCertificate): Promise<void>;
   get(id: Id): Promise<PaymentCertificate | null>;
   list(filter?: CertificateFilter): Promise<PaymentCertificate[]>;
   listPaged(filter: CertificateFilter, page: PageParams): Promise<Page<PaymentCertificate>>;

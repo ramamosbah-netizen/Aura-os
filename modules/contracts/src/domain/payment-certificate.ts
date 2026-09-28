@@ -8,6 +8,12 @@ import { type Id, newId, moneyNumber } from '@aura/shared';
 // so a spine consumer (e.g. finance AR) can raise the client invoice from the certified event alone.
 
 export type CertificateStatus = 'draft' | 'submitted' | 'certified' | 'paid' | 'rejected';
+/**
+ * How the certificate's work done is valued (J5-02, owner's decision of 2026-09-28):
+ *   measured — by its lines: previous work done + Σ line quantity × the frozen awarded rate
+ *   typed    — by the cumulative figure the QS entered (a contract whose award froze no rates)
+ */
+export type CertificateValuation = 'measured' | 'typed';
 
 export interface PaymentCertificate {
   id: Id;
@@ -25,6 +31,9 @@ export interface PaymentCertificate {
   reference: string | null;
   periodStart: string | null; // date-only
   periodEnd: string | null; // date-only
+  valuation: CertificateValuation;
+  /** Measured: the cumulative work done certified before this certificate, which its lines add to. */
+  previousWorkDone: number;
   // ── inputs (all cumulative "to date") ──
   cumulativeWorkDone: number; // gross value of work executed to date
   materialsOnSite: number; // value of materials on site to date
@@ -107,6 +116,8 @@ export interface NewPaymentCertificate {
   retentionCapPercent?: number;
   advanceRecoveredToDate?: number;
   previousCertifiedNet?: number;
+  valuation?: CertificateValuation;
+  previousWorkDone?: number;
   createdBy?: Id | null;
 }
 
@@ -140,6 +151,8 @@ export function makePaymentCertificate(input: NewPaymentCertificate): PaymentCer
     accountId: input.accountId ?? null,
     accountName: input.accountName ?? null,
     sequence: input.sequence,
+    valuation: input.valuation ?? 'typed',
+    previousWorkDone: round2(Number(input.previousWorkDone ?? 0)),
     reference: input.reference?.trim() || `IPC-${String(input.sequence).padStart(3, '0')}`,
     periodStart: input.periodStart ?? null,
     periodEnd: input.periodEnd ?? null,
@@ -159,6 +172,35 @@ export function makePaymentCertificate(input: NewPaymentCertificate): PaymentCer
     certifiedBy: null,
     certifiedAt: null,
   };
+}
+
+/**
+ * A measured certificate's value, set by its lines: work done = previous work done + Σ the lines'
+ * amounts (each quantity × the frozen awarded rate), and the retention / advance / net maths runs on
+ * that exactly as it runs on a typed figure. Only a draft is revalued — once submitted, the figure
+ * is what is under review.
+ */
+export function applyMeasuredWork(cert: PaymentCertificate, linesValue: number): PaymentCertificate {
+  if (cert.valuation !== 'measured') throw new Error(`only a certificate valued by measured lines can be revalued from them — ${cert.reference ?? cert.id} is valued by a typed figure`);
+  if (cert.status !== 'draft') throw new Error(`only a draft certificate can be revalued (certificate ${cert.reference ?? cert.id} is ${cert.status})`);
+  const work = round2(cert.previousWorkDone + (Number(linesValue) || 0));
+  const math = computeCertificate({
+    contractValue: cert.contractValue,
+    cumulativeWorkDone: work,
+    materialsOnSite: cert.materialsOnSite,
+    retentionPercent: cert.retentionPercent,
+    retentionCapPercent: cert.retentionCapPercent,
+    advanceRecoveredToDate: cert.advanceRecoveredToDate,
+    previousCertifiedNet: cert.previousCertifiedNet,
+  });
+  return { ...cert, cumulativeWorkDone: work, ...math };
+}
+
+/** The latest certificate that counts — certified or paid — whose cumulative figures a new one builds on. */
+export function latestIssued(certs: PaymentCertificate[]): PaymentCertificate | null {
+  return certs
+    .filter((c) => c.status === 'certified' || c.status === 'paid')
+    .reduce<PaymentCertificate | null>((acc, c) => (!acc || c.sequence > acc.sequence ? c : acc), null);
 }
 
 export interface CertificateSummary {

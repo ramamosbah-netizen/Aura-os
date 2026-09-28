@@ -3266,16 +3266,16 @@
       "source": "apps/api/src/events/cross-module-subscriber.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "PARTIAL",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
         "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Fresh contract tests retained measured IPC lines with BOQ references, quantities and rates; fresh PostgreSQL certification proof persisted one governed certified fact. Project quantity authority/UI entry remain only partially proved.",
+      "currentBehavior": "AN IPC ON AN AWARDED CONTRACT IS VALUED BY ITS MEASURED LINES AT THE FROZEN AWARDED RATE (owner's decision, 2026-09-28). A certificate records how it is valued (migration 0397): 'measured' when the contract's project carries frozen award items with rates, 'typed' otherwise. Measured: it starts from the work done the previous certificate certified, the QS adds lines naming a frozen award item and a quantity only — the project, unit, rate and description are the award's, and a typed rate, unit, project, item or description is refused 400 — and each line revalues the draft (work done = previous + Σ quantity × awarded rate; retention, advance and net as before). A claim is bounded by what is installed on the ledger less what earlier certificates certified (older unclassified invoiced quantity counts as certified), per project; an item not mapped to delivery, unpriced or without a unit says why it cannot be claimed; a line is taken only while the certificate is a draft (service, and a trigger). A typed figure on a measured contract is refused; a contract with no frozen rates keeps the typed figure. The award and the ledger are read through an app-layer port that reports a failure instead of reading it as zero. Proved: the browser against PostgreSQL on a governed project (ipc-measured-lines.spec.ts) — the QS raises the IPC with no typed figure, the unit and rate are the award's, 50 is refused as more than the 40 eligible, 30 values the certificate at 30 × the awarded rate, a typed rate is refused, a different Commercial Manager certifies, the ledger holds 30 certified and 10 remain eligible; 20 service tests; the in-memory J2–J6 audit. NOT RE-PROVED: the denial of line authoring to a role without contracts.certificate.lines, and the printed IPC.",
       "acceptanceProof": "QS measures eligible canonical installed quantities, freezes IPC lines and reconciles previous/current/cumulative values to the quantity ledger."
     },
     {
@@ -7820,13 +7820,13 @@
     },
     {
       "id": "J5-02",
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "originalClassification": "INCOMPLETE",
       "currentBehavior": "شاشة IPC تعالج قيمًا إجمالية دون سطور الكميات الموجودة في API؛ مشروع الدخول لا يحدد العقد.",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J5-02",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "COM-03"
       ],
@@ -7843,7 +7843,7 @@
       "expectedOperationalBehavior": "Measured IPC lines works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "QS measures eligible canonical installed quantities, freezes IPC lines and reconciles previous/current/cumulative values to the quantity ledger."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING: the IPC screen handled gross values without the quantity lines the API had, and the project it was entered from did not determine the contract. NOW, on the owner's decision of 2026-09-28 that measured lines set an IPC's value: opened with a project, the screen is that project's contract (no picker; that contract's certificates only; a link to all contracts), and on an awarded contract it takes no typed work-done figure — it shows the frozen award items with their awarded rate, sold, installed, certified and eligible quantities and lets the QS measure them on the open draft, the lines and the value they set shown beside them. Proved in the browser against PostgreSQL (ipc-measured-lines.spec.ts) by u-e2e-qs and certified by u-e2e-qs2 on a governed project with 40 of 100 installed: locked contract, no work-done field, 50 refused as over the 40 eligible, 30 accepted at the awarded rate and valuing the certificate at 30 × that rate, a typed rate refused by the API, certification posting 30 certified to the ledger and leaving 10 eligible. On the way the governed-delivery browser fixture was repaired: its supplier-quote requirement is computed and refuses hand-attached evidence, so a Commercial Manager — not the preparer — waives it with a reason; activity-progress and planned-output, which use the fixture, pass again. STATED: J5-01 (the AR draft from these lines) is a separate change; the PostgreSQL certification proof c4-certification still stops at the API-side fixture's evidence step, recorded as its own task."
     },
     {
       "id": "J6-01",

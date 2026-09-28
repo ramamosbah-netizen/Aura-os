@@ -6,16 +6,16 @@ import type { IpcLineStore } from './ipc-line-store';
 
 interface Row {
   id: string; tenant_id: string; company_id: string | null; certificate_id: string;
-  project_id: string; boq_item_id: string; description: string;
+  project_id: string; boq_item_id: string; frozen_item_key: string | null; description: string;
   quantity: string | number; unit: string; rate: string | number; amount: string | number; created_at: Date | string;
 }
 
-const COLS = 'id, tenant_id, company_id, certificate_id, project_id, boq_item_id, description, quantity, unit, rate, amount, created_at';
+const COLS = 'id, tenant_id, company_id, certificate_id, project_id, boq_item_id, description, quantity, unit, rate, amount, created_at, frozen_item_key';
 
 function toLine(r: Row): IpcLine {
   return {
     id: r.id, tenantId: r.tenant_id, companyId: r.company_id, certificateId: r.certificate_id,
-    projectId: r.project_id, boqItemId: r.boq_item_id, description: r.description,
+    projectId: r.project_id, boqItemId: r.boq_item_id, frozenItemKey: r.frozen_item_key ?? null, description: r.description,
     quantity: Number(r.quantity), unit: r.unit, rate: Number(r.rate), amount: Number(r.amount),
     createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
   };
@@ -35,8 +35,8 @@ export class PostgresIpcLineStore implements IpcLineStore {
 
   private insert(executor: Pool | PoolClient, l: IpcLine): Promise<unknown> {
     return executor.query(
-      `insert into public.aura_contracts_ipc_lines (${COLS}) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [l.id, l.tenantId, l.companyId, l.certificateId, l.projectId, l.boqItemId, l.description, l.quantity, l.unit, l.rate, l.amount, l.createdAt],
+      `insert into public.aura_contracts_ipc_lines (${COLS}) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [l.id, l.tenantId, l.companyId, l.certificateId, l.projectId, l.boqItemId, l.description, l.quantity, l.unit, l.rate, l.amount, l.createdAt, l.frozenItemKey ?? null],
     );
   }
 

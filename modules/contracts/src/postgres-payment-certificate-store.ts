@@ -29,6 +29,8 @@ interface Row {
   net_certified_to_date: string | number;
   net_this_certificate: string | number;
   status: string;
+  valuation: string;
+  previous_work_done: string | number;
   created_by: string | null;
   certified_by: string | null;
   certified_at: Date | string | null;
@@ -38,7 +40,7 @@ interface Row {
 // period_start/period_end are DATE columns — select them as ::text so PG returns the calendar
 // string directly (avoids the toISOString() UTC day-shift drift seen elsewhere).
 const COLS =
-  'id, tenant_id, company_id, contract_id, contract_title, contract_value, account_id, account_name, sequence, reference, period_start::text, period_end::text, cumulative_work_done, materials_on_site, retention_percent, retention_cap_percent, advance_recovered_to_date, previous_certified_net, gross_to_date, retention_to_date, net_certified_to_date, net_this_certificate, status, created_by, certified_by, certified_at, created_at';
+  'id, tenant_id, company_id, contract_id, contract_title, contract_value, account_id, account_name, sequence, reference, period_start::text, period_end::text, cumulative_work_done, materials_on_site, retention_percent, retention_cap_percent, advance_recovered_to_date, previous_certified_net, gross_to_date, retention_to_date, net_certified_to_date, net_this_certificate, status, created_by, certified_by, certified_at, created_at, valuation, previous_work_done';
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 const isoOrNull = (v: Date | string | null): string | null => (v == null ? null : iso(v));
@@ -54,6 +56,8 @@ function rowToCert(r: Row): PaymentCertificate {
     accountId: r.account_id,
     accountName: r.account_name,
     sequence: Number(r.sequence),
+    valuation: (r.valuation ?? 'typed') as PaymentCertificate['valuation'],
+    previousWorkDone: Number(r.previous_work_done ?? 0),
     reference: r.reference,
     periodStart: r.period_start,
     periodEnd: r.period_end,
@@ -76,7 +80,7 @@ function rowToCert(r: Row): PaymentCertificate {
 }
 
 const INSERT_COLS =
-  'id, tenant_id, company_id, contract_id, contract_title, contract_value, account_id, account_name, sequence, reference, period_start, period_end, cumulative_work_done, materials_on_site, retention_percent, retention_cap_percent, advance_recovered_to_date, previous_certified_net, gross_to_date, retention_to_date, net_certified_to_date, net_this_certificate, status, created_by, certified_by, certified_at, created_at';
+  'id, tenant_id, company_id, contract_id, contract_title, contract_value, account_id, account_name, sequence, reference, period_start, period_end, cumulative_work_done, materials_on_site, retention_percent, retention_cap_percent, advance_recovered_to_date, previous_certified_net, gross_to_date, retention_to_date, net_certified_to_date, net_this_certificate, status, created_by, certified_by, certified_at, created_at, valuation, previous_work_done';
 
 /** Durable payment certificates (IPCs) on Postgres (`aura_contracts_payment_certificates`). */
 export class PostgresPaymentCertificateStore implements PaymentCertificateStore {
@@ -94,14 +98,26 @@ export class PostgresPaymentCertificateStore implements PaymentCertificateStore 
   private insert(executor: Pool | PoolClient, c: PaymentCertificate): Promise<unknown> {
     return executor.query(
       `INSERT INTO public.aura_contracts_payment_certificates (${INSERT_COLS})
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27)`,
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)`,
       [
         c.id, c.tenantId, c.companyId, c.contractId, c.contractTitle, c.contractValue, c.accountId, c.accountName,
         c.sequence, c.reference, c.periodStart, c.periodEnd, c.cumulativeWorkDone, c.materialsOnSite, c.retentionPercent,
         c.retentionCapPercent, c.advanceRecoveredToDate, c.previousCertifiedNet, c.grossToDate, c.retentionToDate,
         c.netCertifiedToDate, c.netThisCertificate, c.status, c.createdBy, c.certifiedBy, c.certifiedAt, c.createdAt,
+        c.valuation, c.previousWorkDone,
       ],
     );
+  }
+
+  async revalueDraftWithClient(tx: TxHandle | null, c: PaymentCertificate): Promise<void> {
+    const executor: Pool | PoolClient = tx === null ? this.pool : (tx as PoolClient);
+    const res = await executor.query(
+      `UPDATE public.aura_contracts_payment_certificates
+          SET cumulative_work_done=$2, gross_to_date=$3, retention_to_date=$4, net_certified_to_date=$5, net_this_certificate=$6
+        WHERE id=$1 AND status='draft'`,
+      [c.id, c.cumulativeWorkDone, c.grossToDate, c.retentionToDate, c.netCertifiedToDate, c.netThisCertificate],
+    );
+    if (res.rowCount !== 1) throw new Error(`only a draft certificate can be revalued (certificate ${c.id})`);
   }
 
   async update(c: PaymentCertificate): Promise<void> {

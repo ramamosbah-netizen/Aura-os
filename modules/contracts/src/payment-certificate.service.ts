@@ -1,15 +1,18 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull } from '@aura/shared';
+import { type AccessTarget, assertSameTenant, type Id, makeEvent, type OrgLevel, sameTenantOrNull, sumMoney } from '@aura/shared';
 import { AccessService, AuditService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 import {
   CERTIFICATE_EVENT,
   type CertificateStatus,
   type CertificateSummary,
   type PaymentCertificate,
+  applyMeasuredWork,
   certificateSummary,
+  latestIssued,
   makePaymentCertificate,
   priorCertifiedNet,
 } from './domain/payment-certificate';
+import { IPC_VALUATION_SOURCE, type ContractValuationBasis, type IpcValuationSource, isMeasured } from './ipc-valuation.port';
 import { PAYMENT_CERTIFICATE_STORE, type CertificateFilter, type PaymentCertificateStore } from './payment-certificate-store';
 import { IPC_LINE_STORE, type IpcLineStore } from './ipc-line-store';
 import { type IpcLine, makeIpcLine } from './domain/ipc-line';
@@ -22,7 +25,11 @@ export interface CreateCertificateInput {
   contractId: Id;
   periodStart?: string | null;
   periodEnd?: string | null;
-  cumulativeWorkDone: number;
+  /**
+   * Typed valuation only. A contract valued by its measured lines refuses a typed figure: its work
+   * done is what its lines add to the previous certificate (J5-02).
+   */
+  cumulativeWorkDone?: number | null;
   materialsOnSite?: number;
   retentionPercent?: number;
   retentionCapPercent?: number;
@@ -55,31 +62,86 @@ export class PaymentCertificateService {
     // design:paramtypes and Nest injects null silently, which would make the guards inert.
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(AuditService) private readonly audit: AuditService | null = null,
+    // The frozen award and the ledger, answered by the composition root (J5-02).
+    @Optional() @Inject(IPC_VALUATION_SOURCE) private readonly valuation: IpcValuationSource | null = null,
   ) {}
 
-  /** Add a valuation line to a draft IPC — a BOQ item's certified quantity × rate. On certification
-   *  the Quantity Ledger accrues these as the items' INVOICED position. */
-  async addLine(input: { certificateId: Id; projectId: Id; boqItemId: Id; description: string; quantity: number; unit?: string | null; rate?: number }): Promise<IpcLine> {
+  /** What the contract's award lets a certificate claim; null when the contract is valued as typed. */
+  private async basisOf(tenantId: Id, contractId: Id): Promise<ContractValuationBasis | null> {
+    if (!this.valuation) return null;
+    const answer = await this.valuation.basis(tenantId, contractId);
+    // Refused, never guessed: an unreadable ledger would otherwise read as "nothing certified yet".
+    if (!answer.known) throw new Error(`the contract's award and quantities could not be read: ${answer.reason} — a measured certificate cannot be valued without them`);
+    return answer.basis;
+  }
+
+  /** The frozen award items of the contract's project, with what each may still claim (J5-02). */
+  async claimable(tenantId: Id, contractId: Id): Promise<{ valuation: 'measured' | 'typed'; basis: ContractValuationBasis | null }> {
+    const contract = await this.contracts.get(contractId);
+    if (!contract || contract.tenantId !== tenantId) throw new Error(`contract ${contractId} not found`);
+    const basis = await this.basisOf(tenantId, contractId);
+    return { valuation: isMeasured(basis) ? 'measured' : 'typed', basis };
+  }
+
+  /**
+   * MEASURE A FROZEN AWARD ITEM ON A DRAFT IPC (J5-02, owner's decision of 2026-09-28).
+   *
+   * The QS names the item and the quantity; nothing else. The project is the contract's, the unit
+   * and the rate are the award's, the description is the award's — a caller can no longer type a
+   * rate, point the line at another project or post quantities to an item the award does not hold.
+   * The quantity is bounded by what is installed less what earlier certificates certified, and the
+   * certificate's work done is then what its lines add to the previous certificate.
+   *
+   * On certification each line posts its quantity to the Quantity Ledger as the item's CERTIFIED
+   * position.
+   */
+  async addLine(input: { certificateId: Id; frozenItemKey: string; quantity: number }): Promise<IpcLine> {
     const cert = assertSameTenant(
       await this.store.get(input.certificateId),
       this.tenant?.boundTenantId(),
       'payment certificate',
       input.certificateId,
     );
-    if (!input.unit?.trim()) throw new Error('unit is required; certification unit evidence cannot be inferred');
+    const label = cert.reference ?? cert.id;
+    if (cert.status !== 'draft') throw new Error(`only a draft certificate can take measured lines (${label} is ${cert.status})`);
+    if (cert.valuation !== 'measured') {
+      throw new Error(`measured lines can only be added to a certificate valued by them — the award behind ${label} froze no priced items, so it is valued by its typed figure`);
+    }
+    const quantity = Number(input.quantity);
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('the certified quantity must be positive');
+    const basis = await this.basisOf(cert.tenantId, cert.contractId);
+    if (!basis) throw new Error(`the award behind ${label} could not be found — measured lines cannot be valued without it`);
+    const item = basis.items.find((i) => i.frozenItemKey === input.frozenItemKey);
+    if (!item) throw new Error(`frozen award item ${input.frozenItemKey} not found on the contract's project`);
+    if (item.blockedReason || item.rate === null || !item.unit) {
+      throw new Error(`${item.description} can only be claimed once ${item.blockedReason ?? (item.rate === null ? 'the award has priced it' : 'the award names its unit')}`);
+    }
+    const existing = await this.lineStore.listByCertificate(cert.id, cert.tenantId);
+    const alreadyHere = existing.filter((l) => l.frozenItemKey === item.frozenItemKey).reduce((s, l) => s + l.quantity, 0);
+    if (quantity + alreadyHere > item.eligible + 1e-9) {
+      throw new Error(
+        `the claimed quantity exceeds what is eligible for ${item.description}: ${item.installed} ${item.unit} installed less ${item.certified} certified leaves ${item.eligible}`
+        + (alreadyHere > 0 ? `, of which ${alreadyHere} is already on ${label}` : ''),
+      );
+    }
     const line = makeIpcLine({
       tenantId: cert.tenantId,
       companyId: cert.companyId,
       certificateId: cert.id,
-      projectId: input.projectId,
-      boqItemId: input.boqItemId,
-      description: input.description,
-      quantity: input.quantity,
-      unit: input.unit,
-      rate: input.rate,
+      projectId: basis.projectId,
+      boqItemId: item.boqItemId,
+      frozenItemKey: item.frozenItemKey,
+      description: item.description,
+      quantity,
+      unit: item.unit,
+      rate: item.rate,
     });
-    await this.lineStore.add(line);
-    this.logger.log(`IPC ${cert.reference} line: ${line.quantity} ${line.unit} of "${line.description}" (BOQ ${line.boqItemId})`);
+    const revalued = applyMeasuredWork(cert, Number(sumMoney([...existing.map((l) => l.amount), line.amount])));
+    await this.tx.run(async (handle) => {
+      await this.lineStore.addWithClient(handle, line);
+      await this.store.revalueDraftWithClient(handle, revalued);
+    });
+    this.logger.log(`IPC ${label} line: ${line.quantity} ${line.unit} of "${line.description}" @ ${line.rate} → work done ${revalued.cumulativeWorkDone}`);
     return line;
   }
 
@@ -103,6 +165,20 @@ export class PaymentCertificateService {
 
     // Sequence + paid-to-date baseline are derived from this contract's existing certificates.
     const existing = await this.store.list({ tenantId: input.tenantId, contractId: input.contractId, limit: 500 });
+
+    // HOW THIS CERTIFICATE IS VALUED (J5-02). An award that froze priced items values the work by
+    // measured lines, starting from what the previous certificate certified; the QS adds lines rather
+    // than typing a figure. Without such an award the QS types the cumulative figure, as before.
+    const basis = await this.basisOf(input.tenantId, contract.id);
+    const measured = isMeasured(basis);
+    const previousWorkDone = latestIssued(existing)?.cumulativeWorkDone ?? 0;
+    const typed = input.cumulativeWorkDone;
+    if (measured && typed !== undefined && typed !== null && Number(typed) !== previousWorkDone) {
+      throw new Error('cumulative work done cannot be typed for a contract valued by its measured lines — add the measured quantities to the certificate instead');
+    }
+    if (!measured && (typed === undefined || typed === null)) {
+      throw new Error('cumulativeWorkDone is required for a contract whose award froze no priced items');
+    }
 
     // Only ONE certificate may be open at a time — the double-billing guard.
     //
@@ -139,7 +215,9 @@ export class PaymentCertificateService {
       reference: input.reference ?? null,
       periodStart: input.periodStart ?? null,
       periodEnd: input.periodEnd ?? null,
-      cumulativeWorkDone: input.cumulativeWorkDone,
+      cumulativeWorkDone: measured ? previousWorkDone : Number(typed),
+      valuation: measured ? 'measured' : 'typed',
+      previousWorkDone,
       materialsOnSite: input.materialsOnSite,
       retentionPercent: input.retentionPercent,
       retentionCapPercent: input.retentionCapPercent,
@@ -224,7 +302,8 @@ export class PaymentCertificateService {
     // certified quantity as INVOICED (the last link in the delivery chain).
     const lines = certifying
       ? (await this.lineStore.listByCertificate(updated.id, updated.tenantId)).map((l) => ({
-          ipcLineId: l.id, projectId: l.projectId, boqItemId: l.boqItemId, quantity: l.quantity, unit: l.unit, description: l.description,
+          ipcLineId: l.id, projectId: l.projectId, boqItemId: l.boqItemId, frozenItemKey: l.frozenItemKey, quantity: l.quantity, unit: l.unit,
+          rate: l.rate, amount: l.amount, description: l.description,
         }))
       : [];
 

@@ -146,9 +146,9 @@ describe('quantity ledger — the physical twin of the Cost Ledger (HTTP)', () =
 
     // Certify a remeasurement IPC for 350 of the 400 approved (50 pending billing) → INVOICED.
     const contract = fixture.contract;
-    const ipc = (await http.post('/api/v1/contracts/certificates').send({ contractId: contract.id, cumulativeWorkDone: 200_000 }).expect(201)).body;
+    const ipc = (await http.post('/api/v1/contracts/certificates').send({ contractId: contract.id }).expect(201)).body;
     await http.post(`/api/v1/contracts/certificates/${ipc.id}/lines`)
-      .send({ projectId: project.id, boqItemId, description: 'Blockwork L1', quantity: 350, unit: 'nr', rate: 25 }).expect(201);
+      .send({ frozenItemKey: fixture.item.frozenItemKey, quantity: 350 }).expect(201);
     await http.patch(`/api/v1/contracts/certificates/${ipc.id}/status`).set('x-e2e-actor', 'qty-checker').send({ status: 'certified' }).expect(200);
 
     // The whole chain, each figure = SUM(ledger) by type; the gaps are the operational signals.

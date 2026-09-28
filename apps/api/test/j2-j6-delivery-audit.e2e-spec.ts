@@ -139,8 +139,8 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
 
     // J5: certified, billed and paid remain separate. This audits the handoff
     // into AR; it does not simulate bank settlement or PostgreSQL persistence.
-    const certificate = await post('/contracts/certificates', { contractId: contract.id, cumulativeWorkDone: 1000, reference: 'AUD-IPC-1' });
-    await post(`/contracts/certificates/${certificate.id}/lines`, { projectId, boqItemId: item.id, description: 'CCTV cameras', quantity: 10, unit: 'no', rate: 100 });
+    const certificate = await post('/contracts/certificates', { contractId: contract.id, reference: 'AUD-IPC-1' });
+    await post(`/contracts/certificates/${certificate.id}/lines`, { frozenItemKey: frozen.frozenItemKey, quantity: 10 });
     await checker.patch(`/api/v1/contracts/certificates/${certificate.id}/status`).send({ status: 'certified' }).expect(200);
     const invoices = await eventually(() => get('/finance/customer-invoices'), rows => rows.some((r: any) => r.contractRef === contract.id));
     const invoice = invoices.find((r: any) => r.contractRef === contract.id);

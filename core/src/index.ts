@@ -42,6 +42,7 @@ export * from './dms/dms.service';
 export * from './dms/document-store';
 export * from './dms/document-storage';
 export * from './dms/file-type-policy';
+export * from './dms/virus-scanner';
 export * from './dms/in-memory-document-store';
 export * from './dms/postgres-document-store';
 export * from './dms/document-permission-store';

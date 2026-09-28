@@ -46,6 +46,7 @@ import { PostgresDocumentPermissionStore } from './dms/postgres-document-permiss
 import { InMemoryDocumentStore } from './dms/in-memory-document-store';
 import { PostgresDocumentStore } from './dms/postgres-document-store';
 import { DOCUMENT_STORAGE } from './dms/document-storage';
+import { VIRUS_SCANNER, virusScannerFromEnv } from './dms/virus-scanner';
 import { LocalDocumentStorage } from './dms/local-document-storage';
 import { documentStorageFromEnv } from './dms/supabase-document-storage';
 import { WORKFLOW_STORE } from './workflow/workflow-store';
@@ -203,6 +204,8 @@ import { SagaOrchestratorService } from './workflow/saga-orchestrator.service';
         new OutboxRelay(pool, bus, tenant),
     },
     { provide: DOCUMENT_STORAGE, useFactory: () => documentStorageFromEnv(() => new LocalDocumentStorage()) },
+    // J1-06 — central, fail-closed virus scanning for every upload (CLAMAV_HOST / CLAMAV_PORT).
+    { provide: VIRUS_SCANNER, useFactory: () => virusScannerFromEnv(process.env) },
     {
       provide: DOCUMENT_STORE,
       inject: [PG_POOL],

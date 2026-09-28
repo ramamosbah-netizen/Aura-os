@@ -605,6 +605,17 @@ jobs:
           --health-interval 5s
           --health-timeout 3s
           --health-retries 20
+      # J1-06 — every upload is scanned by ClamAV, fail-closed: without a daemon this tier's uploads
+      # would all be refused. The image fetches its signature database on first start.
+      clamav:
+        image: clamav/clamav:stable
+        ports: ['3310:3310']
+        options: >-
+          --health-cmd "clamdcheck.sh"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 40
+          --health-start-period 120s
     env:
       # Two credentials, deliberately separate, exactly as a deployment has them: schema work belongs
       # to the owner, and the application runs as the least-privilege role the RLS policies are
@@ -612,6 +623,8 @@ jobs:
       # than the migration gate already does.
       DATABASE_URL: postgres://aura_app:aura_app_ci@localhost:5432/aura?sslmode=disable
       PGPASSWORD: aura
+      CLAMAV_HOST: localhost
+      CLAMAV_PORT: '3310'
     steps:
       - uses: actions/checkout@v4
 

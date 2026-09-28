@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import {
   DMS_EVENT,
   DocumentAccessDeniedError,
@@ -23,6 +23,7 @@ import { EVENT_STORE, type EventStore } from '../events/event-store';
 import { DOCUMENT_STORE, type DocumentFilter, type DocumentStore, type DocumentWithVersions } from './document-store';
 import { DOCUMENT_STORAGE, type DocumentStorage } from './document-storage';
 import { checkFileType } from './file-type-policy';
+import { ScannerUnavailableError, VIRUS_SCANNER, type VirusScanner, virusScannerFromEnv } from './virus-scanner';
 import { DOCUMENT_PERMISSION_STORE, type DocumentPermissionStore } from './document-permission-store';
 import {
   DocumentAccessResolver,
@@ -53,7 +54,37 @@ export class DmsService {
     @Inject(EVENT_STORE) private readonly events: EventStore,
     @Inject(DOCUMENT_PERMISSION_STORE) private readonly permissions: DocumentPermissionStore,
     private readonly access_: DocumentAccessResolver,
+    // Central virus scanning (J1-06). Absent, the environment decides — and outside NODE_ENV=test
+    // that is a refusal of every upload, never a pass (fail-closed).
+    @Optional() @Inject(VIRUS_SCANNER) private readonly scanner: VirusScanner | null = null,
   ) {}
+
+  private scannerInUse(): VirusScanner {
+    return this.scanner ?? virusScannerFromEnv();
+  }
+
+  /**
+   * REFUSE WHAT THE SCANNER DOES NOT CLEAR (J1-06). Run after the type check and before a byte is
+   * stored, in the one method pair every upload passes through. An infected file is refused with
+   * the signature named; a scanner that gives no verdict refuses the upload as unavailable (503) —
+   * the file is never stored unscanned.
+   */
+  private async assertClean(file: DocumentFileInput): Promise<string> {
+    const scanner = this.scannerInUse();
+    let verdict;
+    try {
+      verdict = await scanner.scan(file.data);
+    } catch (err) {
+      const reason = err instanceof ScannerUnavailableError ? err.message : `the virus scanner failed (${(err as Error).message})`;
+      this.logger.error(`Refused "${file.fileName}" unscanned: ${reason}`);
+      throw new ServiceUnavailableException(`"${file.fileName}" cannot be stored: ${reason} — uploads are refused until the scanner answers`);
+    }
+    if (!verdict.clean) {
+      this.logger.warn(`Refused "${file.fileName}": ${scanner.engine} found ${verdict.signature}`);
+      throw new Error(`"${file.fileName}" cannot be stored: the virus scanner found ${verdict.signature}`);
+    }
+    return scanner.engine;
+  }
 
   /** What may this actor do with this document, and why? Delegated — this service holds no policy. */
   access(documentId: Id, actor: DocumentActor): Promise<AccessDecision> {
@@ -131,6 +162,7 @@ export class DmsService {
     // storage through this method, so a rule placed here cannot be bypassed by a new upload route
     // that forgets to call it. `input.kind` carries the business category the file was filed under.
     this.assertStorableType(input.kind, file);
+    const scannedBy = await this.assertClean(file);
     const doc = makeDocument(input);
     const key = storageKeyFor(doc, 1, file.fileName);
     const stored = await this.storage.put(key, file.data, file.contentType);
@@ -158,6 +190,7 @@ export class DmsService {
           title: doc.title,
           fileName: version.fileName,
           version: 1,
+          scannedBy,
           linkedTo: { aggregateType: doc.aggregateType, aggregateId: doc.aggregateId },
         },
       }),
@@ -198,6 +231,7 @@ export class DmsService {
     // A revision is judged by the same rule as the original: the category is the document's, so
     // an executable cannot arrive as "version 2" of an approved drawing.
     this.assertStorableType(existing.document.kind, file);
+    await this.assertClean(file);
     const v = nextVersionNumber(existing.document);
     const key = storageKeyFor(existing.document, v, file.fileName);
     const stored = await this.storage.put(key, file.data, file.contentType);

@@ -621,7 +621,7 @@
 | Commercial / Certification | COM-02 | UNVERIFIED |
 | Commercial / Certification | COM-03 | PARTIAL |
 | Commercial / Certification | COM-04 | PARTIAL |
-| Commercial / Certification | COM-05 | DISCONNECTED |
+| Commercial / Certification | COM-05 | PARTIAL |
 | Commercial / Certification | COM-06 | PARTIAL |
 | Commercial / Certification | COM-07 | UNVERIFIED |
 | Commercial / Certification | COM-08 | BACKEND_ONLY |
@@ -682,7 +682,7 @@
 | Finance / Collection | COM-02 | UNVERIFIED |
 | Finance / Collection | COM-03 | PARTIAL |
 | Finance / Collection | COM-04 | PARTIAL |
-| Finance / Collection | COM-05 | DISCONNECTED |
+| Finance / Collection | COM-05 | PARTIAL |
 | Finance / Collection | COM-06 | PARTIAL |
 | Finance / Collection | COM-07 | UNVERIFIED |
 | Finance / Collection | COM-08 | BACKEND_ONLY |

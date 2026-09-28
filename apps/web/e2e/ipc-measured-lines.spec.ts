@@ -4,7 +4,7 @@ import { canBuildGovernedDelivery, createGovernedDelivery } from './governed-del
 import { memberPassword, signInAs } from './project-member-harness';
 
 /**
- * J5-02 — THE IPC IS OPENED FROM THE PROJECT AND VALUED BY MEASURED LINES AT THE AWARDED RATE.
+ * J5-02 / J5-01 — THE IPC IS OPENED FROM THE PROJECT, VALUED BY MEASURED LINES AT THE AWARDED RATE, AND BILLED BY THEM.
  *
  * The finding: the IPC screen worked in gross values with none of the quantity lines the API had,
  * and entering from a project did not determine the contract. Owner's decision (2026-09-28): when a
@@ -97,6 +97,30 @@ test('J5-02 — an IPC opened from the project is valued by measured lines at th
       await request.get(`${API}/contracts/certificates/claimable/${project.contractId}`, { headers: admin }), 'claimable');
     expect(claimable.valuation).toBe('measured');
     expect(claimable.basis.items.find((i) => i.frozenItemKey === frozen.frozenItemKey)).toMatchObject({ certified: 30, eligible: 10 });
+
+    // ── J5-01: the AR draft bills the measured line with its lineage, and deducts the retention ──
+    const certified = await ok<{ netThisCertificate: number; retentionToDate: number }>(await request.get(`${API}/contracts/certificates/${cert.id}`, { headers: admin }), 'the certified figures');
+    type InvoiceLine = { quantity: number; unit?: string; unitPrice: number; lineNet: number; kind?: string; frozenItemKey?: string; sourceIpcId?: string; sourceIpcLineId?: string; projectId?: string; description: string };
+    let invoice: { id: string; status: string; subtotal: number; total: number; projectId: string | null; lines: InvoiceLine[] } | undefined;
+    await expect.poll(async () => {
+      const all = await ok<Array<typeof invoice & { contractRef: string }>>(await request.get(`${API}/finance/customer-invoices`, { headers: admin }), 'AR invoices');
+      invoice = all.find((i) => i!.contractRef === project.contractId);
+      return Boolean(invoice);
+    }, { timeout: 30_000, message: 'certifying the IPC drafts the AR invoice' }).toBe(true);
+    expect(invoice!).toMatchObject({ status: 'draft', projectId: delivery.projectId, subtotal: certified.netThisCertificate });
+    expect(invoice!.lines[0]).toMatchObject({ quantity: 30, unit: frozen.unit, unitPrice: rate, frozenItemKey: frozen.frozenItemKey, sourceIpcId: cert.id, projectId: delivery.projectId });
+    expect(invoice!.lines.find((l) => l.kind === 'deduction'), 'the retention held is deducted, not hidden').toMatchObject({ lineNet: -certified.retentionToDate });
+
+    // The printed tax invoice shows both.
+    await certifier.goto(`/finance/customer-invoices/${invoice!.id}/print`);
+    await expect(certifier.locator('body')).toContainText('certified on');
+    await expect(certifier.locator('body')).toContainText('Retention held on');
+
+    // Issuing it is what posts the Billed quantity, from the line's frozen identity.
+    await ok(await request.post(`${API}/finance/customer-invoices/${invoice!.id}/issue`, { headers: admin, data: {} }), 'issuing the invoice');
+    const billed = await expect.poll(async () => (await ok<{ billed: number | null }>(
+      await request.get(`${API}/projects/quantity-ledger/position/${delivery.boqItemId}`, { headers: admin }), 'position')).billed, { timeout: 30_000 });
+    await billed.toBe(30);
     await certifierContext.close();
   } finally {
     await delivery.cleanup();

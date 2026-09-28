@@ -18,11 +18,11 @@ import {
 import { PurchaseOrderLineService, PurchaseOrderService, PurchaseRequestService } from '@aura/procurement';
 import { TenderService, EstimateService, EstimateSourcingService, type Tender } from '@aura/tendering';
 import { AccountService, OpportunityService, QuotationService, SignalService, PreAwardPackageService, computeQuotationPricing, computeEstimationPricing } from '@aura/crm';
-import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType } from '@aura/finance';
+import { CustomerInvoiceService, InvoiceService, AccountService as FinanceAccountService, JournalService, type AccountType, type NewCustomerInvoiceLine } from '@aura/finance';
 import { HseService } from '@aura/hse';
 import { AmcService } from '@aura/amc';
 import { GoodsReceiptService } from '@aura/inventory';
-import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney, newId, businessDate } from '@aura/shared';
+import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mulMoney, newId, businessDate, sumMoney } from '@aura/shared';
 
 /**
  * Cross-module event subscriber — the reactor that wires the deal chain.
@@ -47,6 +47,24 @@ import { type DomainEvent, projectCompletionSignal, contractCompletionSignal, mu
  *   amc.workorder.completed ──► (auto-draft a client AR invoice for the billable service visit)
  *   finance.invoice.paid    ──► (cash settlement only; never project AC)
  */
+/**
+ * What an IPC moves besides its measured work, as invoice lines (J5-01): materials on site charged
+ * (or deducted when they fall), retention held deducted (or charged when released), advance
+ * recovered deducted. A zero movement adds no line.
+ */
+function movementLines(reference: string, m: { materials: number; retention: number; advance: number }): NewCustomerInvoiceLine[] {
+  const out: NewCustomerInvoiceLine[] = [];
+  const line = (description: string, amount: number, deductWhenPositive: boolean): void => {
+    if (!amount) return;
+    const deduction = deductWhenPositive ? amount > 0 : amount < 0;
+    out.push({ description, quantity: 1, unitPrice: Math.abs(amount), vatRate: 5, ...(deduction ? { kind: 'deduction' as const } : {}) });
+  };
+  line(`Materials on site — movement on ${reference}`, m.materials, false);
+  line(m.retention >= 0 ? `Retention held on ${reference}` : `Retention released on ${reference}`, m.retention, true);
+  line(`Advance payment recovered on ${reference}`, m.advance, true);
+  return out;
+}
+
 @Injectable()
 export class CrossModuleSubscriber implements OnModuleInit {
   private readonly logger = new Logger('CrossModule');
@@ -1009,21 +1027,56 @@ export class CrossModuleSubscriber implements OnModuleInit {
           this.logger.log(`↩ ipc.certified → AR invoice ${invoiceNumber} already exists, skipping`);
           return;
         }
+        /**
+         * J5-01 — A MEASURED CERTIFICATE IS BILLED BY ITS LINES. It used to be billed as one line of
+         * quantity 1 at the net, so issuing the invoice could post no Billed quantity and "what did
+         * we bill for this item" had no answer. Each certified line becomes a charge carrying its
+         * frozen item, project, contract and IPC line; the materials movement is charged and the
+         * retention and advance movements deducted, so the invoice bills exactly the net this
+         * certificate pays — which is checked, not assumed. A typed certificate has no quantities to
+         * carry and keeps its single line.
+         */
+        type CertifiedLine = { ipcLineId: string; projectId: string; boqItemId: string; frozenItemKey: string | null; quantity: number; unit: string; rate: number; amount: number; description: string };
+        const certifiedLines = (Array.isArray(p.lines) ? p.lines : []) as CertifiedLine[];
+        const movements = p.movements as { work: number; materials: number; retention: number; advance: number } | undefined;
+        const measured = p.valuation === 'measured' && certifiedLines.length > 0 && Boolean(movements) && certifiedLines.every((l) => l.frozenItemKey && l.rate > 0);
+        const lines: NewCustomerInvoiceLine[] = measured
+          ? [
+              ...certifiedLines.map((l) => ({
+                description: `${l.description} — certified on ${reference}`,
+                quantity: l.quantity,
+                unit: l.unit,
+                unitPrice: l.rate,
+                vatRate: 5,
+                projectId: l.projectId,
+                contractId,
+                frozenItemKey: l.frozenItemKey,
+                boqItemId: l.boqItemId,
+                sourceIpcId: e.aggregateId,
+                sourceIpcLineId: l.ipcLineId,
+                sourceRef: `ipc:${e.aggregateId}:line:${l.ipcLineId}`,
+              })),
+              ...movementLines(reference, movements!),
+            ]
+          : [{ description: `Interim Payment Certificate ${reference} — work certified to date`, quantity: 1, unitPrice: net, vatRate: 5 }];
+        if (measured) {
+          const billed = Number(sumMoney(lines.map((l) => (l.kind === 'deduction' ? -1 : 1) * Number(mulMoney(l.quantity, l.unitPrice)))));
+          if (billed !== net) {
+            this.logger.error(`ipc.certified → AR invoice ${invoiceNumber} NOT drafted: its lines bill ${billed} but the certificate pays ${net}`);
+            return;
+          }
+        }
+        const projectId = measured ? certifiedLines[0].projectId : null;
         const invoice = await this.customerInvoices.create({
           tenantId: e.tenantId,
           companyId: e.companyId,
           invoiceNumber,
+          accountId: account.id ?? null,
           customerName: account.name?.trim() || 'Client',
+          projectId,
           contractRef: contractId,
           issueDate: businessDate(),
-          lines: [
-            {
-              description: `Interim Payment Certificate ${reference} — work certified to date`,
-              quantity: 1,
-              unitPrice: net,
-              vatRate: 5,
-            },
-          ],
+          lines,
         });
         this.logger.log(
           `⚡ ipc.certified → auto-drafted AR invoice "${invoice.invoiceNumber}" for ${invoice.customerName} (net ${net}, total ${invoice.total})`,
@@ -1040,6 +1093,7 @@ export class CrossModuleSubscriber implements OnModuleInit {
         const invoice = await this.customerInvoices.get(e.aggregateId);
         if (!invoice || invoice.status !== 'issued') return;
         for (const line of invoice.lines) {
+          if (line.kind === 'deduction') continue; // retention / advance: money, not a billed quantity
           const projectId = line.projectId ?? invoice.projectId;
           const contractId = line.contractId ?? invoice.contractRef;
           if (!projectId || !line.frozenItemKey || !line.unit) {

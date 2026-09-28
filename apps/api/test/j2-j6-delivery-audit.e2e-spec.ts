@@ -150,9 +150,11 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const receipt = await post(`/finance/customer-invoices/${invoice.id}/receipts`, { amount: invoice.total });
     const afterBilling = await get(`/projects/quantity-ledger/position/${item.id}`);
     expect(receipt.status).toBe('paid');
-    // The auto-drafted aggregate invoice still has no frozen line identity for the Billed subscriber.
+    // J5-01: the auto-drafted invoice carries each certified line's frozen identity, so issuing it
+    // posts the Billed quantity (it used to be one lump line, and Billed stayed unknown).
     expect(afterBilling.sold).toBe(10);
-    expect(afterBilling.billed).toBeNull();
+    expect(afterBilling.billed).toBe(10);
+    expect(invoice.lines[0]).toMatchObject({ quantity: 10, unit: 'no', frozenItemKey: frozen.frozenItemKey, sourceIpcId: certificate.id });
     console.log('J5_BILLING_RECEIPT', JSON.stringify({ localReceiptStatus: receipt.status, amountReceived: receipt.amountPaid, quantityPosition: afterBilling, bankSettlementTested: false }));
 
     // J6: real domain evidence replaces obsolete manually ticked checklists.

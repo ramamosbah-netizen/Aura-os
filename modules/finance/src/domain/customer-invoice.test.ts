@@ -56,6 +56,32 @@ describe('makeCustomerInvoice', () => {
   });
 });
 
+// J5-01 — an IPC bills its measured lines and deducts retention and advance recovery.
+describe('deduction lines', () => {
+  it('subtract from the charges, VAT included, and stay out of the billed quantities', () => {
+    const inv = makeCustomerInvoice({
+      ...base,
+      lines: [
+        { description: 'IP camera — certified on IPC-001', quantity: 30, unit: 'no', unitPrice: 1_000, frozenItemKey: 'TENDER|rev|CAM-1', sourceIpcLineId: 'l-1' },
+        { description: 'Retention held on IPC-001', quantity: 1, unitPrice: 3_000, kind: 'deduction' },
+      ],
+    });
+    expect(inv.lines[1]).toMatchObject({ kind: 'deduction', lineNet: -3_000, lineVat: -150 });
+    expect(inv.lines[0].kind, 'a charge is written as before, with no kind').toBeUndefined();
+    expect(inv).toMatchObject({ subtotal: 27_000, vatTotal: 1_350, total: 28_350 });
+  });
+
+  it('may not carry delivery lineage — a deduction bills no quantity', () => {
+    expect(() => buildLine({ description: 'Retention', quantity: 1, unitPrice: 10, kind: 'deduction', frozenItemKey: 'K' }))
+      .toThrow('cannot carry delivery lineage');
+  });
+
+  it('may not take an invoice below zero — that is a credit note', () => {
+    expect(() => makeCustomerInvoice({ ...base, lines: [{ description: 'Work', quantity: 1, unitPrice: 100 }, { description: 'Deduction', quantity: 1, unitPrice: 101, kind: 'deduction' }] }))
+      .toThrow('cannot total below zero');
+  });
+});
+
 describe('lifecycle', () => {
   it('issues then takes a partial then final receipt', () => {
     let inv = issueInvoice(makeCustomerInvoice(base));

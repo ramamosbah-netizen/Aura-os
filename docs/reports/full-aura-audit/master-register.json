@@ -3324,7 +3324,7 @@
         "Commercial / Certification",
         "Finance / Collection"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "PARTIAL",
       "authority": "Contracts / Finance / Projects changes",
       "evidence": [
         "R-J26"
@@ -3332,16 +3332,16 @@
       "source": "apps/api/src/events/cross-module-subscriber.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
         "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Reused J5-01: IPC lines collapse to lump sum AR without frozen item lineage.",
+      "currentBehavior": "CERTIFIED LINES FLOW TO THE CUSTOMER INVOICE WITH THEIR LINEAGE, AND ISSUING IT POSTS THE BILLED QUANTITY. Certifying a measured IPC drafts the AR invoice line by line: each certified line is a charge at its awarded rate carrying its frozen item, project, contract, IPC and IPC line; the materials movement is charged and the retention and advance movements are DEDUCTED as their own line kind (a unit price may not be negative, a deduction carries no delivery lineage, and an invoice may not total below zero), so the invoice bills exactly the net the certificate pays — checked before drafting, and nothing is drafted when they disagree. Issuing the invoice posts each charge line's quantity to the ledger as BILLED from its frozen identity; deduction lines are skipped. A typed certificate keeps its single line, since it has no quantities to carry. Proved: the browser against PostgreSQL (ipc-measured-lines.spec.ts) — after a different Commercial Manager certifies 30 at the awarded rate, the drafted invoice carries that line with its lineage and the project, deducts the retention, totals the certificate's net, the printed tax invoice shows both, and issuing it posts 30 BILLED; reactor tests (the line-by-line draft with deductions, and no draft on a disagreement); invoice domain tests; the in-memory J2–J6 audit now reads Billed 10 where it recorded null. NOT RE-PROVED: who may issue the invoice (the permission is unchanged and not re-tested here); cash settlement and bank reconciliation remain outside.",
       "acceptanceProof": "Certified lines flow to invoice and billed projection without changing quantity authority."
     },
     {
@@ -7793,13 +7793,13 @@
     },
     {
       "id": "J5-01",
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "originalClassification": "DISCONNECTED",
       "currentBehavior": "certified lines تتحول إلى AR lump sum دون frozen lineage؛ issued/paid لا ينتجان Billed quantity معلومة.",
       "evidence": "REUSED 2026-09-14-j2-j6-delivery-and-user-experience-audit.md J5-01",
       "sourceReport": "2026-09-14-j2-j6-delivery-and-user-experience-audit.md",
       "kind": "confirmed prior finding",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "capabilityIds": [
         "COM-05"
       ],
@@ -7816,7 +7816,7 @@
       "expectedOperationalBehavior": "Invoice lineage and issue works with canonical inputs, governed permissions and usable handoff",
       "severity": "HIGH",
       "remediationDependency": "Canonical upstream lineage and applicable Wave 1–5 work",
-      "acceptanceProof": "Certified lines flow to invoice and billed projection without changing quantity authority."
+      "acceptanceProof": "MET ON ITS OWN FINDING. THE FINDING: certified lines became an AR lump sum (one line, quantity 1, at the net) with no frozen lineage, so issuing and paying the invoice produced no known Billed quantity. NOW a certified measured IPC is billed line by line — each line at its awarded rate with its frozen item, project, contract and IPC line — with the retention and advance movements as deduction lines, so the invoice totals exactly the net the certificate pays (checked; nothing is drafted on a disagreement), and issuing it posts the Billed quantity from each line's frozen identity; paying it still posts nothing (paid is not billed). Proved in the browser against PostgreSQL on a governed project (ipc-measured-lines.spec.ts): 30 certified at the awarded rate → the drafted invoice carries that line with its lineage and project and deducts the retention, subtotal = the certificate's net → the printed tax invoice shows the line and the deduction → issuing it posts 30 BILLED to the ledger. The in-memory J2–J6 audit, which recorded Billed null after issue and payment, now reads 10. STATED: bank settlement and reconciliation are outside this proof, as the finding itself noted; a typed (unmeasured) certificate still bills one line because it has no quantities."
     },
     {
       "id": "J5-02",
@@ -9157,13 +9157,13 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 53,
-      "PARTIAL": 74,
+      "PARTIAL": 75,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
-      "DISCONNECTED": 7,
+      "DISCONNECTED": 6,
       "WRONG_BEHAVIOR": 6,
       "UNREACHABLE": 0,
       "UNVERIFIED": 36,

@@ -329,7 +329,7 @@
 | Project Manager | COM-02 | UNVERIFIED | UNVERIFIED |
 | Project Manager | COM-03 | PARTIAL | UNVERIFIED |
 | Project Manager | COM-04 | PARTIAL | UNVERIFIED |
-| Project Manager | COM-05 | DISCONNECTED | UNVERIFIED |
+| Project Manager | COM-05 | PARTIAL | UNVERIFIED |
 | Project Manager | COM-06 | PARTIAL | UNVERIFIED |
 | Project Manager | COM-07 | UNVERIFIED | UNVERIFIED |
 | Project Manager | COM-08 | BACKEND_ONLY | UNVERIFIED |
@@ -539,7 +539,7 @@
 | Commercial Manager / QS | COM-02 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | COM-03 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | COM-04 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | COM-05 | DISCONNECTED | UNVERIFIED |
+| Commercial Manager / QS | COM-05 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | COM-06 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | COM-07 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | COM-08 | BACKEND_ONLY | UNVERIFIED |
@@ -784,7 +784,7 @@
 | Finance | COM-02 | UNVERIFIED | UNVERIFIED |
 | Finance | COM-03 | PARTIAL | UNVERIFIED |
 | Finance | COM-04 | PARTIAL | UNVERIFIED |
-| Finance | COM-05 | DISCONNECTED | UNVERIFIED |
+| Finance | COM-05 | PARTIAL | UNVERIFIED |
 | Finance | COM-06 | PARTIAL | UNVERIFIED |
 | Finance | COM-07 | UNVERIFIED | UNVERIFIED |
 | Finance | COM-08 | BACKEND_ONLY | UNVERIFIED |

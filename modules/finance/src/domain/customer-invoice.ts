@@ -7,6 +7,13 @@ import { type Id, newId, mulMoney, vatOf, sumMoney, addMoney, subMoney, convertM
  * Customer / project are snapshots, not joins (same philosophy as the AP invoice).
  */
 export type CustomerInvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'cancelled';
+/**
+ * A line CHARGES the customer or DEDUCTS from what is charged (J5-01). An interim payment certificate
+ * bills measured work at the awarded rates and then deducts the retention held and the advance
+ * recovered; a unit price may not be negative, so a deduction is its own kind: priced positive,
+ * counted negative, and carrying no delivery lineage because it bills no quantity.
+ */
+export type InvoiceLineKind = 'charge' | 'deduction';
 
 export interface CustomerInvoiceLine {
   /** Stable identity within the invoice; legacy JSONB lines may omit it. */
@@ -17,8 +24,10 @@ export interface CustomerInvoiceLine {
   unit?: string | null;
   unitPrice: number;
   vatRate: number; // percent, e.g. 5
-  lineNet: number; // quantity * unitPrice
+  lineNet: number; // quantity * unitPrice, negative on a deduction
   lineVat: number; // lineNet * vatRate/100
+  /** Absent on a charge (every line written before J5-01 is one). */
+  kind?: InvoiceLineKind;
   /** Optional immutable delivery lineage. Missing lineage remains UNKNOWN for Billed quantity. */
   projectId?: Id | null;
   contractId?: Id | null;
@@ -36,6 +45,7 @@ export interface NewCustomerInvoiceLine {
   unit?: string | null;
   unitPrice: number;
   vatRate?: number;
+  kind?: InvoiceLineKind;
   projectId?: Id | null;
   contractId?: Id | null;
   sourceIpcId?: Id | null;
@@ -129,15 +139,22 @@ export function buildLine(input: NewCustomerInvoiceLine): CustomerInvoiceLine {
   if (!Number.isFinite(qty) || qty <= 0) throw new Error('line quantity must be positive');
   if (!Number.isFinite(price) || price < 0) throw new Error('line unit price cannot be negative');
   if (!Number.isFinite(vatRate) || vatRate < 0) throw new Error('line vat rate cannot be negative');
-  const lineNet = mulMoney(qty, price);
+  const kind = input.kind ?? 'charge';
+  if (kind !== 'charge' && kind !== 'deduction') throw new Error('line kind must be charge or deduction');
+  if (kind === 'deduction' && (input.frozenItemKey || input.sourceIpcLineId || input.boqItemId)) {
+    throw new Error('a deduction line cannot carry delivery lineage — it bills no quantity');
+  }
+  const gross = Number(mulMoney(qty, price));
+  const lineNet = kind === 'deduction' ? -gross : gross;
   return {
     description: input.description.trim(),
     quantity: qty,
     ...(input.unit !== undefined ? { unit: input.unit?.trim() || null } : {}),
     unitPrice: price,
     vatRate,
-    lineNet: Number(lineNet),
+    lineNet,
     lineVat: Number(vatOf(lineNet, vatRate)),
+    ...(kind === 'deduction' ? { kind } : {}),
     ...(input.projectId !== undefined ? { projectId: input.projectId } : {}),
     ...(input.contractId !== undefined ? { contractId: input.contractId } : {}),
     ...(input.sourceIpcId !== undefined ? { sourceIpcId: input.sourceIpcId } : {}),
@@ -174,6 +191,7 @@ export function makeCustomerInvoice(input: NewCustomerInvoice): CustomerInvoice 
     throw new Error('invoice lineId values must be unique within an invoice');
   }
   const { subtotal, vatTotal, total } = computeTotals(lines);
+  if (total < 0) throw new Error('an invoice cannot total below zero — deductions larger than the charges belong on a credit note');
   const currency = (input.currency ?? 'AED').trim().toUpperCase();
   /**
    * A FOREIGN-CURRENCY INVOICE CANNOT BE CONSTRUCTED WITHOUT A RATE (FX-01). The default of 1 for a

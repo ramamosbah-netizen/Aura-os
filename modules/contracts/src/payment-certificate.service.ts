@@ -300,6 +300,20 @@ export class PaymentCertificateService {
 
     // On certification, carry the valuation lines so the Quantity Ledger posts each BOQ item's
     // certified quantity as INVOICED (the last link in the delivery chain).
+    // What THIS certificate moves, against the one it builds on (J5-01): the AR draft charges the
+    // measured lines and the materials movement, and deducts the retention and advance movements, so
+    // it bills exactly the net this certificate pays.
+    const prior = certifying
+      ? latestIssued((await this.store.list({ tenantId: updated.tenantId, contractId: updated.contractId, limit: 500 })).filter((c) => c.id !== updated.id))
+      : null;
+    const movements = certifying
+      ? {
+          work: Number(sumMoney([updated.cumulativeWorkDone, -(prior?.cumulativeWorkDone ?? 0)])),
+          materials: Number(sumMoney([updated.materialsOnSite, -(prior?.materialsOnSite ?? 0)])),
+          retention: Number(sumMoney([updated.retentionToDate, -(prior?.retentionToDate ?? 0)])),
+          advance: Number(sumMoney([updated.advanceRecoveredToDate, -(prior?.advanceRecoveredToDate ?? 0)])),
+        }
+      : null;
     const lines = certifying
       ? (await this.lineStore.listByCertificate(updated.id, updated.tenantId)).map((l) => ({
           ipcLineId: l.id, projectId: l.projectId, boqItemId: l.boqItemId, frozenItemKey: l.frozenItemKey, quantity: l.quantity, unit: l.unit,
@@ -321,6 +335,8 @@ export class PaymentCertificateService {
         status,
         netThisCertificate: updated.netThisCertificate,
         account: updated.accountId ? { id: updated.accountId, name: updated.accountName } : null,
+        valuation: updated.valuation,
+        ...(movements ? { movements } : {}),
         lines,
       },
     });

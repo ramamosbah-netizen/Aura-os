@@ -1048,6 +1048,48 @@ describe('CrossModuleSubscriber — deal chain automation (in-memory E2E)', () =
     expect(invoices[0].customerName).toBe('Acme Developments LLC');
   });
 
+  // J5-01 — a measured certificate is billed by its lines, not as one lump.
+  const measuredIpc = (net: number) => makeEvent({
+    type: 'contracts.ipc.certified',
+    tenantId,
+    companyId: null,
+    actorId: null,
+    aggregateType: 'contracts.ipc',
+    aggregateId: 'ipc-measured-1',
+    payload: {
+      account: { id: 'acct-1', name: 'Acme Developments LLC' },
+      netThisCertificate: net,
+      reference: 'IPC-002',
+      contractId: 'contract-xyz-12345678',
+      valuation: 'measured',
+      // 30 × 1,000 + 250 × 12 = 33,000 of work; 3,300 retention; 2,000 advance recovered → 27,700.
+      movements: { work: 33_000, materials: 0, retention: 3_300, advance: 2_000 },
+      lines: [
+        { ipcLineId: 'line-cam', projectId: 'project-1', boqItemId: 'CAM-1', frozenItemKey: 'TENDER|rev|CAM-1', quantity: 30, unit: 'no', rate: 1_000, amount: 30_000, description: 'IP camera' },
+        { ipcLineId: 'line-cbl', projectId: 'project-1', boqItemId: 'CBL-1', frozenItemKey: 'TENDER|rev|CBL-1', quantity: 250, unit: 'm', rate: 12, amount: 3_000, description: 'Cat6 cable' },
+      ],
+    },
+  });
+
+  it('bills a measured certificate line by line with its lineage, and deducts retention and advance', async () => {
+    // The certified-quantity reactor shares the event and needs delivery maps this harness does not
+    // wire; it rejects the publish, after the AR reactor (registered first) has drafted.
+    await h.bus.publish(measuredIpc(27_700)).catch(() => undefined);
+    const [invoice] = (await h.customerInvoices.list({ tenantId })).filter((i) => i.contractRef === 'contract-xyz-12345678');
+    expect(invoice).toMatchObject({ accountId: 'acct-1', projectId: 'project-1', subtotal: 27_700, total: 29_085 });
+    expect(invoice.lines).toEqual([
+      expect.objectContaining({ quantity: 30, unit: 'no', unitPrice: 1_000, projectId: 'project-1', contractId: 'contract-xyz-12345678', frozenItemKey: 'TENDER|rev|CAM-1', boqItemId: 'CAM-1', sourceIpcId: 'ipc-measured-1', sourceIpcLineId: 'line-cam' }),
+      expect.objectContaining({ quantity: 250, unit: 'm', unitPrice: 12, frozenItemKey: 'TENDER|rev|CBL-1', sourceIpcLineId: 'line-cbl' }),
+      expect.objectContaining({ kind: 'deduction', description: 'Retention held on IPC-002', lineNet: -3_300 }),
+      expect.objectContaining({ kind: 'deduction', description: 'Advance payment recovered on IPC-002', lineNet: -2_000 }),
+    ]);
+  });
+
+  it('drafts nothing when the lines would bill a different figure from the certificate', async () => {
+    await h.bus.publish(measuredIpc(27_000)).catch(() => undefined);
+    expect((await h.customerInvoices.list({ tenantId })).filter((i) => i.contractRef === 'contract-xyz-12345678')).toHaveLength(0);
+  });
+
   it('posts a balanced GL journal entry when an asset is disposed', async () => {
     const disposalEvent = makeEvent({
       type: 'assets.asset.disposed',

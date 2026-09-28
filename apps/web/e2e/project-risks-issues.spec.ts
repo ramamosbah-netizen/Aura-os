@@ -175,6 +175,66 @@ test('ending an issue demands a note, and resolved is kept apart from withdrawn'
   await expect(row).not.toContainText('Main contractor cleared the riser');
 });
 
+/**
+ * F-11 — AN OLDER REGISTER READ NEVER PUTS A RESOLVED ISSUE BACK ON SCREEN AS OPEN.
+ *
+ * The audit's finding: a resolution was persisted, the refresh showed it, and then an older register
+ * response still in flight landed afterwards and painted the issue open again. A passing run of the
+ * test above proves nothing about that — it is a question of ORDER, not state. So the order is forced:
+ * the page's first register read is captured while the issue is still open and HELD; the issue is
+ * resolved; a newer read (triggered by raising another issue on the same screen) lands and shows the
+ * resolution; only then is the stale response released. The screen must keep the newer state.
+ */
+test('F-11 — a stale register response arriving late does not reopen a resolved issue', async ({ page }) => {
+  const id = await createProject(page.request, `Issue ordering ${RUN}`);
+  const raised = await page.request.post('/api/projects/issues', {
+    data: { projectId: id, title: `Crane access blocked ${RUN}`, area: 'SAFETY', severity: 'major' },
+  });
+  expect(raised.ok(), await raised.text()).toBe(true);
+  const issue = (await raised.json()) as { id: string };
+
+  // Hold the FIRST register read, captured at request time, while the issue is still open.
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => { release = resolve; });
+  let heldSnapshot: string | null = null;
+  let first = true;
+  await page.route('**/api/projects/projects/*/risk-register', async (route) => {
+    if (!first) { await route.continue(); return; }
+    first = false;
+    const response = await route.fetch();
+    heldSnapshot = await response.text();
+    await released;
+    await route.fulfill({ response });
+  });
+
+  await openRegister(page, id);
+  await expect.poll(() => heldSnapshot, { timeout: 30_000 }).not.toBeNull();
+  expect(heldSnapshot, 'the held response is genuinely older: the issue is open in it').toContain('"status":"open"');
+
+  // The issue is resolved while that read is still in flight…
+  const resolved = await page.request.patch(`/api/projects/issues/${issue.id}/status`, {
+    data: { status: 'resolved', note: 'Crane relocated to the east gate' },
+  });
+  expect(resolved.ok(), await resolved.text()).toBe(true);
+
+  // …and a newer read lands, triggered by an ordinary action on the same screen.
+  const form = page.getByTestId('issue-authoring-form');
+  await form.getByLabel('Issue title').fill(`Second issue ${RUN}`);
+  await form.getByRole('button', { name: 'Raise issue' }).click();
+  const resolvedRow = page.getByTestId('issue-row').filter({ hasText: `Crane access blocked ${RUN}` });
+  await expect(resolvedRow).toContainText('resolved', { timeout: 30_000 });
+  await expect(page.getByTestId('issue-row').filter({ hasText: `Second issue ${RUN}` })).toBeVisible();
+
+  // Now the stale response arrives. It must be discarded, not painted.
+  const stale = page.waitForResponse((r) => r.url().includes('/risk-register') && r.request().method() === 'GET');
+  release();
+  await stale;
+  await page.waitForTimeout(500); // let React commit whatever it was going to commit
+  await expect(resolvedRow, 'the older read must not reopen the issue').toContainText('resolved');
+  await expect(resolvedRow).toContainText('Resolved: Crane relocated to the east gate');
+  await expect(page.getByTestId('issue-row').filter({ hasText: `Second issue ${RUN}` }), 'nor erase the newer issue').toBeVisible();
+});
+
 test('a register entry can be corrected, and correcting it never moves its status', async ({ page }) => {
   const id = await createProject(page.request, `Risk edit ${RUN}`);
   await openRegister(page, id);

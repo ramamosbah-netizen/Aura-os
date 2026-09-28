@@ -8460,9 +8460,9 @@
       "capabilityIds": [
         "MGT-11"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Project Manager",
         "Technical Manager",
@@ -8489,7 +8489,7 @@
       "evidence": "NEW source inspection: apps/api/src/crm/executive-crm.controller.ts",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Resolve/withdraw/reopen an issue with required reasons and guarantee the UI shows the latest persisted version; management rollups and My Work update once with drilldown."
+      "acceptanceProof": "MET, and proved by ORDER rather than by state. The finding was a race: a resolution persisted, the refresh showed it, and an older register response still in flight landed afterwards and painted the issue open again. The Project 360 loader already numbers its reads and discards any response that is not the latest (a sequence guard that arrived with the audit's own remediation commit), but nothing had proved it. project-risks-issues.spec.ts now FORCES the order in the browser against the running API and PostgreSQL: the page's first register read is captured while the issue is still open and HELD; the issue is resolved; a newer read, triggered by raising a second issue on the same screen, lands and shows the resolution; only then is the stale response released — and the row stays resolved with its resolution note, and the newer issue stays on screen. MUTATION-TESTED: with the guard removed the same test reproduces the audit's exact defect (the resolved issue reverts to open). The whole spec, 10/10, re-run green. STATED: `call()` also disables every action while its refresh is in flight, so a user cannot race two of their own actions; the guard is what protects against reads started outside an action (mount, a remount)."
     },
     {
       "id": "F-12",

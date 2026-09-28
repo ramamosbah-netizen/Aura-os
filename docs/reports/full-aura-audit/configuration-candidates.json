@@ -99,6 +99,15 @@
       "state": "invariant-by-design",
       "foundBy": "J5-02",
       "note": "Owner decision 2026-09-28. 'Configuration changes ≠ historical changes': the rate is the one frozen at award, whatever changes later."
+    },
+    {
+      "id": "CC-11",
+      "rule": "An inbound machine webhook (fleet telemetry) authenticates one tenant per deployment: one shared secret, one bound tenant.",
+      "where": "apps/api/src/fleet/telemetry-webhook.auth.ts (FLEET_TELEMETRY_WEBHOOK_SECRET, FLEET_TELEMETRY_TENANT_ID)",
+      "category": "system-configuration",
+      "state": "hardcoded",
+      "foundBy": "SEC-01 webhooks",
+      "note": "Right for JEET-first. A second company needs its own credential bound to its own tenant, issued and rotated from company settings. The signature check itself is a platform invariant and stays fail-closed."
     }
   ]
 }

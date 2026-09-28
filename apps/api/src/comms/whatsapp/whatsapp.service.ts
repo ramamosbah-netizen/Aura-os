@@ -40,9 +40,15 @@ export class WhatsAppService {
     let processed = 0;
     for (const entry of payload.entry ?? []) for (const change of entry.changes ?? []) {
       const value = change.value; const externalAccountId = value?.metadata?.phone_number_id; if (!externalAccountId) continue;
-      const account = await this.store.findProviderAccountByExternalAccountId(externalAccountId); if (!account) { this.logger.warn(`Ignoring webhook for unregistered phone number ${externalAccountId}`); continue; }
-      for (const raw of value?.messages ?? []) { if (await this.inbound(account, value?.contacts ?? [], raw)) processed++; }
-      for (const raw of value?.statuses ?? []) { if (await this.delivery(account.tenantId, account.id, raw)) processed++; }
+      const account = await this.store.findProviderAccountByExternalAccountId(externalAccountId); if (!account) { this.logger.warn(`Ignoring webhook for phone number ${externalAccountId}: not registered to exactly one WhatsApp account`); continue; }
+      // Everything after the routing runs INSIDE the owning tenant, so its writes pass that tenant's RLS —
+      // the webhook itself arrived with none. No actor: the sender is the customer, not an AURA user.
+      processed += await this.tenant.run({ tenantId: account.tenantId, companyId: account.companyId, actorId: null }, async () => {
+        let n = 0;
+        for (const raw of value?.messages ?? []) { if (await this.inbound(account, value?.contacts ?? [], raw)) n++; }
+        for (const raw of value?.statuses ?? []) { if (await this.delivery(account.tenantId, account.id, raw)) n++; }
+        return n;
+      });
     }
     return { received: true, processed };
   }

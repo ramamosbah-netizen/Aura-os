@@ -77,9 +77,16 @@ describe('SEC-01 stage 4 — wave G named what roles already reached, and decide
     }
   });
 
-  it('the allowlist now holds exactly the owner decisions and the two webhooks', () => {
+  it('the allowlist now holds exactly the owner decisions — the webhooks are signed, not granted', () => {
     const still = new Set(ungovernedMutations().map(routeKey) as string[]);
-    const expected = routes.filter((r) => r.group === 'owner-decision' || r.group === 'machine-inbound').map((r) => r.route);
+    // The two inbound webhooks left it as authentication work (@SignedInbound, pinned by
+    // signed-inbound.fitness.test.ts) — and no role gained them: that is asserted by the checks above
+    // only for the groups they cover, so it is asserted for the webhooks here.
+    for (const r of routes.filter((x) => x.group === 'machine-inbound')) {
+      expect(reachers(r.derived), `${r.route} is a machine's, not a role's`).toEqual([]);
+      expect(namers(r.derived), `${r.route} must not be solved by naming a role`).toEqual([]);
+    }
+    const expected = routes.filter((r) => r.group === 'owner-decision').map((r) => r.route);
     for (const route of expected) expect(still, `${route} should still be awaiting its decision`).toContain(route);
     for (const r of routes.filter((x) => !expected.includes(x.route))) {
       expect(still, `${r.route} was named in wave G and must be governed`).not.toContain(r.route);

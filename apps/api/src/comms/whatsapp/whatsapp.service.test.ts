@@ -3,7 +3,7 @@ import { InMemoryWhatsAppStore } from './in-memory-whatsapp-store';
 import { WhatsAppService } from './whatsapp.service';
 import { InMemoryMailStore } from '../mail/in-memory-mail-store';
 
-function makeService(store = new InMemoryWhatsAppStore(), dispatch?: InMemoryMailStore) {
+function makeService(store = new InMemoryWhatsAppStore(), dispatch?: InMemoryMailStore, runs: unknown[] = []) {
   const provider = {
     isConfigured: () => true,
     verifySignature: () => true,
@@ -18,7 +18,7 @@ function makeService(store = new InMemoryWhatsAppStore(), dispatch?: InMemoryMai
     provider as never,
     notifications as never,
     { publish: vi.fn().mockResolvedValue(undefined) } as never,
-    { get: vi.fn().mockReturnValue({ tenantId: 't1' }) } as never,
+    { get: vi.fn().mockReturnValue({ tenantId: 't1' }), run: (info: unknown, fn: () => unknown) => { runs.push(info); return fn(); } } as never,
     null,
     null,
     dispatch ?? null,
@@ -64,6 +64,26 @@ describe('WhatsAppService resource authorization', () => {
     const sent = await service.reply('t1', 'company-1', 'u-owner', false, row.id, 'hello');
     expect(sent.status).toBe('sent');
     expect((await dispatch.getDispatch('t1', sent.id))?.state).toBe('done');
+  });
+
+  it('processes a signed delivery INSIDE the tenant that owns the receiving number', async () => {
+    // The webhook arrives with no tenant; the routing lookup names one, and every write after it must run
+    // bound to THAT tenant, or its RLS refuses them. Recorded by the TenantContext double.
+    const runs: unknown[] = [];
+    const store = new InMemoryWhatsAppStore();
+    (store as unknown as { accounts: Map<string, unknown> }).accounts.set('pn-77', { id: 'acc-77', tenantId: 'tenant-b', companyId: 'co-b', externalAccountId: 'pn-77', ownerUserId: null, displayLabel: 'B', status: 'connected' });
+    const { service } = makeService(store, undefined, runs);
+    const result = await service.webhook(Buffer.from('{}'), { entry: [{ changes: [{ value: { metadata: { phone_number_id: 'pn-77' }, contacts: [{ wa_id: '971500000001', profile: { name: 'Customer' } }], messages: [{ id: 'wamid-in-77', from: '971500000001', timestamp: '1790000000', type: 'text', text: { body: 'Hello' } }] } }] }] } as never, 'sha256=signed');
+    expect(result.processed).toBe(1);
+    expect(runs).toEqual([{ tenantId: 'tenant-b', companyId: 'co-b', actorId: null }]);
+  });
+
+  it('ignores a number that is not registered to exactly one account — nothing is routed', async () => {
+    const runs: unknown[] = [];
+    const { service } = makeService(new InMemoryWhatsAppStore(), undefined, runs);
+    const result = await service.webhook(Buffer.from('{}'), { entry: [{ changes: [{ value: { metadata: { phone_number_id: 'pn-unknown' }, messages: [{ id: 'wamid-x', from: '971500000009', type: 'text', text: { body: 'Hi' } }] } }] }] } as never, 'sha256=signed');
+    expect(result.processed).toBe(0);
+    expect(runs).toEqual([]);
   });
 
   it('ignores duplicate or out-of-order Meta status webhooks', async () => {

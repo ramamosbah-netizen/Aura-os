@@ -15,8 +15,11 @@ export class PostgresWhatsAppStore implements WhatsAppStore {
     const x = r.rows[0]; return x ? { id: x.id, tenantId: x.tenant_id, companyId: x.company_id, externalAccountId: x.external_account_id, ownerUserId: x.owner_user_id, displayLabel: x.display_label, status: x.status } : null;
   }
   async findProviderAccountByExternalAccountId(externalAccountId: string): Promise<WhatsAppProviderAccount | null> {
-    const r = await this.pool.query<{ id: string; tenant_id: string; company_id: string | null; external_account_id: string; owner_user_id: string | null; display_label: string; status: string }>(`select id,tenant_id,company_id,external_account_id,owner_user_id,display_label,status from public.aura_comms_accounts where channel='whatsapp' and external_account_id=$1 limit 1`, [externalAccountId]);
-    const x = r.rows[0]; return x ? { id: x.id, tenantId: x.tenant_id, companyId: x.company_id, externalAccountId: x.external_account_id, ownerUserId: x.owner_user_id, displayLabel: x.display_label, status: x.status } : null;
+    // Before any tenant is known, so through the routing function (migration 0398): the accounts table
+    // is under forced RLS and an inbound webhook binds no tenant. It returns up to two rows, and two means
+    // the number is registered in more than one account — refused rather than routed to whichever came first.
+    const r = await this.pool.query<{ id: string; tenant_id: string; company_id: string | null; external_account_id: string; owner_user_id: string | null; display_label: string; status: string }>('select * from public.aura_route_whatsapp_account($1)', [externalAccountId]);
+    const x = r.rows.length === 1 ? r.rows[0] : undefined; return x ? { id: x.id, tenantId: x.tenant_id, companyId: x.company_id, externalAccountId: x.external_account_id, ownerUserId: x.owner_user_id, displayLabel: x.display_label, status: x.status } : null;
   }
   async findThread(tenantId: string, id: string) { const r = await this.pool.query<ThreadRow>('select * from public.aura_comms_whatsapp_threads where tenant_id=$1 and id=$2', [tenantId, id]); return r.rows[0] ? thread(r.rows[0]) : null; }
   async findThreadByPhone(tenantId: string, providerAccountId: string, phone: string) { const r = await this.pool.query<ThreadRow>('select * from public.aura_comms_whatsapp_threads where tenant_id=$1 and provider_account_id=$2 and phone_e164=$3', [tenantId, providerAccountId, normalizeWhatsAppPhone(phone)]); return r.rows[0] ? thread(r.rows[0]) : null; }

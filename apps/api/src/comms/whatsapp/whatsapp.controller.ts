@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Headers, Param, Post, Query, Req, Sse } from '@nestjs/common';
-import { EventBus, Permissions, TenantContext } from '@aura/core';
+import { EventBus, Permissions, SignedInbound, TenantContext } from '@aura/core';
 import { Observable } from 'rxjs';
 import { WhatsAppService } from './whatsapp.service';
 import { WorkspaceConfigService } from '../../workspace/workspace-config.service';
@@ -10,14 +10,20 @@ const DEV_USER = process.env.WORKSPACE_DEV_USER ?? 'u-admin';
 export class WhatsAppController {
   constructor(private readonly whatsapp: WhatsAppService, private readonly tenant: TenantContext, private readonly events: EventBus, private readonly workspace: WorkspaceConfigService) {}
 
+  // Meta's subscription handshake: it proves the caller by the verify token configured on both sides.
   @Get('webhook')
+  @SignedInbound('WHATSAPP_WEBHOOK_VERIFY_TOKEN — Meta echoes it on the subscription handshake')
   verify(@Query('hub.mode') mode?: string, @Query('hub.verify_token') token?: string, @Query('hub.challenge') challenge?: string): string {
     const result = this.whatsapp.verify({ mode, token, challenge });
     if (!result) throw new BadRequestException('WhatsApp webhook verification failed');
     return result;
   }
 
+  // A delivery from Meta: no user, no tenant. The service refuses it before any work unless the
+  // X-Hub-Signature-256 header is the HMAC of the raw body under the app secret, then routes it to
+  // the tenant that owns the receiving number.
   @Post('webhook')
+  @SignedInbound('X-Hub-Signature-256 — HMAC-SHA256 of the raw body under WHATSAPP_APP_SECRET')
   async webhook(@Req() req: { rawBody?: Buffer }, @Headers('x-hub-signature-256') signature: string | undefined, @Body() body: unknown) {
     const raw = req.rawBody ?? Buffer.from(JSON.stringify(body));
     return this.whatsapp.webhook(raw, body as never, signature);

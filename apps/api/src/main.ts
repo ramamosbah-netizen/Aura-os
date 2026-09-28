@@ -50,7 +50,9 @@ async function bootstrap(): Promise<void> {
     next();
   });
   app.useBodyParser('json', { limit: BODY_LIMIT, verify: (req: IncomingMessage & { rawBody?: Buffer }, _res: ServerResponse, buf: Buffer) => {
-    if ((req.url ?? '').split('?')[0].endsWith('/whatsapp/webhook')) req.rawBody = Buffer.from(buf);
+    // The two signed inbound webhooks verify an HMAC over the EXACT bytes received, so keep them.
+    const path = (req.url ?? '').split('?')[0];
+    if (path.endsWith('/whatsapp/webhook') || path.endsWith('/fleet/telemetry/webhook')) req.rawBody = Buffer.from(buf);
   } });
   app.useBodyParser('urlencoded', { limit: BODY_LIMIT, extended: true });
 
@@ -167,7 +169,9 @@ async function bootstrap(): Promise<void> {
   // `/auth/refresh` is UNAUTHENTICATED by design (S2): it presents an opaque refresh token in the
   // body, not an access token, so — like login — it must be reachable without an Authorization
   // header, or the AUTH_REQUIRED gate rejects it with 401 before rotation ever runs.
-  const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status', '/api/v1/auth/refresh', '/api/v1/whatsapp/webhook'];
+  // The two webhooks carry no user token: each handler is @SignedInbound and refuses an unsigned call
+  // itself (signed-inbound.fitness.test.ts pins both lists to each other).
+  const PUBLIC_PATHS = ['/api/v1/health', '/api/v1/auth/login', '/api/v1/auth/status', '/api/v1/auth/refresh', '/api/v1/whatsapp/webhook', '/api/v1/fleet/telemetry/webhook'];
   // Spine create endpoints where an Idempotency-Key may be *required* (not just honored).
   const requireIdem = process.env.IDEMPOTENCY_REQUIRED === 'true';
   const SPINE_CREATES = [

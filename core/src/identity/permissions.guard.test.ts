@@ -7,6 +7,7 @@ import { TenantContext } from '../tenancy/tenant-context';
 import { Reflector } from '@nestjs/core';
 import { ExecutionContext } from '@nestjs/common';
 import { AccessDeniedError } from '@aura/shared';
+import { SignedInbound } from './signed-inbound.decorator';
 
 // Auth ON — the guard enforces. (When OFF it pass-throughs; see the dedicated test.)
 const authOn = { enabled: true } as unknown as AuthService;
@@ -65,6 +66,21 @@ describe('PermissionsGuard', () => {
     const guard = new PermissionsGuard(mockReflector, mockAccess, mockTenant, authOn);
     await expect(guard.canActivate(httpContext('POST', 'crm/accounts', ''))).resolves.toBe(true);
     expect(mockAssert).toHaveBeenCalledWith('u1', expect.objectContaining({ permission: 'crm.account.create' }));
+  });
+
+  it('lets a SIGNED-INBOUND handler through with no user — and only that handler', async () => {
+    const mockReflector = { getAllAndOverride: vi.fn().mockReturnValue(null) } as unknown as Reflector;
+    const mockAccess = { assert: vi.fn(() => { throw new Error('a machine has no grants to assert'); }) } as unknown as AccessService;
+    const anonymous = { get: () => ({ tenantId: 'dev-tenant', companyId: null, actorId: null }) } as unknown as TenantContext;
+    const guard = new PermissionsGuard(mockReflector, mockAccess, anonymous, authOn);
+
+    const signed = httpContext('POST', 'whatsapp', 'webhook');
+    SignedInbound('Meta X-Hub-Signature-256')({}, 'webhook', { value: signed.getHandler() });
+    await expect(guard.canActivate(signed)).resolves.toBe(true);
+    expect(mockAccess.assert).not.toHaveBeenCalled();
+
+    // The same anonymous caller on an unmarked route is still refused.
+    await expect(guard.canActivate(httpContext('POST', 'whatsapp', 'threads/:id/reply'))).rejects.toThrow(/Actor identity is missing/);
   });
 
   it('allows undecorated exempt routes (health) even with auth on', async () => {

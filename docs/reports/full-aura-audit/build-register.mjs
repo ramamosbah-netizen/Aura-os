@@ -1240,6 +1240,12 @@ Object.assign(defects.find(g=>g.id==='SEC-01'),{
  acceptanceProof:(defects.find(g=>g.id==='SEC-01')?.acceptanceProof??'')+" STAGE 4 WAVE G PROOF: sec01-stage4.fitness.test.ts holds the catalogue to a baseline frozen before the wave (sec01-stage4-baseline.json): each named route is reached by EXACTLY the roles that reached it before and each of them names it; the staff base names the personal acts, with saved views/favourites asserted as the one widening; administration is named on the administrator and reached by no business role; and NO role names an owner-decision permission. Mutation-tested: granting inventory.grn.create to HSE and naming finance.payment.create on Finance each fail it by name. Browser, Auth-ON against PostgreSQL (saved-views-staff.spec.ts): a Sales user favourites a page, it survives a reload and is listed on My Favorites, and a saved view stays private \u2014 a colleague neither sees nor deletes it. Role-user regression: 19 browser tests across Sales, Pre-Sales, Technical, Store, Commercial and project-member journeys passed on the rebuilt API. Route audit: 54 mutating wildcard-only routes, 0 governing verbs.",
 });
 
+/** SEC-01 \u2014 the two inbound webhooks, authenticated by signature (2026-09-28). SEC-01 stays OPEN on the owner decisions. */
+Object.assign(defects.find(g=>g.id==='SEC-01'),{
+ currentBehavior:(defects.find(g=>g.id==='SEC-01')?.currentBehavior??'')+" THE TWO INBOUND WEBHOOKS (2026-09-28), authentication work as the owner directed, not a role grant: with login enforced BOTH were unreachable to the machines that call them \u2014 the permission guard refused any request with no user, and fleet telemetry was not even a token-free path, so a telematics box needed an administrator's token. WhatsApp had a second defect beneath: the receiving number was looked up in a table under FORCED RLS while the webhook bound no tenant, so a real tenant's account could never be found. Now: a closed @SignedInbound marker skips only the user-permission check; each handler refuses before any work unless signed (Meta X-Hub-Signature-256 / the verify token for the handshake; X-AURA-Signature, HMAC of the raw body under a 32+ character deployment secret bound to ONE tenant); WhatsApp routes the receiving number through a narrow security-definer function (migration 0398) that refuses a number registered twice, and processes the delivery inside the owning tenant. 52 ROUTES REMAIN ON THE ALLOWLIST: exactly the owner decisions D-01\u2026D-13.",
+ acceptanceProof:(defects.find(g=>g.id==='SEC-01')?.acceptanceProof??'')+" WEBHOOK PROOF, the running API against PostgreSQL with login enforced (signed-inbound.live.e2e-spec.ts, 8/8), both proof tenants distinct from the local users' dev-tenant, which is also the anonymous placeholder: telemetry refused unsigned, with a wrong secret and with a body other than the one signed (401, nothing stored); a signed position recorded in the bound tenant, and a vehicle that exists only in another tenant not found (404); the old account lookup returns nothing as the app role under RLS while the routing function finds it; the handshake answers only the configured token; a bad signature refused (403, nothing stored); a signed delivery lands as an inbound message and thread in the tenant that owns the number; a number registered in two tenants is refused (processed 0); the other WhatsApp routes still need a user (401). signed-inbound.fitness.test.ts pins the three marked handlers and the token-free paths to each other. STATED: a telemetry secret binds one tenant per deployment (JEET-first; per-tenant credentials are configuration candidate CC-11); no replay window on telemetry (Meta's scheme has none either); CI does not run the live spec yet.",
+});
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));
@@ -1386,6 +1392,15 @@ const configurationCandidates=[
   "state": "invariant-by-design",
   "foundBy": "J5-02",
   "note": "Owner decision 2026-09-28. 'Configuration changes \u2260 historical changes': the rate is the one frozen at award, whatever changes later."
+ },
+ {
+  "id": "CC-11",
+  "rule": "An inbound machine webhook (fleet telemetry) authenticates one tenant per deployment: one shared secret, one bound tenant.",
+  "where": "apps/api/src/fleet/telemetry-webhook.auth.ts (FLEET_TELEMETRY_WEBHOOK_SECRET, FLEET_TELEMETRY_TENANT_ID)",
+  "category": "system-configuration",
+  "state": "hardcoded",
+  "foundBy": "SEC-01 webhooks",
+  "note": "Right for JEET-first. A second company needs its own credential bound to its own tenant, issued and rotated from company settings. The signature check itself is a platform invariant and stays fail-closed."
  }
 ];
 write('configuration-candidates.json',JSON.stringify({date:'2026-09-28',rule:'Owner, 2026-09-28: AURA is JEET-first but multi-company-ready. Every hardcoded business rule found while closing a gap is logged here and classified; nothing here is built yet.',categories:['platform-invariant','company-policy','workflow','permission','evidence-requirement','system-configuration'],candidates:configurationCandidates},null,2));

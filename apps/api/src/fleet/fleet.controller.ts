@@ -1,6 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Post, Put, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { TenantContext } from '@aura/core';
+import { SignedInbound, TenantContext } from '@aura/core';
+import { TELEMETRY_SIGNATURE_HEADER, telemetryWebhookBinding, verifyTelemetrySignature } from './telemetry-webhook.auth';
 import { parsePageParams } from '@aura/shared';
 import {
   type Vehicle,
@@ -319,22 +320,33 @@ export class FleetController {
 
   // ── GPS Telematics & Expiry Triggers ───────────────────────────────────────
 
+  // A telematics box, not a user (telemetry-webhook.auth.ts): refused before any work unless the body is
+  // signed with the deployment's secret, and recorded in the tenant that secret is bound to.
   @Post('telemetry/webhook')
-  async recordTelemetry(@Body() dto: { vehicleId: string; latitude: number; longitude: number; speed: number; odometer?: number; recordedAt?: string }): Promise<VehicleTelemetry> {
+  @SignedInbound('X-AURA-Signature — HMAC-SHA256 of the raw body under FLEET_TELEMETRY_WEBHOOK_SECRET, bound to FLEET_TELEMETRY_TENANT_ID')
+  async recordTelemetry(
+    @Req() req: { rawBody?: Buffer },
+    @Headers(TELEMETRY_SIGNATURE_HEADER) signature: string | undefined,
+    @Body() dto: { vehicleId: string; latitude: number; longitude: number; speed: number; odometer?: number; recordedAt?: string },
+  ): Promise<VehicleTelemetry> {
+    const binding = telemetryWebhookBinding();
+    if (!binding) throw new ServiceUnavailableException('the telemetry webhook is not configured — it needs FLEET_TELEMETRY_WEBHOOK_SECRET (32+ characters) and FLEET_TELEMETRY_TENANT_ID');
+    if (!verifyTelemetrySignature(req.rawBody, signature, binding.secret)) throw new UnauthorizedException('the telemetry signature is missing or does not match the body');
     if (!dto?.vehicleId) throw new BadRequestException('vehicleId is required');
     if (dto?.latitude === undefined) throw new BadRequestException('latitude is required');
     if (dto?.longitude === undefined) throw new BadRequestException('longitude is required');
     if (dto?.speed === undefined) throw new BadRequestException('speed is required');
 
-    const ctx = this.tenant.get();
-    return await this.fleetService.recordTelemetry(ctx.tenantId, {
-      vehicleId: dto.vehicleId,
-      latitude: Number(dto.latitude),
-      longitude: Number(dto.longitude),
-      speed: Number(dto.speed),
-      odometer: dto.odometer !== undefined ? Number(dto.odometer) : undefined,
-      recordedAt: dto.recordedAt,
-    });
+    // The call arrived with no tenant; the secret's binding is the only thing that says whose vehicle this is.
+    return await this.tenant.run({ tenantId: binding.tenantId, companyId: binding.companyId, actorId: null }, () =>
+      this.fleetService.recordTelemetry(binding.tenantId, {
+        vehicleId: dto.vehicleId,
+        latitude: Number(dto.latitude),
+        longitude: Number(dto.longitude),
+        speed: Number(dto.speed),
+        odometer: dto.odometer !== undefined ? Number(dto.odometer) : undefined,
+        recordedAt: dto.recordedAt,
+      }));
   }
 
   @Get('vehicles/:id/telemetry')

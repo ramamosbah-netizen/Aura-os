@@ -174,6 +174,12 @@ export function scanRoutes() {
     const window = src.slice(above, below);
     const classLevel = /@Permissions\(/.test(src.slice(0, src.indexOf('export class')));
     if (/@Permissions\(/.test(window) || classLevel) continue;
+    /**
+     * A MACHINE CALLING IN is governed by the caller's signature, not by a role (SEC-01 stage 4: the
+     * two inbound webhooks). Counted as governed ONLY because signed-inbound.fitness.test.ts pins the
+     * exact handlers allowed to carry the marker — a new one fails there by name.
+     */
+    if (/@SignedInbound\(/.test(window)) continue;
 
     /**
      * TOMBSTONES ARE NOT DEBT. A handler declared `(): never` cannot return — it exists only to

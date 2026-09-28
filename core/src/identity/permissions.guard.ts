@@ -14,6 +14,7 @@ import { ModulesService } from '../config/modules.service';
 import { TenantContext } from '../tenancy/tenant-context';
 import { PERMISSIONS_KEY } from './permissions.decorator';
 import { SELF_SCOPED_KEY } from './self-scoped.decorator';
+import { SIGNED_INBOUND_KEY } from './signed-inbound.decorator';
 import { ProjectResolverRegistry } from './project-resolver';
 import { type AccessTarget, type OrgLevel, type Id, AccessDeniedError } from '@aura/shared';
 
@@ -158,6 +159,15 @@ export class PermissionsGuard implements CanActivate {
     // The permission guard mirrors that: annotations become no-ops until auth is turned on,
     // exactly like the AI/DB/auth seams. Enforcement engages the moment a verifier is set.
     if (!this.auth.enabled) {
+      return true;
+    }
+
+    // A MACHINE calling in (signed-inbound.decorator.ts): no user, so no user permission can describe
+    // it, and "Actor identity is missing" below would refuse every delivery. The handler verifies the
+    // caller's signature itself before it does any work; the set of handlers allowed to do this is
+    // pinned by signed-inbound.fitness.test.ts. Read with Reflect, as the route paths are.
+    const handler = context.getHandler();
+    if (handler && Reflect.getMetadata(SIGNED_INBOUND_KEY, handler)) {
       return true;
     }
 

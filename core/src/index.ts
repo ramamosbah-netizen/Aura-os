@@ -18,6 +18,7 @@ export * from './identity/access.service';
 export * from './identity/standard-elv-roles';
 export * from './identity/project-resolver';
 export * from './identity/self-scoped.decorator';
+export * from './identity/signed-inbound.decorator';
 export * from './identity/auth.service';
 export * from './identity/mfa.service';
 export * from './identity/users.service';

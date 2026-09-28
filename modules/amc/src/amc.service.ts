@@ -3,7 +3,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { makeEvent, type Page, type PageParams, roundDecimal } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { AmcStore, AMC_STORE } from './store.interface';
-import { ServiceContract, ContractStatus } from './domain/service-contract';
+import { ServiceContract, ContractStatus, type ContractSource } from './domain/service-contract';
 import { WorkOrder, WorkOrderPriority, WorkOrderType, GeoCoordinate } from './domain/work-order';
 import { SupportTicket, TicketPriority, type SlaStatus } from './domain/support-ticket';
 import { PpmSchedule, PpmFrequency } from './domain/ppm-schedule';
@@ -37,6 +37,11 @@ export class AmcService {
     currency?: string;
     slaResponseHours?: number;
     slaResolutionHours?: number;
+    source?: ContractSource;
+    projectId?: string | null;
+    projectName?: string | null;
+    handoverId?: string | null;
+    accountId?: string | null;
   }): Promise<ServiceContract> {
     const contract = new ServiceContract({ id: genId(), ...params });
     await this.store.saveContract(contract);
@@ -46,6 +51,48 @@ export class AmcService {
 
   async listContracts(tenantId: string): Promise<ServiceContract[]> {
     return this.store.listContracts(tenantId);
+  }
+
+  /**
+   * The contract a client's handover acceptance opens — ONCE per handover (J6-01). A re-delivered
+   * or concurrent acceptance event finds the contract already there (the store's unique handover
+   * key decides a race) and returns it rather than opening a second.
+   */
+  async openFromHandover(params: {
+    tenantId: string;
+    companyId?: string;
+    handoverId: string;
+    projectId: string;
+    projectName: string | null;
+    accountId: string | null;
+    clientName: string;
+    startDate: Date;
+    endDate: Date;
+  }): Promise<{ contract: ServiceContract; opened: boolean }> {
+    const existing = await this.store.findContractByHandover(params.tenantId, params.handoverId);
+    if (existing) return { contract: existing, opened: false };
+    try {
+      const contract = await this.createContract({
+        tenantId: params.tenantId,
+        companyId: params.companyId,
+        contractNumber: `AMC-${params.handoverId.slice(0, 8)}`,
+        clientName: params.clientName,
+        serviceScope: `Warranty & AMC — ${params.projectName ?? 'project'}`,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        value: 0,
+        source: 'handover',
+        projectId: params.projectId,
+        projectName: params.projectName,
+        handoverId: params.handoverId,
+        accountId: params.accountId,
+      });
+      return { contract, opened: true };
+    } catch (err) {
+      const raced = await this.store.findContractByHandover(params.tenantId, params.handoverId);
+      if (raced) return { contract: raced, opened: false };
+      throw err;
+    }
   }
 
   async findContract(id: string): Promise<ServiceContract | null> {

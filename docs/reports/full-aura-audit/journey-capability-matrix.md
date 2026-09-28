@@ -793,7 +793,7 @@
 | Handover | HO-05 | UNVERIFIED |
 | Handover | HO-06 | COMPLETE |
 | Handover | HO-07 | COMPLETE |
-| Handover | HO-08 | DISCONNECTED |
+| Handover | HO-08 | PARTIAL |
 | Handover | HO-09 | PARTIAL |
 | Handover | HO-10 | UNVERIFIED |
 | Handover | HO-11 | PARTIAL |
@@ -840,7 +840,7 @@
 | Warranty / Service | HO-05 | UNVERIFIED |
 | Warranty / Service | HO-06 | COMPLETE |
 | Warranty / Service | HO-07 | COMPLETE |
-| Warranty / Service | HO-08 | DISCONNECTED |
+| Warranty / Service | HO-08 | PARTIAL |
 | Warranty / Service | HO-09 | PARTIAL |
 | Warranty / Service | HO-10 | UNVERIFIED |
 | Warranty / Service | HO-11 | PARTIAL |
@@ -887,7 +887,7 @@
 | Closeout | HO-05 | UNVERIFIED |
 | Closeout | HO-06 | COMPLETE |
 | Closeout | HO-07 | COMPLETE |
-| Closeout | HO-08 | DISCONNECTED |
+| Closeout | HO-08 | PARTIAL |
 | Closeout | HO-09 | PARTIAL |
 | Closeout | HO-10 | UNVERIFIED |
 | Closeout | HO-11 | PARTIAL |

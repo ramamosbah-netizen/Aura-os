@@ -106,7 +106,15 @@ export class InMemoryAmcStore implements AmcStore {
 
   // --- Service Contracts ---
   async saveContract(contract: ServiceContract): Promise<void> {
+    // One contract per handover, as the database's unique index holds it.
+    if (contract.handoverId) {
+      const other = [...this.contracts.values()].find((c) => c.tenantId === contract.tenantId && c.handoverId === contract.handoverId && c.id !== contract.id);
+      if (other) throw new Error(`handover ${contract.handoverId} already opened service contract ${other.contractNumber}`);
+    }
     this.contracts.set(contract.id, contract);
+  }
+  async findContractByHandover(tenantId: string, handoverId: string): Promise<ServiceContract | null> {
+    return [...this.contracts.values()].find((c) => c.tenantId === tenantId && c.handoverId === handoverId) ?? null;
   }
   async findContract(id: string): Promise<ServiceContract | null> {
     return this.contracts.get(id) ?? null;

@@ -10,7 +10,27 @@ interface ServiceContract {
   startDate: string;
   endDate: string;
   value: number;
+  status: 'active' | 'expired' | 'terminated';
+  /** Where it came from (J6-01): entered here, or opened by a client's handover acceptance. */
+  source?: 'manual' | 'handover';
+  projectId?: string | null;
+  projectName?: string | null;
+  handoverId?: string | null;
+  /** The customer's account; null when the project names none. */
+  accountId?: string | null;
 }
+
+/**
+ * NOTHING ON THIS SCREEN IS INVENTED. It used to fill an empty store with two contracts (a real
+ * developer's name at AED 850,000), four map pins at named Dubai sites, two work orders and KPI
+ * counts of 4, 3 and 4 — so a new tenant saw an AMC business it did not have, and a real one could
+ * not tell its own records from the decoration. Empty is shown as empty.
+ */
+const DUBAI = { north: 25.35, south: 24.9, west: 54.9, east: 55.6 };
+const onMap = (lat: number, lng: number) => ({
+  top: `${Math.min(92, Math.max(4, ((DUBAI.north - lat) / (DUBAI.north - DUBAI.south)) * 100))}%`,
+  left: `${Math.min(92, Math.max(4, ((lng - DUBAI.west) / (DUBAI.east - DUBAI.west)) * 100))}%`,
+});
 
 interface SupportTicket {
   id: string;
@@ -40,6 +60,7 @@ export default function AmcClient() {
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [now, setNow] = useState(Date.now());
 
   // Form states
@@ -54,15 +75,19 @@ export default function AmcClient() {
         fetch('/api/amc/work-orders'),
       ]);
 
+      if (!resContracts.ok || !resTickets.ok || !resWO.ok) throw new Error('AMC data could not be read');
       const dataContracts = await resContracts.json();
       const dataTickets = await resTickets.json();
       const dataWO = await resWO.json();
 
-      setContracts(dataContracts ?? []);
-      setTickets(dataTickets ?? []);
-      setWorkOrders(dataWO ?? []);
-    } catch (err) {
-      console.error('Failed to load AMC data:', err);
+      setContracts(Array.isArray(dataContracts) ? dataContracts : []);
+      setTickets(Array.isArray(dataTickets) ? dataTickets : []);
+      setWorkOrders(Array.isArray(dataWO) ? dataWO : []);
+      setFailed(false);
+    } catch {
+      // A fault, not an empty book: saying "no contracts" when the service did not answer would
+      // tell a maintenance team their contracts are gone.
+      setFailed(true);
     } finally {
       setLoading(false);
     }
@@ -114,12 +139,8 @@ export default function AmcClient() {
     };
   }
 
-  const defaultLocations = [
-    { name: 'Dubai Mall', lat: 25.1972, lng: 55.2797, priority: 'critical', desc: 'HVAC Failure' },
-    { name: 'Jumeirah Beach Hotel', lat: 25.1412, lng: 55.1856, priority: 'high', desc: 'Chiller Leakage' },
-    { name: 'Marina Heights', lat: 25.0889, lng: 55.1472, priority: 'medium', desc: 'Elevator Maintenance' },
-    { name: 'Downtown Heights', lat: 25.2048, lng: 55.2708, priority: 'low', desc: 'Lobby Painting' },
-  ];
+  const pending = workOrders.filter((w) => w.status !== 'completed');
+  const located = pending.filter((w) => w.location && Number.isFinite(w.location.lat) && Number.isFinite(w.location.lng));
 
   return (
     <div style={s.root}>
@@ -138,21 +159,21 @@ export default function AmcClient() {
       <div style={s.statsGrid}>
         <div style={s.statCard}>
           <span style={s.statLabel}>Active Contracts</span>
-          <span style={s.statValue}>{contracts.length || 4}</span>
+          <span style={s.statValue} data-testid="amc-active-contracts">{contracts.filter((c) => c.status === 'active').length}</span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>Open Tickets</span>
-          <span style={s.statValue}>{tickets.filter(t => t.status !== 'resolved').length || 3}</span>
+          <span style={s.statValue}>{tickets.filter(t => t.status !== 'resolved').length}</span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>SLA Breaches</span>
           <span style={{ ...s.statValue, color: 'var(--bad)' }}>
-            {tickets.filter(t => new Date(t.slaDueAt).getTime() < now && t.status !== 'resolved').length || 0}
+            {tickets.filter(t => new Date(t.slaDueAt).getTime() < now && t.status !== 'resolved').length}
           </span>
         </div>
         <div style={s.statCard}>
           <span style={s.statLabel}>Pending Work Orders</span>
-          <span style={{ ...s.statValue, color: 'var(--accent)' }}>{workOrders.filter(w => w.status !== 'completed').length || 4}</span>
+          <span style={{ ...s.statValue, color: 'var(--accent)' }}>{pending.length}</span>
         </div>
       </div>
 
@@ -199,30 +220,26 @@ export default function AmcClient() {
             <div style={s.contractsList}>
               {loading ? (
                 <div style={s.placeholder}>Loading contracts...</div>
+              ) : failed ? (
+                <div style={s.placeholder} role="alert" data-testid="amc-unavailable">AMC records could not be read. This is a fault, not an empty book — retry when the service is available.</div>
               ) : contracts.length === 0 ? (
-                // Sample Fallback data to populate the UI beautifully if store empty
-                [
-                  { id: '1', contractNumber: 'AMC-2026-001', clientName: 'Emaar Properties PJSC', serviceScope: 'HVAC and Chiller Preventive Maintenance', value: 850000 },
-                  { id: '2', contractNumber: 'AMC-2026-002', clientName: 'Jumeirah Group', serviceScope: 'ELV Systems & Fire Alarm Maintenance', value: 340000 },
-                ].map((c) => (
-                  <div key={c.id} style={s.contractRow}>
-                    <div>
-                      <div style={s.contractNum}>{c.contractNumber}</div>
-                      <div style={s.clientName}>{c.clientName}</div>
-                      <div style={s.scope}>{c.serviceScope}</div>
-                    </div>
-                    <div style={s.contractVal}>AED {c.value.toLocaleString()}</div>
-                  </div>
-                ))
+                <div style={s.placeholder} data-testid="amc-contracts-empty">No service contracts yet. One opens when a client accepts a project handover.</div>
               ) : (
                 contracts.map((c) => (
-                  <div key={c.id} style={s.contractRow}>
+                  <div key={c.id} style={s.contractRow} data-testid={`amc-contract-${c.id}`}>
                     <div>
                       <div style={s.contractNum}>{c.contractNumber}</div>
-                      <div style={s.clientName}>{c.clientName}</div>
+                      {/* The customer — from the project's account; said plainly when there is none. */}
+                      <div style={{ ...s.clientName, ...(c.source === 'handover' && !c.accountId ? { color: 'var(--warn)' } : {}) }} data-testid="amc-contract-client">{c.clientName}</div>
                       <div style={s.scope}>{c.serviceScope}</div>
+                      {c.source === 'handover' && c.projectId && (
+                        <div style={s.scope} data-testid="amc-contract-lineage">
+                          From the handover of <a href={`/project/${c.projectId}`} style={{ color: 'var(--accent)', textDecoration: 'none', fontWeight: 600 }}>{c.projectName ?? 'the project'}</a>
+                          {' '}· warranty {c.startDate.slice(0, 10)} to {c.endDate.slice(0, 10)}
+                        </div>
+                      )}
                     </div>
-                    <div style={s.contractVal}>AED {c.value.toLocaleString()}</div>
+                    <div style={s.contractVal}>{c.value > 0 ? `AED ${c.value.toLocaleString()}` : 'Not priced'}</div>
                   </div>
                 ))
               )}
@@ -240,8 +257,9 @@ export default function AmcClient() {
             <div style={s.mapContainer}>
               <div style={s.mapGridBg} />
               
-              {/* Map Pins */}
-              {defaultLocations.map((loc, idx) => {
+              {/* Map Pins — only work orders that carry a location, placed by their coordinates. */}
+              {located.length === 0 && <div style={s.placeholder}>No open work order has a location.</div>}
+              {located.map((wo) => {
                 const pinColors: Record<string, string> = {
                   critical: 'var(--bad)',
                   high: 'var(--warn)',
@@ -250,20 +268,19 @@ export default function AmcClient() {
                 };
                 return (
                   <div
-                    key={loc.name}
+                    key={wo.id}
                     style={{
                       ...s.mapPin,
-                      top: `${35 + idx * 15}%`,
-                      left: `${20 + idx * 18}%`,
-                      borderColor: pinColors[loc.priority],
+                      ...onMap(wo.location!.lat, wo.location!.lng),
+                      borderColor: pinColors[wo.priority],
                     }}
                   >
-                    <span style={{ ...s.pinPulse, background: pinColors[loc.priority] }} />
+                    <span style={{ ...s.pinPulse, background: pinColors[wo.priority] }} />
                     <div style={s.pinTooltip}>
-                      <strong>{loc.name}</strong>
-                      <div>{loc.desc}</div>
-                      <span style={{ color: pinColors[loc.priority], fontSize: 10, fontWeight: 700, uppercase: true } as any}>
-                        {loc.priority}
+                      <strong>{wo.orderNumber}</strong>
+                      <div>{wo.description}</div>
+                      <span style={{ color: pinColors[wo.priority], fontSize: 10, fontWeight: 700, textTransform: 'uppercase' }}>
+                        {wo.priority}
                       </span>
                     </div>
                   </div>
@@ -278,27 +295,17 @@ export default function AmcClient() {
             <div style={s.woSection}>
               <h3 style={s.woTitle}>Dispatch Queue</h3>
               <div style={s.woList}>
-                {workOrders.length === 0 ? (
-                  [
-                    { id: 'wo-1', orderNumber: 'WO-8871', description: 'HVAC Failure in Sector 4', priority: 'critical' },
-                    { id: 'wo-2', orderNumber: 'WO-8872', description: 'Fire alarm safety check', priority: 'high' },
-                  ].map((wo) => (
-                    <div key={wo.id} style={s.woRow}>
-                      <div>
-                        <span style={s.woNum}>{wo.orderNumber}</span>
-                        <span style={s.woDesc}>{wo.description}</span>
-                      </div>
-                      <button type="button" style={s.btnSmall}>Assign Tech</button>
-                    </div>
-                  ))
+                {pending.length === 0 ? (
+                  <div style={s.placeholder}>No work orders waiting for dispatch.</div>
                 ) : (
-                  workOrders.map((wo) => (
+                  pending.map((wo) => (
                     <div key={wo.id} style={s.woRow}>
                       <div>
                         <span style={s.woNum}>{wo.orderNumber}</span>
                         <span style={s.woDesc}>{wo.description}</span>
                       </div>
-                      <button type="button" style={s.btnSmall}>Assign Tech</button>
+                      {/* Assigning a technician happens on the dispatch board; this button did nothing. */}
+                      <a href="/amc/dispatch" style={{ ...s.btnSmall, textDecoration: 'none' }}>Dispatch →</a>
                     </div>
                   ))
                 )}

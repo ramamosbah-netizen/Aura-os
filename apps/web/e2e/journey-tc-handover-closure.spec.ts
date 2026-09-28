@@ -21,7 +21,6 @@
 // The failing-then-passing leg is deliberate: a system that passes first time never exercises the
 // defect chain, and "fail → defect → retest → pass" is the path a real commissioning actually takes.
 import { expect, test } from '@playwright/test';
-import { createProject } from './fixtures';
 import { altApiAuthHeaders, apiAuthHeaders } from './api-auth';
 import { systemFromChecklist } from './approved-checklist';
 
@@ -111,9 +110,20 @@ async function releaseControlledDocument(
 test.setTimeout(300_000);
 
 test('the whole chain: engineering through acceptance, closeout and the service handoff', async ({ page, baseURL }) => {
-  const projectId = await createProject(page.request, 'TC Gate23 Journey', baseURL);
   const run = stamp();
   const req = page.request;
+  // The project is delivered FOR a customer (J6-01): a canonical CRM account, so the service contract
+  // that acceptance opens can name who it is for — and be checked against something other than the
+  // project's own name.
+  const customer = `Nakheel Communities ${run}`;
+  const account = await (await req.post(`${API}/api/v1/crm/accounts`, { headers: H(), data: { name: customer } })).json() as { id?: string };
+  expect(account?.id, 'the customer account must exist').toBeTruthy();
+  const projectTitle = `TC Gate23 Journey ${run}`;
+  const created = await req.post(`${baseURL}/api/projects/projects`, {
+    data: { title: projectTitle, reference: `PX-J23-${run}`, value: 250_000, accountId: account.id },
+  });
+  expect(created.ok(), `the project must exist — ${await created.text()}`).toBe(true);
+  const projectId = ((await created.json()) as { id: string }).id;
 
   // ── 1. ENGINEERING releases a drawing ────────────────────────────────────────────────────────
   const drawing = await (
@@ -736,25 +746,43 @@ test('the whole chain: engineering through acceptance, closeout and the service 
 
   // ── 11. DELIVER → MAINTAIN: acceptance starts the service relationship ───────────────────────
   //
-  // Matched by CONTRACT NUMBER, because that is the only link the product actually has. The reactor
-  // derives `AMC-<first 8 of the handover id>` and writes the project into `serviceScope` as prose —
-  // so a service contract's tie back to the project it maintains is a SENTENCE, not a reference.
-  // Recorded as a finding in the TC-GATE-23 audit rather than papered over here: this spec asserts
-  // what the chain does, and the register says what it should do.
+  // Matched by REFERENCE (J6-01). The contract used to be findable only by its number, carried no
+  // project and no handover, and put the PROJECT's name in the client field — its tie back to what it
+  // maintains was a sentence in `serviceScope`. It now names the handover, the project and the
+  // customer's account, and the customer is the project's customer.
   //
   // The reactor runs off the event, so the contract appears asynchronously.
-  const expectedContract = `AMC-${(pkg.id as string).slice(0, 8)}`;
+  type Contract = { id: string; contractNumber: string; clientName: string; source: string; handoverId: string | null; projectId: string | null; projectName: string | null; accountId: string | null; startDate: string };
+  let contract: Contract | undefined;
   await expect
     .poll(
       async () => {
         const res = await req.get(`${API}/api/v1/amc/contracts`, { headers: H() });
-        if (!res.ok()) return [] as string[];
-        const all = (await res.json()) as { contractNumber?: string }[];
-        return all.map((c) => c.contractNumber ?? '');
+        if (!res.ok()) return false;
+        contract = ((await res.json()) as Contract[]).find((c) => c.handoverId === pkg.id);
+        return Boolean(contract);
       },
       { timeout: 30_000, message: 'an accepted handover must raise the service contract that maintains it' },
     )
-    .toContain(expectedContract);
+    .toBe(true);
+  expect(contract).toMatchObject({
+    contractNumber: `AMC-${(pkg.id as string).slice(0, 8)}`,
+    source: 'handover',
+    projectId,
+    projectName: projectTitle,
+    accountId: account.id,
+    clientName: customer,
+  });
+  expect(contract!.clientName, 'the customer is not the project').not.toBe(projectTitle);
+  const again = ((await (await req.get(`${API}/api/v1/amc/contracts`, { headers: H() })).json()) as Contract[]).filter((c) => c.handoverId === pkg.id);
+  expect(again, 'one contract per handover').toHaveLength(1);
+
+  // On the AMC screen: the customer, and the project it came from as a link.
+  await page.goto('/amc', { waitUntil: 'domcontentloaded' });
+  const row = page.getByTestId(`amc-contract-${contract!.id}`);
+  await expect(row.getByTestId('amc-contract-client')).toHaveText(customer);
+  await expect(row.getByTestId('amc-contract-lineage')).toContainText(projectTitle);
+  await expect(row.getByTestId('amc-contract-lineage').getByRole('link', { name: projectTitle })).toHaveAttribute('href', `/project/${projectId}`);
 
   // ── 12. And the project can close ────────────────────────────────────────────────────────────
   const readiness = await req.get(`/api/projects/projects/${projectId}/closeout-readiness`);

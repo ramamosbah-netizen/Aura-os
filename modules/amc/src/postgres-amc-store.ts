@@ -28,6 +28,7 @@ interface ContractRow {
   client_name: string; asset_id: string | null; service_scope: string;
   start_date: string; end_date: string; value: string; currency: string; status: string;
   sla_response_hours: number; sla_resolution_hours: number; created_at: Date; updated_at: Date;
+  source: string; project_id: string | null; project_name: string | null; handover_id: string | null; account_id: string | null;
 }
 interface WorkOrderRow {
   id: string; tenant_id: string; company_id: string | null; contract_id: string | null;
@@ -56,7 +57,7 @@ interface PpmRow {
 
 const CONTRACT_COLS = `id, tenant_id, company_id, contract_number, client_name, asset_id, service_scope,
   start_date::text, end_date::text, value, currency, status, sla_response_hours, sla_resolution_hours,
-  created_at, updated_at`;
+  created_at, updated_at, source, project_id, project_name, handover_id, account_id`;
 const WORK_ORDER_COLS = `id, tenant_id, company_id, contract_id, order_number, asset_id, description,
   priority, type, status, assigned_to, scheduled_date::text, completed_date::text,
   completed_by, cancelled_by, cancelled_at::text, cancellation_reason,
@@ -84,6 +85,11 @@ function rowToContract(r: ContractRow): ServiceContract {
     status: r.status as ServiceContract['status'],
     slaResponseHours: r.sla_response_hours,
     slaResolutionHours: r.sla_resolution_hours,
+    source: r.source as ServiceContract['source'],
+    projectId: r.project_id,
+    projectName: r.project_name,
+    handoverId: r.handover_id,
+    accountId: r.account_id,
   });
   Object.assign(c, { createdAt: new Date(r.created_at), updatedAt: new Date(r.updated_at) });
   return c;
@@ -183,8 +189,8 @@ export class PostgresAmcStore implements AmcStore {
          (id, tenant_id, company_id, contract_number, client_name, asset_id, service_scope,
           start_date, end_date, value, currency, status, sla_response_hours, sla_resolution_hours,
           terminated_by, terminated_at, termination_reason,
-          created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+          created_at, updated_at, source, project_id, project_name, handover_id, account_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24)
        ON CONFLICT (id) DO UPDATE SET
          status = EXCLUDED.status, service_scope = EXCLUDED.service_scope,
          terminated_by = EXCLUDED.terminated_by, terminated_at = EXCLUDED.terminated_at,
@@ -195,9 +201,16 @@ export class PostgresAmcStore implements AmcStore {
         c.serviceScope, toDate(c.startDate), toDate(c.endDate), c.value, c.currency, c.status,
         c.slaResponseHours, c.slaResolutionHours,
         c.terminatedBy ?? null, toDate(c.terminatedAt), c.terminationReason ?? null,
-        c.createdAt, c.updatedAt,
+        c.createdAt, c.updatedAt, c.source, c.projectId, c.projectName, c.handoverId, c.accountId,
       ],
     );
+  }
+  async findContractByHandover(tenantId: string, handoverId: string): Promise<ServiceContract | null> {
+    const res = await this.pool.query<ContractRow>(
+      `SELECT ${CONTRACT_COLS} FROM public.aura_amc_service_contracts WHERE tenant_id = $1 AND handover_id = $2`,
+      [tenantId, handoverId],
+    );
+    return res.rows.length ? rowToContract(res.rows[0]) : null;
   }
   async findContract(id: string): Promise<ServiceContract | null> {
     const res = await this.pool.query<ContractRow>(

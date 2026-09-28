@@ -3,6 +3,8 @@
 // ============================================================
 
 export type ContractStatus = 'active' | 'expired' | 'terminated';
+/** Where a contract came from: entered on the AMC screen, or opened by a client's handover acceptance. */
+export type ContractSource = 'manual' | 'handover';
 
 export class ServiceContract {
   readonly id: string;
@@ -23,6 +25,17 @@ export class ServiceContract {
   terminationReason?: string | null;
   readonly slaResponseHours: number;
   readonly slaResolutionHours: number;
+  /**
+   * LINEAGE (J6-01). A contract opened by a handover names the project it maintains, the handover
+   * that started it and the customer's canonical account — it used to carry none of them and
+   * wrote the project's name where the customer's belongs.
+   */
+  readonly source: ContractSource;
+  readonly projectId: string | null;
+  readonly projectName: string | null;
+  readonly handoverId: string | null;
+  /** The customer's account; null when the project names none, and the contract says so. */
+  readonly accountId: string | null;
   readonly createdAt: Date;
   updatedAt: Date;
 
@@ -41,7 +54,15 @@ export class ServiceContract {
     status?: ContractStatus;
     slaResponseHours?: number;
     slaResolutionHours?: number;
+    source?: ContractSource;
+    projectId?: string | null;
+    projectName?: string | null;
+    handoverId?: string | null;
+    accountId?: string | null;
   }) {
+    if (params.source === 'handover' && (!params.handoverId || !params.projectId)) {
+      throw new Error('a service contract opened from a handover must name the handover and the project');
+    }
     this.id = params.id;
     this.tenantId = params.tenantId;
     this.companyId = params.companyId;
@@ -56,6 +77,11 @@ export class ServiceContract {
     this.status = params.status ?? 'active';
     this.slaResponseHours = params.slaResponseHours ?? 4;
     this.slaResolutionHours = params.slaResolutionHours ?? 24;
+    this.source = params.source ?? 'manual';
+    this.projectId = params.projectId ?? null;
+    this.projectName = params.projectName ?? null;
+    this.handoverId = params.handoverId ?? null;
+    this.accountId = params.accountId ?? null;
     this.createdAt = new Date();
     this.updatedAt = new Date();
   }

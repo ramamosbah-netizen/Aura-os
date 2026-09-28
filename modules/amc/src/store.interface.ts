@@ -11,6 +11,8 @@ export interface AmcStore {
   saveContract(contract: ServiceContract): Promise<void>;
   findContract(id: string): Promise<ServiceContract | null>;
   listContracts(tenantId: string): Promise<ServiceContract[]>;
+  /** The contract a handover opened, if any — at most one per handover (J6-01). */
+  findContractByHandover(tenantId: string, handoverId: string): Promise<ServiceContract | null>;
 
   // Work Orders
   saveWorkOrder(order: WorkOrder): Promise<void>;

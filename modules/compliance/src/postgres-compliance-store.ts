@@ -21,7 +21,7 @@ const CASE_COLS = `id, tenant_id, company_id, authority_code, obligation_code, s
   subject_id, project_id, system, coverage, device_ids, reference, status, notes, created_by,
   created_at, updated_at`;
 const SUB_COLS = `id, tenant_id, case_id, attempt, submitted_at::text, submitted_by, reference, fee,
-  currency, notes`;
+  currency, notes, method, transmittal_id, evidence_document_id`;
 const INSP_COLS = `id, tenant_id, case_id, requested_at::text, scheduled_at::text, conducted_at::text,
   inspector_reference, inspection_reference, outcome, notes, reinspection_required,
   reinspection_date::text`;
@@ -119,9 +119,11 @@ export class PostgresComplianceStore implements ComplianceStore {
   async addSubmission(s: ComplianceSubmission): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_compliance_submissions
-        (id, tenant_id, case_id, attempt, submitted_at, submitted_by, reference, fee, currency, notes)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
-      [s.id, s.tenantId, s.caseId, s.attempt, s.submittedAt, s.submittedBy, s.reference, s.fee, s.currency, s.notes],
+        (id, tenant_id, case_id, attempt, submitted_at, submitted_by, reference, fee, currency, notes,
+         method, transmittal_id, evidence_document_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+      [s.id, s.tenantId, s.caseId, s.attempt, s.submittedAt, s.submittedBy, s.reference, s.fee, s.currency, s.notes,
+        s.method, s.transmittalId, s.evidenceDocumentId],
     );
   }
 
@@ -244,6 +246,7 @@ const toSubmission = (r: any): ComplianceSubmission => ({
   id: r.id, tenantId: r.tenant_id, caseId: r.case_id, attempt: r.attempt, submittedAt: r.submitted_at,
   submittedBy: r.submitted_by, reference: r.reference,
   fee: r.fee === null ? null : Number(r.fee), currency: r.currency, notes: r.notes,
+  method: r.method ?? null, transmittalId: r.transmittal_id ?? null, evidenceDocumentId: r.evidence_document_id ?? null,
 });
 
 const toInspection = (r: any): ComplianceInspection => ({

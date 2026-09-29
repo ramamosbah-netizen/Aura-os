@@ -1,6 +1,6 @@
 {
   "recordedAt": "2026-09-28",
-  "note": "SEC-01 stage 4 baseline, frozen BEFORE wave G: for each of the 151 routes that were on route-permission-allowlist.json, the permission it derives, which non-admin roles reached it then, and the group the owner-reviewed draft put it in (docs/reports/full-aura-audit/sec-01-stage-4-authority-draft.md). sec01-stage4.fitness.test.ts holds the roles to this record: a named route keeps exactly these holders, and an owner-decision permission stays named by NOBODY until the owner decides it. Change an entry only with the owner decision that changes it. OWNER DECISIONS (2026-09-28): each owner-decision entry now carries `decided` — the permission that governs the route, EXACTLY the non-admin roles that reach it, and the roles that must hold it by name — except D-09 (authority approvals), recorded `decided: null` because the current routes cannot express the owner's split; its permissions stay named by nobody until the route split is approved.",
+  "note": "SEC-01 stage 4 baseline, frozen BEFORE wave G: for each of the 151 routes that were on route-permission-allowlist.json, the permission it derives, which non-admin roles reached it then, and the group the owner-reviewed draft put it in (docs/reports/full-aura-audit/sec-01-stage-4-authority-draft.md). sec01-stage4.fitness.test.ts holds the roles to this record: a named route keeps exactly these holders, and an owner-decision permission stays named by NOBODY until the owner decides it. Change an entry only with the owner decision that changes it. OWNER DECISIONS (2026-09-28): each owner-decision entry now carries `decided` — the permission that governs the route, EXACTLY the non-admin roles that reach it, and the roles that must hold it by name — except D-09 (authority approvals), recorded `decided: null` because the current routes cannot express the owner's split; its permissions stay named by nobody until the route split is approved. D-09 DECIDED (2026-09-29): the owner answered the route-split questions — the eight compliance routes now carry decided holders too, and no owner-decision route remains undecided.",
   "routes": [
     {
       "route": "DELETE crm/accounts/:id/installed-base/:itemId",
@@ -586,7 +586,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.authority.create",
+        "holders": [
+          "r-document-controller",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-document-controller",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "POST compliance/cases",
@@ -594,7 +605,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.case.create",
+        "holders": [
+          "r-document-controller",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-document-controller",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "POST compliance/cases/:id/certificates",
@@ -602,7 +624,16 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.case.certificates",
+        "holders": [
+          "r-document-controller"
+        ],
+        "named": [
+          "r-document-controller"
+        ]
+      }
     },
     {
       "route": "POST compliance/cases/:id/decisions",
@@ -610,7 +641,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.case.decisions",
+        "holders": [
+          "r-pm",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-pm",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "POST compliance/cases/:id/inspections",
@@ -618,7 +660,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.case.inspections",
+        "holders": [
+          "r-pm",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-pm",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "POST compliance/cases/:id/submissions",
@@ -626,7 +679,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.case.submissions",
+        "holders": [
+          "r-document-controller",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-document-controller",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "POST crm/accounts/:id/installed-base",
@@ -1743,7 +1807,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.case.status",
+        "holders": [
+          "r-pm",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-pm",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "PUT compliance/inspections/:inspectionId/outcome",
@@ -1751,7 +1826,18 @@
       "group": "owner-decision",
       "decision": "D-09",
       "holdersBefore": [],
-      "decided": null
+      "decided": {
+        "date": "2026-09-29",
+        "governedBy": "compliance.inspection.outcome",
+        "holders": [
+          "r-pm",
+          "r-project-engineer"
+        ],
+        "named": [
+          "r-pm",
+          "r-project-engineer"
+        ]
+      }
     },
     {
       "route": "PUT elv/devices/:id/commissioning",

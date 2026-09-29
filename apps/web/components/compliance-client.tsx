@@ -39,7 +39,11 @@ interface ComplianceCase {
   createdAt: string;
 }
 
-interface Submission { id: string; attempt: number; submittedAt: string; reference: string | null; fee: number | null; currency: string | null }
+interface Submission {
+  id: string; attempt: number; submittedAt: string; reference: string | null; fee: number | null; currency: string | null;
+  /** SEC-01 D-09: how it was submitted and what proves it — null only on a submission recorded before that rule. */
+  method: 'controlled_package' | 'authority_portal' | null; transmittalId: string | null; evidenceDocumentId: string | null;
+}
 interface Decision { id: string; outcome: string; decisionDate: string; decisionBy: string | null; reason: string | null; conditions: string | null }
 interface Certificate { id: string; number: string; issuedAt: string; expiresAt: string | null; supersededByCertificateId: string | null }
 interface Inspection { id: string; scheduledAt: string | null; conductedAt: string | null; outcome: string | null; reinspectionRequired: boolean }
@@ -47,6 +51,8 @@ interface Renewal { certificate: Certificate; status: 'expired' | 'expiring' | '
 
 const STATUS_TONE: Record<string, 'good' | 'warn' | 'bad' | 'neutral'> = {
   certified: 'good',
+  // Received, not closed (SEC-01 D-09): the PM or Project Engineer still has to confirm closure.
+  certificate_received: 'warn',
   approved: 'good',
   rejected: 'bad',
   expired: 'bad',
@@ -238,7 +244,7 @@ export default function ComplianceClient({
             </Select>
             <Select value={filter.status} onChange={(e) => setFilter({ ...filter, status: e.target.value })}>
               <option value="">Any status</option>
-              {['draft', 'submitted', 'under_review', 'inspection', 'approved', 'certified', 'rejected', 'expired'].map((s) => (
+              {['draft', 'submitted', 'under_review', 'inspection', 'approved', 'certificate_received', 'certified', 'rejected', 'expired'].map((s) => (
                 <option key={s} value={s}>{s.replace('_', ' ')}</option>
               ))}
             </Select>
@@ -260,7 +266,7 @@ export default function ComplianceClient({
                     <Td>{c.obligationCode}</Td>
                     <Td>{c.scope.toLowerCase()}</Td>
                     <Td>{c.system ?? '—'}</Td>
-                    <Td><Badge tone={STATUS_TONE[c.status] ?? 'neutral'}>{c.status.replace('_', ' ')}</Badge></Td>
+                    <Td><span data-testid={`case-status-${c.id}`} title={c.status === 'certificate_received' ? 'Certificate recorded — closure waits for the PM or Project Engineer' : undefined}><Badge tone={STATUS_TONE[c.status] ?? 'neutral'}>{c.status.replace('_', ' ')}</Badge></span></Td>
                     <Td>
                       <Button size="sm" tone="neutral" onClick={() => loadDetail(c.id)}>
                         {openCaseId === c.id ? 'Hide' : 'History'}
@@ -388,6 +394,11 @@ function CaseHistory({ detail }: { detail: { submissions: Submission[]; decision
             <strong>#{s.attempt}</strong> {s.submittedAt}
             {s.reference && ` · ${s.reference}`}
             {s.fee !== null && ` · ${s.currency ?? ''} ${s.fee}`}
+            <span data-testid={`submission-evidence-${s.id}`}>
+              {s.method === 'controlled_package' ? ' · via controlled package (transmittal)'
+                : s.method === 'authority_portal' ? ' · via authority portal, receipt stored'
+                  : ' · recorded before evidence was required'}
+            </span>
           </p>
         ))}
       </section>

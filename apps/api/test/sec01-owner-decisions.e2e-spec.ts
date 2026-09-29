@@ -22,7 +22,8 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
  * the raiser may not answer their own RFI, a variation is submitted before it is decided and never by
  * its raiser — the rule is driven end to end on real records.
  *
- * D-09 (authority approvals) is deliberately absent: it was not applied (see the decision review).
+ * D-09 (authority approvals), answered 2026-09-29, is proved last: who registers, runs, records and closes
+ * a case, that a certificate no longer closes it, and that a submission never exists without evidence.
  */
 const TENANT = 'sec01-decisions-tenant';
 const ROLES = {
@@ -31,6 +32,8 @@ const ROLES = {
   planner: 'r-planning-engineer', site: 'r-site-engineer', tc: 'r-commissioning-engineer', store: 'r-store',
   docControl: 'r-document-controller', estimator: 'r-estimator', preSales: 'r-pre-sales', salesMgr: 'r-sales-manager',
   sales: 'r-sales', buyer: 'r-procurement', procMgr: 'r-procurement-manager',
+  // Fixture identity only — builds the transmittal a submission cites; never an actor under test.
+  admin: 'r-admin',
 } as const;
 type Actor = keyof typeof ROLES;
 
@@ -275,5 +278,109 @@ describe('D-13 — the Estimator prices, Pre-Sales scopes, the Sales Manager kee
     await forbidden('sales', 'post', `crm/opportunities/${X}/outcome/override`, {});
     await allowed('salesMgr', 'post', `${pkg}/open`, {});
     await forbidden('estimator', 'post', `${pkg}/open`, {});
+  });
+});
+
+describe('D-09 — authority approvals: registered by the engineer or document control, run and CLOSED by the PM or engineer', () => {
+  let projectId = '';
+  const code = `DCD-${X.slice(0, 6).toUpperCase()}`;
+  const openCase = (actor: Actor) => call(actor, 'post', 'compliance/cases', {
+    authorityCode: code, obligationCode: 'FIRE_ALARM_NOC', scope: 'PROJECT', subjectId: projectId, projectId, system: 'fire alarm',
+  });
+  const status = async (caseId: string) =>
+    (await request(app.getHttpServer()).get(`/api/v1/compliance/cases/${caseId}`).set('Authorization', `Bearer ${token.pm}`).expect(200)).body.status as string;
+  const storedReceipt = async (caseId: string, text: string) => {
+    const doc = await call('docControl', 'post', 'documents', {
+      kind: 'report', title: 'Authority portal receipt', aggregateType: 'compliance.case', aggregateId: caseId,
+      fileName: 'receipt.txt', contentType: 'text/plain', content: text,
+    }).expect(201);
+    return (doc.body.document?.id ?? doc.body.id) as string;
+  };
+
+  beforeAll(async () => {
+    projectId = (await call('pm', 'post', 'projects/projects', { title: `SEC-01 D-09 ${X.slice(0, 6)}`, reference: `SD9-${X.slice(0, 6)}`, value: 50_000 }).expect(201)).body.id;
+  });
+
+  it('registering an authority and opening a case: the Project Engineer and Document Controller may; the PM and Site may not', async () => {
+    expect((await call('projEng', 'post', 'compliance/authorities', { code, name: 'Dubai Civil Defence', jurisdiction: 'Dubai' })).status).toBe(201);
+    expect((await call('docControl', 'post', 'compliance/authorities', { code: `${code}-B`, name: 'SIRA', jurisdiction: 'Dubai' })).status).toBe(201);
+    await forbidden('pm', 'post', 'compliance/authorities', { code: `${code}-C`, name: 'x', jurisdiction: 'Dubai' });
+    await forbidden('site', 'post', 'compliance/authorities', { code: `${code}-D`, name: 'x', jurisdiction: 'Dubai' });
+    expect((await openCase('projEng')).status).toBe(201);
+    expect((await openCase('docControl')).status).toBe(201);
+    const pmOpen = await openCase('pm');
+    expect(pmOpen.status, 'the PM has oversight, not registration').toBe(403);
+  });
+
+  it('a submission never exists without evidence — a portal needs its receipt and reference, a package its SENT transmittal', async () => {
+    const kase = (await openCase('docControl').expect(201)).body.id as string;
+    const portal = { submittedAt: '2026-09-29', method: 'authority_portal' };
+
+    expect((await call('docControl', 'post', `compliance/cases/${kase}/submissions`, { submittedAt: '2026-09-29' })).status, 'no method, no evidence').toBe(400);
+    const noReceipt = await call('docControl', 'post', `compliance/cases/${kase}/submissions`, { ...portal, reference: 'DCD-PORTAL-1' });
+    expect(noReceipt.status).toBe(400);
+    expect(noReceipt.body.message).toContain('must never exist without evidence');
+    const fakeReceipt = await call('docControl', 'post', `compliance/cases/${kase}/submissions`, { ...portal, reference: 'DCD-PORTAL-1', evidenceDocumentId: randomUUID() });
+    expect(fakeReceipt.status, 'an id that is not a stored document proves nothing').toBe(400);
+    expect(fakeReceipt.body.message).toContain('the submission evidence is invalid');
+
+    const receiptId = await storedReceipt(kase, 'Portal submission DCD-PORTAL-1 received');
+    await forbidden('pm', 'post', `compliance/cases/${kase}/submissions`, { ...portal, reference: 'DCD-PORTAL-1', evidenceDocumentId: receiptId });
+    const recorded = await call('docControl', 'post', `compliance/cases/${kase}/submissions`, { ...portal, reference: 'DCD-PORTAL-1', evidenceDocumentId: receiptId });
+    expect(recorded.status, JSON.stringify(recorded.body)).toBe(201);
+    expect(recorded.body).toMatchObject({ method: 'authority_portal', evidenceDocumentId: receiptId, reference: 'DCD-PORTAL-1' });
+    expect(await status(kase)).toBe('submitted');
+
+    // A controlled package: the transmittal must exist AND have been sent.
+    const second = (await openCase('projEng').expect(201)).body.id as string;
+    const entry = (await call('admin', 'post', 'doccontrol/register', { projectId, documentNumber: `FA-${X.slice(0, 4)}`, title: 'Fire alarm layout', discipline: 'elv' }).expect(201)).body.id as string;
+    const tr = (await call('admin', 'post', 'doccontrol/transmittals', { projectId, code: `TR-D9-${X.slice(0, 6)}`, title: 'NOC submission', sender: 'Document Control', recipient: 'Dubai Civil Defence', purpose: 'For Approval' }).expect(201)).body.id as string;
+    await call('admin', 'post', `doccontrol/transmittals/${tr}/items`, { items: [{ registerEntryId: entry, revision: 'A', purpose: 'for_approval' }] }).expect(201);
+    const draftCited = await call('projEng', 'post', `compliance/cases/${second}/submissions`, { submittedAt: '2026-09-29', method: 'controlled_package', transmittalId: tr });
+    expect(draftCited.status).toBe(400);
+    expect(draftCited.body.message).toContain('is still a draft');
+    await call('admin', 'post', `doccontrol/transmittals/${tr}/recipients`, { userId: 'u-projEng', party: 'other' }).expect(201);
+    const sent = await call('admin', 'post', `doccontrol/transmittals/${tr}/send`, {});
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+    const packaged = await call('projEng', 'post', `compliance/cases/${second}/submissions`, { submittedAt: '2026-09-29', method: 'controlled_package', transmittalId: tr });
+    expect(packaged.status, JSON.stringify(packaged.body)).toBe(201);
+    expect(packaged.body).toMatchObject({ method: 'controlled_package', transmittalId: tr, evidenceDocumentId: null });
+  });
+
+  it('a certificate is RECEIVED, not closed; only the PM or Project Engineer confirms closure, and only on a received certificate', async () => {
+    const kase = (await openCase('projEng').expect(201)).body.id as string;
+    const receiptId = await storedReceipt(kase, 'receipt P-2');
+    await call('docControl', 'post', `compliance/cases/${kase}/submissions`, { submittedAt: '2026-09-29', method: 'authority_portal', reference: 'P-2', evidenceDocumentId: receiptId }).expect(201);
+
+    const early = await call('docControl', 'post', `compliance/cases/${kase}/certificates`, { number: 'NOC-0', issuedAt: '2026-09-29' });
+    expect(early.status, 'a certificate follows an approval').toBe(409);
+    expect(early.body.message).toContain('a certificate can only be recorded on an approved case');
+
+    await forbidden('docControl', 'post', `compliance/cases/${kase}/decisions`, { outcome: 'approved', decisionDate: '2026-09-29' });
+    await call('pm', 'post', `compliance/cases/${kase}/decisions`, { outcome: 'approved', decisionDate: '2026-09-29' }).expect(201);
+    expect(await status(kase)).toBe('approved');
+
+    const skip = await call('pm', 'put', `compliance/cases/${kase}/status`, { status: 'certified' });
+    expect(skip.status, 'approved never jumps to closed').toBe(409);
+    const claimed = await call('projEng', 'put', `compliance/cases/${kase}/status`, { status: 'certificate_received' });
+    expect(claimed.status).toBe(409);
+    expect(claimed.body.message).toBe('a case can only reach certificate received by recording its certificate');
+
+    await forbidden('projEng', 'post', `compliance/cases/${kase}/certificates`, { number: 'NOC-1', issuedAt: '2026-09-29' });
+    await call('docControl', 'post', `compliance/cases/${kase}/certificates`, { number: 'NOC-1', issuedAt: '2026-09-29', expiresAt: '2027-09-29' }).expect(201);
+    expect(await status(kase), 'recording the certificate does NOT close the case').toBe('certificate_received');
+
+    await forbidden('docControl', 'put', `compliance/cases/${kase}/status`, { status: 'certified' });
+    const closed = await call('pm', 'put', `compliance/cases/${kase}/status`, { status: 'certified' });
+    expect(closed.status, JSON.stringify(closed.body)).toBe(200);
+    expect(closed.body.status).toBe('certified');
+  });
+
+  it('inspections and their outcomes are the PM’s and the engineer’s — not document control’s', async () => {
+    const kase = (await openCase('projEng').expect(201)).body.id as string;
+    await forbidden('docControl', 'post', `compliance/cases/${kase}/inspections`, {});
+    const inspection = await call('projEng', 'post', `compliance/cases/${kase}/inspections`, { scheduledAt: '2026-10-05' }).expect(201);
+    await forbidden('docControl', 'put', `compliance/inspections/${inspection.body.id}/outcome`, { outcome: 'pass', conductedAt: '2026-10-05' });
+    await call('pm', 'put', `compliance/inspections/${inspection.body.id}/outcome`, { outcome: 'pass', conductedAt: '2026-10-05' }).expect(200);
   });
 });

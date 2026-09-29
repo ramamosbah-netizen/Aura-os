@@ -25,7 +25,7 @@
 
 ## Owner's decisions, 2026-09-28 — applied
 
-D-01…D-08 and D-10…D-13 are applied as the owner decided them (with the owner's modifications to D-01, D-06, D-08 and D-10), each with an allowed and a forbidden actor proved (`apps/api/test/sec01-owner-decisions.e2e-spec.ts`), the domain rules of D-04, D-05 and D-06 proved on real records, and D-13 applied only after the Estimator's and Pre-Sales' refusals were reproduced in the browser. `sec01-stage4.fitness.test.ts` holds every decided act to exactly the decided holders. **D-09 is not applied** — the section below is the route split it needs.
+D-01…D-08 and D-10…D-13 are applied as the owner decided them (with the owner's modifications to D-01, D-06, D-08 and D-10), each with an allowed and a forbidden actor proved (`apps/api/test/sec01-owner-decisions.e2e-spec.ts`), the domain rules of D-04, D-05 and D-06 proved on real records, and D-13 applied only after the Estimator's and Pre-Sales' refusals were reproduced in the browser. `sec01-stage4.fitness.test.ts` holds every decided act to exactly the decided holders. D-09 was held for the route split below. The owner answered it on 2026-09-29, and it is now applied (see the last section).
 
 ## D-09 — the route split the owner asked to see before anything is applied
 
@@ -53,3 +53,41 @@ Giving the Document Controller the submission or certificate route would hand th
 | Confirm the case certified | `PUT …/cases/:id/status` → `certified` (refused unless a live certificate is recorded) | **PM, Project Engineer** |
 
 **Questions before it is built:** (1) who registers an authority; (2) should recording a certificate keep moving the case to *certified* automatically (simpler; the Document Controller then effectively closes the case) or require the PM/PE's confirmation as proposed; (3) is a submission without a controlled package ever acceptable (e.g. an online portal submission with no transmittal) — if so, the package reference stays optional and the screen says so.
+
+## D-09 — the owner's answers, 2026-09-29 — applied
+
+**The answers.** (1) The Project Engineer and the Document Controller register the authority and open the case. The PE owns the technical side, the DC the controlled submissions and records, and the PM has oversight. (2) Recording the certificate must **not** close the case. The DC records it and the case waits at *certificate received*; the PM or the PE confirms the closure. (3) A submission without a controlled package is allowed only where the method produces none, such as an authority's online portal. It then needs the evidence plus the method and reference, and **a submission never exists without evidence**.
+
+**Who holds what now.**
+
+| Act | Route | Holder |
+|---|---|---|
+| Register an authority; open a case | `POST compliance/authorities`, `POST compliance/cases` | Project Engineer, Document Controller |
+| Change a case's status (including confirming closure); schedule inspections and record their outcomes; record the authority's decision | `PUT …/cases/:id/status`, `…/inspections`, `…/inspections/:id/outcome`, `…/decisions` | PM, Project Engineer |
+| Record a submission | `POST …/cases/:id/submissions` | Document Controller, Project Engineer ¹ |
+| Record the certificate | `POST …/cases/:id/certificates` | Document Controller |
+| Read the register | `compliance.*.read` | PM, Project Engineer, Document Controller |
+
+**The transition and closure rules, enforced in the domain:**
+
+- A new state, `certificate_received`, sits between *approved* and *certified*.
+- Recording a certificate moves an approved case (or a certified or expired one being renewed) to *certificate received*. Anywhere else it is refused with 409.
+- Nobody can set *certificate received* by hand ("a case can only reach certificate received by recording its certificate").
+- *Certified* is reachable only from *certificate received*, and only with a live certificate on file. *Approved* can never jump straight to *certified*.
+
+**Evidence** (migration 0399, enforced by the table as well as the domain, so no writer can skip it):
+
+- Every submission names its method.
+- A `controlled_package` submission cites a Document Control transmittal that was actually **sent**. A draft transmittal is refused, because nothing reached the authority.
+- An `authority_portal` submission cites a stored DMS document the recorder can open, plus the portal reference. An id that is not a stored document is refused.
+- Submissions recorded before 0399 have no method. The constraint is `NOT VALID`, so they are kept as they were, and the screen labels them "recorded before evidence was required".
+
+**How this differs from the split proposed above.** There is no separate `submission-packages` route. The submission cites the transmittal directly, because the transmittal *is* Document Control's controlled package: making it a second record would only duplicate it.
+
+¹ **An interpretation to confirm.** The owner gave the controlled submissions to the Document Controller, and the operational process to the PM and PE. Recording a submission is both at once: it files the record and moves the case to *submitted*. It is therefore given to the DC **and** to the PE, since a portal submission is often made by the engineer. If the owner wants it to be the Document Controller's alone, that is a one-line role change, and the fitness test and the e2e allowed/forbidden pair go with it.
+
+**Proof:**
+
+- `apps/api/test/sec01-owner-decisions.e2e-spec.ts` (Auth ON, shipped roles): the allowed and forbidden actor for every act, including the PM refused registration, submission and certificate, the DC refused decisions, inspections and closure, and the PE refused the certificate. It also covers every evidence refusal and the hold at *certificate received* before the PM confirms closure.
+- `modules/compliance/src/postgres-compliance-evidence.pg.test.ts`: against PostgreSQL, the table refuses an unevidenced submission however it is written, and a *certificate received* case persists.
+- `apps/web/e2e/compliance-certificate-received.spec.ts`: on the real /compliance screen, the recorded certificate leaves the case at *certificate received*, with a note that closure waits for the PM or PE. The submission's evidence is shown, and the case reads *certified* only after closure is confirmed.

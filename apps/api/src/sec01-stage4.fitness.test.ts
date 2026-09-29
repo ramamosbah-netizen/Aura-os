@@ -77,9 +77,10 @@ describe('SEC-01 stage 4 — wave G named what roles already reached; the owner 
    * name. `governedBy` is the permission the route now asks for: its derived name, or, for the pre-award
    * routes of D-13, the permission it now declares.
    */
-  it('each owner-decided act (D-01…D-13, except D-09) is reached by exactly the decided roles', () => {
+  it('each owner-decided act (D-01…D-13) is reached by exactly the decided roles', () => {
     const decidedRoutes = routes.filter((x) => x.group === 'owner-decision' && x.decided);
-    expect(decidedRoutes).toHaveLength(44);
+    // Every owner-decision route is decided: D-09 was answered on 2026-09-29.
+    expect(decidedRoutes).toHaveLength(52);
     for (const r of decidedRoutes) {
       const d = r.decided!;
       expect(reachers(d.governedBy), `${r.route} (${r.decision}): ${d.governedBy} must be reached by exactly the decided roles`).toEqual(d.holders);
@@ -104,18 +105,17 @@ describe('SEC-01 stage 4 — wave G named what roles already reached; the owner 
     // D-13: the pricing policy and the outcome override stay the Sales Manager's alone.
     expect(reachers('crm.opportunity.policy')).toEqual(['r-sales-manager']);
     expect(reachers('crm.opportunity.override')).toEqual(['r-sales-manager']);
+    // D-09: recording the certificate is the Document Controller's alone; confirming closure (the
+    // status route) is the PM's and the Project Engineer's, and the Document Controller cannot reach it.
+    expect(reachers('compliance.case.certificates')).toEqual(['r-document-controller']);
+    expect(reachers('compliance.case.status')).toEqual(['r-pm', 'r-project-engineer']);
   });
 
-  it('D-09 stays undecided: no role names its permissions, and nobody new reaches them', () => {
-    const held = routes.filter((x) => x.group === 'owner-decision' && x.decided === null);
-    expect(held.map((r) => r.decision)).toEqual(Array(8).fill('D-09'));
-    for (const r of held) {
-      expect(namers(r.derived), `${r.derived} waits for the D-09 route split — naming it decides it`).toEqual([]);
-      expect(reachers(r.derived), `${r.route}: the holders of an undecided act changed`).toEqual(r.holdersBefore);
-    }
+  it('no owner-decision route is left undecided', () => {
+    expect(routes.filter((x) => x.group === 'owner-decision' && !x.decided)).toEqual([]);
   });
 
-  it('the allowlist now holds exactly the undecided D-09 routes — the webhooks are signed, not granted', () => {
+  it('the allowlist is EMPTY — every stage-4 route is named, declared, or signed', () => {
     const still = new Set(ungovernedMutations().map(routeKey) as string[]);
     // The two inbound webhooks left it as authentication work (@SignedInbound, pinned by
     // signed-inbound.fitness.test.ts) — and no role gained them: that is asserted by the checks above

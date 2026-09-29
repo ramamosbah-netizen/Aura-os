@@ -45,6 +45,10 @@ export const CASE_STATUSES = [
   'under_review',
   'inspection',
   'approved',
+  // SEC-01 D-09 (owner, 2026-09-29): recording the authority's certificate does NOT close the case.
+  // The Document Controller records it and the case waits here; the PM or Project Engineer confirms
+  // closure, which is `certified`.
+  'certificate_received',
   'certified',
   'rejected',
   'expired',
@@ -160,10 +164,13 @@ const NEXT: Record<ComplianceCaseStatus, ComplianceCaseStatus[]> = {
   submitted: ['under_review', 'inspection', 'approved', 'rejected', 'withdrawn'],
   under_review: ['inspection', 'approved', 'rejected'],
   inspection: ['approved', 'rejected', 'under_review'],
-  approved: ['certified', 'rejected'],
-  certified: ['expired', 'submitted'],
+  // A certificate is RECEIVED before the case is closed on it — never approved → certified directly.
+  approved: ['certificate_received', 'rejected'],
+  certificate_received: ['certified'],
+  // A renewal certificate can arrive for a certified or expired case; it too waits for confirmation.
+  certified: ['expired', 'submitted', 'certificate_received'],
   rejected: ['submitted', 'withdrawn'],
-  expired: ['submitted', 'withdrawn'],
+  expired: ['submitted', 'withdrawn', 'certificate_received'],
   withdrawn: [],
 };
 

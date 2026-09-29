@@ -108,6 +108,24 @@
       "state": "hardcoded",
       "foundBy": "SEC-01 webhooks",
       "note": "Right for JEET-first. A second company needs its own credential bound to its own tenant, issued and rotated from company settings. The signature check itself is a platform invariant and stays fail-closed."
+    },
+    {
+      "id": "CC-12",
+      "rule": "The owner-decided holders of each authority act (SEC-01 D-01…D-13: payments, VAT, guarantees, engineering review, RFIs, variations, lifecycle, authority approvals, devices, documents, estimation) are the Standard Contractor default written into the role catalogue.",
+      "where": "core/src/identity/standard-elv-roles.ts (the decision constants), pinned by apps/api/src/sec01-stage4.fitness.test.ts",
+      "category": "permission",
+      "state": "hardcoded",
+      "foundBy": "SEC-01 D-01…D-13",
+      "note": "Right for JEET. Another company will name different holders. Making this configurable means the fitness pin moves to the default policy, not that it goes away. The separation-of-duties rules that came with the decisions are platform invariants and are NOT to be made configurable: an author may not review or decide their own engineering item, a raiser may not answer their own RFI or decide their own variation, and a variation is decided only after submission."
+    },
+    {
+      "id": "CC-13",
+      "rule": "A submission to an authority is made as a controlled package (a transmittal that was sent) or through an authority portal (a stored receipt plus the portal reference).",
+      "where": "modules/compliance/src/domain/case-records.ts (SUBMISSION_METHODS); infrastructure/migrations/0399 (chk_aura_compliance_submission_evidence)",
+      "category": "evidence-requirement",
+      "state": "hardcoded",
+      "foundBy": "SEC-01 D-09",
+      "note": "That a submission never exists without evidence is a platform invariant. Which methods exist, and what evidence each needs, is company/authority configuration: a hand-delivered submission with a stamped acknowledgement, say. Adding a method today takes a code change and a migration to the check."
     }
   ]
 }

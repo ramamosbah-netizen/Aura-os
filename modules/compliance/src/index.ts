@@ -5,4 +5,5 @@ export * from './store.interface';
 export * from './in-memory-compliance-store';
 export * from './postgres-compliance-store';
 export * from './compliance.service';
+export * from './compliance-evidence.port';
 export * from './compliance.module';

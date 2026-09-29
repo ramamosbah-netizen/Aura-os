@@ -728,6 +728,19 @@ const PRE_AWARD_PRICING = ['crm.pricing-sheet.open', 'crm.pricing-sheet.revise',
 const SALES_MANAGER_PRE_AWARD = ['crm.opportunity.open', 'crm.opportunity.override', 'crm.opportunity.policy'] as const;
 /** D-12 — model calibration and AI completion stay system administration until AI access is designed. */
 const AI_ADMINISTRATION = ['intelligence.calibration.trigger', 'ai.complete.create'] as const;
+/**
+ * D-09 — AUTHORITY APPROVALS (Civil Defence, SIRA, utilities), owner 2026-09-29. The Project Engineer owns
+ * the technical side and the Document Controller the controlled submissions and records; either may
+ * register the authority and open the case. The PM has oversight: with the Project Engineer they run the
+ * process — status, inspections, the authority's decision — and they alone CONFIRM CLOSURE. Recording
+ * the certificate is the Document Controller's, and it does not close the case (the compliance domain
+ * holds it at `certificate_received`). A submission is recorded by the Document Controller or the
+ * Project Engineer, and never without evidence (the domain refuses it).
+ */
+const AUTHORITY_CASE_REGISTRATION = ['compliance.authority.create', 'compliance.case.create'] as const;
+const AUTHORITY_PROCESS = ['compliance.case.status', 'compliance.case.inspections', 'compliance.inspection.outcome', 'compliance.case.decisions'] as const;
+const AUTHORITY_SUBMISSION = 'compliance.case.submissions';
+const AUTHORITY_CERTIFICATE_RECORD = 'compliance.case.certificates';
 
 export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
   {
@@ -917,7 +930,8 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Coordinates technical, site, quality and material work inside an assigned project.',
     assignmentScope: 'project',
     permissions: [
-      'projects.*.read', 'projects.issue.*', 'projects.risk.*', ...SEC01_ISSUE_AND_RISK_WORK, 'engineering.rfi.create', RFI_ANSWER, ...ELV_DEVICE_REGISTRATION, PROJECT_RESPONSIBILITY_WORK,
+      'projects.*.read', 'projects.issue.*', 'projects.risk.*', ...SEC01_ISSUE_AND_RISK_WORK, 'engineering.rfi.create', RFI_ANSWER, ...ELV_DEVICE_REGISTRATION,
+      ...AUTHORITY_CASE_REGISTRATION, ...AUTHORITY_PROCESS, AUTHORITY_SUBMISSION, readOnly('compliance'), PROJECT_RESPONSIBILITY_WORK,
       // Also on the raising side of a technical query: accepts an answer as adequate, never gives one.
       'engineering.*.read', 'engineering.rfi.*', 'engineering.tq.close', 'site.*.read', 'quality.*.read',
       // Also on the proposing side of a material approval; decides none.
@@ -937,6 +951,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'project',
     permissions: [
       ...PROJECTS_DELIVERY, ...SEC01_COST_AND_VARIATION_WORK, ...SEC01_ISSUE_AND_RISK_WORK, ...SEC01_WBS_AND_DELAY_WORK, ...SEC01_PM_ONLY_WORK, ...PM_LIFECYCLE_AUTHORITY,
+      ...AUTHORITY_PROCESS, readOnly('compliance'),
       readOnly('projects'), 'contracts.certificate.create', 'contracts.certificate.update',
       // RAISES a subcontractor application and instructs a variation for work on their own project,
       // and CERTIFIES NEITHER. That separation is the point: the person who says the work was done is
@@ -1296,6 +1311,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     assignmentScope: 'tenant-or-project',
     permissions: [
       ...DOCCONTROL_RELEASE_AUTHORITY, ...GENERIC_DOCUMENT_CONTROL,
+      ...AUTHORITY_CASE_REGISTRATION, AUTHORITY_SUBMISSION, AUTHORITY_CERTIFICATE_RECORD, readOnly('compliance'),
       readOnly('doccontrol'), readOnly('engineering'), readOnly('projects'), ...STAFF_BASE,
     ],
   },

@@ -103,12 +103,19 @@ describe('ComplianceCase — coverage', () => {
 });
 
 describe('ComplianceCase — lifecycle', () => {
-  it('walks the happy path to a certificate', () => {
+  it('walks the happy path to a certificate — received first, closed only after (D-09)', () => {
     let c = projectCase();
-    for (const s of ['submitted', 'under_review', 'approved', 'certified'] as const) {
+    for (const s of ['submitted', 'under_review', 'approved', 'certificate_received', 'certified'] as const) {
       c = setCaseStatus(c, s);
     }
     expect(c.status).toBe('certified');
+  });
+
+  it('never closes a case straight from approval — the certificate is received before the case is closed on it', () => {
+    let c = projectCase();
+    for (const s of ['submitted', 'approved'] as const) c = setCaseStatus(c, s);
+    expect(() => setCaseStatus(c, 'certified')).toThrow(/can follow approved/);
+    expect(setCaseStatus(c, 'certificate_received').status).toBe('certificate_received');
   });
 
   it('lets a rejected case be resubmitted — a refusal is the middle of a case, not the end', () => {
@@ -119,8 +126,10 @@ describe('ComplianceCase — lifecycle', () => {
 
   it('treats renewal as the same journey run again, from certified or expired', () => {
     let c = projectCase();
-    for (const s of ['submitted', 'under_review', 'approved', 'certified'] as const) c = setCaseStatus(c, s);
+    for (const s of ['submitted', 'under_review', 'approved', 'certificate_received', 'certified'] as const) c = setCaseStatus(c, s);
     expect(setCaseStatus(c, 'submitted').status).toBe('submitted');
+    // A renewal certificate for a certified or expired case is received and waits for confirmation too.
+    expect(setCaseStatus(c, 'certificate_received').status).toBe('certificate_received');
 
     const expired = setCaseStatus(c, 'expired');
     expect(setCaseStatus(expired, 'submitted').status).toBe('submitted');
@@ -154,16 +163,35 @@ describe('ComplianceCase — lifecycle', () => {
 
 describe('Submissions — attempt history', () => {
   it('numbers attempts so a resubmission does not overwrite the first', () => {
-    const first = makeSubmission({ tenantId: 't1', caseId: 'c1', attempt: 1, submittedAt: '2026-08-01' });
-    const second = makeSubmission({ tenantId: 't1', caseId: 'c1', attempt: 2, submittedAt: '2026-09-01' });
+    const first = makeSubmission({ tenantId: 't1', caseId: 'c1', attempt: 1, submittedAt: '2026-08-01', method: 'controlled_package', transmittalId: 'tr-1' });
+    const second = makeSubmission({ tenantId: 't1', caseId: 'c1', attempt: 2, submittedAt: '2026-09-01', method: 'controlled_package', transmittalId: 'tr-2' });
     expect(first.id).not.toBe(second.id);
     expect([first.attempt, second.attempt]).toEqual([1, 2]);
   });
 
   it('refuses a negative fee', () => {
     expect(() =>
-      makeSubmission({ tenantId: 't1', caseId: 'c1', attempt: 1, submittedAt: '2026-08-01', fee: -5 }),
+      makeSubmission({ tenantId: 't1', caseId: 'c1', attempt: 1, submittedAt: '2026-08-01', fee: -5, method: 'controlled_package', transmittalId: 'tr-1' }),
     ).toThrow(/fee cannot be negative/);
+  });
+});
+
+describe('Submissions — never without evidence (SEC-01 D-09)', () => {
+  const base = { tenantId: 't1', caseId: 'c1', attempt: 1, submittedAt: '2026-10-01' };
+  it('a controlled-package submission carries the transmittal that sent it', () => {
+    expect(() => makeSubmission({ ...base, method: 'controlled_package' })).toThrow('a controlled-package submission requires the transmittal that carried it');
+    const s = makeSubmission({ ...base, method: 'controlled_package', transmittalId: 'tr-9', evidenceDocumentId: 'ignored' });
+    expect(s).toMatchObject({ method: 'controlled_package', transmittalId: 'tr-9', evidenceDocumentId: null });
+  });
+  it('a portal submission needs BOTH the portal reference and a stored evidence document', () => {
+    expect(() => makeSubmission({ ...base, method: 'authority_portal', reference: 'DCD-PORTAL-77' })).toThrow(/never exist without evidence/);
+    expect(() => makeSubmission({ ...base, method: 'authority_portal', evidenceDocumentId: 'doc-1' })).toThrow(/never exist without evidence/);
+    expect(() => makeSubmission({ ...base, method: 'authority_portal', evidenceDocumentId: 'doc-1', reference: '   ' })).toThrow(/never exist without evidence/);
+    const s = makeSubmission({ ...base, method: 'authority_portal', evidenceDocumentId: 'doc-1', reference: 'DCD-PORTAL-77' });
+    expect(s).toMatchObject({ method: 'authority_portal', evidenceDocumentId: 'doc-1', transmittalId: null, reference: 'DCD-PORTAL-77' });
+  });
+  it('refuses a submission that says nothing about how it was made', () => {
+    expect(() => makeSubmission({ ...base, method: 'email' as never })).toThrow(/submission method must be one of/);
   });
 });
 

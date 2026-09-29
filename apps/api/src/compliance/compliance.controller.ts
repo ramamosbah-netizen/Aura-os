@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, NotFoundException, Param, Post, Put, Query } from '@nestjs/common';
-import { IsIn, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { TenantContext } from '@aura/core';
 import { parsePageParams, businessDate } from '@aura/shared';
 import {
@@ -8,6 +8,7 @@ import {
   CASE_STATUSES,
   DECISION_OUTCOMES,
   INSPECTION_OUTCOMES,
+  SUBMISSION_METHODS,
   ComplianceService,
   type ComplianceCase,
   type ComplianceCaseStatus,
@@ -15,6 +16,7 @@ import {
   type CoverageMode,
   type DecisionOutcome,
   type InspectionOutcome,
+  type SubmissionMethod,
 } from '@aura/compliance';
 
 class RegisterAuthorityDto {
@@ -39,6 +41,10 @@ class OpenCaseDto {
 
 class SubmitDto {
   @IsString() submittedAt!: string;
+  // SEC-01 D-09: how it was submitted, and what proves it — the service refuses a submission without evidence.
+  @IsIn(SUBMISSION_METHODS as unknown as string[]) method!: SubmissionMethod;
+  @IsOptional() @IsUUID() transmittalId?: string;
+  @IsOptional() @IsUUID() evidenceDocumentId?: string;
   @IsOptional() @IsString() reference?: string;
   @IsOptional() @IsInt() @Min(0) fee?: number;
   @IsOptional() @IsString() currency?: string;
@@ -184,9 +190,14 @@ export class ComplianceController {
     return found;
   }
 
+  /**
+   * The PM's and Project Engineer's transitions (SEC-01 D-09) — including CLOSURE, `certified`, which
+   * only a received, live certificate permits. `certificate_received` is not settable here: it is
+   * reached only by recording the certificate.
+   */
   @Put('cases/:id/status')
   changeStatus(@Param('id') id: string, @Body() dto: CaseStatusDto): Promise<ComplianceCase> {
-    return this.service.changeCaseStatus(id, this.tenant.get().tenantId, dto.status);
+    return this.service.changeCaseStatusByHand(id, this.tenant.get().tenantId, dto.status);
   }
 
   // ── Submissions ──────────────────────────────────────────────────────────────

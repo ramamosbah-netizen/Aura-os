@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, ServiceUnavailableException } from '@nestjs/common';
 import { type ExpiryStatus, type Id, type Page, type PageParams, makeEvent } from '@aura/shared';
 import { EVENT_STORE, type EventStore } from '@aura/core';
 import { type Authority, type NewAuthority, makeAuthority } from './domain/authority';
@@ -17,6 +17,7 @@ import {
   type DecisionOutcome,
   type InspectionOutcome,
   type NewComplianceCertificate,
+  type SubmissionMethod,
   certificateStatus,
   currentCertificate,
   makeCertificate,
@@ -27,6 +28,7 @@ import {
   renew,
 } from './domain/case-records';
 import { COMPLIANCE_STORE, type CaseFilter, type ComplianceStore } from './store.interface';
+import { COMPLIANCE_EVIDENCE, type ComplianceEvidencePort } from './compliance-evidence.port';
 
 /**
  * Compliance Core service (ADR-0018).
@@ -46,6 +48,8 @@ export class ComplianceService {
   constructor(
     @Inject(COMPLIANCE_STORE) private readonly store: ComplianceStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Explicit @Inject: an optional union-typed parameter without it is silently null.
+    @Optional() @Inject(COMPLIANCE_EVIDENCE) private readonly evidence: ComplianceEvidencePort | null = null,
   ) {}
 
   // ── Authorities ──────────────────────────────────────────────────────────────
@@ -106,6 +110,24 @@ export class ComplianceService {
     return c;
   }
 
+  /**
+   * A transition asked for BY HAND — the status route (SEC-01 D-09, owner 2026-09-29).
+   *
+   * `certificate_received` is reached only by recording the certificate: set by hand, it would say a
+   * certificate arrived that nobody recorded. `certified` is the case's CLOSURE, confirmed by the PM or
+   * Project Engineer (who alone hold the route) and only on a received certificate that is still live.
+   */
+  async changeCaseStatusByHand(id: Id, tenantId: Id, status: ComplianceCaseStatus): Promise<ComplianceCase> {
+    if (status === 'certificate_received') {
+      throw new Error('a case can only reach certificate received by recording its certificate');
+    }
+    if (status === 'certified') {
+      const live = currentCertificate(await this.store.listCertificates(tenantId, id));
+      if (!live) throw new Error('a case can only be closed as certified on a recorded, live certificate');
+    }
+    return this.changeCaseStatus(id, tenantId, status);
+  }
+
   /** Guarded transition — the sequence lives in the domain. */
   async changeCaseStatus(id: Id, tenantId: Id, status: ComplianceCaseStatus): Promise<ComplianceCase> {
     const existing = await this.requireCase(id, tenantId);
@@ -133,16 +155,35 @@ export class ComplianceService {
   async submit(
     caseId: Id,
     tenantId: Id,
-    input: { submittedAt: string; submittedBy?: Id | null; reference?: string | null; fee?: number | null; currency?: string | null; notes?: string | null },
+    input: {
+      submittedAt: string; submittedBy?: Id | null; reference?: string | null; fee?: number | null; currency?: string | null; notes?: string | null;
+      method: SubmissionMethod; transmittalId?: Id | null; evidenceDocumentId?: Id | null;
+    },
   ): Promise<ComplianceSubmission> {
     const c = await this.requireCase(caseId, tenantId);
     const prior = await this.store.listSubmissions(tenantId, caseId);
+    // The shape first (method, and the evidence it demands), then that the evidence is REAL.
     const submission = makeSubmission({ tenantId, caseId, attempt: prior.length + 1, ...input });
+    await this.assertEvidence(tenantId, submission, input.submittedBy ?? null);
 
     await this.store.addSubmission(submission);
     // draft → submitted, or rejected/expired/certified → submitted for a resubmission or renewal.
     if (c.status !== 'submitted') await this.changeCaseStatus(caseId, tenantId, 'submitted');
     return submission;
+  }
+
+  /**
+   * A submission's evidence must exist, belong to this tenant, and — for a package — have been SENT.
+   * Fail-closed: with no way to check, nothing is recorded (503), because an unchecked id is not proof.
+   */
+  private async assertEvidence(tenantId: Id, s: ComplianceSubmission, actorId: Id | null): Promise<void> {
+    if (!this.evidence) {
+      throw new ServiceUnavailableException('submission evidence cannot be verified here, so no submission is recorded');
+    }
+    const answer = s.method === 'controlled_package'
+      ? await this.evidence.sentTransmittal(tenantId, s.transmittalId!)
+      : await this.evidence.readableDocument(tenantId, s.evidenceDocumentId!, actorId);
+    if (!answer.ok) throw new Error(`the submission evidence is invalid: ${answer.reason}`);
   }
 
   listSubmissions(tenantId: Id, caseId: Id): Promise<ComplianceSubmission[]> {
@@ -215,7 +256,12 @@ export class ComplianceService {
   // ── Certificates (append-only series) ────────────────────────────────────────
 
   async issueCertificate(caseId: Id, tenantId: Id, input: Omit<NewComplianceCertificate, 'tenantId' | 'caseId'>): Promise<ComplianceCertificate> {
-    await this.requireCase(caseId, tenantId);
+    const c = await this.requireCase(caseId, tenantId);
+    // SEC-01 D-09: recording a certificate RECEIVES it — the case waits for the PM or Project Engineer
+    // to confirm closure. It follows an approval (or renews a certified / expired case), nothing else.
+    if (!['approved', 'certified', 'expired'].includes(c.status)) {
+      throw new Error(`a certificate can only be recorded on an approved case, or to renew a certified or expired one — this case is ${c.status}`);
+    }
     const existing = await this.store.listCertificates(tenantId, caseId);
     const live = currentCertificate(existing);
 
@@ -229,13 +275,13 @@ export class ComplianceService {
       // why it took a live probe to find.
       await this.store.saveCertificate(current);
       await this.store.saveCertificate(previous);
-      await this.changeCaseStatus(caseId, tenantId, 'certified').catch(() => undefined);
+      await this.changeCaseStatus(caseId, tenantId, 'certificate_received');
       return current;
     }
 
     const certificate = makeCertificate({ tenantId, caseId, ...input });
     await this.store.saveCertificate(certificate);
-    await this.changeCaseStatus(caseId, tenantId, 'certified');
+    await this.changeCaseStatus(caseId, tenantId, 'certificate_received');
     await this.events.append([
       makeEvent({
         type: 'compliance.certificate.issued',

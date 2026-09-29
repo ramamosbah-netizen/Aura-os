@@ -1284,6 +1284,23 @@ defects.push({
  "acceptanceProof": "Against the running API and PostgreSQL: a correctly signed call inside the window is recorded once; the identical request re-sent is refused and records nothing; a call whose signed timestamp is outside the window is refused; a call with a valid signature over a body whose timestamp was altered is refused; and the device contract is written down."
 });
 
+/**
+ * SEC-01 CLOSED (2026-09-29) — D-09 answered and applied, and the allowlist is EMPTY. Placed after every
+ * other write to SEC-01 so nothing earlier can reopen it. The residue is stated, not hidden: read routes
+ * still reached only by a wildcard, role wildcards that still re-grant named acts, SEC-TEL-01, and the
+ * one D-09 interpretation the owner may narrow.
+ */
+Object.assign(defects.find(g=>g.id==='SEC-01'),{
+ classification:'COMPLETE', status:'CLOSED_VERIFIED',
+ currentBehavior:(defects.find(g=>g.id==='SEC-01')?.currentBehavior??'')+" D-09, AUTHORITY APPROVALS (owner, 2026-09-29): 8 \u2192 0. The owner answered the split: the Project Engineer and the Document Controller register an authority and open a case (the PM has oversight, not registration); the PM and the Project Engineer run the process \u2014 status, inspections and their outcomes, the authority's decision \u2014 and ALONE confirm closure; the Document Controller records the certificate, and with the Project Engineer records submissions. Two domain rules came with it. RECORDING A CERTIFICATE NO LONGER CLOSES THE CASE: a new state, certificate_received, sits between approved and certified; a certificate can be recorded only on an approved case (or to renew a certified or expired one), nobody can set certificate_received by hand, and certified is reachable only from it and only with a live certificate. A SUBMISSION NEVER EXISTS WITHOUT EVIDENCE: every submission names its method \u2014 a controlled_package cites a Document Control transmittal that was actually SENT (a draft is refused), an authority_portal submission cites a stored document the recorder can open plus the portal reference \u2014 enforced by the service through a Compliance-owned evidence port and by the table itself (migration 0399, NOT VALID so pre-existing submissions are neither rewritten nor given a method nobody recorded). THE ALLOWLIST IS EMPTY: every mutating route in the API derives a name a role NAMES, declares its permission, or \u2014 the two inbound webhooks \u2014 authenticates by signature.",
+ acceptanceProof:(defects.find(g=>g.id==='SEC-01')?.acceptanceProof??'')+" STAGE 4 MET, AND SEC-01 CLOSES ON ITS OWN CRITERION \u2014 'the allowlist is empty and the fitness test stands alone', each stage on Auth-ON proof with real principals. The route audit reports 0 mutating routes whose derived name only a wildcard reaches and 0 governing verbs; route-permission-allowlist.json holds routes [] and governed-routes.fitness.test.ts now fails the build on ANY new one; sec01-stage4.fitness.test.ts pins all 52 decided routes to exactly their decided holders and fails if any is left undecided. D-09 PROOF: sec01-owner-decisions.e2e-spec.ts (Auth ON, the shipped catalogue, 21/21) \u2014 the PE and DC register and open, the PM is refused both; the PM is refused a submission and the DC records one; a submission with no method, a portal one with no receipt, and one citing an id that is not a stored document are each refused (400), a draft transmittal is refused ('is still a draft') and the same transmittal once SENT is accepted; a certificate on a merely submitted case is refused (409); approved cannot be moved to certified (409) nor to certificate_received by hand (409); the PE is refused the certificate, the DC records it and the case stays at certificate_received; the DC is refused closure and the PM confirms it; inspections and their outcomes are refused to the DC and done by the PE and PM. POSTGRESQL (postgres-compliance-evidence.pg.test.ts, 3/3): both evidence shapes persist and read back; the TABLE refuses a submission with no method, a package with no transmittal, a portal submission with no or a blank reference or no receipt, and an unknown method, whatever writes it; a certificate_received case persists. BROWSER against the running API and PostgreSQL (compliance-certificate-received.spec.ts, with the existing compliance.spec.ts, 7/7): the /compliance register shows the case at 'certificate received' with 'closure waits for the PM or Project Engineer', the submission's evidence in its history, and 'certified' only after closure is confirmed. WHAT THIS CLOSURE DOES NOT CLAIM: (1) 266 READ routes still derive a name only a wildcard reaches \u2014 SEC-01 concerned acts that manufacture business facts, and a read is outside that criterion, not proved governed; (2) role wildcards remain (entity wildcards such as projects.milestone.*, and crm.* on the Sales Manager), so naming an act did not narrow what those wildcards also re-grant \u2014 narrowing them means enumerating their reads too; (3) SEC-TEL-01 (signed telemetry accepts a replay) stays OPEN as its own record; (4) ONE D-09 INTERPRETATION FOR THE OWNER TO CONFIRM: recording a submission both files the record and moves the case to submitted, so it is held by the Document Controller AND the Project Engineer \u2014 if the owner wants it the Document Controller's alone, that is a one-line role change with its fitness and allowed/forbidden pair; (5) no Admin Center or configurable authority policy was built \u2014 who holds each act is the Standard Contractor default in code, and CC candidates record where a company will need to change it.",
+});
+
+/** J1-09 \u2014 the Executive amount stays the owner's (2026-09-29). Placed after the EST-17 update to J1-09. */
+Object.assign(prior.find(g=>g.id==='J1-09'),{
+ currentBehavior: prior.find(g=>g.id==='J1-09').currentBehavior + " OWNER, 2026-09-29: the Executive quotation-approval amount stays PENDING and no monetary threshold is to be invented; it remains an explicit owner / company-policy decision until an approved JEET amount is provided. Nothing about the policy or the gap changes until then.",
+});
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));
@@ -1439,6 +1456,24 @@ const configurationCandidates=[
   "state": "hardcoded",
   "foundBy": "SEC-01 webhooks",
   "note": "Right for JEET-first. A second company needs its own credential bound to its own tenant, issued and rotated from company settings. The signature check itself is a platform invariant and stays fail-closed."
+ },
+ {
+  "id": "CC-12",
+  "rule": "The owner-decided holders of each authority act (SEC-01 D-01\u2026D-13: payments, VAT, guarantees, engineering review, RFIs, variations, lifecycle, authority approvals, devices, documents, estimation) are the Standard Contractor default written into the role catalogue.",
+  "where": "core/src/identity/standard-elv-roles.ts (the decision constants), pinned by apps/api/src/sec01-stage4.fitness.test.ts",
+  "category": "permission",
+  "state": "hardcoded",
+  "foundBy": "SEC-01 D-01\u2026D-13",
+  "note": "Right for JEET. Another company will name different holders. Making this configurable means the fitness pin moves to the default policy, not that it goes away. The separation-of-duties rules that came with the decisions are platform invariants and are NOT to be made configurable: an author may not review or decide their own engineering item, a raiser may not answer their own RFI or decide their own variation, and a variation is decided only after submission."
+ },
+ {
+  "id": "CC-13",
+  "rule": "A submission to an authority is made as a controlled package (a transmittal that was sent) or through an authority portal (a stored receipt plus the portal reference).",
+  "where": "modules/compliance/src/domain/case-records.ts (SUBMISSION_METHODS); infrastructure/migrations/0399 (chk_aura_compliance_submission_evidence)",
+  "category": "evidence-requirement",
+  "state": "hardcoded",
+  "foundBy": "SEC-01 D-09",
+  "note": "That a submission never exists without evidence is a platform invariant. Which methods exist, and what evidence each needs, is company/authority configuration: a hand-delivered submission with a stamped acknowledgement, say. Adding a method today takes a code change and a migration to the check."
  }
 ];
 write('configuration-candidates.json',JSON.stringify({date:'2026-09-28',rule:'Owner, 2026-09-28: AURA is JEET-first but multi-company-ready. Every hardcoded business rule found while closing a gap is logged here and classified; nothing here is built yet.',categories:['platform-invariant','company-policy','workflow','permission','evidence-requirement','system-configuration'],candidates:configurationCandidates},null,2));

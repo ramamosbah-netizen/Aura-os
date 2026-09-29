@@ -11,6 +11,21 @@ import { type Id, newId, classifyExpiry, daysUntil, type ExpiryStatus } from '@a
 
 // ── Submission ─────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * HOW A SUBMISSION REACHED THE AUTHORITY, and therefore what proves it (SEC-01 D-09, owner 2026-09-29).
+ *
+ *   controlled_package  the controlled documents went out as a doccontrol transmittal — the package
+ *                       IS the evidence, so the transmittal is required
+ *   authority_portal    the method produces no package (an authority's online portal): the portal's
+ *                       submission reference AND a stored evidence document (the portal receipt)
+ *                       are required instead
+ *
+ * A submission never exists without evidence. Rows recorded before this rule carry no method; the
+ * database's check does not reach back to them and nothing is invented for them.
+ */
+export const SUBMISSION_METHODS = ['controlled_package', 'authority_portal'] as const;
+export type SubmissionMethod = (typeof SUBMISSION_METHODS)[number];
+
 export interface ComplianceSubmission {
   id: Id;
   tenantId: Id;
@@ -24,6 +39,12 @@ export interface ComplianceSubmission {
   fee: number | null;
   currency: string | null;
   notes: string | null;
+  /** Null only on a submission recorded before D-09 required evidence. */
+  method: SubmissionMethod | null;
+  /** The doccontrol transmittal that carried the controlled package (controlled_package). */
+  transmittalId: Id | null;
+  /** The stored evidence of a portal submission — the portal's receipt (authority_portal). */
+  evidenceDocumentId: Id | null;
 }
 
 export interface NewComplianceSubmission {
@@ -36,10 +57,25 @@ export interface NewComplianceSubmission {
   fee?: number | null;
   currency?: string | null;
   notes?: string | null;
+  method: SubmissionMethod;
+  transmittalId?: Id | null;
+  evidenceDocumentId?: Id | null;
 }
 
 export function makeSubmission(input: NewComplianceSubmission): ComplianceSubmission {
   if (!input.caseId) throw new Error('caseId is required');
+  if (!SUBMISSION_METHODS.includes(input.method)) {
+    throw new Error(`submission method must be one of ${SUBMISSION_METHODS.join(', ')} — a submission is recorded with how it was made`);
+  }
+  const reference = (input.reference ?? '').trim() || null;
+  const transmittalId = (input.transmittalId ?? '').trim() || null;
+  const evidenceDocumentId = (input.evidenceDocumentId ?? '').trim() || null;
+  if (input.method === 'controlled_package' && !transmittalId) {
+    throw new Error('a controlled-package submission requires the transmittal that carried it');
+  }
+  if (input.method === 'authority_portal' && (!evidenceDocumentId || !reference)) {
+    throw new Error('a portal submission requires the portal reference and a stored evidence document — a submission must never exist without evidence');
+  }
   if (!Number.isInteger(input.attempt) || input.attempt < 1) throw new Error('attempt must be a positive integer');
   if (input.fee !== null && input.fee !== undefined && input.fee < 0) throw new Error('fee cannot be negative');
   return {
@@ -49,10 +85,13 @@ export function makeSubmission(input: NewComplianceSubmission): ComplianceSubmis
     attempt: input.attempt,
     submittedAt: input.submittedAt,
     submittedBy: input.submittedBy ?? null,
-    reference: (input.reference ?? '').trim() || null,
+    reference,
     fee: input.fee ?? null,
     currency: (input.currency ?? '').trim().toUpperCase() || null,
     notes: (input.notes ?? '').trim() || null,
+    method: input.method,
+    transmittalId: input.method === 'controlled_package' ? transmittalId : null,
+    evidenceDocumentId: input.method === 'authority_portal' ? evidenceDocumentId : null,
   };
 }
 

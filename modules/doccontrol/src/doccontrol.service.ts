@@ -383,6 +383,11 @@ export class DocControlService {
     return this.transmittalAckStore.listByTransmittal(transmittalId, tenantId);
   }
 
+  /** One transmittal in a tenant, or null — read by the compliance evidence check (SEC-01 D-09). */
+  getTransmittal(tenantId: Id, id: Id): Promise<Transmittal | null> {
+    return this.transmittalStore.findById(id, tenantId);
+  }
+
   listTransmittals(tenantId: Id): Promise<Transmittal[]> {
     return this.transmittalStore.findAll(tenantId);
   }

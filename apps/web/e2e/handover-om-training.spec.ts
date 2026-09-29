@@ -7,6 +7,7 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { approveDrawingForConstruction } from './drawing-approval';
 import { systemFromChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
@@ -63,8 +64,7 @@ async function readySystem(request: import('@playwright/test').APIRequestContext
   const drawing = await (await request.post(`${API}/api/v1/engineering/drawings`, {
     headers: H(), data: { projectId, code: `DWG-${Date.now().toString().slice(-5)}`, title: 'CCTV layout', revision: '0', discipline: 'cctv' },
   })).json();
-  for (const step of ['submit', 'start-review']) await request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/${step}`, { headers: H(), data: {} });
-  await request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved' } });
+  await approveDrawingForConstruction(request, drawing.id, H());
 
   // TC-GATE-8: the as-built is linked to the system it documents. A drawing sitting in the register
   // no longer answers for a system nobody linked it to.

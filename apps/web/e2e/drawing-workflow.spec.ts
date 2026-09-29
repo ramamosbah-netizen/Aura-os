@@ -1,14 +1,18 @@
 // AURA OS — G-32 drawing workflow, browser E2E.
 // Drives the shop-drawing lifecycle through the real project UI: register → Drawing 360 →
 // Submit → Start review → Approve → controlled transmit, asserting each state and conveyance.
+// SEC-01 D-04 (owner, 2026-09-28): the author may not review their own drawing — the refusal is
+// shown on screen to the author, and the Technical Manager reviews and approves in their own session.
 // The API is seeded through the web BFF; if the API is unreachable the spec skips (the web shell
 // degrades gracefully, so there is nothing to drive).
 import { expect, test } from '@playwright/test';
 import { projectFixtureId } from './fixtures';
+import { memberPassword, signInAs } from './project-member-harness';
 
 const code = `ELV-E2E-${Date.now().toString().slice(-6)}`;
 
-test('project drawing → review → sent DocControl transmittal (UI)', async ({ page, baseURL }) => {
+test('project drawing → review → sent DocControl transmittal (UI)', async ({ page, browser, baseURL }) => {
+  test.skip(!memberPassword(), 'needs the Auth-ON local API: the review is done by a second person');
   const projectId = await projectFixtureId(page.request, baseURL);
   const member = await page.request.post(`${baseURL}/api/projects/${projectId}/members`, {
     data: { userId: 'u-admin', roleId: 'r-pm' },
@@ -36,13 +40,27 @@ test('project drawing → review → sent DocControl transmittal (UI)', async ({
   await page.getByTestId('btn-submit').click();
   await expect(page.getByTestId('drawing-status')).toHaveText('Submitted');
 
-  // 4. Start review → Under Review.
+  // 4. The AUTHOR may not start the review of their own drawing — refused on screen.
   await page.getByTestId('btn-start-review').click();
-  await expect(page.getByTestId('drawing-status')).toHaveText('Under Review');
+  await expect(page.getByTestId('workflow-error')).toContainText('may not review their own drawing');
+  await expect(page.getByTestId('drawing-status')).toHaveText('Submitted');
 
-  // 5. Approve → Approved. Conveyance stays disabled until a named recipient is recorded.
-  await page.getByTestId('btn-approve').click();
-  await expect(page.getByTestId('drawing-status')).toHaveText('Approved');
+  // 5. The Technical Manager, in their own session, starts the review and approves.
+  const drawingUrl = page.url();
+  const tmContext = await browser.newContext({ baseURL, storageState: { cookies: [], origins: [] } });
+  const tm = await tmContext.newPage();
+  expect(await signInAs(tm, baseURL!, 'u-e2e-techmgr'), 'the Technical Manager signs in').toBe(true);
+  await tm.goto(drawingUrl, { waitUntil: 'domcontentloaded' });
+  await expect(tm.getByTestId('drawing-status')).toHaveText('Submitted', { timeout: 60_000 });
+  await tm.getByTestId('btn-start-review').click();
+  await expect(tm.getByTestId('drawing-status')).toHaveText('Under Review');
+  await tm.getByTestId('btn-approve').click();
+  await expect(tm.getByTestId('drawing-status')).toHaveText('Approved');
+  await tmContext.close();
+
+  // Back with the author: conveyance stays disabled until a named recipient is recorded.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await expect(page.getByTestId('drawing-status')).toHaveText('Approved', { timeout: 60_000 });
   await expect(page.getByTestId('btn-transmit')).toBeVisible();
   await expect(page.getByTestId('btn-transmit')).toBeDisabled();
 

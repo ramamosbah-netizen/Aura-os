@@ -176,7 +176,7 @@ describe('ENG-05 — a controlled package, sent once, with receipts (JWT ON)', (
     // relative to the distribution that forbids it.
     const refused = await outsider.put(`/api/v1/doccontrol/transmittals/${transmittalId}/acknowledge`).send({ note: 'got it' });
     expect(refused.status).toBe(409);
-    expect(refused.body.message).toMatch(/only a named recipient can acknowledge it/);
+    expect(refused.body.message).toMatch(/was not sent to .*; a receipt can only be recorded for somebody it was sent to/);
     expect((await receipt()).acknowledgedCount).toBe(0);
   });
 
@@ -241,6 +241,7 @@ describe('ENG-05 — a controlled package, sent once, with receipts (JWT ON)', (
 describe('ENG-06 — a release reaches named roles, and only they accept it (JWT ON)', () => {
   let app: INestApplication;
   let design: ReturnType<typeof request.agent>;
+  let reviewer: ReturnType<typeof request.agent>;
   let siteEngineer: ReturnType<typeof request.agent>;
   let projectEngineer: ReturnType<typeof request.agent>;
   let procurement: ReturnType<typeof request.agent>;
@@ -272,10 +273,12 @@ describe('ENG-06 — a release reaches named roles, and only they accept it (JWT
       permissions: ['doccontrol.transmittal.read', 'doccontrol.transmittal.acknowledge', 'projects.project.read', 'work-items.*'],
     });
     access.grant({ userId: 'rl-design', roleId: 'r-e2e-release-design', scope: { kind: 'org', level: 'tenant', id: AUTH_TENANT } });
+    // SEC-01 D-04: the author does not review their own drawing, so a second design authority reviews it.
+    access.grant({ userId: 'rl-reviewer', roleId: 'r-e2e-release-design', scope: { kind: 'org', level: 'tenant', id: AUTH_TENANT } });
     for (const userId of ['rl-site', 'rl-pe', 'rl-buyer', 'rl-bystander']) {
       access.grant({ userId, roleId: 'r-e2e-release-recipient', scope: { kind: 'org', level: 'tenant', id: AUTH_TENANT } });
     }
-    for (const userId of ['rl-design', 'rl-site', 'rl-pe', 'rl-buyer', 'rl-bystander']) {
+    for (const userId of ['rl-design', 'rl-reviewer', 'rl-site', 'rl-pe', 'rl-buyer', 'rl-bystander']) {
       users.save({ tenantId: AUTH_TENANT, userId, displayName: userId, active: true });
     }
 
@@ -289,6 +292,7 @@ describe('ENG-06 — a release reaches named roles, and only they accept it (JWT
     const server = app.getHttpServer();
     const agent = (sub: string) => request.agent(server).set('Authorization', `Bearer ${auth.mint({ sub, tenantId: AUTH_TENANT })}`);
     design = agent('rl-design');
+    reviewer = agent('rl-reviewer');
     siteEngineer = agent('rl-site');
     projectEngineer = agent('rl-pe');
     procurement = agent('rl-buyer');
@@ -318,8 +322,8 @@ describe('ENG-06 — a release reaches named roles, and only they accept it (JWT
   it('issues the release from Design to three named operational roles', async () => {
     // draft → submitted → under_review → approved → transmitted, each step its own governed act.
     await design.post(`/api/v1/engineering/drawings/${drawingId}/submit`).send({}).expect(201);
-    await design.post(`/api/v1/engineering/drawings/${drawingId}/start-review`).send({}).expect(201);
-    await design.post(`/api/v1/engineering/drawings/${drawingId}/review`).send({ outcome: 'approved' }).expect(201);
+    await reviewer.post(`/api/v1/engineering/drawings/${drawingId}/start-review`).send({}).expect(201);
+    await reviewer.post(`/api/v1/engineering/drawings/${drawingId}/review`).send({ outcome: 'approved' }).expect(201);
     await design.post(`/api/v1/engineering/drawings/${drawingId}/transmit`).send({
       recipient: 'Site distribution', purpose: 'For Information',
       recipients: [
@@ -345,7 +349,7 @@ describe('ENG-06 — a release reaches named roles, and only they accept it (JWT
     const transmittal = await releaseTransmittal();
     const refused = await bystander.put(`/api/v1/doccontrol/transmittals/${transmittal.id}/acknowledge`).send({});
     expect(refused.status).toBe(409);
-    expect(refused.body.message).toMatch(/only a named recipient can acknowledge it/);
+    expect(refused.body.message).toMatch(/was not sent to .*; a receipt can only be recorded for somebody it was sent to/);
     expect((await receiptOfRelease(transmittal.id)).acknowledgedCount).toBe(0);
   });
 

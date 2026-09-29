@@ -25,10 +25,12 @@ describe('Project delivery responsibilities (HTTP)', () => {
       tenantId: 'responsibility-tenant', companyId: null, actorId: req.headers['x-test-actor'] ?? 'manager', correlationId: 'responsibility-e2e',
     }, () => next()));
     const users = app.get(UsersService);
-    for (const userId of ['manager', 'engineer', 'reader', 'outsider']) users.save({ tenantId: 'responsibility-tenant', userId, displayName: userId, active: true });
+    for (const userId of ['manager', 'reviewer', 'engineer', 'reader', 'outsider']) users.save({ tenantId: 'responsibility-tenant', userId, displayName: userId, active: true });
     await app.init();
     const access = app.get(AccessService);
     access.grant({ userId: 'manager', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: 'responsibility-tenant' } });
+    // SEC-01 D-04: the drawing's author does not review it, so a second authority does.
+    access.grant({ userId: 'reviewer', roleId: 'r-admin', scope: { kind: 'org', level: 'tenant', id: 'responsibility-tenant' } });
     http = request(app.getHttpServer());
 
     projectId = (await http.post('/api/v1/projects/projects').send({ title: 'Responsibility project' }).expect(201)).body.id;
@@ -86,8 +88,8 @@ describe('Project delivery responsibilities (HTTP)', () => {
       .send({ projectId, code: 'ELV-CCTV-IFC-001', title: 'CCTV construction layout' })
       .expect(201)).body;
     await http.post(`/api/v1/engineering/drawings/${drawing.id}/submit`).set('x-test-actor', 'manager').send({ purpose: 'For Approval' }).expect(201);
-    await http.post(`/api/v1/engineering/drawings/${drawing.id}/start-review`).set('x-test-actor', 'manager').send({}).expect(201);
-    await http.post(`/api/v1/engineering/drawings/${drawing.id}/review`).set('x-test-actor', 'manager').send({ outcome: 'approved' }).expect(201);
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/start-review`).set('x-test-actor', 'reviewer').send({}).expect(201);
+    await http.post(`/api/v1/engineering/drawings/${drawing.id}/review`).set('x-test-actor', 'reviewer').send({ outcome: 'approved' }).expect(201);
 
     await http.post(`/api/v1/engineering/drawings/${drawing.id}/transmit`)
       .set('x-test-actor', 'manager')

@@ -1,4 +1,5 @@
 import { BadRequestException, Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertNotOwnWork } from './domain/own-work';
 import { type AccessTarget, assertSameTenant, type HealthSignal, type Id, makeEvent, type OrgLevel, sameTenantOrNull, businessDate } from '@aura/shared';
 import { ProjectResolverRegistry, AccessService, EVENT_STORE, type EventStore, TenantContext, TX_RUNNER, type TxRunner } from '@aura/core';
 
@@ -159,6 +160,8 @@ export class EngineeringService {
   async startReviewDrawing(tenantId: Id, actorId: Id | null, id: Id): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
     this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.review', drawing.projectId);
+    // D-04: whoever wrote or submitted the drawing does not review it.
+    assertNotOwnWork(actorId, [drawing.createdBy, drawing.submittedBy], { item: 'drawing', authored: 'wrote or submitted', act: 'review' });
 
     const updated = applyStartReview(drawing, actorId); // enforces submitted → under_review
     const event = makeEvent({
@@ -190,6 +193,7 @@ export class EngineeringService {
   ): Promise<Drawing> {
     const drawing = await this.loadDrawing(id);
     this.assertDrawingPerm(actorId, drawing.tenantId, drawing.companyId, 'engineering.drawing.review', drawing.projectId);
+    assertNotOwnWork(actorId, [drawing.createdBy, drawing.submittedBy], { item: 'drawing', authored: 'wrote or submitted', act: 'decide' });
 
     const decision = outcomeToDecision(input.outcome);
     const review = makeDrawingReview({
@@ -481,6 +485,8 @@ export class EngineeringService {
       if (rfi.companyId) orgPath.push({ level: 'company', id: rfi.companyId });
       this.access.assert(actorId, { permission: 'engineering.rfi.answer', orgPath, resource: { type: 'project', id: rfi.projectId } });
     }
+    // D-05: the answer comes from somebody other than the person who asked.
+    assertNotOwnWork(actorId, [rfi.createdBy], { item: 'RFI', authored: 'raised', act: 'answer' });
 
     rfi.answer = answer;
     rfi.status = 'answered';
@@ -571,6 +577,10 @@ export class EngineeringService {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (submittal.companyId) orgPath.push({ level: 'company', id: submittal.companyId });
       this.access.assert(actorId, { permission: 'engineering.submittal.update_status', orgPath, resource: { type: 'project', id: submittal.projectId } });
+    }
+    // D-04: submitting is the author's act; approving or rejecting is somebody else's.
+    if (status === 'approved' || status === 'rejected') {
+      assertNotOwnWork(actorId, [submittal.createdBy], { item: 'submittal', authored: 'wrote', act: 'decide' });
     }
 
     const oldStatus = submittal.status;
@@ -904,6 +914,9 @@ export class EngineeringService {
       if (dc.companyId) orgPath.push({ level: 'company', id: dc.companyId });
       this.access.assert(actorId, { permission: 'engineering.design_change.decide', orgPath, resource: { type: 'project', id: dc.projectId } });
     }
+    if (status === 'approved' || status === 'rejected') {
+      assertNotOwnWork(actorId, [dc.createdBy], { item: 'design change', authored: 'raised', act: 'decide' });
+    }
     const updated = decideDesignChange(dc, status, actorId);
     const type = status === 'approved' ? DESIGN_CHANGE_EVENT.approved
       : status === 'rejected' ? DESIGN_CHANGE_EVENT.rejected
@@ -977,6 +990,9 @@ export class EngineeringService {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
       if (doc.companyId) orgPath.push({ level: 'company', id: doc.companyId });
       this.access.assert(actorId, { permission: 'engineering.document.transition', orgPath, resource: { type: 'project', id: doc.projectId } });
+    }
+    if (status === 'approved' || status === 'rejected') {
+      assertNotOwnWork(actorId, [doc.createdBy], { item: 'engineering document', authored: 'wrote', act: 'decide' });
     }
     const updated = transitionDocument(doc, status, actorId);
     const type = status === 'submitted' ? ENGINEERING_DOCUMENT_EVENT.submitted

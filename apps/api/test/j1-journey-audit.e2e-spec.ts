@@ -73,7 +73,9 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
     await app.get(SettingsService).set(tenantId, 'company.name', 'J1 Audit MEP LLC', 'E2E document identity');
     await app.get(SettingsService).set(tenantId, 'company.legalName', 'J1 Audit MEP L.L.C.', 'E2E legal identity');
     await app.get(SettingsService).set(tenantId, 'company.trn', '100111111111111', 'E2E tax identity');
-    access.registerRole({ id: 'j1-scope-author', name: 'Scope author without approval', permissions: ['crm.opportunity.scope', 'crm.opportunity.read'] });
+    // SEC-01 D-13 (2026-09-28): the scope route declares `crm.scope.create` now; this author still writes a
+    // scope and still cannot approve one.
+    access.registerRole({ id: 'j1-scope-author', name: 'Scope author without approval', permissions: ['crm.scope.create', 'crm.opportunity.read'] });
     for (const [userId, roleId] of [['j1-admin', 'r-admin'], ['j1-checker', 'r-admin'], ['j1-sales', 'r-sales'], ['j1-sales-manager', 'r-sales-manager'], ['j1-author', 'j1-scope-author'], ['j1-engineer', 'r-pre-sales'], ['j1-estimator', 'r-estimator'], ['j1-commercial-manager', 'r-commercial-manager'], ['j1-hse', 'r-hse'], ['j1-technical-manager', 'r-technical-manager']]) {
       access.grant({ userId, roleId, scope: { kind: 'org', level: 'tenant', id: tenantId } });
       app.get(UsersService).save({ tenantId, userId, displayName: userId, active: true });
@@ -294,7 +296,7 @@ it('records J1 intake, handoff and scope-to-estimate observations with Auth ON',
       technicalStudyRevision: approvedStudy.revisionNo, technicalStudyStatus: approvedStudy.status,
       technicalStudyAuthor: approvedStudy.authorId, technicalStudyReviewer: approvedStudy.reviewerId,
       authorStudyApprovalHttp: authorStudyApproval.status, wrongFunctionalStudyApprovalHttp: salesStudyApproval.status,
-      scopeAuthorPermissions: ['crm.opportunity.scope', 'crm.opportunity.read'], explicitScopeApprovalHttp: explicitApproval.status,
+      scopeAuthorPermissions: ['crm.scope.create', 'crm.opportunity.read'], explicitScopeApprovalHttp: explicitApproval.status,
       inlineScopeApprovalHttp: inlineApproval.status, inlineScopeStatus: inlineApproval.body.status,
       salesFunctionalApprovalHttp: salesApproval.status, salesManagerFunctionalApprovalHttp: 201,
       approvedBasisQuantity: approved.lines?.[0]?.quantity, callerEstimateQuantity: 240,

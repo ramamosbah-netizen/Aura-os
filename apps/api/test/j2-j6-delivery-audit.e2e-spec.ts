@@ -128,8 +128,9 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     // movement defects are reproduced separately, not hidden by this continuation.
     const drawing = await post('/engineering/drawings', { projectId, code: 'AUD-DWG', title: 'CCTV layout', revision: '0', discipline: 'cctv' });
     await post(`/engineering/drawings/${drawing.id}/submit`);
-    await post(`/engineering/drawings/${drawing.id}/start-review`);
-    await post(`/engineering/drawings/${drawing.id}/review`, { outcome: 'approved', comments: 'Fixture construction release' });
+    // SEC-01 D-04: the author does not review their own drawing — the checker does.
+    await postAsChecker(`/engineering/drawings/${drawing.id}/start-review`);
+    await postAsChecker(`/engineering/drawings/${drawing.id}/review`, { outcome: 'approved', comments: 'Fixture construction release' });
     await post('/site/installations', { projectId, boqItemId: item.id, date: '2026-09-14', description: 'Installed CCTV cameras', quantity: 10, unit: 'no' });
     const report = await post('/site/daily-reports', { projectId, date: '2026-09-14', workDescription: 'CCTV installation' });
     await put(`/site/daily-reports/${report.id}/submit`);

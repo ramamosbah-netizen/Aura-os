@@ -7,6 +7,7 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { approveDrawingForConstruction } from './drawing-approval';
 import { bindToChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
@@ -78,9 +79,7 @@ test('readiness is derived from the domains that own it, and UNKNOWN blocks', as
     headers: H(),
     data: { projectId, code: `DWG-${Date.now().toString().slice(-5)}`, title: 'CCTV layout — Level 3', revision: '0', discipline: 'cctv' },
   })).json();
-  await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/submit`, { headers: H(), data: {} });
-  await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/start-review`, { headers: H(), data: {} });
-  await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved for construction' } });
+  await approveDrawingForConstruction(page.request, drawing.id, H());
 
   await page.reload({ waitUntil: 'domcontentloaded' });
   // A reload closes the disclosure — it is view state, not a filter.

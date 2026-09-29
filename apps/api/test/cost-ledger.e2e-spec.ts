@@ -210,7 +210,9 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
         .send({ projectId: project.id, cbsNodeId: node.id, title: 'Extra cladding', type: 'addition', amount: 20_000 })
         .expect(201)
     ).body;
-    await http.patch(`/api/v1/projects/variations/${add.id}/status`).send({ status: 'approved' }).expect(200);
+    // SEC-01 D-06: submitted by the raiser, decided internally by somebody else.
+    await http.patch(`/api/v1/projects/variations/${add.id}/status`).send({ status: 'submitted' }).expect(200);
+    await http.patch(`/api/v1/projects/variations/${add.id}/status`).set('x-e2e-actor', CERTIFIER).send({ status: 'approved' }).expect(200);
     const afterAdd = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.budgetAmount === 120_000 ? [n] : []; });
     expect(afterAdd[0].budgetAmount).toBe(120_000);
     expect((await ledger(node.id)).find((t) => t.source === 'variation')).toMatchObject({ type: 'budget', amount: 20_000 });
@@ -221,7 +223,9 @@ describe('cost ledger — the Transaction Engine (HTTP)', () => {
         .send({ projectId: project.id, cbsNodeId: node.id, title: 'Descope trims', type: 'omission', amount: 5_000 })
         .expect(201)
     ).body;
-    await http.patch(`/api/v1/projects/variations/${omit.id}/status`).send({ status: 'approved' }).expect(200);
+    // SEC-01 D-06: submitted by the raiser, decided internally by somebody else.
+    await http.patch(`/api/v1/projects/variations/${omit.id}/status`).send({ status: 'submitted' }).expect(200);
+    await http.patch(`/api/v1/projects/variations/${omit.id}/status`).set('x-e2e-actor', CERTIFIER).send({ status: 'approved' }).expect(200);
     const afterOmit = await eventually(async () => { const n = await nodeById(project.id, node.id); return n.budgetAmount === 115_000 ? [n] : []; });
     expect(afterOmit[0].budgetAmount).toBe(115_000);
     expect((await ledger(node.id)).filter((t) => t.type === 'budget')).toHaveLength(2);

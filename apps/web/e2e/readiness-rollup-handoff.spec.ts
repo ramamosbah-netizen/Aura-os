@@ -13,6 +13,7 @@ import zlib, { inflateSync } from 'node:zlib';
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { approveDrawingForConstruction } from './drawing-approval';
 import { provisionedActorsUnavailable } from './provisioned-actors';
 import { signInAs } from './project-member-harness';
 import { approvedChecklist, bearer, tokenFor } from './approved-checklist';
@@ -80,8 +81,7 @@ test('the rollup names the checklist gate, prints it, and Handover reads the sam
   const drawing = await (await page.request.post(`${V1}/engineering/drawings`, {
     headers: H(), data: { projectId, code: `DWG-RR-${run}`, title: 'CCTV layout', revision: '0', discipline: 'cctv' },
   })).json();
-  for (const step of ['submit', 'start-review']) await page.request.post(`${V1}/engineering/drawings/${drawing.id}/${step}`, { headers: H(), data: {} });
-  await page.request.post(`${V1}/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved' } });
+  await approveDrawingForConstruction(page.request, drawing.id, H());
   const pkg = await page.request.post(`${V1}/commissioning/handovers`, { headers: H(), data: { projectId, code: `HO-RR-${run}`, title: 'Tower A handover' } });
   expect(pkg.ok(), `the handover package: ${await pkg.text()}`).toBe(true);
 

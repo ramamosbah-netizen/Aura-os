@@ -543,14 +543,20 @@ export class CrmPreAwardPackageController {
     return this.packages.requestTechnicalStudyChanges(tenantId, packageId, studyId, actorId, dto.comment);
   }
 
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Pre-Sales engineer was refused it in the browser.
   @Post(':id/pre-award-package/scope')
+  @Permissions('crm.scope.create')
   async addScope(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddScopeDto) {
     if (dto.approve) throw new BadRequestException('scope approval is a separate governed command');
     const { tenantId, companyId, packageId } = await this.ensurePackage(id);
     return this.packages.addScopeBasisFromApprovedStudy({ tenantId, companyId, packageId, lines: toBasisLines(dto.lines), createdBy: this.tenant.get().actorId });
   }
 
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Estimator was refused it in the browser.
   @Post(':id/pre-award-package/estimate')
+  @Permissions('crm.estimate.create')
   async addEstimate(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: AddEstimateDto) {
     if (!dto?.basisRevisionId?.trim()) throw new BadRequestException('basisRevisionId is required');
     if (dto.approve) throw new BadRequestException('estimate freeze and approval are separate governed commands');
@@ -566,7 +572,10 @@ export class CrmPreAwardPackageController {
    * (description, unit, quantity) before approving. Provenance on surviving lines is preserved by the
    * domain, and each changed line is stamped as human-edited. Approved/superseded revisions refuse.
    */
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Pre-Sales engineer was refused it in the browser.
   @Patch(':id/pre-award-package/scope/:basisId/lines')
+  @Permissions('crm.scope.update')
   async editScopeLines(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('basisId', ParseUuidOr404Pipe) basisId: string,
@@ -598,7 +607,10 @@ export class CrmPreAwardPackageController {
    * change; the engine recomputes estimatedCost from the resources, so the total is never a typed-in
    * number. Nothing commercial here — profit/margin/selling live in Pricing (Slice 7).
    */
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Estimator was refused it in the browser.
   @Patch(':id/pre-award-package/estimate/:estimateId/build-ups')
+  @Permissions('crm.estimate.update')
   async updateEstimateBuildUps(
     @Param('id', ParseUuidOr404Pipe) id: string,
     @Param('estimateId', ParseUuidOr404Pipe) estimateId: string,
@@ -650,21 +662,30 @@ export class CrmPreAwardPackageController {
   // ── Pricing Workspace (Slice 7) — draft → set policy → freeze → quotation ──
 
   /** Open the Pricing Workspace: the open draft, else the current frozen sheet, else a fresh v1 draft. */
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Estimator was refused it in the browser.
   @Post(':id/pre-award-package/pricing/open')
+  @Permissions('crm.pricing-sheet.open')
   async openPricing(@Param('id', ParseUuidOr404Pipe) id: string) {
     const { tenantId, companyId } = await this.ensurePackage(id);
     return this.packages.openPricing({ tenantId, companyId, opportunityId: id, actorId: this.tenant.get().actorId });
   }
 
   /** Open the NEXT pricing revision (P-002…) from the current frozen sheet — explicit re-pricing. */
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Estimator was refused it in the browser.
   @Post(':id/pre-award-package/pricing/revision')
+  @Permissions('crm.pricing-sheet.revise')
   async openPricingRevision(@Param('id', ParseUuidOr404Pipe) id: string) {
     const { tenantId, companyId } = await this.ensurePackage(id);
     return this.packages.openPricingRevision({ tenantId, companyId, opportunityId: id, actorId: this.tenant.get().actorId });
   }
 
   /** Live preview — the selling figures for a policy on the current cost baseline. Pure, no write. */
+  // SEC-01 D-13 (owner, 2026-09-28): declared in the vocabulary the role that does this work already
+  // speaks. The derived name reached only `crm.*`, so the Estimator was refused it in the browser.
   @Post(':id/pre-award-package/pricing/preview')
+  @Permissions('crm.pricing-sheet.preview')
   async previewPricing(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: PricingPolicyDto) {
     if (!dto?.method) throw new BadRequestException('a pricing method (target_margin | markup) is required');
     const { tenantId } = await this.ensurePackage(id);

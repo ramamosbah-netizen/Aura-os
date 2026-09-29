@@ -65,10 +65,13 @@ const readOnly = (module: string): string => `${module}.*.read`;
  * wildcard gets put back.
  */
 const FINANCE_ENTITIES = [
-  'account', 'bank-guarantee', 'bank-transaction', 'budget', 'cost-center',
+  'account', 'budget', 'cost-center',
   'fx', 'journal', 'payment', 'petty-cash', 'post-dated-cheque', 'profit-center',
-  'revenue-recognition', 'statement', 'tax-code', 'tax-summary', 'vat-return',
+  'revenue-recognition', 'statement', 'tax-code', 'tax-summary',
 ] as const;
+// `bank-transaction`, `vat-return` and `bank-guarantee` are NOT in the list above since the owner's
+// SEC-01 decisions D-01…D-03 (2026-09-28): each holds one act that moved to the Finance Controller, and
+// an entity wildcard would have kept handing it back. They are spelled out act by act below.
 
 /**
  * `customer-invoice` and `invoice` are NOT in the list above, and that is the point.
@@ -493,6 +496,14 @@ const COMMISSIONING_ACCEPTANCE = [
  * /QS raises and submits it, this role records the determination that comes back, and neither does
  * both.
  */
+/**
+ * D-06 — a project variation is RAISED and SUBMITTED by the PM and DECIDED — internally, commercially —
+ * by the Commercial Manager. Replaces `projects.variation.*` on both, which let either raise and approve.
+ * The domain refuses the creator deciding their own and a decision on anything not submitted. This is
+ * INTERNAL approval: nothing here is the client's, and no client state is implied by it.
+ */
+const VARIATION_RAISING = ['projects.variation.create', 'projects.variation.status', 'projects.variation.submit'] as const;
+const VARIATION_DECISION = ['projects.variation.status', 'projects.variation.approve', 'projects.variation.reject'] as const;
 const PROJECTS_DELIVERY = [
   'projects.project.create', 'projects.project.update', 'projects.project.cancel',
   'projects.milestone.*', 'projects.schedule.*', 'projects.task.*', 'projects.wbs.*', 'projects.wb.*',
@@ -500,7 +511,7 @@ const PROJECTS_DELIVERY = [
   'projects.delay.*', 'projects.delay-log.*', 'projects.resource-booking.*', 'projects.resource-pool.*',
   'projects.resource-capacity.*', 'projects.resource-conflict.*', 'projects.responsibility.*',
   'projects.planning-run.*', 'projects.quantity-ledger.*', 'projects.cost-ledger.*',
-  'projects.variation.*', 'projects.progress.*', 'projects.baseline.*', 'projects.eot-claim.read',
+  ...VARIATION_RAISING, 'projects.progress.*', 'projects.baseline.*', 'projects.eot-claim.read',
   // Who is on the project team. Dropped by the enumeration and caught by the vocabulary guard —
   // the SEVENTH time enumerating a module wildcard has lost a real permission, which is precisely
   // the failure that guard exists for.
@@ -646,6 +657,78 @@ const SEC01_ADMINISTRATION = [
   'workspace.config.update', 'integration.webhook.create', 'integration.webhook.update', 'events.event.create',
 ] as const;
 
+/**
+ * SEC-01 STAGE 4 — THE OWNER'S DECISIONS D-01…D-13 (2026-09-28), the current JEET baseline.
+ * docs/reports/full-aura-audit/sec-01-stage-4-decision-review.md records each one; sec01-stage4.fitness
+ * holds the catalogue to exactly these holders. NOT configurable policy — that comes later.
+ * D-09 (authority approvals) is NOT here: the current routes cannot express the owner's split between
+ * running the process and controlling its documents, so it waits for the route split to be approved.
+ */
+/** D-01/D-02/D-03 — Finance's treasury and tax work, by name. No payment threshold yet (owner: a future policy). */
+const FINANCE_TREASURY_WORK = [
+  'finance.payment.create', 'finance.journal.create',
+  'finance.bank-transaction.read', 'finance.bank-transaction.reconcile',
+  'finance.vat-return.read', 'finance.vat-return.create',
+  'finance.bank-guarantee.read', 'finance.post-dated-cheque.status',
+] as const;
+/**
+ * D-01/D-02/D-03 — the Finance Controller's: REVERSING a bank reconciliation, recording a VAT return as
+ * filed or paid (a declaration to the tax authority), and releasing / claiming a bank guarantee. The
+ * preparer is not the one who reverses, files or releases.
+ */
+const FINANCE_CONTROLLER_DECISIONS = [
+  'finance.bank-transaction.unreconcile', 'finance.vat-return.status', 'finance.bank-guarantee.status',
+] as const;
+/**
+ * D-04 — engineering review and decision, by name on the Technical Manager. Both spellings where the
+ * route derives one name and the service asserts another (`submittal.status` / `.update_status`,
+ * `design-change.decision` / `design_change.decide`, and `drawing.start-review`, which the service
+ * checks as `drawing.review`). The rule that an author may not review or decide their own item is in the
+ * engineering domain, not here.
+ */
+const ENGINEERING_REVIEW_AUTHORITY = [
+  'engineering.drawing.start-review', 'engineering.drawing.review',
+  'engineering.submittal.status', 'engineering.submittal.update_status',
+  'engineering.design-change.decision', 'engineering.design_change.decide',
+  'engineering.document.transition', 'engineering.bim-model.version',
+] as const;
+/** D-05 — the answer to an RFI; the engineering domain refuses the person who raised it. */
+const RFI_ANSWER = 'engineering.rfi.answer';
+/**
+ * D-07/D-08 — the PM runs the project through its normal lifecycle (cancelling has its own command and is
+ * NOT decided here), finalises closeout, approves the WBS baseline the planner prepares, and forecasts
+ * cash; the delay's status is the planner's and the PM's.
+ */
+const PM_LIFECYCLE_AUTHORITY = [
+  'projects.project.status', 'projects.project.wbs-baseline', 'projects.closeout.finalize',
+  'projects.delay.status', 'projects.cashflow-forecast.create',
+] as const;
+/** D-08 — commercial: cash-flow forecasts, and the delivery-item maps IPC billing posts against (QS). */
+const COMMERCIAL_PROJECT_WORK = ['projects.cashflow-forecast.create', 'projects.delivery-item-map.create'] as const;
+/**
+ * D-10 — the installed ELV device register. Engineering registers devices from the design / as-built side;
+ * T&C owns their status and their link to commissioning. NOT the Store: receiving serialised stock and
+ * recording an installed device are different records.
+ */
+const ELV_DEVICE_REGISTRATION = ['elv.device.read', 'elv.device.create', 'elv.device.update'] as const;
+const ELV_DEVICE_COMMISSIONING = ['elv.device.read', 'elv.device.status', 'elv.device.commissioning'] as const;
+/** D-11 — the generic controlled document routes. Per-document rights (edit, share) still apply on top. */
+const GENERIC_DOCUMENT_CONTROL = [
+  'documents.document.create', 'documents.version.create', 'documents.share.create', 'documents.permission.delete',
+] as const;
+/** D-12 — estimating and where a price came from. */
+const ESTIMATION_WORK = ['estimation.line.create', 'intelligence.pricing-source.create'] as const;
+/**
+ * D-13 — pre-award pricing, by name on the Estimator (the routes now declare the pricing-sheet vocabulary
+ * this role already speaks). The estimate and build-ups declare `crm.estimate.create/update`, and the
+ * scope `crm.scope.create/update` — names the Estimator and Pre-Sales already hold.
+ */
+const PRE_AWARD_PRICING = ['crm.pricing-sheet.open', 'crm.pricing-sheet.revise', 'crm.pricing-sheet.preview'] as const;
+/** D-13 — the Sales Manager keeps the package, the outcome override and the pricing policy, by name. */
+const SALES_MANAGER_PRE_AWARD = ['crm.opportunity.open', 'crm.opportunity.override', 'crm.opportunity.policy'] as const;
+/** D-12 — model calibration and AI completion stay system administration until AI access is designed. */
+const AI_ADMINISTRATION = ['intelligence.calibration.trigger', 'ai.complete.create'] as const;
+
 export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
   {
     id: 'r-sales',
@@ -693,7 +776,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Reviews the pipeline, approves commercial offers and governs tender Bid/No-Bid amendments.',
     assignmentScope: 'tenant',
     permissions: [
-      'crm.*', ...SEC01_LEAD_WORK, ...SEC01_SALES_MANAGER_WORK,
+      'crm.*', ...SEC01_LEAD_WORK, ...SEC01_SALES_MANAGER_WORK, ...SALES_MANAGER_PRE_AWARD,
       // `tendering.*` USED TO BE HERE. One pattern covering preparation, the submission of a priced
       // offer to a customer, and the capture of an award that creates a Contract — and, more to the
       // point, covering every tendering act added after it was written.
@@ -734,7 +817,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // through `crm.*`. Mirrors `crm.pricing-sheet.freeze`, which this role already holds.
       'crm.estimate.freeze',
       'crm.quotation.create', 'crm.quotation.read', 'crm.quotation.update',
-      'crm.pricing-sheet.*',
+      'crm.pricing-sheet.*', ...PRE_AWARD_PRICING, ...ESTIMATION_WORK,
       // ASSEMBLES the evidence a commercial approval rests on — vendor quotes, datasheets, the
       // technical proposal. Not `waive`: the estimator files the evidence, and deciding to proceed
       // without a piece of it is the approver's exception to make, not the preparer's.
@@ -760,7 +843,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Produces drawings, RFIs, submittals, technical queries and design revisions for assigned work.',
     assignmentScope: 'tenant-or-project',
     permissions: [
-      'engineering.*.read', 'engineering.*.create', 'engineering.*.update', ...SEC01_ENGINEERING_AUTHORING,
+      'engineering.*.read', 'engineering.*.create', 'engineering.*.update', ...SEC01_ENGINEERING_AUTHORING, ...ELV_DEVICE_REGISTRATION,
       'engineering.drawing.submit', 'engineering.drawing.revise',
       // RELEASE, NOT TRANSMIT. This act hands an approved drawing to the site team who take an
       // `engineering_release` responsibility for it; it conveys nothing outside the business. It was
@@ -825,7 +908,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // `schedule.progress-override` does: the person who maintains the figure must not also be the
       // one who declares it true.
       'projects.milestone.read', 'projects.milestone.create',
-      'projects.delay.*', ...SEC01_WBS_AND_DELAY_WORK, readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
+      'projects.delay.*', ...SEC01_WBS_AND_DELAY_WORK, 'projects.delay.status', readOnly('site'), readOnly('engineering'), readOnly('procurement'), ...STAFF_BASE,
     ],
   },
   {
@@ -834,7 +917,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Coordinates technical, site, quality and material work inside an assigned project.',
     assignmentScope: 'project',
     permissions: [
-      'projects.*.read', 'projects.issue.*', 'projects.risk.*', ...SEC01_ISSUE_AND_RISK_WORK, 'engineering.rfi.create', PROJECT_RESPONSIBILITY_WORK,
+      'projects.*.read', 'projects.issue.*', 'projects.risk.*', ...SEC01_ISSUE_AND_RISK_WORK, 'engineering.rfi.create', RFI_ANSWER, ...ELV_DEVICE_REGISTRATION, PROJECT_RESPONSIBILITY_WORK,
       // Also on the raising side of a technical query: accepts an answer as adequate, never gives one.
       'engineering.*.read', 'engineering.rfi.*', 'engineering.tq.close', 'site.*.read', 'quality.*.read',
       // Also on the proposing side of a material approval; decides none.
@@ -853,7 +936,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Owns project delivery, risk, programme, cost control, variations and delivery approvals.',
     assignmentScope: 'project',
     permissions: [
-      ...PROJECTS_DELIVERY, ...SEC01_COST_AND_VARIATION_WORK, ...SEC01_ISSUE_AND_RISK_WORK, ...SEC01_WBS_AND_DELAY_WORK, ...SEC01_PM_ONLY_WORK,
+      ...PROJECTS_DELIVERY, ...SEC01_COST_AND_VARIATION_WORK, ...SEC01_ISSUE_AND_RISK_WORK, ...SEC01_WBS_AND_DELAY_WORK, ...SEC01_PM_ONLY_WORK, ...PM_LIFECYCLE_AUTHORITY,
       readOnly('projects'), 'contracts.certificate.create', 'contracts.certificate.update',
       // RAISES a subcontractor application and instructs a variation for work on their own project,
       // and CERTIFIES NEITHER. That separation is the point: the person who says the work was done is
@@ -887,7 +970,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'crm.scope.read', 'crm.scope.approve', 'crm.requirement.read',
       'tendering.study.read', 'tendering.study.approve',
       'tendering.takeoff.read', 'tendering.takeoff.approve',
-      'engineering.*', ...SEC01_ENGINEERING_AUTHORING, 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
+      'engineering.*', ...SEC01_ENGINEERING_AUTHORING, ...ENGINEERING_REVIEW_AUTHORITY, RFI_ANSWER, 'projects.resource-pool.*', 'projects.resource-capacity.*', 'projects.resource-conflict.*',
       // NAMED, though `engineering.*` already reaches it (SEC-01). The technical verdict on each
       // supplier line is the act a tender's supplier prices depend on — a quote judged
       // non-compliant is not a market alternative — and an authority this consequential should be
@@ -920,7 +1003,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       'tendering.internal-pricing.access',
       // `contracts.*` USED TO BE HERE.
       ...CONTRACTS_COMMERCIAL, ...CONTRACTS_AUTHORITY, ...CONTRACTS_REGISTER_READ,
-      'projects.variation.*', 'projects.cb.*', ...SEC01_COST_AND_VARIATION_WORK, PROJECT_RESPONSIBILITY_WORK,
+      ...VARIATION_DECISION, 'projects.cb.*', ...SEC01_COST_AND_VARIATION_WORK, ...COMMERCIAL_PROJECT_WORK, PROJECT_RESPONSIBILITY_WORK,
       // PREPARES AND SUBMITS an extension-of-time claim, and does NOT determine it. Before this the
       // role named `projects.eot-claim.*` — both sides of the exchange — and could exercise
       // NEITHER, because the service asserted `projects.project.update` for every act in that file
@@ -978,7 +1061,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // business in one pattern. The Manager reviews and authorises; it does not need to be able to
       // do the Buyer's job as well, and holding both made the maker/checker question unanswerable at
       // the authority layer.
-      ...PROCUREMENT_AUTHORITY,
+      ...PROCUREMENT_AUTHORITY, 'intelligence.pricing-source.create',
       // The sourcing decision (SUP-13/SUP-14), unchanged and closed to new scope by ADR-0022. The
       // decision and the award both declare `procurement.rfq.award`; the Buyer prepares, submits and
       // withdraws under `procurement.rfq.create`/`.update`, which it already names.
@@ -1039,7 +1122,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // `finance.*` USED TO BE HERE, and declaring the two period permissions would have changed
       // nothing while it was: a wildcard matches every name in the module, including the ones nobody
       // chose to grant. Running the department and closing the books were one permission.
-      ...FINANCE_OPERATIONS, ...SEC01_FINANCE_WORK,
+      ...FINANCE_OPERATIONS, ...SEC01_FINANCE_WORK, ...FINANCE_TREASURY_WORK,
       ...FINANCE_AR_OPERATIONS,
       'finance.period.read', // sees which periods are closed; cannot close or reopen one
       // RELEASES a certified subcontractor claim for payment, and certifies nothing. It already held
@@ -1074,7 +1157,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
       // Voiding a receivable the customer has seen, removing one from the register, and posting the
       // period-end revaluation. Corrections and period-end acts, not day-to-day AR — and the domain
       // refuses the person who ISSUED an invoice its cancellation, whichever role they hold.
-      ...FINANCE_INVOICE_CORRECTIONS,
+      ...FINANCE_INVOICE_CORRECTIONS, ...FINANCE_CONTROLLER_DECISIONS,
       readOnly('finance'), readOnly('contracts'), readOnly('projects'), ...STAFF_BASE,
     ],
   },
@@ -1084,7 +1167,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Executes system-specific pre-commissioning, tests, defects, retests and evidence capture.',
     assignmentScope: 'project',
     permissions: [
-      ...COMMISSIONING_RECORD, readOnly('commissioning'),
+      ...COMMISSIONING_RECORD, readOnly('commissioning'), ...ELV_DEVICE_COMMISSIONING,
       // Assembles and submits the handover dossier — the delivery side — and accepts nothing.
       ...COMMISSIONING_DELIVERY,
       readOnly('quality'), readOnly('engineering'), readOnly('site'), readOnly('projects'),
@@ -1212,7 +1295,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     description: 'Owns the document register, issues approved revisions and releases them externally by transmittal.',
     assignmentScope: 'tenant-or-project',
     permissions: [
-      ...DOCCONTROL_RELEASE_AUTHORITY,
+      ...DOCCONTROL_RELEASE_AUTHORITY, ...GENERIC_DOCUMENT_CONTROL,
       readOnly('doccontrol'), readOnly('engineering'), readOnly('projects'), ...STAFF_BASE,
     ],
   },
@@ -1240,7 +1323,7 @@ export const STANDARD_ELV_ROLES: readonly StandardElvRole[] = [
     name: 'System Administrator',
     description: 'Administers the platform, users, configuration and access.',
     assignmentScope: 'tenant',
-    permissions: ['*', ...SEC01_ADMINISTRATION],
+    permissions: ['*', ...SEC01_ADMINISTRATION, ...AI_ADMINISTRATION],
   },
   {
     id: 'r-client',

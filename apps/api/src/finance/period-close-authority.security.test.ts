@@ -56,10 +56,14 @@ describe('finance period close — authority', () => {
     for (const permission of [
       'finance.invoice.approve', 'finance.journal.post', 'finance.payment.create',
       'finance.account.create', 'finance.fx.read', 'finance.customer-invoice.issue',
-      'finance.budget.update', 'finance.vat-return.submit', 'finance.petty-cash.create',
+      'finance.budget.update', 'finance.vat-return.create', 'finance.petty-cash.create',
     ]) {
       expect(holds('r-finance', permission), `${permission} must still be held by r-finance`).toBe(true);
     }
+    // SEC-01 D-02 (owner, 2026-09-28): Finance GENERATES the VAT return; recording it filed or paid is the
+    // Finance Controller's. (This list used to name `finance.vat-return.submit`, which no route or
+    // service asks for — it was held only through the `finance.vat-return.*` wildcard D-02 removed.)
+    expect(holds('r-finance', 'finance.vat-return.status'), 'filing the VAT return is the controller’s').toBe(false);
   });
 
   it('gives the two acts to a controller who does not post into the periods it closes', () => {

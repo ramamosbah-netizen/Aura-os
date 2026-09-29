@@ -22,6 +22,7 @@
 // defect chain, and "fail → defect → retest → pass" is the path a real commissioning actually takes.
 import { expect, test } from '@playwright/test';
 import { altApiAuthHeaders, apiAuthHeaders } from './api-auth';
+import { approveDrawingForConstruction } from './drawing-approval';
 import { systemFromChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
@@ -133,14 +134,8 @@ test('the whole chain: engineering through acceptance, closeout and the service 
     })
   ).json();
   test.skip(!drawing?.id, 'engineering API not reachable behind the web shell');
-  for (const step of ['submit', 'start-review']) {
-    await req.post(`${API}/api/v1/engineering/drawings/${drawing.id}/${step}`, { headers: H(), data: {} });
-  }
-  const reviewed = await req.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, {
-    headers: H(),
-    data: { outcome: 'approved', comments: 'Approved for construction' },
-  });
-  expect(reviewed.ok(), 'the drawing must reach approved — the engineering gate reads this').toBe(true);
+  // The engineering gate reads an approved drawing — approved by the Technical Manager, not its author (SEC-01 D-04).
+  await approveDrawingForConstruction(req, drawing.id, H());
 
   // ── 2. SITE / ELV: the device exists and is installed ────────────────────────────────────────
   const device = await (

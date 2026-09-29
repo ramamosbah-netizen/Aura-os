@@ -21,3 +21,35 @@
 | D-13 | Pre-award package: override an opportunity outcome, set a pricing policy, add an estimate, edit build-ups, open the package, open / revise / preview pricing, add scope, edit scope lines | **Sales Manager only** | `crm.*` | By the role catalogue, the Estimator and Pre-Sales engineer are refused the estimate, build-up and scope acts the estimation workspace calls (not yet reproduced in the browser — I would reproduce it before applying). | Sales Manager keeps everything, by name; **Estimator** also gets estimate, build-ups and pricing open / revise / preview; **Pre-Sales** gets scope and scope lines; outcome override and pricing policy stay **Sales Manager only**. | Keep the Sales Manager only. | Names on Sales Manager, Estimator, Pre-Sales. 10 routes. | Yes — the pricing policy is set by the manager, not by the estimator who prices |
 
 **Grant-only** (a role change the fitness test can prove): D-02, D-03, D-07, D-09, D-10, D-11, D-12, and D-01 / D-13 as proposed. **Needs code as well** (a domain rule or a route split, each with its own proof): D-04 and D-05 (author ≠ reviewer / answerer), D-06 (raiser ≠ approver, submit before decide), D-08 (cancelling split from the other status changes).
+
+
+## Owner's decisions, 2026-09-28 — applied
+
+D-01…D-08 and D-10…D-13 are applied as the owner decided them (with the owner's modifications to D-01, D-06, D-08 and D-10), each with an allowed and a forbidden actor proved (`apps/api/test/sec01-owner-decisions.e2e-spec.ts`), the domain rules of D-04, D-05 and D-06 proved on real records, and D-13 applied only after the Estimator's and Pre-Sales' refusals were reproduced in the browser. `sec01-stage4.fitness.test.ts` holds every decided act to exactly the decided holders. **D-09 is not applied** — the section below is the route split it needs.
+
+## D-09 — the route split the owner asked to see before anything is applied
+
+**The owner's decision:** PM and Project Engineer own the operational authority-approval process; the Document Controller manages the controlled submissions, documents and certificates.
+
+**Why the current routes cannot express it.** Three of the eight compliance routes do an operational act and a record-keeping act in one call, and none of them carries a document:
+
+| Route | What it records | What it ALSO does |
+|---|---|---|
+| `POST compliance/cases/:id/submissions` | date, authority reference, fee, notes — **no documents** | moves the case to **submitted** |
+| `POST compliance/cases/:id/decisions` | the authority's decision, conditions, reason | moves the case to **approved / rejected** |
+| `POST compliance/cases/:id/certificates` | certificate number, issue and expiry dates — **no file** | moves the case to **certified** |
+
+Giving the Document Controller the submission or certificate route would hand them the case's status; giving it to the PM would leave the Document Controller nothing to manage — the controlled documents are not in the compliance module at all today.
+
+**The split proposed.**
+
+| Act | Route | Holder |
+|---|---|---|
+| Register an authority (master data: Dubai Civil Defence, SIRA, a utility) | `POST compliance/authorities` | **owner to choose** — the Document Controller, or company configuration later (it is a configuration candidate) |
+| Open a case; change its status; schedule an inspection; record the inspection outcome; record the authority's decision | existing routes | **PM, Project Engineer** |
+| Prepare the controlled submission package — the register revisions sent, issued as a controlled transmittal to the authority | **new** `POST compliance/cases/:id/submission-packages` (links a doccontrol transmittal / register revisions to the case; changes no status) | **Document Controller** |
+| Record that the case was submitted (date, authority reference, fee), citing the package | existing `…/submissions`, now **requiring** a package reference | **PM, Project Engineer** |
+| Record the certificate as a controlled record (number, dates, the certificate file in the register) | `…/certificates`, **no longer moving the case** | **Document Controller** |
+| Confirm the case certified | `PUT …/cases/:id/status` → `certified` (refused unless a live certificate is recorded) | **PM, Project Engineer** |
+
+**Questions before it is built:** (1) who registers an authority; (2) should recording a certificate keep moving the case to *certified* automatically (simpler; the Document Controller then effectively closes the case) or require the PM/PE's confirmation as proposed; (3) is a submission without a controlled package ever acceptable (e.g. an online portal submission with no transmittal) — if so, the package reference stays optional and the screen says so.

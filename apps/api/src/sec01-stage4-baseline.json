@@ -1,6 +1,6 @@
 {
   "recordedAt": "2026-09-28",
-  "note": "SEC-01 stage 4 baseline, frozen BEFORE wave G: for each of the 151 routes that were on route-permission-allowlist.json, the permission it derives, which non-admin roles reached it then, and the group the owner-reviewed draft put it in (docs/reports/full-aura-audit/sec-01-stage-4-authority-draft.md). sec01-stage4.fitness.test.ts holds the roles to this record: a named route keeps exactly these holders, and an owner-decision permission stays named by NOBODY until the owner decides it. Change an entry only with the owner decision that changes it.",
+  "note": "SEC-01 stage 4 baseline, frozen BEFORE wave G: for each of the 151 routes that were on route-permission-allowlist.json, the permission it derives, which non-admin roles reached it then, and the group the owner-reviewed draft put it in (docs/reports/full-aura-audit/sec-01-stage-4-authority-draft.md). sec01-stage4.fitness.test.ts holds the roles to this record: a named route keeps exactly these holders, and an owner-decision permission stays named by NOBODY until the owner decides it. Change an entry only with the owner decision that changes it. OWNER DECISIONS (2026-09-28): each owner-decision entry now carries `decided` — the permission that governs the route, EXACTLY the non-admin roles that reach it, and the roles that must hold it by name — except D-09 (authority approvals), recorded `decided: null` because the current routes cannot express the owner's split; its permissions stay named by nobody until the route split is approved.",
   "routes": [
     {
       "route": "DELETE crm/accounts/:id/installed-base/:itemId",
@@ -52,7 +52,17 @@
       "derived": "documents.permission.delete",
       "group": "owner-decision",
       "decision": "D-11",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "documents.permission.delete",
+        "holders": [
+          "r-document-controller"
+        ],
+        "named": [
+          "r-document-controller"
+        ]
+      }
     },
     {
       "route": "DELETE finance/budgets/:id",
@@ -184,7 +194,18 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.estimate.update",
+        "holders": [
+          "r-estimator",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-estimator"
+        ]
+      }
     },
     {
       "route": "PATCH crm/opportunities/:id/pre-award-package/pricing/:sheetId/policy",
@@ -193,7 +214,17 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.opportunity.policy",
+        "holders": [
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-sales-manager"
+        ]
+      }
     },
     {
       "route": "PATCH crm/opportunities/:id/pre-award-package/scope/:basisId/lines",
@@ -202,14 +233,37 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.scope.update",
+        "holders": [
+          "r-pre-sales",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-pre-sales"
+        ]
+      }
     },
     {
       "route": "PATCH elv/devices/:id",
       "derived": "elv.device.update",
       "group": "owner-decision",
       "decision": "D-10",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "elv.device.update",
+        "holders": [
+          "r-project-engineer",
+          "r-technical-engineer"
+        ],
+        "named": [
+          "r-project-engineer",
+          "r-technical-engineer"
+        ]
+      }
     },
     {
       "route": "PATCH finance/bank-guarantees/:id/status",
@@ -218,7 +272,17 @@
       "decision": "D-03",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.bank-guarantee.status",
+        "holders": [
+          "r-finance-controller"
+        ],
+        "named": [
+          "r-finance-controller"
+        ]
+      }
     },
     {
       "route": "PATCH finance/post-dated-cheques/:id/status",
@@ -227,7 +291,17 @@
       "decision": "D-03",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.post-dated-cheque.status",
+        "holders": [
+          "r-finance"
+        ],
+        "named": [
+          "r-finance"
+        ]
+      }
     },
     {
       "route": "PATCH finance/vat-returns/:id/status",
@@ -236,7 +310,17 @@
       "decision": "D-02",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.vat-return.status",
+        "holders": [
+          "r-finance-controller"
+        ],
+        "named": [
+          "r-finance-controller"
+        ]
+      }
     },
     {
       "route": "PATCH integration/webhooks/:id",
@@ -332,7 +416,19 @@
       "holdersBefore": [
         "r-planning-engineer",
         "r-pm"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.delay.status",
+        "holders": [
+          "r-planning-engineer",
+          "r-pm"
+        ],
+        "named": [
+          "r-planning-engineer",
+          "r-pm"
+        ]
+      }
     },
     {
       "route": "PATCH projects/issues/:id",
@@ -349,7 +445,17 @@
       "derived": "projects.project.status",
       "group": "owner-decision",
       "decision": "D-08",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.project.status",
+        "holders": [
+          "r-pm"
+        ],
+        "named": [
+          "r-pm"
+        ]
+      }
     },
     {
       "route": "PATCH projects/risks/:id",
@@ -369,7 +475,19 @@
       "holdersBefore": [
         "r-commercial-manager",
         "r-pm"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.variation.status",
+        "holders": [
+          "r-commercial-manager",
+          "r-pm"
+        ],
+        "named": [
+          "r-commercial-manager",
+          "r-pm"
+        ]
+      }
     },
     {
       "route": "PATCH projects/wbs/:id/progress",
@@ -419,7 +537,13 @@
       "derived": "ai.complete.create",
       "group": "owner-decision",
       "decision": "D-12",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "ai.complete.create",
+        "holders": [],
+        "named": []
+      }
     },
     {
       "route": "POST builder/approvals",
@@ -461,42 +585,48 @@
       "derived": "compliance.authority.create",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "POST compliance/cases",
       "derived": "compliance.case.create",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "POST compliance/cases/:id/certificates",
       "derived": "compliance.case.certificates",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "POST compliance/cases/:id/decisions",
       "derived": "compliance.case.decisions",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "POST compliance/cases/:id/inspections",
       "derived": "compliance.case.inspections",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "POST compliance/cases/:id/submissions",
       "derived": "compliance.case.submissions",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "POST crm/accounts/:id/installed-base",
@@ -616,7 +746,17 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.opportunity.override",
+        "holders": [
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-sales-manager"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/pre-award-package/estimate",
@@ -625,7 +765,18 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.estimate.create",
+        "holders": [
+          "r-estimator",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-estimator"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/pre-award-package/open",
@@ -634,7 +785,17 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.opportunity.open",
+        "holders": [
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-sales-manager"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/pre-award-package/pricing/open",
@@ -643,7 +804,18 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.pricing-sheet.open",
+        "holders": [
+          "r-estimator",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-estimator"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/pre-award-package/pricing/preview",
@@ -652,7 +824,18 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.pricing-sheet.preview",
+        "holders": [
+          "r-estimator",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-estimator"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/pre-award-package/pricing/revision",
@@ -661,7 +844,18 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.pricing-sheet.revise",
+        "holders": [
+          "r-estimator",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-estimator"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/pre-award-package/scope",
@@ -670,7 +864,18 @@
       "decision": "D-13",
       "holdersBefore": [
         "r-sales-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "crm.scope.create",
+        "holders": [
+          "r-pre-sales",
+          "r-sales-manager"
+        ],
+        "named": [
+          "r-pre-sales"
+        ]
+      }
     },
     {
       "route": "POST crm/opportunities/:id/scope-assist/:proposalId/accept",
@@ -704,28 +909,70 @@
       "derived": "documents.document.create",
       "group": "owner-decision",
       "decision": "D-11",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "documents.document.create",
+        "holders": [
+          "r-document-controller"
+        ],
+        "named": [
+          "r-document-controller"
+        ]
+      }
     },
     {
       "route": "POST documents/:id/share",
       "derived": "documents.share.create",
       "group": "owner-decision",
       "decision": "D-11",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "documents.share.create",
+        "holders": [
+          "r-document-controller"
+        ],
+        "named": [
+          "r-document-controller"
+        ]
+      }
     },
     {
       "route": "POST documents/:id/versions",
       "derived": "documents.version.create",
       "group": "owner-decision",
       "decision": "D-11",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "documents.version.create",
+        "holders": [
+          "r-document-controller"
+        ],
+        "named": [
+          "r-document-controller"
+        ]
+      }
     },
     {
       "route": "POST elv/devices",
       "derived": "elv.device.create",
       "group": "owner-decision",
       "decision": "D-10",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "elv.device.create",
+        "holders": [
+          "r-project-engineer",
+          "r-technical-engineer"
+        ],
+        "named": [
+          "r-project-engineer",
+          "r-technical-engineer"
+        ]
+      }
     },
     {
       "route": "POST engineering/bim-models",
@@ -774,7 +1021,17 @@
       "decision": "D-04",
       "holdersBefore": [
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.drawing.review",
+        "holders": [
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "POST engineering/drawings/:id/start-review",
@@ -783,7 +1040,17 @@
       "decision": "D-04",
       "holdersBefore": [
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.drawing.start-review",
+        "holders": [
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "POST engineering/rfis",
@@ -811,7 +1078,17 @@
       "derived": "estimation.line.create",
       "group": "owner-decision",
       "decision": "D-12",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "estimation.line.create",
+        "holders": [
+          "r-estimator"
+        ],
+        "named": [
+          "r-estimator"
+        ]
+      }
     },
     {
       "route": "POST events",
@@ -854,7 +1131,17 @@
       "decision": "D-01",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.bank-transaction.reconcile",
+        "holders": [
+          "r-finance"
+        ],
+        "named": [
+          "r-finance"
+        ]
+      }
     },
     {
       "route": "POST finance/bank-transactions/:id/unreconcile",
@@ -863,7 +1150,17 @@
       "decision": "D-01",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.bank-transaction.unreconcile",
+        "holders": [
+          "r-finance-controller"
+        ],
+        "named": [
+          "r-finance-controller"
+        ]
+      }
     },
     {
       "route": "POST finance/bank-transactions/auto-match",
@@ -926,7 +1223,17 @@
       "decision": "D-01",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.journal.create",
+        "holders": [
+          "r-finance"
+        ],
+        "named": [
+          "r-finance"
+        ]
+      }
     },
     {
       "route": "POST finance/payments",
@@ -935,7 +1242,17 @@
       "decision": "D-01",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.payment.create",
+        "holders": [
+          "r-finance"
+        ],
+        "named": [
+          "r-finance"
+        ]
+      }
     },
     {
       "route": "POST finance/petty-cash",
@@ -989,7 +1306,17 @@
       "decision": "D-02",
       "holdersBefore": [
         "r-finance"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "finance.vat-return.create",
+        "holders": [
+          "r-finance"
+        ],
+        "named": [
+          "r-finance"
+        ]
+      }
     },
     {
       "route": "POST fleet/telemetry/webhook",
@@ -1010,14 +1337,32 @@
       "derived": "intelligence.calibration.trigger",
       "group": "owner-decision",
       "decision": "D-12",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "intelligence.calibration.trigger",
+        "holders": [],
+        "named": []
+      }
     },
     {
       "route": "POST intelligence/pricing-sources",
       "derived": "intelligence.pricing-source.create",
       "group": "owner-decision",
       "decision": "D-12",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "intelligence.pricing-source.create",
+        "holders": [
+          "r-estimator",
+          "r-procurement-manager"
+        ],
+        "named": [
+          "r-estimator",
+          "r-procurement-manager"
+        ]
+      }
     },
     {
       "route": "POST inventory/grns",
@@ -1087,7 +1432,19 @@
       "derived": "projects.cashflow-forecast.create",
       "group": "owner-decision",
       "decision": "D-08",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.cashflow-forecast.create",
+        "holders": [
+          "r-commercial-manager",
+          "r-pm"
+        ],
+        "named": [
+          "r-commercial-manager",
+          "r-pm"
+        ]
+      }
     },
     {
       "route": "POST projects/cbs",
@@ -1115,7 +1472,17 @@
       "decision": "D-07",
       "holdersBefore": [
         "r-pm"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.closeout.finalize",
+        "holders": [
+          "r-pm"
+        ],
+        "named": [
+          "r-pm"
+        ]
+      }
     },
     {
       "route": "POST projects/delays",
@@ -1132,7 +1499,17 @@
       "derived": "projects.delivery-item-map.create",
       "group": "owner-decision",
       "decision": "D-08",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.delivery-item-map.create",
+        "holders": [
+          "r-commercial-manager"
+        ],
+        "named": [
+          "r-commercial-manager"
+        ]
+      }
     },
     {
       "route": "POST projects/issues",
@@ -1149,7 +1526,17 @@
       "derived": "projects.project.wbs-baseline",
       "group": "owner-decision",
       "decision": "D-08",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "projects.project.wbs-baseline",
+        "holders": [
+          "r-pm"
+        ],
+        "named": [
+          "r-pm"
+        ]
+      }
     },
     {
       "route": "POST projects/risks",
@@ -1355,28 +1742,50 @@
       "derived": "compliance.case.status",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "PUT compliance/inspections/:inspectionId/outcome",
       "derived": "compliance.inspection.outcome",
       "group": "owner-decision",
       "decision": "D-09",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": null
     },
     {
       "route": "PUT elv/devices/:id/commissioning",
       "derived": "elv.device.commissioning",
       "group": "owner-decision",
       "decision": "D-10",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "elv.device.commissioning",
+        "holders": [
+          "r-commissioning-engineer"
+        ],
+        "named": [
+          "r-commissioning-engineer"
+        ]
+      }
     },
     {
       "route": "PUT elv/devices/:id/status",
       "derived": "elv.device.status",
       "group": "owner-decision",
       "decision": "D-10",
-      "holdersBefore": []
+      "holdersBefore": [],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "elv.device.status",
+        "holders": [
+          "r-commissioning-engineer"
+        ],
+        "named": [
+          "r-commissioning-engineer"
+        ]
+      }
     },
     {
       "route": "PUT engineering/bim-models/:id/version",
@@ -1385,7 +1794,17 @@
       "decision": "D-04",
       "holdersBefore": [
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.bim-model.version",
+        "holders": [
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "PUT engineering/design-changes/:id/decision",
@@ -1394,7 +1813,17 @@
       "decision": "D-04",
       "holdersBefore": [
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.design-change.decision",
+        "holders": [
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "PUT engineering/documents/:id/transition",
@@ -1403,7 +1832,17 @@
       "decision": "D-04",
       "holdersBefore": [
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.document.transition",
+        "holders": [
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "PUT engineering/rfis/:id/answer",
@@ -1413,7 +1852,19 @@
       "holdersBefore": [
         "r-project-engineer",
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.rfi.answer",
+        "holders": [
+          "r-project-engineer",
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-project-engineer",
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "PUT engineering/submittals/:id/status",
@@ -1422,7 +1873,17 @@
       "decision": "D-04",
       "holdersBefore": [
         "r-technical-manager"
-      ]
+      ],
+      "decided": {
+        "date": "2026-09-28",
+        "governedBy": "engineering.submittal.status",
+        "holders": [
+          "r-technical-manager"
+        ],
+        "named": [
+          "r-technical-manager"
+        ]
+      }
     },
     {
       "route": "PUT inventory/locations/:id/active",

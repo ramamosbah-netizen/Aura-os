@@ -6,6 +6,13 @@ import { type Id, newId } from '@aura/shared';
  * approval workflow. Approved variations adjust the project's revised contract value.
  */
 export type VariationType = 'addition' | 'omission';
+/**
+ * The INTERNAL lifecycle of a project variation: raised and submitted by the PM, decided by the
+ * Commercial Manager (SEC-01 D-06). `approved` means APPROVED INTERNALLY — the business accepts the
+ * change and moves its own cost budget — and nothing more: it is not the client's approval, and no
+ * client state is modelled yet. When the client side is built (submitted to the client, client-approved,
+ * client-rejected), it gets its OWN states or record, never a reuse of `approved`.
+ */
 export type VariationStatus = 'draft' | 'submitted' | 'approved' | 'rejected';
 
 export interface VariationOrder {

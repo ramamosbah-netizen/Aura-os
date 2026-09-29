@@ -38,10 +38,11 @@ test('project member performs previously blocked drawing, document and handover 
     const document=await s.post<{id:string}>('/doccontrol/register',{projectId:s.mine.id,documentNumber:`CL-DC-${s.run}`,title:'Scoped controlled document'});
     const code=`CL-CX-${s.run}`;
     const system=await s.post<{id:string}>('/commissioning/records',{projectId:s.mine.id,code,title:'Scoped CCTV',system:'cctv'});
+    // SEC-01 D-04: whoever writes or submits a drawing does not review it — the author submits, and
+    // the project member (neither author nor submitter) starts the review in the browser.
+    await s.post(`/engineering/drawings/${drawing.id}/submit`,{});
     expect(await signInAs(page,baseURL!,MEMBER)).toBe(true);
     await page.goto(`/project/${s.mine.id}/drawings/${drawing.id}`);
-    await expect(page.getByTestId('drawing-status')).toHaveText('Draft');
-    await page.getByTestId('btn-submit').click();
     await expect(page.getByTestId('drawing-status')).toHaveText('Submitted');
     await page.getByTestId('btn-start-review').click();
     await expect(page.getByTestId('drawing-status')).toHaveText('Under Review');

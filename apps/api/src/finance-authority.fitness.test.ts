@@ -36,6 +36,10 @@ const AUTHORITY_ENTITIES: Record<string, string> = {
   period: 'closing and reopening the books — r-finance-controller holds these; r-finance reads them',
   'customer-invoice': 'split act by act: AR issues and takes receipts; the controller voids, deletes and posts',
   invoice: 'split act by act: AR creates, updates and codes tax lines; the controller posts the revaluation',
+  // SEC-01 D-01…D-03, the owner's decisions of 2026-09-28.
+  'bank-transaction': 'split act by act: Finance imports, matches and reconciles; the controller REVERSES a reconciliation',
+  'vat-return': 'split act by act: Finance generates the return; the controller records it filed and paid',
+  'bank-guarantee': 'split act by act: Finance records the guarantee; the controller releases, claims or expires it',
 };
 
 describe('finance authority — the operational role does not close its own books', () => {
@@ -110,6 +114,17 @@ describe('finance authority — the operational role does not close its own book
         role.permissions.filter((p) => /^finance\.(customer-)?invoice\.\*/.test(p)),
         `${role.id} carries an invoice wildcard, which re-grants issue, cancel and post`,
       ).toEqual([]);
+    }
+  });
+
+  it('splits treasury and tax acts as the owner decided (SEC-01 D-01…D-03)', () => {
+    for (const p of ['finance.payment.create', 'finance.journal.create', 'finance.bank-transaction.reconcile',
+      'finance.bank-transaction.import', 'finance.vat-return.create', 'finance.bank-guarantee.create', 'finance.post-dated-cheque.status']) {
+      expect(holds(financeRole, p), `r-finance must hold ${p}`).toBe(true);
+    }
+    for (const p of ['finance.bank-transaction.unreconcile', 'finance.vat-return.status', 'finance.bank-guarantee.status']) {
+      expect(holds(financeRole, p), `r-finance must NOT hold ${p} — it is the controller's`).toBe(false);
+      expect(controller.permissions, `r-finance-controller must hold ${p} by name`).toContain(p);
     }
   });
 

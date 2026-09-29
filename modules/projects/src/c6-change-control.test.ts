@@ -40,6 +40,7 @@ describe('C6 change-control boundary', () => {
   it('rejects terminal rewrites and converges duplicate approval races', async () => {
     const fx = fixture();
     const vo = await fx.service.create({ tenantId: 'tenant-a', projectId: 'project-a', title: 'Race', type: 'addition', amount: 10 });
+    await fx.service.changeStatus(vo.id, 'submitted', 'maker'); // D-06: submitted before it is decided
     const results = await Promise.all([fx.service.changeStatus(vo.id, 'approved', 'a'), fx.service.changeStatus(vo.id, 'approved', 'b')]);
     expect(results.every((r) => r.status === 'approved')).toBe(true);
     await expect(fx.service.changeStatus(vo.id, 'draft', 'a')).rejects.toThrow('cannot move variation from approved');
@@ -48,6 +49,7 @@ describe('C6 change-control boundary', () => {
   it('rejects a conflicting decision race rather than silently overwriting approval', async () => {
     const fx = fixture();
     const vo = await fx.service.create({ tenantId: 'tenant-a', projectId: 'project-a', title: 'Conflict', type: 'addition', amount: 10 });
+    await fx.service.changeStatus(vo.id, 'submitted', 'maker');
     const results = await Promise.allSettled([
       fx.service.changeStatus(vo.id, 'approved', 'a'),
       fx.service.changeStatus(vo.id, 'rejected', 'b'),

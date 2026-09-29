@@ -13,6 +13,7 @@
 import { expect, test } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { approveDrawingForConstruction } from './drawing-approval';
 import { bindToChecklist } from './approved-checklist';
 
 const API = process.env.AURA_API_URL ?? 'http://localhost:4000';
@@ -103,10 +104,7 @@ test('handover readiness is projected, and a tick cannot buy a submission', asyn
   const drawing = await (await page.request.post(`${API}/api/v1/engineering/drawings`, {
     headers: H(), data: { projectId, code: `DWG-${Date.now().toString().slice(-5)}`, title: 'CCTV layout', revision: '0', discipline: 'cctv' },
   })).json();
-  for (const step of ['submit', 'start-review']) {
-    await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/${step}`, { headers: H(), data: {} });
-  }
-  await page.request.post(`${API}/api/v1/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved' } });
+  await approveDrawingForConstruction(page.request, drawing.id, H());
 
   // A controlled document exists on the project, but it is not an as-built yet.
   const docNumber = `ELV-AB-${Date.now().toString().slice(-5)}`;

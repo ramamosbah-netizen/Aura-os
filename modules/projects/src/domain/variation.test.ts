@@ -42,6 +42,7 @@ describe('VariationService', () => {
     const svc = build();
     const vo = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Extra MEP', type: 'addition', amount: 80000, createdBy: 'u1' });
     expect(vo.status).toBe('draft');
+    await svc.changeStatus(vo.id, 'submitted', 'u1');
 
     const approved = await svc.changeStatus(vo.id, 'approved', 'mgr');
     expect(approved.status).toBe('approved');
@@ -56,6 +57,7 @@ describe('VariationService', () => {
   it('treats same-status replay as an immutable no-op and rejects terminal rewrites', async () => {
     const svc = build();
     const vo = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Replay-safe change', type: 'addition', amount: 10, createdBy: 'u1' });
+    await svc.changeStatus(vo.id, 'submitted', 'u1');
     await svc.changeStatus(vo.id, 'approved', 'mgr');
     const replay = await svc.changeStatus(vo.id, 'approved', 'mgr');
     expect(replay.status).toBe('approved');
@@ -65,15 +67,36 @@ describe('VariationService', () => {
   it('converges duplicate approval races and rejects an approve/reject race', async () => {
     const svc = build();
     const duplicate = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Concurrent approval', type: 'addition', amount: 20 });
+    await svc.changeStatus(duplicate.id, 'submitted', 'u1');
     const approvals = await Promise.all([svc.changeStatus(duplicate.id, 'approved', 'mgr'), svc.changeStatus(duplicate.id, 'approved', 'mgr')]);
     expect(approvals.every((v) => v.status === 'approved')).toBe(true);
 
     const conflict = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Conflicting decision', type: 'addition', amount: 20 });
+    await svc.changeStatus(conflict.id, 'submitted', 'u1');
     const outcomes = await Promise.allSettled([
       svc.changeStatus(conflict.id, 'approved', 'mgr'),
       svc.changeStatus(conflict.id, 'rejected', 'mgr'),
     ]);
     expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
     expect(outcomes.filter((o) => o.status === 'rejected')).toHaveLength(1);
+  });
+
+  // SEC-01 D-06 (owner, 2026-09-28).
+  it('a draft is submitted before anyone decides it — it cannot be approved or rejected straight from draft', async () => {
+    const svc = build();
+    const vo = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Unsubmitted change', type: 'addition', amount: 50, createdBy: 'pm' });
+    await expect(svc.changeStatus(vo.id, 'approved', 'cm')).rejects.toThrow('cannot move variation from draft to approved');
+    await expect(svc.changeStatus(vo.id, 'rejected', 'cm')).rejects.toThrow('cannot move variation from draft to rejected');
+    await svc.changeStatus(vo.id, 'submitted', 'pm');
+    expect((await svc.changeStatus(vo.id, 'approved', 'cm')).status).toBe('approved');
+  });
+
+  it('whoever raised a variation may not decide it — approve or reject — and somebody else may', async () => {
+    const svc = build();
+    const vo = await svc.create({ tenantId: 't1', projectId: 'p1', title: 'Own change', type: 'omission', amount: 30, createdBy: 'cm' });
+    await svc.changeStatus(vo.id, 'submitted', 'pm');
+    await expect(svc.changeStatus(vo.id, 'approved', 'cm')).rejects.toThrow('the person who raised this variation may not decide their own variation');
+    await expect(svc.changeStatus(vo.id, 'rejected', 'cm')).rejects.toThrow(/their own variation/);
+    expect((await svc.changeStatus(vo.id, 'rejected', 'cm-2')).status).toBe('rejected');
   });
 });

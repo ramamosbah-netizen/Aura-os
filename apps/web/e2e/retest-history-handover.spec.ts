@@ -21,6 +21,7 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
 import { createProject } from './fixtures';
 import { apiAuthHeaders } from './api-auth';
+import { approveDrawingForConstruction } from './drawing-approval';
 import { provisionedActorsUnavailable } from './provisioned-actors';
 import { signInAs } from './project-member-harness';
 import { bearer, systemFromChecklist, tokenFor, QAQC } from './approved-checklist';
@@ -115,8 +116,7 @@ test('a retest is persisted, read back, printed on the pack and received in the 
   const drawing = await (await page.request.post(`${V1}/engineering/drawings`, {
     headers: H(), data: { projectId, code: `DWG-RT-${run}`, title: 'CCTV layout', revision: '0', discipline: 'cctv' },
   })).json();
-  for (const step of ['submit', 'start-review']) await page.request.post(`${V1}/engineering/drawings/${drawing.id}/${step}`, { headers: H(), data: {} });
-  await page.request.post(`${V1}/engineering/drawings/${drawing.id}/review`, { headers: H(), data: { outcome: 'approved', comments: 'Approved' } });
+  await approveDrawingForConstruction(page.request, drawing.id, H());
   for (const [documentNumber, title, status] of [[`ELV-AB-${run}`, 'CCTV layout — as-built', 'as_built'], [`DOC-OM-${run}`, 'CCTV O&M manual', 'for_construction']]) {
     const reg = await page.request.post(`${DC}/register`, {
       headers: H(), data: { projectId, documentNumber, title, discipline: 'elv', docType: 'document', currentRevision: 'B', status },

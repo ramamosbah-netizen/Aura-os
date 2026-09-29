@@ -96,8 +96,15 @@ export class VariationService {
       this.access.assert(actorId, { permission, orgPath: [{ level: 'tenant', id: existing.tenantId }], resource: { type: 'project', id: existing.projectId } });
     }
     if (existing.status === status) return existing;
+    // SEC-01 D-06 (owner, 2026-09-28): a variation is SUBMITTED before anyone decides it — a draft
+    // cannot jump straight to approved or rejected — and whoever raised it does not decide it. The
+    // decision is the INTERNAL commercial one; the client's acceptance is not modelled here and is not
+    // implied by `approved` (see VariationStatus).
+    if ((status === 'approved' || status === 'rejected') && actorId && existing.createdBy === actorId) {
+      throw new Error('the person who raised this variation may not decide their own variation');
+    }
     const allowed: Record<VariationStatus, VariationStatus[]> = {
-      draft: ['submitted', 'approved', 'rejected'],
+      draft: ['submitted'],
       submitted: ['approved', 'rejected'],
       approved: [],
       rejected: [],

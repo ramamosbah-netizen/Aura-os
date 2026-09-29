@@ -143,18 +143,56 @@ describe('customer invoicing — sending a claim and withdrawing one are two han
 
   it('keeps the receipts with AR, and still refuses a receipt on a draft', async () => {
     const sent = await issued();
-    expect((await controller.post(`/api/v1/finance/customer-invoices/${sent.id}/receipts`).send({ amount: 10_000 })).status).toBe(403);
+    const money = (amount: number, bankReference: string) => ({ amount, receivedOn: '2026-09-28', bankReference });
+    expect((await controller.post(`/api/v1/finance/customer-invoices/${sent.id}/receipts`).send(money(10_000, 'TT-1'))).status).toBe(403);
 
-    const paid = await post<InvoiceBody>(ar, `/api/v1/finance/customer-invoices/${sent.id}/receipts`, { amount: 10_000 });
+    const paid = await post<InvoiceBody>(ar, `/api/v1/finance/customer-invoices/${sent.id}/receipts`, money(10_000, 'TT-1'));
     expect(paid).toMatchObject({ status: 'partially_paid', amountPaid: 10_000 });
 
     // …and the existing rule still holds: money against an invoice nobody sent is refused.
     const d = await draft();
-    expect((await ar.post(`/api/v1/finance/customer-invoices/${d.id}/receipts`).send({ amount: 1_000 })).status).toBeGreaterThanOrEqual(400);
+    expect((await ar.post(`/api/v1/finance/customer-invoices/${d.id}/receipts`).send(money(1_000, 'TT-2'))).status).toBeGreaterThanOrEqual(400);
 
     // Once money is on it, the void is refused for the reason it always was.
     const held = await controller.post(`/api/v1/finance/customer-invoices/${sent.id}/cancel`).send({ reason: 'change of mind' });
     expect(held.status).toBeGreaterThanOrEqual(400);
     expect(held.body.message).toMatch(/receipts recorded/);
+  });
+
+  /**
+   * AR-INV-02 — each receipt is a record of its own, and the invoice's paid amount is their sum. Before
+   * this, two receipts of 5,000 and one of 10,000 were the same row, and who took which money, when and
+   * against what bank reference existed nowhere.
+   */
+  it('records each receipt with its amount, date, bank reference and recorder; the paid amount is their sum', async () => {
+    const sent = await issued();
+    const url = `/api/v1/finance/customer-invoices/${sent.id}/receipts`;
+
+    const noReference = await ar.post(url).send({ amount: 5_000, receivedOn: '2026-09-28' });
+    expect(noReference.status, 'money with no bank reference cannot be reconciled').toBe(400);
+    expect(noReference.body.message).toMatch(/requires the bank reference/);
+    const noDate = await ar.post(url).send({ amount: 5_000, bankReference: 'TT-5001' });
+    expect(noDate.status).toBe(400);
+    expect(noDate.body.message).toMatch(/requires the date the money was received/);
+
+    const first = await post<InvoiceBody & { receipt: { id: string; recordedBy: string } }>(ar, url, { amount: 5_000, receivedOn: '2026-09-27', bankReference: 'TT-5001' });
+    expect(first).toMatchObject({ status: 'partially_paid', amountPaid: 5_000, receipt: { recordedBy: 'ci-ar' } });
+    await post(ar, url, { amount: 5_000, receivedOn: '2026-09-28', bankReference: 'TT-5002' });
+    const settled = await post<InvoiceBody>(ar, url, { amount: sent.total - 10_000, receivedOn: '2026-09-29', bankReference: 'CHQ-000417' });
+    expect(settled).toMatchObject({ status: 'paid', amountPaid: sent.total });
+    const over = await ar.post(url).send({ amount: 1, receivedOn: '2026-09-29', bankReference: 'TT-OVER' });
+    expect(over.status, 'nothing past the total').toBeGreaterThanOrEqual(400);
+
+    const listed = await ar.get(url);
+    expect(listed.status).toBe(200);
+    const rows = listed.body as Array<{ amount: number; receivedOn: string; bankReference: string; recordedBy: string; legacy: boolean }>;
+    expect(rows.map((r) => [r.amount, r.receivedOn, r.bankReference, r.recordedBy, r.legacy])).toEqual([
+      [5_000, '2026-09-27', 'TT-5001', 'ci-ar', false],
+      [5_000, '2026-09-28', 'TT-5002', 'ci-ar', false],
+      [sent.total - 10_000, '2026-09-29', 'CHQ-000417', 'ci-ar', false],
+    ]);
+    expect(rows.reduce((sum, r) => sum + r.amount, 0), 'the invoice reconciles to its receipts').toBe(settled.amountPaid);
+    // The controller reads the receivable too — and still cannot take money against it.
+    expect((await controller.get(url)).status).toBe(200);
   });
 });

@@ -1,6 +1,6 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, Fragment, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ExportButton from './export-button';
@@ -8,7 +8,7 @@ import SaveViewButton from './save-view-button';
 import { CURRENCIES } from '@aura/shared';
 import CreateDrawer from './ui/create-drawer';
 import NextBestActionBanner from './ui/next-best-action-banner';
-import { businessDateInputValue } from '@/lib/locale';
+import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE, businessDateInputValue } from '@/lib/locale';
 
 interface Line {
   description: string;
@@ -33,6 +33,17 @@ interface CustomerInvoice {
   lines: Line[];
 }
 
+/** A customer receipt as its own record (AR-INV-02) — the invoice's Paid column is the sum of these. */
+interface Receipt {
+  id: string;
+  amount: number;
+  receivedOn: string | null;
+  bankReference: string | null;
+  recordedBy: string | null;
+  recordedAt: string | null;
+  legacy: boolean;
+}
+
 const badgeKind: Record<string, string> = { draft: 'badge', issued: 'badge badge-accent', partially_paid: 'badge badge-warn', paid: 'badge badge-good', cancelled: 'badge badge-bad' };
 const today = () => businessDateInputValue();
 
@@ -46,6 +57,12 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
   const [emailRecipient, setEmailRecipient] = useState('');
   const [emailMessage, setEmailMessage] = useState('');
   const [sendMsg, setSendMsg] = useState('');
+  // A receipt is a record: amount, the date the money arrived, and the bank reference it reconciles to.
+  const [receiptFor, setReceiptFor] = useState<string | null>(null);
+  const [receiptForm, setReceiptForm] = useState({ amount: '', receivedOn: today(), bankReference: '' });
+  const [receiptBusy, setReceiptBusy] = useState(false);
+  const [historyFor, setHistoryFor] = useState<string | null>(null);
+  const [history, setHistory] = useState<Record<string, Receipt[] | { error: string }>>({});
 
   const totals = useMemo(() => {
     const issued = invoices.filter((i) => i.status !== 'draft' && i.status !== 'cancelled').reduce((s, i) => s + i.total, 0);
@@ -67,10 +84,47 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
     }
   };
 
-  const receipt = (inv: CustomerInvoice) => {
-    const remaining = (inv.total - inv.amountPaid).toFixed(2);
-    const amt = prompt(`Receipt amount (outstanding ${remaining} AED):`, remaining);
-    if (amt && Number(amt) > 0) act(inv.id, 'receipts', { amount: Number(amt) });
+  const loadReceipts = async (id: string) => {
+    try {
+      const res = await fetch(`/api/finance/customer-invoices/${id}/receipts`, { cache: 'no-store' });
+      const data = await res.json();
+      setHistory((h) => ({ ...h, [id]: res.ok && Array.isArray(data) ? (data as Receipt[]) : { error: data.message || data.error || 'Could not load receipts' } }));
+    } catch (e) {
+      setHistory((h) => ({ ...h, [id]: { error: (e as Error).message } }));
+    }
+  };
+
+  const toggleHistory = (id: string) => {
+    if (historyFor === id) { setHistoryFor(null); return; }
+    setHistoryFor(id);
+    void loadReceipts(id);
+  };
+
+  const openReceipt = (inv: CustomerInvoice) => {
+    setError('');
+    setReceiptFor(receiptFor === inv.id ? null : inv.id);
+    setReceiptForm({ amount: (inv.total - inv.amountPaid).toFixed(2), receivedOn: today(), bankReference: '' });
+  };
+
+  const saveReceipt = async (inv: CustomerInvoice) => {
+    setError('');
+    setReceiptBusy(true);
+    try {
+      const res = await fetch(`/api/finance/customer-invoices/${inv.id}/receipts`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ amount: Number(receiptForm.amount), receivedOn: receiptForm.receivedOn, bankReference: receiptForm.bankReference }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || data.error || 'Failed');
+      setReceiptFor(null);
+      setHistoryFor(inv.id);
+      await loadReceipts(inv.id);
+      router.refresh();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setReceiptBusy(false);
+    }
   };
 
   return (
@@ -91,8 +145,9 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
           recommendedAction={invoices.some((i) => i.status === 'draft') ? 'Issue Draft Tax Invoices' : 'Record Client Payment Receipts'}
           explanation={
             invoices.some((i) => i.status === 'draft')
-              ? 'Issuing a client tax invoice posts double-entry GL journals and opens AR collections.'
-              : 'Record full or partial receipts against issued invoices to update customer ledger balance.'
+              // Not "posts double-entry GL journals": nothing posts an AR invoice or receipt to the ledger (AR-GL-01).
+              ? 'Issuing a client tax invoice makes it a claim on the customer and opens AR collections.'
+              : 'Record each receipt against an issued invoice with the date it arrived and its bank reference.'
           }
         />
       </div>
@@ -135,8 +190,10 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
             <tbody>
               {invoices.map((inv) => {
                 const isTarget = highlightId === inv.id;
+                const receipts = history[inv.id];
                 return (
-                  <tr key={inv.id} style={isTarget ? { background: 'var(--accent-soft, rgba(247,178,59,.12))', borderLeft: '3px solid var(--accent)' } : undefined}>
+                  <Fragment key={inv.id}>
+                  <tr style={isTarget ? { background: 'var(--accent-soft, rgba(247,178,59,.12))', borderLeft: '3px solid var(--accent)' } : undefined}>
                     <td style={{ color: 'var(--muted)' }}>{inv.issueDate}</td>
                   <td style={{ fontWeight: 600 }}>{inv.invoiceNumber}</td>
                   <td>{inv.customerName}</td>
@@ -145,7 +202,8 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
                   <td><span className={badgeKind[inv.status] ?? 'badge'}>{inv.status.replace('_', ' ')}</span></td>
                   <td style={{ display: 'flex', gap: 6 }}>
                     {inv.status === 'draft' && <button type="button" className="btn btn-primary" style={st.smBtn} onClick={() => act(inv.id, 'issue')}>Issue</button>}
-                    {(inv.status === 'issued' || inv.status === 'partially_paid') && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} onClick={() => receipt(inv)}>Receipt</button>}
+                    {(inv.status === 'issued' || inv.status === 'partially_paid') && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} onClick={() => openReceipt(inv)}>Receipt</button>}
+                    {inv.amountPaid > 0 && <button type="button" className="btn btn-ghost" style={st.smBtn} aria-expanded={historyFor === inv.id} onClick={() => toggleHistory(inv.id)}>Receipts</button>}
                     {inv.status === 'draft' && <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(inv.id, 'cancel')}>Cancel</button>}
                     <button
                       type="button"
@@ -159,6 +217,68 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
                     <a className="btn btn-ghost" style={st.smBtn} href={`/finance/customer-invoices/${inv.id}/print`} title="Print Tax Invoice (PDF)" target="_blank" rel="noopener noreferrer">🖨</a>
                   </td>
                 </tr>
+                  {receiptFor === inv.id && (
+                    <tr>
+                      <td colSpan={7}>
+                        <form data-testid={`receipt-form-${inv.id}`} style={st.receiptForm} onSubmit={(e) => { e.preventDefault(); void saveReceipt(inv); }}>
+                          <strong style={{ fontSize: 13 }}>Record a receipt against {inv.invoiceNumber}</strong>
+                          <label style={st.field}>Amount
+                            <input style={st.input} type="number" step="0.01" min="0.01" required value={receiptForm.amount}
+                              onChange={(e) => setReceiptForm((f) => ({ ...f, amount: e.target.value }))} />
+                          </label>
+                          <label style={st.field}>Received on
+                            <input style={st.input} type="date" required value={receiptForm.receivedOn}
+                              onChange={(e) => setReceiptForm((f) => ({ ...f, receivedOn: e.target.value }))} />
+                          </label>
+                          <label style={st.field}>Bank reference
+                            <input style={st.input} required placeholder="Transfer id or cheque number" value={receiptForm.bankReference}
+                              onChange={(e) => setReceiptForm((f) => ({ ...f, bankReference: e.target.value }))} />
+                          </label>
+                          <div style={{ display: 'flex', gap: 8, alignSelf: 'flex-end' }}>
+                            <button type="button" className="btn btn-ghost" style={st.smBtn} onClick={() => setReceiptFor(null)}>Cancel</button>
+                            <button type="submit" className="btn btn-primary" style={st.smBtn} disabled={receiptBusy} aria-busy={receiptBusy}>{receiptBusy ? 'Saving…' : 'Record receipt'}</button>
+                          </div>
+                        </form>
+                      </td>
+                    </tr>
+                  )}
+                  {historyFor === inv.id && (
+                    <tr>
+                      <td colSpan={7}>
+                        <div data-testid={`receipts-${inv.id}`} style={st.history}>
+                          {!receipts ? <p style={st.muted}>Loading receipts…</p>
+                            : 'error' in receipts ? <p style={st.err}>{receipts.error}</p>
+                              : receipts.length === 0 ? <p style={st.muted}>No receipts recorded.</p> : (
+                                <table className="data-table">
+                                  <thead><tr><th>Received on</th><th>Amount</th><th>Bank reference</th><th>Recorded by</th><th>Recorded at</th></tr></thead>
+                                  <tbody>
+                                    {receipts.map((r) => (
+                                      <tr key={r.id} data-testid={`receipt-row-${r.id}`}>
+                                        {r.legacy ? (
+                                          <>
+                                            <td style={{ color: 'var(--muted)' }}>—</td>
+                                            <td>{r.amount.toLocaleString()}</td>
+                                            <td colSpan={3} style={{ color: 'var(--muted)' }}>Recorded before receipts were kept one by one — the amount is all that was kept.</td>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <td>{r.receivedOn}</td>
+                                            <td>{r.amount.toLocaleString()}</td>
+                                            <td>{r.bankReference}</td>
+                                            <td>{r.recordedBy ?? '—'}</td>
+                                            <td style={{ color: 'var(--muted)' }}>{r.recordedAt ? new Date(r.recordedAt).toLocaleString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE }) : '—'}</td>
+                                          </>
+                                        )}
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              )}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
               );
             })}
             </tbody>
@@ -222,5 +342,8 @@ const st = {
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
   modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
   modalBox: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 20, maxWidth: 460, width: '92%', boxShadow: 'var(--shadow-lg)' } as CSSProperties,
+  receiptForm: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', padding: '10px 4px' } as CSSProperties,
+  field: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, minWidth: 160 } as CSSProperties,
+  history: { padding: '6px 4px 10px' } as CSSProperties,
   input: { width: '100%', padding: '8px 12px', background: 'var(--panel-2)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text)', boxSizing: 'border-box' } as CSSProperties,
 };

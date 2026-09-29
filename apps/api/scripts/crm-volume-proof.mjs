@@ -82,14 +82,25 @@ async function seed() {
       ON CONFLICT (id) DO NOTHING`, [tenantId, counts.accounts, counts.activities]);
     await client.query(`
       INSERT INTO public.aura_finance_customer_invoices
-        (id, tenant_id, company_id, invoice_number, customer_name, account_id, issue_date, due_date, lines, subtotal, vat_total, total, amount_paid, status, created_by)
+        (id, tenant_id, company_id, invoice_number, customer_name, account_id, issue_date, due_date, lines, subtotal, vat_total, total, status, created_by)
       SELECT md5('volume-invoice-' || g)::uuid, $1, 'volume-company', 'VI-' || g,
              'Volume Account ' || (((g - 1) % $2::int) + 1), md5('volume-account-' || (((g - 1) % $2::int) + 1)),
              CURRENT_DATE - (g % 365), CURRENT_DATE - (g % 60), '[]'::jsonb,
-             (g % 200 + 1) * 100, (g % 20) * 10, (g % 200 + 1) * 110, (g % 3) * 100,
-             CASE WHEN g % 11 = 0 THEN 'paid' ELSE 'issued' END, 'volume-proof'
+             (g % 200 + 1) * 100, (g % 20) * 10, (g % 200 + 1) * 110,
+             'issued', 'volume-proof'
       FROM generate_series(1, $3::int) g
       ON CONFLICT (id) DO NOTHING`, [tenantId, counts.accounts, counts.invoices]);
+    // Money reaches an invoice only as a receipt (migration 0400, AR-INV-02): the paid amount and the
+    // paid / part-paid status are derived from these rows, never written onto the invoice directly.
+    await client.query(`
+      INSERT INTO public.aura_finance_customer_receipts
+        (id, tenant_id, invoice_id, amount, received_on, bank_reference, recorded_by, recorded_at)
+      SELECT md5('volume-receipt-' || g)::uuid, $1, md5('volume-invoice-' || g)::uuid,
+             CASE WHEN g % 11 = 0 THEN (g % 200 + 1) * 110 ELSE LEAST((g % 3) * 100, (g % 200 + 1) * 110) END,
+             CURRENT_DATE - (g % 30), 'VOL-' || g, 'volume-proof', now()
+      FROM generate_series(1, $2::int) g
+      WHERE g % 11 = 0 OR g % 3 <> 0
+      ON CONFLICT (id) DO NOTHING`, [tenantId, counts.invoices]);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK');

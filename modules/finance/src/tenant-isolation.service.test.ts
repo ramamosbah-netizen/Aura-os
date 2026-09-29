@@ -136,7 +136,7 @@ describe('CustomerInvoiceService — tenant isolation', () => {
     const { store, svc, tenant, seed } = customerInvoiceHarness();
     const ci = seed();
     await store.save(ci);
-    await asB(tenant, () => expect(svc.recordReceipt(ci.id, 500)).rejects.toThrow(/not found/i));
+    await asB(tenant, () => expect(svc.recordReceipt(ci.id, { amount: 500, receivedOn: '2026-09-29', bankReference: 'TT-1' })).rejects.toThrow(/not found/i));
     expect((await store.get(ci.id))?.amountPaid).toBe(0); // no phantom receipt
   });
 

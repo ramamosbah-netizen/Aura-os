@@ -148,7 +148,7 @@ it('traces one awarded job through delivery evidence and handover with Auth ON',
     const position = await get(`/projects/quantity-ledger/position/${item.id}`);
     console.log('J5_CERTIFICATION', JSON.stringify({ certified: position.certified, installed: position.installed, invoiceStatus: invoice.status, invoiceProjectId: invoice.projectId ?? null, invoiceLines: invoice.lines, cashSettlementTested: false }));
     await post(`/finance/customer-invoices/${invoice.id}/issue`);
-    const receipt = await post(`/finance/customer-invoices/${invoice.id}/receipts`, { amount: invoice.total });
+    const receipt = await post(`/finance/customer-invoices/${invoice.id}/receipts`, { amount: invoice.total, receivedOn: '2026-09-28', bankReference: 'AUD-TT-1' });
     const afterBilling = await get(`/projects/quantity-ledger/position/${item.id}`);
     expect(receipt.status).toBe('paid');
     // J5-01: the auto-drafted invoice carries each certified line's frozen identity, so issuing it

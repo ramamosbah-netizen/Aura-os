@@ -8760,9 +8760,9 @@
       "capabilityIds": [
         "COM-05"
       ],
-      "classification": "BACKEND_ONLY",
+      "classification": "COMPLETE",
       "kind": "fresh defect — found beside AR-INV-01 and deliberately NOT folded into it",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Finance"
       ],
@@ -8770,12 +8770,12 @@
         "Finance / Collection"
       ],
       "authority": "modules/finance/src/domain/customer-invoice.ts (recordReceipt)",
-      "currentBehavior": "`amount_paid` on the invoice is a running total and nothing else. Recording a receipt adds to it and advances the status; WHO recorded which receipt, WHEN, for how much, and against what bank reference exists nowhere on the record. AR-INV-01 put the actor on the `receipt_recorded` event, so the spine can now answer it — but an event log is not somewhere a screen or a reconciliation reads at decision time, which is the same objection this programme raised to the finance period close relying on its events. Two receipts of 5,000 and one of 10,000 are indistinguishable on the row.",
+      "currentBehavior": "`amount_paid` on the invoice is a running total and nothing else. Recording a receipt adds to it and advances the status; WHO recorded which receipt, WHEN, for how much, and against what bank reference exists nowhere on the record. AR-INV-01 put the actor on the `receipt_recorded` event, so the spine can now answer it — but an event log is not somewhere a screen or a reconciliation reads at decision time, which is the same objection this programme raised to the finance period close relying on its events. Two receipts of 5,000 and one of 10,000 are indistinguishable on the row. CLOSED 2026-09-29. Each receipt is now a row of its own — aura_finance_customer_receipts (migration 0400): the amount, the date the money was received, the bank reference it reconciles to, who recorded it and when. The invoice's amount_paid is DERIVED: a receipts trigger locks the invoice, sums its receipts and sets amount_paid and the status from that sum, and an invoice guard refuses any other writer setting amount_paid, moving an invoice that carries money to any other status (so a void with money on it is refused by the table, including the stale-save race the service could not see), or inserting an invoice already paid. The store no longer writes the column at all. The rules that were the service's alone are the database's too: no receipt on a draft, none past the total. A receipt is never edited or deleted (the API role holds SELECT and INSERT only, and a trigger refuses the owner). EXISTING MONEY WAS KEPT HONESTLY: every invoice already carrying an amount got ONE legacy receipt for exactly that amount with no date, reference, recorder or time — because nobody recorded them — and the migration verifies every invoice equals the sum of its receipts or fails. The screen replaced its window.prompt for an amount with a form for the amount, the date received and the bank reference, and lists every receipt with its recorder; a legacy receipt says it kept the amount only. FOUND AND FIXED WHILE PROVING IT: the first version of the trigger DEADLOCKED two concurrent receipts — the receipt's foreign-key check takes KEY SHARE on the invoice before an AFTER trigger could lock it FOR UPDATE, so each waited on the other; PostgreSQL still aborted one (never an over-payment) but the refusal read 'deadlock detected'. The lock now happens in a BEFORE trigger, ahead of the foreign key, and the race refuses cleanly. Also changed: crm-volume-proof.mjs wrote amount_paid straight onto invoices, which 0400 refuses; it now seeds receipts and lets the database derive the totals (dry-run: 0 of 2,000 invoices disagree with their receipts).",
       "expectedOperationalBehavior": "Each receipt is a record: amount, date, who recorded it, and the bank reference it reconciles to. The invoice’s `amountPaid` is then a DERIVED sum of them rather than an independently maintained number — programme rule 3, no two totals that can disagree.",
       "evidence": "modules/finance/src/domain/customer-invoice.ts recordReceipt; the aura_finance_customer_invoices table, which has no receipt child rows and no receipts column.",
       "severity": "HIGH",
       "remediationDependency": "None. It is a data-model addition, not an authority fix, which is exactly why it was not folded into AR-INV-01 — closing an authority record on a schema feature would make that record’s proof mean less than it says.",
-      "acceptanceProof": "Each receipt persisted as its own record with its actor, date, amount and bank reference; `amountPaid` derived from them and proved to reconcile; the existing over-payment and status rules preserved; and a receipt visible on the screen that shows the invoice."
+      "acceptanceProof": "MET. PERSISTED AS ITS OWN RECORD, WITH ACTOR, DATE, AMOUNT AND BANK REFERENCE: postgres-customer-receipts.pg.test.ts (5/5, as the API role aura_app under RLS) — three receipts read back with their amount, date, bank reference and recorder, and amount_paid equals their sum; the table refuses a receipt with no, or a blank, bank reference and one with no date; an edit and a delete are refused. DERIVED AND PROVED TO RECONCILE: an UPDATE setting amount_paid and status 'paid' directly is refused ('never a number of its own'); the stored column equals the sum of receipts after every write; the volume dry-run found 0 disagreeing invoices in 2,000. EXISTING RULES PRESERVED, NOW IN THE DATABASE TOO: a receipt on a draft is refused ('cannot record a receipt from status draft') and one past the total ('receipt exceeds invoice balance') with nothing left behind; cancelling an invoice carrying money is refused by the table, including a stale save; CONCURRENCY: two transactions racing 600 + 600 into a 1,050 balance — exactly one lands, the second is refused with the balance message, and the total reconciles; the same race through the store with Promise.all — one fulfils, one is refused. MUTATION-TESTED: dropping the BEFORE lock trigger brings the deadlock back and loses the draft refusal (2 failures); restoring it returns 5/5. API, AUTH ON (customer-invoice-authority.e2e-spec.ts, 5/5): money with no bank reference or no date is 400; three receipts are listed back with amount, date, bank reference and the recorder 'ci-ar' taken from the session; they sum to the paid amount; nothing past the total; the Finance Controller reads the receipts and is still refused recording one (403); j2-j6-delivery-audit still traces an IPC through billing to paid. DOMAIN AND SERVICE: customer-invoice.test.ts (26) and customer-invoice.service.test.ts (9), including a save restating the paid amount being ignored and a status that contradicts the receipts being refused by the in-memory twin as by the table. BROWSER against the running API and PostgreSQL (customer-receipts.spec.ts, 1/1): on /finance/customer-invoices a receipt of blanks for a bank reference is refused in words, a receipt of 400 on 2026-09-27 against TT-… is listed with u-admin as recorder and the invoice reads 'partially paid', the remaining 650 by cheque makes it 'paid', and after a reload both receipts read back from PostgreSQL and sum to 1,050; fx-governed-booking and ipc-measured-lines still pass (4/4). NOT CLAIMED: receipts post nothing to the general ledger — neither did the running total, and neither does issuing (AR-GL-01, recorded separately); a receipt is matched to no bank-statement line (bank reconciliation matches supplier payments only); there is no receipt reversal — a wrong receipt cannot be corrected by an act, which a finance team will need, and that is a design question, not a gap this record closes; and a receipt's date is not refused for being in the future, because no rule for that was given."
     },
     {
       "id": "PROC-COM-01",
@@ -9176,6 +9176,31 @@
       "severity": "MEDIUM",
       "remediationDependency": "None upstream. The provider must be able to sign a timestamp — a device-contract question to settle with the telematics supplier before building.",
       "acceptanceProof": "Against the running API and PostgreSQL: a correctly signed call inside the window is recorded once; the identical request re-sent is refused and records nothing; a call whose signed timestamp is outside the window is refused; a call with a valid signature over a body whose timestamp was altered is refused; and the device contract is written down."
+    },
+    {
+      "id": "AR-GL-01",
+      "title": "Customer invoices and receipts never reach the general ledger",
+      "capabilityIds": [
+        "COM-05"
+      ],
+      "classification": "DISCONNECTED",
+      "kind": "fresh finding — measured while closing AR-INV-02, deliberately NOT folded into it",
+      "status": "OPEN",
+      "roles": [
+        "Finance",
+        "Commercial Manager / QS"
+      ],
+      "stages": [
+        "Commercial / Certification",
+        "Finance / Collection"
+      ],
+      "authority": "modules/finance/src/customer-invoice.service.ts (issue, recordReceipt); modules/finance/src/projections/profit-loss.projection.ts",
+      "currentBehavior": "Issuing a customer invoice posts no journal, and recording a receipt posts no journal: CustomerInvoiceService.issue and recordReceipt write the invoice and an event and nothing else, and the only subscriber to a customer-invoice event posts the Billed QUANTITY (cross-module-subscriber), not money. The profit-and-loss projection handles finance.invoice.approved / .paid — SUPPLIER invoices — only. So the receivable, the revenue, the output VAT and the cash received from customers are absent from the ledger, while supplier payments post Dr AP / Cr Bank. The one AR journal that does exist is the FX revaluation, which posts to the Accounts Receivable control account (1200) that nothing else posts to — a revaluation of a balance the ledger does not hold. Until 2026-09-29 the Customer Invoices screen told the user 'Issuing a client tax invoice posts double-entry GL journals'; that sentence was removed with AR-INV-02 because it was untrue.",
+      "expectedOperationalBehavior": "Issuing a customer invoice and recording a receipt each post a balanced journal through the existing JournalService — the receivable against revenue (or against deferred/contract revenue where revenue recognition owns it) and output VAT; the receipt against the bank account the money reached — so the AR control account, revenue, output VAT and bank agree with the sub-ledger, and the FX revaluation revalues a balance the ledger actually carries.",
+      "evidence": "FRESH, 2026-09-29: customer-invoice.service.ts (no journals.post in issue or recordReceipt — only in postFxRevaluation); profit-loss.projection.ts (only finance.invoice.approved/paid); apps/api/src/events/cross-module-subscriber.ts (customer_invoice.issued → billed quantity only); the removed banner copy in apps/web/components/customer-invoices-client.tsx.",
+      "severity": "HIGH",
+      "remediationDependency": "Owner / finance decisions before building, none of which may be invented: the revenue account(s) an issued invoice credits, and whether revenue is recognised at invoicing or by the revenue-recognition module (modules/finance/src/domain/revenue-recognition.ts), which posting at issue would double-count; the output-VAT account; and which bank account a customer receipt lands in (the receipt records a bank REFERENCE, not an account). A backfill of the invoices and receipts already recorded is a separate decision.",
+      "acceptanceProof": "Against the running API and PostgreSQL: issuing an invoice posts one balanced journal with the decided accounts and a receipt posts one to the decided bank account, each citing its invoice/receipt; the AR control balance equals the open AR sub-ledger; a cancelled invoice reverses its journal; nothing is posted twice on retry; and the revenue-recognition interaction is proved not to double-count."
     }
   ],
   "totals": {
@@ -9194,9 +9219,9 @@
       "UNVERIFIED": 36,
       "NOT_AUDITED": 0
     },
-    "gaps": 70,
+    "gaps": 71,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 24
+    "freshDefects": 25
   }
 }

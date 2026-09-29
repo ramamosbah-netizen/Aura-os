@@ -12,6 +12,7 @@ import {
   assertSoftDeletable,
   cancellationSeparation,
 } from './domain/customer-invoice';
+import { type CustomerReceipt, makeCustomerReceipt } from './domain/customer-receipt';
 import { type ArAgingReport, buildArAging } from './domain/ar-aging';
 import { computeFxRevaluation } from './domain/fx-revaluation';
 import { evaluateContractCap } from './domain/contract-cap';
@@ -179,21 +180,41 @@ export class CustomerInvoiceService {
     return updated;
   }
 
-  async recordReceipt(id: Id, amount: number, recordedBy: Id | null = null): Promise<CustomerInvoice> {
+  /**
+   * RECORD A RECEIPT — as a record of its own (AR-INV-02): the amount, the date the money was received,
+   * the bank reference it reconciles to, and who recorded it. The invoice's paid amount and status are
+   * then what the STORE derives from its receipts; this service no longer writes either. The domain
+   * rule runs first so an ordinary refusal reads well, and the database runs it again under a lock.
+   */
+  async recordReceipt(
+    id: Id,
+    input: { amount: number; receivedOn: string; bankReference: string },
+    recordedBy: Id | null = null,
+  ): Promise<CustomerInvoice & { receipt: CustomerReceipt }> {
     // Tenant boundary (G-03): a receipt must not post against another tenant's invoice.
     const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
-    const updated = recordReceipt(inv, amount);
-    await this.store.save(updated);
+    const receipt = makeCustomerReceipt({ tenantId: inv.tenantId, invoiceId: inv.id, ...input, recordedBy });
+    recordReceipt(inv, receipt.amount);
+    const updated = await this.store.addReceipt(receipt);
     await this.events.append([
       makeEvent({
         type: CUSTOMER_INVOICE_EVENT.receiptRecorded,
         tenantId: inv.tenantId, companyId: inv.companyId, actorId: recordedBy ?? null,
         aggregateType: 'finance.customer_invoice', aggregateId: id,
-        payload: { amount: Number(amount), amountPaid: updated.amountPaid, status: updated.status },
+        payload: {
+          receiptId: receipt.id, amount: receipt.amount, receivedOn: receipt.receivedOn, bankReference: receipt.bankReference,
+          amountPaid: updated.amountPaid, status: updated.status,
+        },
       }),
     ]);
-    this.logger.log(`Receipt ${amount} on invoice ${inv.invoiceNumber} → paid ${updated.amountPaid}/${inv.total} (${updated.status})`);
-    return updated;
+    this.logger.log(`Receipt ${receipt.amount} (${receipt.bankReference}) on invoice ${inv.invoiceNumber} → paid ${updated.amountPaid}/${inv.total} (${updated.status})`);
+    return { ...updated, receipt };
+  }
+
+  /** The invoice's receipts, oldest first — each with its amount, date, bank reference and recorder. */
+  async listReceipts(id: Id): Promise<CustomerReceipt[]> {
+    const inv = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'customer invoice', id);
+    return this.store.listReceipts(inv.tenantId, inv.id);
   }
 
   async cancel(id: Id, cancelledBy: Id | null = null, reason?: string | null): Promise<CustomerInvoice> {

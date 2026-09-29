@@ -69,3 +69,63 @@ describe('CustomerInvoiceService — audit trail', () => {
     expect(emittedTypes(append)).toContain('finance.customer_invoice.cancelled');
   });
 });
+
+/**
+ * AR-INV-02 — A RECEIPT IS A RECORD, AND THE PAID AMOUNT IS THEIR SUM. Before this, two receipts of
+ * 5,000 and one of 10,000 left the same row; nobody could say who took which money, when, or against
+ * what bank reference.
+ */
+describe('CustomerInvoiceService — receipts are records', () => {
+  const receipt = (amount: number, bankReference: string, receivedOn = '2026-09-28') => ({ amount, receivedOn, bankReference });
+
+  it('keeps each receipt with its amount, date, bank reference and recorder, and derives the paid amount from them', async () => {
+    const { svc, input, append } = harness();
+    const inv = await svc.create(input(A, 'AR-R1'));
+    await svc.issue(inv.id, 'u-ar');
+    const first = await svc.recordReceipt(inv.id, receipt(250, 'TT-0001', '2026-09-27'), 'u-ar');
+    expect(first).toMatchObject({ status: 'partially_paid', amountPaid: 250, receipt: { amount: 250, bankReference: 'TT-0001', receivedOn: '2026-09-27', recordedBy: 'u-ar', legacy: false } });
+    await svc.recordReceipt(inv.id, receipt(250, 'TT-0002'), 'u-ar2');
+    // 1,000 net + 5% VAT = 1,050.
+    const last = await svc.recordReceipt(inv.id, receipt(550, 'CHQ-77'), 'u-ar');
+    expect(last).toMatchObject({ status: 'paid', amountPaid: 1050 });
+
+    const rows = await svc.listReceipts(inv.id);
+    expect(rows.map((r) => [r.amount, r.bankReference, r.recordedBy])).toEqual([[250, 'TT-0001', 'u-ar'], [250, 'TT-0002', 'u-ar2'], [550, 'CHQ-77', 'u-ar']]);
+    expect(rows.reduce((s, r) => s + r.amount, 0), 'the paid amount reconciles to its receipts').toBe(last.amountPaid);
+    const recorded = append.mock.calls.flatMap((c) => c[0] as Array<{ type: string; payload: Record<string, unknown> }>).filter((e) => e.type === 'finance.customer_invoice.receipt_recorded');
+    expect(recorded.map((e) => e.payload.bankReference)).toEqual(['TT-0001', 'TT-0002', 'CHQ-77']);
+  });
+
+  it('refuses a receipt with no date or no bank reference, and writes nothing', async () => {
+    const { svc, input } = harness();
+    const inv = await svc.create(input(A, 'AR-R2'));
+    await svc.issue(inv.id, 'u-ar');
+    await expect(svc.recordReceipt(inv.id, receipt(100, '  '), 'u-ar')).rejects.toThrow('requires the bank reference');
+    await expect(svc.recordReceipt(inv.id, receipt(100, 'TT-1', ''), 'u-ar')).rejects.toThrow('requires the date');
+    await expect(svc.recordReceipt(inv.id, receipt(100, 'TT-1', '2026-02-30x'), 'u-ar')).rejects.toThrow('requires the date');
+    expect(await svc.listReceipts(inv.id)).toEqual([]);
+    expect((await svc.get(inv.id))!.amountPaid).toBe(0);
+  });
+
+  it('keeps the existing rules: no receipt on a draft, none past the total, no void once money is on it', async () => {
+    const { svc, input } = harness();
+    const draft = await svc.create(input(A, 'AR-R3'));
+    await expect(svc.recordReceipt(draft.id, receipt(100, 'TT-1'), 'u-ar')).rejects.toThrow('cannot record a receipt from status draft');
+    await svc.issue(draft.id, 'u-ar');
+    await expect(svc.recordReceipt(draft.id, receipt(1050.01, 'TT-1'), 'u-ar')).rejects.toThrow('exceeds invoice balance');
+    await svc.recordReceipt(draft.id, receipt(100, 'TT-1'), 'u-ar');
+    await expect(svc.cancel(draft.id, 'u-controller', 'wrong contract')).rejects.toThrow('receipts recorded');
+    expect((await svc.listReceipts(draft.id)).length).toBe(1);
+  });
+
+  it('the store will not let a save restate the paid amount — only a receipt moves it', async () => {
+    const { store, svc, input } = harness();
+    const inv = await svc.create(input(A, 'AR-R4'));
+    await svc.issue(inv.id, 'u-ar');
+    await svc.recordReceipt(inv.id, receipt(400, 'TT-9'), 'u-ar');
+    const current = (await store.get(inv.id))!;
+    await store.save({ ...current, amountPaid: 999 });
+    expect((await store.get(inv.id))!.amountPaid, 'a caller-supplied total is ignored').toBe(400);
+    await expect(store.save({ ...current, status: 'cancelled' })).rejects.toThrow('its status follows its receipts');
+  });
+});

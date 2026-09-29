@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { type Id, type Page, type PageParams, makePage } from '@aura/shared';
 import type { CustomerInvoice, CustomerInvoiceLine } from './domain/customer-invoice';
+import type { CustomerReceipt } from './domain/customer-receipt';
 import type { CustomerInvoiceFilter, CustomerInvoiceStore } from './customer-invoice-store';
 
 interface Row {
@@ -87,23 +88,28 @@ function rowTo(r: Row): CustomerInvoice {
 export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
   constructor(private readonly pool: Pool) {}
 
+  /**
+   * `amount_paid` is deliberately ABSENT from this write (AR-INV-02). It is the sum of the invoice's
+   * receipts, kept by the receipts trigger of migration 0400, which refuses any other writer setting
+   * it — so a new row takes the column default of 0, and an update leaves it where the receipts put it.
+   */
   async save(inv: CustomerInvoice): Promise<void> {
     await this.pool.query(
       `INSERT INTO public.aura_finance_customer_invoices
         (id, tenant_id, company_id, invoice_number, account_id, customer_name, project_id, project_name, contract_ref,
          issue_date, due_date, lines, subtotal, vat_total, total, currency, exchange_rate, base_total,
-         exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, amount_paid, status, created_by, created_at,
+         exchange_rate_effective_date, exchange_rate_source, exchange_rate_id, status, created_by, created_at,
          issued_by, issued_at, cancelled_by, cancelled_at, cancel_reason, deleted_by)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30)
        ON CONFLICT (id) DO UPDATE SET
-         amount_paid = EXCLUDED.amount_paid, status = EXCLUDED.status,
+         status = EXCLUDED.status,
          issued_by = EXCLUDED.issued_by, issued_at = EXCLUDED.issued_at,
          cancelled_by = EXCLUDED.cancelled_by, cancelled_at = EXCLUDED.cancelled_at,
          cancel_reason = EXCLUDED.cancel_reason, deleted_by = EXCLUDED.deleted_by`,
       [
         inv.id, inv.tenantId, inv.companyId, inv.invoiceNumber, inv.accountId, inv.customerName, inv.projectId, inv.projectName, inv.contractRef,
         inv.issueDate, inv.dueDate, JSON.stringify(inv.lines), inv.subtotal, inv.vatTotal, inv.total, inv.currency, inv.exchangeRate, inv.baseTotal,
-        inv.exchangeRateEffectiveDate, inv.exchangeRateSource, inv.exchangeRateId, inv.amountPaid, inv.status, inv.createdBy, inv.createdAt,
+        inv.exchangeRateEffectiveDate, inv.exchangeRateSource, inv.exchangeRateId, inv.status, inv.createdBy, inv.createdAt,
         // `created_by` and `created_at` stay out of the DO UPDATE SET above, as they always have:
         // who raised the invoice is fixed when it is raised. `issued_by` is in it, because the row is
         // written once at create and again at issue — and it is the fact the cancellation is refused
@@ -175,5 +181,41 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
       [tenantId, invoiceNumber],
     );
     return (res.rowCount ?? 0) > 0;
+  }
+
+  /**
+   * One INSERT. Everything else is the database's: the receipts trigger (migration 0400) locks the
+   * invoice row, refuses a receipt on an invoice that is not open for one or that would take it past
+   * its total, and sets `amount_paid` and the status from the sum of the receipts. Concurrent receipts
+   * serialise on that lock, so two of them cannot both fit into the same balance.
+   */
+  async addReceipt(receipt: CustomerReceipt): Promise<CustomerInvoice> {
+    await this.pool.query(
+      `INSERT INTO public.aura_finance_customer_receipts
+        (id, tenant_id, invoice_id, amount, received_on, bank_reference, recorded_by, recorded_at, legacy)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,false)`,
+      [receipt.id, receipt.tenantId, receipt.invoiceId, receipt.amount, receipt.receivedOn, receipt.bankReference, receipt.recordedBy, receipt.recordedAt],
+    );
+    const inv = await this.get(receipt.invoiceId);
+    if (!inv) throw new Error(`customer invoice ${receipt.invoiceId} not found`);
+    return inv;
+  }
+
+  async listReceipts(tenantId: Id, invoiceId: Id): Promise<CustomerReceipt[]> {
+    const res = await this.pool.query<{
+      id: string; tenant_id: string; invoice_id: string; amount: string | number; received_on: string | null;
+      bank_reference: string | null; recorded_by: string | null; recorded_at: Date | string | null; legacy: boolean;
+    }>(
+      `SELECT id, tenant_id, invoice_id, amount, received_on::text AS received_on, bank_reference, recorded_by, recorded_at, legacy
+       FROM public.aura_finance_customer_receipts
+       WHERE tenant_id = $1 AND invoice_id = $2
+       ORDER BY legacy DESC, recorded_at ASC NULLS FIRST, id`,
+      [tenantId, invoiceId],
+    );
+    return res.rows.map((r) => ({
+      id: r.id, tenantId: r.tenant_id, invoiceId: r.invoice_id, amount: Number(r.amount),
+      receivedOn: r.received_on, bankReference: r.bank_reference, recordedBy: r.recorded_by,
+      recordedAt: r.recorded_at ? iso(r.recorded_at) : null, legacy: r.legacy,
+    }));
   }
 }

@@ -126,6 +126,15 @@
       "state": "hardcoded",
       "foundBy": "SEC-01 D-09",
       "note": "That a submission never exists without evidence is a platform invariant. Which methods exist, and what evidence each needs, is company/authority configuration: a hand-delivered submission with a stamped acknowledgement, say. Adding a method today takes a code change and a migration to the check."
+    },
+    {
+      "id": "CC-14",
+      "rule": "A customer receipt must carry the date the money was received and a bank reference (transfer id or cheque number); a receipt with no reference cannot be recorded.",
+      "where": "modules/finance/src/domain/customer-receipt.ts (makeCustomerReceipt); infrastructure/migrations/0400 (chk_aura_customer_receipt_evidence)",
+      "category": "evidence-requirement",
+      "state": "hardcoded",
+      "foundBy": "AR-INV-02",
+      "note": "Right for a contractor paid by transfer and cheque. A company that takes cash receipts would need a method with its own evidence (a cash receipt number, say) rather than a blank reference. That a receipt is its own record and the paid amount is their sum is a platform invariant and is NOT to be made configurable."
     }
   ]
 }

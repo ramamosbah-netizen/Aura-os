@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { makeCustomerInvoice, computeTotals, buildLine, issueInvoice, recordReceipt, cancelInvoice, balanceOf } from './customer-invoice';
+import { makeCustomerInvoice, computeTotals, buildLine, issueInvoice, recordReceipt, cancelInvoice, balanceOf, receiptStatus } from './customer-invoice';
+import { amountPaidFrom, makeCustomerReceipt } from './customer-receipt';
 
 const T = 'tenant-1';
 const baseLines = [
@@ -153,5 +154,27 @@ describe('G-10 — VAT is exact, no float drift (regression)', () => {
   it('converts baseTotal by the FX rate exactly', () => {
     const inv = makeCustomerInvoice({ ...base, lines: [{ description: 'a', quantity: 1, unitPrice: 109.85 }], currency: 'USD', exchangeRate: 3.6725 });
     expect(inv.baseTotal).toBe(423.59); // total 115.34 × 3.6725 = 423.58615 → 423.59
+  });
+});
+
+describe('customer receipt — a record of its own (AR-INV-02)', () => {
+  it('carries its amount, date, bank reference and recorder, and the paid amount is their exact sum', () => {
+    const r = makeCustomerReceipt({ tenantId: 't', invoiceId: 'i', amount: 0.1, receivedOn: '2026-09-28', bankReference: ' TT-1 ', recordedBy: 'u-ar' });
+    expect(r).toMatchObject({ amount: 0.1, receivedOn: '2026-09-28', bankReference: 'TT-1', recordedBy: 'u-ar', legacy: false });
+    expect(amountPaidFrom([r, { amount: 0.2 }])).toBe(0.3);
+    expect(amountPaidFrom([])).toBe(0);
+  });
+
+  it('refuses a receipt without a positive amount, a real date or a bank reference', () => {
+    const ok = { tenantId: 't', invoiceId: 'i', amount: 10, receivedOn: '2026-09-28', bankReference: 'TT-1' };
+    expect(() => makeCustomerReceipt({ ...ok, amount: 0 })).toThrow('must be positive');
+    expect(() => makeCustomerReceipt({ ...ok, amount: Number.NaN })).toThrow('must be positive');
+    expect(() => makeCustomerReceipt({ ...ok, receivedOn: '28/09/2026' })).toThrow('requires the date');
+    expect(() => makeCustomerReceipt({ ...ok, bankReference: '' })).toThrow('requires the bank reference');
+  });
+
+  it('a receipt status follows the money alone', () => {
+    expect(receiptStatus(100, 99.99)).toBe('partially_paid');
+    expect(receiptStatus(100, 100)).toBe('paid');
   });
 });

@@ -252,7 +252,17 @@ export function issueInvoice(inv: CustomerInvoice, issuedBy: Id | null = null): 
   return { ...inv, status: 'issued', issuedBy, issuedAt: new Date().toISOString() };
 }
 
-/** Record a customer receipt against an issued invoice; advances to partially_paid / paid. */
+/** What an invoice carrying receipts IS, from its money alone: covered → paid, otherwise part-paid. */
+export function receiptStatus(total: number, amountPaid: number): 'paid' | 'partially_paid' {
+  return amountPaid >= total - 0.001 ? 'paid' : 'partially_paid';
+}
+
+/**
+ * THE RULE a receipt must pass, and what the invoice becomes after it: advances to partially_paid /
+ * paid. The receipt itself is a record of its own (domain/customer-receipt.ts, AR-INV-02) and the
+ * store derives `amountPaid` from those records — so this is the check made before one is written,
+ * never a second place the total is kept. PostgreSQL makes the same check again under a row lock.
+ */
 export function recordReceipt(inv: CustomerInvoice, amount: number): CustomerInvoice {
   if (inv.status !== 'issued' && inv.status !== 'partially_paid') {
     throw new Error(`cannot record a receipt from status ${inv.status}`);
@@ -261,8 +271,7 @@ export function recordReceipt(inv: CustomerInvoice, amount: number): CustomerInv
   if (!Number.isFinite(a) || a <= 0) throw new Error('receipt amount must be positive');
   const amountPaid = Number(addMoney(inv.amountPaid, a));
   if (amountPaid > inv.total + 0.001) throw new Error(`receipt exceeds invoice balance (paid ${inv.amountPaid}, total ${inv.total})`);
-  const status: CustomerInvoiceStatus = amountPaid >= inv.total - 0.001 ? 'paid' : 'partially_paid';
-  return { ...inv, amountPaid, status };
+  return { ...inv, amountPaid, status: receiptStatus(inv.total, amountPaid) };
 }
 
 /**

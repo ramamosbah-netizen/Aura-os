@@ -28,6 +28,7 @@ import {
   type PettyCashCategory,
   PettyCashService,
   type CustomerInvoice,
+  type CustomerReceipt,
   type NewCustomerInvoiceLine,
   type ArAgingReport,
   type ApAgingReport,
@@ -763,11 +764,29 @@ export class FinanceController {
     return await this.customerInvoices.issue(id, this.tenant.get().actorId ?? null);
   }
 
+  /**
+   * RECORD A RECEIPT (AR-INV-02) — a record of its own: the amount, the date the money was received and
+   * the bank reference it reconciles to, with the recorder taken from the session. The reply is the
+   * invoice as its receipts now make it, with the receipt that was written.
+   */
   @Post('customer-invoices/:id/receipts')
   @Permissions('finance.customer-invoice.receipts')
-  async recordReceipt(@Param('id') id: string, @Body() dto: { amount: number }): Promise<CustomerInvoice> {
+  async recordReceipt(
+    @Param('id') id: string,
+    @Body() dto: { amount: number; receivedOn: string; bankReference: string },
+  ): Promise<CustomerInvoice & { receipt: CustomerReceipt }> {
     if (!(Number(dto?.amount) > 0)) throw new BadRequestException('amount must be positive');
-    return await this.customerInvoices.recordReceipt(id, Number(dto.amount), this.tenant.get().actorId ?? null);
+    return await this.customerInvoices.recordReceipt(
+      id,
+      { amount: Number(dto.amount), receivedOn: String(dto?.receivedOn ?? ''), bankReference: String(dto?.bankReference ?? '') },
+      this.tenant.get().actorId ?? null,
+    );
+  }
+
+  /** The invoice's receipts — who recorded each, when the money arrived, for how much, and the bank reference. */
+  @Get('customer-invoices/:id/receipts')
+  listCustomerReceipts(@Param('id') id: string): Promise<CustomerReceipt[]> {
+    return this.customerInvoices.listReceipts(id);
   }
 
   /**

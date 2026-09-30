@@ -20,6 +20,13 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
  *   A quotation line is a DECLARATION, never a DETERMINATION. No compliance verdict, no eligibility,
  *   no rank, no comparable value. A supplier writing "comply" is a claim with exactly the standing of
  *   their price, and nothing in this surface converts it into a pass.
+ *
+ * CAPTURED THE WAY QC-01 NOW REQUIRES (migration 0352). A supplier line belongs to an immutable
+ * quotation REVISION, so this suite opens the supplier's quotation (family), takes its base offer and
+ * starts a revision — `POST procurement/quotations/:id/lines` now takes that REVISION id. The old
+ * fixture posted lines against the RFQ-quote header id, which is why every test here answered 404.
+ * An ALTERNATE is no longer a flag on a line: it is a separate, labelled OFFER (migration 0351), so
+ * "an alternate must say what it is" is asserted on the offer, where the rule now lives.
  */
 
 const TENANT = `quo-${Date.now()}`;
@@ -98,13 +105,26 @@ describe('what a supplier offered, item by item (JWT ON)', () => {
 
     const rfq = (await buyer.post('/api/v1/procurement/rfqs')
       .send({ title: `RFQ ${run}`, prId: pr.id }).expect(201)).body;
-    const quotation = (await buyer.post(`/api/v1/procurement/rfqs/${rfq.id}/quotes`).send({
-      supplierName: `Gulf ELV ${run}`, amount: 6400,
-      currency: 'USD', taxTreatment: 'exclusive', taxRatePct: 5,
-      freightAmount: 300, freightTerms: 'CIF Jebel Ali', paymentTerms: '30 days net', validityDate: '2026-12-31',
-    }).expect(201)).body;
+    const supplier = await quotationFrom(rfq.id as string, `Gulf ELV ${run}`, 'USD');
 
-    return { prId: pr.id as string, lineA: lineA.id as string, lineB: lineB.id as string, quotationId: quotation.id as string, run };
+    return {
+      prId: pr.id as string, lineA: lineA.id as string, lineB: lineB.id as string, rfqId: rfq.id as string,
+      familyId: supplier.familyId, quotationId: supplier.revisionId, run,
+    };
+  }
+
+  /**
+   * One supplier's quotation against an RFQ, captured as QC-01 has it: the family, its BASE offer, and
+   * a draft Rev 1 carrying the supplier's commercial terms. Returns the REVISION the lines go on.
+   */
+  async function quotationFrom(rfqId: string, supplierName: string, currency: string) {
+    const family = (await buyer.post('/api/v1/procurement/quotations/families')
+      .send({ rfqId, supplierName, supplierQuotationRef: `${supplierName}-Q1` }).expect(201)).body as { family: { id: string }; baseOffer: { id: string } };
+    const revision = (await buyer.post(`/api/v1/procurement/quotations/offers/${family.baseOffer.id}/revisions`).send({
+      supplierRevisionRef: 'Rev 1', currency, taxTreatment: 'exclusive', taxRatePct: 5,
+      freightAmount: 300, freightTerms: 'CIF Jebel Ali', paymentTerms: '30 days net', validityDate: '2026-12-31',
+    }).expect(201)).body as { id: string };
+    return { familyId: family.family.id, revisionId: revision.id };
   }
 
   const addLine = (quotationId: string, body: Record<string, unknown>) =>
@@ -185,36 +205,40 @@ describe('what a supplier offered, item by item (JWT ON)', () => {
 
   it('requires an alternate to say what it actually is', async () => {
     const s = await scene();
-    const vague = await addLine(s.quotationId, {
-      prLineId: s.lineA, quantity: 12, uom: 'nr', unitPrice: 380, isAlternate: true,
-    });
+    // An alternate is its own OFFER beside the base one, and it must say what is offered instead.
+    const vague = await buyer.post(`/api/v1/procurement/quotations/families/${s.familyId}/offers`).send({ label: '   ' });
     expect(vague.status).toBe(400);
-    expect(String(vague.body?.message)).toMatch(/make and model/i);
+    expect(String(vague.body?.message)).toMatch(/must say what is being offered instead/i);
 
     // Named, and still not an equivalent — nothing here grants it compliance.
-    const named = (await addLine(s.quotationId, {
-      prLineId: s.lineA, quantity: 12, uom: 'nr', unitPrice: 380, isAlternate: true,
+    const offer = (await buyer.post(`/api/v1/procurement/quotations/families/${s.familyId}/offers`)
+      .send({ label: 'Dahua IPC-HDBW3441E instead of the specified dome' }).expect(201)).body as { id: string; kind: string };
+    expect(offer.kind).toBe('alternative');
+    const rev = (await buyer.post(`/api/v1/procurement/quotations/offers/${offer.id}/revisions`)
+      .send({ supplierRevisionRef: 'Alt Rev 1', currency: 'USD' }).expect(201)).body as { id: string };
+    const named = (await addLine(rev.id, {
+      prLineId: s.lineA, quantity: 12, uom: 'nr', unitPrice: 380,
       offeredManufacturer: 'Dahua', offeredModel: 'IPC-HDBW3441E', complianceResponse: 'comply_with_deviation',
       deviations: 'different lens', exclusions: 'no mounting bracket',
     }).expect(201)).body;
-    expect(named.isAlternate).toBe(true);
+    expect(named.offeredModel).toBe('IPC-HDBW3441E');
     expect(named.deviations).toBe('different lens');
     expect(named).not.toHaveProperty('isCompliant');
+    // The base offer's answer to the same requirement is untouched by the alternative's.
+    expect(((await buyer.get(`/api/v1/procurement/quotations/${s.quotationId}/lines`).expect(200)).body as unknown[]).length).toBe(0);
   });
 
   it('reads every supplier’s answer to ONE requirement — the grain a comparison needs', async () => {
     const s = await scene();
-    const other = (await buyer.post(`/api/v1/procurement/rfqs/${(await admin.get(`/api/v1/procurement/rfqs`).expect(200)).body[0]?.id ?? ''}/quotes`)
-      .send({ supplierName: `Second ${s.run}`, amount: 5000, currency: 'AED' }).catch(() => ({ body: null })) as { body: { id?: string } | null }).body;
+    // A SECOND supplier quoting the same RFQ. The old fixture reached for "the first RFQ in the list"
+    // and swallowed every failure, so it could pass having compared one supplier with nobody.
+    const other = await quotationFrom(s.rfqId, `Second ${s.run}`, 'AED');
 
     await addLine(s.quotationId, { prLineId: s.lineA, quantity: 12, uom: 'nr', unitPrice: 430 }).expect(201);
-    if (other?.id) {
-      await buyer.post(`/api/v1/procurement/quotations/${other.id}/lines`)
-        .send({ prLineId: s.lineA, quantity: 12, uom: 'nr', unitPrice: 415 }).catch(() => undefined);
-    }
+    await addLine(other.revisionId, { prLineId: s.lineA, quantity: 12, uom: 'nr', unitPrice: 415 }).expect(201);
 
-    const answers = (await buyer.get(`/api/v1/procurement/quotations/by-requirement/${s.lineA}`).expect(200)).body as Array<{ prLineId: string }>;
-    expect(answers.length).toBeGreaterThanOrEqual(1);
+    const answers = (await buyer.get(`/api/v1/procurement/quotations/by-requirement/${s.lineA}`).expect(200)).body as Array<{ prLineId: string; unitPrice: number }>;
+    expect(answers.map((a) => a.unitPrice).sort((x, y) => x - y)).toEqual([415, 430]);
     expect(answers.every((a) => a.prLineId === s.lineA)).toBe(true);
   });
 

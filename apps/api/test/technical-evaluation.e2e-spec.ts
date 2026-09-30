@@ -20,6 +20,11 @@ import { AllExceptionsFilter } from '../src/common/all-exceptions.filter';
  *
  * That asymmetry is the point. Governing the decision with a procurement permission would have made
  * it impossible for the role that actually decides.
+ *
+ * Offers are captured the way QC-01 requires (migration 0352): the supplier's quotation (family), its
+ * base offer, and a revision the lines belong to. A verdict is on a line OF A REVISION, and the
+ * evaluator's queue is keyed on the revision — so Rev 1's judgement can never be read as Rev 2's. The
+ * old fixture posted lines against the RFQ-quote header id, which is why every test here answered 404.
  */
 
 const TENANT = `tec-${Date.now()}`;
@@ -79,6 +84,14 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
     delete process.env.AUTH_JWT_SECRET;
   });
 
+  /** A supplier's quotation against an RFQ, captured as QC-01 has it; returns the REVISION the lines go on. */
+  async function revisionFor(rfqId: string, supplierName: string): Promise<string> {
+    const family = (await buyer.post('/api/v1/procurement/quotations/families')
+      .send({ rfqId, supplierName }).expect(201)).body as { baseOffer: { id: string } };
+    return ((await buyer.post(`/api/v1/procurement/quotations/offers/${family.baseOffer.id}/revisions`)
+      .send({ supplierRevisionRef: 'Rev 1', currency: 'AED' }).expect(201)).body as { id: string }).id;
+  }
+
   /** A requisition line asking for 12 cameras, and a supplier offering against it. */
   async function scene(offered: Record<string, unknown> = {}) {
     const run = `${Date.now()}${Math.floor(Math.random() * 1000)}`;
@@ -92,14 +105,13 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
     const prLine = (await buyer.post(`/api/v1/procurement/purchase-requests/${pr.id}/lines`)
       .send({ material: camera.id, quantity: 12, estimatedUnitCost: 450 }).expect(201)).body;
     const rfq = (await buyer.post('/api/v1/procurement/rfqs').send({ title: `RFQ ${run}`, prId: pr.id }).expect(201)).body;
-    const quotation = (await buyer.post(`/api/v1/procurement/rfqs/${rfq.id}/quotes`)
-      .send({ supplierName: `Supplier ${run}`, amount: 5000, currency: 'AED' }).expect(201)).body;
-    const line = (await buyer.post(`/api/v1/procurement/quotations/${quotation.id}/lines`).send({
+    const revisionId = await revisionFor(rfq.id, `Supplier ${run}`);
+    const line = (await buyer.post(`/api/v1/procurement/quotations/${revisionId}/lines`).send({
       prLineId: prLine.id, quantity: 12, uom: 'nr', unitPrice: 430,
       offeredManufacturer: 'Hikvision', offeredModel: 'DS-2CD2143G2-I', complianceResponse: 'comply',
       ...offered,
     }).expect(201)).body;
-    return { lineId: line.id as string, quotationId: quotation.id as string, run };
+    return { lineId: line.id as string, quotationId: revisionId, run };
   }
 
   it('an offer nobody has evaluated is UNKNOWN — not eligible, however low the price', async () => {
@@ -199,9 +211,8 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
     const prLine = (await buyer.post(`/api/v1/procurement/purchase-requests/${pr.id}/lines`)
       .send({ material: mat.id, quantity: 100, estimatedUnitCost: 4 }).expect(201)).body;
     const rfq = (await buyer.post('/api/v1/procurement/rfqs').send({ title: `R ${run}`, prId: pr.id }).expect(201)).body;
-    const quotation = (await buyer.post(`/api/v1/procurement/rfqs/${rfq.id}/quotes`)
-      .send({ supplierName: `S ${run}`, amount: 100, currency: 'AED' }).expect(201)).body;
-    const declined = (await buyer.post(`/api/v1/procurement/quotations/${quotation.id}/lines`)
+    const revisionId = await revisionFor(rfq.id, `S ${run}`);
+    const declined = (await buyer.post(`/api/v1/procurement/quotations/${revisionId}/lines`)
       .send({ prLineId: prLine.id, response: 'no_bid' }).expect(201)).body;
 
     const res = await techManager.post(`/api/v1/procurement/quotation-lines/${declined.id}/evaluation`)
@@ -218,6 +229,14 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
       .send({ supplierName: `S ${run}`, amount: 100, currency: 'AED', leadTimeDays: 21 });
     expect(res.status).toBe(400);
     expect(String(res.body?.message)).toMatch(/must be recorded on the quotation line/i);
+
+    // …and on the capture path every quotation now takes, where a revision's header is the header.
+    const family = (await buyer.post('/api/v1/procurement/quotations/families')
+      .send({ rfqId: rfq.id, supplierName: `S2 ${run}` }).expect(201)).body as { baseOffer: { id: string } };
+    const onRevision = await buyer.post(`/api/v1/procurement/quotations/offers/${family.baseOffer.id}/revisions`)
+      .send({ supplierRevisionRef: 'Rev 1', currency: 'AED', leadTimeDays: 21 });
+    expect(onRevision.status).toBe(400);
+    expect(String(onRevision.body?.message)).toMatch(/must be recorded on the quotation line/i);
   });
 
   /**
@@ -286,10 +305,10 @@ describe('the internal technical verdict on a supplier offer (JWT ON)', () => {
     const pr = (await buyer.post('/api/v1/procurement/purchase-requests').send({ title: `P ${run}`, projectId: project.id, value: 0 }).expect(201)).body;
     const prLine = (await buyer.post(`/api/v1/procurement/purchase-requests/${pr.id}/lines`).send({ material: mat.id, quantity: 5, estimatedUnitCost: 4 }).expect(201)).body;
     const rfq = (await buyer.post('/api/v1/procurement/rfqs').send({ title: `R ${run}`, prId: pr.id }).expect(201)).body;
-    const quotation = (await buyer.post(`/api/v1/procurement/rfqs/${rfq.id}/quotes`).send({ supplierName: `S ${run}`, amount: 10, currency: 'AED' }).expect(201)).body;
-    await buyer.post(`/api/v1/procurement/quotations/${quotation.id}/lines`).send({ prLineId: prLine.id, response: 'no_bid' }).expect(201);
+    const revisionId = await revisionFor(rfq.id, `S ${run}`);
+    await buyer.post(`/api/v1/procurement/quotations/${revisionId}/lines`).send({ prLineId: prLine.id, response: 'no_bid' }).expect(201);
 
-    const awaiting = (await techManager.get(`/api/v1/procurement/quotation-lines/awaiting/${quotation.id}`).expect(200)).body as unknown[];
+    const awaiting = (await techManager.get(`/api/v1/procurement/quotation-lines/awaiting/${revisionId}`).expect(200)).body as unknown[];
     expect(awaiting).toHaveLength(0);
   });
 

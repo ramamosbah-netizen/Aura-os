@@ -110,7 +110,8 @@ export async function createGovernedDeliveryFixture(
   }
   await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'priced' }).expect(200);
   const quotation = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
-  await establishGovernedQuotationReadiness(http, quotation.id, `quantity-ledger-${title}`);
+  // qty-maker prepared the offer; qty-checker answers for it, so qty-checker excuses what cannot be typed in.
+  await establishGovernedQuotationReadiness(http, quotation.id, `quantity-ledger-${title}`, 'qty-checker');
   await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).send({ action: 'submit_review' }).expect(200);
   await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).set('x-e2e-actor', 'qty-checker').send({ action: 'approve' }).expect(200);
   const awardResponse = await http.post(`/api/v1/tendering/tenders/${tender.id}/award`).set('x-e2e-actor', 'qty-checker').send({

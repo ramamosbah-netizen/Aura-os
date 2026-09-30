@@ -85,7 +85,7 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     await http.post('/api/v1/tendering/estimates').send({ boqItemId: item.id, components: [{ costType: 'material', description: TITLE, quantity: 1, unitCost: 100 }], applyToBoq: false }).expect(201);
     await http.patch(`/api/v1/tendering/tenders/${tender.id}/status`).send({ status: 'priced' }).expect(200);
     const quotation = (await http.post(`/api/v1/tendering/tenders/${tender.id}/quotation`).send({}).expect(201)).body;
-    await establishGovernedQuotationReadiness(http, quotation.id, `c4-${tender.id}`);
+    await establishGovernedQuotationReadiness(http, quotation.id, `c4-${tender.id}`, CERTIFIER);
     await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).send({ action: 'submit_review' }).expect(200);
     await http.patch(`/api/v1/crm/quotations/${quotation.id}/status`).set('x-e2e-actor', CERTIFIER).send({ action: 'approve' }).expect(200);
     const award = await http.post(`/api/v1/tendering/tenders/${tender.id}/award`).set('x-e2e-actor', CERTIFIER).send({ awardedValue: 600000, currency: 'AED', awardedAt: '2026-09-01T08:00:00.000Z', awardReference: `C4-${tender.id}` });

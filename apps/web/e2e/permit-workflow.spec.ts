@@ -16,8 +16,35 @@ const openWindow = () => ({
   validFrom: new Date(Date.now() - 3600_000).toISOString(),
   validTo: new Date(Date.now() + 3600_000).toISOString(),
 });
+const API_V1 = `${process.env.AURA_API_URL ?? 'http://localhost:4000'}/api/v1`;
+
+/**
+ * THE RISK ASSESSMENT IS APPROVED BY SOMEBODY OTHER THAN ITS AUTHOR.
+ *
+ * Both permit journeys below seeded an approved assessment by writing it AND approving it as the
+ * session user, and both stopped there: "the person who wrote this risk assessment may not approve
+ * their own — it is what authorises a permit to work" (403). The spec was stale, not the product.
+ * The second configured actor (E2E_ALT_USERNAME — u-e2e-checker, who holds r-hse and therefore
+ * `hse.risk-assessment.approve`) approves it now, and the author's own approval is asserted as the
+ * refusal it is.
+ */
+async function approvedByAnother(
+  request: import('@playwright/test').APIRequestContext,
+  baseURL: string | undefined,
+  raId: string,
+): Promise<void> {
+  const own = await request.put(`${baseURL}/api/hse/risk-assessments/${raId}/approve`);
+  expect(own.status(), 'the author must not approve their own risk assessment').toBe(403);
+  expect(await own.text()).toContain('may not approve their own');
+  const alt = altApiAuthHeaders();
+  const other = await request.put(`${API_V1}/hse/risk-assessments/${raId}/approve`, { headers: alt! });
+  expect(other.ok(), `a second HSE officer approves it — ${await other.text()}`).toBe(true);
+}
 
 test('permit register → 360 → approve → close, with the authorisation gates enforced (UI)', async ({ page, baseURL }) => {
+  // WITHOUT a second actor this journey is correctly IMPOSSIBLE — segregation of duties refuses both
+  // the assessment's self-approval and the permit's — so the requirement is stated, not failed into.
+  test.skip(!altApiAuthHeaders(), 'needs a second actor: set E2E_ALT_USERNAME to an account this environment seeds');
   const projectId = await projectFixtureId(page.request, baseURL);
   // ── Seed an APPROVED risk assessment: without one the permit can never be issued.
   const raRes = await page.request.post(`${baseURL}/api/hse/risk-assessments`, {
@@ -31,7 +58,7 @@ test('permit register → 360 → approve → close, with the authorisation gate
   test.skip(raRes.status() === 502 || raRes.status() === 404, 'HSE API not running behind the web shell');
   expect(raRes.ok()).toBeTruthy();
   const ra = await raRes.json();
-  expect((await page.request.put(`${baseURL}/api/hse/risk-assessments/${ra.id}/approve`)).ok()).toBeTruthy();
+  await approvedByAnother(page.request, baseURL, ra.id);
 
   // ── A permit WITHOUT an assessment — the blocked case.
   const bare = await (
@@ -53,11 +80,6 @@ test('permit register → 360 → approve → close, with the authorisation gate
   // before auth was enabled (no actor ⇒ no recorded requester), which is exactly why turning auth
   // on is worth doing rather than working around.
   const alt = altApiAuthHeaders();
-  // WITHOUT a second actor this journey is not merely awkward, it is correctly IMPOSSIBLE:
-  // segregation of duties refuses self-authorisation, so the approve leg below could never
-  // succeed. The comment above has always said so; the assertions did not, and the spec failed
-  // as though the product were broken (TC-GATE-23). Skipping states the requirement instead.
-  test.skip(!alt, 'needs a second actor: set E2E_ALT_USERNAME to an account this environment seeds');
   const apiBase = process.env.AURA_API_URL ?? 'http://localhost:4000';
   const permit = alt
     ? await (
@@ -153,6 +175,7 @@ test('a rejected permit carries its reason and re-opens for correction (UI)', as
 test('a permit cannot be approved by the person who requested it (UI)', async ({ page, baseURL }) => {
   const projectId = await projectFixtureId(page.request, baseURL);
   test.skip(!authEnabled(), 'no verifier configured — the API records no requester, so SoD is inert');
+  test.skip(!altApiAuthHeaders(), 'needs a second actor to approve the risk assessment the permit cites');
 
   const raRes = await page.request.post(`${baseURL}/api/hse/risk-assessments`, {
     data: {
@@ -164,7 +187,7 @@ test('a permit cannot be approved by the person who requested it (UI)', async ({
   });
   test.skip(raRes.status() === 502 || raRes.status() === 404, 'HSE API not running behind the web shell');
   const ra = await raRes.json();
-  expect((await page.request.put(`${baseURL}/api/hse/risk-assessments/${ra.id}/approve`)).ok()).toBeTruthy();
+  await approvedByAnother(page.request, baseURL, ra.id);
 
   // Requested through the BFF, so the session user is recorded as the requester.
   const mine = await (

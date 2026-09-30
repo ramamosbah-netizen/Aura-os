@@ -6,6 +6,11 @@
 // The assertions that carry the design are the history ones — that a rejection survives the later
 // approval, and that a renewal issues a new certificate rather than editing an expiry date. Those
 // are the two places where a simpler model quietly loses the record a dispute turns on.
+//
+// SEC-01 D-09 (owner, 2026-09-29) changed two things this journey walks through, and it now walks
+// them as the product does: a submission never exists without evidence (here, an authority-portal
+// submission citing its stored receipt and the portal reference), and recording a certificate no
+// longer closes the case — it waits at `certificate_received` until closure is confirmed.
 import 'reflect-metadata';
 import type { INestApplication } from '@nestjs/common';
 import { ValidationPipe } from '@nestjs/common';
@@ -75,6 +80,18 @@ describe('Compliance Core (HTTP)', () => {
   describe('a case through rejection, resubmission and certification', () => {
     let caseId: string;
 
+    /** The portal's receipt, stored as a document — the evidence an authority_portal submission cites. */
+    async function portalSubmission(reference: string, extra: Record<string, unknown> = {}) {
+      const doc = await http.post('/api/v1/documents').send({
+        kind: 'report', title: `Portal receipt ${reference}`, aggregateType: 'compliance.case', aggregateId: caseId,
+        fileName: `${reference}.txt`, contentType: 'text/plain', content: `Portal submission ${reference} received`,
+      });
+      expect(doc.status, JSON.stringify(doc.body)).toBeLessThan(300);
+      const evidenceDocumentId = (doc.body.document?.id ?? doc.body.id) as string;
+      return http.post(`/api/v1/compliance/cases/${caseId}/submissions`)
+        .send({ method: 'authority_portal', reference, evidenceDocumentId, ...extra });
+    }
+
     it('opens a project-scoped case and derives its subject type', async () => {
       const res = await http.post('/api/v1/compliance/cases').send({
         authorityCode: 'SIRA', obligationCode: 'SYSTEM_CERT', scope: 'PROJECT',
@@ -87,10 +104,16 @@ describe('Compliance Core (HTTP)', () => {
       expect(res.body.status).toBe('draft');
     });
 
-    it('submits, and the case follows', async () => {
+    it('refuses a submission with no evidence — it must never exist without it', async () => {
       const res = await http.post(`/api/v1/compliance/cases/${caseId}/submissions`)
-        .send({ submittedAt: '2026-08-01', reference: 'SIRA-SUB-1', fee: 500, currency: 'aed' });
-      expect(res.status).toBeLessThan(300);
+        .send({ submittedAt: '2026-08-01', reference: 'SIRA-SUB-0' });
+      expect(res.status).toBe(400);
+    });
+
+    it('submits, and the case follows', async () => {
+      const res = await portalSubmission('SIRA-SUB-1', { submittedAt: '2026-08-01', fee: 500, currency: 'aed' });
+      expect(res.status, JSON.stringify(res.body)).toBeLessThan(300);
+      expect(res.body.method).toBe('authority_portal');
       expect(res.body.attempt).toBe(1);
       expect(res.body.currency).toBe('AED');
 
@@ -114,8 +137,7 @@ describe('Compliance Core (HTTP)', () => {
     });
 
     it('resubmits as attempt 2 rather than overwriting attempt 1', async () => {
-      const res = await http.post(`/api/v1/compliance/cases/${caseId}/submissions`)
-        .send({ submittedAt: '2026-09-01', reference: 'SIRA-SUB-2' });
+      const res = await portalSubmission('SIRA-SUB-2', { submittedAt: '2026-09-01' });
       expect(res.body.attempt).toBe(2);
 
       const subs = await http.get(`/api/v1/compliance/cases/${caseId}/submissions`).expect(200);
@@ -149,12 +171,16 @@ describe('Compliance Core (HTTP)', () => {
       expect(rows[1].outcome).toBe('approved');
     });
 
-    it('issues a certificate and marks the case certified', async () => {
+    it('records a certificate — the case waits at certificate received until closure is confirmed', async () => {
       const res = await http.post(`/api/v1/compliance/cases/${caseId}/certificates`)
         .send({ number: 'SIRA-CERT-001', issuedAt: '2026-09-25', expiresAt: '2027-09-25' });
       expect(res.status).toBeLessThan(300);
       expect(res.body.supersededByCertificateId).toBeNull();
 
+      const received = await http.get(`/api/v1/compliance/cases/${caseId}`).expect(200);
+      expect(received.body.status, 'a recorded certificate does not close the case').toBe('certificate_received');
+
+      await http.put(`/api/v1/compliance/cases/${caseId}/status`).send({ status: 'certified' }).expect(200);
       const c = await http.get(`/api/v1/compliance/cases/${caseId}`).expect(200);
       expect(c.body.status).toBe('certified');
     });
@@ -173,6 +199,8 @@ describe('Compliance Core (HTTP)', () => {
       expect(rows[0].expiresAt).toBe('2027-09-25');
       expect(rows[0].supersededByCertificateId).not.toBeNull();
       expect(rows[1].supersededByCertificateId).toBeNull();
+      // The renewal is received too, and its closure confirmed the same way.
+      await http.put(`/api/v1/compliance/cases/${caseId}/status`).send({ status: 'certified' }).expect(200);
     });
 
     it('writes the renewal in an order the foreign key accepts', async () => {

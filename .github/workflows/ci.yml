@@ -57,9 +57,17 @@ jobs:
         run: pnpm --filter @aura/web test -- --run crm-sales-route-ownership.fitness.test.ts crm-lead-parity.fitness.test.ts commercial-source-truth.fitness.test.ts components/commercial-ownership.fitness.test.ts
 
       - name: API HTTP e2e (Supertest — TIER-2 #39/#40)
-        # The release-proof suite below is explicitly database-backed and must not run against
-        # this tier's forced in-memory adapters. It runs in web-smoke-postgres after migrations.
-        run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e.ts --exclude test/sales-mutation-release-proof.e2e-spec.ts
+        # The suites excluded here are explicitly database-backed and must not run against this
+        # tier's forced in-memory adapters (vitest.config.e2e.ts pins DATABASE_URL=''): the Sales
+        # release proof and the three PD-5C PostgreSQL proofs (C4 certification, C5 cost ledger,
+        # C6 change control), which throw "DATABASE_URL is required" by design. All four run in
+        # web-smoke-postgres after migrations — excluded here, never silently skipped.
+        run: >-
+          pnpm --filter @aura/api exec vitest run --config vitest.config.e2e.ts
+          --exclude test/sales-mutation-release-proof.e2e-spec.ts
+          --exclude test/c4-certification.e2e-spec.ts
+          --exclude test/c5-cost-ledger.pg.e2e-spec.ts
+          --exclude test/c6-change-control.pg.e2e-spec.ts
 
       # Blocking: the production graph is expected to stay at zero known advisories. SheetJS is
       # pinned to its official patched distribution and DOMPurify is overridden to a fixed release.
@@ -801,6 +809,19 @@ jobs:
         # only its own run. Keep it beside the real PostgreSQL/browser proof, never in TIER-2's
         # in-memory API e2e job.
         run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts test/sales-mutation-release-proof.e2e-spec.ts
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
+
+      - name: PD-5C PostgreSQL proofs (C4 certification · C5 cost ledger · C6 change control)
+        # Excluded from TIER-2's in-memory job: each proves what only persistence can show — one
+        # certified ledger fact under concurrent replay (C4), monetary provenance and projections
+        # rebuilt from the append-only ledger (C5), and serialised variation decisions with their
+        # audit and budget posted once (C6). The API runs as the least-privilege app role
+        # (DATABASE_URL) and the proofs read back as the schema owner (MIGRATION_DATABASE_URL).
+        run: >-
+          pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts
+          test/c4-certification.e2e-spec.ts test/c5-cost-ledger.pg.e2e-spec.ts test/c6-change-control.pg.e2e-spec.ts
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}

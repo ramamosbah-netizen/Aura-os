@@ -102,6 +102,14 @@ describe('PD-5C C4 certification — governed PostgreSQL proof', () => {
     const wbs = (await http.post('/api/v1/projects/wbs').send({ projectId: project!.id, code: 'C4.1', title: TITLE, plannedValue: 100000, boqItemId: item.id }).expect(201)).body;
     await http.post('/api/v1/projects/delivery-item-maps').send({ projectId: project!.id, frozenItemKey: frozen.frozenItemKey, wbsNodeId: wbs.id }).expect(201);
     await http.post('/api/v1/site/installations').send({ projectId: project!.id, boqItemId: item.id, date: '2026-09-01', description: TITLE, quantity: 40, unit: 'nr' }).expect(201);
+    // The installation reaches the Quantity Ledger through its event, which in PostgreSQL travels the
+    // outbox — asynchronously. Certifying before it lands was measured as "0 nr installed … leaves 0":
+    // the claim was refused correctly, against a ledger that had not heard yet. Wait for the fact.
+    const installed = await until(async () => {
+      const position = (await http.get(`/api/v1/projects/quantity-ledger/position/${item.id}`).expect(200)).body as { installed: number | null };
+      return position.installed === 40 ? position : null;
+    }, 200);
+    expect(installed, 'the installation never reached the Quantity Ledger').toBeTruthy();
 
     const certificate = (await http.post('/api/v1/contracts/certificates').set('x-e2e-actor', MAKER).send({ contractId: contract!.id, reference: `C4-${tender.id}` }).expect(201)).body;
     const line = (await http.post(`/api/v1/contracts/certificates/${certificate.id}/lines`).set('x-e2e-actor', MAKER).send({ frozenItemKey: frozen.frozenItemKey, quantity: 30 }).expect(201)).body;

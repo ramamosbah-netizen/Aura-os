@@ -42,10 +42,12 @@ describe('daily reports are unique per project per day (HTTP)', () => {
     await app.init();
     http = request(app.getHttpServer());
 
+    // No `status: 'active'` any more: a project is not created already active — that is a governed
+    // lifecycle move, refused at creation (400). A daily report does not need one.
     const project = await http
       .post('/api/v1/projects/projects')
-      .send({ title: 'Uniqueness fixture', reference: 'PX-UNIQ-1', status: 'active', value: 1000 })
-      .expect(201);
+      .send({ title: 'Uniqueness fixture', reference: 'PX-UNIQ-1', value: 1000 });
+    if (project.status !== 201) throw new Error(`project fixture: ${project.status} ${JSON.stringify(project.body)}`);
     projectId = project.body.id as string;
   });
 

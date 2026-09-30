@@ -31,6 +31,8 @@ let projects: ProjectService, cbs: CbsService, wbs: WbsService, variations: Vari
 let mine: string, other: string, foreign: string;
 let serial = 0;
 const cases: Case[] = [];
+/** A tenant-level assertion (NOT_PROJECT_OWNED): proved by its own named test below, like safety training. */
+const TEMPLATE_ADAPTATION = "a system template is adapted into each project as that project's own ITP revision";
 function data(projectId: string, extra: Data = {}): Data {
   const code = `SC-${++serial}`;
   return { tenantId: T, projectId, code, title: code, reference: code, documentNumber: code,
@@ -69,7 +71,10 @@ for (const [method, permission] of [
   ['createSubmittal','engineering.submittal.create'], ['createTechnicalQuery','engineering.tq.create'],
   ['createDesignChange','engineering.design_change.create'], ['createDocument','engineering.document.create'],
   ['registerBimModel','engineering.bim_model.register'],
-]) createCase('engineering', method, permission, () => eng, {}, method === 'registerBimModel' ? 'uploadedBy' : 'createdBy');
+]) createCase('engineering', method, permission, () => eng,
+  // ENG-04: a MATERIAL submittal is raised in Quality, so the engineering register's own is technical.
+  method === 'createSubmittal' ? { submittalType: 'technical' } : {},
+  method === 'registerBimModel' ? 'uploadedBy' : 'createdBy');
 for (const [method, permission] of [
   ['createTransmittal','doccontrol.transmittal.create'], ['createCorrespondence','doccontrol.correspondence.create'],
   ['createSubmittal','doccontrol.submittal.create'], ['createRegisterEntry','doccontrol.register.create'],
@@ -109,10 +114,15 @@ transition('engineering','assertDrawingPerm','engineering.drawing.submit', p => 
   (a,r) => eng.submitDrawing(T,a,r.id));
 transition('engineering','answerRfi','engineering.rfi.answer', p => eng.createRfi(data(p) as never),
   (a,r) => eng.answerRfi(T,a,r.id,'Confirmed'));
-transition('engineering','updateSubmittalStatus','engineering.submittal.update_status', p => eng.createSubmittal(data(p) as never),
+transition('engineering','updateSubmittalStatus','engineering.submittal.update_status', p => eng.createSubmittal(data(p,{submittalType:'technical'}) as never),
   (a,r) => eng.updateSubmittalStatus(T,a,r.id,'submitted'));
 transition('engineering','respondTechnicalQuery','engineering.tq.respond', p => eng.createTechnicalQuery(data(p) as never),
-  (a,r) => eng.respondTechnicalQuery(T,a,r.id,'Confirmed'));
+  (a,r) => eng.respondTechnicalQuery(T,a,r.id,{ response: 'Confirmed' }));
+// Closing is the RAISING side accepting the answer — its own authority, and never the answerer's.
+transition('engineering','closeTechnicalQuery','engineering.tq.close', async p => {
+  const tq = await eng.createTechnicalQuery(data(p) as never);
+  return eng.respondTechnicalQuery(T,null,tq.id,{ response: 'Confirmed by the designer' });
+}, (a,r) => eng.closeTechnicalQuery(T,a,r.id));
 transition('engineering','decideDesignChange','engineering.design_change.decide', p => eng.createDesignChange(data(p) as never),
   (a,r) => eng.decideDesignChange(T,a,r.id,'approved'));
 transition('engineering','transitionDocument','engineering.document.transition', p => eng.createDocument(data(p) as never),
@@ -123,15 +133,19 @@ transition('doccontrol','acknowledgeTransmittal','doccontrol.transmittal.acknowl
   const r = await doc.createTransmittal(data(p) as never); return doc.sendTransmittal(T,null,r.id);
 }, (a,r) => doc.acknowledgeTransmittal(T,a,r.id));
 transition('doccontrol','closeCorrespondence','doccontrol.correspondence.close', p => doc.createCorrespondence(data(p) as never),
-  (a,r) => doc.closeCorrespondence(T,a,r.id));
-transition('doccontrol','assertDocPerm','doccontrol.document.submit', async p => {
+  (a,r) => doc.closeCorrespondence(T,a,r.id,'Reply received and filed'));
+transition('doccontrol','addTransmittalRecipient','doccontrol.transmittal.update', p => doc.createTransmittal(data(p) as never),
+  (a,r) => doc.addTransmittalRecipient({ tenantId: T, actorId: a, transmittalId: r.id, userId: `recipient-${++serial}`, party: 'other' }));
+transition('doccontrol','assertDocPerm','doccontrol.revision.submit', async p => {
   const entry = await doc.createRegisterEntry(data(p) as never);
   return (await doc.listDocumentRevisions(T,entry.id))[0];
 }, (a,r) => doc.submitDocument(T,a,r.id));
-transition('site','assertReportPerm','site.daily_report.submit', p => site.createDailyReport(data(p) as never),
+transition('site','assertReportPerm','site.daily-report.submit', p => site.createDailyReport(data(p) as never),
   (a,r) => site.submitDailyReport(T,a,r.id));
 transition('site','resolveDelayLog','site.delay.resolve', p => site.createDelayLog(data(p) as never),
   (a,r) => site.resolveDelayLog(T,a,r.id));
+transition('site','assertInstructionPerm','site.instruction.acknowledge', p => site.issueSiteInstruction(data(p) as never),
+  (a,r) => site.acknowledgeSiteInstruction(T,a,r.id));
 transition('quality','assertNcrPerm','quality.ncr.plan', p => quality.raiseNcr(data(p) as never),
   (a,r) => quality.planNcrAction(T,a,r.id, { rootCause: 'Cause', correctiveAction: 'Repair', responsibleParty: 'Team', targetDate: '2026-10-01' } as never));
 transition('quality','startInspection','quality.ir.approve', p => quality.requestInspection(data(p) as never),
@@ -140,6 +154,15 @@ transition('quality','resolveInspection','quality.ir.approve', p => quality.requ
   (a,r) => quality.resolveInspection(T,a,r.id,'approved'));
 transition('quality','resolveSnag','quality.snag.resolve', p => quality.logSnag(data(p) as never),
   (a,r) => quality.resolveSnag(T,a,r.id,'resolved'));
+transition('quality','addInspectionEvidence','quality.ir.resolve', p => quality.requestInspection(data(p) as never),
+  (a,r) => quality.addInspectionEvidence(T,a,r.id,{ fileId: `scope-photo-${++serial}` }));
+transition('quality','addNcrEvidence','quality.ncr.correct', p => quality.raiseNcr(data(p) as never),
+  (a,r) => quality.addNcrEvidence(T,a,r.id,{ fileId: `scope-photo-${++serial}` }));
+// Escalation is for a correction that is genuinely LATE — the NCR is raised already overdue.
+transition('quality','escalateNcr','quality.ncr.verify', p => quality.raiseNcr(data(p,{ dueAt: '2020-01-01T00:00:00.000Z' }) as never),
+  (a,r) => quality.escalateNcr(T,a,r.id,'Correction is overdue'));
+transition('quality','assertItpPerm','quality.itp.activate', p => quality.createItp(data(p) as never),
+  (a,r) => quality.activateItp(T,a,r.id));
 transition('hse','assertIncidentPermission','hse.incident.close', p => hse.reportIncident(data(p) as never),
   (a,r) => hse.investigateIncident(T,a,r.id));
 async function permit(p: string) {
@@ -151,6 +174,9 @@ transition('hse','approvePermit','hse.ptw.approve', permit, (a,r) => hse.approve
 transition('hse','assertPermitPermission','hse.ptw.approve', permit, (a,r) => hse.rejectPermit(T,a,r.id,'Unsafe'));
 transition('hse','completeCapa','hse.capa.complete', p => hse.raiseCapa(data(p) as never),
   (a,r) => hse.completeCapa(T,a,r.id));
+// The assessment is written by somebody else (no createdBy here), so the approver is never its author.
+transition('hse','approveRiskAssessment','hse.risk-assessment.approve', p => hse.createRiskAssessment(data(p) as never),
+  (a,r) => hse.approveRiskAssessment(T,r.id,a));
 transition('variation','changeStatus','projects.variation.submit', p => variations.create(data(p,{type:'addition'}) as never),
   (a,r) => variations.changeStatus(r.id,'submitted',a));
 transition('wbs','updateProgress','projects.project.update', p => wbs.create(data(p,{boqItemId:null}) as never),
@@ -158,7 +184,7 @@ transition('wbs','updateProgress','projects.project.update', p => wbs.create(dat
 transition('wbs','approveOpeningBaseline','projects.project.update', async p => {
   await wbs.create(data(p,{boqItemId:null,plannedValue:100}) as never); return { id:p };
 }, (a,r) => wbs.approveOpeningBaseline(r.id,a));
-transition('delay-eot','assertProjectAccess','projects.project.update', p => delays.createEotClaim(data(p) as never),
+transition('delay-eot','assertProjectAccess','projects.eot-claim.submit', p => delays.createEotClaim(data(p) as never),
   (a,r) => delays.submitEotClaim(r.id,a));
 
 async function newProject(tenantId = T) {
@@ -180,7 +206,13 @@ function grants(permission: string, project: string) {
   return actors;
 }
 describe('service scope closure — JWT ON, real application services and stores', () => {
+  // SELF-CONTAINED AUTH, as j2-j6-delivery-audit does it: this suite asserts `auth.enabled` and is
+  // worthless without it, but it relied on AUTH_JWT_SECRET being set by whoever ran it — so CI's
+  // in-memory job, which sets none, failed it before any scope was checked. Set around its own app,
+  // restored afterwards so no other suite inherits it.
+  const previousSecret = process.env.AUTH_JWT_SECRET;
   beforeAll(async () => {
+    process.env.AUTH_JWT_SECRET = 'isolated-service-scope-closure-secret';
     app = await NestFactory.create(AppModule,{logger:false});
     app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(new ValidationPipe({transform:true,whitelist:true,forbidUnknownValues:false}));
@@ -200,12 +232,15 @@ describe('service scope closure — JWT ON, real application services and stores
     mine=(await newProject()).id; other=(await newProject()).id; foreign=(await newProject('foreign-tenant')).id;
     access.registerRole({id:'wrong-function',name:'Member without function',permissions:['unrelated.entity.read']});
   });
-  afterAll(async () => { await app?.close(); });
+  afterAll(async () => {
+    await app?.close();
+    if (previousSecret === undefined) delete process.env.AUTH_JWT_SECRET; else process.env.AUTH_JWT_SECRET = previousSecret;
+  });
 
-  it('covers every one of the 59 classified service assertions', () => {
+  it('covers every one of the 68 classified service assertions', () => {
     const expected=classification.filter(r=>r.key.includes('.service.ts#')).map(r=>r.evidence).sort();
-    const covered=[...cases.map(c=>c.key),'safety training is worker competence'].sort();
-    expect(covered).toHaveLength(59);
+    const covered=[...cases.map(c=>c.key),'safety training is worker competence',TEMPLATE_ADAPTATION].sort();
+    expect(covered).toHaveLength(68);
     expect(covered).toEqual(expected);
     expect(app.get(ProjectResolverRegistry).registeredSubjects()).toEqual([
       'commissioning/handovers/om-items','commissioning/handovers/spares','commissioning/handovers/training',
@@ -240,6 +275,22 @@ describe('service scope closure — JWT ON, real application services and stores
     expect(await asActor(actors.org,()=>orgRun(actors.org))).toBeTruthy();
   });
 
+  it(TEMPLATE_ADAPTATION,async()=>{
+    // The library is TENANT authority: a template belongs to no project, so a project-scoped grant
+    // of the same permission cannot write it, and an organisation grant can.
+    const lib=grants('quality.itp-template.manage',mine);
+    const draft=(actor: string)=>({tenantId:T,actorId:actor,system:'cctv',title:`CCTV installation ${++serial}`,
+      points:[{code:'P1',activity:'Inspect camera mounting',acceptanceCriteria:'Plumb and secure',pointType:'hold'}]});
+    await expect(asActor(lib.member,()=>quality.createItpTemplate(draft(lib.member) as never))).rejects.toBeInstanceOf(AccessDeniedError);
+    const template=await asActor(lib.org,()=>quality.createItpTemplate(draft(lib.org) as never));
+    await asActor(lib.org,()=>quality.publishItpTemplate(T,lib.org,template.id));
+    // ADAPTING it is PROJECT authority, judged against the project it becomes part of.
+    const p=(await newProject()).id;
+    const q=grants('quality.itp.create',p);
+    await expect(asActor(q.outsider,()=>quality.prepareSystemItp({tenantId:T,actorId:q.outsider,projectId:p,templateId:template.id}))).rejects.toBeInstanceOf(AccessDeniedError);
+    const itp=await asActor(q.member,()=>quality.prepareSystemItp({tenantId:T,actorId:q.member,projectId:p,templateId:template.id}));
+    expect(itp).toMatchObject({projectId:p,revision:1});
+  });
   it('safety training is worker competence: project membership does not confer tenant-wide recording',async()=>{
     const a=grants('hse.training.record',mine);
     await expect(asActor(a.member,()=>hse.recordSafetyTraining(data(mine,{createdBy:a.member}) as never))).rejects.toBeInstanceOf(AccessDeniedError);

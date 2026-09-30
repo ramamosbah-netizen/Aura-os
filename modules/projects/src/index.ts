@@ -28,6 +28,8 @@ export * from './project.service';
 export * from './wbs.service';
 export * from './cbs.service';
 export * from './domain/cost-transaction';
+export * from './domain/cost-actuals';
+export * from './domain/activity-cost';
 export * from './cost-ledger-store';
 export * from './in-memory-cost-ledger-store';
 export * from './postgres-cost-ledger-store';

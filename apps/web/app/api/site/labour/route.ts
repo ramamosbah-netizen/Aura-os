@@ -8,6 +8,10 @@ export async function POST(request: Request): Promise<Response> {
     trade?: string;
     headcount?: number;
     hours?: number;
+    /** F-07: the all-in rate, the cost line and the work package — passed through; the API validates them. */
+    costRate?: number;
+    cbsNodeId?: string;
+    wbsNodeId?: string;
     subcontractorName?: string;
     notes?: string;
   };

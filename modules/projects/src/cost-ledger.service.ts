@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { CompaniesService } from '@aura/core';
 import { COST_LEDGER_STORE, type CostLedgerFilter, type CostLedgerStore } from './cost-ledger-store';
 import { type CostTransaction, type NewCostTransaction, makeCostTransaction } from './domain/cost-transaction';
+import { type WorkPackageActuals, actualByWorkPackage, countableActual } from './domain/cost-actuals';
 import { CbsService } from './cbs.service';
 import { WbsService } from './wbs.service';
 
@@ -65,11 +66,10 @@ export class CostLedgerService {
     const actualByCbs = new Map<string, number>();
     const actualByWbs = new Map<string, number>();
     for (const txn of txns) {
-      if (txn.type !== 'actual') continue;
       // Legacy rows without monetary provenance retain their explicit historical amount. New
       // cross-currency rows without a base amount are unknown and are excluded from projections.
-      const amount = txn.baseAmount ?? (txn.baseCurrency == null && txn.sourceCurrency == null ? txn.amount : null);
-      if (amount == null || !Number.isFinite(amount)) continue;
+      const amount = countableActual(txn);
+      if (amount == null) continue;
       if (txn.cbsNodeId) actualByCbs.set(txn.cbsNodeId, (actualByCbs.get(txn.cbsNodeId) ?? 0) + amount);
       if (txn.wbsNodeId) actualByWbs.set(txn.wbsNodeId, (actualByWbs.get(txn.wbsNodeId) ?? 0) + amount);
     }
@@ -127,13 +127,26 @@ export class CostLedgerService {
   list(filter: CostLedgerFilter): Promise<CostTransaction[]> {
     return this.store.list(filter);
   }
+
+  /**
+   * The project's actual cost by work package, with the unattributed remainder and the total — read
+   * from the ledger itself, never from the WBS projection. `packageIds` are the project's own work
+   * packages: a posting naming any other id is not this project's package cost, and is counted as
+   * unattributed rather than dropped.
+   */
+  async actualByWorkPackage(tenantId: string, projectId: string, packageIds: readonly string[]): Promise<WorkPackageActuals> {
+    return actualByWorkPackage(await this.store.list({ tenantId, projectId, limit: 1000000 }), packageIds);
+  }
 }
 
 function sameCanonicalFact(a: CostTransaction, b: CostTransaction): boolean {
   return a.tenantId === b.tenantId
     && a.projectId === b.projectId
     && a.cbsNodeId === b.cbsNodeId
-    && a.wbsNodeId === b.wbsNodeId
+    // A fact posted before its source's work package was carried into cost (F-07) is on file with
+    // no package. A replay of that event now carries one; the append-only first fact stands, and it
+    // stays unattributed rather than failing the outbox forever on a difference nobody can repair.
+    && (a.wbsNodeId === b.wbsNodeId || b.wbsNodeId === null)
     && a.type === b.type
     && a.amount === b.amount
     && a.sourceAmount === b.sourceAmount

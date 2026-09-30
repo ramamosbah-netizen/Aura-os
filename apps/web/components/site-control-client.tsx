@@ -9,7 +9,7 @@ import EmptyState from './ui/empty-state';
 import SiteInstructionsClient from './site-instructions-client';
 import { SITE_PATH, SITE_SECTIONS } from '@/lib/workspace-sections';
 import { useWorkspaceSection } from '@/lib/use-workspace-section';
-import { businessDateInputValue } from '@/lib/locale';
+import { DISPLAY_LOCALE, businessDateInputValue } from '@/lib/locale';
 
 type SiteSection = (typeof SITE_SECTIONS)[number]['id'];
 const SECTION_IDS = SITE_SECTIONS.map((section) => section.id) as SiteSection[];
@@ -79,11 +79,23 @@ interface LabourAllocation {
   headcount: number;
   hours: number;
   manHours: number;
+  /** manHours × the all-in rate; 0 when no rate was given (and then no cost posts). */
+  labourCost?: number;
+  cbsNodeId?: string | null;
+  /** The work package the hours were spent on; null is normal (mobilisation, standing time). */
+  wbsNodeId?: string | null;
   subcontractorName: string | null;
   notes: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** One project's cost lines and work packages — offered only when the page is scoped to that project. */
+export interface LabourCostCoding {
+  projectId: string;
+  costLines: Array<{ id: string; code: string; title: string }>;
+  workPackages: Array<{ id: string; code: string; title: string }>;
 }
 
 interface ScheduleTask {
@@ -131,6 +143,12 @@ interface Props {
     status: string;
   }>;
   instructionsUnavailable?: boolean;
+  /**
+   * F-07: charging labour to a cost line and a work package. Present only when the page is scoped to
+   * ONE project, because the lines and packages belong to it — offering every project's packages in
+   * one list would invite a mismatch the server then has to refuse.
+   */
+  costCoding?: LabourCostCoding | null;
 }
 
 export default function SiteControlClient({
@@ -142,6 +160,7 @@ export default function SiteControlClient({
   projects,
   initialInstructions,
   instructionsUnavailable = false,
+  costCoding = null,
 }: Props) {
   const router = useRouter();
   // The section lives in the URL, so a shortcut card, a pasted link and a reopened AURA tab all land
@@ -423,14 +442,28 @@ export default function SiteControlClient({
             <CreateDrawer
               entity="Labour Allocation"
               buttonLabel="Log Labour Allocation"
-              subtitle="Record daily labour by trade. Man-hours = headcount × hours, computed by the API."
+              subtitle={costCoding
+                ? 'Record daily labour by trade. Man-hours = headcount × hours; with a rate and a cost line the cost posts to the Cost Ledger, against the work package if you name one.'
+                : 'Record daily labour by trade. Man-hours = headcount × hours, computed by the API. Choose a project above to charge labour to a cost line and a work package.'}
               endpoint="/api/site/labour"
               fields={[
-                { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                costCoding
+                  // Scoped: the project is the page's, fixed, so the lines and packages below are its own.
+                  ? { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2, defaultValue: costCoding.projectId, readonly: true }
+                  : { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
                 { name: 'date', label: 'Date', kind: 'date', required: true, defaultValue: today },
                 { name: 'trade', label: 'Trade / designation', kind: 'text', required: true, placeholder: 'e.g. Mason, Steel Fixer, Carpenter' },
                 { name: 'headcount', label: 'Headcount', kind: 'number', required: true, placeholder: 'Number of workers' },
                 { name: 'hours', label: 'Hours worked per person', kind: 'number', required: true, placeholder: 'Hours worked' },
+                ...(costCoding ? [
+                  { name: 'costRate', label: 'All-in rate per man-hour', kind: 'number' as const, placeholder: 'Blank posts no cost', hint: 'The company rate for this trade; with a cost line, man-hours × rate posts to the Cost Ledger.' },
+                  { name: 'cbsNodeId', label: 'Cost line (CBS)', kind: 'select' as const, options: costCoding.costLines.map((line) => ({ value: line.id, label: `${line.code} · ${line.title}` })) },
+                  {
+                    name: 'wbsNodeId', label: 'Work package', kind: 'select' as const, span: 2 as const,
+                    options: costCoding.workPackages.map((node) => ({ value: node.id, label: `${node.code} · ${node.title}` })),
+                    hint: 'Leave empty when the hours belonged to no single package — mobilisation, housekeeping, standing time. They are reported as unattributed, never guessed.',
+                  },
+                ] : []),
                 { name: 'subcontractorName', label: 'Subcontractor name', kind: 'text', placeholder: 'e.g. Al Falah Co.', span: 2 },
                 { name: 'notes', label: 'Notes', kind: 'textarea', placeholder: 'Specific tasks worked, zones assigned, tool box topics discussed…' },
               ]}
@@ -450,7 +483,7 @@ export default function SiteControlClient({
               <table style={st.table}>
                 <thead>
                   <tr>
-                    {['Date', 'Project', 'Trade / Role', 'Headcount', 'Hours', 'Man-Hours', 'Subcontractor', 'Notes'].map((h) => (
+                    {['Date', 'Project', 'Trade / Role', 'Headcount', 'Hours', 'Man-Hours', 'Cost', 'Work package', 'Subcontractor', 'Notes'].map((h) => (
                       <th key={h} style={st.th}>{h}</th>
                     ))}
                   </tr>
@@ -464,6 +497,12 @@ export default function SiteControlClient({
                       <td style={st.tdCode}>{l.headcount}</td>
                       <td style={st.tdCode}>{l.hours}h</td>
                       <td style={st.td}>{l.manHours} mh</td>
+                      <td style={st.tdCode} data-testid={`labour-cost-${l.id}`}>{l.labourCost && l.labourCost > 0 ? l.labourCost.toLocaleString(DISPLAY_LOCALE) : '—'}</td>
+                      <td style={st.tdMuted} data-testid={`labour-package-${l.id}`}>{(() => {
+                        if (!l.wbsNodeId) return 'Unattributed';
+                        const node = costCoding?.workPackages.find((item) => item.id === l.wbsNodeId);
+                        return node ? `${node.code} · ${node.title}` : 'Work package';
+                      })()}</td>
                       <td style={st.tdMuted}>{l.subcontractorName || 'Direct'}</td>
                       <td style={st.td}>{l.notes || '—'}</td>
                     </tr>

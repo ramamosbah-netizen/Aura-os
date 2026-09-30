@@ -90,6 +90,9 @@ interface LabourAllocation {
   headcount: number;
   hours: number;
   manHours: number;
+  labourCost?: number;
+  cbsNodeId?: string | null;
+  wbsNodeId?: string | null;
   subcontractorName: string | null;
   notes: string | null;
   createdBy: string | null;
@@ -133,7 +136,7 @@ export default async function SiteControlPage({
   const project = workspaceProject(filters);
   const scoped = project ? `?projectId=${encodeURIComponent(project)}` : '';
 
-  const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects, instructions] = await Promise.all([
+  const [dailyReports, delayLogs, materialConsumption, labourAllocations, schedules, projects, instructions, costLines, workPackages] = await Promise.all([
     getJson<DailyReport[]>(`/api/site/daily-reports${scoped}`),
     getJson<DelayLog[]>(`/api/site/delay-logs${scoped}`),
     getJson<MaterialConsumption[]>(`/api/site/material-consumption${scoped}`),
@@ -141,7 +144,19 @@ export default async function SiteControlPage({
     getJson<ProjectSchedule[]>('/api/projects/schedules'),
     getJson<Project[]>('/api/projects/projects'),
     getJson<SiteInstruction[]>(`/api/site/instructions${scoped}`),
+    // F-07: the scoped project's cost lines and work packages, so a day's labour can be charged to
+    // them from this screen. Only for one project — they belong to it.
+    project ? getJson<Array<{ id: string; projectId: string; code: string; title: string }>>(`/api/projects/cbs${scoped}`) : Promise.resolve(null),
+    project ? getJson<Array<{ id: string; projectId: string; code: string; title: string }>>(`/api/projects/wbs${scoped}`) : Promise.resolve(null),
   ]);
+  const own = <T extends { projectId: string }>(rows: T[] | null) => (rows ?? []).filter((row) => row.projectId === project);
+  const costCoding = project && costLines !== null && workPackages !== null
+    ? {
+      projectId: project,
+      costLines: own(costLines).map(({ id, code, title }) => ({ id, code, title })),
+      workPackages: own(workPackages).map(({ id, code, title }) => ({ id, code, title })),
+    }
+    : null;
 
   const open = <T extends { status?: string }>(rows: T[] | null, closed: string[]) => rows === null ? null : rows.filter((row) => !closed.includes((row.status ?? '').toLowerCase())).length;
   // "In progress" is read from the RESOLVED figure: an activity the site has started but nobody
@@ -187,6 +202,7 @@ export default async function SiteControlPage({
         projects={projects ?? []}
         initialInstructions={instructions ?? []}
         instructionsUnavailable={instructions === null}
+        costCoding={costCoding}
       />
 
       {/* The same shortcut grid Sales and the Delivery Operations overview use. Each card opens its

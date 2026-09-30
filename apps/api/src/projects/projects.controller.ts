@@ -49,6 +49,8 @@ import {
   type ResourcePoolMember,
   type ResourceConflictResolution,
   type ActivityProgress,
+  type ActivityCost,
+  type ScheduleCostCoverage,
   type PlannedOutput,
   type LookAhead,
   type DelayImpact,
@@ -1646,6 +1648,8 @@ export class ProjectsController {
     progress: Record<string, ActivityProgress>;
     output: Record<string, PlannedOutput>;
     calendar: Awaited<ReturnType<ScheduleService['calendarOf']>>;
+    cost: Record<string, ActivityCost>;
+    costCoverage: ScheduleCostCoverage;
   }>> {
     const all = await this.schedule.list(this.tenant.get().tenantId);
     const schedules = projectId?.trim() ? all.filter((plan) => plan.projectId === projectId.trim()) : all;
@@ -1653,10 +1657,16 @@ export class ProjectsController {
     // different days because the clock moved between them.
     const today = businessDate();
     return Promise.all(schedules.map(async (plan) => {
-      const [progress, output, calendar] = await Promise.all([
+      const [progress, output, calendar, cost] = await Promise.all([
         this.schedule.progressOf(plan), this.schedule.outputOf(plan, today), this.schedule.calendarOf(plan, today),
+        // What each activity's work package has cost, from the Cost Ledger (F-07) — the same figure
+        // the WBS and the ledger show, read here rather than typed in again.
+        this.schedule.costOf(plan),
       ]);
-      return { ...plan, progress: Object.fromEntries(progress), output: Object.fromEntries(output), calendar };
+      return {
+        ...plan, progress: Object.fromEntries(progress), output: Object.fromEntries(output), calendar,
+        cost: Object.fromEntries(cost.byTask), costCoverage: cost.coverage,
+      };
     }));
   }
 

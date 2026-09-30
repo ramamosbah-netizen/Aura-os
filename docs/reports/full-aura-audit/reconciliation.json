@@ -14,7 +14,7 @@
     "UNVERIFIED": 36,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 71,
+  "gapRecords": 72,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -90,7 +90,8 @@
     "VAT-BASIS-01",
     "BUY-APPR-01",
     "SEC-TEL-01",
-    "AR-GL-01"
+    "AR-GL-01",
+    "COST-CODE-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,

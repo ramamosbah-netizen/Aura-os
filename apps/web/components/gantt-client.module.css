@@ -83,3 +83,12 @@
    network is authored as a fact about this activity, and the whole set is what the server judges. */
 .predecessors { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; color: var(--muted); font-size: 11px; }
 .predecessors select { min-width: 200px; min-height: 58px; padding: 4px 6px; font-size: 11px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); color: var(--text); }
+
+/* F-07 — the cost the package figures leave out, said once per plan. */
+.costCoverage {
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  border-left: 3px solid var(--border);
+}

@@ -66,6 +66,14 @@ interface ProjectSchedule {
     everyDayWorked: boolean;
     activities: Record<string, { windowWorkingDays: number; floatWorkingDays: number | null }>;
   };
+  /**
+   * What each activity's WORK PACKAGE has cost, from the Cost Ledger (F-07) — derived on every read.
+   * The package's, not the activity's: two activities on one package show one figure and say so.
+   * Null actual = cannot be read; null budget = never stated. Neither is zero.
+   */
+  cost?: Record<string, { wbsNodeId: string | null; packageActual: number | null; packagePostings: number; packageBudget: number | null; sharedBy: number }>;
+  /** The project's actual cost and the part of it no work package carries — said once, beside every package figure. */
+  costCoverage?: { projectActual: number | null; unattributedActual: number | null; unattributedPostings: number; unknownProvenance: number };
 }
 interface Project { id: string; title: string }
 interface WbsNode { id: string; projectId: string; code: string; title: string; parentId: string | null }
@@ -79,6 +87,8 @@ interface ResourceCatalogItem {
 }
 
 const DAY = 86_400_000;
+const money = (n: number) => n.toLocaleString(DISPLAY_LOCALE, { maximumFractionDigits: 2 });
+const postings = (n: number) => `${n} ${n === 1 ? 'posting' : 'postings'}`;
 const d = (s: string) => Date.parse(s);
 const days = (a: string, b: string) => Math.round((d(b) - d(a)) / DAY);
 
@@ -443,6 +453,17 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
               </button>
             </div>
             <div className={styles.timeline} aria-hidden="true"><span /> <div className={styles.timelineScale}><span>{new Date(min).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span><span>Today</span><span>{new Date(min + total * 86_400_000).toLocaleDateString(DISPLAY_LOCALE, { timeZone: DISPLAY_TIME_ZONE, day: '2-digit', month: 'short' })}</span></div><span /><span /></div>
+            {sch.costCoverage && sch.costCoverage.projectActual !== null && (
+              // The remainder every package figure below leaves out — plant, subcontract claims,
+              // labour booked to no package. Without this line, the package figures read as the whole.
+              <p className={styles.costCoverage} data-testid={`cost-coverage-${sch.projectId}`}>
+                Actual cost to date {money(sch.costCoverage.projectActual)} (Cost Ledger)
+                {(sch.costCoverage.unattributedActual ?? 0) > 0
+                  ? ` · ${money(sch.costCoverage.unattributedActual ?? 0)} of it (${postings(sch.costCoverage.unattributedPostings)}) names no work package, so no activity below shows it`
+                  : ' · all of it attributed to work packages'}
+                {sch.costCoverage.unknownProvenance > 0 ? ` · ${postings(sch.costCoverage.unknownProvenance)} left out: amount in base currency unknown` : ''}
+              </p>
+            )}
             <div className={styles.rows}>
               {sch.tasks.map((t, idx) => (
                 <Fragment key={t.id ?? `${t.name}-${idx}`}>
@@ -509,6 +530,20 @@ export default function GanttClient({ schedules, projects = [], wbsNodes = [], r
                             >{labour.text}</small>
                           )}
                         </>
+                      );
+                    })()}
+                    {(() => {
+                      // The package's cost, from the same ledger the WBS and the cost screens read —
+                      // not typed in here, and not this activity's alone when others share the package.
+                      const taskId = t.id;
+                      const cost = taskId ? sch.cost?.[taskId] : undefined;
+                      if (!taskId || !cost || !cost.wbsNodeId) return null;
+                      const actual = cost.packageActual === null ? 'actual cost cannot be read' : `${money(cost.packageActual)} actual (${postings(cost.packagePostings)})`;
+                      const budget = cost.packageBudget === null ? 'no budget stated' : `of ${money(cost.packageBudget)} budget`;
+                      return (
+                        <small data-testid={`package-cost-${taskId}`}>
+                          Package cost · {actual} {budget}{cost.sharedBy > 1 ? ` · shared by ${cost.sharedBy} activities` : ''}
+                        </small>
                       );
                     })()}
                   </div>

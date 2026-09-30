@@ -7,6 +7,8 @@ import { WBS_STORE, type WbsNodeFilter, type WbsStore } from './wbs-store';
 import { QuantityLedgerService } from './quantity-ledger.service';
 import { DeliveryItemMapService } from './delivery-item-map.service';
 import { PROJECT_STORE, type ProjectStore } from './project-store';
+import { COST_LEDGER_STORE, type CostLedgerStore } from './cost-ledger-store';
+import { actualByWorkPackage } from './domain/cost-actuals';
 
 /** Optional ITP release gate — injected when the Quality module is loaded (mirrors procurement's QUALITY_GATE). */
 export const ITP_GATE = Symbol('ITP_GATE');
@@ -34,7 +36,20 @@ export class WbsService {
     @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
     @Optional() @Inject(DeliveryItemMapService) private readonly deliveryItemMaps?: DeliveryItemMapService,
     @Optional() @Inject(PROJECT_STORE) private readonly projects: ProjectStore | null = null,
+    // The Cost Ledger itself, read for the project's ACTUAL cost (F-07). The WBS `actualCost` column
+    // holds only what was attributed to a package, so summing it understates AC by every posting that
+    // names none — which, until the sources carried the package, was every posting.
+    @Optional() @Inject(COST_LEDGER_STORE) private readonly costLedger: CostLedgerStore | null = null,
   ) {}
+
+  /**
+   * The project's actual cost: the Cost Ledger's total, attributed to a package or not. Null when no
+   * ledger is bound, so the caller falls back to the projection it always used and says nothing new.
+   */
+  private async ledgerActual(tenantId: Id | null | undefined, projectId: Id): Promise<number | null> {
+    if (!this.costLedger || !tenantId) return null;
+    return actualByWorkPackage(await this.costLedger.list({ tenantId, projectId, limit: 1000000 }), []).total;
+  }
 
   async create(input: {
     tenantId: Id;
@@ -315,14 +330,19 @@ export class WbsService {
       }
     }
 
+    // AC is the project's actual cost, and the Cost Ledger is what holds it (F-07). The per-package
+    // projection above only knows what was attributed to a package; plant, subcontract claims and
+    // unallocated labour name none, and leaving them out made CV read as the whole earned value.
+    const ledgerAc = await this.ledgerActual(project?.tenantId ?? nodes[0]?.tenantId ?? this.tenant?.boundTenantId(), projectId);
+
     if (!project?.wbsBaselineSnapshot) {
       // Without an approved opening baseline, BAC/EV are not authoritative. AC may still be
       // available from the B6 projection, but no static plannedValue is exposed as PV.
-      ac = (rootNodes.length > 0 ? rootNodes : nodes).reduce((sum, node) => sum + node.actualCost, 0);
+      ac = ledgerAc ?? (rootNodes.length > 0 ? rootNodes : nodes).reduce((sum, node) => sum + node.actualCost, 0);
       return calculateEvm(null, null, ac, null);
     }
 
-    return calculateEvm(project.wbsBaselineSnapshot.originalBac, ev, ac, null);
+    return calculateEvm(project.wbsBaselineSnapshot.originalBac, ev, ledgerAc ?? ac, null);
   }
 
   /**

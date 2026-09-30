@@ -12,6 +12,9 @@ import { compareRecovery, type RecoveryComparison } from './domain/recovery-prop
 import { forecastCompletion, type ForecastCompletion } from './domain/forecast-completion';
 import { assessDelayImpact, type DelayImpact, type ConcurrentDelay } from './domain/delay-impact';
 import { ActivityOutputService } from './activity-output.service';
+import { COST_LEDGER_STORE, type CostLedgerStore } from './cost-ledger-store';
+import { actualByWorkPackage } from './domain/cost-actuals';
+import { type ActivityCost, type ScheduleCostCoverage, resolveActivityCosts } from './domain/activity-cost';
 import { ProjectCalendarService } from './project-calendar.service';
 import { workingDaysInRange } from './domain/working-calendar';
 import {
@@ -86,7 +89,27 @@ export class ScheduleService {
     // moves and only its HISTORY is unavailable — which such a composition then says rather than
     // pretending the previous one never existed.
     @Optional() @Inject(SCHEDULE_BASELINE_STORE) private readonly baselines: ScheduleBaselineStore | null = null,
+    // What each work package has actually cost (F-07). Optional like every seam: unbound, every
+    // activity's cost reads as unknown — which is what such a composition then knows.
+    @Optional() @Inject(COST_LEDGER_STORE) private readonly costLedger: CostLedgerStore | null = null,
   ) {}
+
+  /**
+   * What each activity's work package has cost, read from the Cost Ledger in ONE pass for the plan,
+   * with the project's unattributed remainder beside it (F-07). Derived beside the plan, never
+   * written into it — see domain/activity-cost.ts.
+   */
+  async costOf(schedule: ProjectSchedule): Promise<{ byTask: Map<Id, ActivityCost>; coverage: ScheduleCostCoverage }> {
+    const packages = (await this.wbs.list({ tenantId: schedule.tenantId, projectId: schedule.projectId }))
+      .filter((node) => node.tenantId === schedule.tenantId && node.projectId === schedule.projectId);
+    const actuals = this.costLedger
+      ? actualByWorkPackage(
+        await this.costLedger.list({ tenantId: schedule.tenantId, projectId: schedule.projectId, limit: 1000000 }),
+        packages.map((node) => node.id),
+      )
+      : null;
+    return resolveActivityCosts(schedule.tasks, packages, actuals);
+  }
 
   /** Create-or-replace the project's schedule (idempotent per project; keeps baseline). */
   async save(input: NewProjectSchedule): Promise<ProjectSchedule> {

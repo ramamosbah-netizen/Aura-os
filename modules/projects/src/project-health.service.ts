@@ -2,6 +2,8 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { assessProjectHealth, type HealthSignal, type Id, type ProjectHealth } from '@aura/shared';
 import { HEALTH_SIGNALS, unknownSignal, type HealthSignalDeclaration } from './domain/health-signals';
 import { WBS_STORE, type WbsStore } from './wbs-store';
+import { COST_LEDGER_STORE, type CostLedgerStore } from './cost-ledger-store';
+import { actualByWorkPackage } from './domain/cost-actuals';
 import { VARIATION_STORE, type VariationStore } from './variation-store';
 import { DELAY_STORE, EOT_STORE, type DelayStore, type EotStore } from './delay-eot-store';
 
@@ -87,6 +89,9 @@ export class ProjectHealthService {
     @Optional() @Inject(HSE_HEALTH) private readonly hse: HseHealthPort | null = null,
     @Optional() @Inject(ENGINEERING_HEALTH) private readonly engineering: EngineeringHealthPort | null = null,
     @Optional() @Inject(PROCUREMENT_HEALTH) private readonly procurement: ProcurementHealthPort | null = null,
+    // The project's actual cost comes from the Cost Ledger (F-07), not from the WBS column that holds
+    // only what was attributed to a package. Unbound, the projection is used as before.
+    @Optional() @Inject(COST_LEDGER_STORE) private readonly costLedger: CostLedgerStore | null = null,
   ) {}
 
   /**
@@ -163,10 +168,18 @@ export class ProjectHealthService {
     let evmReadable = true;
     try {
       const nodes = await this.wbs.list({ tenantId, projectId });
-      const sum = (pick: (n: (typeof nodes)[number]) => number): number => nodes.reduce((t, n) => t + (pick(n) || 0), 0);
+      // ROOT nodes only: a parent already holds its children's rolled-up values, so summing every
+      // level counted each package once per level above it (F-07).
+      const roots = nodes.filter((n) => !n.parentId);
+      const counted = roots.length > 0 ? roots : nodes;
+      const sum = (pick: (n: (typeof nodes)[number]) => number): number => counted.reduce((t, n) => t + (pick(n) || 0), 0);
       const pv = sum((n) => n.plannedValue);
       const ev = sum((n) => n.earnedValue ?? 0);
-      const ac = sum((n) => n.actualCost ?? 0);
+      // AC is everything the project has actually spent — the ledger's total — and not only the part a
+      // source happened to attribute to a package, which would flatter CPI by all the rest.
+      const ac = this.costLedger
+        ? actualByWorkPackage(await this.costLedger.list({ tenantId, projectId, limit: 1000000 }), []).total
+        : sum((n) => n.actualCost ?? 0);
       // Null, not 1.0, when there is nothing to divide by. A project with no baseline has not
       // achieved an index of one; it has no index, and saying otherwise would report CLEAR for the
       // one condition §2 refuses to start execution over.

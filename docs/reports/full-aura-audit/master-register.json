@@ -8326,9 +8326,9 @@
       "capabilityIds": [
         "PLN-01"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Planning Engineer",
         "Project Engineer",
@@ -8338,13 +8338,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Wave 3 iteration 5 makes a canonical same-project WBS node mandatory for every new schedule activity. The service reloads the persisted node, rejects missing/foreign project links, preserves an established link through edits and PostgreSQL enforces tenant/project/WBS lineage. Auth-ON browser proof creates and reloads the activity from a project-filtered WBS selector. Resource requirements, cost and quantity-driven progress are not yet connected through the same activity.",
+      "currentBehavior": "Wave 3 iteration 5 makes a canonical same-project WBS node mandatory for every new schedule activity. The service reloads the persisted node, rejects missing/foreign project links, preserves an established link through edits and PostgreSQL enforces tenant/project/WBS lineage. Auth-ON browser proof creates and reloads the activity from a project-filtered WBS selector. Resource requirements, cost and quantity-driven progress are not yet connected through the same activity. MEASURED 2026-09-29, before building: the record was older than the work since. Demand was ALREADY connected (requirements on the activity for employees, assets, vehicles and pools; a booking references the exact requirement of the exact activity by foreign key, migration 0316), and so was quantity-driven progress (activity → WBS package → delivery-item map → Quantity Ledger, §22). COST WAS NOT: every cost source — PO and subcontract commitments, subcontract claims, material issues, labour and plant — posted to a CBS line only. No source set the WBS package, so a package's actual cost was zero whatever was spent on it; project EVM read AC from those zeros (CV equal to the whole earned value) and project health reported cost performance UNKNOWN — 'no actual cost has been posted' — on projects with posted cost, while summing every WBS level so a parent and its children were counted as three packages. And the Site labour form had no rate, cost line or work package at all, so from the screen labour posted no cost. NOW: labour and material issues carry the package their source already recorded and validated into the Cost Ledger (plant usage and subcontract claims record none, and stay unattributed rather than being guessed); the ledger answers actual cost BY PACKAGE with the unattributed remainder and the total (one rule, shared with the projection rebuild); project EVM and health read AC as the ledger's TOTAL and count each package once; the schedule read gives every activity its package's budget and ledger actual — said to be the package's, shared by N activities — and the plan states the project's unattributed remainder once; and the Site labour form, scoped to a project, takes the rate, the cost line and the work package. A pre-change event replayed after deploy no longer jams the outbox on the package difference: the first, unattributed fact stands.",
       "expectedOperationalBehavior": "WBS and activity linkage from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
       "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
       "severity": "CRITICAL",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Continue the established WBS identity into employee/equipment demand, quantity-driven progress and cost; prove the planning and delivery views reconcile without re-entry."
+      "acceptanceProof": "MET. ONE ACTIVITY, BROWSER, AUTH ON, POSTGRESQL (activity-cost-lineage.spec.ts): a governed delivery's quantity-controlled package W with two activities on it; DEMAND — a person required on the activity is booked, and the booking references that requirement of that activity, which carries W; PROGRESS — 150 of 200 m2 installed: the bar reads 'Measured from installed quantity · 75%' and the WBS package reads 75; COST — on the Site screen, scoped to the project, a day's labour of 4 × 8 h at 50 is logged against a cost line AND W and the row shows 1,600 and W; plant of 10 h × 120 names no package; the Gantt shows 'Package cost · 1,600 actual (1 posting)', 'shared by 2 activities', and 'Actual cost to date 2,800 (Cost Ledger) · 1,200 of it (1 posting) names no work package'; the DELIVERY records hold the same figures without re-entry — the Cost Ledger has the labour posting at 1,600 with W and the CBS line and the plant posting with no package, and the WBS package's actual cost reads 1,600. With it (5/5 in one run): activity-progress, planned-output (2) and schedule-wbs-workflow. UNIT: f07-cost-by-work-package.test.ts (7) — attributed, unattributed, a foreign package counted as unattributed, commitments excluded, a no-FX posting left out and counted; two activities on one package show its figure; unknown never becomes zero; health CPI UNKNOWN from the projection alone and 0.5 from the ledger (EV 500 against 800 unattributed + 200 attributed); a parent and two children read CPI 1.0, not 2.0; EVM CV −200 from 500 EV against 700 total AC; the replay tolerance, and a real package disagreement still refused. The existing health (17), baseline (5), cost-ledger (5) and B6 (6) suites unchanged. NOT CLAIMED: (1) cost is the PACKAGE's, never an activity's — nothing attributes cost to an activity, by design; (2) plant usage and subcontract claims record no package, and PO / subcontract commitments are not carried to packages — COST-CODE-01, recorded separately, which also covers that POs, purchase-request lines, subcontracts, material issues and plant usage cannot be cost-coded from ANY screen; (3) project-health SPI still divides EV by the baselined planned value, not a time-phased PV — only its double count was fixed; (4) the API e2e twins of activity-progress and planned-output are red in their shared governed-delivery fixture (a quotation-readiness 409), the pre-existing delivery-fixture failure already filed, while their browser specs pass; and the C5 PostgreSQL e2e still needs DATABASE_URL, as before."
     },
     {
       "id": "F-08",
@@ -9201,6 +9201,37 @@
       "severity": "HIGH",
       "remediationDependency": "Owner / finance decisions before building, none of which may be invented: the revenue account(s) an issued invoice credits, and whether revenue is recognised at invoicing or by the revenue-recognition module (modules/finance/src/domain/revenue-recognition.ts), which posting at issue would double-count; the output-VAT account; and which bank account a customer receipt lands in (the receipt records a bank REFERENCE, not an account). A backfill of the invoices and receipts already recorded is a separate decision.",
       "acceptanceProof": "Against the running API and PostgreSQL: issuing an invoice posts one balanced journal with the decided accounts and a receipt posts one to the decided bank account, each citing its invoice/receipt; the AR control balance equals the open AR sub-ledger; a cancelled invoice reverses its journal; nothing is posted twice on retry; and the revenue-recognition interaction is proved not to double-count."
+    },
+    {
+      "id": "COST-CODE-01",
+      "title": "No screen codes a purchase, subcontract, material issue or plant cost to a cost line or work package",
+      "capabilityIds": [
+        "MGT-08",
+        "PLN-01"
+      ],
+      "classification": "UNREACHABLE",
+      "kind": "fresh finding — measured while closing F-07, deliberately NOT folded into it",
+      "status": "OPEN",
+      "roles": [
+        "Procurement Manager / Buyer",
+        "Commercial Manager / QS",
+        "Project Manager",
+        "Site Engineer",
+        "Storekeeper"
+      ],
+      "stages": [
+        "Procurement",
+        "Site",
+        "Progress",
+        "Commercial / Certification"
+      ],
+      "authority": "Cost Ledger sources (apps/api/src/events/cross-module-subscriber.ts) and their entry screens",
+      "currentBehavior": "The Cost Ledger posts committed and actual cost only for source records coded to a CBS line, and to a work package only where the source names one. The APIs accept that coding — purchase-request lines (cbsNodeId, wbsNodeId, validated against the project), purchase orders, subcontracts, stock movements, site labour and plant — but, measured across apps/web on 2026-09-29, NO screen sends it except the Project 360 delivery-item map and, since F-07, the Site labour form scoped to a project. The requisition lines panel, the purchase order and subcontract screens and the stock issue form (which posts direction, quantity, reason and unit cost only) carry no cost line or package, and plant usage has no screen at all and records no package even through the API. So for a project run through the screens, PO and subcontract commitments, subcontract claims, material issues and plant never reach the Cost Ledger: CBS committed and actual, WBS actual, EVM AC and the health CPI stay empty or labour-only.",
+      "expectedOperationalBehavior": "Each cost source is coded where it is raised, on its own screen, in the project's own lines and packages: a requisition line and an order line name their cost line and, where the goods are for one, the work package; a subcontract its cost line (and its packages where its scope is split); a stock issue to a project its cost line and the package it goes to; plant usage has a screen and may name a package as labour now can. Unattributed stays a legitimate answer and is reported as such, never guessed.",
+      "evidence": "FRESH, 2026-09-29: grep of apps/web for cbsNodeId finds only project-360-client.tsx (delivery-item map) and the BFF routes; stock-client.tsx move() posts { direction, quantity, reason, unitCost }; modules/site/src/domain/plant-usage.ts has cbsNodeId and no wbsNodeId, and no web component posts to /site/plant.",
+      "severity": "HIGH",
+      "remediationDependency": "None upstream. Which sources carry a package is partly an owner question (a subcontract's scope split across packages), and must be asked rather than invented.",
+      "acceptanceProof": "Through the screens, Auth ON, against PostgreSQL: a requisition/order line, a subcontract, a stock issue and a plant record are each coded on their own screen; the Cost Ledger holds the commitment or actual with its cost line (and package where named); the CBS line, the WBS package and the planning view show the same figures; and a source left uncoded is visible as uncoded rather than missing."
     }
   ],
   "totals": {
@@ -9219,9 +9250,9 @@
       "UNVERIFIED": 36,
       "NOT_AUDITED": 0
     },
-    "gaps": 71,
+    "gaps": 72,
     "reusedFindings": 34,
     "newFindings": 12,
-    "freshDefects": 25
+    "freshDefects": 26
   }
 }

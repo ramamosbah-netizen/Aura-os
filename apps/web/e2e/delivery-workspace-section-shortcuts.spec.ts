@@ -131,7 +131,8 @@ for (const workspace of WORKSPACES) {
  * decision rather than something that arrived by copying a neighbouring page.
  */
 const SINGLE_REGISTER_WORKSPACES = [
-  { name: 'Handover', path: '/handover', tabTitle: 'Handover', heading: /Handover Packages/i },
+  // Anchored: an empty register also shows "No handover packages yet", which the loose pattern matched too.
+  { name: 'Handover', path: '/handover', tabTitle: 'Handover', heading: /^Handover Packages$/i },
 ];
 
 for (const workspace of SINGLE_REGISTER_WORKSPACES) {

@@ -1604,6 +1604,8 @@ export class CrossModuleSubscriber implements OnModuleInit {
           companyId: e.companyId ?? null,
           projectId,
           cbsNodeId,
+          // The work package the issue named, if any (F-07) — a return carries the issue's package back.
+          wbsNodeId: (p.wbsNodeId as string | null) ?? null,
           type: 'actual',
           amount: sign * cost,
           quantity: sign * quantity,
@@ -1770,7 +1772,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
         if (!cbsNodeId || !projectId || labourCost <= 0) return;
         await this.ledger.post({
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
-          cbsNodeId, type: 'actual', amount: labourCost, quantity: manHours, source: 'labour_timesheet',
+          // WHAT the hours were spent on, when the day sheet said (F-07). Site validated it against the
+          // project; null stays null — unattributed labour is normal and is reported as such.
+          cbsNodeId, wbsNodeId: (p.wbsNodeId as string | null) ?? null,
+          type: 'actual', amount: labourCost, quantity: manHours, source: 'labour_timesheet',
           sourceRef: `${(p.trade as string) ?? 'Labour'} — ${manHours}mh`,
            dimensions: { labourId: e.aggregateId, trade: (p.trade as string) ?? '' },
            dedupeKey: `labour:${e.aggregateId}`,

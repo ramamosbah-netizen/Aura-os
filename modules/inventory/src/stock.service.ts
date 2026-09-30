@@ -266,6 +266,9 @@ export class StockService {
           projectId: movement.projectId,
           cbsNodeId: movement.cbsNodeId,
           boqItemId: movement.boqItemId,
+          // The work package the material went to, when the issue named one (F-07): the cost strand
+          // carries it into the Cost Ledger so the package's actual cost is the ledger's, not zero.
+          wbsNodeId: movement.wbsNodeId,
         },
       }),
     ]);

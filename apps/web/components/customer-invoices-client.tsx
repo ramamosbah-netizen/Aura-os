@@ -53,10 +53,6 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
   const highlightId = searchParams?.get('id');
   const invoices = initialInvoices;
   const [error, setError] = useState('');
-  const [emailInv, setEmailInv] = useState<CustomerInvoice | null>(null);
-  const [emailRecipient, setEmailRecipient] = useState('');
-  const [emailMessage, setEmailMessage] = useState('');
-  const [sendMsg, setSendMsg] = useState('');
   // A receipt is a record: amount, the date the money arrived, and the bank reference it reconciles to.
   const [receiptFor, setReceiptFor] = useState<string | null>(null);
   const [receiptForm, setReceiptForm] = useState({ amount: '', receivedOn: today(), bankReference: '' });
@@ -205,16 +201,21 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
                     {(inv.status === 'issued' || inv.status === 'partially_paid') && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} onClick={() => openReceipt(inv)}>Receipt</button>}
                     {inv.amountPaid > 0 && <button type="button" className="btn btn-ghost" style={st.smBtn} aria-expanded={historyFor === inv.id} onClick={() => toggleHistory(inv.id)}>Receipts</button>}
                     {inv.status === 'draft' && <button type="button" className="btn btn-ghost" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(inv.id, 'cancel')}>Cancel</button>}
-                    <button
-                      type="button"
+                    {/* There was an "Email PDF" button here whose modal announced "Tax Invoice PDF sent to …
+                        Recorded in audit log." after checking only that a recipient was typed: nothing was
+                        sent and nothing was logged. AURA cannot email a client yet — its mail reaches AURA
+                        users only and carries no attachment — so the honest act is the one that exists. */}
+                    <a
                       className="btn btn-ghost"
-                      style={{ ...st.smBtn, color: 'var(--accent)' }}
-                      title="Email Invoice PDF to Client"
-                      onClick={() => setEmailInv(inv)}
+                      style={st.smBtn}
+                      href={`/finance/customer-invoices/${inv.id}/print`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid={`print-invoice-${inv.id}`}
+                      title="Open the tax invoice to print or save as PDF. AURA does not email invoices to clients yet — send the PDF from your own mail."
                     >
-                      📧 Email PDF
-                    </button>
-                    <a className="btn btn-ghost" style={st.smBtn} href={`/finance/customer-invoices/${inv.id}/print`} title="Print Tax Invoice (PDF)" target="_blank" rel="noopener noreferrer">🖨</a>
+                      🖨 Print / PDF
+                    </a>
                   </td>
                 </tr>
                   {receiptFor === inv.id && (
@@ -286,46 +287,6 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
         </section>
       )}
 
-      {/* 1-Click IPC / Tax Invoice Email Modal */}
-      {emailInv && (
-        <div style={st.modalOverlay}>
-          <div style={st.modalBox}>
-            <h3 style={{ marginTop: 0, color: 'var(--accent)' }}>📧 Email Invoice PDF: {emailInv.invoiceNumber}</h3>
-            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: '0 0 12px' }}>
-              Send certified tax invoice PDF to client <strong>{emailInv.customerName}</strong>. Attachment will be attached automatically.
-            </p>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4 }}>Client Email Recipient:</label>
-            <input
-              style={st.input}
-              placeholder="e.g. accounts@emaar.ae"
-              value={emailRecipient}
-              onChange={(e) => setEmailRecipient(e.target.value)}
-            />
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4, marginTop: 10 }}>Message / Notes:</label>
-            <textarea
-              style={{ ...st.input, height: 60 }}
-              placeholder="Please find attached certified Tax Invoice PDF..."
-              value={emailMessage}
-              onChange={(e) => setEmailMessage(e.target.value)}
-            />
-            {sendMsg && <div style={st.ok}>{sendMsg}</div>}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setEmailInv(null)}>Cancel</button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => {
-                  if (!emailRecipient.trim()) { alert('Email recipient is required'); return; }
-                  setSendMsg(`✅ Tax Invoice PDF sent to ${emailRecipient}. Recorded in audit log.`);
-                  setTimeout(() => { setEmailInv(null); setSendMsg(''); setEmailRecipient(''); setEmailMessage(''); }, 2000);
-                }}
-              >
-                Send Email & Log Audit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
@@ -338,10 +299,7 @@ const st = {
   toolbar: { display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16 } as CSSProperties,
   smBtn: { padding: '5px 12px', fontSize: 12.5 } as CSSProperties,
   err: { color: 'var(--bad)', fontSize: 13 } as CSSProperties,
-  ok: { color: 'var(--good)', fontSize: 12.5, fontWeight: 600, marginTop: 8 } as CSSProperties,
   muted: { color: 'var(--muted)', padding: '14px 0' } as CSSProperties,
-  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'var(--overlay)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 } as CSSProperties,
-  modalBox: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 14, padding: 20, maxWidth: 460, width: '92%', boxShadow: 'var(--shadow-lg)' } as CSSProperties,
   receiptForm: { display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end', padding: '10px 4px' } as CSSProperties,
   field: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12, fontWeight: 600, minWidth: 160 } as CSSProperties,
   history: { padding: '6px 4px 10px' } as CSSProperties,

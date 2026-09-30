@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Param, Post, Query, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Body, Controller, ForbiddenException, Get, Param, Post, Query, Logger, NotFoundException } from '@nestjs/common';
 import { AmcService, SupportTicket, type PpmFrequency } from '@aura/amc';
 import { TenantContext } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
@@ -22,15 +22,29 @@ export class AmcController {
     private readonly tenant: TenantContext,
   ) {}
 
-  private tenantId(): string {
-    return this.tenant.get().tenantId ?? 'default';
+  /**
+   * THE TENANT COMES FROM THE SESSION, NEVER FROM THE REQUEST.
+   *
+   * Ten routes used to take `body.tenantId` or `?tenantId=` first and fall back to the session, and
+   * the session to a literal 'default' — so any caller could read or write another tenant's service
+   * contracts, tickets and work orders by naming it. A supplied tenant that is the caller's own is
+   * tolerated; any other is refused, loudly, rather than quietly ignored, so a client that sends one
+   * learns it was wrong. No tenant at all is a refusal, not a default.
+   */
+  private tenantId(supplied?: unknown): string {
+    const own = this.tenant.get().tenantId;
+    if (!own) throw new ForbiddenException('no tenant is bound to this request');
+    if (supplied !== undefined && supplied !== null && supplied !== '' && supplied !== own) {
+      throw new ForbiddenException('the tenant is taken from your session, never from the request');
+    }
+    return own;
   }
 
   // ─── Service Contracts ────────────────────────────────────────────────────
 
   @Post('contracts')
   async createContract(@Body() body: any) {
-    const tenantId = body.tenantId || this.tenantId();
+    const tenantId = this.tenantId(body?.tenantId);
     this.logger.log(`Creating AMC contract for client "${body.clientName}" in tenant ${tenantId}`);
     return this.service.createContract({
       ...body,
@@ -42,12 +56,15 @@ export class AmcController {
 
   @Get('contracts')
   async listContracts(@Query('tenantId') tenantId?: string) {
-    return this.service.listContracts(tenantId || this.tenantId());
+    return this.service.listContracts(this.tenantId(tenantId));
   }
 
   @Get('contracts/:id')
   async getContract(@Param('id') id: string) {
-    return this.service.findContract(id);
+    // Another tenant's contract is "not found" — indistinguishable from one that does not exist.
+    const contract = await this.service.findContract(id);
+    if (!contract) throw new NotFoundException(`service contract ${id} not found`);
+    return contract;
   }
 
   @Post('contracts/:id/terminate')
@@ -61,7 +78,7 @@ export class AmcController {
 
   @Post('tickets')
   async raiseTicket(@Body() body: any) {
-    const tenantId = body.tenantId || this.tenantId();
+    const tenantId = this.tenantId(body?.tenantId);
     this.logger.log(`Raising support ticket "${body.title}" in tenant ${tenantId}`);
     return this.service.raiseTicket({
       ...body,
@@ -74,7 +91,7 @@ export class AmcController {
     @Query('tenantId') tenantId?: string,
     @Query('contractId') contractId?: string,
   ) {
-    const tickets = await this.service.listTickets(tenantId || this.tenantId(), contractId);
+    const tickets = await this.service.listTickets(this.tenantId(tenantId), contractId);
     // Add real-time SLA breach check to response payload
     return tickets.map((t: SupportTicket) => ({
       ...t,
@@ -103,7 +120,7 @@ export class AmcController {
 
   @Get('tickets/sla-status')
   async slaStatus(@Query('tenantId') tenantId?: string) {
-    const report = await this.service.slaStatusReport(tenantId || this.tenantId());
+    const report = await this.service.slaStatusReport(this.tenantId(tenantId));
     return report.map((r) => ({
       id: r.ticket.id,
       ticketNumber: r.ticket.ticketNumber,
@@ -119,14 +136,14 @@ export class AmcController {
 
   @Post('tickets/sla-sweep')
   async slaSweep(@Body('tenantId') tenantId?: string) {
-    const escalated = await this.service.sweepSlaBreaches(tenantId || this.tenantId());
+    const escalated = await this.service.sweepSlaBreaches(this.tenantId(tenantId));
     return { escalated: escalated.length, tickets: escalated.map((t) => ({ id: t.id, ticketNumber: t.ticketNumber, escalationLevel: t.escalationLevel })) };
   }
 
   @Get('tickets/:id')
   async getTicket(@Param('id') id: string) {
     const ticket = await this.service.findTicket(id);
-    if (!ticket) return null;
+    if (!ticket) throw new NotFoundException(`ticket ${id} not found`);
     return {
       ...ticket,
       isSlaBreached: ticket.isSlaBreached(),
@@ -148,7 +165,7 @@ export class AmcController {
 
   @Post('work-orders')
   async createWorkOrder(@Body() body: any) {
-    const tenantId = body.tenantId || this.tenantId();
+    const tenantId = this.tenantId(body?.tenantId);
     this.logger.log(`Creating work order "${body.orderNumber}" in tenant ${tenantId}`);
     return this.service.createWorkOrder({
       ...body,
@@ -162,7 +179,7 @@ export class AmcController {
     @Query('tenantId') tenantId?: string,
     @Query('contractId') contractId?: string,
   ) {
-    return this.service.listWorkOrders(tenantId || this.tenantId(), contractId);
+    return this.service.listWorkOrders(this.tenantId(tenantId), contractId);
   }
 
   @Get('work-orders/paged')
@@ -182,7 +199,7 @@ export class AmcController {
     @Query('minLng') minLng?: string,
     @Query('maxLng') maxLng?: string,
   ) {
-    const tid = tenantId || this.tenantId();
+    const tid = this.tenantId(tenantId);
     if (minLat && maxLat && minLng && maxLng) {
       return this.service.getDispatchBoard(tid, {
         minLat: Number(minLat),
@@ -242,7 +259,7 @@ export class AmcController {
 
   @Get('ppm-schedules')
   async listPpms(@Query('tenantId') tenantId?: string, @Query('contractId') contractId?: string) {
-    return this.service.listPpmSchedules(tenantId || this.tenantId(), contractId);
+    return this.service.listPpmSchedules(this.tenantId(tenantId), contractId);
   }
 
   @Post('ppm-schedules/:id/deactivate')

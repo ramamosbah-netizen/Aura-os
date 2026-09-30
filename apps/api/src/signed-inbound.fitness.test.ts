@@ -48,12 +48,14 @@ describe('signed inbound — the machines allowed past the user-permission guard
     expect(signedHandlers()).toEqual(ALLOWED);
   });
 
+  // It reads every source file in modules/ and apps/api/src — seconds under the gate's parallel load,
+  // which the 5 s default timed out on (2026-09-30) while the answer itself was correct.
   it('nothing outside the API controllers uses the marker', () => {
     const elsewhere = [...files(join(REPO, 'modules'), '.ts'), ...files(join(REPO, 'apps/api/src'), '.ts')]
       .filter((f) => !f.endsWith('.controller.ts') && !f.endsWith('.test.ts'))
       .filter((f) => readFileSync(f, 'utf8').includes('@SignedInbound('));
     expect(elsewhere).toEqual([]);
-  });
+  }, 60_000);
 
   it('the auth middleware lets exactly those paths through without a token, and keeps their raw bytes', () => {
     const main = readFileSync(join(API_SRC, 'main.ts'), 'utf8');

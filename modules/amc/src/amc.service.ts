@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable, Logger } from '@nestjs/common';
-import { makeEvent, type Page, type PageParams, roundDecimal } from '@aura/shared';
-import { EVENT_STORE, type EventStore } from '@aura/core';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { assertSameTenant, makeEvent, type Page, type PageParams, roundDecimal, sameTenantOrNull } from '@aura/shared';
+import { EVENT_STORE, type EventStore, TenantContext } from '@aura/core';
 import { AmcStore, AMC_STORE } from './store.interface';
 import { ServiceContract, ContractStatus, type ContractSource } from './domain/service-contract';
 import { WorkOrder, WorkOrderPriority, WorkOrderType, GeoCoordinate } from './domain/work-order';
@@ -20,7 +20,24 @@ export class AmcService {
   constructor(
     @Inject(AMC_STORE) private readonly store: AmcStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
+    // Explicit @Inject: a union-typed ctor param emits `Object` and Nest injects null in silence.
+    // Optional so the domain tests need no request scope — with none bound there is nothing to check.
+    @Optional() @Inject(TenantContext) private readonly tenant: TenantContext | null = null,
   ) {}
+
+  /**
+   * The tenant of the request (or of the event being handled), or null outside one. Every lookup BY
+   * ID is judged against it: an id from another tenant reads as "not found", never as that tenant's
+   * record — the in-memory store has no RLS behind it, and "hard to guess" is not isolation.
+   */
+  private bound(): string | null {
+    return this.tenant?.boundTenantId() ?? null;
+  }
+
+  /** A contract another record points at must be the SAME tenant's — a work order may not borrow one. */
+  private async ownContract(contractId: string, tenantId: string): Promise<ServiceContract> {
+    return assertSameTenant(await this.store.findContract(contractId), tenantId, 'service contract', contractId);
+  }
 
   // ── Service Contracts ────────────────────────────────────────
 
@@ -96,7 +113,7 @@ export class AmcService {
   }
 
   async findContract(id: string): Promise<ServiceContract | null> {
-    return this.store.findContract(id);
+    return sameTenantOrNull(await this.store.findContract(id), this.bound());
   }
 
   async listTickets(tenantId: string, contractId?: string): Promise<SupportTicket[]> {
@@ -108,11 +125,11 @@ export class AmcService {
   }
 
   async findTicket(id: string): Promise<SupportTicket | null> {
-    return this.store.findTicket(id);
+    return sameTenantOrNull(await this.store.findTicket(id), this.bound());
   }
 
   async findWorkOrder(id: string): Promise<WorkOrder | null> {
-    return this.store.findWorkOrder(id);
+    return sameTenantOrNull(await this.store.findWorkOrder(id), this.bound());
   }
 
   async listWorkOrders(tenantId: string, contractId?: string): Promise<WorkOrder[]> {
@@ -124,8 +141,7 @@ export class AmcService {
   }
 
   async terminateContract(id: string, actorId: string | null = null, reason?: string): Promise<ServiceContract> {
-    const contract = await this.store.findContract(id);
-    if (!contract) throw new Error(`Contract ${id} not found`);
+    const contract = assertSameTenant(await this.store.findContract(id), this.bound(), 'service contract', id);
     contract.terminate(actorId, reason);
     await this.store.saveContract(contract);
     this.logger.log(`[AMC] Contract terminated: ${contract.contractNumber}`);
@@ -155,8 +171,7 @@ export class AmcService {
     // been terminated. Without this, the AMC → AR reactor happily invoices against a dead
     // agreement — the commercial mirror of authorising work with no permit.
     if (params.contractId) {
-      const contract = await this.store.findContract(params.contractId);
-      if (!contract) throw new Error(`service contract ${params.contractId} not found`);
+      const contract = await this.ownContract(params.contractId, params.tenantId);
       if (!contract.isActive()) {
         throw new Error(
           `a work order can only be raised against an active service contract (${contract.contractNumber} is '${contract.status}' and runs to ${contract.endDate.toISOString().slice(0, 10)})`,
@@ -171,8 +186,7 @@ export class AmcService {
   }
 
   async assignWorkOrder(id: string, technicianId: string): Promise<WorkOrder> {
-    const order = await this.store.findWorkOrder(id);
-    if (!order) throw new Error(`Work order ${id} not found`);
+    const order = assertSameTenant(await this.store.findWorkOrder(id), this.bound(), 'work order', id);
     order.assign(technicianId);
     await this.store.saveWorkOrder(order);
     this.logger.log(`[AMC] Work order ${order.orderNumber} assigned to ${technicianId}`);
@@ -181,8 +195,7 @@ export class AmcService {
 
   /** assigned → in_progress: the technician is on site. Reachable for the first time here. */
   async startWorkOrder(id: string): Promise<WorkOrder> {
-    const order = await this.store.findWorkOrder(id);
-    if (!order) throw new Error(`Work order ${id} not found`);
+    const order = assertSameTenant(await this.store.findWorkOrder(id), this.bound(), 'work order', id);
     order.startWork();
     await this.store.saveWorkOrder(order);
     this.logger.log(`[AMC] Work order ${order.orderNumber} started`);
@@ -190,8 +203,7 @@ export class AmcService {
   }
 
   async cancelWorkOrder(id: string, actorId: string | null = null, reason?: string): Promise<WorkOrder> {
-    const order = await this.store.findWorkOrder(id);
-    if (!order) throw new Error(`Work order ${id} not found`);
+    const order = assertSameTenant(await this.store.findWorkOrder(id), this.bound(), 'work order', id);
     order.cancel(actorId, reason);
     await this.store.saveWorkOrder(order);
     this.logger.log(`[AMC] Work order ${order.orderNumber} cancelled`);
@@ -199,15 +211,14 @@ export class AmcService {
   }
 
   async completeWorkOrder(id: string, cost?: number, actorId: string | null = null): Promise<WorkOrder> {
-    const order = await this.store.findWorkOrder(id);
-    if (!order) throw new Error(`Work order ${id} not found`);
+    const order = assertSameTenant(await this.store.findWorkOrder(id), this.bound(), 'work order', id);
     // The SLA the order is judged against is the one on its governing contract.
-    const governing = order.contractId ? await this.store.findContract(order.contractId) : null;
+    const governing = order.contractId ? sameTenantOrNull(await this.store.findContract(order.contractId), order.tenantId) : null;
     order.complete(cost, governing?.slaResolutionHours, new Date(), actorId);
     await this.store.saveWorkOrder(order);
 
     // Emit on the spine so the AMC → AR reactor can bill a completed, costed visit.
-    const contract = order.contractId ? await this.store.findContract(order.contractId) : null;
+    const contract = governing;
     await this.events.append([
       makeEvent({
         type: 'amc.workorder.completed',
@@ -244,6 +255,7 @@ export class AmcService {
     slaResponseHours?: number;
     slaResolutionHours?: number;
   }): Promise<SupportTicket> {
+    if (params.contractId) await this.ownContract(params.contractId, params.tenantId);
     const ticket = new SupportTicket({ id: genId(), ...params });
     await this.store.saveTicket(ticket);
     this.logger.log(`[AMC] Ticket raised: ${ticket.ticketNumber} — "${ticket.title}" (SLA due: ${ticket.slaDueAt.toISOString()})`);
@@ -251,8 +263,7 @@ export class AmcService {
   }
 
   async assignTicket(id: string, technicianId: string): Promise<SupportTicket> {
-    const ticket = await this.store.findTicket(id);
-    if (!ticket) throw new Error(`Ticket ${id} not found`);
+    const ticket = assertSameTenant(await this.store.findTicket(id), this.bound(), 'ticket', id);
     ticket.assign(technicianId);
     await this.store.saveTicket(ticket);
     this.logger.log(`[AMC] Ticket ${ticket.ticketNumber} assigned to ${technicianId}`);
@@ -260,8 +271,7 @@ export class AmcService {
   }
 
   async resolveTicket(id: string, actorId: string | null = null): Promise<SupportTicket> {
-    const ticket = await this.store.findTicket(id);
-    if (!ticket) throw new Error(`Ticket ${id} not found`);
+    const ticket = assertSameTenant(await this.store.findTicket(id), this.bound(), 'ticket', id);
     ticket.resolve(actorId);
     await this.store.saveTicket(ticket);
     this.logger.log(`[AMC] Ticket ${ticket.ticketNumber} resolved`);
@@ -338,8 +348,7 @@ export class AmcService {
     frequency: PpmFrequency;
     startDate: Date;
   }): Promise<PpmSchedule> {
-    const contract = await this.store.findContract(params.contractId);
-    if (!contract) throw new Error(`Contract ${params.contractId} not found`);
+    await this.ownContract(params.contractId, params.tenantId);
     const schedule = new PpmSchedule({ id: genId(), ...params });
     await this.store.savePpm(schedule);
     this.logger.log(`[AMC] PPM schedule created: ${schedule.frequency} "${schedule.taskDescription}" on contract ${schedule.contractId}`);
@@ -351,8 +360,7 @@ export class AmcService {
   }
 
   async deactivatePpmSchedule(id: string): Promise<PpmSchedule> {
-    const schedule = await this.store.findPpm(id);
-    if (!schedule) throw new Error(`PPM schedule ${id} not found`);
+    const schedule = assertSameTenant(await this.store.findPpm(id), this.bound(), 'PPM schedule', id);
     schedule.deactivate();
     await this.store.savePpm(schedule);
     return schedule;

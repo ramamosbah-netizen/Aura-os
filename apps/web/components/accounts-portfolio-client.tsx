@@ -149,8 +149,9 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
   // The server snapshot is the refresh signal; filter-driven refetches below remain authoritative
   // once the client starts interacting with the portfolio.
   }, [seedPage]);
-  // Ownership is a workspace username; "me" comes from /workspace/me (the session
-  // `sub` passed from the server need not equal the username and is null in dev).
+  // Ownership is the actor the API recorded — the session `sub`, passed from the server, which IS the
+  // username (measured). /workspace/me is refused to every shipped role, so it is only the no-session
+  // dev fallback here and the source of admin/role labels.
   const [me, setMe] = useState<TeamUser | null>(null);
   const [team, setTeam] = useState<TeamUser[]>([]);
 
@@ -171,7 +172,7 @@ export default function AccountsPortfolioClient({ initialPage, rows, currentUser
     })();
   }, []);
 
-  const myId = me?.username ?? currentUserId;
+  const myId = currentUserId ?? me?.username ?? null;
   const canManage = !!me && (me.isAdmin === true || /manager|executive|admin|lead/i.test(me.roleLabel ?? ''));
   const ownerLabel = (username: string): string => {
     const u = team.find((t) => t.username === username);

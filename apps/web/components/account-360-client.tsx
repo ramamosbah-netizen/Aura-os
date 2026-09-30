@@ -108,16 +108,20 @@ const PARTY_LABEL: Record<string, string> = {
   other: 'Other',
 };
 
-export default function Account360Client({ accountId }: { accountId: string }) {
+export default function Account360Client({ accountId, currentUserId = null }: { accountId: string; currentUserId?: string | null }) {
   const [data, setData] = useState<Payload | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<DataError | null>(null);
   const [tab, setTab] = useState<Tab>('overview');
   const [busy, setBusy] = useState(false);
-  // Identity for ownership: the account owner is stored as a workspace username
-  // (e.g. "u-pm"), so "me" comes from /workspace/me — NOT the session `sub`, which
-  // need not equal the username and is absent in the dev pass-through.
+  // WHO "ME" IS, for ownership. The owner is stored as the actor the API saw — the session `sub`,
+  // which IS the username (measured: u-e2e-sales signs in with sub "u-e2e-sales" and the accounts it
+  // creates carry ownerId "u-e2e-sales"). So identity comes from the session, passed by the server.
+  // /workspace/me is refused (403) to every shipped role, which made every real user nobody here and
+  // hid "Assign to me"; it is kept only for what it alone says — admin, role label — and as the
+  // no-session dev fallback.
   const [me, setMe] = useState<TeamUser | null>(null);
+  const myId: string | null = currentUserId ?? me?.username ?? null;
   const [team, setTeam] = useState<TeamUser[]>([]);
   // Outcome Loop — capture what happened after acting so the relationship never goes quiet.
   const [outcomeNote, setOutcomeNote] = useState<string | null>(null);
@@ -293,7 +297,7 @@ export default function Account360Client({ accountId }: { accountId: string }) {
   // The ONE next best action.
   let nba: NextBestAction | undefined;
   if (receivables.overdue > 0) nba = { label: 'Chase overdue AR', hint: `AED ${aed(receivables.overdue)} overdue`, href: '/finance/ar' };
-  else if (!a.ownerId) nba = { label: 'Assign an owner', hint: me ? 'assign to you' : 'no owner yet', onClick: () => { if (me) void assignOwner(me.username); } };
+  else if (!a.ownerId) nba = { label: 'Assign an owner', hint: myId ? 'assign to you' : 'no owner yet', onClick: () => { if (myId) void assignOwner(myId); } };
   else if (contacts.length === 0) nba = { label: 'Add key contacts', onClick: () => setTab('contacts') };
   else if (!hasPrimary) nba = { label: 'Set the primary contact', onClick: () => setTab('contacts') };
   else if (openOpps.length === 0) nba = { label: 'Create an opportunity', href: '/crm/pipeline' };
@@ -364,8 +368,8 @@ export default function Account360Client({ accountId }: { accountId: string }) {
             value: (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 {a.ownerId ? ownerLabel(a.ownerId) : <span style={{ color: 'var(--muted)' }}>Unassigned</span>}
-                {me && a.ownerId !== me.username && (
-                  <button disabled={busy} onClick={() => void assignOwner(me.username)} style={st.inlineAction}>Assign to me</button>
+                {myId && a.ownerId !== myId && (
+                  <button disabled={busy} onClick={() => void assignOwner(myId)} style={st.inlineAction}>Assign to me</button>
                 )}
                 {canManage && (
                   <select value={a.ownerId ?? ''} disabled={busy} onChange={(e) => void assignOwner(e.target.value || null)} style={st.ownerSelect} title="Assign owner — admin / manager">

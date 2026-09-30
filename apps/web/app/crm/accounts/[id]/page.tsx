@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { fetchJson } from '@/lib/api';
+import { currentUser, fetchJson } from '@/lib/api';
 import DataStateNotice from '../../../../components/ui/data-state';
 import RecordChrome from '../../../../components/record-chrome';
 import Account360Client from '../../../../components/account-360-client';
@@ -38,7 +38,9 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
       <div style={st.navRow}>
         <a href="/crm/customers?view=accounts" style={st.link}>← Back to Customers</a>
       </div>
-      <Account360Client accountId={result.data.id} />
+      {/* "me" is the signed-in person — the session `sub`, which is what the API records as an
+          owner. /workspace/me is refused to every shipped role (measured), so it cannot be it. */}
+      <Account360Client accountId={result.data.id} currentUserId={(await currentUser())?.sub ?? null} />
     </div>
   );
 }

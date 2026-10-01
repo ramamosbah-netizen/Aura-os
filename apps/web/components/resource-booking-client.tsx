@@ -129,7 +129,7 @@ export default function ResourceBookingClient({
       {bookings.map((view) => {
         const task = tasks.find((item) => item.id === view.booking.taskId);
         const tone = view.booking.status === 'released' ? 'released' : view.assessment.feasibility.toLowerCase();
-        return <article key={view.booking.id} className={styles.booking} data-tone={tone}>
+        return <article key={view.booking.id} className={styles.booking} data-tone={tone} data-testid={`booking-${view.booking.id}`}>
           <div className={styles.bookingHead}>
             <div><strong>{label(view.booking.resource)}</strong><small>{task?.name ?? 'Archived activity'} · {view.booking.quantity} {view.booking.unit}</small></div>
             <span>{view.booking.status === 'released' ? 'RELEASED' : view.assessment.feasibility}</span>

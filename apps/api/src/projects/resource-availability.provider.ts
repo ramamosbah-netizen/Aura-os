@@ -22,10 +22,19 @@ import { businessDate } from '@aura/shared';
  *                                         not a fact, and planning must not pre-empt HR's decision.
  *   Fleet   a SCHEDULED maintenance     → `absent` on that date. A completed one is history.
  *           a `retired` vehicle         → `absent` from today on. It has left service for good.
- *           a `maintenance` status      → `unknown` from today on, because nobody said until when.
+ *           OUT OF SERVICE (`maintenance`) → `unknown` from today on, because nobody said until
+ *                                         when — named with the reason and day the Fleet
+ *                                         administrator gave, when they gave one (F-08).
  *   Assets  a SCHEDULED maintenance     → `absent` on that date.
  *           a `disposed` asset          → `absent` from today on.
- *           a `maintenance`/`inactive`  → `unknown` from today on, same reasoning as Fleet.
+ *           an `inactive` asset         → `unknown` from today on, same reasoning as Fleet.
+ *           a `maintenance` asset       → read by its OPEN JOBS. AssetsService moves an asset into
+ *                                         `maintenance` the moment a job is booked, so the status
+ *                                         alone cannot tell next month's calibration from a machine
+ *                                         on the bench now. Jobs all dated ahead → only their dates
+ *                                         (above); a job dated today or earlier still open → the
+ *                                         machine is in the workshop, `unknown` from today; no job
+ *                                         behind the status → nobody said why, `unknown`.
  *
  * POOLS ARE DELIBERATELY ABSENT from all of this. A pool's capacity is declared, and deriving it
  * from its roster's leave would be exactly the arithmetic migration 0319 refuses to invent:
@@ -91,7 +100,9 @@ export class ResourceAvailabilityFromRegisters implements ResourceAvailabilityPr
         facts.push({
           resource: { resourceType: 'vehicle', canonicalResourceId: vehicle.id },
           from: openEnd.from, to: openEnd.to, effect: 'unknown',
-          reason: `${vehicle.plateNumber} is off the road for maintenance with no stated return date`,
+          reason: vehicle.outOfServiceReason
+            ? `${vehicle.plateNumber} is out of service since ${vehicle.outOfServiceSince}: ${vehicle.outOfServiceReason} — no stated return date`
+            : `${vehicle.plateNumber} is off the road for maintenance with no stated return date`,
           source: 'fleet',
         });
       }
@@ -116,10 +127,20 @@ export class ResourceAvailabilityFromRegisters implements ResourceAvailabilityPr
           reason: `${asset.name} has been disposed of`, source: 'assets',
         });
       } else if ((asset.status === 'maintenance' || asset.status === 'inactive') && openEnd.from <= openEnd.to) {
+        let reason = `${asset.name} is ${asset.status} with no stated return date`;
+        if (asset.status === 'maintenance') {
+          const open = assetMaintenance.filter((m) => m.assetId === asset.id && m.status === 'scheduled');
+          const started = open.filter((m) => m.date <= today).sort((a, b) => a.date.localeCompare(b.date));
+          // Every open job lies ahead: the status is the booking's side effect, and the jobs' own
+          // dates (read below) are the whole statement.
+          if (open.length > 0 && started.length === 0) continue;
+          if (started.length > 0) {
+            reason = `${asset.name} is in maintenance since ${started[0].date}: ${started[0].description} — no stated return date`;
+          }
+        }
         facts.push({
           resource: { resourceType: 'asset', canonicalResourceId: asset.id },
-          from: openEnd.from, to: openEnd.to, effect: 'unknown',
-          reason: `${asset.name} is ${asset.status} with no stated return date`, source: 'assets',
+          from: openEnd.from, to: openEnd.to, effect: 'unknown', reason, source: 'assets',
         });
       }
     }

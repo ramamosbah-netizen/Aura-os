@@ -1720,7 +1720,7 @@
         "Planning",
         "Progress"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "authority": "Projects schedule / resource facts",
       "evidence": [
         "N-PLAN"
@@ -1728,16 +1728,16 @@
       "source": "modules/projects/src/domain/resource-booking.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
+        "browser": "COMPLETE",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. A held employee booking now also reaches the linked person’s My Work (PLN-07). HR/Fleet availability remains open.",
+      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. A held employee booking now also reaches the linked person’s My Work (PLN-07). HR/Fleet availability remains open. F-08 (2026-10-01): availability is connected both ways the acceptance names. LEAVE — an approved HR leave makes the committed days a known zero and the standing booking CONFLICTED, naming the leave (built 2026-09-15, employee-account-allocation.spec.ts, re-run green 2026-10-01). BREAKDOWN — the Fleet administrator takes a vehicle out of service with a stated reason (migration 0401: the reason and the day are stored together, only while out of service, never blank, refused by the table otherwise), and every booking against it reads UNKNOWN from that day in Fleet's own words, until it is returned to service. Nothing in Projects is re-entered or altered.",
       "acceptanceProof": "Connect HR/Fleet availability so a leave or breakdown changes the feasibility of an existing commitment without re-entry."
     },
     {
@@ -1803,7 +1803,7 @@
         "browser": "NOT_AUDITED",
         "handoff": "PARTIAL"
       },
-      "currentBehavior": "The live schedule records vehicle/asset demand from canonical Fleet/Assets catalogs and commits it into typed, dated bookings. An asset now carries a custodian in its own register (migration 0320, shaped like Fleet’s existing driver link), so an equipment commitment reaches the one person answerable for that machine and is accepted or declined by them with a reason — proven Auth-ON in the browser, including the refusal for somebody who no longer holds it. Breakdown and availability are still not bridged: a machine going out of service does not change the feasibility of a commitment already made against it.",
+      "currentBehavior": "The live schedule records vehicle/asset demand from canonical Fleet/Assets catalogs and commits it into typed, dated bookings. An asset now carries a custodian in its own register (migration 0320, shaped like Fleet’s existing driver link), so an equipment commitment reaches the one person answerable for that machine and is accepted or declined by them with a reason — proven Auth-ON in the browser, including the refusal for somebody who no longer holds it. Breakdown and availability are still not bridged: a machine going out of service does not change the feasibility of a commitment already made against it. UPDATE (F-08, 2026-10-01): the sentence above is superseded for vehicles and partly for assets. A vehicle breakdown is now recorded on the Fleet screen (out of service, with reason) and turns every commitment against it UNKNOWN from that day, naming the cause — browser-proved, Auth ON, PostgreSQL. It surfaces as UNKNOWN, deliberately not CONFLICTED: a breakdown states no return date, so there is no known capacity to exceed. Scheduled service is a dated absence (CONFLICTED on its day) and a retired vehicle or disposed asset a permanent one — unit-proved, not browser-proved. Assets have no out-of-service act of their own: a breakdown is booked as maintenance, which the bridge now reads by its open jobs (a job dated today or earlier and still open = in the workshop, UNKNOWN from today; jobs all ahead = only their dates) — unit-proved only.",
       "acceptanceProof": "Bridge Fleet/Assets availability and breakdown into current feasibility, so a machine out of service surfaces as a conflict on the commitments that depend on it."
     },
     {
@@ -8352,9 +8352,9 @@
       "capabilityIds": [
         "PLN-06"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Planning Engineer",
         "Project Engineer",
@@ -8364,13 +8364,13 @@
         "Planning",
         "Progress"
       ],
-      "currentBehavior": "Wave 3 iterations 6-8 let the planner author and edit working-day duration plus multiple employee, vehicle, asset and governed shared-pool demand lines on a WBS-linked activity, then commit an exact persisted requirement into a held booking. The service derives resource, unit, quantity and dates from the saved activity, PostgreSQL protects requirement lineage, and the Auth-ON browser proves create, reload, cross-project conflict, reason-governed over-capacity commitment and retained release history. A held employee booking now also reaches the linked person’s My Work (PLN-07). HR/Fleet availability remains open.",
+      "currentBehavior": "CLOSED 2026-10-01. The title is older than the work: requirement authoring was delivered in Wave 3 iterations 6-8, and the open acceptance was availability. MEASURED before building: the leave half already existed and was browser-proved (7f20170b1, 2026-09-15 — HR, Fleet and Assets state availability through a port Projects reads and does not own; an approved leave makes a standing booking CONFLICTED naming the leave) but was recorded under PLN-09 only. The breakdown half could not occur: a vehicle's status was set once at registration and no route or screen could change it, so a van with a dead gearbox stayed `active` and every booking against it AVAILABLE. Built: POST /fleet/vehicles/:id/out-of-service (reason required) and /return-to-service, under the fleet.vehicle.update permission the Fleet administrator (r-hr-manager) already held and no route used; the vehicle stores since-when and why (migration 0401, constraint-checked); the Fleet screen's vehicle rows carry both acts, the out-of-service dialog refusing to submit without a reason; the availability bridge names the breakdown — '<plate> is out of service since <day>: <reason> — no stated return date'. Fixed on the way: an asset is moved into `maintenance` the moment a job is BOOKED, so a calibration booked for next month made the machine UNKNOWN this week; the bridge now reads such an asset by its open jobs.",
       "expectedOperationalBehavior": "Resource requirements from governed canonical records with actual usable output",
       "authority": "Projects schedule / resource facts",
-      "evidence": "NEW source inspection: modules/projects/src/domain/resource-booking.ts",
+      "evidence": "FRESH 2026-10-01: modules/fleet/src/fleet.service.ts (takeOutOfService, returnToService), domain/vehicle.ts, postgres-fleet-store.ts, infrastructure/migrations/0401_fleet_vehicle_out_of_service.sql; apps/api/src/fleet/fleet.controller.ts; apps/api/src/projects/resource-availability.provider.ts; apps/web/components/fleet-control-client.tsx, app/api/fleet/vehicles/[id]/[action]/route.ts; tests modules/fleet/src/domain/fleet.test.ts, apps/api/src/projects/resource-availability.provider.spec.ts, apps/web/e2e/vehicle-breakdown-feasibility.spec.ts, apps/web/e2e/employee-account-allocation.spec.ts (leave, re-run).",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Connect HR/Fleet availability so a leave or breakdown changes the feasibility of an existing commitment without re-entry."
+      "acceptanceProof": "MET. BREAKDOWN, BROWSER, AUTH ON, POSTGRESQL (vehicle-breakdown-feasibility.spec.ts): a van committed to an activity while free reads AVAILABLE on the planner's desk (u-e2e-planner, a project member); the same act through the planner's own session is refused 403; the Fleet administrator (u-e2e-hrmgr, r-hr-manager — a new provisioned actor, so the permission is proved by the role that holds it and not by an administrator) opens the Fleet screen, cannot confirm without a reason, and takes the van out of service; the row reads 'out of service — since <today>: gearbox failure, waiting for parts'; the planner's desk turns the commitment UNKNOWN naming exactly that, and the commitment record is byte-for-byte unchanged; returning the van to service on the same screen makes it AVAILABLE again. LEAVE, BROWSER (employee-account-allocation.spec.ts, re-run 2026-10-01): a pending leave changes nothing; approved, the commitment turns CONFLICTED naming the leave, the record unchanged. DATABASE: 0401's constraint refuses a reason on an active vehicle, a blank reason, a reason without a day and a day without a reason, and admits the full pair or neither (probed directly, NULL rows included). UNIT: 3 Fleet service tests (permission asserted, reason trimmed and required, only active→out and out→active, events carry the reason) and 11 bridge tests (2 new: the breakdown named in Fleet's words from its day; an asset read by its open jobs). AUTHORING (schedule-wbs-workflow.spec.ts, re-run 2026-10-01): employee, asset and pool demand lines added, edited and reloaded on the schedule screen — as the administrator; a Planning Engineer authoring them is not separately proved. LIMITS — not evidence for: an asset breakdown in the browser (assets have no out-of-service act; booking maintenance is the path, unit-proved only); scheduled-service CONFLICTED for vehicles or assets in the browser (unit-proved); a return date — a breakdown is UNKNOWN until someone returns the vehicle, by design; conflict resolution ownership (PLN-09/PLN-10, not re-audited)."
     },
     {
       "id": "F-09",
@@ -9237,8 +9237,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 53,
-      "PARTIAL": 76,
+      "COMPLETE": 54,
+      "PARTIAL": 75,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,

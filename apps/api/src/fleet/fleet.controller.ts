@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Headers, Param, Post, Put, Query, Req, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString } from 'class-validator';
-import { SignedInbound, TenantContext } from '@aura/core';
+import { Permissions, SignedInbound, TenantContext } from '@aura/core';
 import { TELEMETRY_SIGNATURE_HEADER, telemetryWebhookBinding, verifyTelemetrySignature } from './telemetry-webhook.auth';
 import { parsePageParams } from '@aura/shared';
 import {
@@ -22,6 +22,10 @@ class CreateVehicleDto {
   @IsOptional() @IsString() registrationExpiry?: string | null;
   @IsOptional() @IsString() status?: Vehicle['status'];
   @IsOptional() @IsString() driverEmployeeId?: string | null;
+}
+
+class OutOfServiceDto {
+  @IsString() reason!: string;
 }
 
 class LogFuelDto {
@@ -71,6 +75,25 @@ export class FleetController {
       status: dto.status,
       driverEmployeeId: dto.driverEmployeeId,
     });
+  }
+
+  /**
+   * A breakdown: the vehicle leaves service today with a stated reason, and every booking committed
+   * against it is reassessed as UNKNOWN from today (F-08). The same act as editing the vehicle, so
+   * the same permission the Fleet administrator already holds — not a new one nobody is granted.
+   */
+  @Permissions('fleet.vehicle.update')
+  @Post('vehicles/:id/out-of-service')
+  takeOutOfService(@Param('id') id: string, @Body() dto: OutOfServiceDto): Promise<Vehicle> {
+    const ctx = this.tenant.get();
+    return this.fleetService.takeOutOfService(ctx.tenantId, ctx.actorId, id, dto?.reason ?? '');
+  }
+
+  @Permissions('fleet.vehicle.update')
+  @Post('vehicles/:id/return-to-service')
+  returnToService(@Param('id') id: string): Promise<Vehicle> {
+    const ctx = this.tenant.get();
+    return this.fleetService.returnToService(ctx.tenantId, ctx.actorId, id);
   }
 
   @Post('vehicles/:id/restore')

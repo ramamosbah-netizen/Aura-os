@@ -132,6 +132,8 @@ export const EVENT_CATALOG: EventTypeDef[] = [
   { type: 'hr.leave.approved', module: 'hr', description: 'Leave request approved', severity: 'INFO' },
   { type: 'hr.payroll.run', module: 'hr', description: 'Payroll processed for period', severity: 'INFO' },
   { type: 'fleet.vehicle.created', module: 'fleet', description: 'Vehicle fleet profile registered', severity: 'INFO' },
+  { type: 'fleet.vehicle.out_of_service', module: 'fleet', description: 'Vehicle taken out of service, with the reason', severity: 'INFO' },
+  { type: 'fleet.vehicle.returned_to_service', module: 'fleet', description: 'Vehicle returned to service', severity: 'INFO' },
   { type: 'fleet.fuel.logged', module: 'fleet', description: 'Vehicle fuel consumption entry logged', severity: 'INFO' },
   { type: 'fleet.maintenance.scheduled', module: 'fleet', description: 'Vehicle maintenance scheduled', severity: 'INFO' },
   { type: 'fleet.maintenance.completed', module: 'fleet', description: 'Vehicle maintenance completed', severity: 'INFO' },

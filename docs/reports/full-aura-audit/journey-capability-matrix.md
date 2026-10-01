@@ -324,7 +324,7 @@
 | Planning | PLN-03 | COMPLETE |
 | Planning | PLN-04 | COMPLETE |
 | Planning | PLN-05 | COMPLETE |
-| Planning | PLN-06 | PARTIAL |
+| Planning | PLN-06 | COMPLETE |
 | Planning | PLN-07 | PARTIAL |
 | Planning | PLN-08 | PARTIAL |
 | Planning | PLN-09 | PARTIAL |
@@ -549,7 +549,7 @@
 | Progress | PLN-03 | COMPLETE |
 | Progress | PLN-04 | COMPLETE |
 | Progress | PLN-05 | COMPLETE |
-| Progress | PLN-06 | PARTIAL |
+| Progress | PLN-06 | COMPLETE |
 | Progress | PLN-07 | PARTIAL |
 | Progress | PLN-08 | PARTIAL |
 | Progress | PLN-09 | PARTIAL |

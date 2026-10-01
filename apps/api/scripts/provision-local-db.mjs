@@ -371,7 +371,13 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
                                 // provisioned actor, so the whole vertical could only be driven by an
                                 // administrator — and a capability proved only by an administrator has
                                 // had its permissions proved by nobody.
-                                ['u-e2e-estimator', 'r-estimator'], ['u-e2e-salesmgr', 'r-sales-manager']]) {
+                                ['u-e2e-estimator', 'r-estimator'], ['u-e2e-salesmgr', 'r-sales-manager'],
+                                // THE FLEET ADMINISTRATOR (F-08). `r-hr-manager` alone holds
+                                // `fleet.vehicle.update` — taking a broken-down vehicle out of
+                                // service, the act that turns every commitment against it UNKNOWN.
+                                // Proved only by an administrator, it would prove nothing about who
+                                // may say a van is off the road.
+                                ['u-e2e-hrmgr', 'r-hr-manager']]) {
   await handoff.query(
     `INSERT INTO public.aura_users (tenant_id, user_id, display_name, active, updated_at)
      VALUES ('dev-tenant', $1, $1, true, now())
@@ -393,7 +399,7 @@ for (const [userId, roleId] of [['u-e2e-storekeeper', 'r-store'], ['u-e2e-site',
   }
 }
 await handoff.end();
-console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) u-e2e-planner (r-planning-engineer), u-e2e-service (r-service-manager) u-e2e-exec (r-executive), u-e2e-sales (r-sales), u-e2e-estimator (r-estimator) and u-e2e-salesmgr (r-sales-manager)');
+console.log('✓ seeded u-e2e-storekeeper, u-e2e-site, u-e2e-buyer (r-procurement), u-e2e-techmgr (r-technical-manager), u-e2e-procmgr (r-procurement-manager) u-e2e-presales (r-pre-sales), u-e2e-finance (r-finance) u-e2e-controller-a/b (r-finance-controller), u-e2e-pm (r-pm) u-e2e-qs/qs2 (r-commercial-manager) u-e2e-hse/hse2 (r-hse), u-e2e-eng (r-technical-engineer) u-e2e-doccon (r-document-controller), u-e2e-projeng (r-project-engineer), u-e2e-qaqc (r-qa-qc), u-e2e-tc (r-commissioning-engineer) u-e2e-fm (r-handover-fm) u-e2e-planner (r-planning-engineer), u-e2e-service (r-service-manager) u-e2e-exec (r-executive), u-e2e-sales (r-sales), u-e2e-estimator (r-estimator), u-e2e-salesmgr (r-sales-manager) and u-e2e-hrmgr (r-hr-manager)');
 
 
 

@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
+import { businessDate, type Id, type OrgLevel, makeEvent, type Page, type PageParams } from '@aura/shared';
 import { AccessService, EVENT_STORE, type EventStore, TX_RUNNER, type TxRunner } from '@aura/core';
 
 import { type Vehicle, makeVehicle } from './domain/vehicle';
@@ -19,6 +19,8 @@ export const TELEMETRY_STORE = Symbol('TELEMETRY_STORE');
 
 export const FLEET_EVENT = {
   vehicleCreated: 'fleet.vehicle.created',
+  vehicleOutOfService: 'fleet.vehicle.out_of_service',
+  vehicleReturnedToService: 'fleet.vehicle.returned_to_service',
   fuelLogged: 'fleet.fuel.logged',
   maintenanceScheduled: 'fleet.maintenance.scheduled',
   maintenanceCompleted: 'fleet.maintenance.completed',
@@ -106,6 +108,93 @@ export class FleetService {
 
     this.logger.log(`Vehicle soft-deleted: ${id}`);
     return true;
+  }
+
+  /**
+   * A BREAKDOWN, said once, where it belongs. The vehicle leaves service today, with the reason in
+   * the administrator's words, and stays out until someone returns it — there is no return date,
+   * because nobody knows one. Every booking planners committed against it is reassessed by the
+   * availability bridge as UNKNOWN from today, naming this reason; nothing in Projects is touched.
+   *
+   * Only an ACTIVE vehicle can go out of service: one already out says so, and a retired one has
+   * left the fleet for good, which is a different statement with a different remedy.
+   */
+  async takeOutOfService(tenantId: string, actorId: string | null, id: string, reason: string): Promise<Vehicle> {
+    const vehicle = await this.vehicleStore.findById(tenantId, id);
+    if (!vehicle) throw new Error(`vehicle ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (vehicle.companyId) orgPath.push({ level: 'company', id: vehicle.companyId });
+      this.access.assert(actorId, { permission: 'fleet.vehicle.update', orgPath });
+    }
+    const stated = (reason ?? '').trim();
+    if (!stated) throw new Error('taking a vehicle out of service requires a reason');
+    if (vehicle.status !== 'active') {
+      throw new Error(`only an active vehicle can be taken out of service — ${vehicle.plateNumber} is ${vehicle.status}`);
+    }
+
+    const since = businessDate();
+    const updated: Vehicle = {
+      ...vehicle,
+      status: 'maintenance',
+      outOfServiceSince: since,
+      outOfServiceReason: stated,
+      updatedAt: new Date().toISOString(),
+    };
+    const event = makeEvent({
+      type: FLEET_EVENT.vehicleOutOfService,
+      tenantId,
+      companyId: vehicle.companyId,
+      actorId,
+      aggregateType: 'fleet.vehicle',
+      aggregateId: vehicle.id,
+      payload: { plateNumber: vehicle.plateNumber, since, reason: stated },
+    });
+    let saved = updated;
+    await this.tx.run(async (handle) => {
+      saved = await this.vehicleStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Vehicle ${vehicle.plateNumber} out of service since ${since}: ${stated}`);
+    return saved;
+  }
+
+  /** Back on the road. Only a vehicle that is out of service can return to it. */
+  async returnToService(tenantId: string, actorId: string | null, id: string): Promise<Vehicle> {
+    const vehicle = await this.vehicleStore.findById(tenantId, id);
+    if (!vehicle) throw new Error(`vehicle ${id} not found`);
+    if (actorId) {
+      const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: tenantId }];
+      if (vehicle.companyId) orgPath.push({ level: 'company', id: vehicle.companyId });
+      this.access.assert(actorId, { permission: 'fleet.vehicle.update', orgPath });
+    }
+    if (vehicle.status !== 'maintenance') {
+      throw new Error(`only a vehicle that is out of service can return to service — ${vehicle.plateNumber} is ${vehicle.status}`);
+    }
+
+    const updated: Vehicle = {
+      ...vehicle,
+      status: 'active',
+      outOfServiceSince: null,
+      outOfServiceReason: null,
+      updatedAt: new Date().toISOString(),
+    };
+    const event = makeEvent({
+      type: FLEET_EVENT.vehicleReturnedToService,
+      tenantId,
+      companyId: vehicle.companyId,
+      actorId,
+      aggregateType: 'fleet.vehicle',
+      aggregateId: vehicle.id,
+      payload: { plateNumber: vehicle.plateNumber, outSince: vehicle.outOfServiceSince, reason: vehicle.outOfServiceReason },
+    });
+    let saved = updated;
+    await this.tx.run(async (handle) => {
+      saved = await this.vehicleStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
+    this.logger.log(`Vehicle ${vehicle.plateNumber} returned to service`);
+    return saved;
   }
 
   /** Undo a soft-delete; returns the restored vehicle. */

@@ -17,6 +17,8 @@ interface Vehicle {
   plateNumber: string;
   registrationExpiry: string | null;
   status: 'active' | 'maintenance' | 'retired';
+  outOfServiceSince?: string | null;
+  outOfServiceReason?: string | null;
   driverEmployeeId: string | null;
   lastLatitude: number | null;
   lastLongitude: number | null;
@@ -79,6 +81,10 @@ export default function FleetControlClient({
   const fuelLogs = initialFuelLogs;
   const maintenance = initialMaintenance;
   const [error, setError] = useState<string | null>(null);
+  // F-08: the vehicle being taken out of service, and the reason being written for it.
+  const [outOfService, setOutOfService] = useState<Vehicle | null>(null);
+  const [outReason, setOutReason] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const today = businessDateInputValue();
   const vehicleOptions = vehicles.map((v) => ({ value: v.id, label: `${v.make} ${v.model} (${v.plateNumber})` }));
@@ -150,6 +156,51 @@ export default function FleetControlClient({
     }
   };
 
+  /** The API's own sentence when it refuses, not a dump of the response body. */
+  const failure = async (res: Response, fallback: string): Promise<string> => {
+    const body = (await res.json().catch(() => null)) as { message?: string | string[] } | null;
+    const message = Array.isArray(body?.message) ? body?.message.join('; ') : body?.message;
+    return message || fallback;
+  };
+
+  // A BREAKDOWN, said here once: every booking committed against the vehicle is reassessed from
+  // today by the planning desk — nobody re-enters it there (F-08).
+  const handleOutOfService = async () => {
+    if (!outOfService || !outReason.trim()) return;
+    setError(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/fleet/vehicles/${outOfService.id}/out-of-service`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ reason: outReason.trim() }),
+      });
+      if (!res.ok) throw new Error(await failure(res, 'Failed to take the vehicle out of service'));
+      setOutOfService(null);
+      setOutReason('');
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Failed to take the vehicle out of service');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleReturnToService = async (v: Vehicle) => {
+    setError(null);
+    try {
+      const res = await fetch(`/api/fleet/vehicles/${v.id}/return-to-service`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      if (!res.ok) throw new Error(await failure(res, 'Failed to return the vehicle to service'));
+      router.refresh();
+    } catch (err: any) {
+      setError(err.message || 'Failed to return the vehicle to service');
+    }
+  };
+
   const handleCompleteMaintenance = async (id: string) => {
     setError(null);
     const costStr = prompt('Enter final actual maintenance cost (AED):', '0');
@@ -195,7 +246,39 @@ export default function FleetControlClient({
 
   return (
     <div>
-      {error && <div style={st.errorPanel}>{error}</div>}
+      {error && <div style={st.errorPanel} role="alert">{error}</div>}
+
+      {outOfService && (
+        <div style={st.dialogBackdrop}>
+          <div role="dialog" aria-modal="true" aria-labelledby="out-of-service-title" style={st.dialog} data-testid="out-of-service-dialog">
+            <h3 id="out-of-service-title" style={st.dialogTitle}>
+              Take {outOfService.make} {outOfService.model} ({outOfService.plateNumber}) out of service
+            </h3>
+            <p style={st.muted}>
+              From today, until it is returned to service. Every commitment planners have made against this
+              vehicle will show its capacity as unknown, with your reason — the bookings themselves are not changed.
+            </p>
+            <label style={st.dialogLabel} htmlFor="out-of-service-reason">What happened</label>
+            <textarea
+              id="out-of-service-reason"
+              value={outReason}
+              onChange={(e) => setOutReason(e.target.value)}
+              placeholder="e.g. gearbox failure, waiting for parts"
+              rows={3}
+              style={st.dialogInput}
+              autoFocus
+            />
+            <div style={st.rowActions}>
+              <button type="button" style={st.btnWarn} disabled={busy || !outReason.trim()} onClick={handleOutOfService}>
+                {busy ? 'Saving…' : 'Take out of service'}
+              </button>
+              <button type="button" style={st.btnPlain} disabled={busy} onClick={() => { setOutOfService(null); setOutReason(''); }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={st.tabs}>
@@ -275,7 +358,7 @@ export default function FleetControlClient({
                     {vehicles.map((v) => {
                       const expiryStatus = getRegExpiryStatus(v.registrationExpiry);
                       return (
-                        <tr key={v.id}>
+                        <tr key={v.id} data-testid={`vehicle-row-${v.id}`}>
                           <td style={st.tdBold}>{v.make} {v.model}</td>
                           <td style={st.td}>{v.year}</td>
                           <td style={st.tdCode}>{v.plateNumber}</td>
@@ -289,21 +372,50 @@ export default function FleetControlClient({
                               {expiryStatus.label}
                             </span>
                           </td>
-                          <td style={st.td}>
+                          <td style={st.td} data-testid={`vehicle-status-${v.id}`}>
                             <span style={
                               v.status === 'active' ? st.tagApproved :
                               v.status === 'maintenance' ? st.tagPending : st.tagMuted
                             }>
-                              {v.status}
+                              {v.status === 'maintenance' ? 'out of service' : v.status}
                             </span>
+                            {v.status === 'maintenance' && (
+                              <div style={st.outNote}>
+                                {v.outOfServiceReason
+                                  ? <>since {v.outOfServiceSince}: {v.outOfServiceReason}</>
+                                  : <>no reason recorded</>}
+                              </div>
+                            )}
                           </td>
                           <td style={st.td}>
-                            <button
-                              onClick={() => handleDeleteVehicle(v.id)}
-                              style={st.btnReject}
-                            >
-                              Delete
-                            </button>
+                            <div style={st.rowActions}>
+                              {v.status === 'active' && (
+                                <button
+                                  type="button"
+                                  onClick={() => { setOutOfService(v); setOutReason(''); }}
+                                  style={st.btnWarn}
+                                  data-testid={`vehicle-out-of-service-${v.id}`}
+                                >
+                                  Out of service
+                                </button>
+                              )}
+                              {v.status === 'maintenance' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleReturnToService(v)}
+                                  style={st.btnApprove}
+                                  data-testid={`vehicle-return-${v.id}`}
+                                >
+                                  Return to service
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleDeleteVehicle(v.id)}
+                                style={st.btnReject}
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -667,6 +779,42 @@ const st = {
     fontSize: 12,
     fontWeight: 600,
     cursor: 'pointer',
+  } as CSSProperties,
+  btnWarn: {
+    padding: '6px 12px',
+    borderRadius: 6,
+    background: 'var(--warn-soft, var(--panel))',
+    color: 'var(--warn, var(--text))',
+    border: '1px solid var(--border)',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+  } as CSSProperties,
+  btnPlain: {
+    padding: '6px 12px',
+    borderRadius: 6,
+    background: 'transparent',
+    color: 'var(--text)',
+    border: '1px solid var(--border)',
+    fontSize: 12,
+    fontWeight: 600,
+    cursor: 'pointer',
+  } as CSSProperties,
+  rowActions: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' } as CSSProperties,
+  outNote: { marginTop: 4, fontSize: 11.5, color: 'var(--muted)', maxWidth: 260, whiteSpace: 'normal' } as CSSProperties,
+  dialogBackdrop: {
+    position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex',
+    alignItems: 'center', justifyContent: 'center', zIndex: 60, padding: 16,
+  } as CSSProperties,
+  dialog: {
+    background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: 20,
+    width: '100%', maxWidth: 480, display: 'flex', flexDirection: 'column', gap: 10,
+  } as CSSProperties,
+  dialogTitle: { margin: 0, fontSize: 16 } as CSSProperties,
+  dialogLabel: { fontSize: 12.5, fontWeight: 600 } as CSSProperties,
+  dialogInput: {
+    width: '100%', boxSizing: 'border-box', padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
+    background: 'var(--bg, var(--panel))', color: 'var(--text)', fontSize: 13, resize: 'vertical',
   } as CSSProperties,
   btnReject: {
     padding: '6px 12px',

@@ -12,6 +12,7 @@ import {
 } from '../in-memory-fleet-store';
 import { FleetService } from '../fleet.service';
 import { AccessService, type EventStore, type TxRunner } from '@aura/core';
+import { businessDate } from '@aura/shared';
 
 const mockAccess = {
   assert: () => {},
@@ -281,6 +282,59 @@ describe('Fleet Bounded Context', () => {
       expect(triggered.length).toBe(1);
       expect(triggered[0].plateNumber).toBe('DXB-EXPIRES');
       expect(triggered[0].daysRemaining).toBeLessThanOrEqual(15);
+    });
+  });
+
+  // F-08: a breakdown is said once, in Fleet, and the availability bridge carries it to every
+  // commitment made against the vehicle. These are the rules of saying it.
+  describe('Out of service', () => {
+    const build = () => {
+      const appended: Array<{ type: string; payload: Record<string, unknown> }> = [];
+      const asserted: string[] = [];
+      const events = {
+        appendWithClient: async (_h: unknown, list: Array<{ type: string; payload: Record<string, unknown> }>) => { appended.push(...list); return list; },
+        append: async () => [],
+      } as unknown as EventStore;
+      const access = { assert: (_actor: string, req: { permission: string }) => { asserted.push(req.permission); } } as unknown as AccessService;
+      const service = new FleetService(
+        new InMemoryVehicleStore(), new InMemoryFuelLogStore(), new InMemoryMaintenanceStore(),
+        new InMemoryTrafficFineStore(), new InMemorySalikChargeStore(), new InMemoryTelemetryStore(),
+        events, mockTx, access,
+      );
+      return { service, appended, asserted };
+    };
+    const van = (service: FleetService) => service.createVehicle(null, { tenantId: 't1', make: 'Toyota', model: 'Hiace', year: 2022, plateNumber: 'dxb-77' });
+
+    it('takes an active vehicle out of service today, with the reason as stated, and says so', async () => {
+      const { service, appended, asserted } = build();
+      const v = await van(service);
+      const out = await service.takeOutOfService('t1', 'u-fleet', v.id, '  gearbox failure  ');
+      expect(out).toMatchObject({ status: 'maintenance', outOfServiceSince: businessDate(), outOfServiceReason: 'gearbox failure' });
+      expect((await service.getVehicle('t1', v.id))?.status).toBe('maintenance');
+      expect(asserted).toEqual(['fleet.vehicle.update']);
+      expect(appended.at(-1)).toMatchObject({ type: 'fleet.vehicle.out_of_service', payload: { plateNumber: 'DXB-77', since: businessDate(), reason: 'gearbox failure' } });
+    });
+
+    it('refuses without a reason, twice in a row, and for a retired vehicle', async () => {
+      const { service } = build();
+      const v = await van(service);
+      await expect(service.takeOutOfService('t1', null, v.id, '   ')).rejects.toThrow(/requires a reason/);
+      await service.takeOutOfService('t1', null, v.id, 'flat battery');
+      await expect(service.takeOutOfService('t1', null, v.id, 'again')).rejects.toThrow(/only an active vehicle can be taken out of service/);
+      const retired = await service.createVehicle(null, { tenantId: 't1', make: 'Nissan', model: 'Urvan', year: 2012, plateNumber: 'old-1', status: 'retired' });
+      await expect(service.takeOutOfService('t1', null, retired.id, 'engine')).rejects.toThrow(/only an active vehicle can be taken out of service — OLD-1 is retired/);
+      await expect(service.takeOutOfService('t1', null, 'missing', 'engine')).rejects.toThrow(/not found/);
+      await expect(service.takeOutOfService('t2', null, v.id, 'engine')).rejects.toThrow(/not found/);
+    });
+
+    it('returns it to service and clears what was said, keeping it in the event', async () => {
+      const { service, appended } = build();
+      const v = await van(service);
+      await expect(service.returnToService('t1', null, v.id)).rejects.toThrow(/only a vehicle that is out of service can return to service/);
+      await service.takeOutOfService('t1', null, v.id, 'gearbox failure');
+      const back = await service.returnToService('t1', 'u-fleet', v.id);
+      expect(back).toMatchObject({ status: 'active', outOfServiceSince: null, outOfServiceReason: null });
+      expect(appended.at(-1)).toMatchObject({ type: 'fleet.vehicle.returned_to_service', payload: { outSince: businessDate(), reason: 'gearbox failure' } });
     });
   });
 });

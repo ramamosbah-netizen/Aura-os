@@ -42,8 +42,9 @@ export class PostgresVehicleStore implements VehicleStore {
     const res = await conn.query(
       `insert into public.aura_fleet_vehicles (
         id, tenant_id, company_id, make, model, year, plate_number, registration_expiry, status, driver_employee_id,
-        last_latitude, last_longitude, last_speed, last_odometer, last_telemetry_at, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+        last_latitude, last_longitude, last_speed, last_odometer, last_telemetry_at, created_at, updated_at,
+        out_of_service_since, out_of_service_reason
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       on conflict (id) do update set
         make = excluded.make,
         model = excluded.model,
@@ -51,6 +52,8 @@ export class PostgresVehicleStore implements VehicleStore {
         plate_number = excluded.plate_number,
         registration_expiry = excluded.registration_expiry,
         status = excluded.status,
+        out_of_service_since = excluded.out_of_service_since,
+        out_of_service_reason = excluded.out_of_service_reason,
         -- completed_by / completed_at belong to fleet MAINTENANCE, not to the vehicle. Wave F
         -- pasted them here as well as into aura_assets, and a vehicle has neither column, so
         -- every vehicle write answered 500 on "column excluded.completed_by does not exist".
@@ -80,6 +83,8 @@ export class PostgresVehicleStore implements VehicleStore {
         vehicle.lastTelemetryAt,
         vehicle.createdAt,
         vehicle.updatedAt,
+        vehicle.outOfServiceSince ?? null,
+        vehicle.outOfServiceReason ?? null,
       ],
     );
     return this.mapVehicle(res.rows[0]);
@@ -121,6 +126,9 @@ export class PostgresVehicleStore implements VehicleStore {
       plateNumber: row.plate_number,
       registrationExpiry: row.registration_expiry instanceof Date ? row.registration_expiry.toISOString().split('T')[0] : row.registration_expiry ? String(row.registration_expiry) : null,
       status: row.status,
+      // DATE arrives as text (core/src/events/pg-pool.ts) — no timezone round-trip to shift the day.
+      outOfServiceSince: row.out_of_service_since ? String(row.out_of_service_since) : null,
+      outOfServiceReason: row.out_of_service_reason ?? null,
       driverEmployeeId: row.driver_employee_id,
       lastLatitude: row.last_latitude !== null && row.last_latitude !== undefined ? Number(row.last_latitude) : null,
       lastLongitude: row.last_longitude !== null && row.last_longitude !== undefined ? Number(row.last_longitude) : null,

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { businessDateInDays } from '@aura/shared';
 import { ResourceAvailabilityFromRegisters } from './resource-availability.provider';
 
 /**
@@ -28,7 +29,9 @@ const employee = { resourceType: 'employee' as const, canonicalResourceId: 'emp-
 const vehicle = { resourceType: 'vehicle' as const, canonicalResourceId: 'veh-1' };
 const asset = { resourceType: 'asset' as const, canonicalResourceId: 'asset-crane' };
 const week = { from: '2026-10-01', to: '2026-10-07' };
-const far = (offset: number): string => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+// The adapter's "today" is the company's business day; a UTC date disagrees with it for four hours
+// every night (Dubai is UTC+4), which is when a test written against the UTC date would fail.
+const far = (offset: number): string => businessDateInDays(offset);
 
 describe('availability read from the owning registers', () => {
   it('reads an APPROVED leave as a dated absence, and ignores one still being decided', async () => {
@@ -104,6 +107,39 @@ describe('availability read from the owning registers', () => {
     }).unavailability('t1', [asset], week);
     expect(booked[0]).toMatchObject({ from: '2026-10-06', to: '2026-10-06', effect: 'absent' });
     expect(booked[0].reason).toContain('calibration');
+  });
+
+  it('names a breakdown in the Fleet administrator\'s own words, from the day it was declared (F-08)', async () => {
+    const facts = await provider({
+      vehicles: [{ id: 'veh-1', status: 'maintenance', plateNumber: 'A-12345', outOfServiceSince: far(-2), outOfServiceReason: 'gearbox failure' }],
+    }).unavailability('t1', [vehicle], { from: far(0), to: far(7) });
+    // Still UNKNOWN — a breakdown has no return date — but the planner reads what happened and when.
+    expect(facts).toEqual([expect.objectContaining({ resource: vehicle, from: far(0), to: far(7), effect: 'unknown', source: 'fleet' })]);
+    expect(facts[0].reason).toBe(`A-12345 is out of service since ${far(-2)}: gearbox failure — no stated return date`);
+  });
+
+  it('reads an asset in maintenance by the dates its open jobs state, not as out of service from today', async () => {
+    // Scheduling a service moves the asset into `maintenance` the moment it is booked (AssetsService).
+    // A calibration booked for next month is a statement about next month: it must not make the
+    // machine UNKNOWN this week.
+    const ahead = await provider({
+      assets: [{ id: 'asset-crane', status: 'maintenance', name: 'Tower crane' }],
+      assetMaintenance: [{ assetId: 'asset-crane', status: 'scheduled', date: far(5), description: 'calibration' }],
+    }).unavailability('t1', [asset], { from: far(0), to: far(7) });
+    expect(ahead).toEqual([expect.objectContaining({ from: far(5), to: far(5), effect: 'absent' })]);
+
+    // A job dated today or earlier and still open IS the machine on the workbench, with no end stated.
+    const overdue = await provider({
+      assets: [{ id: 'asset-crane', status: 'maintenance', name: 'Tower crane' }],
+      assetMaintenance: [{ assetId: 'asset-crane', status: 'scheduled', date: far(-3), description: 'hydraulic leak' }],
+    }).unavailability('t1', [asset], { from: far(0), to: far(7) });
+    expect(overdue).toEqual([expect.objectContaining({ from: far(0), to: far(7), effect: 'unknown' })]);
+    expect(overdue[0].reason).toContain(`in maintenance since ${far(-3)}: hydraulic leak`);
+
+    // In maintenance with no job behind it: nobody said why or until when.
+    const unexplained = await provider({ assets: [{ id: 'asset-crane', status: 'maintenance', name: 'Tower crane' }] })
+      .unavailability('t1', [asset], { from: far(0), to: far(7) });
+    expect(unexplained).toEqual([expect.objectContaining({ from: far(0), to: far(7), effect: 'unknown' })]);
   });
 
   it('never speaks about a pool, whatever its members are doing', async () => {

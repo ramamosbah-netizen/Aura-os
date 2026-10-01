@@ -10,6 +10,13 @@ export interface Vehicle {
   plateNumber: string;
   registrationExpiry: string | null; // YYYY-MM-DD
   status: 'active' | 'maintenance' | 'retired';
+  /**
+   * While the vehicle is out of service: the business day it went out, and why — in the Fleet
+   * administrator's words. Both null otherwise, and both null on a vehicle registered as under
+   * maintenance before anyone could say why (migration 0401 keeps that honest).
+   */
+  outOfServiceSince: string | null;
+  outOfServiceReason: string | null;
   driverEmployeeId: string | null;
   lastLatitude: number | null;
   lastLongitude: number | null;
@@ -46,6 +53,8 @@ export function makeVehicle(input: NewVehicle): Vehicle {
     plateNumber: input.plateNumber.trim().toUpperCase(),
     registrationExpiry: input.registrationExpiry ?? null,
     status: input.status ?? 'active',
+    outOfServiceSince: null,
+    outOfServiceReason: null,
     driverEmployeeId: input.driverEmployeeId ?? null,
     lastLatitude: null,
     lastLongitude: null,

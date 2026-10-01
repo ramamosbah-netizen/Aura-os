@@ -1,213 +1,56 @@
 'use client';
 
-import type { CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
+import { classifyStatus, type DataError } from '@/lib/data-error';
+import DataStateNotice from './ui/data-state';
+import ExecutiveDecisionsGrid, { type ExecutiveDecisionsView } from './executive-decisions-grid';
 
-interface Funnel {
-  accounts: number;
-  tenders: number;
-  contracts: number;
-  projects: number;
-  tenderValue: number;
-  contractValue: number;
-  projectValue: number;
-}
+/**
+ * The CEO perspective of the Business Command Center (F-10): the governed executive decision set —
+ * the SAME read, and the same tiles, as /executive, so the two can never disagree.
+ *
+ * It replaces KPI cards that were computed here from whatever lists the shell had loaded: a dollar
+ * sign on AED money, tender and project values summed as "active contract volume", approved supplier
+ * invoices labelled accounts payable, and budget minus invoiced labelled variance — none of which
+ * said what it counted or when.
+ */
+export default function CeoCommandCenter() {
+  const [state, setState] = useState<{ view: ExecutiveDecisionsView } | { error: DataError } | null>(null);
 
-interface ProjectLedger {
-  projectId: string;
-  projectName: string | null;
-  budget: number;
-  committed: number;
-  invoiced: number;
-  variance: number;
-}
-
-interface BankAccount {
-  id: string;
-  code: string;
-  name: string;
-}
-
-interface Invoice {
-  id: string;
-  title: string;
-  poTitle: string | null;
-  projectName: string | null;
-  status: string;
-  value: number;
-}
-
-function money(n: number): string {
-  return typeof n === 'number' ? '$' + n.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—';
-}
-
-export default function CeoCommandCenter({
-  funnel,
-  winRate,
-  ledgers,
-  bankAccounts,
-  invoices,
-}: {
-  funnel: Funnel | null;
-  winRate: number | null;
-  ledgers: ProjectLedger[];
-  bankAccounts: BankAccount[];
-  invoices: Invoice[];
-}) {
-  // Sum unpaid approved invoices as current liabilities
-  const apLiabilities = invoices
-    .filter((inv) => inv.status === 'approved')
-    .reduce((sum, inv) => sum + inv.value, 0);
-
-  // Compute overall contract/project portfolio value
-  const contractVolume = funnel?.contractValue ?? 0;
-  const projectVolume = funnel?.projectValue ?? 0;
+  useEffect(() => {
+    let live = true;
+    fetch('/api/intelligence/executive-decisions', { cache: 'no-store' })
+      .then(async (res) => {
+        if (!live) return;
+        if (!res.ok) { setState({ error: { kind: classifyStatus(res.status), status: res.status } }); return; }
+        const view = (await res.json()) as ExecutiveDecisionsView;
+        if (live) setState({ view });
+      })
+      .catch(() => { if (live) setState({ error: { kind: 'unreachable', status: 0 } }); });
+    return () => { live = false; };
+  }, []);
 
   return (
     <div style={s.container}>
-      <h2 style={s.h2}>👔 Executive CEO Command Center</h2>
-      <p style={s.sub}>High-level oversight of cash position, win rate, and project execution health.</p>
-
-      {/* KPI Cards Grid */}
-      <div style={s.grid}>
-        <div style={s.card}>
-          <div style={s.cardVal()}>{money(contractVolume + projectVolume)}</div>
-          <div style={s.cardLabel}>Active Contract Volume</div>
-          <div style={s.cardSub}>Signed contracts & live project values</div>
-        </div>
-
-        <div style={s.card}>
-          <div style={s.cardVal(apLiabilities > 0)}>{money(apLiabilities)}</div>
-          <div style={s.cardLabel}>Accounts Payable (AP)</div>
-          <div style={s.cardSub}>Approved unpaid supplier invoices</div>
-        </div>
-
-        <div style={s.card}>
-          <div style={s.cardVal()}>
-            {winRate === null ? 'N/A' : `${Math.round(winRate * 100)}%`}
-          </div>
-          <div style={s.cardLabel}>Tender Win Rate</div>
-          <div style={s.cardSub}>Conversion ratio of pipeline tenders</div>
-        </div>
+      <div style={s.head}>
+        <h2 style={s.h2}>Executive decisions</h2>
+        <a href="/executive" style={s.open}>Open the full page →</a>
       </div>
-
-      {/* Project KPI Health Monitor */}
-      <section style={s.section}>
-        <h3 style={s.sectionTitle}>Global Project Performance Monitor</h3>
-        {ledgers.length === 0 ? (
-          <div style={s.empty}>No projects registered.</div>
-        ) : (
-          <div style={s.tableWrap}>
-            <table style={s.table}>
-              <thead>
-                <tr>
-                  <th style={s.th}>Project</th>
-                  <th style={s.thNum}>Revenue Budget</th>
-                  <th style={s.thNum}>Committed (POs)</th>
-                  <th style={s.thNum}>Invoiced Actuals</th>
-                  <th style={s.thNum}>Variance</th>
-                  <th style={s.thStatus}>Financial Health</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ledgers.map((l) => {
-                  const isHealthy = l.variance >= 0;
-                  return (
-                    <tr key={l.projectId} style={s.tr}>
-                      <td style={s.td}>{l.projectName ?? l.projectId}</td>
-                      <td style={s.tdNum}>{money(l.budget)}</td>
-                      <td style={s.tdNum}>{money(l.committed)}</td>
-                      <td style={s.tdNum}>{money(l.invoiced)}</td>
-                      <td style={{ ...s.tdNum, color: isHealthy ? 'var(--good)' : 'var(--bad)' }}>
-                        {isHealthy ? money(l.variance) : `(${money(-l.variance)})`}
-                      </td>
-                      <td style={s.tdStatus}>
-                        <span style={s.healthBadge(isHealthy)}>
-                          {isHealthy ? '● FAVORABLE' : '▲ OVER-BUDGET'}
-                        </span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
+      {state === null ? (
+        <p style={s.loading}>Reading the decision set…</p>
+      ) : 'error' in state ? (
+        <DataStateNotice error={state.error} subject="the executive decisions" />
+      ) : (
+        <ExecutiveDecisionsGrid view={state.view} />
+      )}
     </div>
   );
 }
 
 const s = {
-  container: { display: 'flex', flexDirection: 'column', gap: 16 } as CSSProperties,
+  container: { display: 'flex', flexDirection: 'column', gap: 12 } as CSSProperties,
+  head: { display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 } as CSSProperties,
   h2: { fontSize: 20, margin: 0, fontWeight: 700 } as CSSProperties,
-  sub: { fontSize: 13.5, color: 'var(--muted)', margin: 0 } as CSSProperties,
-  grid: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 4 } as CSSProperties,
-  card: {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 14,
-    padding: '20px',
-  } as CSSProperties,
-  cardVal: (alert?: boolean): CSSProperties => ({
-    fontSize: 26,
-    fontWeight: 700,
-    color: alert ? 'var(--bad)' : 'var(--text)',
-  }),
-  cardLabel: { fontSize: 13, color: 'var(--text)', marginTop: 6, fontWeight: 600 } as CSSProperties,
-  cardSub: { fontSize: 12, color: 'var(--muted)', marginTop: 2 } as CSSProperties,
-  section: {
-    background: 'var(--panel)',
-    border: '1px solid var(--border)',
-    borderRadius: 14,
-    padding: '20px',
-    marginTop: 8,
-  } as CSSProperties,
-  sectionTitle: { fontSize: 15, margin: '0 0 14px', color: 'var(--text)', fontWeight: 600 } as CSSProperties,
-  empty: { textAlign: 'center', padding: '20px', color: 'var(--muted)' } as CSSProperties,
-  tableWrap: { overflowX: 'auto' } as CSSProperties,
-  table: { width: '100%', borderCollapse: 'collapse', fontSize: 13 } as CSSProperties,
-  th: {
-    textAlign: 'left',
-    color: 'var(--muted)',
-    fontWeight: 500,
-    fontSize: 11.5,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    padding: '10px 12px',
-    borderBottom: '1px solid var(--border)',
-  } as CSSProperties,
-  thNum: {
-    textAlign: 'right',
-    color: 'var(--muted)',
-    fontWeight: 500,
-    fontSize: 11.5,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    padding: '10px 12px',
-    borderBottom: '1px solid var(--border)',
-  } as CSSProperties,
-  thStatus: {
-    textAlign: 'center',
-    color: 'var(--muted)',
-    fontWeight: 500,
-    fontSize: 11.5,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    padding: '10px 12px',
-    borderBottom: '1px solid var(--border)',
-  } as CSSProperties,
-  tr: { borderBottom: '1px solid var(--border)' } as CSSProperties,
-  td: { padding: '12px', color: 'var(--text)' } as CSSProperties,
-  tdNum: { padding: '12px', textAlign: 'right', fontVariantNumeric: 'tabular-nums' } as CSSProperties,
-  tdStatus: { padding: '12px', textAlign: 'center' } as CSSProperties,
-  healthBadge: (healthy: boolean): CSSProperties => ({
-    fontSize: 11,
-    fontWeight: 700,
-    color: healthy ? 'var(--good)' : 'var(--bad)',
-    background: healthy ? 'var(--good-soft)' : 'var(--bad-soft)',
-    borderRadius: 6,
-    padding: '3px 8px',
-    textTransform: 'uppercase',
-    display: 'inline-block',
-  }),
+  open: { fontSize: 13, fontWeight: 600, color: 'var(--accent)', textDecoration: 'none' } as CSSProperties,
+  loading: { color: 'var(--muted)', fontSize: 13 } as CSSProperties,
 };

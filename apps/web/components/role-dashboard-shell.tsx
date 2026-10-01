@@ -211,9 +211,7 @@ export default function RoleDashboardShell({
 
         {activeRole === 'command' && <ActivityFeed events={events ?? []} />}
 
-        {activeRole === 'ceo' && (
-          <CeoCommandCenter funnel={funnel} winRate={winRate} ledgers={ledgers} bankAccounts={bankAccounts} invoices={invoices} />
-        )}
+        {activeRole === 'ceo' && <CeoCommandCenter />}
 
         {activeRole === 'cfo' && <CfoPortal bankAccounts={bankAccounts} invoices={invoices} />}
 

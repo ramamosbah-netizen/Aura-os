@@ -52,6 +52,10 @@ describe('AURA suite taxonomy', () => {
   it('owns the canonical route in Control and leaves the legacy My Work path unowned', () => {
     expect(activeSuite('/command-center')?.id).toBe('business-command-center');
     expect(activeSuite('/command-center/ceo')?.id).toBe('business-command-center');
+    // The executive decision set (F-10) is the Command Center's cross-module decisions, not a suite of its own.
+    expect(activeSuite('/executive')?.id).toBe('business-command-center');
+    expect(activeSuite('/executive/cash')?.id).toBe('business-command-center');
+    expect(activeSuite('/executive-summary')?.id).toBeUndefined();
     expect(activeSuite('/my-work/command-center')?.id).toBeUndefined();
   });
 

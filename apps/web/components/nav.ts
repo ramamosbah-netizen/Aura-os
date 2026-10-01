@@ -51,6 +51,7 @@ export const NAV: NavGroup[] = [
     glyph: '✦',
     items: [
       { label: 'Business Command Center', href: '/command-center', glyph: '✦', desc: 'Organization health, cross-module decisions, risks and role dashboards' },
+      { label: 'Executive Decisions', href: '/executive', glyph: '◈', desc: 'The governed decision set — each figure with when it was read, what it counted and the records behind it' },
     ],
   },
   {

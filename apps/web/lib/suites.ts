@@ -63,7 +63,7 @@ export const AURA_SUITES: AuraSuite[] = [
     description: 'Organization health, cross-module decisions, risks and role dashboards.',
     entryHref: '/command-center', gate: 'suite.commandCenter',
     capabilities: [{ label: 'Business health', status: 'IMPLEMENTED' }, { label: 'Cross-module decisions', status: 'IMPLEMENTED' }, { label: 'Risk and financial snapshots', status: 'IMPLEMENTED' }, { label: 'Role perspectives', status: 'IMPLEMENTED' }],
-    owns: (href) => href === '/command-center' || starts('/command-center')(href),
+    owns: (href) => starts('/command-center', '/executive')(href),
   },
 
   // ── Business suites (fixed order) ──

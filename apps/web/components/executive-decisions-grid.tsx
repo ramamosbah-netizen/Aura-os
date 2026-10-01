@@ -83,11 +83,14 @@ export default function ExecutiveDecisionsGrid({ view }: { view: ExecutiveDecisi
               </>
             )}
             <p style={s.source}>Source: {d.source}</p>
-            {d.state === 'measured' && (
+            {d.state === 'measured' && (d.recordCount > 0 ? (
               <a href={`/executive/${d.id}`} style={s.drill} data-testid={`decision-${d.id}-drill`}>
                 Open the {d.recordCount} {d.recordCount === 1 ? 'record' : 'records'} →
               </a>
-            )}
+            ) : (
+              // A link to an empty list is a promise with nothing behind it.
+              <span style={s.noDrill} data-testid={`decision-${d.id}-no-records`}>No records behind this figure</span>
+            ))}
           </section>
         ))}
       </div>
@@ -112,4 +115,5 @@ const s = {
   unavailable: { margin: '4px 0', fontSize: 13, color: 'var(--bad)' } as CSSProperties,
   source: { margin: 'auto 0 0', paddingTop: 6, fontSize: 11, color: 'var(--muted)' } as CSSProperties,
   drill: { fontSize: 12.5, fontWeight: 650, color: 'var(--accent)', textDecoration: 'none' } as CSSProperties,
+  noDrill: { fontSize: 12.5, color: 'var(--muted)' } as CSSProperties,
 };

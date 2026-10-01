@@ -7003,7 +7003,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -7011,16 +7011,16 @@
       "source": "apps/api/src/crm/executive-crm.controller.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "PARTIAL",
+        "persistence": "PARTIAL",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
         "actualOutput": "UNVERIFIED",
         "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Live CEO KPI cards and project rows are plain text with no drilldown or freshness/source timestamp. Most requested portfolio decisions are absent from that perspective.",
+      "currentBehavior": "Live CEO KPI cards and project rows are plain text with no drilldown or freshness/source timestamp. Most requested portfolio decisions are absent from that perspective. F-10 (2026-10-01): Senior Management's view is now the governed executive decision set (MGT-01…MGT-14) at /executive and in the Command Center's CEO perspective — the same API read, so the two cannot disagree. Every decision states when it was read (one pass, one time), what it counted and what it left out with the reason, its source and basis, and opens the exact records it counted, each linked to the page that holds it. The KPI surfaces of the other roles this capability names (Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer) were NOT re-audited for lineage or drilldown.",
       "acceptanceProof": "Every KPI states as-of time and population, opens the exact source records, and covers the governed executive decision set."
     }
   ],
@@ -8423,9 +8423,9 @@
       "capabilityIds": [
         "MGT-15"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Project Manager",
         "Technical Manager",
@@ -8446,13 +8446,13 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "currentBehavior": "Live CEO KPI cards and project rows are plain text with no drilldown or freshness/source timestamp. Most requested portfolio decisions are absent from that perspective.",
+      "currentBehavior": "CLOSED 2026-10-01. Before: the CEO perspective was KPI cards computed in the browser from whatever lists the shell had loaded — a dollar sign on AED money, tender and project values summed as 'active contract volume', approved supplier invoices labelled accounts payable, budget minus invoiced labelled variance — none stating what it counted or when, with no drilldown, and most governed decisions absent. It also sat behind /command-center, which decides entry from /workspace/me (refused to every shipped role), so a real Senior Management user was redirected to My Work and never saw it. Now: GET /intelligence/executive-decisions and /:id (intelligence.executive-decision.read, which r-executive holds through intelligence.*.read) answer all fourteen decisions MGT-01…MGT-14 from the services that own them, tenant-filtered, read in one pass at one time. Each is MEASURED (figures, counted population, exclusions with reasons, source, basis) or UNAVAILABLE with the reason; a source that throws is reported as unreadable, never as zero. The drilldown's records ARE the counted population, each with its page and its own unit (money, days, quantity or count — the variations list holds money beside time claims in days). Money is one base currency (CC-06); a record in another currency is an exclusion, never converted at an ungoverned rate. /executive renders the tiles and /executive/[decision] the lineage and the records (find box, 25 a page); the Command Center's CEO perspective renders the same read. The Business Command Center suite owns /executive and lists Executive Decisions among its functions.",
       "expectedOperationalBehavior": "KPI drilldown and freshness from governed canonical records with actual usable output",
       "authority": "Canonical portfolio projections",
-      "evidence": "NEW source inspection: apps/api/src/crm/executive-crm.controller.ts",
+      "evidence": "FRESH 2026-10-01: apps/api/src/intelligence/executive-decisions{.ts,.service.ts,.controller.ts}; apps/api/src/finance/revenue-recognition.read.ts (one per-project computation for Finance and the decision set); apps/web/app/executive/page.tsx, apps/web/app/executive/[decision]/page.tsx, components/executive-decisions-grid.tsx, components/executive-decision-records.tsx, components/ceo-command-center.tsx; apps/api/test/executive-decisions.e2e-spec.ts; apps/web/e2e/executive-decisions.spec.ts. Commit 4e0826816 and its follow-up.",
       "severity": "CRITICAL",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Every KPI states as-of time and population, opens the exact source records, and covers the governed executive decision set."
+      "acceptanceProof": "MET for Senior Management. API (executive-decisions.e2e-spec.ts, Auth ON, shipped catalogue): all fourteen decisions in order; one asOf across them; every measured decision's record count equals its counted population; no source failed; seeded facts at their values (pipeline 250,000 and 1 deal; receivable and overdue 105,000 incl. 5% VAT; one high/high risk; one submitted variation of 40,000, unit currency; a risk carries no invented value); another tenant's 9,999,999 deal not counted; drilldown hrefs; Sales 403; unknown decision 404. BROWSER, AUTH ON, POSTGRESQL (executive-decisions.spec.ts): u-e2e-exec (r-executive) reaches the view BY CLICKING — suite launcher → Business Command Center → Executive Decisions; all fourteen tiles state their source and are either measured with their population or unavailable with a reason, and none reads 'could not be read'; every measured tile's drill names exactly its counted population, and a tile that counts nothing offers no link; the pipeline tile's count equals the drilldown's record count; this run's opportunity is found in it at AED 123,456 and opens its own page without refusal; a Sales rep is told they may not see it; the Command Center's CEO perspective shows the same fourteen decisions and none of the old cards. LIMITS — this closure is NOT evidence for: the other roles' KPI surfaces under MGT-15 (still PARTIAL); population completeness beyond read limits (F-06 stays open — this view reads up to 100,000 rows per source and reports a cap as an exclusion, but no run exceeded it); cash in the bank (customer invoices and receipts do not reach the ledger, AR-GL-01) or cost from uncoded sources (COST-CODE-01), both stated on their tiles; SPI (no time-phased planned value exists) or a win rate where nothing was decided in 365 days, both stated rather than invented; an export or print of the decision set (actualOutput UNVERIFIED). /command-center itself still redirects r-executive to My Work because it reads /workspace/me — whether roles hold workspace.me.read is the owner's permission-catalogue decision; the decision set no longer depends on it. PipelineProjection still feeds the Project Manager dashboard, outside this closure."
     },
     {
       "id": "F-11",
@@ -9238,14 +9238,14 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 53,
-      "PARTIAL": 75,
+      "PARTIAL": 76,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 6,
-      "WRONG_BEHAVIOR": 6,
+      "WRONG_BEHAVIOR": 5,
       "UNREACHABLE": 0,
       "UNVERIFIED": 36,
       "NOT_AUDITED": 0

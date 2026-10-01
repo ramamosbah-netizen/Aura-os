@@ -1,6 +1,6 @@
 # Workspace / page coverage
 
-225 page.tsx templates enumerated. Enumeration is not audit. 36 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
+227 page.tsx templates enumerated. Enumeration is not audit. 38 templates now carry new live browser evidence; the remainder stay visibly NOT_AUDITED. Dynamic routes are templates, not counts of records.
 
 | Source page | New browser status | Output status |
 | --- | --- | --- |
@@ -97,6 +97,8 @@
 | apps/web/app/engineering/drawings/[id]/page.tsx | PARTIAL | Live submit/review/approve audit path passed; transmit not executed |
 | apps/web/app/engineering/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/events/page.tsx | NOT_AUDITED | UNVERIFIED |
+| apps/web/app/executive/page.tsx | PARTIAL | F-10 live (Auth ON, PostgreSQL): r-executive reaches it by clicking; fourteen decisions with as-of, population, source; Sales refused |
+| apps/web/app/executive/[decision]/page.tsx | PARTIAL | F-10 live: lineage, counted population equals the records, find and paging; a record opens its own page |
 | apps/web/app/finance/ap-aging/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/finance/ar-aging/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/finance/bank-guarantees/page.tsx | NOT_AUDITED | UNVERIFIED |

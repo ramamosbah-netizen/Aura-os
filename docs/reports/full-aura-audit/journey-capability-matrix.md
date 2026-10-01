@@ -60,7 +60,7 @@
 | Sales | MGT-12 | UNVERIFIED |
 | Sales | MGT-13 | UNVERIFIED |
 | Sales | MGT-14 | PARTIAL |
-| Sales | MGT-15 | WRONG_BEHAVIOR |
+| Sales | MGT-15 | PARTIAL |
 | Pre-Sales | STU-01 | COMPLETE |
 | Pre-Sales | STU-02 | COMPLETE |
 | Pre-Sales | STU-03 | COMPLETE |
@@ -195,7 +195,7 @@
 | Award | MGT-12 | UNVERIFIED |
 | Award | MGT-13 | UNVERIFIED |
 | Award | MGT-14 | PARTIAL |
-| Award | MGT-15 | WRONG_BEHAVIOR |
+| Award | MGT-15 | PARTIAL |
 | Mobilisation | AWD-01 | PARTIAL |
 | Mobilisation | AWD-02 | PARTIAL |
 | Mobilisation | AWD-03 | PARTIAL |
@@ -253,7 +253,7 @@
 | Mobilisation | MGT-12 | UNVERIFIED |
 | Mobilisation | MGT-13 | UNVERIFIED |
 | Mobilisation | MGT-14 | PARTIAL |
-| Mobilisation | MGT-15 | WRONG_BEHAVIOR |
+| Mobilisation | MGT-15 | PARTIAL |
 | Engineering | STU-01 | COMPLETE |
 | Engineering | STU-02 | COMPLETE |
 | Engineering | STU-03 | COMPLETE |
@@ -318,7 +318,7 @@
 | Engineering | MGT-12 | UNVERIFIED |
 | Engineering | MGT-13 | UNVERIFIED |
 | Engineering | MGT-14 | PARTIAL |
-| Engineering | MGT-15 | WRONG_BEHAVIOR |
+| Engineering | MGT-15 | PARTIAL |
 | Planning | PLN-01 | PARTIAL |
 | Planning | PLN-02 | COMPLETE |
 | Planning | PLN-03 | COMPLETE |
@@ -385,7 +385,7 @@
 | Planning | MGT-12 | UNVERIFIED |
 | Planning | MGT-13 | UNVERIFIED |
 | Planning | MGT-14 | PARTIAL |
-| Planning | MGT-15 | WRONG_BEHAVIOR |
+| Planning | MGT-15 | PARTIAL |
 | Procurement | SUP-01 | COMPLETE |
 | Procurement | SUP-02 | UNVERIFIED |
 | Procurement | SUP-03 | UNVERIFIED |
@@ -458,7 +458,7 @@
 | Procurement | MGT-12 | UNVERIFIED |
 | Procurement | MGT-13 | UNVERIFIED |
 | Procurement | MGT-14 | PARTIAL |
-| Procurement | MGT-15 | WRONG_BEHAVIOR |
+| Procurement | MGT-15 | PARTIAL |
 | Site | SIT-01 | UNVERIFIED |
 | Site | SIT-02 | PARTIAL |
 | Site | SIT-03 | PARTIAL |
@@ -616,7 +616,7 @@
 | Progress | MGT-12 | UNVERIFIED |
 | Progress | MGT-13 | UNVERIFIED |
 | Progress | MGT-14 | PARTIAL |
-| Progress | MGT-15 | WRONG_BEHAVIOR |
+| Progress | MGT-15 | PARTIAL |
 | Commercial / Certification | COM-01 | PARTIAL |
 | Commercial / Certification | COM-02 | UNVERIFIED |
 | Commercial / Certification | COM-03 | PARTIAL |
@@ -677,7 +677,7 @@
 | Commercial / Certification | MGT-12 | UNVERIFIED |
 | Commercial / Certification | MGT-13 | UNVERIFIED |
 | Commercial / Certification | MGT-14 | PARTIAL |
-| Commercial / Certification | MGT-15 | WRONG_BEHAVIOR |
+| Commercial / Certification | MGT-15 | PARTIAL |
 | Finance / Collection | COM-01 | PARTIAL |
 | Finance / Collection | COM-02 | UNVERIFIED |
 | Finance / Collection | COM-03 | PARTIAL |
@@ -738,7 +738,7 @@
 | Finance / Collection | MGT-12 | UNVERIFIED |
 | Finance / Collection | MGT-13 | UNVERIFIED |
 | Finance / Collection | MGT-14 | PARTIAL |
-| Finance / Collection | MGT-15 | WRONG_BEHAVIOR |
+| Finance / Collection | MGT-15 | PARTIAL |
 | T&C | TC-01 | PARTIAL |
 | T&C | TC-02 | PARTIAL |
 | T&C | TC-03 | PARTIAL |
@@ -941,4 +941,4 @@
 | Closeout | MGT-12 | UNVERIFIED |
 | Closeout | MGT-13 | UNVERIFIED |
 | Closeout | MGT-14 | PARTIAL |
-| Closeout | MGT-15 | WRONG_BEHAVIOR |
+| Closeout | MGT-15 | PARTIAL |

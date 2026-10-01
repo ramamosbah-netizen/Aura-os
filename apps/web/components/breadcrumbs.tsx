@@ -47,14 +47,14 @@ export default function Breadcrumbs() {
   return (
     <nav style={s.trail} aria-label="Breadcrumb">
       {crumbs.map((c, i) => (
-        <span key={`${c.label}-${i}`} style={s.crumbWrap}>
+        <span key={`${c.label}-${i}`} style={s.crumbWrap(i, crumbs.length)}>
           {i > 0 && <span style={s.sep}>›</span>}
           {c.href ? (
-            <Link href={c.href} style={s.link}>
+            <Link href={c.href} style={s.link} title={c.label}>
               {c.label}
             </Link>
           ) : (
-            <span style={i === crumbs.length - 1 ? s.current : s.plain}>{c.label}</span>
+            <span style={i === crumbs.length - 1 ? s.current : s.plain} title={c.label}>{c.label}</span>
           )}
         </span>
       ))}
@@ -72,14 +72,22 @@ const s = {
     overflow: 'hidden',
     whiteSpace: 'nowrap',
   } as CSSProperties,
-  crumbWrap: { display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 } as CSSProperties,
-  sep: { color: 'var(--muted)', fontSize: 12 } as CSSProperties,
-  link: { color: 'var(--muted)', textDecoration: 'none' } as CSSProperties,
-  plain: { color: 'var(--muted)' } as CSSProperties,
+  // When the bar is tight the record title gives way most, the page a little, the group (always
+  // short) not at all — so every level stays partly readable. Every label clips its OWN text: a
+  // crumb that may shrink but does not clip paints over its neighbour, which is how
+  // "Control › Executive Decisions › Pipeline…" rendered as one overlapping smear.
+  crumbWrap: (i: number, count: number): CSSProperties => ({
+    display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0,
+    flexShrink: i === 0 ? 0 : i === count - 1 ? 4 : 1,
+  }),
+  sep: { color: 'var(--muted)', fontSize: 12, flexShrink: 0 } as CSSProperties,
+  link: { color: 'var(--muted)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, maxWidth: 180 } as CSSProperties,
+  plain: { color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, maxWidth: 180 } as CSSProperties,
   current: {
     color: 'var(--text)',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+    minWidth: 0,
     maxWidth: 260,
   } as CSSProperties,
 };

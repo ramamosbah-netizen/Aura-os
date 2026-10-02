@@ -339,6 +339,7 @@ export default function AppShell({
               type="button"
               className="app-topbar-company-button"
               style={s.companyButton}
+              title={activeCompany}
               onClick={() => setCompanyDropdownOpen((o) => !o)}
             >
               <span style={s.companyDot} />

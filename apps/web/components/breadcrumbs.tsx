@@ -38,16 +38,19 @@ export default function Breadcrumbs() {
   const match = findNavMatch(pathname);
   if (!match) return null;
 
+  // `path`, not `href`: an item may link with a query (`/crm/pipeline?view=board`), and on its own
+  // page the pathname is the path alone.
+  const onItemPage = pathname === match.path;
   const crumbs: Crumb[] = [
     { label: match.group, href: groupLandingHref(match.group) },
-    { label: match.label, href: pathname === match.href ? null : match.href },
+    { label: match.label, href: onItemPage ? null : match.href },
   ];
-  if (pathname !== match.href && recordTitle) crumbs.push({ label: recordTitle, href: null });
+  if (!onItemPage && recordTitle) crumbs.push({ label: recordTitle, href: null });
 
   return (
     <nav style={s.trail} aria-label="Breadcrumb">
       {crumbs.map((c, i) => (
-        <span key={`${c.label}-${i}`} style={s.crumbWrap(i, crumbs.length)}>
+        <span key={`${c.label}-${i}`} style={s.crumbWrap(i)}>
           {i > 0 && <span style={s.sep}>›</span>}
           {c.href ? (
             <Link href={c.href} style={s.link} title={c.label}>
@@ -72,13 +75,14 @@ const s = {
     overflow: 'hidden',
     whiteSpace: 'nowrap',
   } as CSSProperties,
-  // When the bar is tight the record title gives way most, the page a little, the group (always
-  // short) not at all — so every level stays partly readable. Every label clips its OWN text: a
-  // crumb that may shrink but does not clip paints over its neighbour, which is how
-  // "Control › Executive Decisions › Pipeline…" rendered as one overlapping smear.
-  crumbWrap: (i: number, count: number): CSSProperties => ({
+  // When the bar is tight the record gives way first (its name is already on the tab strip and the
+  // page heading), then the group; the nav item — where "back" goes — gives way last, capped by its
+  // own max width. Every label clips its OWN text: a crumb that may shrink but does not clip paints
+  // over its neighbour, which is how "Control › Executive Decisions › Pipeline…" rendered as one
+  // overlapping smear.
+  crumbWrap: (i: number): CSSProperties => ({
     display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0,
-    flexShrink: i === 0 ? 0 : i === count - 1 ? 4 : 1,
+    flexShrink: i === 0 ? 1 : i === 1 ? 0 : 4,
   }),
   sep: { color: 'var(--muted)', fontSize: 12, flexShrink: 0 } as CSSProperties,
   link: { color: 'var(--muted)', textDecoration: 'none', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0, maxWidth: 180 } as CSSProperties,

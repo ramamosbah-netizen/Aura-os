@@ -6,6 +6,13 @@ export interface NavItem {
   href: string;
   glyph: string;
   desc: string;
+  /**
+   * Further path prefixes whose pages sit UNDER this item in the breadcrumb — the records and
+   * sub-pages reached from it that the sidebar does not list: an opportunity's 360 under
+   * Opportunities, an account's under Customers. Never rendered and never a link, so adding one
+   * changes no sidebar entry, palette result or suite count; it only answers "where am I?".
+   */
+  owns?: readonly string[];
 }
 
 /** A Domain/Area inside a LARGE workspace (e.g. Operations → Procurement). Adds the middle
@@ -58,19 +65,19 @@ export const NAV: NavGroup[] = [
     title: 'Sales & Commercial',
     glyph: '◎',
     items: [
-      { label: 'Overview', href: '/crm/overview', glyph: '◎', desc: 'Sales cockpit — pipeline health, forecast, deals needing attention & the quote book' },
+      { label: 'Overview', href: '/crm/overview', owns: ['/crm/activities'], glyph: '◎', desc: 'Sales cockpit — pipeline health, forecast, deals needing attention & the quote book' },
       { label: 'Radar', href: '/crm/radar', glyph: '⚡', desc: 'Sales intelligence — new signals before lead qualification' },
       { label: 'Leads', href: '/crm/leads', glyph: '⌥', desc: 'Lead qualification and conversion' },
-      { label: 'Opportunities', href: '/crm/pipeline?view=board', glyph: '⌁', desc: 'Deal execution — switch between Board and List views' },
-      { label: 'Tenders', href: '/tendering/tenders', glyph: '◳', desc: 'Tender 360 — bid/no-bid, requirements, clarifications, BOQ and submission' },
+      { label: 'Opportunities', href: '/crm/pipeline?view=board', owns: ['/crm/opportunities'], glyph: '⌁', desc: 'Deal execution — switch between Board and List views' },
+      { label: 'Tenders', href: '/tendering/tenders', owns: ['/tendering'], glyph: '◳', desc: 'Tender 360 — bid/no-bid, requirements, clarifications, BOQ and submission' },
       { label: 'Estimation', href: '/tendering/pricing', glyph: '∑', desc: 'Current costing workspace — Tender pricing adapter with BOQ/resource breakdown' },
       { label: 'Forecast', href: '/crm/forecast', glyph: '◷', desc: 'Expected close, commit and forecast movement' },
       { label: 'Analytics', href: '/crm/analytics?view=performance', glyph: '📈', desc: 'Performance, sources, margin and executive analysis' },
-      { label: 'Customers', href: '/crm/customers', glyph: '◈', desc: 'Accounts, contacts & stakeholder relationships' },
+      { label: 'Customers', href: '/crm/customers', owns: ['/crm/accounts', '/crm/contacts'], glyph: '◈', desc: 'Accounts, contacts & stakeholder relationships' },
       { label: 'Campaigns', href: '/crm/campaigns', glyph: '◔', desc: 'Marketing campaigns — spend, leads generated & ROI by channel' },
       { label: 'Quotations', href: '/crm/quotations', glyph: '✎', desc: 'Quotation workspace — Overview analytics plus a searchable List/Board register' },
       { label: 'Commercial Decisions', href: '/crm/commercial', glyph: '⚖', desc: 'Decision workspace — prioritize commercial actions and open canonical records' },
-      { label: 'Contracts', href: '/contracts/contracts', glyph: '▦', desc: 'Accepted commercial agreements and downstream handoff context' },
+      { label: 'Contracts', href: '/contracts/contracts', owns: ['/contracts'], glyph: '▦', desc: 'Accepted commercial agreements and downstream handoff context' },
       { label: 'Reports', href: '/crm/reports', glyph: '▤', desc: 'Sales report discovery — links to canonical analytics and read models' },
       { label: 'Company Intelligence', href: '/intelligence', glyph: '✶', desc: 'Company-wide signals and governed decision support' },
       { label: 'Market Intelligence', href: '/crm/market-intelligence', glyph: '⊛', desc: 'The reference catalogue behind pricing — items, brands, benchmark cost/sell & install time' },
@@ -81,11 +88,11 @@ export const NAV: NavGroup[] = [
     glyph: '▥',
     items: [
       { label: 'Portfolio', href: '/projects/dashboard', glyph: '◎', desc: 'PMO view — portfolio health, at-risk projects and decisions' },
-      { label: 'Projects', href: '/projects/projects', glyph: '▥', desc: 'Official project register and Project 360 entry' },
+      { label: 'Projects', href: '/projects/projects', owns: ['/project', '/my-projects'], glyph: '▥', desc: 'Official project register and Project 360 entry' },
       { label: 'Project Controls', href: '/projects/controls', glyph: '◉', desc: 'Technical control tower — WBS, CBS, schedule, cost and readiness by project' },
       { label: 'Planning & Schedule', href: '/projects/schedule', glyph: '▤', desc: 'Gantt — planned vs baseline vs actual %' },
       { label: 'Changes', href: '/projects/variations', glyph: '◷', desc: 'Governed variations and revised contract value' },
-      { label: 'Approvals & Actions', href: '/my-work/approvals', glyph: '✓', desc: 'Cross-suite decisions requiring project action' },
+      { label: 'Approvals & Actions', href: '/my-work/approvals', owns: ['/projects/approvals'], glyph: '✓', desc: 'Cross-suite decisions requiring project action' },
       { label: 'Project Closeout', href: '/projects/closeout', glyph: '🏁', desc: 'Unified project closeout wizard and handover readiness' },
     ],
   },
@@ -96,9 +103,9 @@ export const NAV: NavGroup[] = [
       { label: 'Overview', href: '/operations/overview', glyph: '◎', desc: 'Cross-project operational command center' },
       { label: 'Pre-Execution', href: '/operations/pre-execution', glyph: '◌', desc: 'Evidence-based readiness before work starts on site' },
       { label: 'Engineering', href: '/engineering', glyph: '⚙', desc: 'Drawings, RFIs, submittals and engineering actions across projects' },
-      { label: 'Site', href: '/site/control', glyph: '▤', desc: 'Instructions, daily reports, progress, labour and site evidence' },
+      { label: 'Site', href: '/site/control', owns: ['/site/execution'], glyph: '▤', desc: 'Instructions, daily reports, progress, labour and site evidence' },
       { label: 'Quality', href: '/quality/control', glyph: '✓', desc: 'Inspections, NCRs, snags and corrective actions across projects' },
-      { label: 'HSE', href: '/hse/control', glyph: '🛡', desc: 'Permits, incidents, observations and CAPA across projects' },
+      { label: 'HSE', href: '/hse/control', owns: ['/hse/permits'], glyph: '🛡', desc: 'Permits, incidents, observations and CAPA across projects' },
       { label: 'Authority Compliance', href: '/compliance', glyph: '⚖', desc: 'Authority approvals — cases, submissions, decisions, certificates, inspections and renewals' },
       { label: 'Testing & Commissioning', href: '/commissioning', glyph: '✓', desc: 'Tests, witnessed sign-off and system readiness' },
       { label: 'Handover', href: '/handover', glyph: '⇥', desc: 'Acceptance packages and client sign-off across projects' },
@@ -120,9 +127,9 @@ export const NAV: NavGroup[] = [
       {
         title: 'Procurement', glyph: '◈',
         items: [
-          { label: 'Overview', href: '/procurement/dashboard', glyph: '◎', desc: 'Procurement cockpit — PO spend & counts by status' },
+          { label: 'Overview', href: '/procurement/dashboard', owns: ['/procurement'], glyph: '◎', desc: 'Procurement cockpit — PO spend & counts by status' },
           { label: 'Purchase Requests', href: '/procurement/purchase-requests', glyph: '▤', desc: 'Procurement request & approval' },
-          { label: 'RFQs', href: '/procurement/rfqs', glyph: '◷', desc: 'Vendor quotations & bid comparison' },
+          { label: 'RFQs', href: '/procurement/rfqs', owns: ['/procurement/quotations', '/procurement/technical-evaluation', '/procurement/requirements'], glyph: '◷', desc: 'Vendor quotations & bid comparison' },
           { label: 'Suppliers', href: '/procurement/suppliers', glyph: '◈', desc: 'Approved-vendor master & onboarding' },
           { label: 'Purchase Orders', href: '/procurement/purchase-orders', glyph: '▣', desc: 'Procurement spend' },
           { label: '3-Way Match', href: '/procurement/three-way-match', glyph: '⚖', desc: 'PO ↔ goods-received ↔ invoiced reconciliation — catches billing over-exposure' },
@@ -160,7 +167,7 @@ export const NAV: NavGroup[] = [
         title: 'Quality', glyph: '✓',
         items: [
           { label: 'Quality Control', href: '/quality/control', glyph: '✓', desc: 'Non-conformance reports, inspections, & snags' },
-          { label: 'Inspection Requests', href: '/quality/inspection-requests', glyph: '🔍', desc: 'IRs — call the consultant for hold/witness inspection; approve or reject' },
+          { label: 'Inspection Requests', href: '/quality/inspection-requests', owns: ['/quality/irs'], glyph: '🔍', desc: 'IRs — call the consultant for hold/witness inspection; approve or reject' },
           { label: 'Non-Conformance', href: '/quality/ncrs', glyph: '⚠️', desc: 'NCR register — raise → corrected → closed with root cause' },
           { label: 'Snagging', href: '/quality/snags', glyph: '📌', desc: 'Punch list — pre-handover defects, open → resolved → closed' },
           { label: 'Inspection & Test Plans', href: '/quality/itps', glyph: '☑', desc: 'ITPs — hold/witness points & sign-off' },
@@ -181,8 +188,8 @@ export const NAV: NavGroup[] = [
       {
         title: 'People', glyph: '👤',
         items: [
-          { label: 'Overview', href: '/hr/dashboard', glyph: '◎', desc: 'Headcount by department & distribution' },
-          { label: 'HR & Payroll', href: '/hr/control', glyph: '👤', desc: 'Employee profiles, leave logs, & payroll processing' },
+          { label: 'Overview', href: '/hr/dashboard', owns: ['/hr'], glyph: '◎', desc: 'Headcount by department & distribution' },
+          { label: 'HR & Payroll', href: '/hr/control', owns: ['/hr/payroll'], glyph: '👤', desc: 'Employee profiles, leave logs, & payroll processing' },
           { label: 'Timesheets', href: '/hr/timesheets', glyph: '⏱', desc: 'Daily hours logging & approval' },
           { label: 'Attendance', href: '/hr/attendance', glyph: '🗓', desc: 'Daily presence — check-in/out, status & worked hours' },
           { label: 'Appraisals', href: '/hr/appraisals', glyph: '📈', desc: 'Performance reviews — weighted competency scores → 0–100; submit & acknowledge' },
@@ -198,7 +205,7 @@ export const NAV: NavGroup[] = [
           { label: 'Fleet & Logistics', href: '/fleet/control', glyph: '🚚', desc: 'Vehicles, equipment fleet, fuel logs, & maintenance' },
           { label: 'Traffic Fines', href: '/fleet/fines', glyph: '🚦', desc: 'UAE fines — black points, driver liability, settlement' },
           { label: 'Salik (Tolls)', href: '/fleet/salik', glyph: '🛣', desc: 'Dubai road tolls — record, allocate to cost owner, dispute' },
-          { label: 'Assets & Equipment', href: '/assets/control', glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
+          { label: 'Assets & Equipment', href: '/assets/control', owns: ['/assets'], glyph: '🔧', desc: 'Asset register, calibration, inspections, & warranties' },
           { label: 'Depreciation', href: '/assets/depreciation', glyph: '📉', desc: 'Asset depreciation schedule & net book value' },
           { label: 'Disposals', href: '/assets/disposals', glyph: '🗑', desc: 'End-of-life — sale/scrap/write-off with gain/loss vs net book value' },
         ],
@@ -226,7 +233,7 @@ export const NAV: NavGroup[] = [
     title: 'Finance',
     glyph: '◳',
     items: [
-      { label: 'Overview', href: '/finance/dashboard', glyph: '◎', desc: 'Finance cockpit — revenue, profit, cash position, receivables & payables' },
+      { label: 'Overview', href: '/finance/dashboard', owns: ['/finance'], glyph: '◎', desc: 'Finance cockpit — revenue, profit, cash position, receivables & payables' },
       { label: 'Invoices', href: '/finance/invoices', glyph: '◰', desc: 'Finance — supplier invoices' },
       { label: 'Customer Invoices', href: '/finance/customer-invoices', glyph: '◳', desc: 'Finance — client tax invoices & receipts (AR)' },
       { label: 'AR Aging', href: '/finance/ar-aging', glyph: '▦', desc: 'Finance — receivables aged by overdue bucket' },
@@ -251,7 +258,7 @@ export const NAV: NavGroup[] = [
     glyph: '▤',
     items: [
       { label: 'Documents', href: '/documents', glyph: '▤', desc: 'DMS — versioned documents' },
-      { label: 'Document Control', href: '/documents/control', glyph: '⧇', desc: 'Controlled drawing register (revisions + distribution history), transmittals & correspondence' },
+      { label: 'Document Control', href: '/documents/control', owns: ['/doccontrol'], glyph: '⧇', desc: 'Controlled drawing register (revisions + distribution history), transmittals & correspondence' },
       { label: 'Submittals', href: '/doccontrol/submittals', glyph: '⊟', desc: 'Document submittal register (Code A/B/C/D review)' },
       { label: 'Templates', href: '/admin/templates', glyph: '⧇', desc: 'DMS — visual print templates' },
     ],
@@ -321,16 +328,34 @@ export function visibleNav(allowedSuites: Set<string> | null): NavGroup[] {
 }
 
 /** The nav item owning a pathname — longest href-prefix wins (breadcrumbs, AI context). */
-export function findNavMatch(pathname: string): { group: string; label: string; href: string } | null {
-  let match: { group: string; label: string; href: string } | null = null;
+/** An href's path — `/crm/pipeline?view=board` lives at `/crm/pipeline`. */
+export function navPath(href: string): string {
+  const cut = href.search(/[?#]/);
+  return cut === -1 ? href : href.slice(0, cut);
+}
+
+/**
+ * Which nav item a page sits under: the item whose own path, or one of whose `owns` prefixes, is
+ * the LONGEST prefix of the pathname. `href` is where the item links (query included); `path` is
+ * the item's own page, so a caller can tell "on the item's page" from "on something beneath it".
+ *
+ * Paths, not hrefs: a pathname never carries a query, so an item linking `/crm/pipeline?view=board`
+ * matched nothing at all — not even its own board — until the comparison dropped the query.
+ */
+export function findNavMatch(location: string): { group: string; label: string; href: string; path: string } | null {
+  // Callers pass a pathname; an href with its query is accepted too and read as its path.
+  const pathname = navPath(location);
+  let match: { group: string; label: string; href: string; path: string } | null = null;
+  let matchedLength = -1;
   for (const group of NAV) {
     for (const item of groupAllItems(group)) {
       if (item.href === '/') continue;
-      if (
-        (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
-        (!match || item.href.length > match.href.length)
-      ) {
-        match = { group: group.title, label: item.label, href: item.href };
+      const path = navPath(item.href);
+      for (const prefix of [path, ...(item.owns ?? [])]) {
+        if ((pathname === prefix || pathname.startsWith(`${prefix}/`)) && prefix.length > matchedLength) {
+          match = { group: group.title, label: item.label, href: item.href, path };
+          matchedLength = prefix.length;
+        }
       }
     }
   }

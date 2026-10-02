@@ -60,8 +60,12 @@ export default function FavoritePageButton({ label }: { label?: string }) {
       aria-pressed={on}
       data-testid="favorite-page"
       title={on ? 'Remove this page from your favourites' : 'Add this page to your favourites'}
+      // The words can be hidden on a narrower topbar (globals.css), so the name never depends on them.
+      aria-label={state === 'loading' ? undefined : on ? 'Remove from Favorites' : 'Add to Favorites'}
     >
-      {state === 'loading' ? '…' : on ? '★ Remove from Favorites' : '☆ Add to Favorites'}
+      {state === 'loading' ? '…' : (
+        <>{on ? '★' : '☆'}<span className="app-topbar-favorite-label"> {on ? 'Remove from Favorites' : 'Add to Favorites'}</span></>
+      )}
     </button>
   );
 }

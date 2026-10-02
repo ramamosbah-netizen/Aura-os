@@ -402,6 +402,51 @@ a {
   }
 }
 
+/* Between phone and wide desktop the topbar's fixed parts — a 340px search box, the full company
+   name, the favourite and create buttons — left the breadcrumb about 40px at a 1280px window: a
+   record page read "Sales &" and nothing else, which tells nobody where they are. In this band the
+   search box yields first (it is a button that opens the palette; its width is not its function)
+   and the company name truncates sooner, its full name kept in the button's tooltip.
+   The trail needs a BASIS to defend: as plain `flex: 1` its basis was zero, so it only ever
+   received what was left over and nothing ever shrank on its behalf. Search shrinks three times
+   as hard as the trail, down to 150px. */
+@media (min-width: 721px) and (max-width: 1440px) {
+  .app-topbar-search {
+    flex: 0 3 340px !important;
+    width: auto !important;
+    min-width: 150px !important;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  /* A narrower search box clips its prompt rather than wrapping it onto a second line. */
+  .app-topbar-search > :first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .app-topbar-crumbs {
+    flex: 1 1 300px !important;
+    min-width: 0 !important;
+  }
+  /* Only the search box and the trail give way. Everything else keeps its own width — given a
+     basis to defend, the trail otherwise squeezed the buttons until "Add to Favorites", "Create"
+     and "Synced" wrapped onto two lines. */
+  .app-topbar > :not(.app-topbar-search):not(.app-topbar-crumbs) {
+    flex-shrink: 0 !important;
+    white-space: nowrap;
+  }
+  .app-topbar-company-name {
+    max-width: 96px !important;
+  }
+}
+
+/* Narrower still, the favourite button keeps its star and its accessible name and drops the words. */
+@media (min-width: 721px) and (max-width: 1366px) {
+  .app-topbar-favorite-label {
+    display: none;
+  }
+}
+
 /* ── CRM Advisor: responsive overlay ────────────────────────────────── */
 
 .crm-advisor-panel {

@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +15,14 @@ export default async function PurchaseOrderPrint({ params }: { params: Promise<{
   const { id } = await params;
   const po = await getJson<PO>(`/api/procurement/purchase-orders/${id}`);
   if (!po) return <div style={{ padding: 40 }}>Purchase order not found or API offline.</div>;
+  const issuer = await issuerParty('From', companyOf(po));
 
   return (
     <DocumentSheet
       kind="PURCHASE ORDER"
       reference={po.reference ?? id.slice(0, 8)}
       status={po.status}
-      from={{ heading: 'From', lines: ['AURA OS Contracting LLC', 'Dubai, UAE', 'TRN 100000000000003'] }}
+      from={issuer}
       to={{ heading: 'Supplier', lines: [po.supplierName ?? '—', po.projectName ? `Project: ${po.projectName}` : ''].filter(Boolean) }}
       meta={[
         { label: 'PO Date', value: (po.createdAt ?? '').slice(0, 10) },

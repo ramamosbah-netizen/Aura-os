@@ -168,10 +168,12 @@ export default function VisualTemplateBuilder({
         doc.setFontSize(8);
         doc.text('[Schedule of Items Table Grid]', xMm + 2, yMm + 15);
       } else if (el.type === 'stamp') {
+        // A placeholder, not a stamp: a preview that printed "APPROVED" could pass for a document
+        // somebody approved.
         doc.rect(xMm, yMm, 22, 22);
         doc.setFontSize(8);
-        doc.text('APPROVED', xMm + 3, yMm + 10);
-        doc.text('AURA OS', xMm + 3, yMm + 15);
+        doc.text('[Approval', xMm + 3, yMm + 10);
+        doc.text('stamp]', xMm + 3, yMm + 15);
       } else {
         doc.setFontSize(el.fontSize || 12);
         let text = el.content;
@@ -194,6 +196,14 @@ export default function VisualTemplateBuilder({
         doc.text(text, xMm, yMm + 3);
       }
     });
+
+    // SAID ON THE PAGE, NOT ONLY ON THE BUTTON (F-02). The values above are invented samples, and
+    // no record has been read: a preview saved or forwarded must not pass for a real document.
+    doc.setFontSize(9);
+    doc.setTextColor(170, 30, 30);
+    doc.text('SAMPLE DATA - DESIGN PREVIEW - NOT A DOCUMENT', 105, 8, { align: 'center' });
+    doc.text('SAMPLE DATA - DESIGN PREVIEW - NOT A DOCUMENT', 105, 292, { align: 'center' });
+    doc.setTextColor(0, 0, 0);
 
     doc.output('dataurlnewwindow');
   };
@@ -224,6 +234,10 @@ export default function VisualTemplateBuilder({
         <div style={s.toolbarLeft}>
           <FileText style={{ color: 'var(--accent)' }} className="w-5 h-5" />
           <span style={s.title}>{initialTemplate ? 'Edit Print Template' : 'Design Document Template'}</span>
+          {/* What this designer is and is not, stated where it is used (F-02). */}
+          <span style={s.designNote} data-testid="template-design-note">
+            A design only: the preview fills it with sample values. Documents are generated from their own records by AURA&apos;s governed layouts; a designed template does not generate any document yet.
+          </span>
         </div>
         <div style={s.zoomControls}>
           <button style={s.zoomBtn} onClick={() => setZoom(prev => Math.max(0.4, prev - 0.05))}>
@@ -236,7 +250,7 @@ export default function VisualTemplateBuilder({
         </div>
         <div style={s.actions}>
           <button style={s.previewBtn} onClick={handlePreviewPDF}>
-            <Eye className="w-4 h-4" /> Preview PDF
+            <Eye className="w-4 h-4" /> Preview with sample data
           </button>
           <button style={s.saveBtn} onClick={handleSaveClick} disabled={saveLoading}>
             <Save className="w-4 h-4" /> {saveLoading ? 'Saving...' : 'Save Layout'}
@@ -452,6 +466,13 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
+  } as CSSProperties,
+  designNote: {
+    fontSize: 11.5,
+    color: 'var(--muted)',
+    maxWidth: 420,
+    lineHeight: 1.35,
+    whiteSpace: 'normal',
   } as CSSProperties,
   title: {
     fontSize: 16,

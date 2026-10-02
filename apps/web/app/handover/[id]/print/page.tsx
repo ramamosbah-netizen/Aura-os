@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,7 @@ export default async function HandoverPrint({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const pkg = await getJson<HandoverPackage>(`/api/commissioning/handovers/${id}`);
   if (!pkg) return <div style={{ padding: 40, color: '#666' }}>Handover package not found or API offline.</div>;
+  const issuer = await issuerParty('Contractor', companyOf(pkg));
 
   const checkStatus = (ok: boolean) => (ok ? '✓ Complete' : '✗ Pending');
 
@@ -60,7 +62,7 @@ export default async function HandoverPrint({ params }: { params: Promise<{ id: 
       kind="HANDOVER & ACCEPTANCE CERTIFICATE"
       reference={pkg.code}
       status={pkg.status}
-      from={{ heading: 'Contractor', lines: ['AURA OS Systems Integration', 'Dubai, UAE', 'TRN 100000000000003'] }}
+      from={issuer}
       to={{ heading: 'Client Acceptance', lines: [pkg.clientRepresentative || 'Client Representative', pkg.projectName || 'Project'] }}
       meta={[
         { label: 'Package Code', value: pkg.code },

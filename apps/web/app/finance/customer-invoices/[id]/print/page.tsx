@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,7 @@ export default async function CustomerInvoicePrint({ params }: { params: Promise
   const { id } = await params;
   const inv = await getJson<CI>(`/api/finance/customer-invoices/${id}`);
   if (!inv) return <div style={{ padding: 40 }}>Invoice not found or API offline.</div>;
+  const issuer = await issuerParty('From', companyOf(inv));
   const cur = inv.currency ?? 'AED';
 
   return (
@@ -24,7 +26,7 @@ export default async function CustomerInvoicePrint({ params }: { params: Promise
       kind="TAX INVOICE"
       reference={inv.invoiceNumber}
       status={inv.status}
-      from={{ heading: 'From', lines: ['AURA OS Contracting LLC', 'Dubai, UAE', 'TRN 100000000000003'] }}
+      from={issuer}
       to={{ heading: 'Bill To', lines: [inv.customerName, inv.projectName ?? '', inv.contractRef ? `Contract: ${inv.contractRef}` : ''].filter(Boolean) }}
       meta={[
         { label: 'Issue Date', value: inv.issueDate },

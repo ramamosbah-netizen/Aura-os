@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,12 +14,13 @@ export default async function SubcontractPrint({ params }: { params: Promise<{ i
   const { id } = await params;
   const sc = await getJson<SC>(`/api/subcontracts/${id}`);
   if (!sc) return <div style={{ padding: 40 }}>Subcontract not found or API offline.</div>;
+  const issuer = await issuerParty('Main Contractor', companyOf(sc));
   return (
     <DocumentSheet
       kind="SUBCONTRACT AGREEMENT"
       reference={sc.reference ?? id.slice(0, 8)}
       status={sc.status}
-      from={{ heading: 'Main Contractor', lines: ['AURA OS Contracting LLC', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Subcontractor', lines: [sc.subcontractorName, sc.projectName ? `Project: ${sc.projectName}` : ''].filter(Boolean) }}
       meta={[
         { label: 'Date', value: (sc.createdAt ?? '').slice(0, 10) },

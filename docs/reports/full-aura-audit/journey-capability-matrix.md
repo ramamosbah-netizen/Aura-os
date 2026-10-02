@@ -14,7 +14,7 @@
 | Sales | OUT-02 | PARTIAL |
 | Sales | OUT-03 | UNVERIFIED |
 | Sales | OUT-04 | PARTIAL |
-| Sales | OUT-05 | WRONG_BEHAVIOR |
+| Sales | OUT-05 | PARTIAL |
 | Sales | OUT-06 | PARTIAL |
 | Sales | OUT-07 | PARTIAL |
 | Sales | OUT-08 | PARTIAL |
@@ -106,7 +106,7 @@
 | Pre-Sales | OUT-02 | PARTIAL |
 | Pre-Sales | OUT-03 | UNVERIFIED |
 | Pre-Sales | OUT-04 | PARTIAL |
-| Pre-Sales | OUT-05 | WRONG_BEHAVIOR |
+| Pre-Sales | OUT-05 | PARTIAL |
 | Pre-Sales | OUT-06 | PARTIAL |
 | Pre-Sales | OUT-07 | PARTIAL |
 | Pre-Sales | OUT-08 | PARTIAL |
@@ -149,7 +149,7 @@
 | Award | OUT-02 | PARTIAL |
 | Award | OUT-03 | UNVERIFIED |
 | Award | OUT-04 | PARTIAL |
-| Award | OUT-05 | WRONG_BEHAVIOR |
+| Award | OUT-05 | PARTIAL |
 | Award | OUT-06 | PARTIAL |
 | Award | OUT-07 | PARTIAL |
 | Award | OUT-08 | PARTIAL |
@@ -207,7 +207,7 @@
 | Mobilisation | OUT-02 | PARTIAL |
 | Mobilisation | OUT-03 | UNVERIFIED |
 | Mobilisation | OUT-04 | PARTIAL |
-| Mobilisation | OUT-05 | WRONG_BEHAVIOR |
+| Mobilisation | OUT-05 | PARTIAL |
 | Mobilisation | OUT-06 | PARTIAL |
 | Mobilisation | OUT-07 | PARTIAL |
 | Mobilisation | OUT-08 | PARTIAL |
@@ -272,7 +272,7 @@
 | Engineering | OUT-02 | PARTIAL |
 | Engineering | OUT-03 | UNVERIFIED |
 | Engineering | OUT-04 | PARTIAL |
-| Engineering | OUT-05 | WRONG_BEHAVIOR |
+| Engineering | OUT-05 | PARTIAL |
 | Engineering | OUT-06 | PARTIAL |
 | Engineering | OUT-07 | PARTIAL |
 | Engineering | OUT-08 | PARTIAL |
@@ -339,7 +339,7 @@
 | Planning | OUT-02 | PARTIAL |
 | Planning | OUT-03 | UNVERIFIED |
 | Planning | OUT-04 | PARTIAL |
-| Planning | OUT-05 | WRONG_BEHAVIOR |
+| Planning | OUT-05 | PARTIAL |
 | Planning | OUT-06 | PARTIAL |
 | Planning | OUT-07 | PARTIAL |
 | Planning | OUT-08 | PARTIAL |
@@ -412,7 +412,7 @@
 | Procurement | OUT-02 | PARTIAL |
 | Procurement | OUT-03 | UNVERIFIED |
 | Procurement | OUT-04 | PARTIAL |
-| Procurement | OUT-05 | WRONG_BEHAVIOR |
+| Procurement | OUT-05 | PARTIAL |
 | Procurement | OUT-06 | PARTIAL |
 | Procurement | OUT-07 | PARTIAL |
 | Procurement | OUT-08 | PARTIAL |
@@ -469,7 +469,7 @@
 | Site | OUT-02 | PARTIAL |
 | Site | OUT-03 | UNVERIFIED |
 | Site | OUT-04 | PARTIAL |
-| Site | OUT-05 | WRONG_BEHAVIOR |
+| Site | OUT-05 | PARTIAL |
 | Site | OUT-06 | PARTIAL |
 | Site | OUT-07 | PARTIAL |
 | Site | OUT-08 | PARTIAL |
@@ -512,7 +512,7 @@
 | QA/QC & HSE | OUT-02 | PARTIAL |
 | QA/QC & HSE | OUT-03 | UNVERIFIED |
 | QA/QC & HSE | OUT-04 | PARTIAL |
-| QA/QC & HSE | OUT-05 | WRONG_BEHAVIOR |
+| QA/QC & HSE | OUT-05 | PARTIAL |
 | QA/QC & HSE | OUT-06 | PARTIAL |
 | QA/QC & HSE | OUT-07 | PARTIAL |
 | QA/QC & HSE | OUT-08 | PARTIAL |
@@ -570,7 +570,7 @@
 | Progress | OUT-02 | PARTIAL |
 | Progress | OUT-03 | UNVERIFIED |
 | Progress | OUT-04 | PARTIAL |
-| Progress | OUT-05 | WRONG_BEHAVIOR |
+| Progress | OUT-05 | PARTIAL |
 | Progress | OUT-06 | PARTIAL |
 | Progress | OUT-07 | PARTIAL |
 | Progress | OUT-08 | PARTIAL |
@@ -631,7 +631,7 @@
 | Commercial / Certification | OUT-02 | PARTIAL |
 | Commercial / Certification | OUT-03 | UNVERIFIED |
 | Commercial / Certification | OUT-04 | PARTIAL |
-| Commercial / Certification | OUT-05 | WRONG_BEHAVIOR |
+| Commercial / Certification | OUT-05 | PARTIAL |
 | Commercial / Certification | OUT-06 | PARTIAL |
 | Commercial / Certification | OUT-07 | PARTIAL |
 | Commercial / Certification | OUT-08 | PARTIAL |
@@ -692,7 +692,7 @@
 | Finance / Collection | OUT-02 | PARTIAL |
 | Finance / Collection | OUT-03 | UNVERIFIED |
 | Finance / Collection | OUT-04 | PARTIAL |
-| Finance / Collection | OUT-05 | WRONG_BEHAVIOR |
+| Finance / Collection | OUT-05 | PARTIAL |
 | Finance / Collection | OUT-06 | PARTIAL |
 | Finance / Collection | OUT-07 | PARTIAL |
 | Finance / Collection | OUT-08 | PARTIAL |
@@ -754,7 +754,7 @@
 | T&C | OUT-02 | PARTIAL |
 | T&C | OUT-03 | UNVERIFIED |
 | T&C | OUT-04 | PARTIAL |
-| T&C | OUT-05 | WRONG_BEHAVIOR |
+| T&C | OUT-05 | PARTIAL |
 | T&C | OUT-06 | PARTIAL |
 | T&C | OUT-07 | PARTIAL |
 | T&C | OUT-08 | PARTIAL |
@@ -801,7 +801,7 @@
 | Handover | OUT-02 | PARTIAL |
 | Handover | OUT-03 | UNVERIFIED |
 | Handover | OUT-04 | PARTIAL |
-| Handover | OUT-05 | WRONG_BEHAVIOR |
+| Handover | OUT-05 | PARTIAL |
 | Handover | OUT-06 | PARTIAL |
 | Handover | OUT-07 | PARTIAL |
 | Handover | OUT-08 | PARTIAL |
@@ -848,7 +848,7 @@
 | Warranty / Service | OUT-02 | PARTIAL |
 | Warranty / Service | OUT-03 | UNVERIFIED |
 | Warranty / Service | OUT-04 | PARTIAL |
-| Warranty / Service | OUT-05 | WRONG_BEHAVIOR |
+| Warranty / Service | OUT-05 | PARTIAL |
 | Warranty / Service | OUT-06 | PARTIAL |
 | Warranty / Service | OUT-07 | PARTIAL |
 | Warranty / Service | OUT-08 | PARTIAL |
@@ -895,7 +895,7 @@
 | Closeout | OUT-02 | PARTIAL |
 | Closeout | OUT-03 | UNVERIFIED |
 | Closeout | OUT-04 | PARTIAL |
-| Closeout | OUT-05 | WRONG_BEHAVIOR |
+| Closeout | OUT-05 | PARTIAL |
 | Closeout | OUT-06 | PARTIAL |
 | Closeout | OUT-07 | PARTIAL |
 | Closeout | OUT-08 | PARTIAL |

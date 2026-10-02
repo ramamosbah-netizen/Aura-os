@@ -14,7 +14,22 @@ export interface Company {
   trn: string;
   baseCurrency: string;
   active: boolean;
+  /** What the company prints on its documents (F-01). */
+  legalName?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
 }
+
+/** The identity a company prints, beyond its name and TRN — edited in the row's fold. */
+const IDENTITY_FIELDS: Array<{ key: 'legalName' | 'address' | 'phone' | 'email' | 'website'; label: string; placeholder: string; wide?: boolean }> = [
+  { key: 'legalName', label: 'Legal name', placeholder: 'as on the trade licence', wide: true },
+  { key: 'address', label: 'Registered address', placeholder: 'office, building, city, country', wide: true },
+  { key: 'phone', label: 'Phone', placeholder: '+971 …' },
+  { key: 'email', label: 'Email', placeholder: 'accounts@…' },
+  { key: 'website', label: 'Website', placeholder: 'https://…' },
+];
 
 const CURRENCIES = ['AED', 'SAR', 'QAR', 'KWD', 'OMR', 'BHD', 'USD', 'EUR'];
 
@@ -26,6 +41,8 @@ export default function CompaniesAdminClient({ initialCompanies }: { initialComp
 
   const [nName, setNName] = useState('');
   const [nCode, setNCode] = useState('');
+  // Which company's document identity is unfolded — one at a time keeps the grid readable.
+  const [open, setOpen] = useState<string | null>(null);
 
   const refresh = async (): Promise<void> => {
     const res = await fetch('/api/admin/companies', { cache: 'no-store' });
@@ -128,7 +145,8 @@ export default function CompaniesAdminClient({ initialCompanies }: { initialComp
               companies.map((c) => {
                 const d = draftOf(c);
                 return (
-                  <tr key={c.id}>
+                  <React.Fragment key={c.id}>
+                  <tr>
                     <td style={{ textAlign: 'left' }}>
                       <input className="input" style={st.cellInput} value={d.name} onChange={(e) => patch(c, { name: e.target.value })} />
                       <span style={st.id}>{c.id}</span>
@@ -154,8 +172,43 @@ export default function CompaniesAdminClient({ initialCompanies }: { initialComp
                         <Pill tone={c.active ? 'good' : 'muted'}>{c.active ? 'active' : 'inactive'}</Pill>
                       )}
                       <button className="btn btn-ghost" style={{ ...st.smBtn, color: 'var(--bad)', marginLeft: 6 }} disabled={busy} onClick={() => void remove(c)}>✕</button>
+                      <button
+                        className="btn btn-ghost"
+                        style={{ ...st.smBtn, marginLeft: 6 }}
+                        aria-expanded={open === c.id}
+                        onClick={() => setOpen(open === c.id ? null : c.id)}
+                        data-testid={`company-identity-toggle-${c.id}`}
+                      >
+                        {open === c.id ? 'Hide identity' : 'Document identity'}
+                      </button>
                     </td>
                   </tr>
+                  {open === c.id && (
+                    <tr data-testid={`company-identity-${c.id}`}>
+                      <td colSpan={6} style={st.identityCell}>
+                        <p style={st.identityNote}>
+                          What {d.name || 'this company'} prints on its documents, beside its name and TRN. Left blank, a field
+                          stays blank on its paper — with more than one company, nothing is borrowed from the organisation profile.
+                        </p>
+                        <div style={st.identityGrid}>
+                          {IDENTITY_FIELDS.map((f) => (
+                            <label key={f.key} style={{ ...st.identityLabel, ...(f.wide ? { gridColumn: '1 / -1' } : {}) }}>
+                              {f.label}
+                              <input
+                                className="input"
+                                style={st.identityInput}
+                                placeholder={f.placeholder}
+                                value={d[f.key] ?? ''}
+                                onChange={(e) => patch(c, { [f.key]: e.target.value })}
+                                aria-label={`${f.label} of ${c.name}`}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })
             )}
@@ -180,4 +233,10 @@ const st = {
   id: { display: 'block', fontFamily: 'ui-monospace, monospace', fontSize: 10, color: 'var(--muted)', fontWeight: 400 } as CSSProperties,
   smBtn: { fontSize: 12, padding: '4px 10px' } as CSSProperties,
   form: { display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' } as CSSProperties,
+  identityCell: { textAlign: 'left', background: 'var(--panel-2, transparent)', padding: '12px 14px' } as CSSProperties,
+  // The admin grid does not wrap its cells; the note must, or it runs off the table's edge.
+  identityNote: { margin: '0 0 10px', fontSize: 12, color: 'var(--muted)', maxWidth: 720, lineHeight: 1.45, whiteSpace: 'normal' } as CSSProperties,
+  identityGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 10, maxWidth: 760 } as CSSProperties,
+  identityLabel: { display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11.5, fontWeight: 600, color: 'var(--muted)' } as CSSProperties,
+  identityInput: { padding: '6px 9px', fontSize: 12.5, borderRadius: 7, width: '100%', boxSizing: 'border-box' } as CSSProperties,
 };

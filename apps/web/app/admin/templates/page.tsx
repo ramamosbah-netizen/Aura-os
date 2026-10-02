@@ -121,7 +121,8 @@ export default function TemplatesPage() {
         <div>
           <h1 style={st.h1}>Platform · Document Templates</h1>
           <p style={st.sub}>
-            Create and edit print layouts for purchase orders, supplier invoices, subcontract agreements, and progress claim certificates.
+            Design print layouts. Documents are generated from their own records by AURA&apos;s governed layouts — a designed
+            template does not generate any document yet, and its preview is filled with sample values.
           </p>
         </div>
         <button style={st.createBtn} onClick={() => setShowCreateModal(true)}>

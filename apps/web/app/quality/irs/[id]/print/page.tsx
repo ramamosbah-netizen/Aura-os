@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,7 @@ export default async function InspectionRequestPrint({ params }: { params: Promi
   const detail = await getJson<Detail>(`/api/quality/irs/${id}/detail`);
   const ir = detail?.inspection;
   if (!ir?.irNumber) return <div style={{ padding: 40, color: '#666' }}>Inspection request not found, or the API is offline.</div>;
+  const issuer = await issuerParty('Contractor', companyOf(ir), 'Quality Assurance');
 
   const photos = (detail?.evidence ?? []).filter((e) => e.category !== 'signature');
   const signature = detail?.signature ?? null;
@@ -71,7 +73,7 @@ export default async function InspectionRequestPrint({ params }: { params: Promi
       kind="INSPECTION REQUEST"
       reference={ir.irNumber}
       status={ir.status}
-      from={{ heading: 'Contractor', lines: ['AURA OS Systems Integration', 'Quality Assurance', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Inspected for', lines: [ir.projectName || ir.projectId, ir.locationDetail] }}
       meta={[
         { label: 'Trade', value: ir.discipline.replace(/_/g, ' ') },

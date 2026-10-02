@@ -32,23 +32,40 @@ export async function resolveDocumentIdentity(
   companyId: string | null,
 ): Promise<DocumentIdentity> {
   const all = await companies.list(tenantId);
-  const company = companyId ? all.find((entry) => entry.id === companyId) ?? null : null;
+  // A document no company issued, in a tenant with exactly one company, IS that company's: today no
+  // session carries a company (COMPANY-CTX-01), so every record arrives without one, and a company
+  // that recorded its own identity must still be the one its paper names.
+  const company = companyId
+    ? all.find((entry) => entry.id === companyId) ?? null
+    : all.length === 1 ? all[0] : null;
   const setting = async (key: string): Promise<string> => (await settings.get(tenantId, key).catch(() => null))?.trim() ?? '';
-  const [profileName, legalName, profileTrn, address, phone, email, website, currency] = await Promise.all([
+  const [profileName, profileLegal, profileTrn, profileAddress, profilePhone, profileEmail, profileWebsite, profileCurrency] = await Promise.all([
     setting('company.name'), setting('company.legalName'), setting('company.trn'), setting('company.address'),
     setting('company.phone'), setting('company.email'), setting('company.website'), setting('finance.defaultCurrency'),
   ]);
-  const name = company?.name || legalName || profileName;
+
+  /*
+   * WHOSE PROFILE IS THE ORGANISATION PROFILE? The tenant's `company.*` settings describe the
+   * company of a tenant that has one — or the issuer of a document no company issued. With two or
+   * more companies they describe none of them in particular, so they may not fill a blank on one
+   * company's paper: that would print another company's legal name or address under this one's
+   * name and TRN (F-01). Each company's own record speaks first, always.
+   */
+  const profileSpeaks = all.length <= 1 || !companyId;
+  const own = (value: string | undefined): string => value?.trim() ?? '';
+  const pick = (mine: string | undefined, profile: string): string => own(mine) || (profileSpeaks ? profile : '');
+
+  const name = own(company?.name) || (profileSpeaks ? profileLegal || profileName : '');
   return {
     companyId,
     name: name || 'Company identity not configured',
     configured: Boolean(name),
-    legalName: legalName || name || '',
-    trn: company?.trn || profileTrn,
-    address,
-    phone,
-    email,
-    website,
-    currency: company?.baseCurrency || currency || 'AED',
+    legalName: pick(company?.legalName, profileLegal) || name,
+    trn: pick(company?.trn, profileTrn),
+    address: pick(company?.address, profileAddress),
+    phone: pick(company?.phone, profilePhone),
+    email: pick(company?.email, profileEmail),
+    website: pick(company?.website, profileWebsite),
+    currency: own(company?.baseCurrency) || (profileSpeaks ? profileCurrency : '') || 'AED',
   };
 }

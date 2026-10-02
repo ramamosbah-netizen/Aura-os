@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,13 +15,14 @@ export default async function GrnPrint({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const grn = await getJson<GRN>(`/api/inventory/${id}`);
   if (!grn) return <div style={{ padding: 40 }}>Goods receipt not found or API offline.</div>;
+  const issuer = await issuerParty('Received By', companyOf(grn));
 
   return (
     <DocumentSheet
       kind="GOODS RECEIPT NOTE"
       reference={grn.reference ?? id.slice(0, 8)}
       status={grn.status}
-      from={{ heading: 'Received By', lines: ['AURA OS Contracting LLC', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Supplier', lines: [grn.supplierName ?? '—', grn.poTitle ? `PO: ${grn.poTitle}` : '', grn.projectName ? `Project: ${grn.projectName}` : ''].filter(Boolean) }}
       meta={[
         { label: 'Received Date', value: (grn.createdAt ?? '').slice(0, 10) },

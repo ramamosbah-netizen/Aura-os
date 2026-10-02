@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,7 @@ export default async function DailyReportPrint({ params }: { params: Promise<{ i
   const detail = await getJson<DailyReportDetail>(`/api/site/daily-reports/${id}`);
   const report = detail?.report;
   if (!report?.date) return <div style={{ padding: 40, color: '#666' }}>Daily report not found or API offline.</div>;
+  const issuer = await issuerParty('Site / Contractor', companyOf(report), 'Engineering & Operations');
 
   const evidence = detail?.evidence ?? [];
   /**
@@ -81,7 +83,7 @@ export default async function DailyReportPrint({ params }: { params: Promise<{ i
       kind="DAILY SITE REPORT"
       reference={`DR-${report.date.replace(/-/g, '')}-${report.id.slice(0, 4)}`}
       status={report.status}
-      from={{ heading: 'Site / Contractor', lines: ['AURA OS Contracting LLC', 'Engineering & Operations', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Project Context', lines: [report.projectName || 'General Construction Site', `Report Date: ${report.date}`] }}
       meta={[
         { label: 'Date', value: report.date },

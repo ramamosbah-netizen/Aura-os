@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, NotFoundException, Param, Post, Query, StreamableFile } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Inject, NotFoundException, Optional, Param, Post, Query, ServiceUnavailableException, StreamableFile } from '@nestjs/common';
 import type {
   Document,
   DocumentActor,
@@ -7,7 +7,10 @@ import type {
   DocumentSubjectType,
   DocumentVersion,
 } from '@aura/shared';
+import { resolveDocumentIdentity, type DocumentIdentity } from '../common/document-identity';
 import {
+  CompaniesService,
+  SettingsService,
   DmsService,
   type AccessDecision,
   type DocumentWithVersions,
@@ -50,6 +53,9 @@ export class DocumentsController {
   constructor(
     private readonly dms: DmsService,
     private readonly tenant: TenantContext,
+    // Explicit tokens: an @Optional() parameter typed as a union reflects as Object and is null.
+    @Optional() @Inject(CompaniesService) private readonly companies: CompaniesService | null = null,
+    @Optional() @Inject(SettingsService) private readonly settings: SettingsService | null = null,
   ) {}
 
   /**
@@ -111,6 +117,18 @@ export class DocumentsController {
       this.actor(),
       dto.note,
     );
+  }
+
+  /**
+   * WHO ISSUES A DOCUMENT (F-01): the identity of the company that owns the record being printed —
+   * its legal name, TRN, address and contacts — resolved from that company's record and, only for
+   * a tenant with one company, the organisation profile. It is the letterhead, not a secret, so any
+   * reader of documents may ask. Declared before `:id`, which would otherwise claim the path.
+   */
+  @Get('issuer-identity')
+  issuerIdentity(@Query('companyId') companyId?: string): Promise<DocumentIdentity> {
+    if (!this.companies || !this.settings) throw new ServiceUnavailableException('Company identity is unavailable');
+    return resolveDocumentIdentity(this.companies, this.settings, this.tenant.get().tenantId, companyId?.trim() || null);
   }
 
   /** Only what the caller may see — filtering happens in the service, not here. */

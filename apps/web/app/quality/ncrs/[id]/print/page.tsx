@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,6 +72,7 @@ export default async function NcrPrint({ params }: { params: Promise<{ id: strin
   const detail = await getJson<Detail>(`/api/quality/ncrs/${id}/detail`);
   const ncr = detail?.ncr;
   if (!ncr?.ncrNumber) return <div style={{ padding: 40, color: '#666' }}>NCR not found, or the API is offline.</div>;
+  const issuer = await issuerParty('Issued by', companyOf(ncr), 'Quality Assurance');
 
   const evidence = detail?.evidence ?? [];
   const evidenced = detail?.evidenced ?? { raised: false, corrected: false };
@@ -99,7 +101,7 @@ export default async function NcrPrint({ params }: { params: Promise<{ id: strin
       kind="NON-CONFORMANCE REPORT"
       reference={ncr.ncrNumber}
       status={ncr.status}
-      from={{ heading: 'Issued by', lines: ['AURA OS Systems Integration', 'Quality Assurance', 'Dubai, UAE'] }}
+      from={issuer}
       to={{
         heading: 'Issued to',
         lines: [ncr.projectName || ncr.projectId, ncr.assignedTo ? `Responsible owner: ${ncr.assignedTo}` : 'No responsible owner named'],

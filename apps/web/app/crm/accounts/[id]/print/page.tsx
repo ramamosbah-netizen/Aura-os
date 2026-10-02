@@ -4,6 +4,7 @@ import { use, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import GeneratedAt from '@/components/ui/generated-at';
+import { useDocumentIssuer } from '@/lib/use-document-issuer';
 
 // Customer dossier — A4 print sheet (browser print-to-PDF, the platform's
 // document pattern). Everything the Account 360 knows, print-formatted.
@@ -13,6 +14,7 @@ interface Payload {
     name: string; status: string; industry: string | null; website: string | null;
     phone: string | null; email: string | null; billingAddress: string | null;
     source: string | null; paymentTerms: string | null; ownerId: string | null; createdAt: string;
+    companyId?: string | null;
   };
   contacts: Array<{ name: string; email?: string | null; phone?: string | null; createdAt: string }>;
   opportunities: Array<{ title: string; stage: string; value: number; winProbability: number; createdAt: string }>;
@@ -31,6 +33,7 @@ const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCA
 export default function AccountDossierPrint({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [p, setP] = useState<Payload | null>(null);
+  const issuer = useDocumentIssuer(p?.account.companyId ?? null);
 
   useEffect(() => {
     void (async () => {
@@ -53,8 +56,9 @@ export default function AccountDossierPrint({ params }: { params: Promise<{ id: 
       <div className="sheet" style={s.sheet}>
         <header style={s.header}>
           <div>
-            <div style={s.company}>AURA OS Contracting LLC</div>
-            <div style={s.companyMeta}>Dubai, United Arab Emirates · TRN 100000000000003</div>
+            {/* The issuer, from the company that owns the record — never a typed-in name and TRN (F-01). */}
+            <div style={s.company} data-testid="issuer-name">{issuer?.name ?? ''}</div>
+            <div style={s.companyMeta}>{issuer?.details ?? ''}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={s.kind}>CUSTOMER DOSSIER</div>

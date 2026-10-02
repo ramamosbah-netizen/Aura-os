@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 import GeneratedAt from '@/components/ui/generated-at';
+import { useDocumentIssuer } from '@/lib/use-document-issuer';
 
 // Accounts register — A4 print sheet of every CRM account (browser print-to-PDF).
 
@@ -23,6 +24,8 @@ const d = (iso: string): string => new Date(iso).toLocaleDateString(DISPLAY_LOCA
 
 export default function AccountsRegisterPrint() {
   const [rows, setRows] = useState<Account[] | null>(null);
+  // An internal register spans accounts, so it is issued by the organisation, not by one company.
+  const issuer = useDocumentIssuer(null);
 
   useEffect(() => {
     void (async () => {
@@ -47,8 +50,9 @@ export default function AccountsRegisterPrint() {
       <div className="sheet" style={s.sheet}>
         <header style={s.header}>
           <div>
-            <div style={s.company}>AURA OS Contracting LLC</div>
-            <div style={s.companyMeta}>Dubai, United Arab Emirates · TRN 100000000000003</div>
+            {/* The issuer, from the company that owns the record — never a typed-in name and TRN (F-01). */}
+            <div style={s.company} data-testid="issuer-name">{issuer?.name ?? ''}</div>
+            <div style={s.companyMeta}>{issuer?.details ?? ''}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={s.kind}>CRM · ACCOUNTS REGISTER</div>

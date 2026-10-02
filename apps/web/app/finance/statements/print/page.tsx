@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../components/document-sheet';
+import { issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,13 +18,14 @@ export default async function StatementsPrint({ searchParams }: { searchParams: 
     getJson<BS>(`/api/finance/statements/balance-sheet?asOf=${asOf}`),
   ]);
   if (!is || !bs) return <div style={{ padding: 40 }}>Statements unavailable or API offline.</div>;
+  const issuer = await issuerParty('Entity', null);
 
   return (
     <DocumentSheet
       kind="FINANCIAL STATEMENTS"
       reference={`FY ${from.slice(0, 4)}`}
       status={bs.balanced ? 'balanced' : 'unbalanced'}
-      from={{ heading: 'Entity', lines: ['AURA OS Contracting LLC', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Period', lines: [`${from} → ${to}`, `Balance sheet as of ${asOf}`] }}
       meta={[
         { label: 'Total Revenue', value: money(is.totalRevenue) },

@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,12 +14,13 @@ export default async function PayslipPrint({ params }: { params: Promise<{ id: s
   const { id } = await params;
   const r = await getJson<Run>(`/api/hr/payroll/${id}`);
   if (!r) return <div style={{ padding: 40 }}>Payroll run not found or API offline.</div>;
+  const issuer = await issuerParty('Employer', companyOf(r));
   return (
     <DocumentSheet
       kind="PAYSLIP"
       reference={`PAY-${id.slice(0, 8)}`}
       status={r.status}
-      from={{ heading: 'Employer', lines: ['AURA OS Contracting LLC', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Employee', lines: [`Employee ID: ${r.employeeId}`] }}
       meta={[{ label: 'Period From', value: r.periodStart }, { label: 'Period To', value: r.periodEnd }]}
       columns={[{ key: 'item', label: 'Component' }, { key: 'amount', label: 'Amount', align: 'right' }]}

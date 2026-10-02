@@ -249,7 +249,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7.5);
     pdf.setTextColor(100, 105, 115);
-    pdf.text(`${quotation.quoteNumber} | Rev ${quotation.revision ?? 0} | Page ${page} of ${pages}`, pageWidth / 2, pageHeight - 9, { align: 'center' });
+    // Every page names its issuer, document, revision and place in the whole (F-02): a continuation
+    // page separated from page one still says whose offer it is and which revision.
+    pdf.text(`${identity.legalName || identity.name} | ${quotation.quoteNumber} | Rev ${quotation.revision ?? 0} | Page ${page} of ${pages}`, pageWidth / 2, pageHeight - 9, { align: 'center' });
   }
 
   const bytes = Buffer.from(pdf.output('arraybuffer'));

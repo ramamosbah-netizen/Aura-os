@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,13 +18,14 @@ export default async function IpcPrint({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   const c = await getJson<IPC>(`/api/contracts/certificates/${id}`);
   if (!c) return <div style={{ padding: 40 }}>Payment certificate not found or API offline.</div>;
+  const issuer = await issuerParty('Contractor', companyOf(c));
 
   return (
     <DocumentSheet
       kind="INTERIM PAYMENT CERTIFICATE"
       reference={c.reference ?? `IPC-${c.sequence}`}
       status={c.status}
-      from={{ heading: 'Contractor', lines: ['AURA OS Contracting LLC', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Employer', lines: [c.accountName ?? '—', c.contractTitle ? `Contract: ${c.contractTitle}` : '', `Contract Value: ${money(c.contractValue)}`].filter(Boolean) }}
       meta={[
         { label: 'Certificate No.', value: String(c.sequence) },

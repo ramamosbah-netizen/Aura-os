@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,6 +65,7 @@ export default async function CommissioningCertificate({ params }: { params: Pro
   const { id } = await params;
   const detail = await getJson<Detail>(`/api/commissioning/records/${id}/detail`);
   if (!detail?.record) return <div style={{ padding: 40, color: '#666' }}>Commissioning record not found, or the API is offline.</div>;
+  const issuer = await issuerParty('Contractor', companyOf(detail.record));
 
   const { record, testItems, testRuns, punchItems, certificate } = detail;
   const signoff = detail.signoffEvidence ?? [];
@@ -133,7 +135,7 @@ export default async function CommissioningCertificate({ params }: { params: Pro
       kind="TESTING &amp; COMMISSIONING EVIDENCE PACK"
       reference={record.code}
       status={record.status}
-      from={{ heading: 'Contractor', lines: ['AURA OS Systems Integration', 'Dubai, UAE', 'TRN 100000000000003'] }}
+      from={issuer}
       to={{ heading: 'Witnessed by', lines: [record.witnessedBy || 'Consultant / Client Representative', record.projectName || record.projectId] }}
       meta={[
         { label: 'System', value: record.title },

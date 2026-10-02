@@ -1,5 +1,6 @@
 import { getJson } from '@/lib/api';
 import DocumentSheet from '../../../../../components/document-sheet';
+import { companyOf, issuerParty } from '@/lib/document-issuer';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,12 +14,13 @@ export default async function ContractPrint({ params }: { params: Promise<{ id: 
   const { id } = await params;
   const c = await getJson<C>(`/api/contracts/contracts/${id}`);
   if (!c) return <div style={{ padding: 40 }}>Contract not found or API offline.</div>;
+  const issuer = await issuerParty('Contractor', companyOf(c));
   return (
     <DocumentSheet
       kind="CONTRACT"
       reference={c.reference ?? id.slice(0, 8)}
       status={c.status}
-      from={{ heading: 'Contractor', lines: ['AURA OS Contracting LLC', 'Dubai, UAE'] }}
+      from={issuer}
       to={{ heading: 'Client', lines: [c.accountName ?? '—', c.tenderTitle ? `From tender: ${c.tenderTitle}` : ''].filter(Boolean) }}
       meta={[
         { label: 'Contract Date', value: (c.createdAt ?? '').slice(0, 10) },

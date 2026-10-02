@@ -15,6 +15,15 @@ export interface Company {
   trn: string;
   baseCurrency: string;
   active: boolean;
+  /**
+   * What this company prints on its documents beyond its name and TRN (F-01, migration 0403).
+   * Empty when nobody recorded it — never borrowed from another company or invented.
+   */
+  legalName?: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+  website?: string;
 }
 
 @Injectable()
@@ -29,7 +38,7 @@ export class CompaniesService {
       return [...(this.local.get(tenantId)?.values() ?? [])].sort((a, b) => a.name.localeCompare(b.name));
     }
     const { rows } = await this.pool.query(
-      `SELECT id, tenant_id, name, code, trn, base_currency, active
+      `SELECT id, tenant_id, name, code, trn, base_currency, active, legal_name, address, phone, email, website
          FROM public.aura_companies WHERE tenant_id = $1 ORDER BY name`,
       [tenantId],
     );
@@ -41,6 +50,11 @@ export class CompaniesService {
       trn: r.trn ?? '',
       baseCurrency: r.base_currency ?? 'AED',
       active: !!r.active,
+      legalName: r.legal_name ?? '',
+      address: r.address ?? '',
+      phone: r.phone ?? '',
+      email: r.email ?? '',
+      website: r.website ?? '',
     }));
   }
 
@@ -52,12 +66,16 @@ export class CompaniesService {
       return company;
     }
     await this.pool.query(
-      `INSERT INTO public.aura_companies (id, tenant_id, name, code, trn, base_currency, active, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+      `INSERT INTO public.aura_companies (id, tenant_id, name, code, trn, base_currency, active,
+         legal_name, address, phone, email, website, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
        ON CONFLICT (tenant_id, id) DO UPDATE SET
          name = excluded.name, code = excluded.code, trn = excluded.trn,
-         base_currency = excluded.base_currency, active = excluded.active, updated_at = now()`,
-      [company.id, company.tenantId, company.name, company.code, company.trn, company.baseCurrency, company.active],
+         base_currency = excluded.base_currency, active = excluded.active,
+         legal_name = excluded.legal_name, address = excluded.address, phone = excluded.phone,
+         email = excluded.email, website = excluded.website, updated_at = now()`,
+      [company.id, company.tenantId, company.name, company.code, company.trn, company.baseCurrency, company.active,
+        company.legalName || null, company.address || null, company.phone || null, company.email || null, company.website || null],
     );
     this.logger.log(`Company ${company.id} (${company.name}) upserted for ${company.tenantId}`);
     return company;

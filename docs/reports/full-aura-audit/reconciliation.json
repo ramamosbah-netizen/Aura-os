@@ -1,20 +1,20 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 54,
+    "COMPLETE": 55,
     "PARTIAL": 75,
     "BACKEND_ONLY": 4,
     "UI_ONLY": 0,
     "ABSENT": 0,
     "DUPLICATED": 0,
     "WRONG_AUTHORITY": 0,
-    "DISCONNECTED": 6,
+    "DISCONNECTED": 5,
     "WRONG_BEHAVIOR": 5,
     "UNREACHABLE": 0,
     "UNVERIFIED": 36,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 72,
+  "gapRecords": 73,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -91,7 +91,8 @@
     "BUY-APPR-01",
     "SEC-TEL-01",
     "AR-GL-01",
-    "COST-CODE-01"
+    "COST-CODE-01",
+    "MAIL-DRAFT-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,

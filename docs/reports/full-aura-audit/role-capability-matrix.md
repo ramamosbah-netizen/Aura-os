@@ -33,7 +33,7 @@
 | Sales | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Sales | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Sales | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Sales | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Sales | MAIL-08 | COMPLETE | UNVERIFIED |
 | Sales | MAIL-09 | PARTIAL | UNVERIFIED |
 | Sales | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Sales | XOP-01 | PARTIAL | UNVERIFIED |
@@ -96,7 +96,7 @@
 | Pre-Sales / Estimator | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Pre-Sales / Estimator | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Pre-Sales / Estimator | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Pre-Sales / Estimator | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Pre-Sales / Estimator | MAIL-08 | COMPLETE | UNVERIFIED |
 | Pre-Sales / Estimator | MAIL-09 | PARTIAL | UNVERIFIED |
 | Pre-Sales / Estimator | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Pre-Sales / Estimator | XOP-01 | PARTIAL | UNVERIFIED |
@@ -362,7 +362,7 @@
 | Project Manager | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Project Manager | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Project Manager | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Project Manager | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Project Manager | MAIL-08 | COMPLETE | UNVERIFIED |
 | Project Manager | MAIL-09 | PARTIAL | UNVERIFIED |
 | Project Manager | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Project Manager | XOP-01 | PARTIAL | UNVERIFIED |
@@ -460,7 +460,7 @@
 | Technical Manager | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Technical Manager | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Technical Manager | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Technical Manager | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Technical Manager | MAIL-08 | COMPLETE | UNVERIFIED |
 | Technical Manager | MAIL-09 | PARTIAL | UNVERIFIED |
 | Technical Manager | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | XOP-01 | PARTIAL | UNVERIFIED |
@@ -561,7 +561,7 @@
 | Commercial Manager / QS | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Commercial Manager / QS | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Commercial Manager / QS | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Commercial Manager / QS | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Commercial Manager / QS | MAIL-08 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | MAIL-09 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | XOP-01 | PARTIAL | UNVERIFIED |
@@ -634,7 +634,7 @@
 | Procurement Manager / Buyer | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Procurement Manager / Buyer | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Procurement Manager / Buyer | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Procurement Manager / Buyer | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Procurement Manager / Buyer | MAIL-08 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | MAIL-09 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-01 | PARTIAL | UNVERIFIED |
@@ -806,7 +806,7 @@
 | Finance | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Finance | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Finance | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Finance | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Finance | MAIL-08 | COMPLETE | UNVERIFIED |
 | Finance | MAIL-09 | PARTIAL | UNVERIFIED |
 | Finance | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Finance | XOP-01 | PARTIAL | UNVERIFIED |
@@ -901,7 +901,7 @@
 | Handover / FM | MAIL-05 | DISCONNECTED | UNVERIFIED |
 | Handover / FM | MAIL-06 | DISCONNECTED | UNVERIFIED |
 | Handover / FM | MAIL-07 | DISCONNECTED | UNVERIFIED |
-| Handover / FM | MAIL-08 | DISCONNECTED | UNVERIFIED |
+| Handover / FM | MAIL-08 | COMPLETE | UNVERIFIED |
 | Handover / FM | MAIL-09 | PARTIAL | UNVERIFIED |
 | Handover / FM | MAIL-10 | UNVERIFIED | UNVERIFIED |
 | Handover / FM | XOP-01 | PARTIAL | UNVERIFIED |

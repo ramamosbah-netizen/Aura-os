@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { newId } from '@aura/shared';
-import type { MailDirection, MailParticipant, MailRecord, MailState, RecipientRole } from './mail-domain';
+import type { MailAttachment, MailDirection, MailParticipant, MailRecord, MailState, RecipientRole } from './mail-domain';
 import type { DispatchRecord, MailFilter, MailStore } from './mail-store';
 
 interface MailRow {
@@ -157,6 +157,25 @@ export class PostgresMailStore implements MailStore {
         where p.tenant_id = $1 and p.subject_type = 'mail' and p.subject_id = any($2::uuid[])`,
       [tenantId, rows.map((r) => r.id)],
     );
+    const { rows: files } = await this.pool.query<{
+      id: string; owner_id: string; document_id: string; document_version: number;
+      name: string; mime: string; size_bytes: string | number; created_at: Date | string;
+    }>(
+      `select id, owner_id, document_id, document_version, name, mime, size_bytes, created_at
+         from public.aura_comms_attachments
+        where tenant_id = $1 and owner_type = 'mail' and owner_id = any($2::uuid[]) and document_id is not null
+        order by created_at, id`,
+      [tenantId, rows.map((r) => r.id)],
+    );
+    const filesByMail = new Map<string, MailAttachment[]>();
+    for (const file of files) {
+      const list = filesByMail.get(file.owner_id) ?? [];
+      list.push({
+        id: file.id, documentId: file.document_id, version: Number(file.document_version),
+        name: file.name, mime: file.mime, sizeBytes: Number(file.size_bytes), createdAt: iso(file.created_at),
+      });
+      filesByMail.set(file.owner_id, list);
+    }
     const byMail = new Map<string, MailParticipant[]>();
     for (const person of people) {
       const list = byMail.get(person.subject_id) ?? [];
@@ -170,7 +189,7 @@ export class PostgresMailStore implements MailStore {
       });
       byMail.set(person.subject_id, list);
     }
-    return rows.map((row) => this.toRecord(row, byMail.get(row.id) ?? []));
+    return rows.map((row) => ({ ...this.toRecord(row, byMail.get(row.id) ?? []), attachments: filesByMail.get(row.id) ?? [] }));
   }
 
   private toRecord(row: MailRow, participants: MailParticipant[]): MailRecord {
@@ -267,6 +286,7 @@ export class PostgresMailStore implements MailStore {
         [tenantId, mailId],
       );
       await client.query(`delete from public.aura_comms_participants where tenant_id = $1 and subject_type = 'mail' and subject_id = $2`, [tenantId, mailId]);
+      await client.query(`delete from public.aura_comms_attachments where tenant_id = $1 and owner_type = 'mail' and owner_id = $2`, [tenantId, mailId]);
       await client.query(`delete from public.aura_comms_mail where tenant_id = $1 and id = $2`, [tenantId, mailId]);
       await client.query('COMMIT');
     } catch (error) {
@@ -275,6 +295,29 @@ export class PostgresMailStore implements MailStore {
     } finally {
       client.release();
     }
+  }
+
+  async addAttachment(tenantId: string, mailId: string, attachment: MailAttachment): Promise<boolean> {
+    // The partial unique index (0402) is the authority on "already attached"; a conflict is an
+    // answer, not an error.
+    const { rowCount } = await this.pool.query(
+      `insert into public.aura_comms_attachments
+         (id, tenant_id, owner_type, owner_id, mail_id, name, mime, size_bytes, document_id, document_version, created_at)
+       values ($1, $2, 'mail', $3, $3, $4, $5, $6, $7, $8, $9)
+       on conflict (tenant_id, owner_id, document_id) where owner_type = 'mail' and document_id is not null do nothing`,
+      [attachment.id, tenantId, mailId, attachment.name, attachment.mime, attachment.sizeBytes,
+        attachment.documentId, attachment.version, attachment.createdAt],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async removeAttachment(tenantId: string, mailId: string, attachmentId: string): Promise<boolean> {
+    const { rowCount } = await this.pool.query(
+      `delete from public.aura_comms_attachments
+        where tenant_id = $1 and owner_type = 'mail' and owner_id = $2 and id = $3`,
+      [tenantId, mailId, attachmentId],
+    );
+    return (rowCount ?? 0) > 0;
   }
 
   async markRead(tenantId: string, mailId: string, reader: { address?: string | null; userId?: string | null }, at: string): Promise<void> {

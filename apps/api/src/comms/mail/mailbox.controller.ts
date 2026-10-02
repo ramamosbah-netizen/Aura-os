@@ -1,7 +1,7 @@
-import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Query, StreamableFile } from '@nestjs/common';
 import { INTERNAL_ACCOUNT_ID } from './mail-domain';
-import { Permissions, TenantContext } from '@aura/core';
-import { MailService, type MailCaller } from './mail.service';
+import { ParseUuidOr404Pipe, Permissions, TenantContext } from '@aura/core';
+import { MailService, type AttachmentAccess, type MailCaller } from './mail.service';
 import { MAIL_STORE, type MailStore } from './mail-store';
 import type { MailParticipant, MailRecord } from './mail-domain';
 import { Inject } from '@nestjs/common';
@@ -67,7 +67,8 @@ export class MailboxController {
     return [
       // The built-in path, offered under its logical key. It has no row and no uuid — see
       // INTERNAL_ACCOUNT_ID — and MailService translates it back to NULL on the way in.
-      { id: INTERNAL_ACCOUNT_ID, provider: 'aura-internal', label: 'AURA internal mail', status: 'connected', capabilities: ['send', 'scheduled_send'] },
+      // `attachments`: internal mail carries governed AURA documents (F-09) — the adapter declares it.
+      { id: INTERNAL_ACCOUNT_ID, provider: 'aura-internal', label: 'AURA internal mail', status: 'connected', capabilities: ['send', 'scheduled_send', 'attachments'] },
       ...rows.map((row) => ({
         id: row.id, provider: row.provider, label: row.label, status: row.status, capabilities: row.capabilities,
       })),
@@ -103,6 +104,44 @@ export class MailboxController {
   async deleteDraft(@Param('id') id: string): Promise<{ ok: true }> {
     await this.mail.deleteDraft(this.caller(), id);
     return { ok: true };
+  }
+
+  /** Attach a DMS document to the caller's own draft, at its current revision (F-09). */
+  @Post('drafts/:id/attachments')
+  @Permissions('comms.mail.send')
+  async attach(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: { documentId?: string }): Promise<MailRecord> {
+    if (!dto?.documentId) throw new BadRequestException('An attachment requires a documentId');
+    return this.present(await this.mail.attachDocument(this.caller(), id, dto.documentId));
+  }
+
+  @Delete('drafts/:id/attachments/:attachmentId')
+  @Permissions('comms.mail.send')
+  async detach(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('attachmentId', ParseUuidOr404Pipe) attachmentId: string,
+  ): Promise<MailRecord> {
+    return this.present(await this.mail.detachDocument(this.caller(), id, attachmentId));
+  }
+
+  /** Who on the envelope could not open each attachment — the sender's view before sending. */
+  @Get('message/:id/attachment-access')
+  @Permissions('comms.mail.send')
+  attachmentAccess(@Param('id', ParseUuidOr404Pipe) id: string): Promise<AttachmentAccess[]> {
+    return this.mail.attachmentAccess(this.caller(), id);
+  }
+
+  /**
+   * The attachment's bytes, for someone the message reached, under their OWN document access.
+   * Always served as a download: an attachment is never rendered as active same-origin content.
+   */
+  @Get('message/:id/attachments/:attachmentId/content')
+  async attachmentContent(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+    @Param('attachmentId', ParseUuidOr404Pipe) attachmentId: string,
+  ): Promise<StreamableFile> {
+    const { bytes, version } = await this.mail.downloadAttachment(this.caller(), id, attachmentId);
+    const safeFileName = version.fileName.replace(/[\r\n"]/g, '').slice(0, 255) || 'attachment';
+    return new StreamableFile(bytes, { type: version.contentType, disposition: `attachment; filename="${safeFileName}"` });
   }
 
   @Post('message/:id/send')

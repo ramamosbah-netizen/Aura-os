@@ -1,4 +1,4 @@
-import type { MailRecord } from './mail-domain';
+import type { MailAttachment, MailRecord } from './mail-domain';
 import { normaliseAddress } from './mail-domain';
 import type { DispatchRecord, MailFilter, MailStore } from './mail-store';
 
@@ -14,6 +14,8 @@ export class InMemoryMailStore implements MailStore {
   private readonly dispatch = new Map<string, Map<string, DispatchRecord>>();
   /** Stands in for aura_comms_accounts.sync_cursor. */
   private readonly cursors = new Map<string, string>();
+  /** Stands in for aura_comms_attachments (owner_type 'mail'): `${tenantId}::${mailId}` -> rows. */
+  private readonly attachments = new Map<string, MailAttachment[]>();
 
   private box(tenantId: string): Map<string, MailRecord> {
     let box = this.mail.get(tenantId);
@@ -41,6 +43,7 @@ export class InMemoryMailStore implements MailStore {
   private hydrate(tenantId: string, mail: MailRecord): MailRecord {
     const reads = this.readsFor(tenantId);
     const copy = structuredClone(mail);
+    copy.attachments = structuredClone(this.attachments.get(`${tenantId}::${mail.id}`) ?? []);
     for (const participant of copy.participants) {
       participant.readAt = participant.role === 'from'
         ? null
@@ -54,6 +57,9 @@ export class InMemoryMailStore implements MailStore {
     // a save write it back would be exactly the "stored on participants" mistake.
     const clean = structuredClone(mail);
     for (const participant of clean.participants) delete participant.readAt;
+    // Attachments are owned by their own methods, exactly as in Postgres; a save carrying a list
+    // must not be able to replace it.
+    delete clean.attachments;
     this.box(tenantId).set(mail.id, clean);
   }
 
@@ -102,6 +108,23 @@ export class InMemoryMailStore implements MailStore {
 
   async remove(tenantId: string, mailId: string): Promise<void> {
     this.box(tenantId).delete(mailId);
+    this.attachments.delete(`${tenantId}::${mailId}`);
+  }
+
+  async addAttachment(tenantId: string, mailId: string, attachment: MailAttachment): Promise<boolean> {
+    const key = `${tenantId}::${mailId}`;
+    const list = this.attachments.get(key) ?? [];
+    if (list.some((a) => a.documentId === attachment.documentId)) return false;
+    this.attachments.set(key, [...list, structuredClone(attachment)]);
+    return true;
+  }
+
+  async removeAttachment(tenantId: string, mailId: string, attachmentId: string): Promise<boolean> {
+    const key = `${tenantId}::${mailId}`;
+    const list = this.attachments.get(key) ?? [];
+    const next = list.filter((a) => a.id !== attachmentId);
+    this.attachments.set(key, next);
+    return next.length !== list.length;
   }
 
   async markRead(tenantId: string, mailId: string, reader: { address?: string | null; userId?: string | null }, at: string): Promise<void> {

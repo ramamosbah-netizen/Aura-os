@@ -1,4 +1,4 @@
-import type { MailRecord, MailState } from './mail-domain';
+import type { MailAttachment, MailRecord, MailState } from './mail-domain';
 
 /** DI token for mail persistence. */
 export const MAIL_STORE = Symbol('MAIL_STORE');
@@ -47,6 +47,14 @@ export interface MailStore {
   thread(tenantId: string, threadId: string): Promise<MailRecord[]>;
   /** Only ever used on a message that has not left; enforced by the service, not here. */
   remove(tenantId: string, mailId: string): Promise<void>;
+
+  /**
+   * The ONLY writers of a message's attachments (F-09). `save` never touches them. The service
+   * decides when they may change (a draft, by its author); the store refuses a document attached
+   * twice to one message by answering false.
+   */
+  addAttachment(tenantId: string, mailId: string, attachment: MailAttachment): Promise<boolean>;
+  removeAttachment(tenantId: string, mailId: string, attachmentId: string): Promise<boolean>;
   markRead(tenantId: string, mailId: string, reader: { address?: string | null; userId?: string | null }, at: string): Promise<void>;
 
   /**

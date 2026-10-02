@@ -37,6 +37,8 @@ export interface MailView {
   failedReason: string | null;
   createdAt: string;
   accountId: string | null;
+  /** Governed documents the message carries (F-09). */
+  attachments?: MailAttachmentView[];
 }
 
 export interface MailAccountView {
@@ -354,6 +356,21 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
 
       <div className={styles.body}>{mail.body}</div>
 
+      {(mail.attachments ?? []).length > 0 ? (
+        <ul className={styles.attachmentList} aria-label="Attachments" data-testid="mail-attachment-list">
+          {(mail.attachments ?? []).map((a) => (
+            <li key={a.id}>
+              {/* Opened under the reader's OWN document access: the API checks the envelope and the
+                  DMS checks them, so a link here is never a way round either. */}
+              <a href={`/api/comms/mail-attachment/${mail.id}/${a.id}`} download={a.name} data-testid={`mail-attachment-link-${a.documentId}`}>
+                <Paperclip aria-hidden />{a.name}
+              </a>
+              <small>rev {a.version} · {sizeLabel(a.sizeBytes)}</small>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+
       {thread && thread.length > 1 ? (
         <details className={styles.thread} data-testid="mail-thread">
           <summary>{thread.length} messages in this conversation</summary>
@@ -415,6 +432,9 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
           >
             {mode === 'forward' ? 'Create forward' : 'Create reply'}
           </button>
+          {mode === 'forward' && (mail.attachments ?? []).length > 0 ? (
+            <p className={styles.hint} data-testid="mail-forward-attachments-note">Attachments are not forwarded — attach them again to the new draft, where who can open them is checked.</p>
+          ) : null}
           {/* Honest: the domain creates a draft, and sending stays a separate, explicit act. */}
           <p className={styles.hint}>This creates a draft you can review before sending. {accounts.length} account(s) available.</p>
         </div>
@@ -422,6 +442,42 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
     </article>
   );
 }
+
+/** A governed document carried by a message (F-09): a reference at the revision that was attached. */
+export interface MailAttachmentView {
+  id: string; documentId: string; version: number; name: string; mime: string; sizeBytes: number;
+}
+
+/** The API's answer to "who on this envelope could not open each attachment". */
+interface AttachmentAccessView {
+  attachmentId: string;
+  documentId: string;
+  name: string;
+  version: number;
+  cannotOpen: Array<{ userId: string | null; address: string | null; why: 'no-access' | 'outside-aura' }>;
+  senderMayShare: boolean;
+}
+
+interface DirectoryPerson { username: string; roleLabel: string }
+interface DocumentSummary { id: string; title: string; kind: string; currentVersion: number }
+
+/** Like `call`, but keeps the API's own sentence when it refuses — the sender needs to read why. */
+async function callWithReason<T>(path: string, init?: RequestInit): Promise<{ ok: true; data: T } | { ok: false; status: number; reason: string | null }> {
+  try {
+    const res = await fetch(path.startsWith('/') ? path : `/api/comms/mailbox/${path}`, { cache: 'no-store', ...init });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => null)) as { message?: string | string[] } | null;
+      const reason = Array.isArray(body?.message) ? body!.message.join('; ') : body?.message ?? null;
+      return { ok: false, status: res.status, reason };
+    }
+    return { ok: true, data: (await res.json()) as T };
+  } catch {
+    return { ok: false, status: 0, reason: null };
+  }
+}
+
+const sizeLabel = (bytes: number): string =>
+  bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} B`;
 
 function Composer({ me, accounts, onDone, onCancel }: {
   me: string; accounts: MailAccountView[]; onDone: (message: string, mailId: string) => Promise<void>;
@@ -449,54 +505,176 @@ function Composer({ me, accounts, onDone, onCancel }: {
   // Discarding typed content is destructive and unrecoverable, so a dirty composer asks once.
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
+  // ── AURA colleagues, addressed as users rather than as strings that look like addresses ──
+  const [people, setPeople] = useState<DirectoryPerson[] | null>(null);
+  const [colleagues, setColleagues] = useState<string[]>([]);
+  useEffect(() => {
+    let live = true;
+    void callWithReason<DirectoryPerson[]>('/api/comms/people').then((result) => {
+      if (live) setPeople(result.ok ? result.data : []);
+    });
+    return () => { live = false; };
+  }, []);
+
+  // ── Governed attachments (F-09) ──
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<MailAttachmentView[]>([]);
+  const [access, setAccess] = useState<AttachmentAccessView[] | null>(null);
+  const [picking, setPicking] = useState(false);
+  const [documents, setDocuments] = useState<DocumentSummary[] | null>(null);
+  const [docQuery, setDocQuery] = useState('');
+  const account = sendable.find((a) => a.id === accountId);
+  const canAttach = Boolean(account?.capabilities.includes('attachments'));
+
   // The user's own zone, so "08:00" means 08:00 where they are. The API converts to UTC and keeps
   // the chosen zone beside it, which is what lets the choice be shown back to them afterwards.
   const timezone = useViewerTimeZone();
   const split = (value: string): string[] => value.split(/[,;]/).map((entry) => entry.trim()).filter(Boolean);
+  const envelope = () => ({
+    accountId: accountId || null,
+    to: [...colleagues.map((userId) => ({ role: 'to', address: null, userId })), ...split(to)],
+    cc: split(cc),
+    bcc: split(bcc),
+    subject,
+    body,
+  });
+
+  /**
+   * The message as a draft on the server, created once and kept current. An attachment needs a
+   * message to belong to, so the first one saves the draft; every later step patches it.
+   */
+  async function ensureDraft(): Promise<string | null> {
+    const result = draftId
+      ? await callWithReason<{ id: string }>(`drafts/${draftId}`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify(envelope()) })
+      : await callWithReason<{ id: string }>('drafts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(envelope()) });
+    if (!result.ok) { setError(result.reason ?? 'The draft could not be saved.'); return null; }
+    if (!draftId) setDraftId(result.data.id);
+    return result.data.id;
+  }
+
+  /** Who could not open what, asked of the API against the envelope as it stands now. */
+  async function checkAccess(id: string): Promise<AttachmentAccessView[] | null> {
+    const result = await callWithReason<AttachmentAccessView[]>(`message/${id}/attachment-access`);
+    if (!result.ok) { setError(result.reason ?? 'Could not check who can open the attachments.'); return null; }
+    setAccess(result.data);
+    return result.data;
+  }
+
+  async function openPicker() {
+    setPicking(true);
+    if (documents !== null) return;
+    const result = await callWithReason<DocumentSummary[]>('/api/documents');
+    setDocuments(result.ok ? result.data : []);
+    if (!result.ok) setError(result.reason ?? 'AURA Documents could not be listed.');
+  }
+
+  async function attach(documentId: string) {
+    setBusy(true);
+    setError(null);
+    const id = await ensureDraft();
+    if (id) {
+      const result = await callWithReason<{ attachments?: MailAttachmentView[] }>(`drafts/${id}/attachments`, {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ documentId }),
+      });
+      if (result.ok) {
+        setAttachments(result.data.attachments ?? []);
+        setPicking(false);
+        await checkAccess(id);
+      } else {
+        setError(result.reason ?? 'The document could not be attached.');
+      }
+    }
+    setBusy(false);
+  }
+
+  async function detach(attachmentId: string) {
+    if (!draftId) return;
+    setBusy(true);
+    const result = await callWithReason<{ attachments?: MailAttachmentView[] }>(`drafts/${draftId}/attachments/${attachmentId}`, { method: 'DELETE' });
+    if (result.ok) {
+      setAttachments(result.data.attachments ?? []);
+      await checkAccess(draftId);
+    } else {
+      setError(result.reason ?? 'The attachment could not be removed.');
+    }
+    setBusy(false);
+  }
+
+  /**
+   * Give one colleague DOWNLOAD on one document — the DMS's own share, made by the sender as an
+   * explicit act and recorded there. Mail grants nothing; this button is only offered where the DMS
+   * says the sender may share, and the DMS checks again when it is pressed.
+   */
+  async function giveAccess(documentId: string, userId: string) {
+    setBusy(true);
+    setError(null);
+    const result = await callWithReason(`/api/documents/${documentId}/share`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ subjectType: 'USER', subjectId: userId, permission: 'DOWNLOAD' }),
+    });
+    if (!result.ok) setError(result.reason ?? 'Access could not be given.');
+    if (draftId) await checkAccess(draftId);
+    setBusy(false);
+  }
+
+  // Recipients changed after something was attached: what was openable may no longer be.
+  async function recheck() {
+    if (!draftId || attachments.length === 0) return;
+    const id = await ensureDraft();
+    if (id) await checkAccess(id);
+  }
+  useEffect(() => { void recheck(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [colleagues]);
 
   /** Create the draft and stop. The backend owns every state after this. */
   async function saveDraft(): Promise<string | null> {
     setBusy(true);
     setError(null);
-    const draft = await call<{ id: string }>('drafts', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ accountId: accountId || null, to: split(to), cc: split(cc), bcc: split(bcc), subject, body }),
-    });
+    const id = await ensureDraft();
     setBusy(false);
-    if (!draft.ok) { setError('The draft could not be saved.'); return null; }
-    await onDone('Saved to Drafts.', draft.data.id);
-    return draft.data.id;
+    if (!id) return null;
+    await onDone('Saved to Drafts.', id);
+    return id;
   }
 
   async function submit(schedule: boolean) {
     setBusy(true);
     setError(null);
-    const draft = await call<{ id: string }>('drafts', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ accountId: accountId || null, to: split(to), cc: split(cc), bcc: split(bcc), subject, body }),
-    });
-    if (!draft.ok) { setBusy(false); setError('The draft could not be saved.'); return; }
+    const id = await ensureDraft();
+    if (!id) { setBusy(false); return; }
+    if (attachments.length > 0) {
+      const now = await checkAccess(id);
+      if (!now || now.some((a) => a.cannotOpen.length > 0)) {
+        setBusy(false);
+        setError('Saved as a draft. It cannot be sent until everyone on it can open what it carries — see above.');
+        return;
+      }
+    }
 
     const followUp = schedule
-      ? await call(`message/${draft.data.id}/schedule`, {
+      ? await callWithReason(`message/${id}/schedule`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ localDateTime: when, timezone }),
       })
-      : await call(`message/${draft.data.id}/send`, { method: 'POST' });
+      : await callWithReason(`message/${id}/send`, { method: 'POST' });
 
     setBusy(false);
     if (!followUp.ok) {
       // Precise about what did and did not happen: the draft exists either way.
-      setError(schedule
-        ? 'Saved as a draft, but scheduling failed — it will not send.'
-        : 'Saved as a draft, but it could not be queued.');
+      setError(followUp.reason
+        ? `Saved as a draft, but it was not ${schedule ? 'scheduled' : 'queued'}: ${followUp.reason}`
+        : schedule
+          ? 'Saved as a draft, but scheduling failed — it will not send.'
+          : 'Saved as a draft, but it could not be queued.');
       return;
     }
-    await onDone(schedule ? `Scheduled for ${when} (${timezone}).` : 'Queued to send.', draft.data.id);
+    await onDone(schedule ? `Scheduled for ${when} (${timezone}).` : 'Queued to send.', id);
   }
+
+  const blocked = (access ?? []).filter((a) => a.cannotOpen.length > 0);
+  const hasRecipient = colleagues.length > 0 || to.trim().length > 0;
+  const matches = (documents ?? []).filter((d) => d.title.toLowerCase().includes(docQuery.trim().toLowerCase()));
+  const attachedIds = new Set(attachments.map((a) => a.documentId));
 
   return (
     <form className={styles.composer} data-testid="mail-composer" onInput={() => setConfirmDiscard(false)} onSubmit={(event) => { event.preventDefault(); void submit(false); }}>
@@ -505,7 +683,7 @@ function Composer({ me, accounts, onDone, onCancel }: {
       <label>
         From
         <select value={accountId} onChange={(event) => setAccountId(event.target.value)} aria-label="Send from account" data-testid="mail-account">
-          {sendable.map((account) => <option key={account.id} value={account.id}>{account.label}</option>)}
+          {sendable.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
         </select>
       </label>
       {/* Only accounts an administrator actually connected appear here. Nothing in this form
@@ -514,18 +692,99 @@ function Composer({ me, accounts, onDone, onCancel }: {
         <p className={styles.hint}>{accounts.length - sendable.length} configured account(s) are not connected yet, so they cannot send.</p>
       ) : null}
 
-      <label>To<input value={to} onChange={(event) => setTo(event.target.value)} placeholder="name@example.com" aria-label="To" data-testid="mail-to" /></label>
-      <label>CC<input value={cc} onChange={(event) => setCc(event.target.value)} aria-label="CC" data-testid="mail-cc" /></label>
-      <label>BCC<input value={bcc} onChange={(event) => setBcc(event.target.value)} aria-label="BCC" data-testid="mail-bcc" /></label>
+      <label>
+        AURA colleagues
+        <select
+          value=""
+          onChange={(event) => { const u = event.target.value; if (u && !colleagues.includes(u)) setColleagues([...colleagues, u]); }}
+          aria-label="Add an AURA colleague"
+          data-testid="mail-colleague-select"
+          disabled={people === null}
+        >
+          <option value="">{people === null ? 'Loading the directory…' : 'Add a colleague…'}</option>
+          {(people ?? []).filter((p) => !colleagues.includes(p.username)).map((p) => (
+            <option key={p.username} value={p.username}>{p.username} — {p.roleLabel}</option>
+          ))}
+        </select>
+      </label>
+      {colleagues.length > 0 ? (
+        <p className={styles.chips} data-testid="mail-colleagues">
+          {colleagues.map((u) => (
+            <span key={u} className={styles.chip} data-testid={`mail-colleague-${u}`}>
+              {u}
+              <button type="button" aria-label={`Remove ${u}`} onClick={() => setColleagues(colleagues.filter((c) => c !== u))}>×</button>
+            </span>
+          ))}
+        </p>
+      ) : null}
+
+      <label>To (email addresses)<input value={to} onChange={(event) => setTo(event.target.value)} onBlur={() => void recheck()} placeholder="name@example.com" aria-label="To" data-testid="mail-to" /></label>
+      <label>CC<input value={cc} onChange={(event) => setCc(event.target.value)} onBlur={() => void recheck()} aria-label="CC" data-testid="mail-cc" /></label>
+      <label>BCC<input value={bcc} onChange={(event) => setBcc(event.target.value)} onBlur={() => void recheck()} aria-label="BCC" data-testid="mail-bcc" /></label>
       <label>Subject<input value={subject} onChange={(event) => setSubject(event.target.value)} aria-label="Subject" data-testid="mail-subject" /></label>
       <label>Message<textarea value={body} onChange={(event) => setBody(event.target.value)} rows={6} aria-label="Message" data-testid="mail-body" /></label>
 
-      <p className={styles.attachHint}>
-        <Paperclip aria-hidden />
-        {/* Stated rather than drawn as a dead control: attachments reference AURA Documents, and
-            that path is not wired into compose yet. */}
-        Attachments come from AURA Documents and are not yet wired into compose.
-      </p>
+      <section className={styles.attachments} aria-label="Attachments" data-testid="mail-attachments">
+        {attachments.map((a) => (
+          <span key={a.id} className={styles.chip} data-testid={`mail-attachment-${a.documentId}`}>
+            <Paperclip aria-hidden />{a.name} · rev {a.version} · {sizeLabel(a.sizeBytes)}
+            <button type="button" aria-label={`Remove ${a.name}`} disabled={busy} onClick={() => void detach(a.id)}>×</button>
+          </span>
+        ))}
+        {canAttach ? (
+          <button type="button" className={styles.attachButton} disabled={busy} onClick={() => void openPicker()} data-testid="mail-attach-open">
+            <Paperclip aria-hidden />Attach from AURA Documents
+          </button>
+        ) : (
+          <p className={styles.attachHint}><Paperclip aria-hidden />This account cannot carry attachments.</p>
+        )}
+      </section>
+
+      {picking ? (
+        <div className={styles.picker} role="dialog" aria-label="Attach from AURA Documents" data-testid="mail-doc-picker">
+          <input value={docQuery} onChange={(event) => setDocQuery(event.target.value)} placeholder="Find a document by title" aria-label="Find a document" data-testid="mail-doc-search" autoFocus />
+          {documents === null ? (
+            <p className={styles.hint}><Loader2 aria-hidden />Loading the documents you may see…</p>
+          ) : matches.length === 0 ? (
+            <p className={styles.hint}>{documents.length === 0 ? 'You may not see any documents.' : 'No document matches that title.'}</p>
+          ) : (
+            <ul>
+              {matches.slice(0, 20).map((d) => (
+                <li key={d.id}>
+                  <span><strong>{d.title}</strong> <small>{d.kind} · rev {d.currentVersion}</small></span>
+                  <button type="button" disabled={busy || attachedIds.has(d.id)} onClick={() => void attach(d.id)} data-testid={`mail-doc-attach-${d.id}`}>
+                    {attachedIds.has(d.id) ? 'Attached' : 'Attach'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {matches.length > 20 ? <p className={styles.hint}>Showing 20 of {matches.length} — refine the title to find the rest.</p> : null}
+          <button type="button" onClick={() => setPicking(false)} data-testid="mail-doc-picker-close">Close</button>
+        </div>
+      ) : null}
+
+      {blocked.length > 0 ? (
+        <div className={styles.failed} role="alert" data-testid="mail-access-warning">
+          <strong>Not everyone on this message can open what it carries.</strong>
+          <ul>
+            {blocked.flatMap((a) => a.cannotOpen.map((who) => (
+              <li key={`${a.attachmentId}-${who.userId ?? who.address}`}>
+                {who.why === 'outside-aura'
+                  ? <>{who.address} is outside AURA and cannot receive “{a.name}”.</>
+                  : <>{who.userId} cannot open “{a.name}”. </>}
+                {who.why === 'no-access' && who.userId && a.senderMayShare ? (
+                  <button type="button" disabled={busy} onClick={() => void giveAccess(a.documentId, who.userId!)} data-testid={`mail-give-access-${who.userId}`}>
+                    Give {who.userId} download access
+                  </button>
+                ) : who.why === 'no-access' ? (
+                  <em> You may not share this document — ask someone who can, or remove it.</em>
+                ) : null}
+              </li>
+            )))}
+          </ul>
+        </div>
+      ) : null}
 
       {error ? <p className={styles.failed} role="alert">{error}</p> : null}
 
@@ -534,8 +793,13 @@ function Composer({ me, accounts, onDone, onCancel }: {
           type="button"
           disabled={busy}
           onClick={() => {
-            const dirty = [to, cc, bcc, subject, body].some((v) => v.trim().length > 0);
-            if (!dirty || confirmDiscard) { onCancel(); return; }
+            const dirty = [to, cc, bcc, subject, body].some((v) => v.trim().length > 0) || colleagues.length > 0 || attachments.length > 0;
+            if (!dirty || confirmDiscard) {
+              // A draft saved only to hold attachments goes with the message the user discarded.
+              if (draftId) void callWithReason(`drafts/${draftId}`, { method: 'DELETE' });
+              onCancel();
+              return;
+            }
             setConfirmDiscard(true);
           }}
           data-testid="mail-cancel-compose"
@@ -543,12 +807,12 @@ function Composer({ me, accounts, onDone, onCancel }: {
           {confirmDiscard ? 'Discard message?' : 'Cancel'}
         </button>
         <button type="button" disabled={busy} onClick={() => void saveDraft()} data-testid="mail-save-draft">Save draft</button>
-        <button type="submit" disabled={busy || !to.trim()} data-testid="mail-send-now">Send now</button>
+        <button type="submit" disabled={busy || !hasRecipient || blocked.length > 0} data-testid="mail-send-now">Send now</button>
         {canSchedule ? (
           <>
             <input type="datetime-local" value={when} onChange={(event) => setWhen(event.target.value)} aria-label="Schedule date and time" data-testid="mail-schedule-at" />
             <span className={styles.hint}>{timezone}</span>
-            <button type="button" disabled={busy || !to.trim() || !when} onClick={() => void submit(true)} data-testid="mail-schedule">Schedule</button>
+            <button type="button" disabled={busy || !hasRecipient || !when || blocked.length > 0} onClick={() => void submit(true)} data-testid="mail-schedule">Schedule</button>
           </>
         ) : (
           <span className={styles.hint}>No connected account supports scheduled send.</span>

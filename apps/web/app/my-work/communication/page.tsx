@@ -13,7 +13,7 @@ import {
   Share2,
   ShieldCheck,
 } from 'lucide-react';
-import { fetchJson, getJson } from '@/lib/api';
+import { currentUser, fetchJson, getJson } from '@/lib/api';
 import AuraTabLink from '@/components/aura-tab-link';
 import AuraTabAnchor from '@/components/aura-tab-anchor';
 import InternalChat, { type ChatChannelView, type ChatUserView } from '@/components/internal-chat';
@@ -121,6 +121,11 @@ export default async function MyCommunicationPage({
     fetchJson<CrmContactView[]>('/api/crm/contacts?status=active'),
     fetchJson<CrmAccountView[]>('/api/crm/accounts?status=active'),
   ]);
+  // WHO IS LOOKING. /workspace/me needs `workspace.me.read`, which no shipped role holds, so for every
+  // real user it answered 403 and chat and mail were told the viewer was nobody: the composer said
+  // "Signed in as ." and a direct message could be labelled with the viewer's own name. The session
+  // carries the identity the API itself uses (its `sub` is the username) — read it from there.
+  const viewer = me?.username ?? (await currentUser())?.sub ?? '';
   const channels = channelResult.ok ? channelResult.data : null;
   const files = fileResult.ok ? fileResult.data : null;
   const unreadItems = unreadResult.ok ? unreadResult.data : null;
@@ -235,7 +240,7 @@ export default async function MyCommunicationPage({
             </div>
           </header>
           <InternalChat
-            me={me?.username ?? ''}
+            me={viewer}
             initialChannels={channels}
             users={(users ?? []) as ChatUserView[]}
             loadError={channelResult.ok ? null : channelResult.error}
@@ -274,7 +279,7 @@ export default async function MyCommunicationPage({
               <p>Inbox, Sent, Drafts, Scheduled and anything waiting on a delivery decision — all inside Communication.</p>
             </div>
           </header>
-          <EmailWorkspace me={me?.username ?? ''} accounts={(accounts ?? []) as MailAccountView[]} initialMailId={deepLinkedMail ?? null} />
+          <EmailWorkspace me={viewer} accounts={(accounts ?? []) as MailAccountView[]} initialMailId={deepLinkedMail ?? null} />
           <p className={styles.truth}><ShieldCheck aria-hidden /><span>Microsoft 365 and Gmail are not configured. Only accounts an administrator has connected can send, and none is simulated here.</span></p>
         </section>
       ) : null}

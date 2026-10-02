@@ -60,6 +60,23 @@ export function participantKey(participant: MailParticipant): string {
   return participant.address ? normaliseAddress(participant.address) : `user:${participant.userId ?? ''}`;
 }
 
+/**
+ * A governed document carried by a message (F-09): a REFERENCE to one DMS document at the revision
+ * that was attached — never a copy of its bytes, and never a grant. Whoever opens it is checked by
+ * the DMS against their own access at that moment.
+ */
+export interface MailAttachment {
+  id: string;
+  documentId: string;
+  /** The revision attached. A later revision of the document does not change what was sent. */
+  version: number;
+  /** Copied from that revision when attached, so the message can be listed without the DMS. */
+  name: string;
+  mime: string;
+  sizeBytes: number;
+  createdAt: string;
+}
+
 export interface MailRecord {
   id: string;
   tenantId: string;
@@ -94,6 +111,11 @@ export interface MailRecord {
   /** When the CURRENT attempt began; a stale value is the crash signature. */
   deliveryStartedAt: string | null;
   deliveryAttempts: number;
+  /**
+   * Hydrated by the store, written ONLY through its attachment methods — never by `save`, which
+   * replaces a message's envelope wholesale and must not be able to drop or forge an attachment.
+   */
+  attachments?: MailAttachment[];
   createdAt: string;
   updatedAt: string;
 }

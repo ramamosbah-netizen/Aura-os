@@ -156,7 +156,7 @@
 | apps/web/app/my-projects/page.tsx | NOT_AUDITED | UNVERIFIED |
 | apps/web/app/my-work/approvals/page.tsx | PARTIAL | Live decision queue filters/views/mobile layout passed |
 | apps/web/app/my-work/command-center/page.tsx | NOT_AUDITED | UNVERIFIED |
-| apps/web/app/my-work/communication/page.tsx | PARTIAL | Live internal mail plus 7 browser tests; external accounts/attachments disconnected |
+| apps/web/app/my-work/communication/page.tsx | PARTIAL | Live internal mail plus 7 browser tests, and (F-09) mail to AURA colleagues carrying a governed document: refused while a recipient cannot open it, sent, and the pinned revision downloaded by the recipient; external accounts still not connected |
 | apps/web/app/my-work/favorites/page.tsx | PARTIAL | Live in-app source-link path passed |
 | apps/web/app/my-work/my-day/page.tsx | PARTIAL | Live daily focus/source coverage/mobile path passed |
 | apps/web/app/my-work/page.tsx | PARTIAL | Live cross-module attention aggregation and source-link paths passed |

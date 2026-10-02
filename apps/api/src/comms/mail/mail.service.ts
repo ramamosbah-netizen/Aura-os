@@ -1,5 +1,6 @@
-import { BadRequestException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { newId } from '@aura/shared';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { newId, type DocumentActor, type DocumentVersion } from '@aura/shared';
+import { DmsService, UsersService } from '@aura/core';
 import {
   INTERNAL_ACCOUNT_ID,
   isAccountIdShape,
@@ -12,6 +13,7 @@ import {
   snippetOf,
   threadLinkageForReply,
   type ComposeInput,
+  type MailAttachment,
   type MailParticipant,
   type MailRecord,
 } from './mail-domain';
@@ -23,6 +25,17 @@ export interface MailCaller {
   companyId: string | null;
   userId: string;
   address: string | null;
+}
+
+/** Who on a message's envelope could not open one attachment, and why (F-09). */
+export interface AttachmentAccess {
+  attachmentId: string;
+  documentId: string;
+  name: string;
+  version: number;
+  cannotOpen: Array<{ userId: string | null; address: string | null; why: 'no-access' | 'outside-aura' }>;
+  /** Whether the DMS lets the sender give access themselves (SHARE and DOWNLOAD both held). */
+  senderMayShare: boolean;
 }
 
 export interface ScheduleInput {
@@ -75,18 +88,179 @@ export function toUtcInstant(localDateTime: string, timezone: string): string {
 export class MailService {
   private readonly logger = new Logger('Mail');
 
-  constructor(@Inject(MAIL_STORE) private readonly store: MailStore) {}
+  constructor(
+    @Inject(MAIL_STORE) private readonly store: MailStore,
+    // The document store and the user directory are what a governed attachment needs (F-09).
+    // Optional so the mail engine still composes without them; attaching then says so plainly.
+    // Explicit @Inject on each: an @Optional() parameter typed as a union is silently null.
+    @Optional() @Inject(DmsService) private readonly dms: DmsService | null = null,
+    @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
+  ) {}
+
+  /**
+   * May this caller see this message at all?
+   *
+   * The envelope decides once a message has LEFT. Until then — a draft, a scheduled message, one
+   * cancelled before it went — it is its author's alone: a recipient named on a half-written draft
+   * has not been sent anything, and must not be able to read, edit, send or delete it.
+   */
+  private visible(caller: MailCaller, mail: MailRecord): boolean {
+    if (mail.fromUser === caller.userId) return true;
+    if (mail.state === 'draft' || mail.state === 'scheduled' || mail.state === 'cancelled') return false;
+    return mail.participants.some((p) =>
+      (p.userId && p.userId === caller.userId)
+      || (caller.address && p.address && p.address.toLowerCase() === caller.address.toLowerCase()));
+  }
 
   private async owned(caller: MailCaller, mailId: string): Promise<MailRecord> {
     const mail = await this.store.get(caller.tenantId, mailId);
     // 404 rather than 403, like every other Communication read: distinguishing them would confirm
     // that a message exists between two people the caller is not part of.
-    if (!mail) throw new NotFoundException(`mail ${mailId} not found`);
-    const onEnvelope = mail.participants.some((p) =>
-      (p.userId && p.userId === caller.userId)
-      || (caller.address && p.address && p.address.toLowerCase() === caller.address.toLowerCase()));
-    if (!onEnvelope && mail.fromUser !== caller.userId) throw new NotFoundException(`mail ${mailId} not found`);
+    if (!mail || !this.visible(caller, mail)) throw new NotFoundException(`mail ${mailId} not found`);
     return mail;
+  }
+
+  /** The caller's own message — the only kind anyone may edit, send, schedule or cancel. */
+  private async authored(caller: MailCaller, mailId: string): Promise<MailRecord> {
+    const mail = await this.owned(caller, mailId);
+    if (mail.fromUser !== caller.userId) throw new NotFoundException(`mail ${mailId} not found`);
+    return mail;
+  }
+
+  // ── Governed attachments (F-09) ────────────────────────────────────────────────────────────
+
+  private requireDms(): DmsService {
+    if (!this.dms) throw new BadRequestException('Document attachments require the document store, which is not configured');
+    return this.dms;
+  }
+
+  /**
+   * An AURA user as the DMS sees them when THEY ask — the same shape DocumentsController builds from
+   * a session: their id, tenant and company. Sessions carry no teams or roles, so neither is invented
+   * here; a share to a team or role is honoured nowhere yet, and this must not be the first place.
+   */
+  private documentActor(caller: MailCaller, userId: string): DocumentActor {
+    const registered = this.users?.get(caller.tenantId, userId) ?? null;
+    return {
+      userId,
+      tenantId: caller.tenantId,
+      companyId: userId === caller.userId ? caller.companyId : (registered?.companyId ?? caller.companyId),
+      teamIds: [],
+      roleIds: [],
+    };
+  }
+
+  /**
+   * Attach a DMS document to the caller's own draft, at its CURRENT revision.
+   *
+   * The sender must be able to DOWNLOAD it: attaching hands the bytes on, and seeing a title is not
+   * holding the file. A document the sender cannot see at all answers 404, like every other DMS
+   * read, so attaching cannot be used to probe for documents.
+   */
+  async attachDocument(caller: MailCaller, mailId: string, documentId: string): Promise<MailRecord> {
+    const mail = await this.authored(caller, mailId);
+    if (mail.state !== 'draft') throw new BadRequestException(`A ${mail.state} message cannot take attachments`);
+    const dms = this.requireDms();
+    const actor = this.documentActor(caller, caller.userId);
+    const decision = await dms.access(documentId, actor);
+    if (!decision.permissions.includes('VIEW')) throw new NotFoundException(`document ${documentId} not found`);
+    const found = await dms.getFor(documentId, actor);
+    if (!decision.permissions.includes('DOWNLOAD')) {
+      throw new ForbiddenException(`You may view "${found.document.title}" but not download it, so you cannot send it`);
+    }
+    const current: DocumentVersion | undefined = found.versions.find((v) => v.version === found.document.currentVersion);
+    if (!current) throw new BadRequestException(`"${found.document.title}" has no current revision to attach`);
+    const attachment: MailAttachment = {
+      id: newId(),
+      documentId,
+      version: current.version,
+      name: current.fileName,
+      mime: current.contentType,
+      sizeBytes: current.sizeBytes,
+      createdAt: new Date().toISOString(),
+    };
+    const added = await this.store.addAttachment(caller.tenantId, mailId, attachment);
+    if (!added) throw new ConflictException(`"${current.fileName}" is already attached to this message`);
+    return (await this.store.get(caller.tenantId, mailId))!;
+  }
+
+  async detachDocument(caller: MailCaller, mailId: string, attachmentId: string): Promise<MailRecord> {
+    const mail = await this.authored(caller, mailId);
+    if (mail.state !== 'draft') throw new BadRequestException(`A ${mail.state} message's attachments cannot be changed`);
+    const removed = await this.store.removeAttachment(caller.tenantId, mailId, attachmentId);
+    if (!removed) throw new NotFoundException(`attachment ${attachmentId} not found`);
+    return (await this.store.get(caller.tenantId, mailId))!;
+  }
+
+  /**
+   * Who on the envelope could NOT open each attachment, and whether the sender may change that.
+   *
+   * Mail never grants access. A recipient opens an attachment with their OWN document access, so a
+   * message whose recipient could not open what it carries is a message that does not work — the
+   * sender is told who, and, when the DMS lets them share the document, can give that person
+   * access as an explicit act of their own before sending.
+   */
+  async attachmentAccess(caller: MailCaller, mailId: string): Promise<AttachmentAccess[]> {
+    const mail = await this.authored(caller, mailId);
+    return this.accessFor(caller, mail);
+  }
+
+  private async accessFor(caller: MailCaller, mail: MailRecord): Promise<AttachmentAccess[]> {
+    const attachments = mail.attachments ?? [];
+    if (attachments.length === 0) return [];
+    const dms = this.requireDms();
+    const recipients = mail.participants.filter((p) => p.role !== 'from');
+    const sender = this.documentActor(caller, caller.userId);
+    const out: AttachmentAccess[] = [];
+    for (const attachment of attachments) {
+      const own = await dms.access(attachment.documentId, sender);
+      const cannotOpen: AttachmentAccess['cannotOpen'] = [];
+      for (const recipient of recipients) {
+        if (!recipient.userId) {
+          cannotOpen.push({ userId: null, address: recipient.address, why: 'outside-aura' });
+          continue;
+        }
+        if (recipient.userId === caller.userId) continue;
+        const theirs = await dms.access(attachment.documentId, this.documentActor(caller, recipient.userId));
+        if (!theirs.permissions.includes('DOWNLOAD')) {
+          cannotOpen.push({ userId: recipient.userId, address: recipient.address, why: 'no-access' });
+        }
+      }
+      out.push({
+        attachmentId: attachment.id,
+        documentId: attachment.documentId,
+        name: attachment.name,
+        version: attachment.version,
+        cannotOpen,
+        // Passing DOWNLOAD on needs SHARE and DOWNLOAD both (the DMS's own delegation rule).
+        senderMayShare: own.permissions.includes('SHARE') && own.permissions.includes('DOWNLOAD'),
+      });
+    }
+    return out;
+  }
+
+  /** Refuse to send while anyone on the envelope could not open what the message carries. */
+  private async assertAttachmentsOpenable(caller: MailCaller, mail: MailRecord): Promise<void> {
+    const blocked = (await this.accessFor(caller, mail)).filter((a) => a.cannotOpen.length > 0);
+    if (blocked.length === 0) return;
+    const reasons = blocked.flatMap((a) => a.cannotOpen.map((who) => who.why === 'outside-aura'
+      ? `${who.address} is outside AURA and cannot receive "${a.name}"`
+      : `${who.userId} cannot open "${a.name}"`));
+    throw new ConflictException(`This message can only be sent when every recipient can open its attachments — ${reasons.join('; ')}`);
+  }
+
+  /**
+   * The bytes of one attachment, for someone the message reached.
+   *
+   * Two gates, both required: the reader must be on the envelope (anyone else gets the same 404 as
+   * for the message), and the DMS must let THEM download the document now. A share revoked after
+   * the message was sent closes the attachment too — being sent a document is not owning it.
+   */
+  async downloadAttachment(caller: MailCaller, mailId: string, attachmentId: string): Promise<{ bytes: Buffer; version: DocumentVersion }> {
+    const mail = await this.owned(caller, mailId);
+    const attachment = (mail.attachments ?? []).find((a) => a.id === attachmentId);
+    if (!attachment) throw new NotFoundException(`attachment ${attachmentId} not found`);
+    return this.requireDms().downloadVersion(attachment.documentId, attachment.version, this.documentActor(caller, caller.userId));
   }
 
 /**
@@ -129,7 +303,7 @@ export class MailService {
   }
 
   async updateDraft(caller: MailCaller, mailId: string, patch: Partial<ComposeInput>): Promise<MailRecord> {
-    const mail = await this.owned(caller, mailId);
+    const mail = await this.authored(caller, mailId);
     if (mail.state !== 'draft') throw new BadRequestException(`A ${mail.state} message cannot be edited`);
     const accountId = patch.accountId !== undefined ? await this.resolveAccountId(caller.tenantId, patch.accountId) : mail.accountId;
     const next: MailRecord = {
@@ -156,7 +330,7 @@ export class MailService {
   }
 
   async deleteDraft(caller: MailCaller, mailId: string): Promise<void> {
-    const mail = await this.owned(caller, mailId);
+    const mail = await this.authored(caller, mailId);
     // Only something that never left may be deleted. A sent message is a record of what happened.
     if (mail.state !== 'draft' && mail.state !== 'cancelled') {
       throw new BadRequestException(`A ${mail.state} message cannot be deleted`);
@@ -166,9 +340,10 @@ export class MailService {
 
   /** Hand a message to delivery. The user asks for `queued`; the worker owns everything after. */
   async queueForSend(caller: MailCaller, mailId: string): Promise<MailRecord> {
-    const mail = await this.owned(caller, mailId);
+    const mail = await this.authored(caller, mailId);
     const sendable = assertSendable(mail);
     if (!sendable.ok) throw new BadRequestException(sendable.error);
+    await this.assertAttachmentsOpenable(caller, mail);
     const next: MailRecord = { ...mail, state: 'queued', updatedAt: new Date().toISOString() };
     await this.store.save(caller.tenantId, next);
     await this.store.upsertDispatch(caller.tenantId, {
@@ -179,9 +354,10 @@ export class MailService {
   }
 
   async schedule(caller: MailCaller, mailId: string, when: ScheduleInput): Promise<MailRecord> {
-    const mail = await this.owned(caller, mailId);
+    const mail = await this.authored(caller, mailId);
     const sendable = assertSendable(mail);
     if (!sendable.ok) throw new BadRequestException(sendable.error);
+    await this.assertAttachmentsOpenable(caller, mail);
     const scheduledAt = toUtcInstant(when.localDateTime, when.timezone);
 
     const next: MailRecord = { ...mail, state: 'scheduled', updatedAt: new Date().toISOString() };
@@ -204,13 +380,13 @@ export class MailService {
 
   /** Rescheduling is scheduling again — same guard, same row, new instant. */
   async reschedule(caller: MailCaller, mailId: string, when: ScheduleInput): Promise<MailRecord> {
-    const mail = await this.owned(caller, mailId);
+    const mail = await this.authored(caller, mailId);
     if (mail.state !== 'scheduled') throw new BadRequestException(`A ${mail.state} message is not scheduled`);
     return this.schedule(caller, mailId, when);
   }
 
   async cancel(caller: MailCaller, mailId: string): Promise<MailRecord> {
-    const mail = await this.owned(caller, mailId);
+    const mail = await this.authored(caller, mailId);
     if (mail.state !== 'scheduled' && mail.state !== 'queued') {
       throw new BadRequestException(`A ${mail.state} message cannot be cancelled`);
     }
@@ -349,7 +525,9 @@ export class MailService {
 
   async thread(caller: MailCaller, mailId: string): Promise<MailRecord[]> {
     const mail = await this.owned(caller, mailId);
-    return this.store.thread(caller.tenantId, mail.threadId);
+    // A conversation also holds other people's unsent replies; each message is shown only to
+    // whoever may see it on its own.
+    return (await this.store.thread(caller.tenantId, mail.threadId)).filter((m) => this.visible(caller, m));
   }
 
   async markRead(caller: MailCaller, mailId: string): Promise<void> {

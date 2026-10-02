@@ -1,6 +1,8 @@
 import { Controller, Get, Header, Inject, NotFoundException, Optional, Param, Query, StreamableFile } from '@nestjs/common';
 import * as XLSX from 'xlsx';
-import { ParseUuidOr404Pipe, PG_POOL, TenantContext } from '@aura/core';
+import { CompaniesService, ParseUuidOr404Pipe, PG_POOL, SettingsService, TenantContext } from '@aura/core';
+import { buildWorkbook, exportedAt, type WorkbookColumn } from '../common/workbook';
+import { resolveDocumentIdentity } from '../common/document-identity';
 import { parsePageParams, businessDate } from '@aura/shared';
 import type { Pool } from 'pg';
 import {
@@ -77,6 +79,9 @@ export class Account360Controller {
     private readonly invoices: CustomerInvoiceService,
     private readonly tenant: TenantContext,
     @Optional() @Inject(PG_POOL) pool: Pool | null,
+    // The issuer named in the export's lineage (F-01/F-03). Explicit tokens: a union is null otherwise.
+    @Optional() @Inject(CompaniesService) private readonly companies: CompaniesService | null = null,
+    @Optional() @Inject(SettingsService) private readonly settings: SettingsService | null = null,
   ) {
     this.portfolioQuery = pool ? new AccountPortfolioQueryService(pool) : null;
   }
@@ -263,34 +268,54 @@ export class Account360Controller {
     };
   }
 
-  /** The accounts register as an Excel workbook (every profile column). */
+  /**
+   * The accounts register as a governed workbook (F-03): every account the caller may see — the whole
+   * register, read page by page, not the first 10,000 — typed, filtered, header frozen, and an
+   * "About this export" sheet saying what it is, when, by whom, under which issuer, and that it is
+   * complete. The register is not narrowed by owner for any role that may read accounts, so the
+   * complete register IS the caller's permitted set.
+   */
   @Get('export.xlsx')
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   @Header('Content-Disposition', 'attachment; filename="crm-accounts.xlsx"')
   async accountsXlsx(): Promise<StreamableFile> {
-    const rows = await this.accounts.list({ tenantId: this.tenant.get().tenantId, limit: 10_000 });
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(
-      wb,
-      XLSX.utils.json_to_sheet(
-        rows.map((a) => ({
-          Name: a.name,
-          Status: a.status,
-          'Party type': a.partyType ?? '',
-          Industry: a.industry ?? '',
-          Website: a.website ?? '',
-          Phone: a.phone ?? '',
-          Email: a.email ?? '',
-          'Billing address': a.billingAddress ?? '',
-          Source: a.source ?? '',
-          'Payment terms': a.paymentTerms ?? '',
-          Owner: a.ownerId ?? '',
-          'Client since': a.createdAt.slice(0, 10),
-        })),
-      ),
-      'Accounts',
-    );
-    return new StreamableFile(XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer);
+    const ctx = this.tenant.get();
+    const rows: Awaited<ReturnType<AccountService['listPaged']>>['items'] = [];
+    let total = 0;
+    for (let offset = 0; ; offset += 500) {
+      const page = await this.accounts.listPaged({ tenantId: ctx.tenantId }, { limit: 500, offset });
+      total = page.total;
+      rows.push(...page.items);
+      if (page.items.length === 0 || rows.length >= page.total) break;
+    }
+    const columns: WorkbookColumn<(typeof rows)[number]>[] = [
+      { label: 'Name', type: 'text', value: (a) => a.name },
+      { label: 'Status', type: 'text', value: (a) => a.status },
+      { label: 'Party type', type: 'text', value: (a) => a.partyType },
+      { label: 'Industry', type: 'text', value: (a) => a.industry },
+      { label: 'Website', type: 'text', value: (a) => a.website },
+      { label: 'Phone', type: 'text', value: (a) => a.phone },
+      { label: 'Email', type: 'text', value: (a) => a.email },
+      { label: 'Billing address', type: 'text', value: (a) => a.billingAddress },
+      { label: 'Source', type: 'text', value: (a) => a.source },
+      { label: 'Payment terms', type: 'text', value: (a) => a.paymentTerms },
+      { label: 'Owner', type: 'text', value: (a) => a.ownerId },
+      { label: 'Client since', type: 'date', value: (a) => a.createdAt.slice(0, 10) },
+    ];
+    const issuer = this.companies && this.settings
+      ? await resolveDocumentIdentity(this.companies, this.settings, ctx.tenantId, ctx.companyId ?? null)
+      : null;
+    const complete = rows.length === total;
+    return new StreamableFile(buildWorkbook('Accounts', columns, rows, {
+      title: 'Customer accounts register',
+      source: 'CRM accounts register (Sales & Commercial › Customers)',
+      completeness: complete
+        ? `All ${rows.length} accounts in the register — every account you are permitted to see.`
+        : `${rows.length} of ${total} accounts: the register changed while it was being read. Export again for a consistent copy.`,
+      generatedAt: exportedAt(),
+      generatedBy: ctx.actorId ?? 'unknown',
+      issuer: issuer?.configured ? [issuer.legalName || issuer.name, issuer.trn ? `TRN ${issuer.trn}` : ''].filter(Boolean) : undefined,
+    }));
   }
 
   /** One customer's FULL dossier as a multi-sheet Excel workbook. */

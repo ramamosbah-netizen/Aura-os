@@ -77,7 +77,7 @@ export default function AssetDisposalClient({ initial }: { initial: AssetDisposa
       <div style={st.regHead}>
         <h2 style={st.h2}>Disposal register</h2>
         <ExportButton filename="asset-disposals" title="Asset Disposal Register" rows={rows as unknown as Array<Record<string, unknown>>}
-          columns={[{ key: 'disposalDate', label: 'Date' }, { key: 'assetName', label: 'Asset' }, { key: 'method', label: 'Method' }, { key: 'proceeds', label: 'Proceeds' }, { key: 'bookValue', label: 'Book value' }, { key: 'gainLoss', label: 'Gain/Loss' }]} />
+          columns={[{ key: 'disposalDate', label: 'Date', type: 'date' }, { key: 'assetName', label: 'Asset' }, { key: 'method', label: 'Method' }, { key: 'proceeds', label: 'Proceeds', type: 'money', total: true }, { key: 'bookValue', label: 'Book value', type: 'money', total: true }, { key: 'gainLoss', label: 'Gain/Loss', type: 'money', total: true }]} />
       </div>
       {rows.length === 0 ? (
         <EmptyState compact title="No disposals recorded" description="Record an asset sale, scrap or write-off — the gain or loss against net book value is computed and posted to the register." />

@@ -4353,16 +4353,16 @@
       "source": "apps/web/components/export-button.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
+        "domain": "PARTIAL",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "PARTIAL",
+        "permissions": "PARTIAL",
+        "ui": "PARTIAL",
         "actualOutput": "PARTIAL",
-        "browser": "NOT_AUDITED",
+        "browser": "PARTIAL",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Actual CRM Accounts XLSX was downloaded and opened: correct 12-column row and Unicode, but all values are text and the workbook has no table, filter, freeze pane, branding or images. Shared generic Excel remains HTML .xls.",
+      "currentBehavior": "F-03 (2026-10-02): one governed workbook builder (apps/api/src/common/workbook.ts) writes native .xlsx with typed cells (numbers and money as numbers with formats, dates as dates, yes/no as booleans, empty as empty), an autofilter, a frozen header, a filter-aware Total row (SUBTOTAL 109, money summed by the money authority) for columns declared summable, and an 'About this export' sheet: title, source, row count, completeness in words, filters, generated at/by, issuer (F-01). The accounts register exports the WHOLE register page by page (it stopped silently at 10,000) and says it is complete; the shared Excel button on 21 registers — formerly an HTML table saved as .xls — now returns a native workbook of the rows on screen and says exactly that. Money is totalled only where one currency is certain (Salik, asset disposals); invoices and quotations are typed but not totalled. Remaining: complete-register server exports exist for accounts (and the comparison, pricing, compliance-matrix and dossier workbooks); the other registers export what the page loaded. SheetJS community edition writes no cell styles, Excel tables or images, so the header is plain and branding is the issuer in words.",
       "acceptanceProof": "Generate role-appropriate native workbooks with typed values, totals, filters, complete permitted rows and canonical lineage."
     },
     {
@@ -8163,9 +8163,9 @@
       "capabilityIds": [
         "OUT-02"
       ],
-      "classification": "PARTIAL",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Sales",
         "Pre-Sales / Estimator",
@@ -8204,13 +8204,13 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "currentBehavior": "Actual CRM Accounts XLSX was downloaded and opened: correct 12-column row and Unicode, but all values are text and the workbook has no table, filter, freeze pane, branding or images. Shared generic Excel remains HTML .xls.",
+      "currentBehavior": "CLOSED 2026-10-02. MEASURED: the accounts XLSX wrote every value as text (amounts and dates Excel could not sum or sort), had no filter or frozen header, said nothing of its origin, and read at most 10,000 accounts; the shared Excel button on 21 registers produced an HTML table named .xls from the rows the page held. The comparison, pricing and compliance workbooks already had filters and lineage sheets. Built: the governed workbook builder; the accounts register on it, complete; POST documents/workbook so the shared button returns native .xlsx of the rows on screen (column types declared or read from the values — mixed stays text), with completeness stated in the file.",
       "expectedOperationalBehavior": "Native Excel operational workbook from governed canonical records with actual usable output",
       "authority": "Owning record + document rendering",
-      "evidence": "NEW source inspection: apps/web/components/export-button.tsx",
+      "evidence": "FRESH 2026-10-02: apps/api/src/common/workbook.ts (+ workbook.test.ts, 6 cases); apps/api/src/crm/account-360.controller.ts (export.xlsx); apps/api/src/documents/documents.controller.ts (POST workbook); apps/web/components/export-button.tsx, app/api/documents/workbook/route.ts, and the typed columns of the Salik, asset-disposal, customer-invoice and quotation registers; apps/api/test/governed-workbook.e2e-spec.ts; apps/web/e2e/governed-workbook.spec.ts.",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Generate role-appropriate native workbooks with typed values, totals, filters, complete permitted rows and canonical lineage."
+      "acceptanceProof": "MET for the governed workbook, the accounts register and the shared Excel button. UNIT (workbook.test.ts): read back with SheetJS — money 0.1 is a number formatted #,##0.00, a date is serial 46037 formatted yyyy-mm-dd, a UTC instant is written on the Dubai wall clock, an absent value is no cell, the autofilter spans header and data only, the Total row is SUBTOTAL(109,…) with 0.1+0.2 cached as 0.3, the About sheet carries source, completeness, filters, generator and issuer, and the data sheet's XML carries a frozen pane (the test caught the freeze silently skipped by a wrong zip path before it shipped). API, AUTH ON (governed-workbook.e2e-spec.ts): 503 accounts — beyond one 500-row page — all exported for a Sales user, filtered A1:L504, dates typed, About saying 'All 503 accounts … every account you are permitted to see' under the configured issuer; Finance's on-screen export of Salik rows is typed, totalled only on the declared column (8.5) and says 'The 3 rows that were on screen when exported…'; an empty request is 400, no session 401. BROWSER, AUTH ON, POSTGRESQL (governed-workbook.spec.ts): the accounts page's Excel link downloads crm-accounts.xlsx with an autofilter, frozen header and the completeness statement; the customer-invoice register's Excel button downloads <register>-<date>.xlsx (a zip, not HTML) in which this run's invoice total is a number cell and its issue date the serial 46296, with the 'rows on screen' statement. LIMITS — not evidence for: complete-register exports beyond accounts and the existing comparison/pricing/compliance/dossier workbooks (other registers export the rows on screen, and say so); cell styling, Excel tables or images (not writable by SheetJS community edition)."
     },
     {
       "id": "F-04",

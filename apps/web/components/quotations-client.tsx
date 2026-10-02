@@ -142,7 +142,7 @@ export default function QuotationsClient({ initialQuotations, embedded, emptyLab
       <div style={st.toolbar}>
         {!embedded && <QuotationCreate />}
         <ExportButton filename="quotations" csvUrl={exportCsvUrl} rows={quotes as unknown as Array<Record<string, unknown>>}
-          columns={[{ key: 'quoteNumber' }, { key: 'revision' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'validUntil' }, { key: 'subtotal' }, { key: 'vatTotal' }, { key: 'total' }, { key: 'status' }, { key: 'ownerId' }]} />
+          columns={[{ key: 'quoteNumber', label: 'Quote' }, { key: 'revision', label: 'Rev', type: 'integer' }, { key: 'customerName', label: 'Customer' }, { key: 'issueDate', label: 'Issue date', type: 'date' }, { key: 'validUntil', label: 'Valid until', type: 'date' }, { key: 'subtotal', label: 'Subtotal', type: 'money' }, { key: 'vatTotal', label: 'VAT', type: 'money' }, { key: 'total', label: 'Total', type: 'money' }, { key: 'status', label: 'Status' }, { key: 'ownerId', label: 'Owner' }]} />
         {error && <span style={st.err}>{error}</span>}
         {msg && <span style={st.ok}>{msg}</span>}
       </div>

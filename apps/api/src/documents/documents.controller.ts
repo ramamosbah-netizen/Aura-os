@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Inject, NotFoundException, Optional, Param, Post, Query, ServiceUnavailableException, StreamableFile } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, Inject, NotFoundException, Optional, Param, Post, Query, ServiceUnavailableException, StreamableFile } from '@nestjs/common';
 import type {
   Document,
   DocumentActor,
@@ -8,8 +8,10 @@ import type {
   DocumentVersion,
 } from '@aura/shared';
 import { resolveDocumentIdentity, type DocumentIdentity } from '../common/document-identity';
+import { buildWorkbook, exportedAt, typedCell, type WorkbookColumn, type WorkbookColumnType } from '../common/workbook';
 import {
   CompaniesService,
+  Permissions,
   SettingsService,
   DmsService,
   type AccessDecision,
@@ -34,6 +36,33 @@ interface AddVersionDto {
   fileName?: string;
   contentType?: string;
   note?: string;
+}
+
+interface WorkbookRequest {
+  title?: string;
+  filename?: string;
+  columns?: Array<{ key: string; label?: string; type?: string; total?: boolean }>;
+  rows?: Array<Record<string, unknown>>;
+  filters?: Array<[string, string]>;
+}
+
+const WORKBOOK_TYPES = new Set<WorkbookColumnType>(['text', 'number', 'integer', 'money', 'percent', 'date', 'datetime', 'boolean']);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+
+/**
+ * A column's type, read from its values when the screen did not say: numbers stay numbers, ISO
+ * dates and instants become dates, yes/no stays yes/no — and anything mixed stays text, because a
+ * guessed number is worse than an honest string.
+ */
+function inferType(values: unknown[]): WorkbookColumnType {
+  const present = values.filter((v) => v !== null && v !== undefined && v !== '');
+  if (present.length === 0) return 'text';
+  if (present.every((v) => typeof v === 'number' && Number.isFinite(v))) return 'number';
+  if (present.every((v) => typeof v === 'boolean')) return 'boolean';
+  if (present.every((v) => typeof v === 'string' && ISO_DATE.test(v))) return 'date';
+  if (present.every((v) => typeof v === 'string' && ISO_INSTANT.test(v) && typedCell('datetime', v)?.t === 'n')) return 'datetime';
+  return 'text';
 }
 
 interface ShareDto {
@@ -129,6 +158,45 @@ export class DocumentsController {
   issuerIdentity(@Query('companyId') companyId?: string): Promise<DocumentIdentity> {
     if (!this.companies || !this.settings) throw new ServiceUnavailableException('Company identity is unavailable');
     return resolveDocumentIdentity(this.companies, this.settings, this.tenant.get().tenantId, companyId?.trim() || null);
+  }
+
+  /**
+   * THE ROWS ON SCREEN, AS A NATIVE WORKBOOK (F-03). The registers' shared Excel button used to save
+   * an HTML table as .xls. It now sends the rows it shows here and receives a real workbook — typed,
+   * filtered, header frozen — whose "About this export" sheet says plainly that these are the rows
+   * that were on screen, not necessarily the whole register. Nothing is read from any store: the
+   * caller already holds the rows, so the permission is the reader's, not a new data grant.
+   */
+  @Permissions('documents.workbook.read')
+  @Post('workbook')
+  async workbook(@Body() dto: WorkbookRequest): Promise<StreamableFile> {
+    const rows = Array.isArray(dto?.rows) ? dto.rows : [];
+    const requested = Array.isArray(dto?.columns) ? dto.columns : [];
+    if (rows.length > 20_000) throw new BadRequestException('A workbook from the screen may hold at most 20,000 rows');
+    if (requested.length === 0 || requested.length > 80) throw new BadRequestException('A workbook requires between 1 and 80 columns');
+    const columns: WorkbookColumn<Record<string, unknown>>[] = requested.map((c) => ({
+      label: String(c.label ?? c.key).slice(0, 120),
+      type: WORKBOOK_TYPES.has(c.type as WorkbookColumnType) ? (c.type as WorkbookColumnType) : inferType(rows.map((r) => r?.[c.key])),
+      value: (row) => row?.[c.key],
+      total: c.total === true,
+    }));
+    const ctx = this.tenant.get();
+    const identity = this.companies && this.settings
+      ? await resolveDocumentIdentity(this.companies, this.settings, ctx.tenantId, ctx.companyId ?? null)
+      : null;
+    const title = String(dto?.title ?? 'Export').slice(0, 120);
+    return new StreamableFile(buildWorkbook(title, columns, rows, {
+      title,
+      source: `${title} — the rows on screen when exported`,
+      completeness: `The ${rows.length} rows that were on screen when exported. This is what the page had loaded and filtered, which may not be the whole register.`,
+      filters: Array.isArray(dto?.filters) ? dto.filters.slice(0, 20).map(([k, v]) => [String(k), String(v)] as [string, string]) : undefined,
+      generatedAt: exportedAt(),
+      generatedBy: ctx.actorId ?? 'unknown',
+      issuer: identity?.configured ? [identity.legalName || identity.name, identity.trn ? `TRN ${identity.trn}` : ''].filter(Boolean) : undefined,
+    }), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="${(String(dto?.filename ?? 'export').replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 80) || 'export')}.xlsx"`,
+    });
   }
 
   /** Only what the caller may see — filtering happens in the service, not here. */

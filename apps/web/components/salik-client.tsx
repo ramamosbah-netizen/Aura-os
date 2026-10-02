@@ -103,7 +103,7 @@ export default function SalikClient({ initialCharges, vehicles }: { initialCharg
         <span style={s.stat}>Total (excl. disputed): <b>AED {total.toLocaleString('en-AE', { minimumFractionDigits: 2 })}</b></span>
       </div>
 
-      <div style={{ margin: '8px 0' }}><ExportButton filename="salik" rows={charges as unknown as Array<Record<string, unknown>>} columns={[{ key: 'chargeDate' }, { key: 'gate' }, { key: 'amount' }, { key: 'status' }, { key: 'allocatedTo' }]} /></div>
+      <div style={{ margin: '8px 0' }}><ExportButton filename="salik" rows={charges as unknown as Array<Record<string, unknown>>} columns={[{ key: 'chargeDate', label: 'Date', type: 'date' }, { key: 'gate', label: 'Gate' }, { key: 'amount', label: 'Amount (AED)', type: 'money', total: true }, { key: 'status', label: 'Status' }, { key: 'allocatedTo', label: 'Allocated to' }]} /></div>
       <table style={s.table}>
         <thead>
           <tr>

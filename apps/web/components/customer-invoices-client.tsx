@@ -131,7 +131,7 @@ export default function CustomerInvoicesClient({ initialInvoices }: { initialInv
         <div style={{ marginLeft: 'auto', alignSelf: 'center', display: 'flex', gap: 8 }}>
           <SaveViewButton />
           <ExportButton filename="customer-invoices" rows={invoices as unknown as Array<Record<string, unknown>>}
-            columns={[{ key: 'invoiceNumber' }, { key: 'customerName' }, { key: 'issueDate' }, { key: 'currency' }, { key: 'total' }, { key: 'amountPaid' }, { key: 'status' }]} />
+            columns={[{ key: 'invoiceNumber', label: 'Invoice' }, { key: 'customerName', label: 'Customer' }, { key: 'issueDate', label: 'Issue date', type: 'date' }, { key: 'currency', label: 'Currency' }, { key: 'total', label: 'Total', type: 'money' }, { key: 'amountPaid', label: 'Paid', type: 'money' }, { key: 'status', label: 'Status' }]} />
         </div>
       </div>
 

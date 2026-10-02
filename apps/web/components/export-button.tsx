@@ -3,7 +3,17 @@
 import { type CSSProperties, useState } from 'react';
 import { businessDateInputValue } from '@/lib/locale';
 
-export interface ExportColumn { key: string; label?: string }
+export interface ExportColumn {
+  key: string;
+  label?: string;
+  /**
+   * How the workbook types this column (F-03). Read from the values when absent — numbers stay
+   * numbers, ISO dates become dates, anything mixed stays text.
+   */
+  type?: 'text' | 'number' | 'integer' | 'money' | 'percent' | 'date' | 'datetime' | 'boolean';
+  /** Add this column to the workbook's Total row (which follows the filter). */
+  total?: boolean;
+}
 
 interface ExportProps {
   rows: Array<Record<string, unknown>>;
@@ -16,9 +26,13 @@ interface ExportProps {
 }
 
 // Shared reporting control — one drop-in that exports the current rows as CSV or Excel,
-// or opens a clean print view (Save-as-PDF from the browser dialog). Dependency-free: CSV and
-// the .xls (SpreadsheetML-as-HTML) are built from the same rows/columns, and print opens a styled
-// window. Adopted across every register so reporting is uniform, not per-module one-offs.
+// or opens a clean print view (Save-as-PDF from the browser dialog). Adopted across every register
+// so reporting is uniform, not per-module one-offs.
+//
+// EXCEL IS A REAL WORKBOOK (F-03). It used to be an HTML table saved as .xls, which Excel opens
+// behind a format warning, every value text. The rows now go to the governed workbook builder and
+// come back as native .xlsx — typed, filtered, header frozen, with an "About this export" sheet
+// that says these are the rows that were on screen, not necessarily the whole register.
 
 const stamp = (): string => businessDateInputValue();
 const esc = (v: unknown): string => (v == null ? '' : String(v));
@@ -41,6 +55,7 @@ export default function ExportButton({ rows, filename, columns, title, csvUrl }:
   const disabled = !rows?.length;
   const [csvLoading, setCsvLoading] = useState(false);
   const [csvError, setCsvError] = useState('');
+  const [excelLoading, setExcelLoading] = useState(false);
   const cols = () => resolveCols(rows, columns);
   const heading = title ?? filename;
 
@@ -79,13 +94,28 @@ export default function ExportButton({ rows, filename, columns, title, csvUrl }:
     return `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
   }
 
-  function exportExcel(): void {
+  async function exportExcel(): Promise<void> {
     if (disabled) return;
-    // Excel opens an HTML table saved as .xls — no library needed.
-    const doc = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-<head><meta charset="utf-8"><style>th{background:#eee;font-weight:bold;text-align:left}td,th{border:1px solid #ccc;padding:4px}</style></head>
-<body><h3>${htmlEsc(heading)}</h3>${tableHtml()}</body></html>`;
-    downloadBlob(new Blob([doc], { type: 'application/vnd.ms-excel;charset=utf-8;' }), `${filename}-${stamp()}.xls`);
+    setExcelLoading(true);
+    setCsvError('');
+    try {
+      const res = await fetch('/api/documents/workbook', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          title: heading,
+          filename: `${filename}-${stamp()}`,
+          columns: cols().map((c) => ({ key: c.key, label: c.label ?? c.key, type: c.type, total: c.total })),
+          rows,
+        }),
+      });
+      if (!res.ok) throw new Error(`Excel export failed (${res.status})`);
+      downloadBlob(await res.blob(), `${filename}-${stamp()}.xlsx`);
+    } catch (err) {
+      setCsvError(err instanceof Error ? err.message : 'Excel export failed');
+    } finally {
+      setExcelLoading(false);
+    }
   }
 
   function printView(): void {
@@ -110,7 +140,7 @@ export default function ExportButton({ rows, filename, columns, title, csvUrl }:
   return (
     <span style={s.group} role="group" aria-label="Export">
       <button type="button" style={s.btn} onClick={() => void exportCsv()} disabled={disabled || csvLoading} title={csvUrl ? 'Export all filtered rows to CSV' : 'Export current rows to CSV'}>{csvLoading ? '… CSV' : '⬇ CSV'}</button>
-      <button type="button" style={s.btn} onClick={exportExcel} disabled={disabled} title="Export current rows to Excel">⬇ Excel</button>
+      <button type="button" style={s.btn} onClick={() => void exportExcel()} disabled={disabled || excelLoading} title="Export the rows shown to a native Excel workbook" data-testid="export-excel">{excelLoading ? '… Excel' : '⬇ Excel'}</button>
       <button type="button" style={s.btn} onClick={printView} disabled={disabled} title="Print / Save as PDF">🖨 Print</button>
       {csvError && <span role="alert" style={s.error}>{csvError}</span>}
     </span>

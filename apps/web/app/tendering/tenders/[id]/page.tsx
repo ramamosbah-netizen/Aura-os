@@ -4,6 +4,7 @@ import RecordChrome from '../../../../components/record-chrome';
 import TenderDetail from '../../../../components/tender-detail';
 import Sales360Journey from '../../../../components/sales-360-journey';
 import TenderAwardBasis, { type TenderCommercialBasisView } from '../../../../components/tender-award-basis';
+import TenderBidAward, { type BidVersusAwardView } from '../../../../components/tender-bid-award';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +47,8 @@ export default async function TenderDetailPage({
       getJson<{ revision: number; lockedBy: string | null; lockedAt: string }>(`/api/crm/quotations/${basis.quotationId}/baseline`),
     ])
     : [null, null];
+  // What went out and what came back, compared before VAT (VAT-BASIS-01). Nothing to say on a draft.
+  const bidAward = tender.status === 'draft' ? null : await getJson<BidVersusAwardView>(`/api/tendering/tenders/${id}/bid-versus-award`);
 
   return (
     <div style={st.container}>
@@ -55,6 +58,7 @@ export default async function TenderDetailPage({
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>
       </div>
       {basis && <TenderAwardBasis basis={basis} quotation={basisQuotation} baseline={basisBaseline} />}
+      {bidAward && <TenderBidAward view={bidAward} />}
       <TenderDetail tender={tender} currentUserId={(await currentUser())?.sub ?? null} />
     </div>
   );

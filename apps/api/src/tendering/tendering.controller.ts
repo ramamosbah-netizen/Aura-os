@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AccessService, CompaniesService, DmsService, Permissions, SettingsService, TenantContext, ParseUuidOr404Pipe, UsersService } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Tender, type TenderStatus, TenderService, checkTenderTransition, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, parsePastedBoqLines, type BoqImportResult, type BoqImportRow } from '@aura/tendering';
+import { type Tender, type TenderStatus, TenderService, checkTenderTransition, type BOQ, type BOQItem, type TenderSubmission, type SubmittedOffer, type TenderAwardEvidence, type BidVersusAward, bidVersusAward, standingSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, parsePastedBoqLines, type BoqImportResult, type BoqImportRow } from '@aura/tendering';
 import { AccountService, PreAwardPackageService, QuotationService, isQuotationCommitted, type TechnicalStudyContent } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 import { resolveDocumentIdentity } from '../common/document-identity';
@@ -502,7 +502,7 @@ export class TenderingController {
       // without it, so its record carried the tender's own estimate instead: two routes into one
       // fact, disagreeing about what was offered. It stays a bare record (method 'other').
       const basis = await this.resolveAwardBasis(found.tenantId, id);
-      return (await this.tenders.submit(id, {}, basis?.value)).tender;
+      return (await this.tenders.submit(id, {}, basis?.offer)).tender;
     }
     return this.tenders.changeStatus(id, dto.status);
   }
@@ -588,11 +588,19 @@ export class TenderingController {
   private async resolveAwardBasis(
     tenantId: string,
     tenderId: string,
-  ): Promise<{ baselineId: string; quotationId: string; value: number } | null> {
+  ): Promise<{ baselineId: string; quotationId: string; value: number; offer: SubmittedOffer } | null> {
     try {
       const offer = await this.currentApprovedOffer(tenantId, tenderId);
-      // `baseline.total` — the Contract Value measure, VAT-inclusive. Unchanged by this slice.
-      return offer ? { baselineId: offer.baseline.id, quotationId: offer.quotation.id, value: offer.baseline.total } : null;
+      // `baseline.total` — the Contract Value measure, VAT-inclusive. Unchanged. Its two parts travel
+      // with it so a submission can say what its number is (VAT-BASIS-01).
+      return offer
+        ? {
+          baselineId: offer.baseline.id,
+          quotationId: offer.quotation.id,
+          value: offer.baseline.total,
+          offer: { net: offer.baseline.subtotal, vat: offer.baseline.vatTotal, gross: offer.baseline.total },
+        }
+        : null;
     } catch {
       return null;
     }
@@ -631,7 +639,22 @@ export class TenderingController {
       notes: dto.notes ?? null,
       submittedBy: ctx.actorId,
       createdBy: ctx.actorId,
-    }, basis?.value);
+    }, basis?.offer);
+  }
+
+  /**
+   * GET /api/tendering/tenders/:id/bid-versus-award — VAT-BASIS-01: the bid that stood (the latest
+   * submission) against the customer's award, compared net with net — or the reason they are not
+   * compared. Reads the recorded facts; derives no award and no contract value.
+   */
+  @Get(':id/bid-versus-award')
+  async bidAgainstAward(
+    @Param('id', ParseUuidOr404Pipe) id: string,
+  ): Promise<{ submission: TenderSubmission | null; award: TenderAwardEvidence | null; comparison: BidVersusAward }> {
+    const found = await this.tenders.get(id);
+    if (!found) throw new NotFoundException(`tender ${id} not found`);
+    const submission = standingSubmission(await this.tenders.listSubmissions(this.tenant.get().tenantId, id));
+    return { submission, award: found.awardEvidence, comparison: bidVersusAward(submission, found.awardEvidence) };
   }
 
   /** GET /api/tendering/tenders/:id/submissions — the submission records, latest first. */

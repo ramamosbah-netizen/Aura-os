@@ -28,6 +28,7 @@ export * from './in-memory-estimate-source-store';
 export * from './postgres-estimate-source-store';
 export * from './estimate-sourcing.service';
 export * from './domain/submission';
+export * from './domain/bid-versus-award';
 export * from './submission-store';
 export * from './in-memory-submission-store';
 export * from './postgres-submission-store';

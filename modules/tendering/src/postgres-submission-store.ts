@@ -17,6 +17,9 @@ interface Row {
   portal: string | null;
   reference: string | null;
   submitted_value: string | number;
+  value_basis: string;
+  submitted_net: string | number | null;
+  submitted_vat: string | number | null;
   addenda_acknowledged: string | null;
   valid_until: Date | string | null;
   notes: string | null;
@@ -25,7 +28,7 @@ interface Row {
 }
 
 const COLS =
-  'id, tenant_id, company_id, tender_id, tender_title, submitted_at, submitted_by, method, portal, reference, submitted_value, addenda_acknowledged, valid_until, notes, created_by, created_at';
+  'id, tenant_id, company_id, tender_id, tender_title, submitted_at, submitted_by, method, portal, reference, submitted_value, addenda_acknowledged, valid_until, notes, created_by, created_at, value_basis, submitted_net, submitted_vat';
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 const isoDate = (v: Date | string | null): string | null =>
@@ -44,6 +47,9 @@ function rowToSubmission(r: Row): TenderSubmission {
     portal: r.portal,
     reference: r.reference,
     submittedValue: Number(r.submitted_value),
+    valueBasis: r.value_basis === 'gross' ? 'gross' : 'unstated',
+    submittedNet: r.submitted_net === null ? null : Number(r.submitted_net),
+    submittedVat: r.submitted_vat === null ? null : Number(r.submitted_vat),
     addendaAcknowledged: r.addenda_acknowledged,
     validUntil: isoDate(r.valid_until),
     notes: r.notes,
@@ -67,14 +73,14 @@ export class PostgresSubmissionStore implements SubmissionStore {
 
   private insert(executor: Pool | PoolClient, s: TenderSubmission): Promise<unknown> {
     // The record is a fact — a conflicting re-save may only correct its annotations
-    // (reference, portal, addenda, validity, notes), never when/who/how much.
+    // (reference, portal, addenda, validity, notes), never when/who/how much, nor what the value is.
     return executor.query(
-      `INSERT INTO public.aura_tendering_submissions (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      `INSERT INTO public.aura_tendering_submissions (${COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
        ON CONFLICT (id) DO UPDATE SET
          portal = EXCLUDED.portal, reference = EXCLUDED.reference,
          addenda_acknowledged = EXCLUDED.addenda_acknowledged,
          valid_until = EXCLUDED.valid_until, notes = EXCLUDED.notes`,
-      [s.id, s.tenantId, s.companyId, s.tenderId, s.tenderTitle, s.submittedAt, s.submittedBy, s.method, s.portal, s.reference, s.submittedValue, s.addendaAcknowledged, s.validUntil, s.notes, s.createdBy, s.createdAt],
+      [s.id, s.tenantId, s.companyId, s.tenderId, s.tenderTitle, s.submittedAt, s.submittedBy, s.method, s.portal, s.reference, s.submittedValue, s.addendaAcknowledged, s.validUntil, s.notes, s.createdBy, s.createdAt, s.valueBasis, s.submittedNet, s.submittedVat],
     );
   }
 

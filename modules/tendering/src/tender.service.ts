@@ -5,7 +5,7 @@ import { TENDER_EVENT, type Tender, type TenderStatus, type NewTender, makeTende
 import { checkTenderTransition, tenderGateMessage, type TenderGateEvidence } from './domain/tender-gate';
 import { makeTenderAwardEvidence, type NewTenderAwardEvidence, type TenderAwardEvidence } from './domain/tender-award-evidence';
 import { makeTenderCommercialBasis, type NewTenderCommercialBasis, type TenderCommercialBasis } from './domain/tender-commercial-basis';
-import { makeTenderSubmission, type NewTenderSubmission, type TenderSubmission } from './domain/submission';
+import { makeTenderSubmission, type NewTenderSubmission, type SubmittedOffer, type TenderSubmission } from './domain/submission';
 import { TENDER_STORE, type TenderFilter, type TenderStore } from './tender-store';
 import { BOQ_STORE, type BOQStore } from './boq-store';
 import { BID_SCORE_STORE, type BidScoreStore } from './bid-score-store';
@@ -456,14 +456,17 @@ export class TenderService implements OnModuleInit {
    */
   async submit(
     id: Id,
-    details: Omit<NewTenderSubmission, 'tenantId' | 'companyId' | 'tenderId' | 'tenderTitle' | 'submittedValue'> = {},
-    /** Canonical approved-offer value resolved by the app layer; never accepted from request data. */
-    approvedOfferValue?: number,
+    details: Omit<NewTenderSubmission, 'tenantId' | 'companyId' | 'tenderId' | 'tenderTitle' | 'submittedValue' | 'offer'> = {},
+    /**
+     * The canonical approved offer — net, VAT and gross — resolved by the app layer; never accepted
+     * from request data. Its gross is the bid value (unchanged), and the submission records all three
+     * so no reader has to guess whether the number holds VAT (VAT-BASIS-01).
+     */
+    approvedOffer?: SubmittedOffer | null,
   ): Promise<{ tender: Tender; submission: TenderSubmission }> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'tender', id);
-    const submittedTender = approvedOfferValue !== undefined && approvedOfferValue > 0
-      ? { ...existing, value: approvedOfferValue }
-      : existing;
+    const offer = approvedOffer && approvedOffer.gross > 0 ? approvedOffer : null;
+    const submittedTender = offer ? { ...existing, value: offer.gross } : existing;
 
     const evidence = await this.tenderEvidence(submittedTender.tenantId, id);
     const check = checkTenderTransition(submittedTender, 'submitted', evidence);
@@ -475,8 +478,11 @@ export class TenderService implements OnModuleInit {
       companyId: submittedTender.companyId,
       tenderId: submittedTender.id,
       tenderTitle: submittedTender.title,
-      // The offer as it stands right now — a snapshot later BOQ edits cannot rewrite.
+      // The offer as it stands right now — a snapshot later BOQ edits cannot rewrite. With an approved
+      // offer the submission records its net and VAT beside the gross; without one, the tender's own
+      // figure goes out with its basis unstated, because nothing says what it holds.
       submittedValue: submittedTender.value,
+      offer,
     });
     const updated: Tender = { ...submittedTender, status: 'submitted' };
 
@@ -499,6 +505,9 @@ export class TenderService implements OnModuleInit {
           portal: submission.portal,
           reference: submission.reference,
           submittedValue: submission.submittedValue,
+          valueBasis: submission.valueBasis,
+          submittedNet: submission.submittedNet,
+          submittedVat: submission.submittedVat,
         },
         account: updated.accountId
           ? { id: updated.accountId, name: updated.accountName }
@@ -523,6 +532,9 @@ export class TenderService implements OnModuleInit {
       {
         status: updated.status,
         submittedValue: submission.submittedValue,
+        valueBasis: submission.valueBasis,
+        submittedNet: submission.submittedNet,
+        submittedVat: submission.submittedVat,
         submissionId: submission.id,
         submittedAt: submission.submittedAt,
       },

@@ -1496,6 +1496,19 @@ defects.push({
  "acceptanceProof": "Two users in two companies sign in normally; each one's records carry their own company and print that company's identity; a user in both switches company through a governed act; the switcher cannot select a company the user does not belong to.",
 });
 
+/**
+ * F-04 CLOSED (2026-10-02) — bookkeeping, not new work. SUP-13 was promoted to COMPLETE against
+ * exactly this finding's criterion and frozen (ADR-0022); the gap record inherited the promoted
+ * classification and acceptance text from its capability but was never itself closed, so it read
+ * COMPLETE and OPEN at once. Closed on a fresh re-run of SUP-13's own browser proof.
+ */
+Object.assign(additions.find(g=>g.id==='F-04'),{
+ status:'CLOSED_VERIFIED',
+ currentBehavior:"CLOSED 2026-10-02 against SUP-13's promotion, which resolved this finding: offers are compared line by line with their commercial conditions, a recommendation is a recorded human decision with its rationale (no computed winner — `lowestQuote` is deleted and fitness-guarded), and approval is a second person under the approval matrix. The record had carried COMPLETE beside OPEN since the promotion because only the capability was promoted.",
+ evidence:"RE-RUN 2026-10-02 against PostgreSQL: apps/web/e2e/sourcing-award.spec.ts (2 passed) and commercial-comparison.spec.ts (1 passed). Original evidence as promoted under SUP-13 (ADR-0022; sourcing-authority.fitness.test.ts).",
+ acceptanceProof:"MET by SUP-13's promotion (see that capability) and re-verified 2026-10-02: the buyer records a recommendation for a supplier that is not the cheapest with its required reason and cannot approve or award it; the procurement manager approves; a withdrawal stands it down. Scope is frozen (sourcing-authority-is-frozen): this closure adds nothing to SUP-13 and claims nothing beyond it.",
+});
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

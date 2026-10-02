@@ -4,7 +4,7 @@ import { Type } from 'class-transformer';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { AccessService, CompaniesService, DmsService, Permissions, SettingsService, TenantContext, ParseUuidOr404Pipe, UsersService } from '@aura/core';
 import { parsePageParams } from '@aura/shared';
-import { type Tender, type TenderStatus, TenderService, checkTenderTransition, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, type BoqImportResult } from '@aura/tendering';
+import { type Tender, type TenderStatus, TenderService, checkTenderTransition, type BOQ, type BOQItem, type TenderSubmission, type SubmissionMethod, SUBMISSION_METHODS, type TenderSource, TENDER_SOURCES, type TenderClarification, type ClarificationKind, CLARIFICATION_KINDS, ClarificationService, parseBoqRows, parsePastedBoqLines, type BoqImportResult, type BoqImportRow } from '@aura/tendering';
 import { AccountService, PreAwardPackageService, QuotationService, isQuotationCommitted, type TechnicalStudyContent } from '@aura/crm';
 import { accountSnapshotPatch, resolveAccountSnapshot } from '../common/account-snapshot';
 import { resolveDocumentIdentity } from '../common/document-identity';
@@ -887,24 +887,41 @@ export class TenderingController {
     return this.tenders.deleteBOQItem(ctx.tenantId, itemId);
   }
 
-  /** JSON bulk import (the paste-text path). `mode: 'replace'` clears the existing BOQ first. */
+  /**
+   * JSON bulk import. `mode: 'replace'` clears the existing BOQ first.
+   *
+   * REVIEW BEFORE WRITE (F-12): `text` is pasted BOQ lines, read by the SAME domain rules as a
+   * spreadsheet (`parsePastedBoqLines`); with `dryRun: true` the parse comes back — rows with the
+   * line they came from, and every line not imported with why — and nothing is written. The screen
+   * then sends back exactly the rows the person reviewed, as `items`. Whatever arrives, only the
+   * known fields are stored: a preview's source line is not a BOQ field.
+   */
   @Post(':id/boq/import')
   @Permissions('tendering.estimate.create')
   async importBOQ(
     @Param('id', ParseUuidOr404Pipe) id: string,
-    @Body() dto: { boqId: string; mode?: 'append' | 'replace'; items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string }> },
-  ): Promise<{ items: BOQItem[]; replaced: number }> {
+    @Body() dto: { boqId: string; mode?: 'append' | 'replace'; items?: BoqImportRow[]; text?: string; dryRun?: boolean },
+  ): Promise<{ items: BOQItem[]; replaced: number } | (BoqImportResult & { dryRun: true })> {
     if (!dto.boqId) throw new BadRequestException('boqId is required');
-    if (!Array.isArray(dto.items) || dto.items.length === 0) throw new BadRequestException('items must be a non-empty array');
     if (dto.mode !== undefined && dto.mode !== 'append' && dto.mode !== 'replace') {
       throw new BadRequestException("mode must be 'append' or 'replace'");
     }
-
     const ctx = this.tenant.get();
     await this.tenders.assertBOQOwnedByTender(ctx.tenantId, id, dto.boqId).catch(() => {
       throw new NotFoundException('BOQ not found for this Tender');
     });
-    return this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, dto.boqId, dto.items, { replace: dto.mode === 'replace' });
+
+    if (typeof dto.text === 'string') {
+      const parsed = parsePastedBoqLines(dto.text);
+      if (dto.dryRun === true) return { ...parsed, dryRun: true };
+      dto.items = parsed.items;
+    }
+    if (!Array.isArray(dto.items) || dto.items.length === 0) throw new BadRequestException('items must be a non-empty array');
+    const items = dto.items.map((item) => ({
+      itemCode: item.itemCode, description: item.description, unit: item.unit,
+      quantity: item.quantity, rate: item.rate, ...(item.ifcGuid ? { ifcGuid: item.ifcGuid } : {}),
+    }));
+    return this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, dto.boqId, items, { replace: dto.mode === 'replace' });
   }
 
   /**
@@ -951,7 +968,11 @@ export class TenderingController {
     await this.tenders.assertBOQOwnedByTender(ctx.tenantId, id, boqId).catch(() => {
       throw new NotFoundException('BOQ not found for this Tender');
     });
-    const result = await this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, boqId, parsed.items, { replace: mode === 'replace' });
+    const items = parsed.items.map((item) => ({
+      itemCode: item.itemCode, description: item.description, unit: item.unit,
+      quantity: item.quantity, rate: item.rate, ...(item.ifcGuid ? { ifcGuid: item.ifcGuid } : {}),
+    }));
+    const result = await this.tenders.importBOQItems(ctx.tenantId, ctx.companyId, boqId, items, { replace: mode === 'replace' });
     return { ...result, issues: parsed.issues, headerRow: parsed.headerRow };
   }
 }

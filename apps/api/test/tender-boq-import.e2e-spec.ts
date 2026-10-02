@@ -123,6 +123,24 @@ describe('T5 BOQ Excel import (HTTP)', () => {
     expect(res.body.message).toContain('could not detect a BOQ header');
   });
 
+  // F-12 — pasted lines are read by the spreadsheet's rules and shown BEFORE anything is written.
+  it('previews pasted lines without writing, then writes exactly the reviewed rows and nothing else', async () => {
+    const { tender, boq } = await newTenderWithBoq();
+    const text = ['1.1, CCTV camera, no, 24, 650', '1.2, Cable tray, m, TBD, 30', '1.3, Patch panel, no, 4,', '1.4, Cable, CAT6, 305m roll, box, 10, 120'].join('\n');
+    const preview = (await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/import`).send({ boqId: boq.id, text, dryRun: true }).expect(201)).body;
+    expect(preview.dryRun).toBe(true);
+    expect(preview.items.map((i: { itemCode: string; quantity: number; sourceRow: number }) => [i.itemCode, i.quantity, i.sourceRow])).toEqual([['1.1', 24, 1], ['1.3', 4, 3]]);
+    // An unreadable quantity is reported, never turned into 0; a comma-ridden line is refused whole.
+    expect(preview.issues.map((i: { row: number }) => i.row)).toEqual([2, 3, 4]);
+    expect((await http.get(`/api/v1/tendering/tenders/${tender.id}/boq`).expect(200)).body.items, 'a preview writes nothing').toHaveLength(0);
+
+    // The screen sends back the reviewed rows; a preview's source line is not stored as a BOQ field.
+    await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/import`).send({ boqId: boq.id, items: preview.items }).expect(201);
+    const stored = (await http.get(`/api/v1/tendering/tenders/${tender.id}/boq`).expect(200)).body.items as Array<Record<string, unknown>>;
+    expect(stored.map((i) => i.itemCode).sort()).toEqual(['1.1', '1.3']);
+    expect(stored.every((i) => !('sourceRow' in i))).toBe(true);
+  });
+
   it('the JSON import route refuses empty arrays and unknown modes', async () => {
     const { tender, boq } = await newTenderWithBoq();
     expect((await http.post(`/api/v1/tendering/tenders/${tender.id}/boq/import`).send({ boqId: boq.id, items: [] })).status).toBe(400);

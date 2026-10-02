@@ -6288,7 +6288,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "PARTIAL",
       "authority": "Shared services with functional owners",
       "evidence": [
         "N-SOURCE"
@@ -6296,16 +6296,16 @@
       "source": "apps/api/src/events/notifications-subscriber.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "PARTIAL",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
+        "browser": "COMPLETE",
         "handoff": "UNVERIFIED"
       },
-      "currentBehavior": "Scope Assist is genuinely grounded and tested, with heuristic fallback and cross-tenant citation rejection. The prominent Tender AI OCR action is explicitly implemented as simulated CSV/tab paste while PDF/OCR is described in source as a later slice.",
+      "currentBehavior": "F-12 (2026-10-02): the client-BOQ import on a tender is what it says — 'Import client BOQ', from an Excel file or pasted lines; it claims no OCR or AI and tells the user AURA does not read PDFs or images. Both sources are read by the domain's one parser (parseBoqRows; pasted lines via parsePastedBoqLines with their line numbers), which never invents: an unreadable quantity skips the row with its reason, a blank rate imports at 0 with a note, a heading is reported as a heading, and a pasted line with more fields than the format (a description carrying commas) is refused rather than reinterpreted. NOTHING is written before review: the screen shows every row with the line or spreadsheet row it came from and every line not imported with why, plus — when replacing — how many existing lines and estimates would go; Import sends exactly the reviewed rows. 'Confidence' is binary by construction: a row is read exactly or reported. Scope Assist (grounded AI with citation checks) is unchanged and was not re-proved here. Remaining: no PDF, image or scanned-document extraction exists.",
       "acceptanceProof": "Rename the current action honestly or implement actual PDF/image/Excel extraction; show source/confidence/issues and never write governed truth before review."
     },
     {
@@ -8497,9 +8497,9 @@
       "capabilityIds": [
         "XOP-16"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "kind": "capability / verification gap",
-      "status": "OPEN",
+      "status": "CLOSED_VERIFIED",
       "roles": [
         "Sales",
         "Pre-Sales / Estimator",
@@ -8538,13 +8538,13 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "currentBehavior": "Scope Assist is genuinely grounded and tested, with heuristic fallback and cross-tenant citation rejection. The prominent Tender AI OCR action is explicitly implemented as simulated CSV/tab paste while PDF/OCR is described in source as a later slice.",
+      "currentBehavior": "CLOSED 2026-10-02. MEASURED: the 'AI OCR' naming was already gone from the screen ('Import client BOQ', 'Validate and import rows', 'PDF/OCR file extraction is a later slice'), but both paths WROTE on the first click: the paste path parsed in the browser by its own rules — an unreadable quantity became 0 under text promising nothing is invented, and lines that did not parse vanished without a word; the Excel path reported its problem rows only after writing (the API already offered dryRun and the screen never used it); 'replace' removed the BOQ and its estimates in the same click; the loader claimed AURA was 'syncing items to the CBS database'. Built: parsePastedBoqLines on the domain parser; the import route previews pasted text with dryRun and stores only known fields; the dialog reads, shows, and writes only on confirm; the import buttons wait for the BOQ to load (a click before then silently did nothing); errors show inside the dialog.",
       "expectedOperationalBehavior": "AI extraction from governed canonical records with actual usable output",
       "authority": "Shared services with functional owners",
-      "evidence": "NEW source inspection: apps/api/src/events/notifications-subscriber.ts",
+      "evidence": "FRESH 2026-10-02: modules/tendering/src/domain/boq-import.ts (+ test: 9 cases, 2 new); apps/api/src/tendering/tendering.controller.ts (boq/import text + dryRun; field picking on both routes); apps/api/test/tender-boq-import.e2e-spec.ts (6, 1 new); apps/web/components/tender-detail.tsx; apps/web/e2e/boq-import-review.spec.ts.",
       "severity": "HIGH",
       "remediationDependency": "Complete applicable output/integration discovery before product remediation",
-      "acceptanceProof": "Rename the current action honestly or implement actual PDF/image/Excel extraction; show source/confidence/issues and never write governed truth before review."
+      "acceptanceProof": "MET — the honest-rename branch of the criterion, plus real Excel extraction, with source and issues shown and nothing written before review. BROWSER, AUTH ON, POSTGRESQL (boq-import-review.spec.ts): on a tender's BOQ workspace, four pasted lines are checked — the review says 2 rows will be imported and lists 'Line 2 — quantity \"TBD\" is not a number' and 'Line 4 — has 7 fields'; the BOQ still holds 0 lines; Import writes exactly the two reviewed rows. An .xlsx (made by AURA's governed workbook) is read with dryRun — 'header found on row 1', rows shown — the review states that replacing would remove the 2 existing lines and their estimates, and Back/Cancel leave the BOQ untouched. API (tender-boq-import.e2e-spec.ts): a pasted dry-run writes nothing, an unreadable quantity and a comma-ridden line are reported, the reviewed rows are stored without the preview's source line. DOMAIN: pasted lines carry their line numbers; a heading is reported as a heading. LIMITS — not evidence for: PDF, image or scanned-document extraction (none exists); a probabilistic confidence (the parser is deterministic: a row is read exactly or reported); a Pre-Sales or Estimator role performing the import (proved as the administrator)."
     },
     {
       "id": "FX-01",
@@ -9308,14 +9308,14 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 55,
-      "PARTIAL": 76,
+      "PARTIAL": 77,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 5,
-      "WRONG_BEHAVIOR": 4,
+      "WRONG_BEHAVIOR": 3,
       "UNREACHABLE": 0,
       "UNVERIFIED": 36,
       "NOT_AUDITED": 0

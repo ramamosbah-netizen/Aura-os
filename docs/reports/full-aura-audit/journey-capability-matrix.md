@@ -44,7 +44,7 @@
 | Sales | XOP-13 | PARTIAL |
 | Sales | XOP-14 | PARTIAL |
 | Sales | XOP-15 | PARTIAL |
-| Sales | XOP-16 | WRONG_BEHAVIOR |
+| Sales | XOP-16 | PARTIAL |
 | Sales | XOP-17 | PARTIAL |
 | Sales | MGT-01 | PARTIAL |
 | Sales | MGT-02 | UNVERIFIED |
@@ -136,7 +136,7 @@
 | Pre-Sales | XOP-13 | PARTIAL |
 | Pre-Sales | XOP-14 | PARTIAL |
 | Pre-Sales | XOP-15 | PARTIAL |
-| Pre-Sales | XOP-16 | WRONG_BEHAVIOR |
+| Pre-Sales | XOP-16 | PARTIAL |
 | Pre-Sales | XOP-17 | PARTIAL |
 | Award | AWD-01 | PARTIAL |
 | Award | AWD-02 | PARTIAL |
@@ -179,7 +179,7 @@
 | Award | XOP-13 | PARTIAL |
 | Award | XOP-14 | PARTIAL |
 | Award | XOP-15 | PARTIAL |
-| Award | XOP-16 | WRONG_BEHAVIOR |
+| Award | XOP-16 | PARTIAL |
 | Award | XOP-17 | PARTIAL |
 | Award | MGT-01 | PARTIAL |
 | Award | MGT-02 | UNVERIFIED |
@@ -237,7 +237,7 @@
 | Mobilisation | XOP-13 | PARTIAL |
 | Mobilisation | XOP-14 | PARTIAL |
 | Mobilisation | XOP-15 | PARTIAL |
-| Mobilisation | XOP-16 | WRONG_BEHAVIOR |
+| Mobilisation | XOP-16 | PARTIAL |
 | Mobilisation | XOP-17 | PARTIAL |
 | Mobilisation | MGT-01 | PARTIAL |
 | Mobilisation | MGT-02 | UNVERIFIED |
@@ -302,7 +302,7 @@
 | Engineering | XOP-13 | PARTIAL |
 | Engineering | XOP-14 | PARTIAL |
 | Engineering | XOP-15 | PARTIAL |
-| Engineering | XOP-16 | WRONG_BEHAVIOR |
+| Engineering | XOP-16 | PARTIAL |
 | Engineering | XOP-17 | PARTIAL |
 | Engineering | MGT-01 | PARTIAL |
 | Engineering | MGT-02 | UNVERIFIED |
@@ -369,7 +369,7 @@
 | Planning | XOP-13 | PARTIAL |
 | Planning | XOP-14 | PARTIAL |
 | Planning | XOP-15 | PARTIAL |
-| Planning | XOP-16 | WRONG_BEHAVIOR |
+| Planning | XOP-16 | PARTIAL |
 | Planning | XOP-17 | PARTIAL |
 | Planning | MGT-01 | PARTIAL |
 | Planning | MGT-02 | UNVERIFIED |
@@ -442,7 +442,7 @@
 | Procurement | XOP-13 | PARTIAL |
 | Procurement | XOP-14 | PARTIAL |
 | Procurement | XOP-15 | PARTIAL |
-| Procurement | XOP-16 | WRONG_BEHAVIOR |
+| Procurement | XOP-16 | PARTIAL |
 | Procurement | XOP-17 | PARTIAL |
 | Procurement | MGT-01 | PARTIAL |
 | Procurement | MGT-02 | UNVERIFIED |
@@ -499,7 +499,7 @@
 | Site | XOP-13 | PARTIAL |
 | Site | XOP-14 | PARTIAL |
 | Site | XOP-15 | PARTIAL |
-| Site | XOP-16 | WRONG_BEHAVIOR |
+| Site | XOP-16 | PARTIAL |
 | Site | XOP-17 | PARTIAL |
 | QA/QC & HSE | QHS-01 | COMPLETE |
 | QA/QC & HSE | QHS-02 | UNVERIFIED |
@@ -542,7 +542,7 @@
 | QA/QC & HSE | XOP-13 | PARTIAL |
 | QA/QC & HSE | XOP-14 | PARTIAL |
 | QA/QC & HSE | XOP-15 | PARTIAL |
-| QA/QC & HSE | XOP-16 | WRONG_BEHAVIOR |
+| QA/QC & HSE | XOP-16 | PARTIAL |
 | QA/QC & HSE | XOP-17 | PARTIAL |
 | Progress | PLN-01 | PARTIAL |
 | Progress | PLN-02 | COMPLETE |
@@ -600,7 +600,7 @@
 | Progress | XOP-13 | PARTIAL |
 | Progress | XOP-14 | PARTIAL |
 | Progress | XOP-15 | PARTIAL |
-| Progress | XOP-16 | WRONG_BEHAVIOR |
+| Progress | XOP-16 | PARTIAL |
 | Progress | XOP-17 | PARTIAL |
 | Progress | MGT-01 | PARTIAL |
 | Progress | MGT-02 | UNVERIFIED |
@@ -661,7 +661,7 @@
 | Commercial / Certification | XOP-13 | PARTIAL |
 | Commercial / Certification | XOP-14 | PARTIAL |
 | Commercial / Certification | XOP-15 | PARTIAL |
-| Commercial / Certification | XOP-16 | WRONG_BEHAVIOR |
+| Commercial / Certification | XOP-16 | PARTIAL |
 | Commercial / Certification | XOP-17 | PARTIAL |
 | Commercial / Certification | MGT-01 | PARTIAL |
 | Commercial / Certification | MGT-02 | UNVERIFIED |
@@ -722,7 +722,7 @@
 | Finance / Collection | XOP-13 | PARTIAL |
 | Finance / Collection | XOP-14 | PARTIAL |
 | Finance / Collection | XOP-15 | PARTIAL |
-| Finance / Collection | XOP-16 | WRONG_BEHAVIOR |
+| Finance / Collection | XOP-16 | PARTIAL |
 | Finance / Collection | XOP-17 | PARTIAL |
 | Finance / Collection | MGT-01 | PARTIAL |
 | Finance / Collection | MGT-02 | UNVERIFIED |
@@ -784,7 +784,7 @@
 | T&C | XOP-13 | PARTIAL |
 | T&C | XOP-14 | PARTIAL |
 | T&C | XOP-15 | PARTIAL |
-| T&C | XOP-16 | WRONG_BEHAVIOR |
+| T&C | XOP-16 | PARTIAL |
 | T&C | XOP-17 | PARTIAL |
 | Handover | HO-01 | COMPLETE |
 | Handover | HO-02 | COMPLETE |
@@ -831,7 +831,7 @@
 | Handover | XOP-13 | PARTIAL |
 | Handover | XOP-14 | PARTIAL |
 | Handover | XOP-15 | PARTIAL |
-| Handover | XOP-16 | WRONG_BEHAVIOR |
+| Handover | XOP-16 | PARTIAL |
 | Handover | XOP-17 | PARTIAL |
 | Warranty / Service | HO-01 | COMPLETE |
 | Warranty / Service | HO-02 | COMPLETE |
@@ -878,7 +878,7 @@
 | Warranty / Service | XOP-13 | PARTIAL |
 | Warranty / Service | XOP-14 | PARTIAL |
 | Warranty / Service | XOP-15 | PARTIAL |
-| Warranty / Service | XOP-16 | WRONG_BEHAVIOR |
+| Warranty / Service | XOP-16 | PARTIAL |
 | Warranty / Service | XOP-17 | PARTIAL |
 | Closeout | HO-01 | COMPLETE |
 | Closeout | HO-02 | COMPLETE |
@@ -925,7 +925,7 @@
 | Closeout | XOP-13 | PARTIAL |
 | Closeout | XOP-14 | PARTIAL |
 | Closeout | XOP-15 | PARTIAL |
-| Closeout | XOP-16 | WRONG_BEHAVIOR |
+| Closeout | XOP-16 | PARTIAL |
 | Closeout | XOP-17 | PARTIAL |
 | Closeout | MGT-01 | PARTIAL |
 | Closeout | MGT-02 | UNVERIFIED |

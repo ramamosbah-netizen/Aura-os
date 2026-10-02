@@ -116,6 +116,14 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
   const [uploadingExcel, setUploadingExcel] = useState(false);
   const [replaceExisting, setReplaceExisting] = useState(false);
   const [importNote, setImportNote] = useState<string | null>(null);
+  // What was read and not yet written: the review step (F-12).
+  const [preview, setPreview] = useState<{
+    source: 'paste' | 'excel';
+    fileName?: string;
+    headerRow?: number;
+    items: Array<{ itemCode: string; description: string; unit: string; quantity: number; rate: number; ifcGuid?: string; sourceRow?: number }>;
+    issues: Array<{ row: number; problem: string }>;
+  } | null>(null);
 
   // Load BOQ on mount
   useEffect(() => {
@@ -275,59 +283,76 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
     }
   }
 
-  // Parse pasted CSV/tabular rows. This path performs no OCR or AI extraction.
-  async function handleAIImport() {
-    if (!boq) return;
+  // ── BOQ import: READ, SHOW, THEN WRITE (F-12) ─────────────────────────────────────────────────
+  // Nothing reaches the BOQ until a person has seen exactly what will be written and what will not.
+  // Both sources are read by the domain's one parser on the server (a pasted line and a spreadsheet
+  // row are judged by the same rules); the preview lists every row with the line it came from and
+  // every line that will not be imported with why; "Import" sends back exactly the reviewed rows.
+  // There is no OCR and no AI here: AURA does not read PDFs or images, and the page says so.
+
+  async function checkPastedRows() {
+    if (!boq) { setErr('The BOQ has not loaded yet — try again in a moment.'); return; }
     setImporting(true);
+    setImportStep('Reading the pasted lines…');
     setErr(null);
-
-    setImportStep('Parsing pasted BOQ lines…');
-
-    // Parse pasted CSV/tab lines — what does not parse is reported, never invented.
-    const parsedItems = [];
-    if (rawText.trim()) {
-      // Simple CSV/tab parser
-      const lines = rawText.split('\n');
-      for (const line of lines) {
-        const parts = line.split(/[,\t]/);
-        if (parts.length >= 4) {
-          const itemCode = parts[0]?.trim();
-          const description = parts[1]?.trim();
-          const unit = parts[2]?.trim();
-          const quantity = Number(parts[3]) || 0;
-          const rate = Number(parts[4]) || 0;
-          const ifcGuid = parts[5]?.trim() || null;
-          if (itemCode && description && unit) {
-            parsedItems.push({ itemCode, description, unit, quantity, rate, ifcGuid });
-          }
-        }
-      }
-    }
-
-    if (parsedItems.length === 0) {
-      setErr('Nothing parseable — paste lines as: code, description, unit, quantity, rate[, ifcGuid]. No data is ever invented.');
-      setImporting(false);
-      setImportStep('');
-      return;
-    }
-
     try {
       const res = await fetch(`/api/tendering/tenders/${tender.id}/boq/import`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          boqId: boq.id,
-          mode: replaceExisting ? 'replace' : 'append',
-          items: parsedItems,
-        }),
+        body: JSON.stringify({ boqId: boq.id, text: rawText, dryRun: true }),
       });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || d.error || 'The pasted lines could not be read');
+      setPreview({ source: 'paste', items: d.items ?? [], issues: d.issues ?? [] });
+    } catch (e: any) {
+      setErr(e.message);
+    } finally {
+      setImporting(false);
+      setImportStep('');
+    }
+  }
 
+  async function previewExcel(file: File) {
+    if (!boq) { setErr('The BOQ has not loaded yet — try again in a moment.'); return; }
+    setUploadingExcel(true);
+    setErr(null);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('boqId', boq.id);
+      formData.append('dryRun', 'true');
+      const res = await fetch(`/api/tendering/tenders/${tender.id}/boq/upload`, { method: 'POST', body: formData });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.message || d.error || 'The Excel file could not be read');
+      setPreview({ source: 'excel', fileName: file.name, headerRow: d.headerRow, items: d.items ?? [], issues: d.issues ?? [] });
+    } catch (e: any) {
+      setErr(e.message || 'The Excel file could not be read');
+    } finally {
+      setUploadingExcel(false);
+    }
+  }
+
+  async function confirmImport() {
+    if (!boq) { setErr('The BOQ has not loaded yet — try again in a moment.'); return; }
+    if (!preview || preview.items.length === 0) return;
+    setImporting(true);
+    setImportStep('Importing the reviewed rows…');
+    setErr(null);
+    try {
+      const res = await fetch(`/api/tendering/tenders/${tender.id}/boq/import`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ boqId: boq.id, mode: replaceExisting ? 'replace' : 'append', items: preview.items }),
+      });
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.message || d.error || 'BOQ import failed');
-
+      setImportNote(
+        `Imported ${d.items?.length ?? 0} reviewed line(s)${d.replaced ? `, replacing ${d.replaced} existing` : ''}` +
+          (preview.issues.length ? `. ${preview.issues.length} line(s) were not imported — see the review for why.` : '.'),
+      );
+      setPreview(null);
       setRawText('');
       setShowImportModal(false);
-      setImportNote(`Imported ${d.items?.length ?? 0} line(s)${d.replaced ? ` (replaced ${d.replaced} existing)` : ''}.`);
       await fetchBOQ();
       router.refresh();
     } catch (e: any) {
@@ -338,38 +363,11 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
     }
   }
 
-  async function handleExcelUpload(file: File) {
-    if (!boq) return;
-    setUploadingExcel(true);
-    setErr(null);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('boqId', boq.id);
-      formData.append('mode', replaceExisting ? 'replace' : 'append');
-
-      const res = await fetch(`/api/tendering/tenders/${tender.id}/boq/upload`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      const d = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(d.message || d.error || 'Failed to upload BOQ Excel file');
-
-      setShowImportModal(false);
-      setImportNote(
-        `Imported ${d.items?.length ?? 0} line(s) from the sheet (header on row ${d.headerRow})` +
-          (d.replaced ? `, replaced ${d.replaced} existing` : '') +
-          (d.issues?.length ? `. ${d.issues.length} row(s) need attention: ${d.issues.slice(0, 5).map((i: { row: number; problem: string }) => `row ${i.row} — ${i.problem}`).join('; ')}${d.issues.length > 5 ? '…' : ''}` : '.'),
-      );
-      await fetchBOQ();
-      router.refresh();
-    } catch (e: any) {
-      setErr(e.message || 'Excel upload failed');
-    } finally {
-      setUploadingExcel(false);
-    }
-  }
+  const closeImport = () => {
+    if (importing || uploadingExcel) return;
+    setPreview(null);
+    setShowImportModal(false);
+  };
 
   return (
     <div style={s.container}>
@@ -491,7 +489,7 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
             </p>
           </div>
           {!boq?.sourceBasisRevisionId && <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" onClick={() => setShowImportModal(true)} style={s.btnAI}>
+            <button type="button" onClick={() => setShowImportModal(true)} style={s.btnImport} disabled={!boq} title={boq ? undefined : 'Loading the BOQ…'}>
               Import client BOQ
             </button>
             <button type="button" onClick={() => setAddingItem(!addingItem)} style={s.btnAccent}>
@@ -572,7 +570,7 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
                 Upload any client BOQ with the study documents, then complete the governed Quantity Take-Off above.
               </p>
               {!boq?.sourceBasisRevisionId && <div style={{ display: 'flex', gap: 10 }}>
-                <button type="button" onClick={() => setShowImportModal(true)} style={s.btnAI}>
+                <button type="button" onClick={() => setShowImportModal(true)} style={s.btnImport} disabled={!boq} title={boq ? undefined : 'Loading the BOQ…'}>
                   Import client BOQ
                 </button>
                 <button type="button" onClick={() => setAddingItem(true)} style={s.btnSecondary}>
@@ -733,29 +731,79 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
       {/* BOQ IMPORT DIALOG MODAL */}
       {showImportModal && (
         <div style={s.modalOverlay}>
-          <div style={s.modalContent}>
+          <div style={s.modalContent} role="dialog" aria-label="Import client BOQ" data-testid="boq-import-dialog">
             <div style={s.modalHeader}>
-              <h3 style={{ margin: 0, fontSize: 18 }}>Import Bill of Quantities</h3>
-              <button
-                type="button"
-                onClick={() => {
-                  if (!importing) setShowImportModal(false);
-                }}
-                style={s.modalClose}
-                disabled={importing}
-              >
+              <h3 style={{ margin: 0, fontSize: 18 }}>{preview ? 'Review before importing' : 'Import client BOQ'}</h3>
+              <button type="button" onClick={closeImport} style={s.modalClose} disabled={importing || uploadingExcel} aria-label="Close">
                 ✕
               </button>
             </div>
 
             <div style={{ padding: '16px 20px 24px' }}>
+              {err && <div style={s.errorBar} role="alert" data-testid="boq-import-error">{err}</div>}
               {importing || uploadingExcel ? (
                 <div style={s.aiLoaderBox}>
                   <div style={s.spinnerLarge} />
-                  <p style={s.aiProgressStep}>{uploadingExcel ? 'Uploading & parsing Excel spreadsheet...' : importStep}</p>
+                  <p style={s.aiProgressStep}>{uploadingExcel ? 'Reading the Excel file…' : importStep}</p>
                   <p style={{ color: 'var(--muted)', fontSize: 12, margin: 0 }}>
-                    Please wait. AURA is reading Excel columns and syncing items to the CBS database.
+                    {preview ? 'Writing exactly the rows you reviewed.' : 'Nothing is written until you have reviewed what was read.'}
                   </p>
+                </div>
+              ) : preview ? (
+                <div data-testid="boq-import-review">
+                  <p style={{ margin: '0 0 6px', fontSize: 14, fontWeight: 600 }} data-testid="boq-import-summary">
+                    {preview.items.length} row(s) will be imported · {preview.issues.length} line(s) will not be, or carry a note
+                  </p>
+                  <p style={{ margin: '0 0 12px', fontSize: 12, color: 'var(--muted)' }}>
+                    {preview.source === 'excel'
+                      ? `From ${preview.fileName ?? 'the Excel file'}; header found on row ${preview.headerRow}. Row numbers are as in Excel.`
+                      : 'From the pasted text. Line numbers are the pasted lines.'}
+                  </p>
+                  {preview.items.length > 0 && (
+                    <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      <table className="data-table" data-testid="boq-import-rows">
+                        <thead>
+                          <tr><th>{preview.source === 'excel' ? 'Row' : 'Line'}</th><th>Code</th><th>Description</th><th>Unit</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Rate</th></tr>
+                        </thead>
+                        <tbody>
+                          {preview.items.slice(0, 50).map((item, i) => (
+                            <tr key={`${item.sourceRow ?? i}-${item.itemCode}`}>
+                              <td>{item.sourceRow ?? '—'}</td><td>{item.itemCode}</td><td>{item.description}</td><td>{item.unit}</td>
+                              <td style={{ textAlign: 'right' }}>{item.quantity}</td><td style={{ textAlign: 'right' }}>{item.rate}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {preview.items.length > 50 && (
+                    <p style={{ margin: '6px 0 0', fontSize: 12, color: 'var(--muted)' }}>Showing the first 50 of {preview.items.length} rows — all {preview.items.length} will be imported.</p>
+                  )}
+                  {preview.issues.length > 0 && (
+                    <div style={{ marginTop: 12 }}>
+                      <p style={{ margin: '0 0 6px', fontSize: 12.5, fontWeight: 600 }}>Not imported, or imported with a note</p>
+                      <ul style={{ margin: 0, paddingLeft: 18, maxHeight: 140, overflow: 'auto', fontSize: 12.5, color: 'var(--warn, var(--muted))' }} data-testid="boq-import-issues">
+                        {preview.issues.map((issue) => (
+                          <li key={`${issue.row}-${issue.problem}`}>{preview.source === 'excel' ? 'Row' : 'Line'} {issue.row} — {issue.problem}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <label style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 14, fontSize: 12.5 }}>
+                    <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} data-testid="boq-import-replace" />
+                    Replace the existing BOQ
+                  </label>
+                  {replaceExisting && items.length > 0 && (
+                    <p style={{ margin: '4px 0 0', fontSize: 12.5, color: 'var(--bad)' }} data-testid="boq-import-replace-warning">
+                      This removes the {items.length} existing line(s), and their estimates go with them.
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+                    <button type="button" onClick={() => setPreview(null)} style={s.btnSecondary}>Back</button>
+                    <button type="button" onClick={() => void confirmImport()} style={s.btnImport} disabled={preview.items.length === 0} data-testid="boq-import-confirm">
+                      Import {preview.items.length} row(s)
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
@@ -767,26 +815,24 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
                     marginBottom: 20,
                     background: 'var(--panel-2)',
                   }}>
-                    <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>Direct Excel Ingestion</p>
+                    <p style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 600 }}>From an Excel file</p>
                     <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)' }}>
-                      Ingest standard .xlsx formats. Columns for Item Code, Description, Unit, Qty, and Rate will be matched automatically.
+                      An .xlsx whose columns are headed Item Code, Description, Unit, Qty and Rate (or their usual synonyms). You review what was read before anything is imported.
                     </p>
                     <input
                       type="file"
                       accept=".xlsx, .xls"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
-                        if (file) handleExcelUpload(file);
+                        if (file) void previewExcel(file);
+                        e.target.value = '';
                       }}
                       style={{ display: 'none' }}
                       id="excel-upload-file-input"
+                      data-testid="boq-import-file"
                     />
                     <label htmlFor="excel-upload-file-input" style={s.btnAccent}>
                       Select Excel File
-                    </label>
-                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 12, fontSize: 12.5, color: 'var(--muted)', justifyContent: 'center' }}>
-                      <input type="checkbox" checked={replaceExisting} onChange={(e) => setReplaceExisting(e.target.checked)} />
-                      Replace the existing BOQ (clears current items — their estimates go with them)
                     </label>
                   </div>
 
@@ -797,9 +843,9 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
                   </div>
 
                   <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5 }}>
-                    Copy-paste raw BOQ lines (code, description, unit, quantity, rate[, ifcGuid]) from a
-                    PDF or spreadsheet — only what parses is imported, nothing is invented. PDF/OCR file
-                    extraction is a later slice.
+                    Paste BOQ lines — code, description, unit, quantity, rate[, IFC GUID] — one per line, tab-separated as
+                    copied from a spreadsheet, or comma-separated. AURA does not read PDFs or images: copy the lines out of
+                    them. What cannot be read is listed with its line, never guessed.
                   </p>
                   <textarea
                     style={s.textarea}
@@ -810,18 +856,15 @@ export default function TenderDetail({ tender, workspace = 'dashboard', currentU
                     value={rawText}
                     onChange={(e) => setRawText(e.target.value)}
                     rows={8}
+                    aria-label="Pasted BOQ lines"
+                    data-testid="boq-import-text"
                   />
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-                    <button
-                      type="button"
-                      disabled={importing || uploadingExcel}
-                      onClick={() => setShowImportModal(false)}
-                      style={s.btnSecondary}
-                    >
+                    <button type="button" onClick={closeImport} style={s.btnSecondary}>
                       Cancel
                     </button>
-                    <button type="button" onClick={handleAIImport} style={s.btnAI}>
-                      Validate and import rows
+                    <button type="button" onClick={() => void checkPastedRows()} style={s.btnImport} disabled={!rawText.trim()} data-testid="boq-import-check">
+                      Check rows
                     </button>
                   </div>
                 </>
@@ -962,7 +1005,7 @@ const s = {
     fontSize: 12.5,
     cursor: 'pointer',
   } as CSSProperties,
-  btnAI: {
+  btnImport: {
     background: 'var(--accent-grad)',
     color: 'var(--accent-ink)',
     fontWeight: 600,

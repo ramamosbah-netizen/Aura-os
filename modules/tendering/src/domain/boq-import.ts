@@ -17,6 +17,11 @@ export interface BoqImportRow {
   quantity: number;
   rate: number;
   ifcGuid?: string;
+  /**
+   * Where the row came from — the spreadsheet row, or the line of pasted text — so a reviewer can
+   * check it against the source before anything is written (F-12). Never persisted.
+   */
+  sourceRow?: number;
 }
 
 export interface BoqImportIssue {
@@ -150,8 +155,57 @@ export function parseBoqRows(rows: unknown[][], headerScanDepth = 10): BoqImport
       quantity,
       rate: Number.isNaN(rate) ? 0 : rate,
       ifcGuid: ifcGuid || undefined,
+      sourceRow: rowNo,
     });
   }
 
   return { items, issues, headerRow: headerIdx + 1, columns };
+}
+
+/** The columns pasted text is read in, in order — the paste box says so. */
+const PASTE_HEADER = ['Code', 'Description', 'Unit', 'Quantity', 'Rate', 'IFC GUID'];
+
+/**
+ * PASTED BOQ LINES, read by the SAME rules as a spreadsheet (F-12).
+ *
+ * The paste box used to parse in the browser by its own looser rules: a line with an unreadable
+ * quantity was imported at quantity 0, and a line that did not parse vanished without a word —
+ * while the box promised "nothing is invented". Here each line is one row (code, description,
+ * unit, quantity, rate[, IFC GUID]) — split on tabs when the line has any, as text copied from a
+ * spreadsheet does, otherwise on commas — and goes through `parseBoqRows`, so a pasted line and a
+ * spreadsheet row are judged identically. Row numbers in the result are the pasted LINE numbers.
+ * A description containing commas cannot be told from extra columns in comma-separated text; such
+ * a line fails on its quantity and is reported, never guessed.
+ */
+export function parsePastedBoqLines(text: string): BoqImportResult {
+  const lines = text.split(/\r?\n/);
+  const fieldIssues: BoqImportIssue[] = [];
+  const rows: unknown[][] = [PASTE_HEADER, ...lines.map((line, i) => {
+    const fields = (line.includes('\t') ? line.split('\t') : line.split(',')).map((cell) => cell.trim());
+    // More fields than the format has means a description carried commas: "Cable, CAT6, 305m roll"
+    // would otherwise be read as 305 of unit "CAT6". Refused whole, never reinterpreted.
+    if (fields.length > PASTE_HEADER.length) {
+      fieldIssues.push({
+        row: i + 1,
+        problem: `has ${fields.length} fields — expected code, description, unit, quantity, rate[, IFC GUID]; a description with commas must be pasted from a spreadsheet (tab-separated) — line skipped`,
+      });
+      return [];
+    }
+    // A line with no separator at all is a heading ("SECTION 2 - ACCESS CONTROL"): read it as a
+    // description, where the shared rule recognises a heading, not as an item code missing the rest.
+    if (fields.length === 1 && fields[0]) return ['', fields[0]];
+    return fields;
+  })];
+  const parsed = parseBoqRows(rows, 1);
+  // Row n of `rows` is pasted line n-1: the synthetic header occupies row 1.
+  return {
+    ...parsed,
+    headerRow: 0,
+    items: parsed.items.map((item) => {
+      const line = (item.sourceRow ?? 1) - 1;
+      // A code-less line is named for its LINE, not for a spreadsheet row it never had.
+      return { ...item, itemCode: item.itemCode === `R${item.sourceRow}` ? `L${line}` : item.itemCode, sourceRow: line };
+    }),
+    issues: [...parsed.issues.map((issue) => ({ ...issue, row: issue.row - 1 })), ...fieldIssues].sort((a, b) => a.row - b.row),
+  };
 }

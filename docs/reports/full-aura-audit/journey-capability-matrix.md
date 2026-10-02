@@ -46,7 +46,7 @@
 | Sales | XOP-15 | PARTIAL |
 | Sales | XOP-16 | PARTIAL |
 | Sales | XOP-17 | PARTIAL |
-| Sales | MGT-01 | PARTIAL |
+| Sales | MGT-01 | COMPLETE |
 | Sales | MGT-02 | UNVERIFIED |
 | Sales | MGT-03 | PARTIAL |
 | Sales | MGT-04 | UNVERIFIED |
@@ -181,7 +181,7 @@
 | Award | XOP-15 | PARTIAL |
 | Award | XOP-16 | PARTIAL |
 | Award | XOP-17 | PARTIAL |
-| Award | MGT-01 | PARTIAL |
+| Award | MGT-01 | COMPLETE |
 | Award | MGT-02 | UNVERIFIED |
 | Award | MGT-03 | PARTIAL |
 | Award | MGT-04 | UNVERIFIED |
@@ -239,7 +239,7 @@
 | Mobilisation | XOP-15 | PARTIAL |
 | Mobilisation | XOP-16 | PARTIAL |
 | Mobilisation | XOP-17 | PARTIAL |
-| Mobilisation | MGT-01 | PARTIAL |
+| Mobilisation | MGT-01 | COMPLETE |
 | Mobilisation | MGT-02 | UNVERIFIED |
 | Mobilisation | MGT-03 | PARTIAL |
 | Mobilisation | MGT-04 | UNVERIFIED |
@@ -304,7 +304,7 @@
 | Engineering | XOP-15 | PARTIAL |
 | Engineering | XOP-16 | PARTIAL |
 | Engineering | XOP-17 | PARTIAL |
-| Engineering | MGT-01 | PARTIAL |
+| Engineering | MGT-01 | COMPLETE |
 | Engineering | MGT-02 | UNVERIFIED |
 | Engineering | MGT-03 | PARTIAL |
 | Engineering | MGT-04 | UNVERIFIED |
@@ -371,7 +371,7 @@
 | Planning | XOP-15 | PARTIAL |
 | Planning | XOP-16 | PARTIAL |
 | Planning | XOP-17 | PARTIAL |
-| Planning | MGT-01 | PARTIAL |
+| Planning | MGT-01 | COMPLETE |
 | Planning | MGT-02 | UNVERIFIED |
 | Planning | MGT-03 | PARTIAL |
 | Planning | MGT-04 | UNVERIFIED |
@@ -444,7 +444,7 @@
 | Procurement | XOP-15 | PARTIAL |
 | Procurement | XOP-16 | PARTIAL |
 | Procurement | XOP-17 | PARTIAL |
-| Procurement | MGT-01 | PARTIAL |
+| Procurement | MGT-01 | COMPLETE |
 | Procurement | MGT-02 | UNVERIFIED |
 | Procurement | MGT-03 | PARTIAL |
 | Procurement | MGT-04 | UNVERIFIED |
@@ -602,7 +602,7 @@
 | Progress | XOP-15 | PARTIAL |
 | Progress | XOP-16 | PARTIAL |
 | Progress | XOP-17 | PARTIAL |
-| Progress | MGT-01 | PARTIAL |
+| Progress | MGT-01 | COMPLETE |
 | Progress | MGT-02 | UNVERIFIED |
 | Progress | MGT-03 | PARTIAL |
 | Progress | MGT-04 | UNVERIFIED |
@@ -663,7 +663,7 @@
 | Commercial / Certification | XOP-15 | PARTIAL |
 | Commercial / Certification | XOP-16 | PARTIAL |
 | Commercial / Certification | XOP-17 | PARTIAL |
-| Commercial / Certification | MGT-01 | PARTIAL |
+| Commercial / Certification | MGT-01 | COMPLETE |
 | Commercial / Certification | MGT-02 | UNVERIFIED |
 | Commercial / Certification | MGT-03 | PARTIAL |
 | Commercial / Certification | MGT-04 | UNVERIFIED |
@@ -724,7 +724,7 @@
 | Finance / Collection | XOP-15 | PARTIAL |
 | Finance / Collection | XOP-16 | PARTIAL |
 | Finance / Collection | XOP-17 | PARTIAL |
-| Finance / Collection | MGT-01 | PARTIAL |
+| Finance / Collection | MGT-01 | COMPLETE |
 | Finance / Collection | MGT-02 | UNVERIFIED |
 | Finance / Collection | MGT-03 | PARTIAL |
 | Finance / Collection | MGT-04 | UNVERIFIED |
@@ -927,7 +927,7 @@
 | Closeout | XOP-15 | PARTIAL |
 | Closeout | XOP-16 | PARTIAL |
 | Closeout | XOP-17 | PARTIAL |
-| Closeout | MGT-01 | PARTIAL |
+| Closeout | MGT-01 | COMPLETE |
 | Closeout | MGT-02 | UNVERIFIED |
 | Closeout | MGT-03 | PARTIAL |
 | Closeout | MGT-04 | UNVERIFIED |

@@ -59,15 +59,17 @@ jobs:
       - name: API HTTP e2e (Supertest — TIER-2 #39/#40)
         # The suites excluded here are explicitly database-backed and must not run against this
         # tier's forced in-memory adapters (vitest.config.e2e.ts pins DATABASE_URL=''): the Sales
-        # release proof and the three PD-5C PostgreSQL proofs (C4 certification, C5 cost ledger,
-        # C6 change control), which throw "DATABASE_URL is required" by design. All four run in
-        # web-smoke-postgres after migrations — excluded here, never silently skipped.
+        # release proof, the three PD-5C PostgreSQL proofs (C4 certification, C5 cost ledger,
+        # C6 change control) and the F-06 executive population proof, which throw "DATABASE_URL is
+        # required" by design. All five run in web-smoke-postgres after migrations — excluded here,
+        # never silently skipped.
         run: >-
           pnpm --filter @aura/api exec vitest run --config vitest.config.e2e.ts
           --exclude test/sales-mutation-release-proof.e2e-spec.ts
           --exclude test/c4-certification.e2e-spec.ts
           --exclude test/c5-cost-ledger.pg.e2e-spec.ts
           --exclude test/c6-change-control.pg.e2e-spec.ts
+          --exclude test/executive-crm-population.pg.e2e-spec.ts
 
       # Blocking: the production graph is expected to stay at zero known advisories. SheetJS is
       # pinned to its official patched distribution and DOMPurify is overridden to a fixed release.
@@ -822,6 +824,15 @@ jobs:
         run: >-
           pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts
           test/c4-certification.e2e-spec.ts test/c5-cost-ledger.pg.e2e-spec.ts test/c6-change-control.pg.e2e-spec.ts
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
+
+      - name: F-06 executive population proof (PostgreSQL)
+        # A book past the old 5,000-row cap, its wins older than 5,000 newer rows and 6,360 rows tied on
+        # created_at: every executive figure and every drilldown held against SQL over the same rows.
+        # Only persistence has a population big enough to be read short, and the order it is paged in.
+        run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts test/executive-crm-population.pg.e2e-spec.ts
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { executiveCrm, type ExecOpportunity } from './executive-crm';
+import { executiveCrm, executiveCrmRecords, type ExecDrill, type ExecOpportunity } from './executive-crm';
 
 const NOW = new Date('2026-07-16T12:00:00Z');
 const ago = (days: number): string => new Date(NOW.getTime() - days * 86400000).toISOString();
 
 const deal = (over: Partial<ExecOpportunity> = {}): ExecOpportunity => ({
-  id: 'o1', accountId: 'acc-1', accountName: 'Acme', stage: 'won', value: 100_000,
+  id: 'o1', title: 'Deal', accountId: 'acc-1', accountName: 'Acme', stage: 'won', value: 100_000,
   ownerId: 'rep-a', winReason: 'best price', lossReason: null, competitors: null,
   updatedAt: ago(10), ...over,
 });
@@ -172,6 +172,74 @@ describe('concentration — a property of the book, not of any row', () => {
     expect(r.coverage.decidedWithoutAccount).toBe(1);
     // ...and the headline value still counts every win.
     expect(r.decided.wonValue).toBe(1_000_000);
+  });
+});
+
+describe('F-06 — the population is stated, and every figure opens to exactly its deals', () => {
+  const book: ExecOpportunity[] = [
+    deal({ id: 'w1', value: 0.1, winReason: 'Best price', accountId: 'a', accountName: 'Alpha' }),
+    deal({ id: 'w2', value: 0.2, winReason: 'best price ', accountId: 'a', accountName: 'Alpha' }),
+    deal({ id: 'w3', value: 500, winReason: null, accountId: 'b', accountName: 'Beta' }),
+    deal({ id: 'w4', value: 70, winReason: 'Relationship', accountId: null, accountName: null }),
+    deal({ id: 'l1', stage: 'lost', value: 300, lossReason: 'Price', competitors: 'Rival, Other' }),
+    deal({ id: 'l2', stage: 'lost', value: 40, lossReason: '  ', competitors: 'rival', accountId: null }),
+    deal({ id: 'l3', stage: 'lost', value: 9, lossReason: 'price', competitors: null }),
+    deal({ id: 'old', stage: 'lost', value: 1_000, lossReason: 'Price', updatedAt: ago(400) }),
+    deal({ id: 'open', stage: 'proposal', value: 9_999 }),
+    deal({ id: 'later', stage: 'won', value: 1, updatedAt: new Date(NOW.getTime() + 60_000).toISOString() }),
+  ];
+
+  it('says what it counted: decided on record, decided in the window, and whether the read was whole', () => {
+    const r = executiveCrm(book, 365, NOW);
+    expect(r.population).toEqual({ decidedOnRecord: 9, counted: 7, complete: true });
+    expect(r.period.asOf).toBe(NOW.toISOString());
+    expect(executiveCrm(book, 365, NOW, false).population.complete).toBe(false);
+  });
+
+  it('closes the window at the read: a deal decided after `asOf` is not in it', () => {
+    expect(executiveCrm(book, 365, NOW).decided.won).toBe(4);
+  });
+
+  it('sums money exactly — 0.1 + 0.2 is 0.3, not 0.30000000000000004', () => {
+    const r = executiveCrm(book, 365, NOW);
+    expect(r.winReasons.find((x) => x.reason === 'Best price')?.value).toBe(0.3);
+    expect(r.decided.wonValue).toBe(570.3);
+  });
+
+  it('each drill lists exactly the deals its figure counted, with the figure\'s count and value', () => {
+    const r = executiveCrm(book, 365, NOW);
+    const drill = (d: ExecDrill) => executiveCrmRecords(book, 365, NOW, d);
+    const ids = (d: ExecDrill) => drill(d).deals.map((x) => x.id).sort();
+
+    expect(drill({ by: 'decided', outcome: 'won' }).total).toEqual({ deals: r.decided.won, value: r.decided.wonValue });
+    expect(drill({ by: 'decided', outcome: 'lost' }).total).toEqual({ deals: r.decided.lost, value: r.decided.lostValue });
+    expect(drill({ by: 'decided', outcome: null }).total.deals).toBe(r.population.counted);
+
+    for (const row of r.winReasons) {
+      expect(drill({ by: 'reason', outcome: 'won', reason: row.reason }).total, `won · ${row.reason}`).toEqual({ deals: row.deals, value: row.value });
+    }
+    for (const row of r.lossReasons) {
+      expect(drill({ by: 'reason', outcome: 'lost', reason: row.reason }).total, `lost · ${row.reason}`).toEqual({ deals: row.deals, value: row.value });
+    }
+    for (const c of r.competitors) {
+      expect(drill({ by: 'competitor', name: c.name }).total, c.name).toEqual({ deals: c.lostDeals, value: c.lostValue });
+    }
+    for (const t of r.concentration.top) {
+      expect(drill({ by: 'account', accountId: t.accountId }).total.value, t.accountName).toBe(t.wonValue);
+    }
+    expect(drill({ by: 'reason', outcome: 'won', reason: null }).total.deals).toBe(r.coverage.winsWithoutReason);
+    expect(drill({ by: 'reason', outcome: 'lost', reason: null }).total.deals).toBe(r.coverage.lossesWithoutReason);
+    expect(drill({ by: 'no-account' }).total.deals).toBe(r.coverage.decidedWithoutAccount);
+
+    // Grouping is the read's own: "Price" opens "price" too, and nothing outside the window.
+    expect(ids({ by: 'reason', outcome: 'lost', reason: 'PRICE' })).toEqual(['l1', 'l3']);
+    expect(ids({ by: 'competitor', name: 'rival' })).toEqual(['l1', 'l2']);
+    expect(ids({ by: 'reason', outcome: 'lost', reason: null })).toEqual(['l2']);
+  });
+
+  it('a drill shows each deal\'s own reason, biggest first', () => {
+    const r = executiveCrmRecords(book, 365, NOW, { by: 'decided', outcome: 'lost' });
+    expect(r.deals.map((d) => [d.id, d.reason])).toEqual([['l1', 'Price'], ['l2', null], ['l3', 'price']]);
   });
 });
 

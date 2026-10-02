@@ -1,8 +1,8 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 55,
-    "PARTIAL": 77,
+    "COMPLETE": 56,
+    "PARTIAL": 76,
     "BACKEND_ONLY": 4,
     "UI_ONLY": 0,
     "ABSENT": 0,
@@ -14,7 +14,7 @@
     "UNVERIFIED": 36,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 74,
+  "gapRecords": 75,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -93,7 +93,8 @@
     "AR-GL-01",
     "COST-CODE-01",
     "MAIL-DRAFT-01",
-    "COMPANY-CTX-01"
+    "COMPANY-CTX-01",
+    "PAGE-ORDER-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,

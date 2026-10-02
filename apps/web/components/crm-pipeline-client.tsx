@@ -6,6 +6,7 @@ import { opportunityAttention, attentionFactsOfOpportunity } from '@aura/shared'
 import CreateDrawer from './ui/create-drawer';
 import LeadConvertDrawer from './lead-convert-drawer';
 import LeadCapture from './lead-capture';
+import ExecutiveCrmDrill, { type ExecDrillRequest } from './executive-crm-drill';
 import { DISPLAY_LOCALE, DISPLAY_TIME_ZONE } from '@/lib/locale';
 
 // CRM · Sales Pipeline — the full sales cycle, with Lead and Opportunity kept
@@ -67,7 +68,9 @@ interface SourceMargin {
  * repeat owner performance: the Overview tab owns that, and one owner may not have two win rates. */
 interface ReasonRow { reason: string | null; deals: number; value: number; percent: number }
 interface ExecutiveCrm {
-  period: { days: number; from: string };
+  period: { days: number; from: string; asOf: string };
+  /** F-06 — what the read counted: every decided deal on record, and those inside the window. */
+  population: { decidedOnRecord: number; counted: number; complete: boolean };
   decided: { won: number; lost: number; wonValue: number; lostValue: number; winRate: number | null; valueWinRate: number | null };
   winReasons: ReasonRow[];
   lossReasons: ReasonRow[];
@@ -130,6 +133,8 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   const [funnel, setFunnel] = useState<SourceFunnel | null>(null);
   const [execDays, setExecDays] = useState(365);
   const [execData, setExecData] = useState<ExecutiveCrm | null>(null);
+  const [execErr, setExecErr] = useState<string | null>(null);
+  const [drill, setDrill] = useState<ExecDrillRequest | null>(null);
   // Preserve the original pipeline workspace's deal filters while the richer workspace owns the
   // tabs. Filters are intentionally local to Board/List; management KPIs stay server-backed.
   const [query, setQuery] = useState('');
@@ -157,11 +162,20 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
   useEffect(() => {
     if (view !== 'executive' && view !== 'allAnalytics') return;
     setExecData(null);
+    setExecErr(null);
+    setDrill(null);
+    // A refusal is said, not shown as a read that never finishes loading.
     void fetch(`/api/crm/executive?days=${execDays}`, { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
+      .then(async (r) => {
+        const body = (await r.json().catch(() => ({}))) as ExecutiveCrm & { message?: string };
+        if (r.status === 403) throw new Error('Your role does not include the executive read of won and lost deals.');
+        if (!r.ok) throw new Error(body.message ?? `The executive read could not be loaded (${r.status}).`);
+        return body;
+      })
       .then((d) => setExecData(d))
-      .catch(() => setExecData(null));
+      .catch((e: unknown) => setExecErr(e instanceof Error ? e.message : String(e)));
   }, [view, execDays]);
+  const openDrill = (label: string, query: Record<string, string>): void => setDrill({ label, query });
 
   useEffect(() => {
     if ((view !== 'sources' && view !== 'allAnalytics') || funnel) return;
@@ -646,7 +660,11 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
 
       {/* ── EXECUTIVE (C6, §7) ── */}
       {(view === 'executive' || view === 'allAnalytics') && (
-        execData === null ? <p style={s.muted}>Loading the executive read…</p> : (
+        execData === null ? (
+          execErr
+            ? <p role="alert" style={{ ...s.muted, color: 'var(--bad)' }} data-testid="exec-refused">{execErr}</p>
+            : <p style={s.muted}>Loading the executive read…</p>
+        ) : (
           <div style={s.cmdGrid}>
             <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -661,11 +679,23 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               <div style={s.cmdKpiRow}>
                 <div style={s.cmdKpi}>
                   <span style={s.kpiLabel}>Won</span>
-                  <span style={s.kpiVal}>{execData.decided.won} · {money(execData.decided.wonValue)}</span>
+                  <span style={s.kpiVal}>
+                    {execData.decided.won > 0 ? (
+                      <button type="button" style={s.drillLink} data-testid="exec-drill-won" onClick={() => openDrill('won', { by: 'decided', outcome: 'won' })}>
+                        {execData.decided.won}
+                      </button>
+                    ) : 0} · {money(execData.decided.wonValue)}
+                  </span>
                 </div>
                 <div style={s.cmdKpi}>
                   <span style={s.kpiLabel}>Lost</span>
-                  <span style={s.kpiVal}>{execData.decided.lost} · {money(execData.decided.lostValue)}</span>
+                  <span style={s.kpiVal}>
+                    {execData.decided.lost > 0 ? (
+                      <button type="button" style={s.drillLink} data-testid="exec-drill-lost" onClick={() => openDrill('lost', { by: 'decided', outcome: 'lost' })}>
+                        {execData.decided.lost}
+                      </button>
+                    ) : 0} · {money(execData.decided.lostValue)}
+                  </span>
                 </div>
                 <div style={s.cmdKpi}>
                   <span style={s.kpiLabel}>Win rate (deals)</span>
@@ -679,7 +709,19 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                   </span>
                 </div>
               </div>
+              <p style={{ ...s.muted, padding: '10px 0 0', fontSize: 12 }} data-testid="exec-population">
+                Counted {execData.population.counted.toLocaleString(DISPLAY_LOCALE)} decided {execData.population.counted === 1 ? 'deal' : 'deals'} —
+                every deal won or lost between {fmt(execData.period.from)} and {fmt(execData.period.asOf)} —
+                of {execData.population.decidedOnRecord.toLocaleString(DISPLAY_LOCALE)} decided on record.
+                {execData.population.complete
+                  ? ' Every one was read; open any count to see its deals.'
+                  : ' The deals changed while they were being read, so this may not be every one — reload for a settled read.'}
+              </p>
             </section>
+
+            {drill && (
+              <ExecutiveCrmDrill request={drill} days={execData.period.days} asOf={execData.period.asOf} onClose={() => setDrill(null)} />
+            )}
 
             <section style={s.cmdCard}>
               <div style={s.cmdTitle}>Why we win</div>
@@ -687,12 +729,24 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr>{['Reason', 'Deals', 'Value'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {execData.winReasons.map((r) => (
+                    {execData.winReasons.map((r, i) => (
                       <tr key={r.reason ?? 'unrecorded'}>
                         <td style={s.cmdTd}>
                           {r.reason ?? <span style={{ color: 'var(--bad)' }}>not recorded</span>}
                         </td>
-                        <td style={s.cmdTd}>{r.deals} · {r.percent}%</td>
+                        <td style={s.cmdTd}>
+                          <button
+                            type="button"
+                            style={s.drillLink}
+                            data-testid={`exec-drill-win-reason-${i}`}
+                            onClick={() => openDrill(
+                              r.reason === null ? 'won with no reason recorded' : `won — “${r.reason}”`,
+                              r.reason === null ? { by: 'no-reason', outcome: 'won' } : { by: 'reason', outcome: 'won', reason: r.reason },
+                            )}
+                          >
+                            {r.deals}
+                          </button> · {r.percent}%
+                        </td>
                         <td style={s.cmdTd}>{money(r.value)}</td>
                       </tr>
                     ))}
@@ -707,12 +761,24 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr>{['Reason', 'Deals', 'Value'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {execData.lossReasons.map((r) => (
+                    {execData.lossReasons.map((r, i) => (
                       <tr key={r.reason ?? 'unrecorded'}>
                         <td style={s.cmdTd}>
                           {r.reason ?? <span style={{ color: 'var(--bad)' }}>not recorded</span>}
                         </td>
-                        <td style={s.cmdTd}>{r.deals} · {r.percent}%</td>
+                        <td style={s.cmdTd}>
+                          <button
+                            type="button"
+                            style={s.drillLink}
+                            data-testid={`exec-drill-loss-reason-${i}`}
+                            onClick={() => openDrill(
+                              r.reason === null ? 'lost with no reason recorded' : `lost — “${r.reason}”`,
+                              r.reason === null ? { by: 'no-reason', outcome: 'lost' } : { by: 'reason', outcome: 'lost', reason: r.reason },
+                            )}
+                          >
+                            {r.deals}
+                          </button> · {r.percent}%
+                        </td>
                         <td style={s.cmdTd}>{money(r.value)}</td>
                       </tr>
                     ))}
@@ -727,10 +793,14 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                   <thead><tr>{['Competitor', 'Losses', 'Value'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
                   <tbody>
-                    {execData.competitors.map((c) => (
+                    {execData.competitors.map((c, i) => (
                       <tr key={c.name}>
                         <td style={s.cmdTd}>{c.name}</td>
-                        <td style={s.cmdTd}>{c.lostDeals}</td>
+                        <td style={s.cmdTd}>
+                          <button type="button" style={s.drillLink} data-testid={`exec-drill-competitor-${i}`} onClick={() => openDrill(`lost against ${c.name}`, { by: 'competitor', name: c.name })}>
+                            {c.lostDeals}
+                          </button>
+                        </td>
                         <td style={s.cmdTd}>{money(c.lostValue)}</td>
                       </tr>
                     ))}
@@ -754,10 +824,14 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
                     <thead><tr>{['Account', 'Won', 'Share'].map((h) => <th key={h} style={s.cmdTh}>{h}</th>)}</tr></thead>
                     <tbody>
-                      {execData.concentration.top.map((t) => (
+                      {execData.concentration.top.map((t, i) => (
                         <tr key={t.accountId}>
                           <td style={s.cmdTd}>{t.accountName}</td>
-                          <td style={s.cmdTd}>{money(t.wonValue)}</td>
+                          <td style={s.cmdTd}>
+                            <button type="button" style={s.drillLink} data-testid={`exec-drill-account-${i}`} onClick={() => openDrill(`won from ${t.accountName}`, { by: 'account', accountId: t.accountId })}>
+                              {money(t.wonValue)}
+                            </button>
+                          </td>
                           <td style={{ ...s.cmdTd, fontWeight: 700 }}>{t.percent}%</td>
                         </tr>
                       ))}
@@ -773,9 +847,24 @@ export default function CrmPipelineClient({ initialLeads, initialOpportunities, 
               <section style={{ ...s.cmdCard, gridColumn: '1 / -1' }}>
                 <div style={s.cmdTitle}>What this read could not see</div>
                 <p style={{ ...s.muted, padding: 0 }}>
-                  {execData.coverage.winsWithoutReason} win(s) and {execData.coverage.lossesWithoutReason} loss(es)
-                  carry no recorded reason{execData.coverage.decidedWithoutAccount > 0 &&
-                    `; ${execData.coverage.decidedWithoutAccount} decided deal(s) have no account, so they cannot enter the concentration table`}.
+                  {execData.coverage.winsWithoutReason > 0 ? (
+                    <button type="button" style={s.drillLink} data-testid="exec-drill-wins-no-reason" onClick={() => openDrill('wins with no reason recorded', { by: 'no-reason', outcome: 'won' })}>
+                      {execData.coverage.winsWithoutReason} win(s)
+                    </button>
+                  ) : '0 wins'} and {execData.coverage.lossesWithoutReason > 0 ? (
+                    <button type="button" style={s.drillLink} data-testid="exec-drill-losses-no-reason" onClick={() => openDrill('losses with no reason recorded', { by: 'no-reason', outcome: 'lost' })}>
+                      {execData.coverage.lossesWithoutReason} loss(es)
+                    </button>
+                  ) : '0 losses'} carry no recorded reason
+                  {execData.coverage.decidedWithoutAccount > 0 && (
+                    <>
+                      ;{' '}
+                      <button type="button" style={s.drillLink} data-testid="exec-drill-no-account" onClick={() => openDrill('decided deals with no account', { by: 'no-account' })}>
+                        {execData.coverage.decidedWithoutAccount} decided deal(s)
+                      </button>
+                      {' '}have no account, so they cannot enter the concentration table
+                    </>
+                  )}.
                   {' '}The percentages above are honest about the deals they can see — these are the ones they cannot.
                 </p>
               </section>
@@ -1079,6 +1168,8 @@ const s = {
   kpiCard: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 4 } as CSSProperties,
   kpiLabel: { fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5 } as CSSProperties,
   kpiVal: { fontSize: 18, fontWeight: 700 } as CSSProperties,
+  /** A count that opens the deals behind it (F-06). */
+  drillLink: { background: 'none', border: 'none', padding: 0, font: 'inherit', color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 } as CSSProperties,
   cmdKpiRow: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 } as CSSProperties,
   cmdKpi: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 12, padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 3 } as CSSProperties,
   cmdKpiLabel: { fontSize: 10, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: 0.5, whiteSpace: 'nowrap' } as CSSProperties,

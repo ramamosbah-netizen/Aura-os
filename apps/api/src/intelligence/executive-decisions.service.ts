@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { businessDate, type OpportunityStage } from '@aura/shared';
-import { OpportunityService } from '@aura/crm';
+import { OpportunityService, execOpportunityOf, executiveCrm } from '@aura/crm';
 import { ContractService } from '@aura/contracts';
 import { PurchaseOrderService } from '@aura/procurement';
 import { CustomerInvoiceService } from '@aura/finance';
@@ -10,6 +10,7 @@ import {
   type CostTransaction,
 } from '@aura/projects';
 import { projectRevenueRecognition, type ProjectRevenueRecognition } from '../finance/revenue-recognition.read';
+import { readEveryPage } from '../common/complete-read';
 import {
   type DecisionExclusion, type DecisionFigure, type DecisionId, type DecisionMeta, type DecisionRecord, EXECUTIVE_DECISIONS, type RecordUnit, type ExecutiveDecision, type ExecutiveDecisionDetail,
   type ExecutiveDecisionsView, inBase, measured, metaOf, sum, summarise, unavailable,
@@ -23,9 +24,10 @@ import {
 const BASE_CURRENCY = 'AED';
 
 /**
- * Read no population silently short. Every store here defaults to 100–500 rows, which is the
- * F-06 / MGT-01 failure: an executive figure over "all opportunities" that was over the first 100.
- * Each read asks for this many explicitly, and if it comes back FULL the decision says so.
+ * Read no population silently short. Every store here defaults to 100–500 rows: an executive figure
+ * over "all opportunities" that was over the first 100. Opportunities (MGT-01, F-06) are read WHOLE,
+ * page after page to the store's own total. Every other source still asks for this many explicitly,
+ * and if a read comes back FULL its decision says so.
  */
 const READ_CAP = 100_000;
 
@@ -113,24 +115,31 @@ export class ExecutiveDecisionsService {
     return {
       // ── MGT-01 ───────────────────────────────────────────────────────────────────────────────
       pipeline: async (tenantId, asOf, meta) => {
-        const all = (await this.opportunities.list({ tenantId, limit: READ_CAP })).filter((o) => o.tenantId === tenantId);
+        // F-06 — the whole book, not its newest N: every page to the store's own total.
+        const read = await readEveryPage((page) => this.opportunities.listPaged({ tenantId }, page));
+        const all = read.items.filter((o) => o.tenantId === tenantId);
         const open = all.filter((o) => OPEN_STAGES.includes(o.stage));
-        const yearAgo = Date.now() - 365 * 86_400_000;
-        const decided = all.filter((o) => (o.stage === 'won' || o.stage === 'lost') && Date.parse(o.updatedAt) >= yearAgo);
-        const won = decided.filter((o) => o.stage === 'won').length;
+        // The win rate is the Executive CRM read's own — the same function over the same deals at the
+        // same moment — so the pipeline workspace and this tile cannot state two win rates for one
+        // business.
+        const { decided } = executiveCrm(all.map(execOpportunityOf), 365, new Date(asOf), read.settled);
+        const settled = decided.won + decided.lost;
         const figures: DecisionFigure[] = [
           { label: 'Open pipeline', value: sum(open.map((o) => o.value || 0)), unit: 'currency' },
           { label: 'Open deals', value: open.length, unit: 'count' },
         ];
-        if (decided.length > 0) figures.push({ label: 'Win rate, last 365 days', value: Math.round((won / decided.length) * 100), unit: 'percent' as const });
+        if (decided.winRate !== null) figures.push({ label: 'Win rate, last 365 days', value: decided.winRate, unit: 'percent' as const });
         return measured(meta, asOf, {
           figures,
           records: open.map((o) => rec(o.id, o.accountName ? `${o.title} · ${o.accountName}` : o.title, `/crm/opportunities/${o.id}`, o.value || 0, 'currency', o.stage)),
           of: 'open opportunities (qualification, proposal, negotiation)',
-          excluded: [this.capped(all.length, 'opportunities')],
-          source: 'CRM opportunities',
-          basis: decided.length > 0
-            ? `Win rate = ${won} won of ${decided.length} decided (won or lost) whose last update falls in the last 365 days. An opportunity's value carries no currency of its own and is read as ${BASE_CURRENCY}.`
+          excluded: read.settled ? [] : [{
+            count: Math.max(1, Math.abs(read.total - read.items.length)),
+            reason: 'opportunities written or removed while the book was being read — it would not hold still; read it again',
+          }],
+          source: 'CRM opportunities — every one on record, read whole',
+          basis: settled > 0
+            ? `Win rate = ${decided.won} won of ${settled} decided (won or lost) whose last update falls in the last 365 days — the Executive CRM read's own figure. An opportunity's value carries no currency of its own and is read as ${BASE_CURRENCY}.`
             : `No opportunity was won or lost in the last 365 days, so no win rate is stated. An opportunity's value is read as ${BASE_CURRENCY}.`,
         });
       },

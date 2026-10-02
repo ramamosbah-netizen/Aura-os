@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { CompaniesService, ParseUuidOr404Pipe, PG_POOL, SettingsService, TenantContext } from '@aura/core';
 import { buildWorkbook, exportedAt, type WorkbookColumn } from '../common/workbook';
 import { resolveDocumentIdentity } from '../common/document-identity';
+import { readEveryPage } from '../common/complete-read';
 import { parsePageParams, businessDate } from '@aura/shared';
 import type { Pool } from 'pg';
 import {
@@ -280,14 +281,9 @@ export class Account360Controller {
   @Header('Content-Disposition', 'attachment; filename="crm-accounts.xlsx"')
   async accountsXlsx(): Promise<StreamableFile> {
     const ctx = this.tenant.get();
-    const rows: Awaited<ReturnType<AccountService['listPaged']>>['items'] = [];
-    let total = 0;
-    for (let offset = 0; ; offset += 500) {
-      const page = await this.accounts.listPaged({ tenantId: ctx.tenantId }, { limit: 500, offset });
-      total = page.total;
-      rows.push(...page.items);
-      if (page.items.length === 0 || rows.length >= page.total) break;
-    }
+    // Whole, and checked as whole: an account repeated across pages is kept once, and "all N" is
+    // only claimed when the distinct rows read are the register's own count (F-06).
+    const { items: rows, total, settled } = await readEveryPage((page) => this.accounts.listPaged({ tenantId: ctx.tenantId }, page), 500);
     const columns: WorkbookColumn<(typeof rows)[number]>[] = [
       { label: 'Name', type: 'text', value: (a) => a.name },
       { label: 'Status', type: 'text', value: (a) => a.status },
@@ -305,7 +301,7 @@ export class Account360Controller {
     const issuer = this.companies && this.settings
       ? await resolveDocumentIdentity(this.companies, this.settings, ctx.tenantId, ctx.companyId ?? null)
       : null;
-    const complete = rows.length === total;
+    const complete = settled;
     return new StreamableFile(buildWorkbook('Accounts', columns, rows, {
       title: 'Customer accounts register',
       source: 'CRM accounts register (Sales & Commercial › Customers)',

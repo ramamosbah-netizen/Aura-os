@@ -382,7 +382,7 @@
 | Project Manager | XOP-15 | PARTIAL | UNVERIFIED |
 | Project Manager | XOP-16 | PARTIAL | UNVERIFIED |
 | Project Manager | XOP-17 | PARTIAL | UNVERIFIED |
-| Project Manager | MGT-01 | PARTIAL | UNVERIFIED |
+| Project Manager | MGT-01 | COMPLETE | UNVERIFIED |
 | Project Manager | MGT-02 | UNVERIFIED | UNVERIFIED |
 | Project Manager | MGT-03 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-04 | UNVERIFIED | UNVERIFIED |
@@ -480,7 +480,7 @@
 | Technical Manager | XOP-15 | PARTIAL | UNVERIFIED |
 | Technical Manager | XOP-16 | PARTIAL | UNVERIFIED |
 | Technical Manager | XOP-17 | PARTIAL | UNVERIFIED |
-| Technical Manager | MGT-01 | PARTIAL | UNVERIFIED |
+| Technical Manager | MGT-01 | COMPLETE | UNVERIFIED |
 | Technical Manager | MGT-02 | UNVERIFIED | UNVERIFIED |
 | Technical Manager | MGT-03 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-04 | UNVERIFIED | UNVERIFIED |
@@ -581,7 +581,7 @@
 | Commercial Manager / QS | XOP-15 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | XOP-16 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | XOP-17 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | MGT-01 | PARTIAL | UNVERIFIED |
+| Commercial Manager / QS | MGT-01 | COMPLETE | UNVERIFIED |
 | Commercial Manager / QS | MGT-02 | UNVERIFIED | UNVERIFIED |
 | Commercial Manager / QS | MGT-03 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-04 | UNVERIFIED | UNVERIFIED |
@@ -654,7 +654,7 @@
 | Procurement Manager / Buyer | XOP-15 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-16 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-17 | PARTIAL | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-01 | PARTIAL | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-01 | COMPLETE | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-02 | UNVERIFIED | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-03 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-04 | UNVERIFIED | UNVERIFIED |
@@ -947,7 +947,7 @@
 | Senior Management | XOP-15 | PARTIAL | UNVERIFIED |
 | Senior Management | XOP-16 | PARTIAL | UNVERIFIED |
 | Senior Management | XOP-17 | PARTIAL | UNVERIFIED |
-| Senior Management | MGT-01 | PARTIAL | UNVERIFIED |
+| Senior Management | MGT-01 | COMPLETE | UNVERIFIED |
 | Senior Management | MGT-02 | UNVERIFIED | UNVERIFIED |
 | Senior Management | MGT-03 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-04 | UNVERIFIED | UNVERIFIED |
@@ -988,7 +988,7 @@
 | CEO | XOP-15 | PARTIAL | UNVERIFIED |
 | CEO | XOP-16 | PARTIAL | UNVERIFIED |
 | CEO | XOP-17 | PARTIAL | UNVERIFIED |
-| CEO | MGT-01 | PARTIAL | UNVERIFIED |
+| CEO | MGT-01 | COMPLETE | UNVERIFIED |
 | CEO | MGT-02 | UNVERIFIED | UNVERIFIED |
 | CEO | MGT-03 | PARTIAL | UNVERIFIED |
 | CEO | MGT-04 | UNVERIFIED | UNVERIFIED |

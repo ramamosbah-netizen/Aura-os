@@ -7,7 +7,7 @@
 | Sales | INT-01 | PARTIAL |
 | Sales | INT-02 | COMPLETE |
 | Sales | INT-03 | COMPLETE |
-| Sales | INT-04 | WRONG_BEHAVIOR |
+| Sales | INT-04 | COMPLETE |
 | Sales | INT-05 | PARTIAL |
 | Sales | INT-06 | COMPLETE |
 | Sales | OUT-01 | PARTIAL |
@@ -56,7 +56,7 @@
 | Sales | MGT-08 | PARTIAL |
 | Sales | MGT-09 | UNVERIFIED |
 | Sales | MGT-10 | BACKEND_ONLY |
-| Sales | MGT-11 | WRONG_BEHAVIOR |
+| Sales | MGT-11 | PARTIAL |
 | Sales | MGT-12 | UNVERIFIED |
 | Sales | MGT-13 | UNVERIFIED |
 | Sales | MGT-14 | PARTIAL |
@@ -191,7 +191,7 @@
 | Award | MGT-08 | PARTIAL |
 | Award | MGT-09 | UNVERIFIED |
 | Award | MGT-10 | BACKEND_ONLY |
-| Award | MGT-11 | WRONG_BEHAVIOR |
+| Award | MGT-11 | PARTIAL |
 | Award | MGT-12 | UNVERIFIED |
 | Award | MGT-13 | UNVERIFIED |
 | Award | MGT-14 | PARTIAL |
@@ -249,7 +249,7 @@
 | Mobilisation | MGT-08 | PARTIAL |
 | Mobilisation | MGT-09 | UNVERIFIED |
 | Mobilisation | MGT-10 | BACKEND_ONLY |
-| Mobilisation | MGT-11 | WRONG_BEHAVIOR |
+| Mobilisation | MGT-11 | PARTIAL |
 | Mobilisation | MGT-12 | UNVERIFIED |
 | Mobilisation | MGT-13 | UNVERIFIED |
 | Mobilisation | MGT-14 | PARTIAL |
@@ -314,7 +314,7 @@
 | Engineering | MGT-08 | PARTIAL |
 | Engineering | MGT-09 | UNVERIFIED |
 | Engineering | MGT-10 | BACKEND_ONLY |
-| Engineering | MGT-11 | WRONG_BEHAVIOR |
+| Engineering | MGT-11 | PARTIAL |
 | Engineering | MGT-12 | UNVERIFIED |
 | Engineering | MGT-13 | UNVERIFIED |
 | Engineering | MGT-14 | PARTIAL |
@@ -381,7 +381,7 @@
 | Planning | MGT-08 | PARTIAL |
 | Planning | MGT-09 | UNVERIFIED |
 | Planning | MGT-10 | BACKEND_ONLY |
-| Planning | MGT-11 | WRONG_BEHAVIOR |
+| Planning | MGT-11 | PARTIAL |
 | Planning | MGT-12 | UNVERIFIED |
 | Planning | MGT-13 | UNVERIFIED |
 | Planning | MGT-14 | PARTIAL |
@@ -403,7 +403,7 @@
 | Procurement | BUY-01 | COMPLETE |
 | Procurement | BUY-02 | PARTIAL |
 | Procurement | BUY-03 | UNVERIFIED |
-| Procurement | BUY-04 | WRONG_BEHAVIOR |
+| Procurement | BUY-04 | COMPLETE |
 | Procurement | BUY-05 | COMPLETE |
 | Procurement | BUY-06 | COMPLETE |
 | Procurement | BUY-07 | COMPLETE |
@@ -454,7 +454,7 @@
 | Procurement | MGT-08 | PARTIAL |
 | Procurement | MGT-09 | UNVERIFIED |
 | Procurement | MGT-10 | BACKEND_ONLY |
-| Procurement | MGT-11 | WRONG_BEHAVIOR |
+| Procurement | MGT-11 | PARTIAL |
 | Procurement | MGT-12 | UNVERIFIED |
 | Procurement | MGT-13 | UNVERIFIED |
 | Procurement | MGT-14 | PARTIAL |
@@ -612,7 +612,7 @@
 | Progress | MGT-08 | PARTIAL |
 | Progress | MGT-09 | UNVERIFIED |
 | Progress | MGT-10 | BACKEND_ONLY |
-| Progress | MGT-11 | WRONG_BEHAVIOR |
+| Progress | MGT-11 | PARTIAL |
 | Progress | MGT-12 | UNVERIFIED |
 | Progress | MGT-13 | UNVERIFIED |
 | Progress | MGT-14 | PARTIAL |
@@ -673,7 +673,7 @@
 | Commercial / Certification | MGT-08 | PARTIAL |
 | Commercial / Certification | MGT-09 | UNVERIFIED |
 | Commercial / Certification | MGT-10 | BACKEND_ONLY |
-| Commercial / Certification | MGT-11 | WRONG_BEHAVIOR |
+| Commercial / Certification | MGT-11 | PARTIAL |
 | Commercial / Certification | MGT-12 | UNVERIFIED |
 | Commercial / Certification | MGT-13 | UNVERIFIED |
 | Commercial / Certification | MGT-14 | PARTIAL |
@@ -734,7 +734,7 @@
 | Finance / Collection | MGT-08 | PARTIAL |
 | Finance / Collection | MGT-09 | UNVERIFIED |
 | Finance / Collection | MGT-10 | BACKEND_ONLY |
-| Finance / Collection | MGT-11 | WRONG_BEHAVIOR |
+| Finance / Collection | MGT-11 | PARTIAL |
 | Finance / Collection | MGT-12 | UNVERIFIED |
 | Finance / Collection | MGT-13 | UNVERIFIED |
 | Finance / Collection | MGT-14 | PARTIAL |
@@ -937,7 +937,7 @@
 | Closeout | MGT-08 | PARTIAL |
 | Closeout | MGT-09 | UNVERIFIED |
 | Closeout | MGT-10 | BACKEND_ONLY |
-| Closeout | MGT-11 | WRONG_BEHAVIOR |
+| Closeout | MGT-11 | PARTIAL |
 | Closeout | MGT-12 | UNVERIFIED |
 | Closeout | MGT-13 | UNVERIFIED |
 | Closeout | MGT-14 | PARTIAL |

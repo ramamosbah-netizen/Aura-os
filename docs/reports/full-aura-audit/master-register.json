@@ -141,7 +141,7 @@
       "stages": [
         "Sales"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "authority": "CRM",
       "evidence": [
         "R-J1"
@@ -150,15 +150,15 @@
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
         "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "PARTIAL",
-        "ui": "UNVERIFIED",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "PARTIAL",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "PARTIAL",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Reused J1-01: default Sales service permission blocks lead actions.",
+      "currentBehavior": "RECONCILED 2026-10-03. The behaviour this row recorded (J1-01: 'the default Sales service permission blocks lead actions') was DISPROVED and J1-01 closed — no code changed. Re-proved today, Auth ON against PostgreSQL, as the seeded Sales rep u-e2e-sales: create a lead 201; mark it qualified 200; convert 201, which creates the account, opportunity, contact and Pre-Sales assignment in one act; disqualify another lead 200. A Site Engineer and a Storekeeper are refused creating a lead, 403 \"no grant satisfies crm.lead.create\". BROWSER (sales-enquiry-intake.spec.ts, re-run green): the enquiry is captured and assigned on screen, the rep qualifies and converts it under their own token, and Pre-Sales receives the converted work on screen. NOT PROVED: qualification and disqualification clicked through the lead screen (the spec drives them by API), and the lead domain tests were not re-run for this row.",
       "acceptanceProof": "Sales role creates, qualifies and converts within tenant; wrong permission denied."
     },
     {
@@ -2624,7 +2624,7 @@
       "stages": [
         "Procurement"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "COMPLETE",
       "authority": "Procurement / Inventory",
       "evidence": [
         "R-J26"
@@ -2632,16 +2632,16 @@
       "source": "apps/api/test/depth-audit-probe.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "PARTIAL",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "PARTIAL",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "PARTIAL",
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Reused J3-01: PO update bypasses dedicated approval permission.",
+      "currentBehavior": "RECONCILED 2026-10-03. The behaviour this row recorded (J3-01: 'PO update bypasses the dedicated approval permission') was REMEDIATED and J3-01 closed against its frozen contract: an update cannot move an order's lifecycle (every generic transition 400), issue, cancel and close are commands with their own permissions (403 to an update-only actor), an order under the threshold carries an explicit automatic approval fact before it can be issued, and the eight database-backed cases were verified to bite by mutation. Held in the gate by no-generic-po-status.fitness.test.ts and the lifecycle domain tests. Requisition approval by the Procurement Manager is BUY-APPR-01's closure. Re-run today: procurement-order-receipt.spec.ts (browser, Auth ON, PostgreSQL) — an approved order is issued through its own command and received against it. NOT PROVED here: the approval decision clicked on screen (the spec records it by API); ARCH-01 (a ModuleRef bridge in this path) stays a watch item.",
       "acceptanceProof": "Update cannot elevate status; authorized approval and wrong-role denial."
     },
     {
@@ -6829,7 +6829,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "WRONG_BEHAVIOR",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6837,16 +6837,16 @@
       "source": "apps/api/src/crm/executive-crm.controller.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "PARTIAL",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "currentBehavior": "Fresh Auth-ON project risk/issue proof passed risk grading, acceptance rationale, materialisation, edit invariants, project containment and named permission refusal. One persisted issue resolution remained visually open after the command because an older register response overwrote the refreshed state.",
+      "currentBehavior": "RECONCILED 2026-10-03. The defect this row recorded — a resolved issue painted open again by an older register response — was fixed and proved by ORDER under F-11 (closed). Re-run today: project-risks-issues.spec.ts, 10/10 in the browser, Auth ON against PostgreSQL — the register is reached from Project 360; a risk is graded by the matrix, never typed; accepting one demands a reason kept apart from the mitigation; a risk that happens becomes a second record still marked foreseen; ending an issue demands a note, resolved kept apart from withdrawn; a late stale read does not reopen a resolved issue; correcting an entry never moves its status; a reader without permission is refused in the domain's words; the register never changes project. Domain: project-risk-issue.service.test.ts, 17/17. The management rollup is F-10's 'risks' decision, which counts open high and critical risks and issues and drills to them. NOT PROVED — why this stays PARTIAL against its criterion: REOPENING an issue, and My Work updating once when an issue changes.",
       "acceptanceProof": "Resolve/withdraw/reopen an issue with required reasons and guarantee the UI shows the latest persisted version; management rollups and My Work update once with drilldown."
     },
     {
@@ -9343,15 +9343,15 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 56,
-      "PARTIAL": 76,
+      "COMPLETE": 58,
+      "PARTIAL": 77,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
       "DISCONNECTED": 5,
-      "WRONG_BEHAVIOR": 3,
+      "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
       "UNVERIFIED": 36,
       "NOT_AUDITED": 0

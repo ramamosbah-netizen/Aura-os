@@ -1611,6 +1611,30 @@ Object.assign(defects.find(g=>g.id==='PAGE-ORDER-01'),{
  acceptanceProof:"MET. FITNESS (paged-order.fitness.test.ts): no paged ORDER BY in modules/*, core or apps/api ends on a key that can tie; it reads what it guards (more than 50 paged queries, both helpers) and, with one store put back on `ORDER BY created_at DESC`, it fails naming that file. POSTGRESQL (paged-order.pg.e2e-spec.ts): four registers — leads (a direct store), bank transactions (tied on a transaction date, as real data ties), employees (the HR helper) and transmittals (the doc-control helper) — are each seeded with 5,200 rows that all share their sort key and paged through their real HTTP endpoint 500 at a time: 11 pages, 5,200 ids, every one distinct and exactly SQL's set. With the leads store put back on the old order the same spec read 5,196 distinct leads — four shown twice, four never shown — so it sees the defect. LIMITS — not evidence for: the other paged registers individually (the fitness covers their clauses; four are driven through PostgreSQL); a page read while rows are being written (offset paging cannot be consistent across concurrent writes — readEveryPage reports that case as unsettled); ordering among ties in the in-memory stores, deliberately left as insertion order.",
 });
 
+/**
+ * RECONCILED 2026-10-03 — three capability rows still read WRONG_BEHAVIOR after the findings behind
+ * them closed: INT-04 (J1-01, disproved), BUY-04 (J3-01, met) and MGT-11 (F-11, met). Each is set
+ * from its OWN acceptance criterion on evidence re-run today; a layer nobody proved stays where it was.
+ */
+{
+  const c = caps.find(c=>c.id==='INT-04');
+  c.classification = 'COMPLETE';
+  c.currentBehavior = "RECONCILED 2026-10-03. The behaviour this row recorded (J1-01: 'the default Sales service permission blocks lead actions') was DISPROVED and J1-01 closed — no code changed. Re-proved today, Auth ON against PostgreSQL, as the seeded Sales rep u-e2e-sales: create a lead 201; mark it qualified 200; convert 201, which creates the account, opportunity, contact and Pre-Sales assignment in one act; disqualify another lead 200. A Site Engineer and a Storekeeper are refused creating a lead, 403 \"no grant satisfies crm.lead.create\". BROWSER (sales-enquiry-intake.spec.ts, re-run green): the enquiry is captured and assigned on screen, the rep qualifies and converts it under their own token, and Pre-Sales receives the converted work on screen. NOT PROVED: qualification and disqualification clicked through the lead screen (the spec drives them by API), and the lead domain tests were not re-run for this row.";
+  Object.assign(c.layers, { persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', handoff:'COMPLETE', ui:'PARTIAL', browser:'PARTIAL' });
+}
+{
+  const c = caps.find(c=>c.id==='BUY-04');
+  c.classification = 'COMPLETE';
+  c.currentBehavior = "RECONCILED 2026-10-03. The behaviour this row recorded (J3-01: 'PO update bypasses the dedicated approval permission') was REMEDIATED and J3-01 closed against its frozen contract: an update cannot move an order's lifecycle (every generic transition 400), issue, cancel and close are commands with their own permissions (403 to an update-only actor), an order under the threshold carries an explicit automatic approval fact before it can be issued, and the eight database-backed cases were verified to bite by mutation. Held in the gate by no-generic-po-status.fitness.test.ts and the lifecycle domain tests. Requisition approval by the Procurement Manager is BUY-APPR-01's closure. Re-run today: procurement-order-receipt.spec.ts (browser, Auth ON, PostgreSQL) — an approved order is issued through its own command and received against it. NOT PROVED here: the approval decision clicked on screen (the spec records it by API); ARCH-01 (a ModuleRef bridge in this path) stays a watch item.";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', browser:'PARTIAL', ui:'PARTIAL', handoff:'PARTIAL' });
+}
+{
+  const c = caps.find(c=>c.id==='MGT-11');
+  c.classification = 'PARTIAL';
+  c.currentBehavior = "RECONCILED 2026-10-03. The defect this row recorded — a resolved issue painted open again by an older register response — was fixed and proved by ORDER under F-11 (closed). Re-run today: project-risks-issues.spec.ts, 10/10 in the browser, Auth ON against PostgreSQL — the register is reached from Project 360; a risk is graded by the matrix, never typed; accepting one demands a reason kept apart from the mitigation; a risk that happens becomes a second record still marked foreseen; ending an issue demands a note, resolved kept apart from withdrawn; a late stale read does not reopen a resolved issue; correcting an entry never moves its status; a reader without permission is refused in the domain's words; the register never changes project. Domain: project-risk-issue.service.test.ts, 17/17. The management rollup is F-10's 'risks' decision, which counts open high and critical risks and issues and drills to them. NOT PROVED — why this stays PARTIAL against its criterion: REOPENING an issue, and My Work updating once when an issue changes.";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', browser:'COMPLETE', handoff:'PARTIAL' });
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

@@ -4,15 +4,15 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 75 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 56 |
-| PARTIAL | 76 |
+| COMPLETE | 58 |
+| PARTIAL | 77 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
 | DUPLICATED | 0 |
 | WRONG_AUTHORITY | 0 |
 | DISCONNECTED | 5 |
-| WRONG_BEHAVIOR | 3 |
+| WRONG_BEHAVIOR | 0 |
 | UNREACHABLE | 0 |
 | UNVERIFIED | 36 |
 | NOT_AUDITED | 0 |
@@ -24,7 +24,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 75 gap records (34 reused + 12 ne
 | INT-01 | Customer/contact matching | PARTIAL | CRM | R-J1 |
 | INT-02 | Enquiry site and systems | COMPLETE | CRM | R-J1 |
 | INT-03 | Enquiry deadlines and owner | COMPLETE | CRM | R-J1 |
-| INT-04 | Qualification and disqualification | WRONG_BEHAVIOR | CRM | R-J1 |
+| INT-04 | Qualification and disqualification | COMPLETE | CRM | R-J1 |
 | INT-05 | Lead conversion and lineage | PARTIAL | CRM | R-J1 |
 | INT-06 | Follow-up and enquiry documents | COMPLETE | CRM | R-J1 |
 | STU-01 | Study assignment and acceptance | COMPLETE | CRM solution scope / Tender pre-award | R-J1 |
@@ -100,7 +100,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 75 gap records (34 reused + 12 ne
 | BUY-01 | Material requisition lines | COMPLETE | Procurement / Inventory | R-J26 |
 | BUY-02 | Supplier approval | PARTIAL | Procurement / Inventory | R-J26 |
 | BUY-03 | RFQ dispatch | UNVERIFIED | Procurement / Inventory | R-J26 |
-| BUY-04 | Purchase approval | WRONG_BEHAVIOR | Procurement / Inventory | R-J26 |
+| BUY-04 | Purchase approval | COMPLETE | Procurement / Inventory | R-J26 |
 | BUY-05 | Partial receipt | COMPLETE | Procurement / Inventory | R-J26 |
 | BUY-06 | Stock issue and return | COMPLETE | Procurement / Inventory | R-J26 |
 | BUY-07 | Material delivery to work package | COMPLETE | Procurement / Inventory | R-J26 |
@@ -196,7 +196,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 75 gap records (34 reused + 12 ne
 | MGT-08 | Cost and commitments | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-09 | Margin and forecast | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
 | MGT-10 | Cash and receivables | BACKEND_ONLY | Canonical portfolio projections | N-SOURCE |
-| MGT-11 | Major risks and issues | WRONG_BEHAVIOR | Canonical portfolio projections | N-SOURCE |
+| MGT-11 | Major risks and issues | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-12 | Variations and claims | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
 | MGT-13 | Forecast completion | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
 | MGT-14 | Closeout exposure | PARTIAL | Canonical portfolio projections | N-SOURCE |

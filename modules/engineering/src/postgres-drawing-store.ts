@@ -143,7 +143,7 @@ export class PostgresDrawingStore implements DrawingStore {
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_engineering_drawings
        WHERE tenant_id = $1 AND project_id = $2 AND code = $3
-       ORDER BY created_at DESC LIMIT 1`,
+       ORDER BY created_at DESC, id DESC LIMIT 1`,
       [tenantId, projectId, code],
     );
     return res.rows.length ? rowToDrawing(res.rows[0]) : null;
@@ -180,7 +180,7 @@ export class PostgresDrawingStore implements DrawingStore {
     params.push(filter.limit ?? 100);
 
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
+      `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToDrawing);
@@ -246,7 +246,7 @@ export class PostgresDrawingStore implements DrawingStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${COLS} FROM public.aura_engineering_drawings ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToDrawing), total, page);

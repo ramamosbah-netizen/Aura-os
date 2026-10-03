@@ -107,7 +107,7 @@ export class PostgresJournalStore implements JournalStore {
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     params.push(filter.limit ?? 100);
     const jRes = await this.pool.query<JournalRow>(
-      `SELECT ${JOURNAL_COLS} FROM public.aura_finance_journals ${whereSql} ORDER BY posted_at DESC LIMIT $${params.length}`,
+      `SELECT ${JOURNAL_COLS} FROM public.aura_finance_journals ${whereSql} ORDER BY posted_at DESC, id DESC LIMIT $${params.length}`,
       params,
     );
 
@@ -162,7 +162,7 @@ export class PostgresJournalStore implements JournalStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const jRes = await this.pool.query<JournalRow>(
-      `SELECT ${JOURNAL_COLS} FROM public.aura_finance_journals ${whereSql} ORDER BY posted_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${JOURNAL_COLS} FROM public.aura_finance_journals ${whereSql} ORDER BY posted_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     if (jRes.rows.length === 0) return makePage([], total, page);

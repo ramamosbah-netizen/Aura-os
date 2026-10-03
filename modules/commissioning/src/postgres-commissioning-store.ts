@@ -138,12 +138,12 @@ export class PostgresCommissioningStore implements CommissioningStore {
     const res = projectId
       ? await this.pool.query<Row>(
           `select ${COLS} from public.aura_commissioning_records
-           where tenant_id = $1 and project_id = $2 order by created_at desc limit 500`,
+           where tenant_id = $1 and project_id = $2 order by created_at desc, id desc limit 500`,
           [tenantId, projectId],
         )
       : await this.pool.query<Row>(
           `select ${COLS} from public.aura_commissioning_records
-           where tenant_id = $1 order by created_at desc limit 500`,
+           where tenant_id = $1 order by created_at desc, id desc limit 500`,
           [tenantId],
         );
     return res.rows.map(toRecord);
@@ -159,7 +159,7 @@ export class PostgresCommissioningStore implements CommissioningStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const res = await this.pool.query<Row>(
       `select ${COLS} from public.aura_commissioning_records ${where}
-       order by created_at desc limit $${params.length + 1} offset $${params.length + 2}`,
+       order by created_at desc, id desc limit $${params.length + 1} offset $${params.length + 2}`,
       [...params, page.limit, page.offset],
     );
     return makePage(res.rows.map(toRecord), total, page);
@@ -340,12 +340,12 @@ export class PostgresCommissioningStore implements CommissioningStore {
     const res = projectId
       ? await this.pool.query<HandoverRow>(
           `select ${HANDOVER_COLS} from public.aura_handover_packages
-           where tenant_id = $1 and project_id = $2 order by created_at desc limit 500`,
+           where tenant_id = $1 and project_id = $2 order by created_at desc, id desc limit 500`,
           [tenantId, projectId],
         )
       : await this.pool.query<HandoverRow>(
           `select ${HANDOVER_COLS} from public.aura_handover_packages
-           where tenant_id = $1 order by created_at desc limit 500`,
+           where tenant_id = $1 order by created_at desc, id desc limit 500`,
           [tenantId],
         );
     return res.rows.map(toHandover);

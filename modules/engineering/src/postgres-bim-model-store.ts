@@ -92,7 +92,7 @@ export class PostgresBimModelStore implements BimModelStore {
     const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 200);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_bim_models ${whereSql} ORDER BY code ASC LIMIT $${params.length}`,
+      `SELECT ${COLS} FROM public.aura_engineering_bim_models ${whereSql} ORDER BY code ASC, id ASC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToModel);
@@ -105,7 +105,7 @@ export class PostgresBimModelStore implements BimModelStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_bim_models ${whereSql} ORDER BY code ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${COLS} FROM public.aura_engineering_bim_models ${whereSql} ORDER BY code ASC, id ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToModel), total, page);

@@ -68,7 +68,7 @@ export class PostgresBudgetStore implements BudgetStore {
       `SELECT COUNT(*)::int AS count FROM public.aura_finance_budgets WHERE tenant_id = $1 AND deleted_at IS NULL`, [tenantId]);
     const total = Number(countRes.rows[0]?.count ?? 0);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+      `SELECT ${COLS} FROM public.aura_finance_budgets WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC, id DESC LIMIT $2 OFFSET $3`,
       [tenantId, page.limit, page.offset],
     );
     return makePage(res.rows.map(toBudget), total, page);

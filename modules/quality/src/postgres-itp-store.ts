@@ -46,7 +46,7 @@ export class PostgresItpStore implements ItpStore {
     const countRes = await this.pool.query<{ count: number }>(
       `select count(*)::int as count from public.aura_quality_itps where tenant_id = $1`, [tenantId]);
     const res = await this.pool.query(
-      `select * from public.aura_quality_itps where tenant_id = $1 order by created_at desc limit $2 offset $3`,
+      `select * from public.aura_quality_itps where tenant_id = $1 order by created_at desc, id desc limit $2 offset $3`,
       [tenantId, page.limit, page.offset]);
     return makePage(res.rows.map(this.mapItp), Number(countRes.rows[0]?.count ?? 0), page);
   }

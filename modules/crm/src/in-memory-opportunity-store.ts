@@ -50,7 +50,7 @@ export class InMemoryOpportunityStore implements OpportunityStore {
     if (filter.leadId) out = out.filter((o) => o.leadId === filter.leadId);
     if (filter.accountId) out = out.filter((o) => o.accountId === filter.accountId);
     if (filter.ownerId) out = out.filter((o) => o.ownerId === filter.ownerId);
-    out.sort((a, b) => (a.createdAt === b.createdAt ? (a.id < b.id ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1));
+    out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }
 

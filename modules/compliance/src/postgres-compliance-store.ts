@@ -109,7 +109,7 @@ export class PostgresComplianceStore implements ComplianceStore {
     );
     const r = await this.pool.query(
       `SELECT ${CASE_COLS} FROM public.aura_compliance_cases ${where}
-       ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+       ORDER BY created_at DESC, id DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, page.limit, page.offset],
     );
     return makePage(r.rows.map(toCase), Number(total.rows[0]?.c ?? 0), page);

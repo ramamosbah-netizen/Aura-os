@@ -97,7 +97,7 @@ export class AuditController {
         `SELECT id, tenant_id, company_id, actor_id, module, entity_type, entity_id, action, changes, metadata, created_at
          FROM public.aura_audit_log
          WHERE ${whereClause}
-         ORDER BY created_at DESC
+         ORDER BY created_at DESC, id DESC
          LIMIT ${lim} OFFSET ${off}`,
         params,
       ),
@@ -177,7 +177,7 @@ export class AuditController {
       `SELECT ${COLS.join(', ')}
          FROM public.aura_audit_log
         WHERE ${conditions.join(' AND ')}
-        ORDER BY created_at DESC
+        ORDER BY created_at DESC, id DESC
         LIMIT ${EXPORT_CAP}`,
       params,
     );

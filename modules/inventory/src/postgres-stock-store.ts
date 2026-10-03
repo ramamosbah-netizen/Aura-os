@@ -143,7 +143,7 @@ export class PostgresStockStore implements StockStore {
     const { whereSql, params } = this.buildItemWhere(filter);
     params.push(filter.limit ?? 200);
     const res = await this.pool.query<ItemRow>(
-      `SELECT ${ITEM_COLS} FROM public.aura_inventory_stock_items ${whereSql} ORDER BY code ASC LIMIT $${params.length}`,
+      `SELECT ${ITEM_COLS} FROM public.aura_inventory_stock_items ${whereSql} ORDER BY code ASC, id ASC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToItem);
@@ -156,7 +156,7 @@ export class PostgresStockStore implements StockStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<ItemRow>(
-      `SELECT ${ITEM_COLS} FROM public.aura_inventory_stock_items ${whereSql} ORDER BY code ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${ITEM_COLS} FROM public.aura_inventory_stock_items ${whereSql} ORDER BY code ASC, id ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToItem), total, page);

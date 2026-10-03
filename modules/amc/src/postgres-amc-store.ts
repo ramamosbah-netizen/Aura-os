@@ -278,7 +278,7 @@ export class PostgresAmcStore implements AmcStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<WorkOrderRow>(
-      `SELECT ${WORK_ORDER_COLS} FROM public.aura_amc_work_orders ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${WORK_ORDER_COLS} FROM public.aura_amc_work_orders ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToWorkOrder), total, page);
@@ -327,7 +327,7 @@ export class PostgresAmcStore implements AmcStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<TicketRow>(
-      `SELECT ${TICKET_COLS} FROM public.aura_amc_tickets ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${TICKET_COLS} FROM public.aura_amc_tickets ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToTicket), total, page);

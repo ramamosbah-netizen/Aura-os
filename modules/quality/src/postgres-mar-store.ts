@@ -88,7 +88,7 @@ export class PostgresMaterialApprovalStore implements MaterialApprovalStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<any>(
-      `SELECT * FROM public.aura_quality_material_approvals ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_quality_material_approvals ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map((row) => this.mapMar(row)), total, page);

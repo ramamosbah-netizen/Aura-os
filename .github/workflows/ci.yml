@@ -60,9 +60,9 @@ jobs:
         # The suites excluded here are explicitly database-backed and must not run against this
         # tier's forced in-memory adapters (vitest.config.e2e.ts pins DATABASE_URL=''): the Sales
         # release proof, the three PD-5C PostgreSQL proofs (C4 certification, C5 cost ledger,
-        # C6 change control) and the F-06 executive population proof, which throw "DATABASE_URL is
-        # required" by design. All five run in web-smoke-postgres after migrations — excluded here,
-        # never silently skipped.
+        # C6 change control), the F-06 executive population proof and the PAGE-ORDER-01 paged-order
+        # proof, which throw "DATABASE_URL is required" by design. All six run in web-smoke-postgres
+        # after migrations — excluded here, never silently skipped.
         run: >-
           pnpm --filter @aura/api exec vitest run --config vitest.config.e2e.ts
           --exclude test/sales-mutation-release-proof.e2e-spec.ts
@@ -70,6 +70,7 @@ jobs:
           --exclude test/c5-cost-ledger.pg.e2e-spec.ts
           --exclude test/c6-change-control.pg.e2e-spec.ts
           --exclude test/executive-crm-population.pg.e2e-spec.ts
+          --exclude test/paged-order.pg.e2e-spec.ts
 
       # Blocking: the production graph is expected to stay at zero known advisories. SheetJS is
       # pinned to its official patched distribution and DOMPurify is overridden to a fixed release.
@@ -833,6 +834,15 @@ jobs:
         # created_at: every executive figure and every drilldown held against SQL over the same rows.
         # Only persistence has a population big enough to be read short, and the order it is paged in.
         run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts test/executive-crm-population.pg.e2e-spec.ts
+        env:
+          DATABASE_URL: ${{ env.DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}
+
+      - name: PAGE-ORDER-01 paged-order proof (PostgreSQL)
+        # 5,200 rows tied on the sort column in four registers (a direct store, a date column, and the
+        # HR and doc-control paging helpers), paged through their real endpoints: every row exactly
+        # once. Ties and their order between page queries are the database's, so only it can show this.
+        run: pnpm --filter @aura/api exec vitest run --config vitest.config.e2e-db.ts test/paged-order.pg.e2e-spec.ts
         env:
           DATABASE_URL: ${{ env.DATABASE_URL }}
           MIGRATION_DATABASE_URL: ${{ env.MIGRATION_DATABASE_URL }}

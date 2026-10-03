@@ -42,7 +42,7 @@ export class InMemoryAccountStore implements AccountStore {
       out = out.filter((a) => [a.name, a.industry, a.email, a.phone, a.ownerId]
         .some((value) => value?.toLowerCase().includes(needle)));
     }
-    out.sort((a, b) => (a.createdAt === b.createdAt ? (a.id < b.id ? 1 : -1) : a.createdAt < b.createdAt ? 1 : -1));
+    out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }
 

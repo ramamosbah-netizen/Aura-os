@@ -139,7 +139,7 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_customer_invoices ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
+      `SELECT ${COLS} FROM public.aura_finance_customer_invoices ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowTo);
@@ -160,7 +160,7 @@ export class PostgresCustomerInvoiceStore implements CustomerInvoiceStore {
     const res = await this.pool.query<Row & { total_count: string }>(
       `SELECT ${COLS}, COUNT(*) OVER() AS total_count
        FROM public.aura_finance_customer_invoices ${whereSql}
-       ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+       ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
       params,
     );
     const total = res.rows.length ? Number(res.rows[0].total_count) : 0;

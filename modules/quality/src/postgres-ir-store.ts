@@ -128,7 +128,7 @@ export class PostgresInspectionRequestStore implements InspectionRequestStore {
     const countRes = await this.pool.query<{ count: number }>(
       `select count(*)::int as count from public.aura_quality_irs where tenant_id = $1`, [tenantId]);
     const res = await this.pool.query(
-      `select * from public.aura_quality_irs where tenant_id = $1 order by inspection_date desc limit $2 offset $3`,
+      `select * from public.aura_quality_irs where tenant_id = $1 order by inspection_date desc, id desc limit $2 offset $3`,
       [tenantId, page.limit, page.offset]);
     return makePage(res.rows.map(this.mapIr), Number(countRes.rows[0]?.count ?? 0), page);
   }

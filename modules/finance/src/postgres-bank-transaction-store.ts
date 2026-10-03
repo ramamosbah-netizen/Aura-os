@@ -113,7 +113,7 @@ export class PostgresBankTransactionStore implements BankTransactionStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<BankTxRow>(
-      `SELECT ${COLS} FROM public.aura_finance_bank_transactions ${whereSql} ORDER BY transaction_date DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${COLS} FROM public.aura_finance_bank_transactions ${whereSql} ORDER BY transaction_date DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToTx), total, page);

@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { type Page, type PageParams, makePage } from '@aura/shared';
+import { type Page, type PageParams, makePage, withUniqueTieBreak } from '@aura/shared';
 import type { EmployeeScopedFilter } from './store.interface';
 
 /**
@@ -20,7 +20,7 @@ export async function pagePostgres<T>(
   const total = Number(countRes.rows[0]?.count ?? 0);
   const winParams = [...opts.params, page.limit, page.offset];
   const res = await pool.query(
-    `SELECT ${opts.cols ?? '*'} FROM public.${opts.table} ${whereSql} ORDER BY ${opts.orderBy} LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+    `SELECT ${opts.cols ?? '*'} FROM public.${opts.table} ${whereSql} ORDER BY ${withUniqueTieBreak(opts.orderBy)} LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
     winParams,
   );
   return makePage(res.rows.map(opts.map), total, page);

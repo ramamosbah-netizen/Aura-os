@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parsePageParams, paginate, makePage, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination';
+import { parsePageParams, paginate, makePage, withUniqueTieBreak, DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT } from './pagination';
 
 describe('pagination contract', () => {
   it('defaults and clamps params', () => {
@@ -24,5 +24,20 @@ describe('pagination contract', () => {
   it('makePage computes hasMore from total', () => {
     expect(makePage([1, 2], 2, { limit: 10, offset: 0 }).hasMore).toBe(false);
     expect(makePage([1, 2], 50, { limit: 2, offset: 0 }).hasMore).toBe(true);
+  });
+});
+
+describe('withUniqueTieBreak (PAGE-ORDER-01)', () => {
+  it('appends the unique key in the direction of the last sort key', () => {
+    expect(withUniqueTieBreak('created_at DESC')).toBe('created_at DESC, id DESC');
+    expect(withUniqueTieBreak('date desc, created_at desc')).toBe('date desc, created_at desc, id DESC');
+    expect(withUniqueTieBreak('document_number ASC')).toBe('document_number ASC, id ASC');
+    expect(withUniqueTieBreak('name')).toBe('name, id ASC');
+  });
+
+  it('leaves a clause that already ends in the key alone, and takes another key when told', () => {
+    expect(withUniqueTieBreak('created_at DESC, id DESC')).toBe('created_at DESC, id DESC');
+    expect(withUniqueTieBreak('id')).toBe('id');
+    expect(withUniqueTieBreak('seq ASC', 'uid')).toBe('seq ASC, uid ASC');
   });
 });

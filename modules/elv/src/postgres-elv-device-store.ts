@@ -137,7 +137,7 @@ export class PostgresElvDeviceStore implements ElvDeviceStore {
     );
     const res = await this.pool.query<Row>(
       `SELECT ${COLS} FROM public.aura_elv_devices ${where}
-       ORDER BY tag ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+       ORDER BY tag ASC, id ASC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
       [...params, page.limit, page.offset],
     );
     return makePage(res.rows.map(toDevice), Number(total.rows[0]?.c ?? 0), page);

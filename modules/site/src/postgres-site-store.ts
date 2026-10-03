@@ -307,7 +307,7 @@ export class PostgresDailyReportStore implements DailyReportStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<any>(
-      `SELECT * FROM public.aura_site_daily_reports ${whereSql} ORDER BY date DESC, created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_site_daily_reports ${whereSql} ORDER BY date DESC, created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map((row) => this.mapDailyReport(row)), total, page);

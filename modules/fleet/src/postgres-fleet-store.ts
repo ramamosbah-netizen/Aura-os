@@ -167,7 +167,7 @@ export class PostgresVehicleStore implements VehicleStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<any>(
-      `SELECT * FROM public.aura_fleet_vehicles ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_fleet_vehicles ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map((row) => this.mapVehicle(row)), total, page);
@@ -239,7 +239,7 @@ export class PostgresFuelLogStore implements FuelLogStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query(
-      `SELECT * FROM public.aura_fleet_fuel_logs ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_fleet_fuel_logs ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(this.mapFuelLog), total, page);
@@ -335,7 +335,7 @@ export class PostgresMaintenanceStore implements MaintenanceStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query(
-      `SELECT * FROM public.aura_fleet_maintenance ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_fleet_maintenance ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(this.mapMaintenance), total, page);
@@ -415,7 +415,7 @@ export class PostgresTrafficFineStore implements TrafficFineStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query(
-      `SELECT * FROM public.aura_fleet_traffic_fines ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_fleet_traffic_fines ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(this.mapFine), total, page);
@@ -489,7 +489,7 @@ export class PostgresSalikChargeStore implements SalikChargeStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query(
-      `SELECT * FROM public.aura_fleet_salik_charges ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_fleet_salik_charges ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(this.mapSalik), total, page);

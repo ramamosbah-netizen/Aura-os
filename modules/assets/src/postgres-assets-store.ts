@@ -186,7 +186,7 @@ export class PostgresAssetStore implements AssetStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<any>(
-      `SELECT * FROM public.aura_assets ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT * FROM public.aura_assets ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map((row) => this.mapAsset(row)), total, page);

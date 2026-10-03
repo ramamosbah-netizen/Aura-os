@@ -145,7 +145,7 @@ export class PostgresHseIncidentStore implements HseIncidentStore {
       `select count(*)::int as count from public.aura_hse_incidents where tenant_id = $1`, [tenantId]);
     const total = Number(countRes.rows[0]?.count ?? 0);
     const res = await this.pool.query(
-      `select * from public.aura_hse_incidents where tenant_id = $1 order by date desc limit $2 offset $3`,
+      `select * from public.aura_hse_incidents where tenant_id = $1 order by date desc, id desc limit $2 offset $3`,
       [tenantId, page.limit, page.offset],
     );
     return makePage(res.rows.map(this.mapHseIncident), total, page);
@@ -251,7 +251,7 @@ export class PostgresPermitToWorkStore implements PermitToWorkStore {
       `select count(*)::int as count from public.aura_hse_ptws where tenant_id = $1`, [tenantId]);
     const total = Number(countRes.rows[0]?.count ?? 0);
     const res = await this.pool.query(
-      `select * from public.aura_hse_ptws where tenant_id = $1 order by created_at desc limit $2 offset $3`,
+      `select * from public.aura_hse_ptws where tenant_id = $1 order by created_at desc, id desc limit $2 offset $3`,
       [tenantId, page.limit, page.offset],
     );
     return makePage(res.rows.map(this.mapPermit), total, page);

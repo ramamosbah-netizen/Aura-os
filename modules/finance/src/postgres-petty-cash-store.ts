@@ -97,7 +97,7 @@ export class PostgresPettyCashStore implements PettyCashStore {
     }
     params.push(filter.limit ?? 200);
     const res = await this.pool.query<FundRow>(
-      `SELECT ${FUND_COLS} FROM public.aura_finance_petty_cash_funds ${where} ORDER BY name ASC LIMIT $${params.length}`,
+      `SELECT ${FUND_COLS} FROM public.aura_finance_petty_cash_funds ${where} ORDER BY name ASC, id ASC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToFund);
@@ -115,7 +115,7 @@ export class PostgresPettyCashStore implements PettyCashStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<FundRow>(
-      `SELECT ${FUND_COLS} FROM public.aura_finance_petty_cash_funds ${where} ORDER BY name ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${FUND_COLS} FROM public.aura_finance_petty_cash_funds ${where} ORDER BY name ASC, id ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToFund), total, page);

@@ -113,7 +113,7 @@ export class PostgresDesignChangeStore implements DesignChangeStore {
     const { whereSql, params } = this.buildWhere(filter);
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_design_changes ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
+      `SELECT ${COLS} FROM public.aura_engineering_design_changes ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToDc);
@@ -126,7 +126,7 @@ export class PostgresDesignChangeStore implements DesignChangeStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_engineering_design_changes ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${COLS} FROM public.aura_engineering_design_changes ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToDc), total, page);

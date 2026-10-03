@@ -124,7 +124,7 @@ export class PostgresContractStore implements ContractStore {
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     params.push(filter.limit ?? 100);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_contracts_contracts ${whereSql} ORDER BY created_at DESC LIMIT $${params.length}`,
+      `SELECT ${COLS} FROM public.aura_contracts_contracts ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowToContract);
@@ -146,7 +146,7 @@ export class PostgresContractStore implements ContractStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_contracts_contracts ${whereSql} ORDER BY created_at DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${COLS} FROM public.aura_contracts_contracts ${whereSql} ORDER BY created_at DESC, id DESC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowToContract), total, page);

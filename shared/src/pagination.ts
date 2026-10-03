@@ -28,6 +28,22 @@ export function parsePageParams(limit?: unknown, offset?: unknown): PageParams {
   };
 }
 
+/**
+ * PAGE-ORDER-01 — an ORDER BY that pages soundly. Offset paging is only as stable as the order under
+ * it: rows that tie on the sort columns (every row one INSERT writes shares its `created_at`) come
+ * back in no fixed order between page queries, so one page can repeat a row the last one showed and
+ * a row can be shown by none. This appends the table's unique key, in the direction of the last
+ * sort key, unless the clause already ends in it.
+ */
+export function withUniqueTieBreak(orderBy: string, key = 'id'): string {
+  const keys = orderBy.split(',').map((k) => k.trim());
+  const last = keys[keys.length - 1] ?? '';
+  const column = last.replace(/\s+(asc|desc)\b.*$/i, '').trim();
+  if (column.toLowerCase() === key.toLowerCase()) return orderBy;
+  const direction = /\sdesc\b/i.test(last) ? 'DESC' : 'ASC';
+  return `${orderBy}, ${key} ${direction}`;
+}
+
 /** Build a Page envelope from a known total and the current window's items. */
 export function makePage<T>(items: T[], total: number, params: PageParams): Page<T> {
   return { items, total, limit: params.limit, offset: params.offset, hasMore: params.offset + items.length < total };

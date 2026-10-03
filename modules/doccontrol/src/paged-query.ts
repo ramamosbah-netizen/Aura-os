@@ -1,5 +1,5 @@
 import type { Pool } from 'pg';
-import { type Page, type PageParams, makePage, paginate } from '@aura/shared';
+import { type Page, type PageParams, makePage, paginate, withUniqueTieBreak } from '@aura/shared';
 import type { DocListFilter } from './store.interface';
 
 /**
@@ -19,7 +19,7 @@ export async function pagePostgres<T>(
   const total = Number(countRes.rows[0]?.count ?? 0);
   const winParams = [...opts.params, page.limit, page.offset];
   const res = await pool.query(
-    `SELECT * FROM public.${opts.table} ${whereSql} ORDER BY ${opts.orderBy} LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+    `SELECT * FROM public.${opts.table} ${whereSql} ORDER BY ${withUniqueTieBreak(opts.orderBy)} LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
     winParams,
   );
   return makePage(res.rows.map(opts.map), total, page);

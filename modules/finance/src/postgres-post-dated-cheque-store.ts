@@ -87,7 +87,7 @@ export class PostgresPostDatedChequeStore implements PostDatedChequeStore {
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
     params.push(filter.limit ?? 200);
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_post_dated_cheques ${whereSql} ORDER BY maturity_date ASC LIMIT $${params.length}`,
+      `SELECT ${COLS} FROM public.aura_finance_post_dated_cheques ${whereSql} ORDER BY maturity_date ASC, id ASC LIMIT $${params.length}`,
       params,
     );
     return res.rows.map(rowTo);
@@ -108,7 +108,7 @@ export class PostgresPostDatedChequeStore implements PostDatedChequeStore {
     const total = Number(countRes.rows[0]?.count ?? 0);
     const winParams = [...params, page.limit, page.offset];
     const res = await this.pool.query<Row>(
-      `SELECT ${COLS} FROM public.aura_finance_post_dated_cheques ${whereSql} ORDER BY maturity_date ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
+      `SELECT ${COLS} FROM public.aura_finance_post_dated_cheques ${whereSql} ORDER BY maturity_date ASC, id ASC LIMIT $${winParams.length - 1} OFFSET $${winParams.length}`,
       winParams,
     );
     return makePage(res.rows.map(rowTo), total, page);

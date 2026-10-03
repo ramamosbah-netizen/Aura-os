@@ -75,6 +75,7 @@ export class CommercialComparisonService {
       quantityCompliance: 'unknown',
       normalisedUnitPrice: missing, normalisedRequestedLineTotal: missing,
       commercialStatus: 'validity_unknown', validityDate: null,
+      terms: null,
     };
   }
 

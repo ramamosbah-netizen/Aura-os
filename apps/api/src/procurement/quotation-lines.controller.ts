@@ -140,6 +140,24 @@ export class QuotationLinesController {
     if (result.offers.length > 0) offers['!autofilter'] = { ref: offers['!ref']! };
     offers['!cols'] = [{ wch: 34 }, ...Array.from({ length: 14 }, () => ({ wch: 20 }))];
 
+    // What each supplier offered besides the price — read beside it, never folded into it. A term the
+    // supplier did not state says so in words: a blank warranty cell reads as "none", which is a claim.
+    const notStated = 'not stated';
+    const terms = XLSX.utils.json_to_sheet(result.offers.map((o) => ({
+      Supplier: o.supplierName,
+      Make: o.terms?.make ?? notStated,
+      Model: o.terms?.model ?? notStated,
+      'Part number': o.terms?.partNumber ?? notStated,
+      'Lead time (days)': o.terms?.leadTimeDays ?? notStated,
+      'Warranty (months)': o.terms?.warrantyMonths ?? notStated,
+      'Supplier compliance claim': o.terms?.complianceResponse ?? notStated,
+      'Technical deviation': o.terms?.technicalDeviation ?? 'none stated',
+      'Commercial deviation': o.terms?.commercialDeviation ?? 'none stated',
+      Exclusions: o.terms?.exclusions ?? 'none stated',
+      Note: o.terms ? '' : (o.notComparableReason ?? 'no line answers this requirement'),
+    })));
+    terms['!cols'] = [{ wch: 34 }, { wch: 18 }, { wch: 18 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 40 }, { wch: 40 }, { wch: 40 }, { wch: 40 }];
+
     const quotations = XLSX.utils.json_to_sheet(result.quotations.map((q) => ({
       Supplier: q.supplierName,
       Currency: q.currency ?? 'UNKNOWN',
@@ -155,6 +173,7 @@ export class QuotationLinesController {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, basis, 'Basis');
     XLSX.utils.book_append_sheet(workbook, offers, 'Offers');
+    XLSX.utils.book_append_sheet(workbook, terms, 'Offered terms');
     XLSX.utils.book_append_sheet(workbook, quotations, 'Quotation charges');
     workbook.Props = {
       Title: `Commercial comparison — ${result.materialName ?? prLineId}`,

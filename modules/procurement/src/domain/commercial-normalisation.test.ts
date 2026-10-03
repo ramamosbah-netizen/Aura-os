@@ -200,6 +200,41 @@ describe('normalising one supplier answer to one requisition line', () => {
  * The separation the whole design turns on: knowing a number and being allowed to act on it are two
  * different facts, and collapsing them into one flag throws away one of them.
  */
+describe('what the supplier offered besides the price is read beside it, never into it', () => {
+  const offered = line({
+    offeredManufacturer: ' Hanwha ', offeredModel: 'XNV-8080R', partNumber: 'HW-8080',
+    complianceResponse: 'comply_with_deviation', deviations: 'IR range 30 m, not 50 m',
+    commercialDeviation: 'Part shipment allowed', exclusions: 'Mounting brackets',
+    leadTimeDays: 21, warrantyMonths: 36,
+  } as Partial<QuotationLine>);
+
+  it('carries make, model, deviations, exclusions, lead time and warranty as captured, trimmed', () => {
+    expect(normalise({ line: offered }).terms).toEqual({
+      make: 'Hanwha', model: 'XNV-8080R', partNumber: 'HW-8080',
+      complianceResponse: 'comply_with_deviation', technicalDeviation: 'IR range 30 m, not 50 m',
+      commercialDeviation: 'Part shipment allowed', exclusions: 'Mounting brackets',
+      leadTimeDays: 21, warrantyMonths: 36,
+    });
+  });
+
+  it('a line whose price cannot be made comparable still says what it offers', () => {
+    const result = normalise({ line: offered, requestedUom: 'box' });
+    expect(result.normalisedUnitPrice.status).toBe('unknown');
+    expect(result.terms?.warrantyMonths).toBe(36);
+  });
+
+  it('the terms change no price: the same line with and without them normalises identically', () => {
+    const bare = normalise();
+    const rich = normalise({ line: { ...offered, quantity: 12, unitPrice: 100 } as QuotationLine });
+    expect(rich.normalisedUnitPrice).toEqual(bare.normalisedUnitPrice);
+    expect(rich.normalisedRequestedLineTotal).toEqual(bare.normalisedRequestedLineTotal);
+  });
+
+  it('blank text reads as nothing offered, not as an empty claim', () => {
+    expect(normalise({ line: line({ exclusions: '  ', deviations: '' }) }).terms).toMatchObject({ exclusions: null, technicalDeviation: null });
+  });
+});
+
 describe('comparability is not commercial eligibility', () => {
   it('an EXPIRED offer keeps its known price — expiry is about the offer, not about our knowledge', () => {
     const expired = quote({ validityDate: '2026-09-16' });

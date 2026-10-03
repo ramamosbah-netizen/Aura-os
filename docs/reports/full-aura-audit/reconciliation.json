@@ -1,7 +1,7 @@
 {
   "capabilities": 180,
   "capabilityStatus": {
-    "COMPLETE": 58,
+    "COMPLETE": 69,
     "PARTIAL": 77,
     "BACKEND_ONLY": 4,
     "UI_ONLY": 0,
@@ -11,10 +11,10 @@
     "DISCONNECTED": 5,
     "WRONG_BEHAVIOR": 0,
     "UNREACHABLE": 0,
-    "UNVERIFIED": 36,
+    "UNVERIFIED": 25,
     "NOT_AUDITED": 0
   },
-  "gapRecords": 75,
+  "gapRecords": 77,
   "priorFindingIds": [
     "J1-01",
     "J1-02",
@@ -94,7 +94,9 @@
     "COST-CODE-01",
     "MAIL-DRAFT-01",
     "COMPANY-CTX-01",
-    "PAGE-ORDER-01"
+    "PAGE-ORDER-01",
+    "QUOTE-TERMS-01",
+    "PO-TERMS-01"
   ],
   "rolePairs": 999,
   "journeyPairs": 938,

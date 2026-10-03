@@ -1635,6 +1635,78 @@ Object.assign(defects.find(g=>g.id==='PAGE-ORDER-01'),{
   Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', browser:'COMPLETE', handoff:'PARTIAL' });
 }
 
+/**
+ * QUOTE-TERMS-01 (found and closed 2026-10-03) and the supplier-comparison rows SUP-02…SUP-12.
+ *
+ * Those eleven rows were never written after QC-01, FX-01…03, F-04 and PO-01 closed: blank, every
+ * layer UNVERIFIED, while the work they describe had been proved. Re-assessing them found one real
+ * gap — warranty and exclusions could not be entered on screen, and nothing a supplier offered
+ * besides the price could be read where offers are compared — which is QUOTE-TERMS-01, fixed here.
+ * Each row is then set from its own (template) criterion — a buyer / Technical Manager / Commercial
+ * Manager role executes it in the RFQ context; save and reload; a refusal; the actual output; the
+ * next role's receipt — on specs re-run today against PostgreSQL with Auth ON.
+ */
+defects.push({
+ "id": "QUOTE-TERMS-01",
+ "title": "A supplier's warranty and exclusions could not be entered on screen, and nothing offered besides the price could be read where offers are compared",
+ "capabilityIds": ["SUP-02", "SUP-03", "SUP-09", "SUP-11"],
+ "classification": "COMPLETE",
+ "kind": "fresh finding — measured while reconciling SUP-02…SUP-12, 2026-10-03",
+ "status": "CLOSED_VERIFIED",
+ "roles": ["Procurement Manager / Buyer", "Technical Manager", "Commercial Manager / QS"],
+ "stages": ["Procurement"],
+ "authority": "Procurement commercial comparison (modules/procurement/src/domain/commercial-normalisation.ts) and quotation capture",
+ "currentBehavior": "CLOSED 2026-10-03. MEASURED: the quotation line has always had warrantyMonths and exclusions, and the capture API took both, but the capture screen offered neither — so a buyer could not record a warranty or an exclusion at all. The comparison (screen, XLSX and PDF) showed quantity, normalised price, validity, freight and payment terms, and NONE of make and model, lead time, warranty, the supplier's compliance claim, technical or commercial deviation, or exclusions — the facts besides price a Commercial Manager chooses on. A recommendation could be reasoned 'better warranty' while warranty could be read nowhere. And once an offer was made current, its own items could no longer be opened on the capture screen. Built: every offer row of the comparison carries `terms` (make, model, part number, compliance claim, technical deviation, commercial deviation, exclusions, lead time, warranty) read beside the price — never folded into it, scored or used to order the offers; the screen shows them in 'What each supplier offers besides the price', a term not stated SAID to be not stated; the XLSX gains an 'Offered terms' sheet (warranty and lead time as numbers) and the PDF a matching section, both from the same governed result; the capture form gains Warranty (months) and Exclusions; any revision's items can be read, and only a draft or received one priced.",
+ "expectedOperationalBehavior": "A buyer records everything a supplier offers, and the people who compare and decide read it beside the price, on screen and in what they circulate.",
+ "evidence": "FRESH 2026-10-03: modules/procurement/src/domain/commercial-normalisation.ts (OfferTerms, offerTermsOf; + 4 tests, procurement suite 420/420); modules/procurement/src/commercial-comparison.service.ts; apps/api/src/procurement/quotation-lines.controller.ts (XLSX 'Offered terms'); apps/web/app/api/procurement/requirements/[prLineId]/comparison.pdf/route.ts; apps/web/components/commercial-comparison-client.tsx; apps/web/components/quotation-capture-client.tsx; apps/web/e2e/offer-terms.spec.ts.",
+ "severity": "HIGH",
+ "remediationDependency": "None.",
+ "acceptanceProof": "MET. BROWSER, AUTH ON, POSTGRESQL (offer-terms.spec.ts): the Buyer (u-e2e-buyer, r-procurement) prices a line ON SCREEN with make, model, a 21-day lead time, a 36-month warranty, a technical deviation and an exclusion; the line reads them back; after a reload the current offer's items open read-only and still read '36 months' and the exclusion; a Site Engineer is refused capturing a quotation line (403); the Commercial Manager (u-e2e-qs, r-commercial-manager, who may read but not capture) sees 'Hanwha XNO-8080R', '21 days', '36 months', the deviation and the exclusion beside the prices, a second supplier's unstated terms read 'not stated' / 'none stated', and both prices read exactly as quoted; the comparison XLSX has an 'Offered terms' sheet carrying the same facts with warranty as the number 36, and the PDF a 'WHAT EACH SUPPLIER OFFERS BESIDES THE PRICE' section reading 'warranty 36 months', the exclusion and the deviation. UNIT: the terms are carried trimmed, survive a price that cannot be made comparable, change no normalised figure, and blank text reads as nothing stated. REGRESSION: quotation-capture.spec.ts 3/3 and commercial-comparison.spec.ts 1/1 green. LIMITS: an awarded order does not carry warranty or exclusions (PO-TERMS-01); no figure weighs any of these terms, deliberately.",
+});
+
+defects.push({
+ "id": "PO-TERMS-01",
+ "title": "An awarded purchase order does not carry the supplier's warranty or exclusions",
+ "capabilityIds": ["SUP-14", "SUP-11", "SUP-02"],
+ "classification": "PARTIAL",
+ "kind": "fresh finding — measured while closing QUOTE-TERMS-01; inside SUP-14's frozen scope, so recorded rather than built",
+ "status": "OPEN",
+ "roles": ["Procurement Manager / Buyer", "Commercial Manager / QS", "Storekeeper", "Finance"],
+ "stages": ["Procurement", "Site", "Handover", "Warranty / Service"],
+ "authority": "SUP-14 award (modules/procurement/src/sourcing-award.service.ts), frozen by ADR-0022",
+ "currentBehavior": "MEASURED 2026-10-03: the governed award copies onto each order line the quantity, unit price, discount and its kind, tax treatment, freight and payment terms, and the make and model offered, and keeps the source quotation line as provenance — but not the warranty months or the exclusions. So the order the supplier is held to says nothing of the warranty that may have decided the award, and a receiving storekeeper or a later warranty claim has to trace back through the provenance to find it.",
+ "expectedOperationalBehavior": "An order states the warranty and exclusions it was awarded on, beside the price, as the order's own terms.",
+ "evidence": "FRESH 2026-10-03: modules/procurement/src/sourcing-award.service.ts (the order-line snapshot); modules/procurement/src/domain/purchase-order-line.ts (no warranty or exclusions field).",
+ "severity": "MEDIUM",
+ "remediationDependency": "An owner decision: SUP-14 is promoted and closed to new scope (ADR-0022), and carrying more terms onto the order widens what the award writes. Needs the owner to open that scope, or to say the provenance link is enough.",
+ "acceptanceProof": "An offer with a warranty and an exclusion is awarded; the raised order line states both as its own terms, on screen and on the printed order; an offer stating neither raises an order saying so.",
+});
+
+{
+  const tested = "Re-run 2026-10-03 against PostgreSQL with Auth ON: quotation-capture.spec.ts 3/3, offer-terms.spec.ts 1/1, commercial-comparison.spec.ts 1/1, technical-verdict-handoff.spec.ts 1/1, sourcing-award.spec.ts 2/2; procurement unit suite 420/420.";
+  const rows = {
+   'SUP-02': ['COMPLETE', "The Buyer records a technical deviation, a commercial deviation and exclusions on each quotation line ON SCREEN (exclusions only since QUOTE-TERMS-01); they read back after a reload; a Site Engineer is refused capture (403). The Technical Manager judges the line — compliant, compliant with a deviation, non-compliant — and the verdict reaches the Buyer in the Buyer's own context (technical-verdict-handoff). The Commercial Manager reads every deviation and exclusion beside the price on the comparison, in its XLSX and in its PDF; quantity deviations are shown as facts ('covers 83.3%'). LIMIT: the awarded order does not carry the exclusions (PO-TERMS-01)."],
+   'SUP-03': ['COMPLETE', "The Buyer records make, model and part number on the quotation line ON SCREEN; the Commercial Manager reads them beside the price on the comparison and in its XLSX and PDF (QUOTE-TERMS-01); a Site Engineer is refused capture. The award copies the make and model OFFERED — not the ones requisitioned — onto the order line (sourcing-award.service.ts, the order line's snapshot — written by the award, not asserted by a spec)."],
+   'SUP-04': ['COMPLETE', "Quantity is captured per line and the unit is the requirement's, copied at capture, so a different unit is a deviation recorded deliberately; the comparison shows offered against requested with the deviation and coverage, flags a different unit, and REFUSES a requisition-line total for a short offer rather than multiplying it up (commercial-comparison); the same values reach the XLSX and PDF; the award carries the quantity onto the order."],
+   'SUP-05': ['COMPLETE', "The Buyer prices each requirement ON SCREEN in the supplier's currency; the comparison states one unit price ex-tax, ex-freight, in the base currency, with its governed rate (QC-01: a EUR offer inclusive of 5% reads 480.00 AED); the XLSX and PDF carry the same values; the award writes the gross unit price as quoted onto the order, with any discount beside it (PO-01), and the persisted order line reads the quoted prices (sourcing-award)."],
+   'SUP-06': ['COMPLETE', "Foreign offers are converted only at a governed rate effective on the stated comparison date, each line amount converted once (FX-01…FX-03); with no governed rate the value is refused in words, never invented; the rate and its effective date are shown with the value and carried into the XLSX and PDF; the award states the order in the supplier's own currency with a currency note (sourcing-award)."],
+   'SUP-07': ['COMPLETE', "The Buyer records the tax treatment and rate of each revision ON SCREEN; a tax-inclusive price with no rate is refused at capture; the comparison takes tax out to a stated ex-tax basis and refuses a value whose tax treatment was never stated; the XLSX and PDF state the basis."],
+   'SUP-08': ['COMPLETE', "Freight amount and terms are captured per revision ON SCREEN, and a change between revisions is shown as one ('freight amount: 500 → 0', 'freight terms: EXW → DAP Dubai'); the comparison keeps freight at the quotation level, converted but never pushed into a line, and says so; the XLSX and PDF carry it the same way; the award carries freight and its terms onto the order (sourcing-award: 200, DAP Dubai)."],
+   'SUP-09': ['COMPLETE', "Lead time is captured per line ON SCREEN — a lead time on the header naming one line is refused at capture (QC-01); the Commercial Manager reads each supplier's lead time beside the price on the comparison and in its XLSX and PDF (QUOTE-TERMS-01); the award reads it to freeze how long each awarded line was priced to take (PLN-11)."],
+   'SUP-10': ['COMPLETE', "Payment terms are captured per revision ON SCREEN, shown per quotation on the comparison and in its XLSX and PDF, and carried onto the order by the award (sourcing-award: '30 days net' read back from the persisted order)."],
+   'SUP-11': ['COMPLETE', "Since QUOTE-TERMS-01: the Buyer records warranty in months per line ON SCREEN (the field existed and could not be reached before); it reads back after a reload; a Site Engineer is refused capture; the Commercial Manager reads it beside the price on the comparison, as a number in the XLSX and in the PDF, an unstated warranty said to be 'not stated'. LIMIT: the awarded order does not carry it (PO-TERMS-01)."],
+   'SUP-12': ['COMPLETE', "Validity is captured per revision ON SCREEN; the comparison states each offer's own validity separately from whether its price is known — live, expired (an offer valid to 2026-01-31 reads expired on 2026-02-15) or not given — the screen reading 'Expired'; a governed bid price may only be taken from a live offer (BID-01 stage D)."],
+  };
+  for (const [id, [cls, text]] of Object.entries(rows)) {
+    const c = caps.find(c=>c.id===id);
+    c.classification = cls;
+    c.currentBehavior = `RECONCILED 2026-10-03 (the row had never been written after QC-01, FX-01…03, F-04 and PO-01). ${text} ${tested}`;
+    Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
+  }
+  caps.find(c=>c.id==='SUP-02').layers.handoff = 'PARTIAL';   // exclusions do not reach the order (PO-TERMS-01)
+  caps.find(c=>c.id==='SUP-11').layers.handoff = 'PARTIAL';   // warranty does not reach the order (PO-TERMS-01)
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

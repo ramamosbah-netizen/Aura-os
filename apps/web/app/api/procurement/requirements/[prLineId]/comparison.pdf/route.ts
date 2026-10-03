@@ -24,6 +24,19 @@ interface Value {
   missingInputs?: string[];
 }
 
+/** What each supplier offered besides the price — printed beside the figures, never folded into them. */
+interface OfferTerms {
+  make: string | null; model: string | null; partNumber: string | null;
+  complianceResponse: string | null; technicalDeviation: string | null; commercialDeviation: string | null;
+  exclusions: string | null; leadTimeDays: number | null; warrantyMonths: number | null;
+}
+
+const CLAIMS: Record<string, string> = {
+  comply: 'supplier says it complies',
+  comply_with_deviation: 'supplier says it complies WITH A DEVIATION',
+  not_offered: 'supplier says it does not offer this',
+};
+
 interface Comparison {
   requestedQuantity: number | null;
   requestedUom: string | null;
@@ -38,6 +51,8 @@ interface Comparison {
     quantityCompliance: string;
     normalisedUnitPrice: Value; normalisedRequestedLineTotal: Value;
     commercialStatus: string; validityDate: string | null;
+    notComparableReason: string | null;
+    terms: OfferTerms | null;
   }>;
   quotations: Array<{
     supplierName: string; currency: string | null; freight: Value | null;
@@ -178,6 +193,46 @@ export async function GET(
     text(q.freightTerms ?? '—', cols[3], { size: 8.5 });
     text(q.paymentTerms ?? '—', cols[4], { size: 8.5 });
     y += 5;
+  }
+
+  // WHAT EACH SUPPLIER OFFERS BESIDES THE PRICE. A term not stated says so: a blank warranty would
+  // read as "none", which is a claim the supplier never made.
+  y += 6;
+  if (y > pdf.internal.pageSize.getHeight() - 45) { pdf.addPage(); y = 18; }
+  text('WHAT EACH SUPPLIER OFFERS BESIDES THE PRICE', left, { size: 9, bold: true });
+  y += 4;
+  text('As the supplier stated it. None of this is in the figures above, and none of it ranks an offer.', left, { size: 7.6, colour: [90, 100, 110] });
+  y += 6;
+  const said = (v: string | number | null, unit = '') => (v === null ? 'not stated' : `${v}${unit}`);
+  for (const offer of data.offers) {
+    if (y > pdf.internal.pageSize.getHeight() - 30) { pdf.addPage(); y = 18; }
+    text(offer.supplierName, cols[0], { size: 8.5, bold: true });
+    const t = offer.terms;
+    if (!t) {
+      text(offer.notComparableReason ?? 'no line answers this requirement', cols[1], { size: 8.5, colour: [90, 100, 110] });
+      y += 6.5;
+      continue;
+    }
+    const product = [t.make, t.model].filter(Boolean).join(' ') || 'make and model not stated';
+    text(
+      `${product}${t.partNumber ? ` (${t.partNumber})` : ''}   ·   lead time ${said(t.leadTimeDays, ' days')}   ·   warranty ${said(t.warrantyMonths, ' months')}` +
+        (t.complianceResponse ? `   ·   ${CLAIMS[t.complianceResponse] ?? t.complianceResponse}` : ''),
+      cols[1], { size: 8.5 },
+    );
+    y += 4.2;
+    const departures = [
+      `Technical deviation: ${t.technicalDeviation ?? 'none stated'}`,
+      `Commercial deviation: ${t.commercialDeviation ?? 'none stated'}`,
+      `Exclusions: ${t.exclusions ?? 'none stated'}`,
+    ];
+    for (const line of departures) {
+      for (const part of pdf.splitTextToSize(line, right - cols[1]) as string[]) {
+        if (y > pdf.internal.pageSize.getHeight() - 20) { pdf.addPage(); y = 18; }
+        text(part, cols[1], { size: 7.6, colour: [70, 80, 92] });
+        y += 3.6;
+      }
+    }
+    y += 2.5;
   }
 
   y = pdf.internal.pageSize.getHeight() - 12;

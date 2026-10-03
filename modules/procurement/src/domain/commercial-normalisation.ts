@@ -126,6 +126,46 @@ export interface RevisionProvenance {
   receivedAt: string | null;
 }
 
+/**
+ * WHAT THE SUPPLIER OFFERED BESIDES THE PRICE, exactly as captured on their line.
+ *
+ * A buyer and a Commercial Manager choose between offers on more than price: what make and model it
+ * is, how long it takes, how long it is guaranteed, where it departs from the specification or the
+ * commercial ask, and what it leaves out. A recommendation may even be reasoned "better warranty" —
+ * and before this, warranty could be read nowhere. These are FACTS SET BESIDE the price: none of them
+ * is folded into it, scored, or used to order the offers, because an ordering is a recommendation
+ * and this read makes none.
+ */
+export interface OfferTerms {
+  make: string | null;
+  model: string | null;
+  partNumber: string | null;
+  /** The supplier's own claim against the specification — `comply_with_deviation` is not an equivalent by saying so. */
+  complianceResponse: string | null;
+  /** The supplier's TECHNICAL departure from the specification. */
+  technicalDeviation: string | null;
+  /** A COMMERCIAL departure — part shipment, a price condition. */
+  commercialDeviation: string | null;
+  exclusions: string | null;
+  leadTimeDays: number | null;
+  warrantyMonths: number | null;
+}
+
+export function offerTermsOf(line: QuotationLine): OfferTerms {
+  const text = (v: string | null) => v?.trim() || null;
+  return {
+    make: text(line.offeredManufacturer),
+    model: text(line.offeredModel),
+    partNumber: text(line.partNumber),
+    complianceResponse: line.complianceResponse,
+    technicalDeviation: text(line.deviations),
+    commercialDeviation: text(line.commercialDeviation),
+    exclusions: text(line.exclusions),
+    leadTimeDays: line.leadTimeDays,
+    warrantyMonths: line.warrantyMonths,
+  };
+}
+
 export interface NormalisedRequirementLine {
   quotationLineId: string | null;
   supplierId: string | null;
@@ -159,6 +199,8 @@ export interface NormalisedRequirementLine {
   /** The offer's own validity, which is not a statement about whether its price is known. */
   commercialStatus: CommercialStatus;
   validityDate: string | null;
+  /** What the supplier offered besides the price. Null when this supplier gave no line to read. */
+  terms: OfferTerms | null;
 }
 
 const unknown = (reason: UnknownReason, missingInputs: string[]): NormalisedCommercialValue =>
@@ -255,6 +297,9 @@ export function normaliseRequirementLine(input: {
     quantityCompliance,
     commercialStatus: commercialStatus(quote, context),
     validityDate: quote.validityDate,
+    // The terms are read whatever happens to the price below: a line whose price cannot be made
+    // comparable still says what it offers.
+    terms: offerTermsOf(line),
   };
 
   const refuse = (reason: UnknownReason, missing: string[]): NormalisedRequirementLine => ({

@@ -63,8 +63,10 @@ interface Line {
   unitPrice: number | null;
   lineDiscount: number | null;
   leadTimeDays: number | null;
+  warrantyMonths: number | null;
   deviations: string | null;
   commercialDeviation: string | null;
+  exclusions: string | null;
 }
 
 interface OfferWithHistory {
@@ -86,7 +88,8 @@ const BLANK = {
 
 const BLANK_LINE = {
   prLineId: '', supplierDescription: '', offeredManufacturer: '', offeredModel: '', partNumber: '',
-  quantity: '', unitPrice: '', lineDiscount: '', leadTimeDays: '', deviations: '', commercialDeviation: '',
+  quantity: '', unitPrice: '', lineDiscount: '', leadTimeDays: '', warrantyMonths: '', deviations: '', commercialDeviation: '',
+  exclusions: '',
 };
 
 const show = (v: string | number | null) => (v === null || v === '' ? '—' : String(v));
@@ -197,8 +200,10 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
         unitPrice: lineFacts.unitPrice === '' ? null : Number(lineFacts.unitPrice),
         lineDiscount: lineFacts.lineDiscount === '' ? null : Number(lineFacts.lineDiscount),
         leadTimeDays: lineFacts.leadTimeDays === '' ? null : Number(lineFacts.leadTimeDays),
+        warrantyMonths: lineFacts.warrantyMonths === '' ? null : Number(lineFacts.warrantyMonths),
         deviations: lineFacts.deviations.trim() || null,
         commercialDeviation: lineFacts.commercialDeviation.trim() || null,
+        exclusions: lineFacts.exclusions.trim() || null,
       }),
     });
     if (created) { setLineFacts({ ...BLANK_LINE }); await loadLines(revisionId); }
@@ -346,15 +351,17 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                               ))}
                         </td>
                         <td style={s.td}>
-                          {(revision.status === 'draft' || revision.status === 'received') && (
-                            <button type="button" className="btn btn-ghost" style={s.sm}
-                              data-testid={`price-items-${revision.id}`}
-                              onClick={() => {
-                                const next = openLines === revision.id ? null : revision.id;
-                                setOpenLines(next);
-                                if (next) void loadLines(revision.id);
-                              }}>{openLines === revision.id ? 'Close items' : 'Price items'}</button>
-                          )}
+                          {/* Every revision's items can be READ — the current offer above all, which is the one a
+                              buyer most needs to see again. Only a draft or received revision can be priced. */}
+                          <button type="button" className="btn btn-ghost" style={s.sm}
+                            data-testid={`${revision.status === 'draft' || revision.status === 'received' ? 'price' : 'view'}-items-${revision.id}`}
+                            onClick={() => {
+                              const next = openLines === revision.id ? null : revision.id;
+                              setOpenLines(next);
+                              if (next) void loadLines(revision.id);
+                            }}>
+                            {openLines === revision.id ? 'Close items' : revision.status === 'draft' || revision.status === 'received' ? 'Price items' : 'View items'}
+                          </button>
                           {revision.status === 'received' && (
                             <button type="button" className="btn btn-ghost" style={s.sm}
                               data-testid={`confirm-${revision.id}`} onClick={() => setStatus(revision.id, 'confirmed')}>Make current</button>
@@ -388,7 +395,7 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                     </p>
                   ) : (
                     <table className="data-table" data-testid={`line-table-${openLines}`}>
-                      <thead><tr>{['Requirement', 'Offered', 'Qty', 'Unit price', 'Lead days', 'Deviations'].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
+                      <thead><tr>{['Requirement', 'Offered', 'Qty', 'Unit price', 'Lead days', 'Warranty', 'Deviations and exclusions'].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr></thead>
                       <tbody>
                         {(lines[openLines] ?? []).map((l) => {
                           const req = requirements.find((r) => r.id === l.prLineId);
@@ -404,10 +411,12 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                               <td style={s.td}>{show(l.quantity)} {l.uom ?? ''}</td>
                               <td style={s.td}>{show(l.unitPrice)}{l.lineDiscount ? <span style={s.tag}>less {l.lineDiscount}</span> : null}</td>
                               <td style={s.td}>{l.leadTimeDays === null ? <span style={s.unknown}>not stated</span> : l.leadTimeDays}</td>
+                              <td style={s.td} data-testid={`line-warranty-${l.id}`}>{l.warrantyMonths === null ? <span style={s.unknown}>not stated</span> : `${l.warrantyMonths} months`}</td>
                               <td style={s.td}>
                                 {l.deviations && <div style={s.change}>technical: {l.deviations}</div>}
                                 {l.commercialDeviation && <div style={s.change}>commercial: {l.commercialDeviation}</div>}
-                                {!l.deviations && !l.commercialDeviation && <span style={s.muted}>—</span>}
+                                {l.exclusions && <div style={s.change} data-testid={`line-exclusions-${l.id}`}>excludes: {l.exclusions}</div>}
+                                {!l.deviations && !l.commercialDeviation && !l.exclusions && <span style={s.muted}>—</span>}
                               </td>
                             </tr>
                           );
@@ -416,6 +425,12 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                     </table>
                   )}
 
+                  {!['draft', 'received'].includes(history.find((h) => h.revision.id === openLines)?.revision.status ?? '') ? (
+                    <p style={s.hint} data-testid={`items-read-only-${openLines}`}>
+                      This revision is {history.find((h) => h.revision.id === openLines)?.revision.status}: its items can be read, not
+                      changed. A supplier who changes their offer sends a new revision.
+                    </p>
+                  ) : (<>
                   <div style={s.grid}>
                     <div style={s.field}>
                       <label style={s.fieldLabel} htmlFor="line-requirement">Requirement</label>
@@ -443,10 +458,14 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                       value={lineFacts.lineDiscount} onChange={(v) => setLineFacts({ ...lineFacts, lineDiscount: v })} />
                     <Field label="Lead time (days)" type="number" testId="line-lead-time"
                       value={lineFacts.leadTimeDays} onChange={(v) => setLineFacts({ ...lineFacts, leadTimeDays: v })} />
+                    <Field label="Warranty (months)" type="number" testId="line-warranty"
+                      value={lineFacts.warrantyMonths} onChange={(v) => setLineFacts({ ...lineFacts, warrantyMonths: v })} />
                     <Field label="Technical deviation" testId="line-deviation"
                       value={lineFacts.deviations} onChange={(v) => setLineFacts({ ...lineFacts, deviations: v })} />
                     <Field label="Commercial deviation" testId="line-commercial-deviation"
                       value={lineFacts.commercialDeviation} onChange={(v) => setLineFacts({ ...lineFacts, commercialDeviation: v })} />
+                    <Field label="Exclusions" testId="line-exclusions"
+                      value={lineFacts.exclusions} onChange={(v) => setLineFacts({ ...lineFacts, exclusions: v })} />
                   </div>
                   <p style={s.hint}>
                     Lead time is recorded here, per item, because one overall figure cannot say when
@@ -455,6 +474,7 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
                   </p>
                   <button type="button" className="btn btn-primary" data-testid={`save-line-${openLines}`}
                     onClick={() => addLine(openLines!)} disabled={busy}>Record item price</button>
+                  </>)}
                 </div>
               )}
             </div>

@@ -28,7 +28,7 @@ interface Value {
 
 interface Offer {
   quotationId: string;
-  quotationLineId: string;
+  quotationLineId: string | null;
   supplierName: string;
   requestedQuantity: number | null;
   requestedUom: string | null;
@@ -41,7 +41,22 @@ interface Offer {
   normalisedRequestedLineTotal: Value;
   commercialStatus: 'live' | 'expired' | 'validity_unknown';
   validityDate: string | null;
+  notComparableReason?: string | null;
+  /** What the supplier offered besides the price. Null when they gave no line for this requirement. */
+  terms: OfferTerms | null;
 }
+
+interface OfferTerms {
+  make: string | null; model: string | null; partNumber: string | null;
+  complianceResponse: string | null; technicalDeviation: string | null; commercialDeviation: string | null;
+  exclusions: string | null; leadTimeDays: number | null; warrantyMonths: number | null;
+}
+
+const CLAIMS: Record<string, string> = {
+  comply: 'Complies',
+  comply_with_deviation: 'Complies with a deviation',
+  not_offered: 'Not offered',
+};
 
 interface QuotationComponents {
   quotationId: string;
@@ -199,6 +214,50 @@ export default function CommercialComparisonClient({ prLineId }: { prLineId: str
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* WHAT EACH SUPPLIER OFFERS BESIDES THE PRICE — read beside the figures, never folded into them,
+          and never used to order the offers. A term not stated says so: a blank would read as "none". */}
+      <div style={s.panel} data-testid="supplier-terms">
+        <div style={s.label}>What each supplier offers besides the price</div>
+        <p style={s.note}>As each supplier stated it. None of this is in the figures above, and none of it ranks an offer.</p>
+        <div className="table-scroll">
+          <table className="data-table" data-testid="terms-table">
+            <thead>
+              <tr>{['Supplier', 'Make and model', 'Lead time', 'Warranty', "Supplier's claim", 'Technical deviation', 'Commercial deviation', 'Exclusions'].map((h) => <th key={h} style={s.th}>{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {data.offers.map((o, i) => {
+                const t = o.terms;
+                const key = o.quotationLineId ?? `absent-${i}`;
+                if (!t) {
+                  return (
+                    <tr key={key} data-testid={`terms-row-${key}`}>
+                      <td style={s.td}><strong>{o.supplierName}</strong></td>
+                      <td style={{ ...s.td, color: 'var(--muted)' }} colSpan={7}>{o.notComparableReason ?? 'No line answers this requirement'}</td>
+                    </tr>
+                  );
+                }
+                const product = [t.make, t.model].filter(Boolean).join(' ');
+                return (
+                  <tr key={key} data-testid={`terms-row-${key}`}>
+                    <td style={s.td}><strong>{o.supplierName}</strong></td>
+                    <td style={s.td} data-testid={`terms-product-${key}`}>
+                      {product || <span style={s.unknown}>not stated</span>}
+                      {t.partNumber && <span style={s.prov}>{t.partNumber}</span>}
+                    </td>
+                    <td style={s.td} data-testid={`terms-lead-time-${key}`}>{t.leadTimeDays === null ? <span style={s.unknown}>not stated</span> : `${t.leadTimeDays} days`}</td>
+                    <td style={s.td} data-testid={`terms-warranty-${key}`}>{t.warrantyMonths === null ? <span style={s.unknown}>not stated</span> : `${t.warrantyMonths} months`}</td>
+                    <td style={s.td}>{t.complianceResponse ? (CLAIMS[t.complianceResponse] ?? t.complianceResponse) : <span style={s.muted}>—</span>}</td>
+                    <td style={s.td} data-testid={`terms-technical-${key}`}>{t.technicalDeviation ?? <span style={s.muted}>none stated</span>}</td>
+                    <td style={s.td} data-testid={`terms-commercial-${key}`}>{t.commercialDeviation ?? <span style={s.muted}>none stated</span>}</td>
+                    <td style={s.td} data-testid={`terms-exclusions-${key}`}>{t.exclusions ?? <span style={s.muted}>none stated</span>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       {/* FREIGHT, at the level it was actually quoted at and never pushed into a line. */}

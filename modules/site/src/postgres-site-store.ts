@@ -80,13 +80,13 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
     const conn = (tx as PoolClient) || this.pool;
     await conn.query(
       `insert into public.aura_site_plant_usage (
-        id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at, resource_type, resource_id
-      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+        id, tenant_id, company_id, project_id, project_name, cbs_node_id, date, equipment, hours, rate, cost, notes, created_by, created_at, updated_at, resource_type, resource_id, wbs_node_id
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
       on conflict (id) do update set
         hours = excluded.hours, rate = excluded.rate, cost = excluded.cost,
-        notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, updated_at = excluded.updated_at,
+        notes = excluded.notes, cbs_node_id = excluded.cbs_node_id, wbs_node_id = excluded.wbs_node_id, updated_at = excluded.updated_at,
         resource_type = excluded.resource_type, resource_id = excluded.resource_id`,
-      [u.id, u.tenantId, u.companyId, u.projectId, u.projectName, u.cbsNodeId, u.date, u.equipment, u.hours, u.rate, u.cost, u.notes, u.createdBy, u.createdAt, u.updatedAt, u.resourceType, u.resourceId],
+      [u.id, u.tenantId, u.companyId, u.projectId, u.projectName, u.cbsNodeId, u.date, u.equipment, u.hours, u.rate, u.cost, u.notes, u.createdBy, u.createdAt, u.updatedAt, u.resourceType, u.resourceId, u.wbsNodeId],
     );
   }
 
@@ -117,6 +117,7 @@ export class PostgresPlantUsageStore implements PlantUsageStore {
       projectId: row.project_id,
       projectName: row.project_name,
       cbsNodeId: row.cbs_node_id ?? null,
+      wbsNodeId: row.wbs_node_id ?? null,
       date: row.date instanceof Date ? row.date.toISOString().split('T')[0] : String(row.date),
       equipment: row.equipment,
       resourceType: row.resource_type ?? null,

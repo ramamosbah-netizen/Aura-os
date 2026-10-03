@@ -1801,7 +1801,10 @@ export class CrossModuleSubscriber implements OnModuleInit {
         if (!cbsNodeId || !projectId || cost <= 0) return;
         await this.ledger.post({
           tenantId: e.tenantId, companyId: e.companyId ?? null, projectId,
-          cbsNodeId, type: 'actual', amount: cost, quantity: hours, source: 'plant_usage',
+          cbsNodeId,
+          // The work package the plant worked on, if one was named (COST-CODE-01) — as labour carries its own.
+          wbsNodeId: (p.wbsNodeId as string | null) ?? null,
+          type: 'actual', amount: cost, quantity: hours, source: 'plant_usage',
           sourceRef: `${(p.equipment as string) ?? 'Plant'} — ${hours}h`,
            dimensions: { plantId: e.aggregateId, equipment: (p.equipment as string) ?? '' },
            dedupeKey: `plant:${e.aggregateId}`,

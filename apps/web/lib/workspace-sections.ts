@@ -75,6 +75,7 @@ export const SITE_SECTIONS = [
   { id: 'delay-logs', label: 'Site Delay Logs', description: 'Disruptions on the ground and their resolution', icon: Hourglass, tone: 'violet' },
   { id: 'material-consumption', label: 'Material Consumption', description: 'What the field has drawn and installed', icon: Package, tone: 'green' },
   { id: 'labour-allocations', label: 'Labour Allocations', description: 'Crews and subcontract labour against the work', icon: Users, tone: 'teal' },
+  { id: 'plant-usage', label: 'Plant & Equipment', description: 'Plant hours against the work, charged to a cost line and package', icon: Wrench, tone: 'amber' },
   { id: 'progress-mapping', label: 'Progress % Mapping (vs Baselines)', description: 'Reported progress against the schedule baseline', icon: TrendingUp, tone: 'slate' },
 ] as const satisfies readonly WorkspaceSection[];
 

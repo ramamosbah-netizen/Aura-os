@@ -123,6 +123,9 @@ test.describe('F-07 — the WBS identity continued into demand, progress and cos
       await post(request, '/site/plant', { projectId: delivery.projectId, date: '2026-09-05', equipment: `Scissor lift ${run}`, hours: 10, rate: 120, cbsNodeId: cbsId });
 
       await expect.poll(async () => (await scheduleOf(request, delivery.projectId)).cost[task.id]?.packageActual, { timeout: 30_000 }).toBe(1600);
+      // The plant is posted by its own reactor off the outbox, independently of the labour above, so
+      // the project total is waited for too — reading it once raced the plant posting.
+      await expect.poll(async () => (await scheduleOf(request, delivery.projectId)).costCoverage.projectActual, { timeout: 30_000 }).toBe(2800);
       plan = await scheduleOf(request, delivery.projectId);
       expect(plan.cost[task.id]).toMatchObject({ packageActual: 1600, packagePostings: 1, sharedBy: 2 });
       expect(plan.costCoverage).toMatchObject({ projectActual: 2800, unattributedActual: 1200, unattributedPostings: 1 });

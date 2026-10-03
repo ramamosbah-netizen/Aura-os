@@ -549,7 +549,7 @@ export class SiteController {
 
   @Post('plant')
   createPlant(
-    @Body() dto: { projectId: string; projectName?: string; cbsNodeId?: string | null; date: string; equipment: string; resourceType?: 'asset' | 'vehicle' | null; resourceId?: string | null; hours: number; rate?: number; notes?: string },
+    @Body() dto: { projectId: string; projectName?: string; cbsNodeId?: string | null; wbsNodeId?: string | null; date: string; equipment: string; resourceType?: 'asset' | 'vehicle' | null; resourceId?: string | null; hours: number; rate?: number; notes?: string },
   ): Promise<PlantUsage> {
     if (!dto?.projectId) throw new BadRequestException('projectId is required');
     if (!dto?.equipment?.trim()) throw new BadRequestException('equipment is required');
@@ -560,7 +560,8 @@ export class SiteController {
       companyId: ctx.companyId ?? undefined,
       projectId: dto.projectId,
       projectName: dto.projectName,
-      cbsNodeId: dto.cbsNodeId ?? null,
+      cbsNodeId: dto.cbsNodeId || null,
+      wbsNodeId: dto.wbsNodeId || null,
       date: dto.date,
       equipment: dto.equipment,
       resourceType: dto.resourceType ?? null,
@@ -572,9 +573,10 @@ export class SiteController {
     });
   }
 
+  /** Scoped by project when the page is: a project-scoped plant register reads that project's plant only. */
   @Get('plant')
-  listPlant(): Promise<PlantUsage[]> {
-    return this.siteService.listPlantUsage(this.tenant.get().tenantId);
+  listPlant(@Query('projectId') projectId?: string): Promise<PlantUsage[]> {
+    return this.siteService.listPlantUsage(this.tenant.get().tenantId, projectId?.trim() || null);
   }
 
   // ── Installation records (INSTALLED quantity against a BOQ item) ─────────────

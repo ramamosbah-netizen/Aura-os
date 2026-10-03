@@ -123,11 +123,27 @@ interface ProjectSchedule extends ProgressBearingSchedule {
   updatedAt: string;
 }
 
+/** A plant record (COST-CODE-01): hours × rate, charged to a cost line and, where it served one, a package. */
+interface PlantUsage {
+  id: string;
+  projectId: string;
+  projectName: string | null;
+  date: string;
+  equipment: string;
+  hours: number;
+  rate: number;
+  cost: number;
+  cbsNodeId: string | null;
+  wbsNodeId: string | null;
+  notes: string | null;
+}
+
 interface Props {
   initialDailyReports: DailyReport[];
   initialDelayLogs: any[];
   initialMaterialConsumption: MaterialConsumption[];
   initialLabourAllocations: LabourAllocation[];
+  initialPlantUsage?: PlantUsage[];
   schedules: ProjectSchedule[];
   projects: Project[];
   initialInstructions: Array<{
@@ -156,6 +172,7 @@ export default function SiteControlClient({
   initialDelayLogs,
   initialMaterialConsumption,
   initialLabourAllocations,
+  initialPlantUsage = [],
   schedules,
   projects,
   initialInstructions,
@@ -505,6 +522,79 @@ export default function SiteControlClient({
                       })()}</td>
                       <td style={st.tdMuted}>{l.subcontractorName || 'Direct'}</td>
                       <td style={st.td}>{l.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </section>
+        </div>
+      )}
+
+      {activeTab === 'plant-usage' && (
+        <div>
+          <div style={st.tabHeader}>
+            <CreateDrawer
+              entity="Plant Usage"
+              buttonLabel="Log Plant Usage"
+              subtitle={costCoding
+                ? 'Record plant or equipment hours. Hours × rate posts to the Cost Ledger on the cost line, against the work package if you name one.'
+                : 'Record plant or equipment hours. Choose a project above to charge plant to a cost line and a work package.'}
+              endpoint="/api/site/plant"
+              fields={[
+                costCoding
+                  ? { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2, defaultValue: costCoding.projectId, readonly: true }
+                  : { name: 'projectId', label: 'Project', kind: 'select', required: true, labelField: 'projectName', options: projectOptions, span: 2 },
+                { name: 'date', label: 'Date', kind: 'date', required: true, defaultValue: today },
+                { name: 'equipment', label: 'Plant / equipment', kind: 'text', required: true, placeholder: 'e.g. Scissor lift SL-02, Generator 60 kVA' },
+                { name: 'hours', label: 'Hours worked', kind: 'number', required: true, placeholder: 'Hours' },
+                ...(costCoding ? [
+                  { name: 'rate', label: 'Hourly rate', kind: 'number' as const, placeholder: 'Blank posts no cost', hint: 'The internal hire or external hire rate; with a cost line, hours × rate posts to the Cost Ledger.' },
+                  { name: 'cbsNodeId', label: 'Cost line (CBS)', kind: 'select' as const, options: costCoding.costLines.map((line) => ({ value: line.id, label: `${line.code} · ${line.title}` })) },
+                  {
+                    name: 'wbsNodeId', label: 'Work package', kind: 'select' as const, span: 2 as const,
+                    options: costCoding.workPackages.map((node) => ({ value: node.id, label: `${node.code} · ${node.title}` })),
+                    hint: 'Leave empty when the plant served no single package — standby, site-wide plant. It is reported as unattributed, never guessed.',
+                  },
+                ] : []),
+                { name: 'notes', label: 'Notes', kind: 'textarea', placeholder: 'Where it worked, operator, breakdowns…' },
+              ]}
+            />
+          </div>
+
+          <section style={st.panel}>
+            <h3 style={st.panelTitle}>Plant & Equipment Log</h3>
+            {initialPlantUsage.length === 0 ? (
+              <EmptyState compact title="No plant usage recorded" description="Log plant and equipment hours to charge them to the project's cost lines." />
+            ) : (
+              <table style={st.table}>
+                <thead>
+                  <tr>
+                    {['Date', 'Project', 'Plant / equipment', 'Hours', 'Rate', 'Cost', 'Cost line', 'Work package', 'Notes'].map((h) => (
+                      <th key={h} style={st.th}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {initialPlantUsage.map((u) => (
+                    <tr key={u.id} data-testid={`plant-row-${u.id}`}>
+                      <td style={st.tdCode}>{u.date}</td>
+                      <td style={st.tdMuted}>{u.projectName || '—'}</td>
+                      <td style={st.td}>{u.equipment}</td>
+                      <td style={st.tdCode}>{u.hours}h</td>
+                      <td style={st.tdCode}>{u.rate > 0 ? u.rate.toLocaleString(DISPLAY_LOCALE) : '—'}</td>
+                      <td style={st.tdCode} data-testid={`plant-cost-${u.id}`}>{u.cost > 0 ? u.cost.toLocaleString(DISPLAY_LOCALE) : '—'}</td>
+                      <td style={st.tdMuted} data-testid={`plant-cost-line-${u.id}`}>{(() => {
+                        if (!u.cbsNodeId) return 'Not charged (uncoded)';
+                        const line = costCoding?.costLines.find((item) => item.id === u.cbsNodeId);
+                        return line ? `${line.code} · ${line.title}` : 'Cost line';
+                      })()}</td>
+                      <td style={st.tdMuted} data-testid={`plant-package-${u.id}`}>{(() => {
+                        if (!u.wbsNodeId) return 'Unattributed';
+                        const node = costCoding?.workPackages.find((item) => item.id === u.wbsNodeId);
+                        return node ? `${node.code} · ${node.title}` : 'Work package';
+                      })()}</td>
+                      <td style={st.td}>{u.notes || '—'}</td>
                     </tr>
                   ))}
                 </tbody>

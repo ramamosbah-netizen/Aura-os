@@ -1717,6 +1717,13 @@ defects.push({
   g.evidence += " FRESH 2026-10-03 (stock-issue slice): modules/inventory/src/cost-line.port.ts, stock.service.ts (the cost-line check); apps/api/src/wiring/gates.module.ts (COST_LINE binding); apps/web/components/project-issue-bar.tsx, stock-client.tsx; apps/web/e2e/stock-issue-cost-coding.spec.ts; stock-issue-return.spec.ts and work-package-delivery.spec.ts re-run green.";
 }
 
+/** COST-CODE-01 — the PLANT slice (2026-10-03). The finding stays OPEN on orders and subcontracts. */
+{
+  const g = defects.find(g=>g.id==='COST-CODE-01');
+  g.currentBehavior += " PLANT SLICE DONE (2026-10-03). Measured: plant usage had an API and no screen, and recorded no work package even through the API; and labour and plant took ANY cost line they were sent — only labour's package was checked against the project. Now: the Site workspace has a Plant & Equipment section (scoped to the project like labour) that logs plant with hours, rate, cost line and the work package it served, and lists each record with its cost, its cost line or 'Not charged (uncoded)', and its package or 'Unattributed'; plant usage carries a work package (migration 0405, checked against the project like labour's) and posts it to the Cost Ledger; a cost line of another project is refused for plant AND labour. PROVED (plant-cost-coding.spec.ts, browser, Auth ON, PostgreSQL): 10 h × 120 logged on screen to a cost line and a package — the ledger holds 1,200 actual with both, and the cost line, the work package and the planning screen ('Package cost · 1,200 actual (1 posting)') read 1,200; plant logged uncoded posts nothing and reads 'Not charged (uncoded)'; plant and labour naming another project's cost line are refused (400) and nothing lands on that project. activity-cost-lineage.spec.ts (F-07) re-run green after a poll was added for its project total, which had raced the plant posting.";
+  g.evidence += " FRESH 2026-10-03 (plant slice): infrastructure/migrations/0405_plant_work_package.sql (round-tripped down/up); modules/site/src/domain/plant-usage.ts, postgres-site-store.ts, site.service.ts (cost-line check for plant and labour); apps/api/src/site/site.controller.ts; apps/api/src/events/cross-module-subscriber.ts (plant posts its package); apps/web/app/api/site/plant/route.ts, app/site/control/page.tsx, components/site-control-client.tsx, lib/workspace-sections.ts; apps/web/e2e/plant-cost-coding.spec.ts.";
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

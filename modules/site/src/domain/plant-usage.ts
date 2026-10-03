@@ -20,6 +20,9 @@ export interface PlantUsage {
   /** CBS cost line this plant is charged to. When set (with a rate), the Transaction Engine posts
    * the plant cost as ACTUAL against it. Nullable + additive. */
   cbsNodeId: string | null;
+  /** The work package the plant worked on (COST-CODE-01, migration 0405). Null = none declared, which
+   * is common and honest — standby, site-wide plant — and is reported as unattributed, never guessed. */
+  wbsNodeId: string | null;
   date: string; // YYYY-MM-DD
   /** The plant/equipment description or asset code (e.g. "Tower Crane TC-01", "JCB 3CX"). Kept as the
    * human label; it is NOT the lineage — "TC-01" and "Tower Crane TC-01" are one crane, not two. */
@@ -50,6 +53,7 @@ export interface NewPlantUsage {
   projectId: string;
   projectName?: string | null;
   cbsNodeId?: string | null;
+  wbsNodeId?: string | null;
   date: string;
   equipment: string;
   resourceType?: PlantResourceType | null;
@@ -83,6 +87,7 @@ export function makePlantUsage(input: NewPlantUsage): PlantUsage {
     projectId: input.projectId,
     projectName: input.projectName ?? null,
     cbsNodeId: input.cbsNodeId ?? null,
+    wbsNodeId: input.wbsNodeId ?? null,
     date: input.date.slice(0, 10),
     equipment: input.equipment.trim(),
     resourceType,

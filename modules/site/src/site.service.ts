@@ -592,6 +592,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
   }): Promise<LabourAllocation> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
     await this.assertWorkPackageBelongsToProject(input.tenantId, input.projectId, input.wbsNodeId ?? null);
+    await this.assertCostLineBelongsToProject(input.tenantId, input.projectId, input.cbsNodeId ?? null);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -635,6 +636,20 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
    * A composition with no Projects registered cannot check the claim, and refuses rather than
    * recording an attribution nobody can stand behind.
    */
+  /**
+   * COST-CODE-01 — and the cost line it is CHARGED to, for the same reason with money attached: a line
+   * of another project would post this project's cost onto that project's books. Only the package was
+   * checked before; the line was taken as sent.
+   */
+  private async assertCostLineBelongsToProject(tenantId: Id, projectId: Id, cbsNodeId: string | null): Promise<void> {
+    if (!cbsNodeId) return;
+    if (!this.projectScope) throw new Error('cost line attribution is unavailable: no project resolver is registered');
+    const owner = await this.projectScope.projectOf('projects', 'cb', cbsNodeId);
+    if (owner !== projectId) {
+      throw new Error(`cost line ${cbsNodeId} does not belong to project ${projectId}`);
+    }
+  }
+
   private async assertWorkPackageBelongsToProject(tenantId: Id, projectId: Id, wbsNodeId: string | null): Promise<void> {
     if (!wbsNodeId) return;
     if (!this.projectScope) throw new Error('work package attribution is unavailable: no project resolver is registered');
@@ -667,6 +682,8 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     projectId: string;
     projectName?: string;
     cbsNodeId?: string | null;
+    /** The work package the plant worked on (COST-CODE-01), when it served one. */
+    wbsNodeId?: string | null;
     date: string;
     equipment: string;
     resourceType?: 'asset' | 'vehicle' | null;
@@ -677,6 +694,8 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     createdBy?: string;
   }): Promise<PlantUsage> {
     await this.projectScope?.requireProject(input.tenantId, input.projectId);
+    await this.assertWorkPackageBelongsToProject(input.tenantId, input.projectId, input.wbsNodeId ?? null);
+    await this.assertCostLineBelongsToProject(input.tenantId, input.projectId, input.cbsNodeId ?? null);
     if (input.createdBy) {
       const orgPath: Array<{ level: OrgLevel; id: Id }> = [{ level: 'tenant', id: input.tenantId }];
       if (input.companyId) orgPath.push({ level: 'company', id: input.companyId });
@@ -694,6 +713,7 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
       payload: {
         projectId: usage.projectId,
         cbsNodeId: usage.cbsNodeId,
+        wbsNodeId: usage.wbsNodeId,
         equipment: usage.equipment,
         hours: usage.hours,
         rate: usage.rate,
@@ -708,8 +728,8 @@ private async assertNoReportForDate(tenantId: string, projectId: string, date: s
     return usage;
   }
 
-  listPlantUsage(tenantId: Id): Promise<PlantUsage[]> {
-    return this.plantStore.findAll(tenantId);
+  listPlantUsage(tenantId: Id, projectId?: Id | null): Promise<PlantUsage[]> {
+    return projectId ? this.plantStore.findByProject(projectId, tenantId) : this.plantStore.findAll(tenantId);
   }
 
   // ── Installation records (physical work fixed in place = INSTALLED quantity) ────────────────

@@ -24,6 +24,7 @@ import { computeFifo, fifoIssueCost, fifoReceiptState, type FifoMove } from './d
 import { STOCK_STORE, type StockFilter, type StockStore } from './stock-store';
 import { ISSUED_POSITION, type IssuedPosition } from './issued-position.port';
 import { WORK_PACKAGE, type WorkPackage } from './work-package.port';
+import { COST_LINE, type CostLine } from './cost-line.port';
 import { DELIVERY_ACK_STORE, type DeliveryAcknowledgement, type DeliveryAcknowledgementStore } from './delivery-acknowledgement.store';
 import { mayAcknowledgeDelivery, acknowledgementCoverage } from './domain/delivery-acknowledgement';
 import { mayReturnFromProject } from './domain/material-return';
@@ -54,6 +55,8 @@ export class StockService {
     @Optional() @Inject(ISSUED_POSITION) private readonly issuedPosition: IssuedPosition | null = null,
     @Optional() @Inject(WORK_PACKAGE) private readonly workPackage: WorkPackage | null = null,
     @Optional() @Inject(DELIVERY_ACK_STORE) private readonly acks: DeliveryAcknowledgementStore | null = null,
+    /** COST-CODE-01 — the cost line a project movement posts actual cost to. Unbound, a coded cost line is REFUSED. */
+    @Optional() @Inject(COST_LINE) private readonly costLine: CostLine | null = null,
   ) {}
 
   async createItem(input: NewStockItem): Promise<StockItem> {
@@ -153,6 +156,26 @@ export class StockService {
         throw new Error(
           `work package ${coding.wbsNodeId} does not belong to this movement’s project, so it ` +
           'cannot be the destination of this material',
+        );
+      }
+    }
+
+    /**
+     * A COST LINE IS CHECKED THE SAME WAY (COST-CODE-01), because it is where the money lands. A
+     * coded movement becomes actual cost on that line; a line of another project — or a work package
+     * passed as a cost line — would put this material on books it does not belong to, while the
+     * movement itself said a different project. Refused before anything is written.
+     */
+    if (coding?.cbsNodeId) {
+      if (!coding.projectId) {
+        throw new Error('a cost line cannot be named on a movement that is not coded to a project');
+      }
+      if (!this.costLine) {
+        throw new Error('cannot verify the cost line this material is charged to — the project cost structure is unavailable');
+      }
+      if (!(await this.costLine.belongsToProject(item.tenantId, coding.projectId, coding.cbsNodeId))) {
+        throw new Error(
+          `cost line ${coding.cbsNodeId} is not a cost line of this movement’s project, so this material cannot be charged to it`,
         );
       }
     }

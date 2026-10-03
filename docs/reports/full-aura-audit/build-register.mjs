@@ -1707,6 +1707,16 @@ defects.push({
   caps.find(c=>c.id==='SUP-11').layers.handoff = 'PARTIAL';   // warranty does not reach the order (PO-TERMS-01)
 }
 
+/**
+ * COST-CODE-01 — the STOCK-ISSUE slice (2026-10-03). The finding stays OPEN: the order, subcontract
+ * and plant routes are not coded on screen yet, and the order route needs a decision first.
+ */
+{
+  const g = defects.find(g=>g.id==='COST-CODE-01');
+  g.currentBehavior += " STOCK-ISSUE SLICE DONE (2026-10-03). Measured: the project-issue bar on the stock screen sent project, BOQ item and work package but no cost line, so material issued through the screen reached the job and never its books; and the server accepted ANY cost line on a movement — one coded to project A naming project B's line was recorded against A and posted onto B's books. Now: the bar names the cost line the issue is charged to, and says plainly when it is not charged; a movement's cost line is checked against the movement's own project and kind before anything is written (COST_LINE port, refused otherwise); the item's movement history says, per project movement, whether it was charged or 'not charged (uncoded)'; and a race in the bar that showed 'nothing issued' just after an issue is fixed. PROVED (stock-issue-cost-coding.spec.ts, browser, Auth ON, PostgreSQL): the Storekeeper issues 20 m on screen to a package and a cost line — the ledger holds 100.00 actual on that line with that package, and the cost line, the work package and the planning screen ('Package cost · 100 actual (1 posting)') all read 100; 4 m issued uncoded posts nothing and reads 'not charged (uncoded)' in the item's history; a movement naming another project's cost line is refused (400) and posts nothing. REMAINING: requisition/order lines — MEASURED: an order drafted from an approved requisition gets no header cost line, the requisition lines' coding is carried onto the order lines, but the committed-cost posting reads ONLY the header and posts at order creation, drafts included; coding lines on screen would therefore reach nothing, and how commitments post (per line, and at which act) is a decision about the ledger's authority, put to the owner rather than invented. Subcontracts (where the owner question on splitting scope across packages also sits) and plant (no screen; plant usage records no package) are not started.";
+  g.evidence += " FRESH 2026-10-03 (stock-issue slice): modules/inventory/src/cost-line.port.ts, stock.service.ts (the cost-line check); apps/api/src/wiring/gates.module.ts (COST_LINE binding); apps/web/components/project-issue-bar.tsx, stock-client.tsx; apps/web/e2e/stock-issue-cost-coding.spec.ts; stock-issue-return.spec.ts and work-package-delivery.spec.ts re-run green.";
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

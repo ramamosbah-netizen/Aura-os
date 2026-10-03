@@ -29,6 +29,7 @@ export * from './domain/material-return';
 export * from './domain/work-package-delivery';
 export * from './issued-position.port';
 export * from './work-package.port';
+export * from './cost-line.port';
 export * from './postgres-delivery-acknowledgement-store';
 export * from './in-memory-delivery-acknowledgement-store';
 export * from './domain/delivery-acknowledgement';

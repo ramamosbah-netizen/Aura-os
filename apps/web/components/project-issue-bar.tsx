@@ -22,6 +22,7 @@ import { type CSSProperties, useCallback, useEffect, useState } from 'react';
 
 interface ProjectLite { id: string; title: string }
 interface WbsLite { id: string; code: string; title: string; boqItemId: string | null }
+interface CostLineLite { id: string; code: string; title: string }
 interface LedgerRow { boqItemId: string | null; type: string; unit: string | null }
 interface Position { boqItemId: string; issued: number; unit: string | null }
 interface DeliveryReport {
@@ -38,12 +39,14 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
   const [projects, setProjects] = useState<ProjectLite[]>([]);
   const [boqItems, setBoqItems] = useState<string[]>([]);
   const [packages, setPackages] = useState<WbsLite[]>([]);
+  const [costLines, setCostLines] = useState<CostLineLite[]>([]);
   const [delivered, setDelivered] = useState<DeliveryReport | null>(null);
   const [position, setPosition] = useState<Position | null>(null);
 
   const [projectId, setProjectId] = useState('');
   const [boqItemId, setBoqItemId] = useState('');
   const [wbsNodeId, setWbsNodeId] = useState('');
+  const [cbsNodeId, setCbsNodeId] = useState('');
   const [qty, setQty] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -59,7 +62,14 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
   // a quantity to nothing, which is how a position ends up silently empty.
   useEffect(() => {
     setBoqItemId(''); setBoqItems([]); setPosition(null); setWbsNodeId(''); setPackages([]);
+    setCbsNodeId(''); setCostLines([]);
     if (!projectId) return;
+    // The cost lines this issue can be CHARGED to (COST-CODE-01). Without one the material reaches
+    // the job but never its books: the material cost strand posts only a coded movement.
+    void (async () => {
+      const res = await fetch(`/api/projects/cbs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' });
+      if (res.ok) setCostLines(((await res.json().catch(() => [])) as CostLineLite[]) ?? []);
+    })();
     // The work packages this project's material can be delivered TO (BUY-07). A destination is
     // chosen from the project's own structure; it is never derived from the BOQ item below.
     void (async () => {
@@ -106,6 +116,11 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
   const move = async (direction: 'in' | 'out'): Promise<void> => {
     setBusy(true); setError(null);
     try {
+      // The position this movement will change, read FRESH, here. Comparing against whatever the bar
+      // last displayed was a race: if that read had failed (null), the first read after posting —
+      // still 0, because the ledger is posted a moment later — counted as "changed", polling stopped,
+      // and the bar told a storekeeper nothing was issued just after they had issued it.
+      const before = boqItemId ? ((await readPosition())?.issued ?? 0) : null;
       const res = await fetch(`/api/inventory/stock/${stockItemId}/movements`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -117,6 +132,9 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
           // Sent ONLY when a destination was actually chosen. An empty selection must stay NULL:
           // that is "no work-package destination declared", which is a fact, not a blank to fill.
           wbsNodeId: wbsNodeId || undefined,
+          // The cost line the material is charged to — and, on a return, credited back to. Sent only
+          // when chosen: "not charged to a cost line" is a fact the screen states, never a guess.
+          cbsNodeId: cbsNodeId || undefined,
           reason: direction === 'out' ? 'issued to project' : 'returned from project',
           /**
            * NO UNIT COST IS SENT, AND THE SERVER SUPPLIES IT.
@@ -146,10 +164,9 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
        * movement has already changed, which is exactly the kind of stale number this wave keeps
        * removing. Poll briefly until it moves, and stop either way rather than spinning.
        */
-      const before = netIssued;
-      for (let i = 0; i < 30; i++) {
+      for (let i = 0; before !== null && i < 30; i++) {
         const settled = await readPosition();
-        if (settled?.issued !== before) break;
+        if (settled && settled.issued !== before) break;
         await new Promise((r) => setTimeout(r, 300));
       }
       await readDelivered();
@@ -201,6 +218,12 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
           {packages.map((w) => <option key={w.id} value={w.id}>{w.code} · {w.title}</option>)}
         </select>
 
+        <select className="select" style={st.field} value={cbsNodeId} onChange={(e) => setCbsNodeId(e.target.value)}
+          disabled={!projectId} data-testid="issue-cost-line" aria-label="Cost line">
+          <option value="">{projectId ? 'Not charged to a cost line' : 'Choose a project first'}</option>
+          {costLines.map((c) => <option key={c.id} value={c.id}>{c.code} · {c.title}</option>)}
+        </select>
+
         <div style={st.qty}>
           <input className="input" style={st.narrow} value={qty} onChange={(e) => setQty(e.target.value)}
             inputMode="decimal" placeholder="Quantity" data-testid="issue-quantity" aria-label="Quantity" />
@@ -244,6 +267,14 @@ export default function ProjectIssueBar({ stockItemId, unit, onMoved }: {
               {unit ? ` ${unit}` : ''}.
             </span>
           )}
+        </p>
+      )}
+
+      {projectId && (
+        <p style={st.position} data-testid="issue-cost-coding">
+          {cbsNodeId
+            ? `Charged to ${costLines.find((c) => c.id === cbsNodeId)?.code ?? 'the chosen cost line'} — the material's cost is posted to that line as actual cost.`
+            : 'Not charged to a cost line — this issue reaches the project but not its cost ledger, and is reported as uncoded.'}
         </p>
       )}
 

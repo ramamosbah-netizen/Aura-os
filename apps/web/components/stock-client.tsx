@@ -31,6 +31,9 @@ interface Movement {
   createdAt: string;
   /** The work package this movement was delivered to (`BUY-07`). NULL = none declared. */
   wbsNodeId?: string | null;
+  /** The project an issue went to, and the cost line it was charged to (COST-CODE-01). */
+  projectId?: string | null;
+  cbsNodeId?: string | null;
   createdBy?: string | null;
 }
 
@@ -258,7 +261,7 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                         <div className="table-scroll">
                         <table style={s.subTable}>
                           <thead>
-                            <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thSR}>Unit cost</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th><th style={s.thSR}>Value</th><th style={s.thS}>Receipt</th></tr>
+                            <tr><th style={s.thS}>When</th><th style={s.thS}>Type</th><th style={s.thSR}>Qty</th><th style={s.thSR}>Unit cost</th><th style={s.thS}>Reason</th><th style={s.thSR}>Balance</th><th style={s.thSR}>Value</th><th style={s.thS}>Charged to</th><th style={s.thS}>Receipt</th></tr>
                           </thead>
                           <tbody>
                             {detail.movements.map((m) => (
@@ -270,6 +273,11 @@ export default function StockClient({ initialItems }: { initialItems: StockItem[
                                 <td style={s.tdS}>{m.reason}</td>
                                 <td style={s.tdSR}>{m.balanceAfter}</td>
                                 <td style={s.tdSR}>{money(m.valueAfter)}</td>
+                                {/* COST-CODE-01: a project movement says whether its cost reached the project's books.
+                                    One that did not is shown as uncoded, not left looking like any other issue. */}
+                                <td style={s.tdS} data-testid={`movement-costing-${m.id}`}>
+                                  {!m.projectId ? '—' : m.cbsNodeId ? 'a project cost line' : <span style={{ color: 'var(--warn, #b45309)' }}>not charged (uncoded)</span>}
+                                </td>
                                 {/*
                                   BUY-07's next-role receipt. Offered only where the movement
                                   actually declared a work package — a delivery nobody can name

@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { QualityModule, QualityService } from '@aura/quality';
 import { ElvModule, ElvDeviceService } from '@aura/elv';
 import { CommissioningModule, CommissioningService, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST, WORK_RECEIPT, QUALITY_ESCALATION } from '@aura/commissioning';
-import { InventoryModule, StockService, MaterialService, ISSUED_POSITION, WORK_PACKAGE } from '@aura/inventory';
+import { InventoryModule, StockService, MaterialService, ISSUED_POSITION, WORK_PACKAGE, COST_LINE } from '@aura/inventory';
 import { DocControlModule, DocControlService } from '@aura/doccontrol';
 import { HseModule, HseService } from '@aura/hse';
 import { EngineeringModule, EngineeringService } from '@aura/engineering';
@@ -92,6 +92,18 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // requisition's OWN project — AWD-05's rule, asked by a new caller. Composed from both node
     // services because the kind is part of the question: without it a WBS id would be accepted as
     // a cost code purely for belonging to the right project.
+    // COST-CODE-01 — the cost line a stock movement charges, checked against the movement's own
+    // project and kind, so one project's material cannot land on another project's cost line.
+    {
+      provide: COST_LINE,
+      inject: [CbsService],
+      useFactory: (cbs: CbsService) => ({
+        async belongsToProject(tenantId: string, projectId: string, cbsNodeId: string) {
+          const node = await cbs.get(cbsNodeId);
+          return !!node && node.tenantId === tenantId && node.projectId === projectId;
+        },
+      }),
+    },
     {
       provide: PROJECT_CODING,
       inject: [WbsService, CbsService],
@@ -186,6 +198,6 @@ import { ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINE
     // projection of code, name and unit. Nothing here moves stock.
     { provide: INVENTORY, useExisting: StockService },
   ],
-  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, WORK_PACKAGE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST, WORK_RECEIPT, QUALITY_ESCALATION],
+  exports: [QUALITY_GATE, MATERIAL_CATALOGUE, PROJECT_CODING, ISSUED_POSITION, WORK_PACKAGE, COST_LINE, ITP_GATE, QUALITY_READINESS, COMMISSIONING_READINESS, DOCUMENTS_READINESS, COMMISSIONING_LIFECYCLE, QUALITY_HEALTH, COMMISSIONING_HEALTH, HSE_HEALTH, ENGINEERING_HEALTH, PROCUREMENT_HEALTH, ELV_EQUIPMENT, QUALITY_EVIDENCE, ENGINEERING_RELEASE, DOC_CONTROL, DOC_CONTROL_ISSUE, INVENTORY, APPROVED_CHECKLIST, WORK_RECEIPT, QUALITY_ESCALATION],
 })
 export class GatesModule {}

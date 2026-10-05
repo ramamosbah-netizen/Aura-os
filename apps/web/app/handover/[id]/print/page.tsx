@@ -63,7 +63,7 @@ export default async function HandoverPrint({ params }: { params: Promise<{ id: 
       reference={pkg.code}
       status={pkg.status}
       from={issuer}
-      to={{ heading: 'Client Acceptance', lines: [pkg.clientRepresentative || 'Client Representative', pkg.projectName || 'Project'] }}
+      to={{ heading: 'Client Acceptance', lines: [pkg.clientRepresentative || 'Client representative not recorded', pkg.projectName || 'Project name not recorded'] }}
       meta={[
         { label: 'Package Code', value: pkg.code },
         { label: 'Commissioned Systems', value: `${pkg.systemsCommissioned} / ${pkg.systemsTotal}` },

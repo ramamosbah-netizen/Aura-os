@@ -59,6 +59,10 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
   const [lr, setLr] = useState({ projectId: initialProjectId, date: today(), trade: '', headcount: '', hours: '', subcontractorName: '' });
   const reportProjectSelected = dr.projectId.trim().length > 0;
   const labourProjectSelected = lr.projectId.trim().length > 0;
+  // THE PROJECT'S NAME TRAVELS WITH ITS ID (SIT-06). The form sent the id alone, so every report
+  // stored no project name and the printed sheet — the controlled site diary — said "General
+  // Construction Site" where the project should be. A snapshot, as every other register keeps one.
+  const projectTitle = (id: string): string | undefined => projects?.find((p) => p.id === id)?.title;
 
   const kpi = useMemo(() => ({
     draft: rows.filter((r) => r.status === 'draft').length,
@@ -117,7 +121,7 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
     if (signature && !signedBy.trim()) return setError('Name the person who signed. A signature recorded against whoever uploaded it is not attributable to them.');
     setBusy(true);
     try {
-      const payload = { projectId: dr.projectId, date: dr.date, workDescription: dr.workDescription, manpowerCount: Number(dr.manpowerCount) || 0, equipmentCount: Number(dr.equipmentCount) || 0 };
+      const payload = { projectId: dr.projectId, projectName: projectTitle(dr.projectId), date: dr.date, workDescription: dr.workDescription, manpowerCount: Number(dr.manpowerCount) || 0, equipmentCount: Number(dr.equipmentCount) || 0 };
       const result = await fetchWithOfflineFallback<DailyReport>('/api/site/daily-reports', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -128,7 +132,7 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
         const offlineRow: DailyReport = {
           id: result.data?.id || `offline-${generateUUID()}`,
           projectId: dr.projectId,
-          projectName: null,
+          projectName: projectTitle(dr.projectId) ?? null,
           date: dr.date,
           workDescription: dr.workDescription,
           manpowerCount: Number(dr.manpowerCount) || 0,
@@ -200,7 +204,7 @@ export default function DailyReportClient({ reports, labour, initialProjectId = 
     if (!lr.trade.trim() || !lr.date.trim()) return setError('Trade and date are required');
     setBusy(true);
     try {
-      const payload = { projectId: lr.projectId, date: lr.date, trade: lr.trade, headcount: Number(lr.headcount) || 0, hours: Number(lr.hours) || 0, subcontractorName: lr.subcontractorName || undefined };
+      const payload = { projectId: lr.projectId, projectName: projectTitle(lr.projectId), date: lr.date, trade: lr.trade, headcount: Number(lr.headcount) || 0, hours: Number(lr.hours) || 0, subcontractorName: lr.subcontractorName || undefined };
       const result = await fetchWithOfflineFallback<LabourAllocation>('/api/site/labour', {
         method: 'POST',
         body: JSON.stringify(payload),

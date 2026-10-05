@@ -2951,7 +2951,7 @@
         "Site",
         "Progress"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Site",
       "evidence": [
         "R-J26"
@@ -2959,16 +2959,17 @@
       "source": "apps/web/components/daily-report-client.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Site Engineer, Project Engineer role executes Site report print in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Site Engineer, Project Engineer role executes Site report print in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "FIXED AND PROVED 2026-10-05. The Daily Reports form now records the project's name with its id (the labour return too), and the printed sheet no longer invents a site name: a report without one says 'Project name not recorded on this report' (the handover acceptance sheet likewise no longer prints 'Client Representative' or 'Project' as if they were names). The sheet carries the issuing company, the report number and status, the project, the date, the work, manpower and plant, every photograph and the signature with who signed it (site-evidence-round-trip.spec.ts, re-run green). PROVED BY ROLE in daily-report-print-roles.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-site records the day's report on the Daily Reports screen, it survives a reload, and the printed report carries the work and the project's name; u-e2e-projeng, who reads site records and writes none, opens the same printed report; u-e2e-storekeeper, with no site access, is refused the report (403) and the sheet shows none of it. LIMIT: reports recorded before this carry no project name and print that they do not; no backfill was made."
     },
     {
       "id": "QHS-01",
@@ -9426,7 +9427,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 77,
+      "COMPLETE": 78,
       "PARTIAL": 87,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -9436,7 +9437,7 @@
       "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 12,
+      "UNVERIFIED": 11,
       "NOT_AUDITED": 0
     },
     "gaps": 77,

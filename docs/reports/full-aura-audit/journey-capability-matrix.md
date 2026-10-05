@@ -464,7 +464,7 @@
 | Site | SIT-03 | PARTIAL |
 | Site | SIT-04 | COMPLETE |
 | Site | SIT-05 | PARTIAL |
-| Site | SIT-06 | UNVERIFIED |
+| Site | SIT-06 | COMPLETE |
 | Site | OUT-01 | PARTIAL |
 | Site | OUT-02 | PARTIAL |
 | Site | OUT-03 | UNVERIFIED |
@@ -565,7 +565,7 @@
 | Progress | SIT-03 | PARTIAL |
 | Progress | SIT-04 | COMPLETE |
 | Progress | SIT-05 | PARTIAL |
-| Progress | SIT-06 | UNVERIFIED |
+| Progress | SIT-06 | COMPLETE |
 | Progress | OUT-01 | PARTIAL |
 | Progress | OUT-02 | PARTIAL |
 | Progress | OUT-03 | UNVERIFIED |

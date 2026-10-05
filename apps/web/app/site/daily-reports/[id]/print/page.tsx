@@ -84,7 +84,7 @@ export default async function DailyReportPrint({ params }: { params: Promise<{ i
       reference={`DR-${report.date.replace(/-/g, '')}-${report.id.slice(0, 4)}`}
       status={report.status}
       from={issuer}
-      to={{ heading: 'Project Context', lines: [report.projectName || 'General Construction Site', `Report Date: ${report.date}`] }}
+      to={{ heading: 'Project Context', lines: [report.projectName || 'Project name not recorded on this report', `Report Date: ${report.date}`] }}
       meta={[
         { label: 'Date', value: report.date },
         { label: 'Manpower Count', value: String(report.manpowerCount) },

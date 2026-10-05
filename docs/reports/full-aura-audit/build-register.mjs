@@ -1853,6 +1853,20 @@ defects.push({
   Object.assign(c.layers, { domain:'PARTIAL', persistence:'COMPLETE', api:'PARTIAL', permissions:'PARTIAL', ui:'PARTIAL', actualOutput:'UNVERIFIED', browser:'PARTIAL', handoff:'COMPLETE' });
 }
 
+/**
+ * SIT-06 SITE REPORT PRINT (2026-10-05). UNVERIFIED with no finding. The printed daily report was
+ * proved in depth as an administrator (SIT-04 / J4-01). Proving it by role found a defect on the
+ * controlled sheet itself: the Daily Reports form sent the project's id and not its name, so every
+ * report stored no project name and the printed site diary said "General Construction Site" where the
+ * project should be — an invented label on a controlled document.
+ */
+{
+  const c = caps.find(c=>c.id==='SIT-06');
+  c.classification = 'COMPLETE';
+  c.currentBehavior = "FIXED AND PROVED 2026-10-05. The Daily Reports form now records the project's name with its id (the labour return too), and the printed sheet no longer invents a site name: a report without one says 'Project name not recorded on this report' (the handover acceptance sheet likewise no longer prints 'Client Representative' or 'Project' as if they were names). The sheet carries the issuing company, the report number and status, the project, the date, the work, manpower and plant, every photograph and the signature with who signed it (site-evidence-round-trip.spec.ts, re-run green). PROVED BY ROLE in daily-report-print-roles.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-site records the day's report on the Daily Reports screen, it survives a reload, and the printed report carries the work and the project's name; u-e2e-projeng, who reads site records and writes none, opens the same printed report; u-e2e-storekeeper, with no site access, is refused the report (403) and the sheet shows none of it. LIMIT: reports recorded before this carry no project name and print that they do not; no backfill was made.";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

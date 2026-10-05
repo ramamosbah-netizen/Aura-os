@@ -1831,6 +1831,28 @@ defects.push({
   Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'UNVERIFIED', browser:'COMPLETE', handoff:'COMPLETE' });
 }
 
+/**
+ * HO-05 WARRANTY CERTIFICATES (2026-10-05). UNVERIFIED with no finding; the mechanism was built by
+ * TC-GATE-5/6 and proved as an administrator. Proved by role here, with no code change.
+ */
+{
+  const c = caps.find(c=>c.id==='HO-05');
+  c.classification = 'COMPLETE';
+  c.currentBehavior = "RECONCILED 2026-10-05 from TC-GATE-5/6's build. The warranty certificate is its own O&M deliverable per system (warranty_certificate), submitted only against a document the controlled register holds, moved required → submitted → reviewed → accepted with who accepted it recorded, and derived into its own handover readiness item (warrantyDocs) disjoint from the O&M manuals item (handover-om-training.spec.ts). PROVED BY ROLE in handover-warranty-roles.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-doccon registers the warranty certificate; u-e2e-tc seeds the system's pack and submits the certificate against it on screen; u-e2e-qaqc is refused moving it (403); u-e2e-fm reviews and accepts it on screen, it survives a reload, and the record names u-e2e-fm as acceptor; the handover dossier's O&M section cites the document; u-e2e-pm sees the warranty-certificates readiness item READY while the rest of the pack is not. OBSERVED, FOR THE OWNER: the T&C Engineer, the PM and Handover/FM may each move a deliverable to any state, so the person who submitted one may also accept it; whether acceptance must be a different person is a separation-of-duties decision this row does not take.";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
+}
+
+/**
+ * HO-10 DEFECT LIABILITY (2026-10-05). UNVERIFIED with no finding. Reconciled from what is built and
+ * proved — the START of the defect-liability period — and no further.
+ */
+{
+  const c = caps.find(c=>c.id==='HO-10');
+  c.classification = 'PARTIAL';
+  c.currentBehavior = "RECONCILED 2026-10-05. WHAT EXISTS: client acceptance of a submitted handover starts the warranty / defect-liability clock — it records the warranty start date and period on the package, refuses the person who submitted the package, and keeps the signed acceptance evidence; the commissioning.handover.accepted event opens ONE 'Warranty & AMC' service contract per handover (idempotent under re-delivery) from that start date to start + period on the calendar, carrying the project lineage, priced at zero; defects reported afterwards are that contract's support tickets and work orders in AMC. PROVED: journey-tc-handover-closure.spec.ts re-run green 2026-10-05 (browser, Auth ON, PostgreSQL — the submitter refused acceptance (403), acceptance by a Handover / FM principal with signed evidence, the service contract opened once with the customer and project lineage on the AMC screen), handover-amc-subscriber.test.ts (dates, calendar months, idempotency) and postgres-amc-contract-lineage.pg.test.ts. NOT PROVED / NOT BUILT: a defect inside the period is not distinguished from paid service work — the contract is 'Warranty & AMC' and its tickets carry no liability flag; the period's END has no consequence anywhere (no expiry, no final defects inspection, no release); release of retention at its end is COM-10 and the money side waits on AR-GL-01; a handover that states no period is given 12 months — configuration candidate CC-04, a company or contract term deferred to the Admin Center; no role-based proof of a defect raised and rectified within the period.";
+  Object.assign(c.layers, { domain:'PARTIAL', persistence:'COMPLETE', api:'PARTIAL', permissions:'PARTIAL', ui:'PARTIAL', actualOutput:'UNVERIFIED', browser:'PARTIAL', handoff:'COMPLETE' });
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

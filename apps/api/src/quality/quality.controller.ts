@@ -687,9 +687,18 @@ export class QualityController {
   }
 
   @Put('itps/:id/points/:index')
-  async recordItpPoint(@Param('id') id: string, @Param('index') index: string, @Body() dto: { result: PointResult }): Promise<Itp> {
+  async recordItpPoint(
+    @Param('id') id: string,
+    @Param('index') index: string,
+    @Body() dto: { result: PointResult; inspectionRequestId?: string | null; note?: string | null },
+  ): Promise<Itp> {
     if (dto?.result !== 'passed' && dto?.result !== 'failed') throw new BadRequestException("result must be 'passed' or 'failed'");
-    return await this.qualityService.recordItpPoint(this.tenant.get().tenantId, id, Number(index), dto.result);
+    const ctx = this.tenant.get();
+    // WHO RECORDED IT, and the inspection behind it (QHS-02) — both reached nothing before.
+    return await this.qualityService.recordItpPoint(ctx.tenantId, id, Number(index), dto.result, ctx.actorId ?? null, {
+      inspectionRequestId: typeof dto.inspectionRequestId === 'string' ? dto.inspectionRequestId : null,
+      note: typeof dto.note === 'string' ? dto.note : null,
+    });
   }
 
   @Put('itps/:id/close')

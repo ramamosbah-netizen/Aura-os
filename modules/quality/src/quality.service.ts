@@ -69,6 +69,7 @@ export const QUALITY_EVENT = {
   irApproved: 'quality.ir.approved',
   snagClosed: 'quality.snag.closed',
   itpCreated: 'quality.itp.created',
+  itpPointRecorded: 'quality.itp.point_recorded',
   itpClosed: 'quality.itp.closed',
   itpTemplatePublished: 'quality.itp_template.published',
   itpRevisionPrepared: 'quality.itp.revision_prepared',
@@ -824,11 +825,42 @@ export class QualityService {
     this.access.assert(actorId, { permission, orgPath, resource: { type: 'project', id: projectId } });
   }
 
-  async recordItpPoint(tenantId: Id, id: Id, pointIndex: number, result: PointResult): Promise<Itp> {
+  /**
+   * Record a result on one ITP point — who, when, and the inspection that evidences it (QHS-02).
+   * The cited inspection is read here, in this tenant, and judged by the plan's own rule.
+   */
+  async recordItpPoint(
+    tenantId: Id,
+    id: Id,
+    pointIndex: number,
+    result: PointResult,
+    actorId: Id | null = null,
+    evidence: { inspectionRequestId?: string | null; note?: string | null } = {},
+  ): Promise<Itp> {
     const itp = await this.itpStore.findById(id, tenantId);
     if (!itp) throw new Error(`ITP ${id} not found`);
-    const updated = recordPointResult(itp, pointIndex, result);
-    await this.tx.run(async (handle) => { await this.itpStore.save(updated, handle); });
+    let inspection: { id: string; irNumber: string; projectId: string; status: string } | null = null;
+    if (evidence.inspectionRequestId?.trim()) {
+      const ir = await this.irStore.findById(evidence.inspectionRequestId.trim(), tenantId);
+      if (!ir) throw new Error(`Inspection Request with ID ${evidence.inspectionRequestId} not found`);
+      inspection = { id: ir.id, irNumber: ir.irNumber, projectId: ir.projectId, status: ir.status };
+    }
+    const updated = recordPointResult(itp, pointIndex, result, { recordedBy: actorId, inspection, note: evidence.note ?? null });
+    const point = updated.points[pointIndex];
+    const event = makeEvent({
+      type: QUALITY_EVENT.itpPointRecorded,
+      tenantId: updated.tenantId, companyId: updated.companyId, actorId,
+      aggregateType: 'quality.itp', aggregateId: updated.id,
+      payload: {
+        reference: updated.reference, projectId: updated.projectId, pointIndex,
+        activity: point.activity, pointType: point.pointType, result,
+        inspectionRequestId: inspection?.id ?? null, inspectionRequestNumber: inspection?.irNumber ?? null,
+      },
+    });
+    await this.tx.run(async (handle) => {
+      await this.itpStore.save(updated, handle);
+      await this.events.appendWithClient(handle, [event]);
+    });
     return updated;
   }
 

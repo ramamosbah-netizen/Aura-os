@@ -146,8 +146,16 @@ test('a Quality ITP is linked, shown with Quality’s own result, and blocks unt
   await expect(page.getByTestId(`pre-gate-${code}-quality-state`)).toHaveText('BLOCKED');
   await expect(page.getByTestId(`pre-gate-${code}-quality`)).toContainText(/ITP point/i);
 
-  // Quality passes the point — in Quality, where it is owned. T&C never writes it.
-  await page.request.put(`${API}/api/v1/quality/itps/${itp.id}/points/0`, { headers: H(), data: { result: 'passed' } });
+  // Quality passes the point — in Quality, where it is owned. T&C never writes it. A HOLD point is
+  // released by its approved inspection (QHS-02), so the inspection is requested and approved first.
+  const ir = await (await page.request.post(`${API}/api/v1/quality/irs`, {
+    headers: H(),
+    data: { projectId, irNumber: `IR-${itpRef}`, discipline: 'ict', locationDetail: 'Comms room', inspectionDate: '2026-10-05' },
+  })).json() as { id: string };
+  const approvedIr = await page.request.put(`${API}/api/v1/quality/irs/${ir.id}/resolve`, { headers: H(), data: { status: 'approved' } });
+  expect(approvedIr.ok(), await approvedIr.text()).toBe(true);
+  const passed = await page.request.put(`${API}/api/v1/quality/itps/${itp.id}/points/0`, { headers: H(), data: { result: 'passed', inspectionRequestId: ir.id } });
+  expect(passed.ok(), await passed.text()).toBe(true);
   await page.reload({ waitUntil: 'domcontentloaded' });
   // A reload closes the disclosure — it is view state, not a filter.
   await page.getByTestId(`pre-open-${code}`).click();

@@ -117,7 +117,9 @@ describe('installation inspection keeps its own behaviour', () => {
     const plan = makeItp({ tenantId: 't1', projectId: 'p1', reference: 'ITP-INST', title: 'Containment', points: [{ activity: 'Tray fixing', pointType: 'hold' }] });
     expect(plan.kind).toBe('installation_inspection');
     const active = activateItp(plan, 'qa-1');
-    const recorded = recordPointResult(active, 0, 'passed');
+    const recorded = recordPointResult(active, 0, 'passed', {
+      recordedBy: 'qa-1', inspection: { id: 'ir-1', irNumber: 'IR-001', projectId: 'p1', status: 'approved' },
+    });
     expect(closeItp(recorded, 'qa-1').status).toBe('closed');
 
     const approved = approveSystemItp(submitSystemItp(prepared(), 'qa-1'), 'qa-2');

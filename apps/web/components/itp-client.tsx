@@ -2,10 +2,13 @@
 
 import ProjectPicker from './ui/project-picker';
 
-import { type CSSProperties, useState } from 'react';
+import { type CSSProperties, Fragment, useState } from 'react';
 import EmptyState from './ui/empty-state';
 
-interface ItpPoint { activity: string; pointType: string; acceptanceCriteria: string; result: string }
+/** One result recorded on a point — who, when, and the inspection behind it (QHS-02). */
+interface PointRecord { result: string; recordedBy: string | null; recordedAt: string; inspectionRequestId: string | null; inspectionRequestNumber: string | null; note: string | null }
+interface ItpPoint { activity: string; pointType: string; acceptanceCriteria: string; result: string; history?: PointRecord[] }
+interface Inspection { id: string; irNumber: string; status: string; locationDetail: string }
 interface Itp {
   id: string;
   projectId: string;
@@ -31,6 +34,18 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
   const [points, setPoints] = useState<DraftPoint[]>([emptyPoint()]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [error, setError] = useState('');
+  // The project's inspection requests, for citing the one that evidences a point (QHS-02).
+  const [inspections, setInspections] = useState<Record<string, Inspection[]>>({});
+  const [cited, setCited] = useState<Record<string, string>>({});
+
+  const expand = async (itp: Itp) => {
+    const next = expanded === itp.id ? null : itp.id;
+    setExpanded(next);
+    if (!next) return;
+    const res = await fetch(`/api/quality/irs?${new URLSearchParams({ projectId: itp.projectId })}`, { cache: 'no-store' });
+    const list = res.ok ? await res.json().catch(() => []) : [];
+    setInspections((m) => ({ ...m, [itp.projectId]: Array.isArray(list) ? (list as Inspection[]) : [] }));
+  };
 
   const setPoint = (i: number, k: keyof DraftPoint, v: string) => setPoints((p) => p.map((pt, idx) => (idx === i ? { ...pt, [k]: v } : pt)));
 
@@ -64,7 +79,8 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
   const recordPoint = async (id: string, index: number, result: 'passed' | 'failed') => {
     setError('');
     try {
-      const res = await fetch(`/api/quality/itps/${id}/points/${index}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ result }) });
+      const inspectionRequestId = cited[`${id}-${index}`] || null;
+      const res = await fetch(`/api/quality/itps/${id}/points/${index}`, { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ result, inspectionRequestId }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || data.error || 'Failed');
       setItps((p) => p.map((i) => (i.id === id ? data : i)));
@@ -96,7 +112,7 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
       <div style={{ marginTop: 10 }}>
         <button style={st.smGray} onClick={() => setPoints((p) => [...p, emptyPoint()])}>+ Add point</button>
         <button style={{ ...st.btn, marginLeft: 12 }} onClick={create}>Create ITP</button>
-        {error && <span style={st.err}>{error}</span>}
+        {error && <span style={st.err} role="alert" data-testid="itp-error">{error}</span>}
       </div>
 
       <h2 style={st.h2}>Plans</h2>
@@ -113,15 +129,15 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
             {itps.map((itp) => {
               const resolved = itp.points.filter((p) => p.result !== 'pending').length;
               return (
-                <>
+                <Fragment key={itp.id}>
                   <tr key={itp.id}>
-                    <td style={st.td}><button style={st.linkBtn} onClick={() => setExpanded(expanded === itp.id ? null : itp.id)}>{itp.reference}</button></td>
+                    <td style={st.td}><button style={st.linkBtn} data-testid={`itp-open-${itp.id}`} onClick={() => void expand(itp)}>{itp.reference}</button></td>
                     <td style={st.td}>{itp.title}</td>
                     <td style={st.td}>{itp.discipline}</td>
                     <td style={st.td}>{resolved}/{itp.points.length}</td>
                     <td style={{ ...st.td, color: statusColor[itp.status] || 'var(--text)', fontWeight: 600 }}>{itp.status}</td>
                     <td style={st.td}>
-                      {itp.status === 'draft' && <button style={st.sm} onClick={() => act(itp.id, 'activate')}>Activate</button>}
+                      {itp.status === 'draft' && <button style={st.sm} data-testid={`itp-activate-${itp.id}`} onClick={() => act(itp.id, 'activate')}>Activate</button>}
                       {itp.status === 'active' && <button style={st.smGreen} onClick={() => act(itp.id, 'close')}>Close</button>}
                     </td>
                   </tr>
@@ -131,28 +147,50 @@ export default function ItpClient({ initialItps }: { initialItps: Itp[] }) {
                         <table style={{ ...st.table, margin: 0 }}>
                           <thead><tr><th style={st.thSm}>Activity</th><th style={st.thSm}>Type</th><th style={st.thSm}>Criteria</th><th style={st.thSm}>Result</th><th style={st.thSm}></th></tr></thead>
                           <tbody>
-                            {itp.points.map((pt, idx) => (
-                              <tr key={idx}>
+                            {itp.points.map((pt, idx) => {
+                              const history = pt.history ?? [];
+                              const last = history[history.length - 1];
+                              const key = `${itp.id}-${idx}`;
+                              const projectIrs = inspections[itp.projectId] ?? [];
+                              return (
+                              <tr key={idx} data-testid={`itp-point-${key}`}>
                                 <td style={st.tdSm}>{pt.activity}</td>
                                 <td style={st.tdSm}>{pt.pointType}</td>
                                 <td style={st.tdSm}>{pt.acceptanceCriteria || '—'}</td>
-                                <td style={{ ...st.tdSm, color: resultColor[pt.result], fontWeight: 600 }}>{pt.result}</td>
+                                <td style={{ ...st.tdSm, color: resultColor[pt.result], fontWeight: 600 }}>
+                                  <span data-testid={`itp-result-${key}`}>{pt.result}</span>
+                                  {/* WHO, WHEN, AND ON WHAT INSPECTION — a result used to be a bare word. */}
+                                  {last && (
+                                    <div style={st.record} data-testid={`itp-record-${key}`}>
+                                      {last.recordedBy ?? 'not recorded'} · {last.recordedAt.slice(0, 10)}
+                                      {last.inspectionRequestNumber ? ` · ${last.inspectionRequestNumber}` : ' · no inspection cited'}
+                                      {history.length > 1 && ` · ${history.length} results recorded`}
+                                    </div>
+                                  )}
+                                </td>
                                 <td style={st.tdSm}>
-                                  {itp.status === 'active' && pt.result === 'pending' && (
+                                  {itp.status === 'active' && pt.result !== 'passed' && (
                                     <>
-                                      <button style={st.smGreen} onClick={() => recordPoint(itp.id, idx, 'passed')}>Pass</button>
-                                      <button style={st.smRed} onClick={() => recordPoint(itp.id, idx, 'failed')}>Fail</button>
+                                      <select style={{ ...st.input, minWidth: 160, fontSize: 12, padding: '3px 6px', marginRight: 6 }} data-testid={`itp-cite-${key}`}
+                                        value={cited[key] ?? ''} onChange={(e) => setCited((c) => ({ ...c, [key]: e.target.value }))}>
+                                        <option value="">{pt.pointType === 'hold' ? 'Inspection that released it…' : 'No inspection cited'}</option>
+                                        {projectIrs.map((ir) => <option key={ir.id} value={ir.id}>{ir.irNumber} · {ir.status}</option>)}
+                                      </select>
+                                      <button style={st.smGreen} data-testid={`itp-pass-${key}`} onClick={() => recordPoint(itp.id, idx, 'passed')}>Pass</button>
+                                      <button style={st.smRed} data-testid={`itp-fail-${key}`} onClick={() => recordPoint(itp.id, idx, 'failed')}>Fail</button>
+                                      {pt.pointType === 'hold' && <div style={st.record}>A hold point passes only on its approved inspection.</div>}
                                     </>
                                   )}
                                 </td>
                               </tr>
-                            ))}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })}
           </tbody>
@@ -180,4 +218,5 @@ const st = {
   td: { padding: '8px 12px', borderBottom: '1px solid var(--border, #e5e7eb)', verticalAlign: 'top' } as CSSProperties,
   thSm: { textAlign: 'left' as const, padding: '5px 10px', borderBottom: '1px solid var(--border, #e5e7eb)', fontWeight: 600, fontSize: 13 } as CSSProperties,
   tdSm: { padding: '5px 10px', borderBottom: '1px solid var(--border, #eef2f6)', fontSize: 13 } as CSSProperties,
+  record: { color: 'var(--muted)', fontWeight: 400, fontSize: 11.5, marginTop: 2 } as CSSProperties,
 };

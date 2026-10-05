@@ -3014,7 +3014,7 @@
       "stages": [
         "QA/QC & HSE"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Quality / HSE",
       "evidence": [
         "R-J26"
@@ -3022,16 +3022,17 @@
       "source": "apps/web/components/inspection-request-client.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative QA/QC, HSE, Site Engineer role executes ITP hold and witness points in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative QA/QC, HSE, Site Engineer role executes ITP hold and witness points in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "BUILT 2026-10-05. Every ITP point result keeps its history (who recorded it, when, the inspection request that evidences it, a note) and emits quality.itp.point_recorded in the same transaction. A PASSED point is final (409; a later failure is an NCR); a FAILED point may be re-inspected. A HOLD point passes only on an APPROVED inspection request of the same project — the plan author's own 'hold' declaration, enforced; any point may cite an inspection, checked the same way. The ITP screen lets QA/QC cite the project's inspection and shows each result's recorder, date and inspection. PROVED: itp.test.ts (hold refused without/with an unapproved/foreign inspection; history; final; re-inspection), wbs-itp-gate.test.ts (completion released via an approved inspection), and itp-hold-witness.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-qaqc activates on screen; the hold point is refused with no inspection and with u-e2e-site's requested-but-unapproved IR; u-e2e-site may not record a result (403); once approved, the hold point passes citing it and shows u-e2e-qaqc and the IR number; the witness point fails, is re-inspected and passes with both results kept; all survive a reload; re-recording a passed point is 409; u-e2e-site reads the release and who gave it; QA/QC closes the plan. commissioning-readiness.spec.ts re-run green (its hold point now passes on an approved IR). NOT PROVED: no printed or exported ITP record (actual output); HSE, named on the row, holds no ITP act; concurrent recordings on one plan are last-write-wins on the points document."
     },
     {
       "id": "QHS-03",
@@ -9422,7 +9423,7 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 75,
-      "PARTIAL": 84,
+      "PARTIAL": 85,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9431,7 +9432,7 @@
       "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 17,
+      "UNVERIFIED": 16,
       "NOT_AUDITED": 0
     },
     "gaps": 77,

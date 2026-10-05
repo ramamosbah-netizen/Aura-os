@@ -1795,6 +1795,18 @@ defects.push({
   Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
 }
 
+/**
+ * QHS-02 ITP HOLD AND WITNESS POINTS (2026-10-05). UNVERIFIED with no finding. Measured: recording a
+ * point result stored a bare status — no actor, no time, no inspection, no event — and a later write
+ * replaced it without trace, so a hold point could read "passed" with nobody and nothing behind it.
+ */
+{
+  const c = caps.find(c=>c.id==='QHS-02');
+  c.classification = 'PARTIAL';
+  c.currentBehavior = "BUILT 2026-10-05. Every ITP point result keeps its history (who recorded it, when, the inspection request that evidences it, a note) and emits quality.itp.point_recorded in the same transaction. A PASSED point is final (409; a later failure is an NCR); a FAILED point may be re-inspected. A HOLD point passes only on an APPROVED inspection request of the same project — the plan author's own 'hold' declaration, enforced; any point may cite an inspection, checked the same way. The ITP screen lets QA/QC cite the project's inspection and shows each result's recorder, date and inspection. PROVED: itp.test.ts (hold refused without/with an unapproved/foreign inspection; history; final; re-inspection), wbs-itp-gate.test.ts (completion released via an approved inspection), and itp-hold-witness.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-qaqc activates on screen; the hold point is refused with no inspection and with u-e2e-site's requested-but-unapproved IR; u-e2e-site may not record a result (403); once approved, the hold point passes citing it and shows u-e2e-qaqc and the IR number; the witness point fails, is re-inspected and passes with both results kept; all survive a reload; re-recording a passed point is 409; u-e2e-site reads the release and who gave it; QA/QC closes the plan. commissioning-readiness.spec.ts re-run green (its hold point now passes on an approved IR). NOT PROVED: no printed or exported ITP record (actual output); HSE, named on the row, holds no ITP act; concurrent recordings on one plan are last-write-wins on the points document.";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'UNVERIFIED', browser:'COMPLETE', handoff:'COMPLETE' });
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

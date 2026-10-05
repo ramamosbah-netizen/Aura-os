@@ -94,7 +94,12 @@ describe('WBS completion — ITP release gate', () => {
     const node = await makeNode();
     const itp = await makeActiveItp();
 
-    await quality.recordItpPoint(tenantId, itp.id, 0, 'passed');
+    // A hold point is released by its approved inspection (QHS-02), so the inspection comes first.
+    const ir = await quality.requestInspection({
+      tenantId, projectId, irNumber: 'IR-CIV-001', discipline: 'civil', locationDetail: 'Grid A1', inspectionDate: '2026-10-05',
+    });
+    await quality.resolveInspection(tenantId, 'u-qaqc', ir.id, 'approved');
+    await quality.recordItpPoint(tenantId, itp.id, 0, 'passed', 'u-qaqc', { inspectionRequestId: ir.id });
     const done = await wbs.updateProgress(node.id, 100);
     expect(done.status).toBe('completed');
     expect(done.earnedValue).toBe(1000);

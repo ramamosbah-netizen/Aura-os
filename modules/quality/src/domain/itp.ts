@@ -33,6 +33,32 @@ export interface ItpPoint {
   code?: string;
   method?: string | null;
   mandatory?: boolean;
+  /**
+   * EVERY RESULT RECORDED ON THIS POINT, oldest first (QHS-02). The current `result` is the last.
+   * Recording a result used to store a status and nothing else — not who, not when, not which
+   * inspection released it — and a later write replaced it without trace. Absent on points recorded
+   * before this existed, which is the honest reading of them: nobody knows.
+   */
+  history?: PointRecord[];
+}
+
+/** One result recorded on an ITP point: who recorded it, when, and the inspection that evidences it. */
+export interface PointRecord {
+  result: 'passed' | 'failed';
+  recordedBy: string | null;
+  recordedAt: string;
+  /** The inspection request that witnessed or released this point, when one was cited. */
+  inspectionRequestId: string | null;
+  inspectionRequestNumber: string | null;
+  note: string | null;
+}
+
+/** The facts about a cited inspection request the plan needs to judge it — read by the service. */
+export interface CitedInspection {
+  id: string;
+  irNumber: string;
+  projectId: string;
+  status: string;
 }
 
 export interface NewItpPoint {
@@ -161,16 +187,57 @@ export function activateItp(itp: Itp, actorId: string | null = null): Itp {
   return { ...itp, status: 'active', activatedBy: actorId, activatedAt: now, updatedAt: now };
 }
 
-/** Sign off a point (by index) as passed or failed. Only on an active ITP. */
-export function recordPointResult(itp: Itp, pointIndex: number, result: PointResult): Itp {
+/**
+ * Sign off a point (by index) as passed or failed. Only on an active ITP.
+ *
+ * QHS-02 — WHAT THE PLAN ALREADY SAYS, NOW HELD TO:
+ *   · who recorded the result and when, kept with every earlier result on the point;
+ *   · a PASSED point is final. A failure found afterwards is a nonconformance, raised as one, not a
+ *     quiet rewrite of a sign-off somebody relied on. A FAILED point may be re-inspected and pass;
+ *   · a HOLD point passes only on the APPROVED inspection request that released it, on this ITP's
+ *     project. "Hold" is the plan author's own statement that work stops until the inspection
+ *     releases it — a pass with no inspection behind it is the one thing that word rules out;
+ *   · any other point may cite the inspection that evidences it, and the citation is checked the
+ *     same way (this project; and approved, if it is cited for a pass).
+ */
+export function recordPointResult(
+  itp: Itp,
+  pointIndex: number,
+  result: PointResult,
+  record: { recordedBy?: string | null; inspection?: CitedInspection | null; note?: string | null } = {},
+): Itp {
   assertInstallationPlan(itp, 'recording a result on the plan');
   if (itp.status !== 'active') throw new Error('can only record results on an active ITP');
   if (result !== 'passed' && result !== 'failed') throw new Error("result must be 'passed' or 'failed'");
   if (!Number.isInteger(pointIndex) || pointIndex < 0 || pointIndex >= itp.points.length) {
     throw new Error(`pointIndex ${pointIndex} out of range`);
   }
-  const points = itp.points.map((p, i) => (i === pointIndex ? { ...p, result } : p));
-  return { ...itp, points, updatedAt: new Date().toISOString() };
+  const point = itp.points[pointIndex];
+  if (point.result === 'passed') {
+    throw new Error(`point ${pointIndex + 1} (${point.activity}) has already passed — a passed point is final; raise a later failure as an NCR`);
+  }
+  const inspection = record.inspection ?? null;
+  if (inspection) {
+    if (inspection.projectId !== itp.projectId) {
+      throw new Error(`inspection request ${inspection.irNumber} does not belong to this ITP's project`);
+    }
+    if (result === 'passed' && inspection.status !== 'approved') {
+      throw new Error(`inspection request ${inspection.irNumber} is not approved (status ${inspection.status}) — only an approved inspection can pass a point`);
+    }
+  } else if (point.pointType === 'hold' && result === 'passed') {
+    throw new Error(`an approved inspection request is required to pass hold point ${pointIndex + 1} (${point.activity}) — cite the inspection that released it`);
+  }
+  const now = new Date().toISOString();
+  const entry: PointRecord = {
+    result,
+    recordedBy: record.recordedBy ?? null,
+    recordedAt: now,
+    inspectionRequestId: inspection?.id ?? null,
+    inspectionRequestNumber: inspection?.irNumber ?? null,
+    note: record.note?.trim() || null,
+  };
+  const points = itp.points.map((p, i) => (i === pointIndex ? { ...p, result, history: [...(p.history ?? []), entry] } : p));
+  return { ...itp, points, updatedAt: now };
 }
 
 export function allPointsResolved(itp: Itp): boolean {

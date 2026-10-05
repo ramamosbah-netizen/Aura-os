@@ -1,6 +1,6 @@
 # Pinned verification queue
 
-18 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
+17 capability leaves require operational acceptance proof. These rows are classified scope, not confirmed missing functionality. A row may be promoted only after its required output, permission, UI and handoff evidence is saved.
 
 ## Closure updates
 
@@ -12,7 +12,6 @@ Wave 3 is **CLOSED / VERIFIED** for its bounded journey, proved iteration by ite
 | --- | --- | --- | --- | --- | --- | --- |
 | STU-07 | RFIs and clarifications | Pre-Sales / Estimator; Design / Technical Engineer; Technical Manager | Pre-Sales; Engineering | CRM solution scope / Tender pre-award | R-J1 | Representative Pre-Sales / Estimator, Design / Technical Engineer, Technical Manager role executes RFIs and clarifications in the canonical CRM solution scope / Tender pre-award context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | EST-07 | Logistics and landed cost | Pre-Sales / Estimator; Commercial Manager / QS; Technical Manager | Pre-Sales | Estimation core / Tender estimate / CRM pricing | N-EST; R-J1 | Representative Pre-Sales / Estimator, Commercial Manager / QS, Technical Manager role executes Logistics and landed cost in the canonical Estimation core / Tender estimate / CRM pricing context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
-| BUY-03 | RFQ dispatch | Procurement Manager / Buyer; Storekeeper | Procurement | Procurement / Inventory | R-J26 | Representative Procurement Manager / Buyer, Storekeeper role executes RFQ dispatch in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SIT-01 | Daily work allocation | Site Engineer; Project Engineer | Site; Progress | Site | R-J26 | Representative Site Engineer, Project Engineer role executes Daily work allocation in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | SIT-06 | Site report print | Site Engineer; Project Engineer | Site; Progress | Site | R-J26 | Representative Site Engineer, Project Engineer role executes Site report print in the canonical Site context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |
 | QHS-02 | ITP hold and witness points | QA/QC; HSE; Site Engineer | QA/QC & HSE | Quality / HSE | R-J26 | Representative QA/QC, HSE, Site Engineer role executes ITP hold and witness points in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved. |

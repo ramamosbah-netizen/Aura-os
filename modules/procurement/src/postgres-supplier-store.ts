@@ -88,6 +88,12 @@ export class PostgresSupplierStore implements SupplierStore {
     add('tenant_id', filter.tenantId);
     add('status', filter.status);
     add('category', filter.category);
+    const q = filter.q?.trim();
+    if (q) {
+      // The text is matched literally: a supplier called "100% Cables" is found by "100%".
+      params.push(`%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      where.push(`(name ILIKE $${params.length} OR code ILIKE $${params.length})`);
+    }
     return { whereSql: where.length ? `WHERE ${where.join(' AND ')}` : '', params };
   }
 

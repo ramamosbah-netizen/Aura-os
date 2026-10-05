@@ -1,15 +1,18 @@
-import { BadRequestException, Body, Controller, Get, Headers, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
+import { BadRequestException, Body, ConflictException, Controller, Delete, Get, Headers, HttpCode, NotFoundException, Param, Patch, Post, Query } from '@nestjs/common';
 import { IsNumber, IsOptional, IsString, IsIn } from 'class-validator';
-import { TenantContext, ApprovalMatrixService, Permissions, type ApprovalRule } from '@aura/core';
+import { TenantContext, ApprovalMatrixService, CompaniesService, Permissions, SettingsService, type ApprovalRule } from '@aura/core';
 import { parsePageParams, type Discipline } from '@aura/shared';
+import { resolveDocumentIdentity, type DocumentIdentity } from '../common/document-identity';
 import {
   type PurchaseOrder,
   type PurchaseOrderStatus,
   PurchaseOrderService,
   type PurchaseRequest,
   type PurchaseRequestStatus,
+  PurchaseRequestLineService,
   PurchaseRequestService,
   type Rfq,
+  type RfqInvitation,
   type RfqQuote,
   RfqService,
   type Supplier,
@@ -100,6 +103,10 @@ export class ProcurementController {
     private readonly suppliers: SupplierService,
     private readonly approvalMatrix: ApprovalMatrixService,
     private readonly tenant: TenantContext,
+    // The enquiry document (BUY-03): what is asked for, and who is asking.
+    private readonly prLines: PurchaseRequestLineService,
+    private readonly companies: CompaniesService,
+    private readonly settings: SettingsService,
   ) {}
 
   // ── APPROVAL MATRIX ──────────────────────────────────────────────────────
@@ -413,7 +420,7 @@ export class ProcurementController {
   }
 
   @Get('rfqs/:id')
-  async getRfq(@Param('id') id: string): Promise<{ rfq: Rfq; quotes: RfqQuote[] }> {
+  async getRfq(@Param('id') id: string): Promise<{ rfq: Rfq; quotes: RfqQuote[]; invitations: Array<RfqInvitation & { supplierStatus: string | null }> }> {
     const found = await this.rfqs.getWithQuotes(id);
     if (!found) throw new NotFoundException(`RFQ ${id} not found`);
     return found;
@@ -430,6 +437,67 @@ export class ProcurementController {
     const found = await this.rfqs.get(id);
     if (!found) throw new NotFoundException(`RFQ ${id} not found`);
     return this.rfqs.send(id, this.tenant.get().actorId ?? null);
+  }
+
+  /**
+   * ADDRESS THE ENQUIRY (BUY-03): ask a supplier from the register to quote. Preparing the enquiry is
+   * updating the RFQ, so it is governed by the name the Buyer and the Procurement Manager already hold.
+   */
+  @Post('rfqs/:id/invitations')
+  @Permissions('procurement.rfq.update')
+  async inviteSupplier(@Param('id') id: string, @Body() dto: { supplierId?: string }): Promise<RfqInvitation> {
+    if (!dto?.supplierId?.trim()) throw new BadRequestException('supplierId is required — an enquiry is addressed to a supplier from the register');
+    const found = await this.rfqs.get(id);
+    if (!found) throw new NotFoundException(`RFQ ${id} not found`);
+    return this.rfqs.invite(id, dto.supplierId.trim(), this.tenant.get().actorId ?? null);
+  }
+
+  /**
+   * THE ENQUIRY ONE SUPPLIER RECEIVES (BUY-03) — the source of the document the Buyer sends.
+   *
+   * Only once the RFQ is sent, and only to a supplier it was sent to: a draft is not an enquiry, and
+   * a document addressed to somebody never asked would be a second, unrecorded dispatch. It carries
+   * what is asked for — item, specification, quantity, unit, needed-by — and NOTHING internal: no
+   * estimated cost, no cost or work-breakdown coding. A supplier who reads our estimate prices to it.
+   */
+  @Get('rfqs/:id/enquiry')
+  @Permissions('procurement.rfq.read')
+  async enquiry(@Param('id') id: string, @Query('supplierId') supplierId?: string): Promise<{
+    rfq: Pick<Rfq, 'id' | 'reference' | 'title' | 'dueDate' | 'sentAt'>;
+    supplier: { id: string; name: string; invitedAt: string };
+    lines: Array<{ lineNo: number; materialCode: string; materialName: string; specification: string | null; manufacturer: string | null; model: string | null; quantity: number; uom: string; needByDate: string | null }>;
+    issuer: DocumentIdentity;
+  }> {
+    if (!supplierId?.trim()) throw new BadRequestException('supplierId is required — an enquiry is addressed to one supplier');
+    const found = await this.rfqs.getWithQuotes(id);
+    if (!found) throw new NotFoundException(`RFQ ${id} not found`);
+    const { rfq, invitations } = found;
+    if (rfq.status === 'draft') {
+      throw new ConflictException('only a sent enquiry can be issued to a supplier — send the RFQ first');
+    }
+    const invitation = invitations.find((i) => i.supplierId === supplierId.trim());
+    if (!invitation) throw new NotFoundException(`supplier ${supplierId} was not sent this enquiry`);
+    const lines = rfq.prId ? await this.prLines.listLines(rfq.prId) : [];
+    return {
+      rfq: { id: rfq.id, reference: rfq.reference, title: rfq.title, dueDate: rfq.dueDate, sentAt: rfq.sentAt },
+      supplier: { id: invitation.supplierId, name: invitation.supplierName, invitedAt: invitation.invitedAt },
+      lines: lines.map((l) => ({
+        lineNo: l.lineNo, materialCode: l.materialCode, materialName: l.materialName,
+        specification: l.specification, manufacturer: l.manufacturer, model: l.model,
+        quantity: l.quantity, uom: l.uom, needByDate: l.needByDate,
+      })),
+      issuer: await resolveDocumentIdentity(this.companies, this.settings, rfq.tenantId, rfq.companyId ?? null),
+    };
+  }
+
+  /** Withdraw an invitation — while the RFQ is a draft only; once sent, who it went to stays. */
+  @Delete('rfqs/:id/invitations/:supplierId')
+  @Permissions('procurement.rfq.update')
+  @HttpCode(204)
+  async withdrawInvitation(@Param('id') id: string, @Param('supplierId') supplierId: string): Promise<void> {
+    const found = await this.rfqs.get(id);
+    if (!found) throw new NotFoundException(`RFQ ${id} not found`);
+    await this.rfqs.withdrawInvitation(id, supplierId);
   }
 
   @Post('rfqs/:id/quotes')
@@ -523,9 +591,11 @@ export class ProcurementController {
     @Query('category') category?: SupplierCategory,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    // Name or code contains — how the enquiry's supplier picker finds one supplier among thousands.
+    @Query('q') q?: string,
   ) {
     return this.suppliers.listPaged(
-      { tenantId: this.tenant.get().tenantId, status, category },
+      { tenantId: this.tenant.get().tenantId, status, category, q },
       parsePageParams(limit, offset),
     );
   }

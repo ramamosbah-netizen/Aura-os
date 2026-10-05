@@ -1,7 +1,7 @@
 import type { Pool } from 'pg';
 import type { Id, Page, PageParams } from '@aura/shared';
 import { makePage } from '@aura/shared';
-import type { Rfq, RfqQuote } from './domain/rfq';
+import type { Rfq, RfqInvitation, RfqQuote } from './domain/rfq';
 import type { RfqFilter, RfqStore } from './rfq-store';
 
 interface RfqRow {
@@ -45,6 +45,18 @@ interface QuoteRow {
 const RFQ_COLS =
   'id, tenant_id, company_id, reference, title, pr_id, pr_title, status, due_date, owner_id, created_by, created_at, sent_by, sent_at';
 const QUOTE_COLS = 'id, rfq_id, tenant_id, company_id, supplier_name, supplier_id, amount, currency, tax_treatment, tax_rate_pct, freight_amount, freight_terms, payment_terms, validity_date, lead_time_days, notes, status, created_at';
+
+interface InvitationRow {
+  id: string;
+  tenant_id: string;
+  rfq_id: string;
+  supplier_id: string;
+  supplier_name: string;
+  invited_by: string | null;
+  invited_at: Date | string;
+}
+
+const INVITATION_COLS = 'id, tenant_id, rfq_id, supplier_id, supplier_name, invited_by, invited_at';
 
 const iso = (v: Date | string): string => (v instanceof Date ? v.toISOString() : String(v));
 
@@ -192,5 +204,35 @@ export class PostgresRfqStore implements RfqStore {
       [rfqId],
     );
     return res.rows.map(rowToQuote);
+  }
+
+  async addInvitation(i: RfqInvitation): Promise<void> {
+    await this.pool.query(
+      `INSERT INTO public.aura_procurement_rfq_invitations (${INVITATION_COLS}) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [i.id, i.tenantId, i.rfqId, i.supplierId, i.supplierName, i.invitedBy, i.invitedAt],
+    );
+  }
+
+  async removeInvitation(rfqId: Id, supplierId: Id): Promise<void> {
+    await this.pool.query(
+      'DELETE FROM public.aura_procurement_rfq_invitations WHERE rfq_id = $1 AND supplier_id = $2',
+      [rfqId, supplierId],
+    );
+  }
+
+  async listInvitations(rfqId: Id): Promise<RfqInvitation[]> {
+    const res = await this.pool.query<InvitationRow>(
+      `SELECT ${INVITATION_COLS} FROM public.aura_procurement_rfq_invitations WHERE rfq_id = $1 ORDER BY invited_at ASC, id ASC`,
+      [rfqId],
+    );
+    return res.rows.map((r) => ({
+      id: r.id,
+      tenantId: r.tenant_id,
+      rfqId: r.rfq_id,
+      supplierId: r.supplier_id,
+      supplierName: r.supplier_name,
+      invitedBy: r.invited_by,
+      invitedAt: iso(r.invited_at),
+    }));
   }
 }

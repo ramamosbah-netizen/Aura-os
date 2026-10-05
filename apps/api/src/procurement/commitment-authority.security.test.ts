@@ -5,7 +5,7 @@ import { permissionMatches } from '@aura/shared';
 import { ELV_ROLE_MATRIX } from '../auth/elv-roles';
 import { classifyDomainMessage } from '../common/all-exceptions.filter';
 import {
-  activateAgreement, activationSeparation, sendRfq, terminateAgreement,
+  activateAgreement, activationSeparation, assertInvitationsEditable, inviteSupplier, sendRfq, terminateAgreement,
   type FrameworkAgreement, type Rfq,
 } from '@aura/procurement';
 import { FrameworkAgreementsController } from './framework-agreements.controller';
@@ -126,11 +126,32 @@ describe('procurement commitments — the state machine', () => {
   it('will not send the same enquiry twice', () => {
     // `send` had no state guard: re-sending re-set the status and emitted a second `rfqSent`, so an
     // RFQ could be "sent" any number of times with no record of which one suppliers answered.
-    const sent = sendRfq(rfq(), 'u-buyer');
+    const draft = rfq();
+    const invited = [inviteSupplier(draft, { id: 'sup-1', name: 'Gulf Cables' }, [], 'u-buyer')];
+    const sent = sendRfq(draft, 'u-buyer', invited);
     expect(sent).toMatchObject({ status: 'sent', sentBy: 'u-buyer' });
     expect(sent.sentAt).not.toBeNull();
-    expect(() => sendRfq(sent, 'u-buyer')).toThrow(/only a draft RFQ can be sent/);
+    expect(() => sendRfq(sent, 'u-buyer', invited)).toThrow(/only a draft RFQ can be sent/);
     expect(classifyDomainMessage('only a draft RFQ can be sent (status X)').status).toBe(409);
+  });
+
+  it('will not send an enquiry to nobody, nor re-address one already sent (BUY-03)', () => {
+    const draft = rfq();
+    expect(() => sendRfq(draft, 'u-buyer', [])).toThrow(/no supplier is invited/);
+    const invited = [inviteSupplier(draft, { id: 'sup-1', name: 'Gulf Cables' }, [], 'u-buyer')];
+    const sent = sendRfq(draft, 'u-buyer', invited);
+    // Every refusal reaches the caller as a state conflict, never as a server fault or bad input.
+    for (const refuse of [
+      () => sendRfq(draft, 'u-buyer', []),
+      () => inviteSupplier(draft, { id: 'sup-1', name: 'Gulf Cables' }, invited, 'u-buyer'),
+      () => inviteSupplier(sent, { id: 'sup-2', name: 'Acme' }, invited, 'u-buyer'),
+      () => assertInvitationsEditable(sent),
+    ]) {
+      let message = '';
+      try { refuse(); } catch (e) { message = (e as Error).message; }
+      expect(message, 'it refuses').not.toBe('');
+      expect(classifyDomainMessage(message).status, message).toBe(409);
+    }
   });
 
   it('says unverifiable only where the agreement genuinely has no creator', () => {

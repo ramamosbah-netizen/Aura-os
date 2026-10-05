@@ -402,7 +402,7 @@
 | Procurement | SUP-14 | COMPLETE |
 | Procurement | BUY-01 | COMPLETE |
 | Procurement | BUY-02 | PARTIAL |
-| Procurement | BUY-03 | UNVERIFIED |
+| Procurement | BUY-03 | COMPLETE |
 | Procurement | BUY-04 | COMPLETE |
 | Procurement | BUY-05 | COMPLETE |
 | Procurement | BUY-06 | COMPLETE |

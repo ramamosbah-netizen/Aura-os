@@ -1,5 +1,5 @@
 import type { Id, Page, PageParams } from '@aura/shared';
-import type { Rfq, RfqQuote } from './domain/rfq';
+import type { Rfq, RfqInvitation, RfqQuote } from './domain/rfq';
 
 /** DI token for the RFQ store. */
 export const RFQ_STORE = Symbol('RFQ_STORE');
@@ -30,4 +30,9 @@ export interface RfqStore {
   updateQuote(quote: RfqQuote): Promise<void>;
   getQuote(id: Id): Promise<RfqQuote | null>;
   listQuotes(rfqId: Id): Promise<RfqQuote[]>;
+
+  /** Who the enquiry is (or was) sent to, in the order they were invited (BUY-03). */
+  addInvitation(invitation: RfqInvitation): Promise<void>;
+  removeInvitation(rfqId: Id, supplierId: Id): Promise<void>;
+  listInvitations(rfqId: Id): Promise<RfqInvitation[]>;
 }

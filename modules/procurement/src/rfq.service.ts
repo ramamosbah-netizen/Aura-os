@@ -4,13 +4,17 @@ import { AccessService, EVENT_STORE, type EventStore, TenantContext } from '@aur
 import {
   RFQ_EVENT,
   type Rfq,
+  type RfqInvitation,
   type RfqQuote,
   type NewRfq,
   type NewRfqQuote,
+  assertInvitationsEditable,
+  inviteSupplier,
   makeRfq,
   makeRfqQuote, sendRfq } from './domain/rfq';
 import { RFQ_STORE, type RfqFilter, type RfqStore } from './rfq-store';
 import { PURCHASE_REQUEST_STORE, type PurchaseRequestStore } from './purchase-request-store';
+import { SUPPLIER_STORE, type SupplierStore } from './supplier-store';
 
 /**
  * RFQ service — the sourcing step (PR → RFQ → quotes → award → PO). Owns
@@ -31,6 +35,8 @@ export class RfqService {
     // Needed only to resolve an RFQ to a project: an RFQ carries `prId`, never `projectId`.
     // Same module, so no ADR-0004 edge — Procurement reading its own request register.
     @Optional() @Inject(PURCHASE_REQUEST_STORE) private readonly requests: PurchaseRequestStore | null = null,
+    // The supplier master, read to address an enquiry to a supplier that exists (BUY-03). Same module.
+    @Optional() @Inject(SUPPLIER_STORE) private readonly suppliers: SupplierStore | null = null,
     // NO PURCHASE-ORDER SERVICE. It was injected here so `award` could raise an order from the
     // winning quote's header number; that authority moved to `SourcingAwardService` (SUP-14), which
     // raises one order per supplier from the offer revision an approved recommendation selected.
@@ -65,7 +71,8 @@ export class RfqService {
 
   async send(id: Id, sentBy: Id | null = null): Promise<Rfq> {
     const existing = assertSameTenant(await this.store.get(id), this.tenant?.boundTenantId(), 'RFQ', id);
-    const updated: Rfq = sendRfq(existing, sentBy);
+    const invitations = await this.store.listInvitations(id);
+    const updated: Rfq = sendRfq(existing, sentBy, invitations);
     await this.store.update(updated);
     await this.events.append([
       makeEvent({
@@ -75,11 +82,56 @@ export class RfqService {
         actorId: sentBy,
         aggregateType: 'procurement.rfq',
         aggregateId: updated.id,
-        payload: { title: updated.title, status: updated.status },
+        // WHO IT WENT TO, on the event as well as the record: the spine is read as the history.
+        payload: {
+          title: updated.title,
+          status: updated.status,
+          suppliers: invitations.map((i) => ({ id: i.supplierId, name: i.supplierName })),
+        },
       }),
     ]);
-    this.logger.log(`RFQ ${updated.title} (${updated.id}) sent to vendors`);
+    this.logger.log(`RFQ ${updated.title} (${updated.id}) sent to ${invitations.length} supplier(s)`);
     return updated;
+  }
+
+  /**
+   * ASK A SUPPLIER TO QUOTE (BUY-03). The supplier must be one from this tenant's master: an enquiry
+   * addressed to a typed name cannot be matched to the quotation that answers it.
+   *
+   * The supplier's approval status is NOT a condition. The existing authority refuses an unapproved
+   * supplier where the business commits — a purchase order or a framework agreement — and asking for
+   * a price commits nothing. The status travels with the invitation so the screen can say so.
+   */
+  async invite(rfqId: Id, supplierId: Id, invitedBy: Id | null): Promise<RfqInvitation> {
+    const rfq = assertSameTenant(await this.store.get(rfqId), this.tenant?.boundTenantId(), 'RFQ', rfqId);
+    if (!this.suppliers) throw new Error('the supplier register is unavailable, so no supplier can be invited');
+    const supplier = sameTenantOrNull(await this.suppliers.get(supplierId), rfq.tenantId);
+    if (!supplier) throw new Error(`supplier ${supplierId} not found`);
+    const invitation = inviteSupplier(rfq, supplier, await this.store.listInvitations(rfqId), invitedBy);
+    await this.store.addInvitation(invitation);
+    this.logger.log(`RFQ ${rfq.id}: ${supplier.name} invited to quote`);
+    return invitation;
+  }
+
+  async withdrawInvitation(rfqId: Id, supplierId: Id): Promise<void> {
+    const rfq = assertSameTenant(await this.store.get(rfqId), this.tenant?.boundTenantId(), 'RFQ', rfqId);
+    assertInvitationsEditable(rfq);
+    if (!(await this.store.listInvitations(rfqId)).some((i) => i.supplierId === supplierId)) {
+      throw new Error(`invitation for supplier ${supplierId} not found on this enquiry`);
+    }
+    await this.store.removeInvitation(rfqId, supplierId);
+  }
+
+  /**
+   * Who the enquiry is addressed to, each with the supplier's CURRENT approval status — a fact the
+   * buyer should see before placing an order with them, read live rather than snapshotted.
+   */
+  async invitations(rfqId: Id): Promise<Array<RfqInvitation & { supplierStatus: string | null }>> {
+    const list = await this.store.listInvitations(rfqId);
+    return Promise.all(list.map(async (i) => ({
+      ...i,
+      supplierStatus: this.suppliers ? (await this.suppliers.get(i.supplierId))?.status ?? null : null,
+    })));
   }
 
   async addQuote(input: NewRfqQuote): Promise<RfqQuote> {
@@ -127,10 +179,10 @@ export class RfqService {
    * The RFQ with its legacy quotes. It no longer returns a `recommended` quote: that field was
    * `lowestQuote`, and a sort by an incomparable number is not a recommendation (SUP-13).
    */
-  async getWithQuotes(id: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[] } | null> {
+  async getWithQuotes(id: Id): Promise<{ rfq: Rfq; quotes: RfqQuote[]; invitations: Array<RfqInvitation & { supplierStatus: string | null }> } | null> {
     const rfq = await this.store.get(id);
     if (!rfq) return null;
-    return { rfq, quotes: await this.store.listQuotes(id) };
+    return { rfq, quotes: await this.store.listQuotes(id), invitations: await this.invitations(id) };
   }
 
   /**

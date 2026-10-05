@@ -2605,7 +2605,7 @@
       "stages": [
         "Procurement"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Procurement / Inventory",
       "evidence": [
         "R-J26"
@@ -2613,16 +2613,17 @@
       "source": "apps/api/test/depth-audit-probe.e2e-spec.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative Procurement Manager / Buyer, Storekeeper role executes RFQ dispatch in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Procurement Manager / Buyer, Storekeeper role executes RFQ dispatch in the canonical Procurement / Inventory context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "BUILT 2026-10-05. An enquiry names the suppliers it is sent to (migration 0407, aura_procurement_rfq_invitations under forced RLS: the canonical supplier with its name as a snapshot, who invited it and when). Suppliers are found in the register by name or code (a paged search, never the capped list) and invited while the RFQ is a draft; a draft is corrected by removing one; once sent, who it went to is history and both acts are refused (409). Sending refuses an RFQ with no invitation (409) and records the suppliers on the record and on the procurement.rfq.sent event. Asking for a price is NOT gated on supplier approval — the existing authority refuses an unapproved supplier where the business commits (order, framework agreement) — so the screen says instead that a pending supplier cannot yet be ordered from. OUTPUT: each invited supplier's enquiry is a PDF (GET procurement/rfqs/:id/enquiry, rendered by the web route) addressed to that supplier from the issuing company (F-01's document identity), with reference, subject, issue and due dates and every requested item with quantity, unit and needed-by; it carries NO internal estimate and no cost coding, and is issued only for a sent RFQ and only to a supplier it was sent to (404 otherwise). RECEIPT: the RFQ screen tells every reader who it went to, when and by whom; the quotation-capture screen lists the suppliers asked, which have and have not answered, and records an invited supplier's reply against that supplier's master record (a reply from a supplier never asked is marked so). PROVED: rfq.test.ts (refuses to send to nobody; event names the suppliers; only this tenant's register, once; approval not required and shown; draft corrected, history kept), procurement-commitment-authority.e2e-spec.ts (Auth ON: to nobody 409, invite 201, send 200, twice 409), and rfq-dispatch.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-buyer finds and invites two suppliers on screen, the list survives a reload, one is removed and re-invited, the pending one is marked; send is not offered until someone is invited; u-e2e-storekeeper is refused invite and send (403); an unknown supplier is 404; no enquiry for a draft (409); sent, with 'by u-e2e-buyer'; second send, late invite and withdrawal after sending refused (409); the approved supplier's enquiry downloads from the screen as a PDF naming that supplier, the issuer, the reference, both items with quantities and dates, and neither the other supplier nor the 7,777.77 estimate; none for a supplier never asked (404); u-e2e-procmgr sees 'Sent to 2 suppliers' with both names; on capture both read 'no quotation recorded yet' until the Buyer records the approved supplier's reply, which is stored against its supplier id. tender-real-supply-path.spec.ts and tender-compliance-matrix.spec.ts now invite before sending and stay green; quotation-capture.spec.ts re-run green. LIMIT: AURA produces and records the enquiry; carrying it to the supplier is the Buyer's, outside AURA, until an external mail provider exists (F-05)."
     },
     {
       "id": "BUY-04",
@@ -9420,7 +9421,7 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 74,
+      "COMPLETE": 75,
       "PARTIAL": 84,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
@@ -9430,7 +9431,7 @@
       "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 18,
+      "UNVERIFIED": 17,
       "NOT_AUDITED": 0
     },
     "gaps": 77,

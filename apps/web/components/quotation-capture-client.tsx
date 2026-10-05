@@ -77,7 +77,7 @@ interface OfferWithHistory {
 }
 
 interface Family {
-  family: { id: string; supplierName: string; supplierQuotationRef: string | null };
+  family: { id: string; supplierId?: string | null; supplierName: string; supplierQuotationRef: string | null };
   offers: OfferWithHistory[];
 }
 
@@ -91,6 +91,9 @@ const BLANK_LINE = {
   quantity: '', unitPrice: '', lineDiscount: '', leadTimeDays: '', warrantyMonths: '', deviations: '', commercialDeviation: '',
   exclusions: '',
 };
+
+/** A supplier the enquiry was sent to (BUY-03). */
+interface Invitation { supplierId: string; supplierName: string; invitedAt: string }
 
 const show = (v: string | number | null) => (v === null || v === '' ? '—' : String(v));
 
@@ -107,6 +110,8 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
   const [lines, setLines] = useState<Record<string, Line[]>>({});
   const [openLines, setOpenLines] = useState<string | null>(null);
   const [lineFacts, setLineFacts] = useState({ ...BLANK_LINE });
+  // Who the enquiry was sent to — so the person recording replies sees who has not answered.
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
 
   const call = useCallback(async (path: string, init?: RequestInit): Promise<unknown | null> => {
     setBusy(true); setErr(null);
@@ -136,6 +141,7 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
   const loadRequirements = useCallback(async () => {
     try {
       const rfq = await (await fetch(`/api/procurement/rfqs/${rfqId}`)).json();
+      if (Array.isArray(rfq?.invitations)) setInvitations(rfq.invitations as Invitation[]);
       const prId = rfq?.rfq?.prId ?? rfq?.prId;
       if (!prId) return;
       const body = await (await fetch(`/api/procurement/purchase-requests/${prId}/lines`)).json();
@@ -157,6 +163,15 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
       body: JSON.stringify({ rfqId, supplierName: supplierName.trim(), supplierQuotationRef: supplierRef.trim() || null }),
     });
     if (created) { setSupplierName(''); setSupplierRef(''); await reload(); }
+  }
+
+  /** A reply from a supplier the enquiry was sent to, recorded against that supplier's master record. */
+  async function recordInvited(invitation: Invitation) {
+    const created = await call('families', {
+      method: 'POST',
+      body: JSON.stringify({ rfqId, supplierId: invitation.supplierId, supplierName: invitation.supplierName }),
+    });
+    if (created) await reload();
   }
 
   async function captureRevision(offerId: string) {
@@ -235,6 +250,29 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
         </div>
       </div>
 
+      {invitations.length > 0 && (
+        <div style={s.panel} data-testid="invited-suppliers">
+          <div style={s.label}>Asked to quote on this enquiry</div>
+          {invitations.map((invitation) => {
+            const answered = families?.some(({ family }) => family.supplierId === invitation.supplierId) ?? false;
+            return (
+              <div key={invitation.supplierId} style={s.row} data-testid={`invited-${invitation.supplierId}`}>
+                <strong style={{ minWidth: 220 }}>{invitation.supplierName}</strong>
+                <span style={s.muted} data-testid={`invited-state-${invitation.supplierId}`}>
+                  {answered ? 'quotation recorded' : 'no quotation recorded yet'}
+                </span>
+                {!answered && (
+                  <button type="button" className="btn btn-ghost" style={s.sm} disabled={busy}
+                    data-testid={`record-invited-${invitation.supplierId}`} onClick={() => recordInvited(invitation)}>
+                    Record their quotation
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {families === null && <div style={s.muted}>Loading quotations…</div>}
       {families?.length === 0 && (
         <div style={s.panel} data-testid="no-quotations">
@@ -248,6 +286,9 @@ export default function QuotationCaptureClient({ rfqId }: { rfqId: string }) {
             <div>
               <strong style={{ fontSize: 15 }}>{family.supplierName}</strong>
               <span style={s.muted}>  {family.supplierQuotationRef ? `· ${family.supplierQuotationRef}` : '· no supplier reference given'}</span>
+              {invitations.length > 0 && !invitations.some((i) => i.supplierId === family.supplierId) && (
+                <span style={s.muted} data-testid={`family-not-invited-${family.id}`}>  · not among the suppliers this enquiry was sent to</span>
+              )}
             </div>
             <button type="button" className="btn btn-ghost" style={s.sm}
               data-testid={`add-alternative-${family.id}`} onClick={() => addAlternative(family.id)}>+ Alternative offer</button>

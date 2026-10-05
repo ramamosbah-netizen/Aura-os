@@ -7,6 +7,8 @@ export interface SupplierFilter {
   tenantId?: string;
   status?: SupplierStatus;
   category?: SupplierCategory;
+  /** Name or code contains this text, case-insensitive — how a picker finds one of thousands. */
+  q?: string;
   limit?: number;
 }
 

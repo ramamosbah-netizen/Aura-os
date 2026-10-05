@@ -146,9 +146,18 @@ test.describe('EST-12 — the Technical Compliance Matrix is issued, filed and r
     const camLine = lines.find((l) => l.sourceBoqItemId === camera.id)!;
     const cblLine = lines.find((l) => l.sourceBoqItemId === cable.id)!;
     const rfq = await call<{ id: string }>('buyer', 'POST', '/procurement/rfqs', { title: `Pricing RFQ ${run}`, prId: requisition.id });
+    // The enquiry names who it goes to (BUY-03).
+    const suppliers = new Map<string, { id: string }>();
+    const supplierOf = async (name: string, code: string) => {
+      if (!suppliers.has(code)) suppliers.set(code, await call<{ id: string }>('buyer', 'POST', '/procurement/suppliers', { code: `${code}-${run}`, name, category: 'materials' }));
+      return suppliers.get(code)!;
+    };
+    for (const [name, code] of [['Gulf Security Systems', 'GSS'], ['Al Noor Technologies', 'ANT']]) {
+      await call('buyer', 'POST', `/procurement/rfqs/${rfq.id}/invitations`, { supplierId: (await supplierOf(name, code)).id });
+    }
     await call('buyer', 'PATCH', `/procurement/rfqs/${rfq.id}/send`);
     const quote = async (name: string, code: string, offers: Array<{ line: typeof camLine; price: number; make: string; model: string; claim: string; deviations?: string }>) => {
-      const supplier = await call<{ id: string }>('buyer', 'POST', '/procurement/suppliers', { code: `${code}-${run}`, name, category: 'materials' });
+      const supplier = await supplierOf(name, code);
       const family = await call<{ baseOffer: { id: string } }>('buyer', 'POST', '/procurement/quotations/families', { rfqId: rfq.id, supplierName: name, supplierId: supplier.id, supplierQuotationRef: `${code}-Q-${run}` });
       const revision = await call<{ id?: string; revision?: { id: string } }>('buyer', 'POST', `/procurement/quotations/offers/${family.baseOffer.id}/revisions`, {
         supplierRevisionRef: 'Rev 1', receivedAt: today, quotationDate: today, validityDate: in30, currency: 'AED', taxTreatment: 'exclusive', taxRatePct: 5, paymentTerms: '30 days',

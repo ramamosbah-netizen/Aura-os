@@ -21,9 +21,33 @@ interface Quote {
   status: string;
 }
 
+/** A supplier this enquiry is (or was) sent to — BUY-03. */
+interface Invitation {
+  supplierId: string;
+  supplierName: string;
+  invitedAt: string;
+  /** The supplier's approval as it stands now; asking for a price does not need it, ordering does. */
+  supplierStatus: string | null;
+}
+
+interface SupplierHit {
+  id: string;
+  code: string;
+  name: string;
+  status: string;
+}
+
 interface Detail {
-  rfq: Rfq;
+  rfq: Rfq & { sentAt?: string | null; sentBy?: string | null };
   quotes: Quote[];
+  invitations?: Invitation[];
+}
+
+/** What the API said, so a refusal reads as the reason rather than as nothing happening. */
+async function reason(res: Response, fallback: string): Promise<string> {
+  const body = (await res.json().catch(() => ({}))) as { message?: string | string[]; error?: string };
+  const message = Array.isArray(body.message) ? body.message.join('; ') : body.message;
+  return message || body.error || fallback;
 }
 
 function money(n: number): string {
@@ -37,6 +61,10 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  // Addressing and sending the enquiry (BUY-03).
+  const [dispatchErr, setDispatchErr] = useState('');
+  const [supplierQuery, setSupplierQuery] = useState('');
+  const [hits, setHits] = useState<SupplierHit[]>([]);
 
   // add-quote form
   const [supplier, setSupplier] = useState('');
@@ -79,6 +107,9 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
     }
     setOpenId(id);
     setDetail(null);
+    setDispatchErr('');
+    setSupplierQuery('');
+    setHits([]);
     const res = await fetch(`/api/procurement/rfqs/${id}`);
     if (res.ok) setDetail(await res.json());
   }
@@ -90,7 +121,37 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
   }
 
   async function send(id: string): Promise<void> {
-    await fetch(`/api/procurement/rfqs/${id}/send`, { method: 'PATCH' });
+    setDispatchErr('');
+    const res = await fetch(`/api/procurement/rfqs/${id}/send`, { method: 'PATCH' });
+    if (!res.ok) setDispatchErr(await reason(res, 'The enquiry could not be sent'));
+    await reloadDetail(id);
+  }
+
+  /** Suppliers from the register whose name or code contains the text — never a capped list. */
+  async function searchSuppliers(text: string): Promise<void> {
+    setSupplierQuery(text);
+    if (!text.trim()) { setHits([]); return; }
+    const res = await fetch(`/api/procurement/suppliers/search?${new URLSearchParams({ q: text.trim(), limit: '20' })}`);
+    const page = (await res.json().catch(() => ({}))) as { items?: SupplierHit[] };
+    setHits(res.ok && Array.isArray(page.items) ? page.items : []);
+  }
+
+  async function invite(id: string, supplierId: string): Promise<void> {
+    setDispatchErr('');
+    const res = await fetch(`/api/procurement/rfqs/${id}/invitations`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ supplierId }),
+    });
+    if (!res.ok) setDispatchErr(await reason(res, 'The supplier could not be invited'));
+    else { setSupplierQuery(''); setHits([]); }
+    await reloadDetail(id);
+  }
+
+  async function withdraw(id: string, supplierId: string): Promise<void> {
+    setDispatchErr('');
+    const res = await fetch(`/api/procurement/rfqs/${id}/invitations/${encodeURIComponent(supplierId)}`, { method: 'DELETE' });
+    if (!res.ok) setDispatchErr(await reason(res, 'The invitation could not be withdrawn'));
     await reloadDetail(id);
   }
 
@@ -100,7 +161,7 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
       return;
     }
     setErr('');
-    await fetch(`/api/procurement/rfqs/${id}/quotes`, {
+    const res = await fetch(`/api/procurement/rfqs/${id}/quotes`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -109,6 +170,9 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
         leadTimeDays: lead ? Number(lead) : null,
       }),
     });
+    // A refused quote used to clear the form as if it had been recorded (the API refuses a header
+    // lead time, for one, and says where it belongs).
+    if (!res.ok) { setErr(await reason(res, 'The quote could not be recorded')); return; }
     setSupplier('');
     setAmount('');
     setLead('');
@@ -137,10 +201,10 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
         ) : (
           rfqs.map((r) => (
             <li key={r.id} style={s.rfqCard}>
-              <button type="button" style={s.rfqHead} onClick={() => open(r.id)}>
+              <button type="button" style={s.rfqHead} data-testid={`rfq-open-${r.id}`} onClick={() => open(r.id)}>
                 <span style={s.chevron}>{openId === r.id ? '▾' : '▸'}</span>
                 <span style={s.rfqTitle}>{r.title}</span>
-                <span style={s.tag(r.status)}>{r.status}</span>
+                <span style={s.tag(r.status)} data-testid={`rfq-status-${r.id}`}>{r.status}</span>
               </button>
 
               {openId === r.id && (
@@ -153,15 +217,93 @@ export default function RfqClient({ initialRfqs }: { initialRfqs: Rfq[] }) {
                         <span style={s.muted}>
                           {detail.quotes.length} quote{detail.quotes.length === 1 ? '' : 's'}
                         </span>
+                        <a style={s.decisionLink} href={`/procurement/rfqs/${r.id}/quotations`} data-testid="rfq-quotations-link">
+                          Supplier quotations →
+                        </a>
                         <a style={s.decisionLink} href={`/procurement/rfqs/${r.id}/recommendation`}>
                           Sourcing decision →
                         </a>
-                        {r.status === 'draft' && (
-                          <button type="button" style={s.smallBtn} onClick={() => send(r.id)}>
-                            Send to vendors
-                          </button>
-                        )}
                       </div>
+
+                      {/*
+                        WHO THE ENQUIRY GOES TO (BUY-03). "Send to vendors" moved the status and named
+                        no vendor: an RFQ could be sent to nobody, and nobody could later say who had
+                        been asked and had not answered.
+                      */}
+                      {(() => {
+                        const invited = detail.invitations ?? [];
+                        const draft = detail.rfq.status === 'draft';
+                        return (
+                          <div style={s.dispatch} data-testid="rfq-dispatch">
+                            <div style={s.dispatchHead}>
+                              <strong style={{ fontSize: 13 }}>
+                                {draft ? 'Who this enquiry goes to' : `Sent to ${invited.length} supplier${invited.length === 1 ? '' : 's'}`}
+                              </strong>
+                              {!draft && (
+                                <span style={s.mutedSm} data-testid="rfq-sent-note">
+                                  {detail.rfq.sentAt ? `on ${detail.rfq.sentAt.slice(0, 10)}` : ''}{detail.rfq.sentBy ? ` by ${detail.rfq.sentBy}` : ''}
+                                </span>
+                              )}
+                            </div>
+                            {invited.length === 0 ? (
+                              <p style={s.mutedSm} data-testid="rfq-no-invitations">
+                                {draft ? 'No supplier invited yet. An enquiry is sent to named suppliers from the register.' : 'This enquiry was sent before suppliers were recorded on it.'}
+                              </p>
+                            ) : (
+                              <ul style={s.invites}>
+                                {invited.map((i) => (
+                                  <li key={i.supplierId} style={s.invite} data-testid={`rfq-invitation-${i.supplierId}`}>
+                                    <span style={{ fontWeight: 600 }}>{i.supplierName}</span>
+                                    {i.supplierStatus && i.supplierStatus !== 'approved' && (
+                                      <span style={s.caution} title="Asking for a price needs no approval; ordering from this supplier does.">
+                                        {i.supplierStatus} — not yet approved to order from
+                                      </span>
+                                    )}
+                                    <span style={{ flex: 1 }} />
+                                    {draft ? (
+                                      <button type="button" style={s.linkBtn} data-testid={`rfq-withdraw-${i.supplierId}`} onClick={() => withdraw(r.id, i.supplierId)}>
+                                        Remove
+                                      </button>
+                                    ) : (
+                                      <a style={s.decisionLink} data-testid={`rfq-enquiry-${i.supplierId}`}
+                                        href={`/api/procurement/rfqs/${r.id}/enquiry.pdf?${new URLSearchParams({ supplierId: i.supplierId })}`}>
+                                        Enquiry PDF ↓
+                                      </a>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            )}
+                            {draft && (
+                              <>
+                                <input style={s.qInput} placeholder="Find a supplier by name or code" data-testid="rfq-supplier-search"
+                                  value={supplierQuery} onChange={(e) => void searchSuppliers(e.target.value)} />
+                                {hits.length > 0 && (
+                                  <ul style={s.invites} data-testid="rfq-supplier-hits">
+                                    {hits.map((h) => (
+                                      <li key={h.id} style={s.invite}>
+                                        <span>{h.name}</span>
+                                        <span style={s.mutedSm}>{h.code} · {h.status}</span>
+                                        <span style={{ flex: 1 }} />
+                                        <button type="button" style={s.smallBtn} data-testid={`rfq-invite-${h.id}`}
+                                          disabled={invited.some((i) => i.supplierId === h.id)} onClick={() => invite(r.id, h.id)}>
+                                          {invited.some((i) => i.supplierId === h.id) ? 'Invited' : 'Invite'}
+                                        </button>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
+                                  <button type="button" style={s.primarySm} data-testid="rfq-send" disabled={invited.length === 0} onClick={() => send(r.id)}>
+                                    {invited.length === 0 ? 'Send — invite a supplier first' : `Send to ${invited.length} supplier${invited.length === 1 ? '' : 's'}`}
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                            {dispatchErr && <p style={s.err} role="alert" data-testid="rfq-dispatch-error">{dispatchErr}</p>}
+                          </div>
+                        );
+                      })()}
 
                       {detail.quotes.length > 0 && (
                         <>
@@ -289,4 +431,12 @@ const s = {
   qInput: { flex: 1, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13 } as CSSProperties,
   qInputSm: { width: 100, background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 10px', fontSize: 13 } as CSSProperties,
   smallBtn: { background: 'var(--panel)', border: '1px solid var(--border)', borderRadius: 8, color: 'var(--text)', padding: '7px 12px', fontSize: 13, cursor: 'pointer' } as CSSProperties,
+  primarySm: { background: 'var(--accent)', border: 'none', borderRadius: 8, color: 'var(--accent-ink)', padding: '7px 14px', fontSize: 13, cursor: 'pointer', fontWeight: 600 } as CSSProperties,
+  linkBtn: { background: 'transparent', border: 'none', color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', textDecoration: 'underline' } as CSSProperties,
+  dispatch: { border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', margin: '4px 0 12px', background: 'var(--panel)', display: 'grid', gap: 6 } as CSSProperties,
+  dispatchHead: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' } as CSSProperties,
+  mutedSm: { color: 'var(--muted)', fontSize: 12.5, margin: 0 } as CSSProperties,
+  invites: { listStyle: 'none', margin: 0, padding: 0, display: 'grid', gap: 4 } as CSSProperties,
+  invite: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, flexWrap: 'wrap', minWidth: 0 } as CSSProperties,
+  caution: { color: 'var(--warn, #b45309)', fontSize: 12 } as CSSProperties,
 };

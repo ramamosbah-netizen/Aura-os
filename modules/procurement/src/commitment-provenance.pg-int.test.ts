@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { PostgresFrameworkAgreementStore } from './postgres-framework-agreement-store';
 import { PostgresRfqStore } from './postgres-rfq-store';
 import { activateAgreement, makeFrameworkAgreement, terminateAgreement } from './domain/framework-agreement';
-import { makeRfq, sendRfq } from './domain/rfq';
+import { inviteSupplier, makeRfq, sendRfq } from './domain/rfq';
 import { newId } from '@aura/shared';
 
 /**
@@ -115,7 +115,9 @@ run('procurement commitments — activation and send provenance in Postgres', ()
   it('records who sent the enquiry', async () => {
     const rfq = makeRfq({ tenantId: TENANT, title: 'Cables', createdBy: 'u-e2e-buyer' });
     await rfqs.create(rfq);
-    await rfqs.update(sendRfq((await rfqs.get(rfq.id))!, 'u-e2e-buyer'));
+    const invited = inviteSupplier(rfq, { id: 'sup-1', name: 'Gulf Cables' }, [], 'u-e2e-buyer');
+    await rfqs.addInvitation(invited);
+    await rfqs.update(sendRfq((await rfqs.get(rfq.id))!, 'u-e2e-buyer', [invited]));
 
     const res = await pool.query<{ status: string; sent_by: string | null; sent_at: Date | null }>(
       'SELECT status, sent_by, sent_at FROM public.aura_procurement_rfqs WHERE id = $1', [rfq.id]);

@@ -114,6 +114,12 @@ describe('procurement commitments — the Buyer runs the cycle, the manager comm
     const rfq = await post<RfqBody>(buyer, '/api/v1/procurement/rfqs', { title: 'Cables RFQ', prId: pr.id });
     expect(rfq).toMatchObject({ status: 'draft', createdBy: 'proc-buyer', sentBy: null });
 
+    // AN ENQUIRY TO NOBODY is not sent (BUY-03): it names the suppliers it goes to.
+    const toNobody = await buyer.patch(`/api/v1/procurement/rfqs/${rfq.id}/send`).send({});
+    expect(toNobody.status).toBe(409);
+    expect(toNobody.body.message).toMatch(/no supplier is invited/);
+    expect((await buyer.post(`/api/v1/procurement/rfqs/${rfq.id}/invitations`).send({ supplierId })).status).toBe(201);
+
     const sent = await buyer.patch(`/api/v1/procurement/rfqs/${rfq.id}/send`).send({});
     expect(sent.status, JSON.stringify(sent.body)).toBe(200);
     expect(sent.body).toMatchObject({ status: 'sent', sentBy: 'proc-buyer' });

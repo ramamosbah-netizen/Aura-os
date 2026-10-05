@@ -29,6 +29,8 @@ export class InMemorySupplierStore implements SupplierStore {
     if (filter.tenantId) out = out.filter((s) => s.tenantId === filter.tenantId);
     if (filter.status) out = out.filter((s) => s.status === filter.status);
     if (filter.category) out = out.filter((s) => s.category === filter.category);
+    const q = filter.q?.trim().toLowerCase();
+    if (q) out = out.filter((s) => s.name.toLowerCase().includes(q) || s.code.toLowerCase().includes(q));
     out.sort((a, b) => (a.name < b.name ? -1 : 1));
     return filter.limit ? out.slice(0, filter.limit) : out;
   }

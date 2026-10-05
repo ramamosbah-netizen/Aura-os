@@ -35,11 +35,65 @@ export interface Rfq {
  * second `rfqSent` event, so an RFQ could be "sent" any number of times with no record of which one
  * the suppliers answered.
  */
-export function sendRfq(rfq: Rfq, sentBy: Id | null = null): Rfq {
+export function sendRfq(rfq: Rfq, sentBy: Id | null, invitations: readonly RfqInvitation[]): Rfq {
   if (rfq.status !== 'draft') {
     throw new Error(`only a draft RFQ can be sent (status ${rfq.status})`);
   }
+  // AN ENQUIRY SENT TO NOBODY (BUY-03). "Sent" recorded who pressed the button and nothing about who
+  // was asked, so an RFQ could be sent with no supplier at all and nobody could later say who had
+  // been asked and had not answered.
+  if (invitations.length === 0) {
+    throw new Error('the enquiry is not ready to send: no supplier is invited — invite at least one from the supplier register first');
+  }
   return { ...rfq, status: 'sent', sentBy, sentAt: new Date().toISOString() };
+}
+
+/**
+ * ONE SUPPLIER ASKED TO QUOTE ON ONE ENQUIRY (BUY-03).
+ *
+ * The supplier is the canonical master record; its name is a snapshot taken when it was invited, so
+ * the enquiry document says what was sent even if the master is renamed later. An invitation is
+ * written and withdrawn only while the RFQ is a draft: once the enquiry has gone out, who it went to
+ * is history, not a setting.
+ */
+export interface RfqInvitation {
+  id: Id;
+  tenantId: Id;
+  rfqId: Id;
+  supplierId: Id;
+  supplierName: string;
+  invitedBy: Id | null;
+  invitedAt: string;
+}
+
+export function inviteSupplier(
+  rfq: Rfq,
+  supplier: { id: Id; name: string },
+  existing: readonly RfqInvitation[],
+  invitedBy: Id | null,
+): RfqInvitation {
+  if (rfq.status !== 'draft') {
+    throw new Error(`suppliers can only be invited before the enquiry is sent (status ${rfq.status})`);
+  }
+  if (existing.some((i) => i.supplierId === supplier.id)) {
+    throw new Error(`${supplier.name} is already invited to this enquiry`);
+  }
+  return {
+    id: newId(),
+    tenantId: rfq.tenantId,
+    rfqId: rfq.id,
+    supplierId: supplier.id,
+    supplierName: supplier.name,
+    invitedBy,
+    invitedAt: new Date().toISOString(),
+  };
+}
+
+/** Withdrawing an invitation is correcting a draft; after sending, the record of who was asked stays. */
+export function assertInvitationsEditable(rfq: Rfq): void {
+  if (rfq.status !== 'draft') {
+    throw new Error(`only a draft enquiry's suppliers can be changed — once sent, who it went to is history (status ${rfq.status})`);
+  }
 }
 
 export interface NewRfq {

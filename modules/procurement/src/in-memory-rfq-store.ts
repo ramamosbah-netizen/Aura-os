@@ -1,12 +1,14 @@
 import type { Id, Page, PageParams } from '@aura/shared';
 import { paginate } from '@aura/shared';
-import type { Rfq, RfqQuote } from './domain/rfq';
+import type { Rfq, RfqInvitation, RfqQuote } from './domain/rfq';
 import type { RfqFilter, RfqStore } from './rfq-store';
 
 /** Phase-0 RFQ store — keeps RFQs + quotes in memory (no-DB boots). */
 export class InMemoryRfqStore implements RfqStore {
   private readonly rfqs = new Map<string, Rfq>();
   private readonly quotes = new Map<string, RfqQuote>();
+  // Insertion-ordered, so the list reads in the order suppliers were invited.
+  private readonly invitations = new Map<string, RfqInvitation>();
 
   async create(rfq: Rfq): Promise<void> {
     this.rfqs.set(rfq.id, { ...rfq });
@@ -60,5 +62,26 @@ export class InMemoryRfqStore implements RfqStore {
     return [...this.quotes.values()]
       .filter((q) => q.rfqId === rfqId)
       .sort((a, b) => a.amount - b.amount);
+  }
+
+  async addInvitation(invitation: RfqInvitation): Promise<void> {
+    const taken = [...this.invitations.values()].some(
+      (i) => i.tenantId === invitation.tenantId && i.rfqId === invitation.rfqId && i.supplierId === invitation.supplierId,
+    );
+    // The database's unique index, kept here so a no-DB boot refuses the same duplicate.
+    if (taken) throw new Error(`${invitation.supplierName} is already invited to this enquiry`);
+    this.invitations.set(invitation.id, { ...invitation });
+  }
+
+  async removeInvitation(rfqId: Id, supplierId: Id): Promise<void> {
+    for (const [id, i] of this.invitations) {
+      if (i.rfqId === rfqId && i.supplierId === supplierId) this.invitations.delete(id);
+    }
+  }
+
+  async listInvitations(rfqId: Id): Promise<RfqInvitation[]> {
+    return [...this.invitations.values()]
+      .filter((i) => i.rfqId === rfqId)
+      .map((i) => ({ ...i }));
   }
 }

@@ -21,11 +21,11 @@
 | Sales | OUT-09 | UNVERIFIED |
 | Sales | MAIL-01 | PARTIAL |
 | Sales | MAIL-02 | UNVERIFIED |
-| Sales | MAIL-03 | DISCONNECTED |
-| Sales | MAIL-04 | DISCONNECTED |
-| Sales | MAIL-05 | DISCONNECTED |
-| Sales | MAIL-06 | DISCONNECTED |
-| Sales | MAIL-07 | DISCONNECTED |
+| Sales | MAIL-03 | COMPLETE |
+| Sales | MAIL-04 | COMPLETE |
+| Sales | MAIL-05 | COMPLETE |
+| Sales | MAIL-06 | COMPLETE |
+| Sales | MAIL-07 | COMPLETE |
 | Sales | MAIL-08 | COMPLETE |
 | Sales | MAIL-09 | PARTIAL |
 | Sales | MAIL-10 | UNVERIFIED |
@@ -113,11 +113,11 @@
 | Pre-Sales | OUT-09 | UNVERIFIED |
 | Pre-Sales | MAIL-01 | PARTIAL |
 | Pre-Sales | MAIL-02 | UNVERIFIED |
-| Pre-Sales | MAIL-03 | DISCONNECTED |
-| Pre-Sales | MAIL-04 | DISCONNECTED |
-| Pre-Sales | MAIL-05 | DISCONNECTED |
-| Pre-Sales | MAIL-06 | DISCONNECTED |
-| Pre-Sales | MAIL-07 | DISCONNECTED |
+| Pre-Sales | MAIL-03 | COMPLETE |
+| Pre-Sales | MAIL-04 | COMPLETE |
+| Pre-Sales | MAIL-05 | COMPLETE |
+| Pre-Sales | MAIL-06 | COMPLETE |
+| Pre-Sales | MAIL-07 | COMPLETE |
 | Pre-Sales | MAIL-08 | COMPLETE |
 | Pre-Sales | MAIL-09 | PARTIAL |
 | Pre-Sales | MAIL-10 | UNVERIFIED |
@@ -156,11 +156,11 @@
 | Award | OUT-09 | UNVERIFIED |
 | Award | MAIL-01 | PARTIAL |
 | Award | MAIL-02 | UNVERIFIED |
-| Award | MAIL-03 | DISCONNECTED |
-| Award | MAIL-04 | DISCONNECTED |
-| Award | MAIL-05 | DISCONNECTED |
-| Award | MAIL-06 | DISCONNECTED |
-| Award | MAIL-07 | DISCONNECTED |
+| Award | MAIL-03 | COMPLETE |
+| Award | MAIL-04 | COMPLETE |
+| Award | MAIL-05 | COMPLETE |
+| Award | MAIL-06 | COMPLETE |
+| Award | MAIL-07 | COMPLETE |
 | Award | MAIL-08 | COMPLETE |
 | Award | MAIL-09 | PARTIAL |
 | Award | MAIL-10 | UNVERIFIED |
@@ -214,11 +214,11 @@
 | Mobilisation | OUT-09 | UNVERIFIED |
 | Mobilisation | MAIL-01 | PARTIAL |
 | Mobilisation | MAIL-02 | UNVERIFIED |
-| Mobilisation | MAIL-03 | DISCONNECTED |
-| Mobilisation | MAIL-04 | DISCONNECTED |
-| Mobilisation | MAIL-05 | DISCONNECTED |
-| Mobilisation | MAIL-06 | DISCONNECTED |
-| Mobilisation | MAIL-07 | DISCONNECTED |
+| Mobilisation | MAIL-03 | COMPLETE |
+| Mobilisation | MAIL-04 | COMPLETE |
+| Mobilisation | MAIL-05 | COMPLETE |
+| Mobilisation | MAIL-06 | COMPLETE |
+| Mobilisation | MAIL-07 | COMPLETE |
 | Mobilisation | MAIL-08 | COMPLETE |
 | Mobilisation | MAIL-09 | PARTIAL |
 | Mobilisation | MAIL-10 | UNVERIFIED |
@@ -279,11 +279,11 @@
 | Engineering | OUT-09 | UNVERIFIED |
 | Engineering | MAIL-01 | PARTIAL |
 | Engineering | MAIL-02 | UNVERIFIED |
-| Engineering | MAIL-03 | DISCONNECTED |
-| Engineering | MAIL-04 | DISCONNECTED |
-| Engineering | MAIL-05 | DISCONNECTED |
-| Engineering | MAIL-06 | DISCONNECTED |
-| Engineering | MAIL-07 | DISCONNECTED |
+| Engineering | MAIL-03 | COMPLETE |
+| Engineering | MAIL-04 | COMPLETE |
+| Engineering | MAIL-05 | COMPLETE |
+| Engineering | MAIL-06 | COMPLETE |
+| Engineering | MAIL-07 | COMPLETE |
 | Engineering | MAIL-08 | COMPLETE |
 | Engineering | MAIL-09 | PARTIAL |
 | Engineering | MAIL-10 | UNVERIFIED |
@@ -346,11 +346,11 @@
 | Planning | OUT-09 | UNVERIFIED |
 | Planning | MAIL-01 | PARTIAL |
 | Planning | MAIL-02 | UNVERIFIED |
-| Planning | MAIL-03 | DISCONNECTED |
-| Planning | MAIL-04 | DISCONNECTED |
-| Planning | MAIL-05 | DISCONNECTED |
-| Planning | MAIL-06 | DISCONNECTED |
-| Planning | MAIL-07 | DISCONNECTED |
+| Planning | MAIL-03 | COMPLETE |
+| Planning | MAIL-04 | COMPLETE |
+| Planning | MAIL-05 | COMPLETE |
+| Planning | MAIL-06 | COMPLETE |
+| Planning | MAIL-07 | COMPLETE |
 | Planning | MAIL-08 | COMPLETE |
 | Planning | MAIL-09 | PARTIAL |
 | Planning | MAIL-10 | UNVERIFIED |
@@ -419,11 +419,11 @@
 | Procurement | OUT-09 | UNVERIFIED |
 | Procurement | MAIL-01 | PARTIAL |
 | Procurement | MAIL-02 | UNVERIFIED |
-| Procurement | MAIL-03 | DISCONNECTED |
-| Procurement | MAIL-04 | DISCONNECTED |
-| Procurement | MAIL-05 | DISCONNECTED |
-| Procurement | MAIL-06 | DISCONNECTED |
-| Procurement | MAIL-07 | DISCONNECTED |
+| Procurement | MAIL-03 | COMPLETE |
+| Procurement | MAIL-04 | COMPLETE |
+| Procurement | MAIL-05 | COMPLETE |
+| Procurement | MAIL-06 | COMPLETE |
+| Procurement | MAIL-07 | COMPLETE |
 | Procurement | MAIL-08 | COMPLETE |
 | Procurement | MAIL-09 | PARTIAL |
 | Procurement | MAIL-10 | UNVERIFIED |
@@ -476,11 +476,11 @@
 | Site | OUT-09 | UNVERIFIED |
 | Site | MAIL-01 | PARTIAL |
 | Site | MAIL-02 | UNVERIFIED |
-| Site | MAIL-03 | DISCONNECTED |
-| Site | MAIL-04 | DISCONNECTED |
-| Site | MAIL-05 | DISCONNECTED |
-| Site | MAIL-06 | DISCONNECTED |
-| Site | MAIL-07 | DISCONNECTED |
+| Site | MAIL-03 | COMPLETE |
+| Site | MAIL-04 | COMPLETE |
+| Site | MAIL-05 | COMPLETE |
+| Site | MAIL-06 | COMPLETE |
+| Site | MAIL-07 | COMPLETE |
 | Site | MAIL-08 | COMPLETE |
 | Site | MAIL-09 | PARTIAL |
 | Site | MAIL-10 | UNVERIFIED |
@@ -519,11 +519,11 @@
 | QA/QC & HSE | OUT-09 | UNVERIFIED |
 | QA/QC & HSE | MAIL-01 | PARTIAL |
 | QA/QC & HSE | MAIL-02 | UNVERIFIED |
-| QA/QC & HSE | MAIL-03 | DISCONNECTED |
-| QA/QC & HSE | MAIL-04 | DISCONNECTED |
-| QA/QC & HSE | MAIL-05 | DISCONNECTED |
-| QA/QC & HSE | MAIL-06 | DISCONNECTED |
-| QA/QC & HSE | MAIL-07 | DISCONNECTED |
+| QA/QC & HSE | MAIL-03 | COMPLETE |
+| QA/QC & HSE | MAIL-04 | COMPLETE |
+| QA/QC & HSE | MAIL-05 | COMPLETE |
+| QA/QC & HSE | MAIL-06 | COMPLETE |
+| QA/QC & HSE | MAIL-07 | COMPLETE |
 | QA/QC & HSE | MAIL-08 | COMPLETE |
 | QA/QC & HSE | MAIL-09 | PARTIAL |
 | QA/QC & HSE | MAIL-10 | UNVERIFIED |
@@ -577,11 +577,11 @@
 | Progress | OUT-09 | UNVERIFIED |
 | Progress | MAIL-01 | PARTIAL |
 | Progress | MAIL-02 | UNVERIFIED |
-| Progress | MAIL-03 | DISCONNECTED |
-| Progress | MAIL-04 | DISCONNECTED |
-| Progress | MAIL-05 | DISCONNECTED |
-| Progress | MAIL-06 | DISCONNECTED |
-| Progress | MAIL-07 | DISCONNECTED |
+| Progress | MAIL-03 | COMPLETE |
+| Progress | MAIL-04 | COMPLETE |
+| Progress | MAIL-05 | COMPLETE |
+| Progress | MAIL-06 | COMPLETE |
+| Progress | MAIL-07 | COMPLETE |
 | Progress | MAIL-08 | COMPLETE |
 | Progress | MAIL-09 | PARTIAL |
 | Progress | MAIL-10 | UNVERIFIED |
@@ -638,11 +638,11 @@
 | Commercial / Certification | OUT-09 | UNVERIFIED |
 | Commercial / Certification | MAIL-01 | PARTIAL |
 | Commercial / Certification | MAIL-02 | UNVERIFIED |
-| Commercial / Certification | MAIL-03 | DISCONNECTED |
-| Commercial / Certification | MAIL-04 | DISCONNECTED |
-| Commercial / Certification | MAIL-05 | DISCONNECTED |
-| Commercial / Certification | MAIL-06 | DISCONNECTED |
-| Commercial / Certification | MAIL-07 | DISCONNECTED |
+| Commercial / Certification | MAIL-03 | COMPLETE |
+| Commercial / Certification | MAIL-04 | COMPLETE |
+| Commercial / Certification | MAIL-05 | COMPLETE |
+| Commercial / Certification | MAIL-06 | COMPLETE |
+| Commercial / Certification | MAIL-07 | COMPLETE |
 | Commercial / Certification | MAIL-08 | COMPLETE |
 | Commercial / Certification | MAIL-09 | PARTIAL |
 | Commercial / Certification | MAIL-10 | UNVERIFIED |
@@ -699,11 +699,11 @@
 | Finance / Collection | OUT-09 | UNVERIFIED |
 | Finance / Collection | MAIL-01 | PARTIAL |
 | Finance / Collection | MAIL-02 | UNVERIFIED |
-| Finance / Collection | MAIL-03 | DISCONNECTED |
-| Finance / Collection | MAIL-04 | DISCONNECTED |
-| Finance / Collection | MAIL-05 | DISCONNECTED |
-| Finance / Collection | MAIL-06 | DISCONNECTED |
-| Finance / Collection | MAIL-07 | DISCONNECTED |
+| Finance / Collection | MAIL-03 | COMPLETE |
+| Finance / Collection | MAIL-04 | COMPLETE |
+| Finance / Collection | MAIL-05 | COMPLETE |
+| Finance / Collection | MAIL-06 | COMPLETE |
+| Finance / Collection | MAIL-07 | COMPLETE |
 | Finance / Collection | MAIL-08 | COMPLETE |
 | Finance / Collection | MAIL-09 | PARTIAL |
 | Finance / Collection | MAIL-10 | UNVERIFIED |
@@ -761,11 +761,11 @@
 | T&C | OUT-09 | UNVERIFIED |
 | T&C | MAIL-01 | PARTIAL |
 | T&C | MAIL-02 | UNVERIFIED |
-| T&C | MAIL-03 | DISCONNECTED |
-| T&C | MAIL-04 | DISCONNECTED |
-| T&C | MAIL-05 | DISCONNECTED |
-| T&C | MAIL-06 | DISCONNECTED |
-| T&C | MAIL-07 | DISCONNECTED |
+| T&C | MAIL-03 | COMPLETE |
+| T&C | MAIL-04 | COMPLETE |
+| T&C | MAIL-05 | COMPLETE |
+| T&C | MAIL-06 | COMPLETE |
+| T&C | MAIL-07 | COMPLETE |
 | T&C | MAIL-08 | COMPLETE |
 | T&C | MAIL-09 | PARTIAL |
 | T&C | MAIL-10 | UNVERIFIED |
@@ -808,11 +808,11 @@
 | Handover | OUT-09 | UNVERIFIED |
 | Handover | MAIL-01 | PARTIAL |
 | Handover | MAIL-02 | UNVERIFIED |
-| Handover | MAIL-03 | DISCONNECTED |
-| Handover | MAIL-04 | DISCONNECTED |
-| Handover | MAIL-05 | DISCONNECTED |
-| Handover | MAIL-06 | DISCONNECTED |
-| Handover | MAIL-07 | DISCONNECTED |
+| Handover | MAIL-03 | COMPLETE |
+| Handover | MAIL-04 | COMPLETE |
+| Handover | MAIL-05 | COMPLETE |
+| Handover | MAIL-06 | COMPLETE |
+| Handover | MAIL-07 | COMPLETE |
 | Handover | MAIL-08 | COMPLETE |
 | Handover | MAIL-09 | PARTIAL |
 | Handover | MAIL-10 | UNVERIFIED |
@@ -855,11 +855,11 @@
 | Warranty / Service | OUT-09 | UNVERIFIED |
 | Warranty / Service | MAIL-01 | PARTIAL |
 | Warranty / Service | MAIL-02 | UNVERIFIED |
-| Warranty / Service | MAIL-03 | DISCONNECTED |
-| Warranty / Service | MAIL-04 | DISCONNECTED |
-| Warranty / Service | MAIL-05 | DISCONNECTED |
-| Warranty / Service | MAIL-06 | DISCONNECTED |
-| Warranty / Service | MAIL-07 | DISCONNECTED |
+| Warranty / Service | MAIL-03 | COMPLETE |
+| Warranty / Service | MAIL-04 | COMPLETE |
+| Warranty / Service | MAIL-05 | COMPLETE |
+| Warranty / Service | MAIL-06 | COMPLETE |
+| Warranty / Service | MAIL-07 | COMPLETE |
 | Warranty / Service | MAIL-08 | COMPLETE |
 | Warranty / Service | MAIL-09 | PARTIAL |
 | Warranty / Service | MAIL-10 | UNVERIFIED |
@@ -902,11 +902,11 @@
 | Closeout | OUT-09 | UNVERIFIED |
 | Closeout | MAIL-01 | PARTIAL |
 | Closeout | MAIL-02 | UNVERIFIED |
-| Closeout | MAIL-03 | DISCONNECTED |
-| Closeout | MAIL-04 | DISCONNECTED |
-| Closeout | MAIL-05 | DISCONNECTED |
-| Closeout | MAIL-06 | DISCONNECTED |
-| Closeout | MAIL-07 | DISCONNECTED |
+| Closeout | MAIL-03 | COMPLETE |
+| Closeout | MAIL-04 | COMPLETE |
+| Closeout | MAIL-05 | COMPLETE |
+| Closeout | MAIL-06 | COMPLETE |
+| Closeout | MAIL-07 | COMPLETE |
 | Closeout | MAIL-08 | COMPLETE |
 | Closeout | MAIL-09 | PARTIAL |
 | Closeout | MAIL-10 | UNVERIFIED |

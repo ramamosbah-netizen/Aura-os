@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { currentUser, getJson } from '@/lib/api';
 import RecordChrome from '../../../../components/record-chrome';
+import RecordCorrespondence from '../../../../components/record-correspondence';
 import TenderDetail from '../../../../components/tender-detail';
 import Sales360Journey from '../../../../components/sales-360-journey';
 import TenderAwardBasis, { type TenderCommercialBasisView } from '../../../../components/tender-award-basis';
@@ -53,6 +54,7 @@ export default async function TenderDetailPage({
   return (
     <div style={st.container}>
       <RecordChrome type="Tender" title={tender.title} />
+      <RecordCorrespondence recordType="tendering.tender" recordId={tender.id} label={tender.title} />
       <Sales360Journey current="tender" />
       <div style={st.navRow}>
         <a href="/tendering/tenders" style={st.link}>← Back to Tenders</a>

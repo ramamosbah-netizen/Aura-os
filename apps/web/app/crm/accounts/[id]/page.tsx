@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import { currentUser, fetchJson } from '@/lib/api';
 import DataStateNotice from '../../../../components/ui/data-state';
 import RecordChrome from '../../../../components/record-chrome';
+import RecordCorrespondence from '../../../../components/record-correspondence';
 import Account360Client from '../../../../components/account-360-client';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
   return (
     <div style={st.container}>
       <RecordChrome type="Account" title={result.data.name} />
+      <RecordCorrespondence recordType="crm.account" recordId={result.data.id} label={result.data.name} />
       <div style={st.navRow}>
         <a href="/crm/customers?view=accounts" style={st.link}>← Back to Customers</a>
       </div>

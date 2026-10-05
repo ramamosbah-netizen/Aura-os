@@ -1,4 +1,4 @@
-import type { MailAttachment, MailRecord, MailState } from './mail-domain';
+import type { MailAttachment, MailLink, MailRecord, MailRecordType, MailState } from './mail-domain';
 
 /** DI token for mail persistence. */
 export const MAIL_STORE = Symbol('MAIL_STORE');
@@ -55,6 +55,13 @@ export interface MailStore {
    */
   addAttachment(tenantId: string, mailId: string, attachment: MailAttachment): Promise<boolean>;
   removeAttachment(tenantId: string, mailId: string, attachmentId: string): Promise<boolean>;
+  /**
+   * The ONLY writer of a message's record links (MAIL-03…07). False when that record is already
+   * linked to that message. The service decides who may link; `save` never touches links.
+   */
+  addLink(tenantId: string, mailId: string, link: MailLink): Promise<boolean>;
+  /** Every message linked to one record, hydrated, newest first. Visibility is the service's to apply. */
+  listByRecord(tenantId: string, recordType: MailRecordType, recordId: string): Promise<MailRecord[]>;
   markRead(tenantId: string, mailId: string, reader: { address?: string | null; userId?: string | null }, at: string): Promise<void>;
 
   /**

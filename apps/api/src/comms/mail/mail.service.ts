@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
 import { newId, type DocumentActor, type DocumentVersion } from '@aura/shared';
-import { DmsService, UsersService } from '@aura/core';
+import { AccessService, DmsService, UsersService } from '@aura/core';
 import {
   INTERNAL_ACCOUNT_ID,
   isAccountIdShape,
@@ -18,6 +18,8 @@ import {
   type MailRecord,
 } from './mail-domain';
 import { MAIL_STORE, type DispatchRecord, type MailFilter, type MailStore } from './mail-store';
+import { MAIL_RECORD_DIRECTORY, RECORD_READ_PERMISSION, type MailRecordDirectory } from './mail-record-directory';
+import { isMailRecordType, type MailRecordRef } from './mail-domain';
 
 /** Who is asking, resolved from the authenticated request — never from a DTO. */
 export interface MailCaller {
@@ -95,7 +97,59 @@ export class MailService {
     // Explicit @Inject on each: an @Optional() parameter typed as a union is silently null.
     @Optional() @Inject(DmsService) private readonly dms: DmsService | null = null,
     @Optional() @Inject(UsersService) private readonly users: UsersService | null = null,
+    /**
+     * Which business records exist and what they are called (MAIL-03…07), and who may read them.
+     * Optional so the mail engine composes without them; linking then refuses rather than linking a
+     * record nobody checked. Explicit @Inject: an @Optional() union-typed parameter is silently null.
+     */
+    @Optional() @Inject(MAIL_RECORD_DIRECTORY) private readonly directory: MailRecordDirectory | null = null,
+    @Optional() @Inject(AccessService) private readonly access: AccessService | null = null,
   ) {}
+
+  // ── What a message is about (MAIL-03…MAIL-07) ─────────────────────────────────────────────
+
+  /**
+   * A record this caller may name: a known kind, existing in this tenant, and readable by them. A
+   * record they may not read is refused as not found — linking must not be a way to learn it exists.
+   */
+  private async checkRecord(caller: MailCaller, ref: Partial<MailRecordRef>): Promise<{ ref: MailRecordRef; label: string }> {
+    if (!isMailRecordType(ref.recordType)) throw new BadRequestException(`a message cannot be linked to a "${String(ref.recordType)}"`);
+    const recordId = String(ref.recordId ?? '').trim();
+    if (!recordId) throw new BadRequestException('a link requires the record it points to');
+    if (!this.directory || !this.access) throw new ConflictException('linking messages to records is unavailable in this composition');
+    const permission = RECORD_READ_PERMISSION[ref.recordType];
+    const decision = this.access.can(caller.userId, {
+      permission,
+      orgPath: [{ level: 'tenant', id: caller.tenantId }],
+      ...(ref.recordType === 'projects.project' ? { resource: { type: 'project', id: recordId } } : {}),
+    });
+    const label = decision.allowed ? await this.directory.labelOf(caller.tenantId, ref.recordType, recordId) : null;
+    if (label === null) throw new NotFoundException(`${ref.recordType} ${recordId} not found`);
+    return { ref: { recordType: ref.recordType, recordId }, label };
+  }
+
+  private async writeLink(caller: MailCaller, mailId: string, checked: { ref: MailRecordRef; label: string }): Promise<void> {
+    await this.store.addLink(caller.tenantId, mailId, {
+      id: newId(), ...checked.ref, recordLabel: checked.label, linkedBy: caller.userId, linkedAt: new Date().toISOString(),
+    });
+  }
+
+  /** Link a message the caller can see to a record they can read. Linking twice is a no-op. */
+  async linkRecord(caller: MailCaller, mailId: string, ref: Partial<MailRecordRef>): Promise<MailRecord> {
+    const mail = await this.owned(caller, mailId);
+    await this.writeLink(caller, mail.id, await this.checkRecord(caller, ref));
+    return (await this.store.get(caller.tenantId, mail.id)) ?? mail;
+  }
+
+  /**
+   * A record's correspondence: the linked messages THIS caller could already read — their own drafts,
+   * and sent or received messages they are on — newest first. Linking widens nothing.
+   */
+  async related(caller: MailCaller, ref: Partial<MailRecordRef>): Promise<MailRecord[]> {
+    const { ref: checked } = await this.checkRecord(caller, ref);
+    const linked = await this.store.listByRecord(caller.tenantId, checked.recordType, checked.recordId);
+    return linked.filter((mail) => this.visible(caller, mail));
+  }
 
   /**
    * May this caller see this message at all?
@@ -288,7 +342,14 @@ export class MailService {
     return value;
   }
 
-  async createDraft(caller: MailCaller, input: Omit<ComposeInput, 'tenantId' | 'fromUser'>): Promise<MailRecord> {
+  async createDraft(
+    caller: MailCaller,
+    input: Omit<ComposeInput, 'tenantId' | 'fromUser'>,
+    /** The records this message is composed FROM (MAIL-03…07). Every one is checked before anything is written. */
+    relatedTo: Array<Partial<MailRecordRef>> = [],
+  ): Promise<MailRecord> {
+    const checkedLinks = [];
+    for (const ref of relatedTo) checkedLinks.push(await this.checkRecord(caller, ref));
     const accountId = await this.resolveAccountId(caller.tenantId, input.accountId);
     const draft = makeDraft({
       ...input,
@@ -299,7 +360,9 @@ export class MailService {
       fromAddress: input.fromAddress ?? caller.address,
     });
     await this.store.save(caller.tenantId, draft);
-    return draft;
+    if (checkedLinks.length === 0) return draft;
+    for (const checked of checkedLinks) await this.writeLink(caller, draft.id, checked);
+    return (await this.store.get(caller.tenantId, draft.id)) ?? draft;
   }
 
   async updateDraft(caller: MailCaller, mailId: string, patch: Partial<ComposeInput>): Promise<MailRecord> {

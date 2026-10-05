@@ -39,7 +39,29 @@ export interface MailView {
   accountId: string | null;
   /** Governed documents the message carries (F-09). */
   attachments?: MailAttachmentView[];
+  /** The business records the message is about (MAIL-03…07). */
+  links?: MailLinkView[];
 }
+
+export interface MailLinkView { id: string; recordType: string; recordId: string; recordLabel: string | null }
+
+/** A record composed FROM: the message is linked to it on creation. */
+interface ComposeAbout { recordType: string; recordId: string; label: string }
+
+/** Where each kind of record lives, so a message's links open the record itself. */
+const RECORD_HREF: Record<string, (id: string) => string> = {
+  'crm.account': (id) => `/crm/accounts/${id}`,
+  'crm.contact': (id) => `/crm/contacts/${id}`,
+  'crm.lead': (id) => `/crm/leads/${id}`,
+  'crm.opportunity': (id) => `/crm/opportunities/${id}`,
+  'tendering.tender': (id) => `/tendering/tenders/${id}`,
+  'procurement.supplier': (id) => `/procurement/suppliers?supplier=${id}`,
+  'projects.project': (id) => `/project/${id}`,
+};
+const RECORD_NOUN: Record<string, string> = {
+  'crm.account': 'Customer', 'crm.contact': 'Contact', 'crm.lead': 'Enquiry', 'crm.opportunity': 'Opportunity',
+  'tendering.tender': 'Tender', 'procurement.supplier': 'Supplier', 'projects.project': 'Project',
+};
 
 export interface MailAccountView {
   id: string; provider: string; label: string; status: string; capabilities: string[];
@@ -108,7 +130,11 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
   const [openId, setOpenId] = useState<string | null>(initialMailId);
   const [thread, setThread] = useState<MailView[] | null>(null);
   const [query, setQuery] = useState('');
-  const [composing, setComposing] = useState(false);
+  // Arriving from a record's "Email about this" opens the composer already about that record.
+  const about: ComposeAbout | null = params.get('relatedType') && params.get('relatedId')
+    ? { recordType: params.get('relatedType')!, recordId: params.get('relatedId')!, label: params.get('relatedLabel') || params.get('relatedId')! }
+    : null;
+  const [composing, setComposing] = useState(params.get('compose') === '1');
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (which: FolderId, search: string) => {
@@ -252,6 +278,7 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
           <Composer
             me={me}
             accounts={accounts}
+            about={about}
             onCancel={() => setComposing(false)}
             onDone={async (message, mailId) => {
               setComposing(false);
@@ -355,6 +382,20 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
       ) : null}
 
       <div className={styles.body}>{mail.body}</div>
+
+      {(mail.links ?? []).length > 0 ? (
+        <p className={styles.hint} data-testid="mail-links">
+          About:{' '}
+          {(mail.links ?? []).map((link, i) => (
+            <span key={link.id}>
+              {i > 0 ? ' · ' : ''}
+              <a href={(RECORD_HREF[link.recordType] ?? (() => '#'))(link.recordId)} data-testid={`mail-link-${link.recordType}`}>
+                {RECORD_NOUN[link.recordType] ?? link.recordType} — {link.recordLabel ?? link.recordId}
+              </a>
+            </span>
+          ))}
+        </p>
+      ) : null}
 
       {(mail.attachments ?? []).length > 0 ? (
         <ul className={styles.attachmentList} aria-label="Attachments" data-testid="mail-attachment-list">
@@ -479,8 +520,10 @@ async function callWithReason<T>(path: string, init?: RequestInit): Promise<{ ok
 const sizeLabel = (bytes: number): string =>
   bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} B`;
 
-function Composer({ me, accounts, onDone, onCancel }: {
+function Composer({ me, accounts, about, onDone, onCancel }: {
   me: string; accounts: MailAccountView[]; onDone: (message: string, mailId: string) => Promise<void>;
+  /** The record this message is composed from (MAIL-03…07); linked when the draft is created. */
+  about?: ComposeAbout | null;
   /** Abandon the message. A composer you cannot back out of traps the user in it. */
   onCancel: () => void;
 }) {
@@ -537,6 +580,8 @@ function Composer({ me, accounts, onDone, onCancel }: {
     bcc: split(bcc),
     subject,
     body,
+    // Read by the API only when the draft is CREATED; an edit never rewrites what a message is about.
+    ...(about ? { relatedTo: [{ recordType: about.recordType, recordId: about.recordId }] } : {}),
   });
 
   /**
@@ -679,6 +724,12 @@ function Composer({ me, accounts, onDone, onCancel }: {
   return (
     <form className={styles.composer} data-testid="mail-composer" onInput={() => setConfirmDiscard(false)} onSubmit={(event) => { event.preventDefault(); void submit(false); }}>
       <h3>New message</h3>
+      {about ? (
+        <p className={styles.hint} data-testid="mail-about">
+          About {RECORD_NOUN[about.recordType] ?? 'record'} — <strong>{about.label}</strong>. The message is linked to it when saved,
+          and shows on that record to you and to the people it is sent to — nobody else.
+        </p>
+      ) : null}
 
       <label>
         From

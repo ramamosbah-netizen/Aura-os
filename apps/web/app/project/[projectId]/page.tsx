@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { fetchJson } from '@/lib/api';
 import DataStateNotice from '@/components/ui/data-state';
 import Project360Client, { type Project360Project } from '@/components/project-360-client';
+import RecordCorrespondence from '@/components/record-correspondence';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,8 @@ export default async function ProjectOverviewPage({
   return (
     <main data-testid="project-command-center" style={{ maxWidth: 1320, margin: '0 auto' }}>
       <Project360Client project={result.data} initialTab={query.tab} />
+      {/* MAIL-07: the project's correspondence, and a message composed from the project. */}
+      <RecordCorrespondence recordType="projects.project" recordId={result.data.id} label={result.data.title} />
     </main>
   );
 }

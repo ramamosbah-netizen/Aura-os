@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 import { getJson } from '@/lib/api';
 import RecordChrome from '../../../../components/record-chrome';
+import RecordCorrespondence from '../../../../components/record-correspondence';
 import Lead360Client from '../../../../components/lead-360-client';
 import Sales360Journey from '../../../../components/sales-360-journey';
 
@@ -34,6 +35,7 @@ export default async function LeadDetailPage({ params }: { params: Promise<{ id:
   return (
     <div style={st.container}>
       <RecordChrome type="Lead" title={lead.name} />
+      <RecordCorrespondence recordType="crm.lead" recordId={lead.id} label={lead.name} />
       <Sales360Journey current="lead" records={{
         lead: `/crm/leads/${lead.id}`,
         opportunity: typeof lead.convertedOpportunityId === 'string' ? `/crm/opportunities/${lead.convertedOpportunityId}` : null,

@@ -1,6 +1,6 @@
 import type { Pool } from 'pg';
 import { newId } from '@aura/shared';
-import type { MailAttachment, MailDirection, MailParticipant, MailRecord, MailState, RecipientRole } from './mail-domain';
+import type { MailAttachment, MailDirection, MailLink, MailParticipant, MailRecord, MailRecordType, MailState, RecipientRole } from './mail-domain';
 import type { DispatchRecord, MailFilter, MailStore } from './mail-store';
 
 interface MailRow {
@@ -176,6 +176,25 @@ export class PostgresMailStore implements MailStore {
       });
       filesByMail.set(file.owner_id, list);
     }
+    const { rows: linkRows } = await this.pool.query<{
+      id: string; mail_id: string; record_type: string; record_id: string; record_label: string | null;
+      linked_by: string; linked_at: Date | string;
+    }>(
+      `select id, mail_id, record_type, record_id, record_label, linked_by, linked_at
+         from public.aura_comms_mail_links
+        where tenant_id = $1 and mail_id = any($2::uuid[])
+        order by linked_at, id`,
+      [tenantId, rows.map((r) => r.id)],
+    );
+    const linksByMail = new Map<string, MailLink[]>();
+    for (const link of linkRows) {
+      const list = linksByMail.get(link.mail_id) ?? [];
+      list.push({
+        id: link.id, recordType: link.record_type as MailRecordType, recordId: link.record_id,
+        recordLabel: link.record_label, linkedBy: link.linked_by, linkedAt: iso(link.linked_at),
+      });
+      linksByMail.set(link.mail_id, list);
+    }
     const byMail = new Map<string, MailParticipant[]>();
     for (const person of people) {
       const list = byMail.get(person.subject_id) ?? [];
@@ -189,7 +208,11 @@ export class PostgresMailStore implements MailStore {
       });
       byMail.set(person.subject_id, list);
     }
-    return rows.map((row) => ({ ...this.toRecord(row, byMail.get(row.id) ?? []), attachments: filesByMail.get(row.id) ?? [] }));
+    return rows.map((row) => ({
+      ...this.toRecord(row, byMail.get(row.id) ?? []),
+      attachments: filesByMail.get(row.id) ?? [],
+      links: linksByMail.get(row.id) ?? [],
+    }));
   }
 
   private toRecord(row: MailRow, participants: MailParticipant[]): MailRecord {
@@ -287,6 +310,7 @@ export class PostgresMailStore implements MailStore {
       );
       await client.query(`delete from public.aura_comms_participants where tenant_id = $1 and subject_type = 'mail' and subject_id = $2`, [tenantId, mailId]);
       await client.query(`delete from public.aura_comms_attachments where tenant_id = $1 and owner_type = 'mail' and owner_id = $2`, [tenantId, mailId]);
+      await client.query(`delete from public.aura_comms_mail_links where tenant_id = $1 and mail_id = $2`, [tenantId, mailId]);
       await client.query(`delete from public.aura_comms_mail where tenant_id = $1 and id = $2`, [tenantId, mailId]);
       await client.query('COMMIT');
     } catch (error) {
@@ -309,6 +333,30 @@ export class PostgresMailStore implements MailStore {
         attachment.documentId, attachment.version, attachment.createdAt],
     );
     return (rowCount ?? 0) > 0;
+  }
+
+  async addLink(tenantId: string, mailId: string, link: MailLink): Promise<boolean> {
+    // The unique index (0406) is the authority on "already linked"; a conflict is an answer.
+    const { rowCount } = await this.pool.query(
+      `insert into public.aura_comms_mail_links (id, tenant_id, mail_id, record_type, record_id, record_label, linked_by, linked_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)
+       on conflict (tenant_id, mail_id, record_type, record_id) do nothing`,
+      [link.id, tenantId, mailId, link.recordType, link.recordId, link.recordLabel, link.linkedBy, link.linkedAt],
+    );
+    return (rowCount ?? 0) > 0;
+  }
+
+  async listByRecord(tenantId: string, recordType: MailRecordType, recordId: string): Promise<MailRecord[]> {
+    const { rows } = await this.pool.query<MailRow>(
+      `select m.* from public.aura_comms_mail m
+        where m.tenant_id = $1
+          and m.id in (select l.mail_id from public.aura_comms_mail_links l
+                        where l.tenant_id = $1 and l.record_type = $2 and l.record_id = $3)
+        order by coalesce(m.sent_at, m.created_at) desc, m.id desc
+        limit 500`,
+      [tenantId, recordType, recordId],
+    );
+    return this.hydrate(tenantId, rows);
   }
 
   async removeAttachment(tenantId: string, mailId: string, attachmentId: string): Promise<boolean> {

@@ -1,8 +1,9 @@
 'use client';
 
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, Fragment, useMemo, useState } from 'react';
 import EmptyState from './ui/empty-state';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import RecordCorrespondence from './record-correspondence';
 import ExportButton from './export-button';
 import CreateDrawer from './ui/create-drawer';
 
@@ -26,6 +27,10 @@ export default function SuppliersClient({ initialSuppliers }: { initialSuppliers
   const router = useRouter();
   const suppliers = initialSuppliers;
   const [error, setError] = useState('');
+  // MAIL-06: a supplier has no record page of its own, so its correspondence opens on its row — and a
+  // message's link to a supplier lands here with that supplier's row already open.
+  const params = useSearchParams();
+  const [correspondenceFor, setCorrespondenceFor] = useState<string | null>(params.get('supplier'));
 
   const counts = useMemo(() => ({
     approved: suppliers.filter((s) => s.status === 'approved').length,
@@ -89,7 +94,8 @@ export default function SuppliersClient({ initialSuppliers }: { initialSuppliers
             <thead><tr><th>Code</th><th>Name</th><th>Category</th><th>Trade licence</th><th>TRN</th><th>Status</th><th>Actions</th></tr></thead>
             <tbody>
               {suppliers.map((s) => (
-                <tr key={s.id}>
+                <Fragment key={s.id}>
+                <tr>
                   <td style={{ color: 'var(--muted)' }}>{s.code}</td>
                   <td style={{ fontWeight: 600 }}>{s.name}</td>
                   <td style={{ textTransform: 'capitalize' }}>{s.category}</td>
@@ -99,8 +105,20 @@ export default function SuppliersClient({ initialSuppliers }: { initialSuppliers
                   <td>
                     {s.status !== 'approved' && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--good)' }} onClick={() => act(s.id, 'approve')}>{s.status === 'suspended' ? 'Reinstate' : 'Approve'}</button>}
                     {s.status === 'approved' && <button type="button" className="btn" style={{ ...st.smBtn, color: 'var(--bad)' }} onClick={() => act(s.id, 'suspend')}>Suspend</button>}
+                    <button type="button" className="btn btn-ghost" style={st.smBtn} data-testid={`supplier-correspondence-${s.id}`}
+                      onClick={() => setCorrespondenceFor(correspondenceFor === s.id ? null : s.id)}>
+                      {correspondenceFor === s.id ? 'Hide correspondence' : 'Correspondence'}
+                    </button>
                   </td>
                 </tr>
+                {correspondenceFor === s.id && (
+                  <tr>
+                    <td colSpan={7}>
+                      <RecordCorrespondence recordType="procurement.supplier" recordId={s.id} label={s.name} compact />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               ))}
             </tbody>
           </table>

@@ -4944,7 +4944,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Communication mail / linked business records",
       "evidence": [
         "N-MAIL"
@@ -4952,16 +4952,16 @@
       "source": "apps/api/src/comms/mail/mail-dispatch.worker.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage.",
+      "currentBehavior": "Customer and contact: from the customer page and the contact page. Built 2026-10-05: a message links to the business records it is about (migration 0406, aura_comms_mail_links under forced RLS; a typed reference with the record's name as a snapshot, written only by the store's link methods, never by a save). A record is linked when a message is composed FROM it — every customer, contact, enquiry, opportunity and tender page, the supplier register row and the project overview carry a Correspondence panel with 'Email about this …', which opens the composer already about that record — or afterwards by anyone who can see the message (POST comms/mailbox/message/:id/links). Each record is checked at the service boundary through a directory the composition root binds to the owning module's own service: it must exist in the tenant and be readable by whoever links it (its own read permission), or it is not found. The record's panel lists the linked messages ITS VIEWER could already read — their own drafts, and messages they sent or received — so a link widens nothing; the message shows 'About: …' and opens the record. PROVED: mail-record-links.test.ts (7 — compose links, refusals before any write, visibility, later linking, edits never rewriting links, deletion) and mail-record-links.spec.ts (browser, Auth ON, PostgreSQL): composed on screen from a customer, a contact, an enquiry, an opportunity, a tender, a supplier and a project, each sent message carries its link with the record's name; each record lists its message, the message names its record and opens it; the colleague it was sent to sees it on the record; a reader of the customer who is not on the message sees nothing; a Sales rep, who may not read suppliers, cannot link a message to one (404). mail-document-attachments.spec.ts re-run green. LIMITS: proved on AURA internal mail — external providers are F-05; linking an EXISTING message to a record is an API act with no screen yet.",
       "acceptanceProof": "Compose from each source record, save the canonical relation, and retrieve the message from both Communication and the related record."
     },
     {
@@ -4996,7 +4996,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Communication mail / linked business records",
       "evidence": [
         "N-MAIL"
@@ -5004,16 +5004,16 @@
       "source": "apps/api/src/comms/mail/mail-dispatch.worker.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage.",
+      "currentBehavior": "Enquiry and opportunity: from the enquiry (lead) page and the opportunity page. Built 2026-10-05: a message links to the business records it is about (migration 0406, aura_comms_mail_links under forced RLS; a typed reference with the record's name as a snapshot, written only by the store's link methods, never by a save). A record is linked when a message is composed FROM it — every customer, contact, enquiry, opportunity and tender page, the supplier register row and the project overview carry a Correspondence panel with 'Email about this …', which opens the composer already about that record — or afterwards by anyone who can see the message (POST comms/mailbox/message/:id/links). Each record is checked at the service boundary through a directory the composition root binds to the owning module's own service: it must exist in the tenant and be readable by whoever links it (its own read permission), or it is not found. The record's panel lists the linked messages ITS VIEWER could already read — their own drafts, and messages they sent or received — so a link widens nothing; the message shows 'About: …' and opens the record. PROVED: mail-record-links.test.ts (7 — compose links, refusals before any write, visibility, later linking, edits never rewriting links, deletion) and mail-record-links.spec.ts (browser, Auth ON, PostgreSQL): composed on screen from a customer, a contact, an enquiry, an opportunity, a tender, a supplier and a project, each sent message carries its link with the record's name; each record lists its message, the message names its record and opens it; the colleague it was sent to sees it on the record; a reader of the customer who is not on the message sees nothing; a Sales rep, who may not read suppliers, cannot link a message to one (404). mail-document-attachments.spec.ts re-run green. LIMITS: proved on AURA internal mail — external providers are F-05; linking an EXISTING message to a record is an API act with no screen yet.",
       "acceptanceProof": "Compose from each source record, save the canonical relation, and retrieve the message from both Communication and the related record."
     },
     {
@@ -5048,7 +5048,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Communication mail / linked business records",
       "evidence": [
         "N-MAIL"
@@ -5056,16 +5056,16 @@
       "source": "apps/api/src/comms/mail/mail-dispatch.worker.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage.",
+      "currentBehavior": "Tender: from the tender page. Built 2026-10-05: a message links to the business records it is about (migration 0406, aura_comms_mail_links under forced RLS; a typed reference with the record's name as a snapshot, written only by the store's link methods, never by a save). A record is linked when a message is composed FROM it — every customer, contact, enquiry, opportunity and tender page, the supplier register row and the project overview carry a Correspondence panel with 'Email about this …', which opens the composer already about that record — or afterwards by anyone who can see the message (POST comms/mailbox/message/:id/links). Each record is checked at the service boundary through a directory the composition root binds to the owning module's own service: it must exist in the tenant and be readable by whoever links it (its own read permission), or it is not found. The record's panel lists the linked messages ITS VIEWER could already read — their own drafts, and messages they sent or received — so a link widens nothing; the message shows 'About: …' and opens the record. PROVED: mail-record-links.test.ts (7 — compose links, refusals before any write, visibility, later linking, edits never rewriting links, deletion) and mail-record-links.spec.ts (browser, Auth ON, PostgreSQL): composed on screen from a customer, a contact, an enquiry, an opportunity, a tender, a supplier and a project, each sent message carries its link with the record's name; each record lists its message, the message names its record and opens it; the colleague it was sent to sees it on the record; a reader of the customer who is not on the message sees nothing; a Sales rep, who may not read suppliers, cannot link a message to one (404). mail-document-attachments.spec.ts re-run green. LIMITS: proved on AURA internal mail — external providers are F-05; linking an EXISTING message to a record is an API act with no screen yet.",
       "acceptanceProof": "Compose from each source record, save the canonical relation, and retrieve the message from both Communication and the related record."
     },
     {
@@ -5100,7 +5100,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Communication mail / linked business records",
       "evidence": [
         "N-MAIL"
@@ -5108,16 +5108,16 @@
       "source": "apps/api/src/comms/mail/mail-dispatch.worker.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage.",
+      "currentBehavior": "Supplier: from the supplier register row, which has no record page of its own; a message about a supplier opens the register on that supplier. Built 2026-10-05: a message links to the business records it is about (migration 0406, aura_comms_mail_links under forced RLS; a typed reference with the record's name as a snapshot, written only by the store's link methods, never by a save). A record is linked when a message is composed FROM it — every customer, contact, enquiry, opportunity and tender page, the supplier register row and the project overview carry a Correspondence panel with 'Email about this …', which opens the composer already about that record — or afterwards by anyone who can see the message (POST comms/mailbox/message/:id/links). Each record is checked at the service boundary through a directory the composition root binds to the owning module's own service: it must exist in the tenant and be readable by whoever links it (its own read permission), or it is not found. The record's panel lists the linked messages ITS VIEWER could already read — their own drafts, and messages they sent or received — so a link widens nothing; the message shows 'About: …' and opens the record. PROVED: mail-record-links.test.ts (7 — compose links, refusals before any write, visibility, later linking, edits never rewriting links, deletion) and mail-record-links.spec.ts (browser, Auth ON, PostgreSQL): composed on screen from a customer, a contact, an enquiry, an opportunity, a tender, a supplier and a project, each sent message carries its link with the record's name; each record lists its message, the message names its record and opens it; the colleague it was sent to sees it on the record; a reader of the customer who is not on the message sees nothing; a Sales rep, who may not read suppliers, cannot link a message to one (404). mail-document-attachments.spec.ts re-run green. LIMITS: proved on AURA internal mail — external providers are F-05; linking an EXISTING message to a record is an API act with no screen yet.",
       "acceptanceProof": "Compose from each source record, save the canonical relation, and retrieve the message from both Communication and the related record."
     },
     {
@@ -5152,7 +5152,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "DISCONNECTED",
+      "classification": "COMPLETE",
       "authority": "Communication mail / linked business records",
       "evidence": [
         "N-MAIL"
@@ -5160,16 +5160,16 @@
       "source": "apps/api/src/comms/mail/mail-dispatch.worker.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "PARTIAL"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "currentBehavior": "Live compose exposes recipients, subject, body and scheduling but no business-record relation. The mail aggregate stores provider account identity, not customer/enquiry/tender/supplier/project lineage.",
+      "currentBehavior": "Project: from the project overview. Built 2026-10-05: a message links to the business records it is about (migration 0406, aura_comms_mail_links under forced RLS; a typed reference with the record's name as a snapshot, written only by the store's link methods, never by a save). A record is linked when a message is composed FROM it — every customer, contact, enquiry, opportunity and tender page, the supplier register row and the project overview carry a Correspondence panel with 'Email about this …', which opens the composer already about that record — or afterwards by anyone who can see the message (POST comms/mailbox/message/:id/links). Each record is checked at the service boundary through a directory the composition root binds to the owning module's own service: it must exist in the tenant and be readable by whoever links it (its own read permission), or it is not found. The record's panel lists the linked messages ITS VIEWER could already read — their own drafts, and messages they sent or received — so a link widens nothing; the message shows 'About: …' and opens the record. PROVED: mail-record-links.test.ts (7 — compose links, refusals before any write, visibility, later linking, edits never rewriting links, deletion) and mail-record-links.spec.ts (browser, Auth ON, PostgreSQL): composed on screen from a customer, a contact, an enquiry, an opportunity, a tender, a supplier and a project, each sent message carries its link with the record's name; each record lists its message, the message names its record and opens it; the colleague it was sent to sees it on the record; a reader of the customer who is not on the message sees nothing; a Sales rep, who may not read suppliers, cannot link a message to one (404). mail-document-attachments.spec.ts re-run green. LIMITS: proved on AURA internal mail — external providers are F-05; linking an EXISTING message to a record is an API act with no screen yet.",
       "acceptanceProof": "Compose from each source record, save the canonical relation, and retrieve the message from both Communication and the related record."
     },
     {
@@ -9413,14 +9413,14 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 69,
+      "COMPLETE": 74,
       "PARTIAL": 77,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
       "DUPLICATED": 0,
       "WRONG_AUTHORITY": 0,
-      "DISCONNECTED": 5,
+      "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
       "UNVERIFIED": 25,

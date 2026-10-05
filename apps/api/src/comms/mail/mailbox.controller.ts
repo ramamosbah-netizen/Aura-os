@@ -16,7 +16,11 @@ interface ComposeDto {
   subject?: string;
   body?: string;
   accountId?: string | null;
+  /** The records this message is composed FROM (MAIL-03…07) — a new draft only. */
+  relatedTo?: Array<{ recordType?: string; recordId?: string }>;
 }
+
+interface LinkDto { recordType?: string; recordId?: string }
 
 interface ScheduleDto { localDateTime?: string; timezone?: string }
 
@@ -75,6 +79,22 @@ export class MailboxController {
     ];
   }
 
+  /**
+   * A business record's correspondence (MAIL-03…07): the messages linked to it that THIS caller could
+   * already read. The record must exist and be readable by the caller, or it is not found.
+   */
+  @Get('related')
+  async related(@Query('recordType') recordType?: string, @Query('recordId') recordId?: string): Promise<MailRecord[]> {
+    return (await this.mail.related(this.caller(), { recordType: recordType as never, recordId })).map((mail) => this.present(mail));
+  }
+
+  /** Link a message the caller can see to a record they can read. */
+  @Post('message/:id/links')
+  @Permissions('comms.mail.send')
+  async link(@Param('id', ParseUuidOr404Pipe) id: string, @Body() dto: LinkDto): Promise<MailRecord> {
+    return this.present(await this.mail.linkRecord(this.caller(), id, { recordType: dto?.recordType as never, recordId: dto?.recordId }));
+  }
+
   @Get('folder/:folder')
   async folder(@Param('folder') folder: string, @Query('q') q?: string): Promise<MailRecord[]> {
     const known = ['inbox', 'sent', 'drafts', 'scheduled', 'needs-review'];
@@ -90,12 +110,16 @@ export class MailboxController {
   @Post('drafts')
   @Permissions('comms.mail.send')
   async createDraft(@Body() dto: ComposeDto): Promise<MailRecord> {
-    return this.present(await this.mail.createDraft(this.caller(), dto));
+    const { relatedTo, ...compose } = dto ?? {};
+    return this.present(await this.mail.createDraft(this.caller(), compose, Array.isArray(relatedTo) ? relatedTo as never : []));
   }
 
   @Patch('drafts/:id')
   @Permissions('comms.mail.send')
-  async updateDraft(@Param('id') id: string, @Body() dto: ComposeDto): Promise<MailRecord> {
+  async updateDraft(@Param('id') id: string, @Body() rawDto: ComposeDto): Promise<MailRecord> {
+    // Links are written only on creation or through the link route, never by an edit.
+    const dto: ComposeDto = { ...(rawDto ?? {}) };
+    delete dto.relatedTo;
     return this.present(await this.mail.updateDraft(this.caller(), id, dto));
   }
 

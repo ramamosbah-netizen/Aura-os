@@ -1732,6 +1732,28 @@ defects.push({
   g.remediationDependency = "Owner decisions, 2026-10-05: (1) how an order's commitment posts — per line by each line's cost line, and at which act; (2) how a subcontract's scope split across work packages apportions its commitment and claims. The stock-issue, plant and subcontract-cost-line routes are built and proved.";
 }
 
+/**
+ * MAIL-03…MAIL-07 (2026-10-05) — a message knows the business records it is about. They were
+ * DISCONNECTED with no finding tracking them; built and proved here, each against its own criterion.
+ */
+{
+  const shared = "Built 2026-10-05: a message links to the business records it is about (migration 0406, aura_comms_mail_links under forced RLS; a typed reference with the record's name as a snapshot, written only by the store's link methods, never by a save). A record is linked when a message is composed FROM it — every customer, contact, enquiry, opportunity and tender page, the supplier register row and the project overview carry a Correspondence panel with 'Email about this …', which opens the composer already about that record — or afterwards by anyone who can see the message (POST comms/mailbox/message/:id/links). Each record is checked at the service boundary through a directory the composition root binds to the owning module's own service: it must exist in the tenant and be readable by whoever links it (its own read permission), or it is not found. The record's panel lists the linked messages ITS VIEWER could already read — their own drafts, and messages they sent or received — so a link widens nothing; the message shows 'About: …' and opens the record. PROVED: mail-record-links.test.ts (7 — compose links, refusals before any write, visibility, later linking, edits never rewriting links, deletion) and mail-record-links.spec.ts (browser, Auth ON, PostgreSQL): composed on screen from a customer, a contact, an enquiry, an opportunity, a tender, a supplier and a project, each sent message carries its link with the record's name; each record lists its message, the message names its record and opens it; the colleague it was sent to sees it on the record; a reader of the customer who is not on the message sees nothing; a Sales rep, who may not read suppliers, cannot link a message to one (404). mail-document-attachments.spec.ts re-run green. LIMITS: proved on AURA internal mail — external providers are F-05; linking an EXISTING message to a record is an API act with no screen yet.";
+  const subject = {
+    'MAIL-03': 'Customer and contact: from the customer page and the contact page.',
+    'MAIL-04': 'Enquiry and opportunity: from the enquiry (lead) page and the opportunity page.',
+    'MAIL-05': 'Tender: from the tender page.',
+    'MAIL-06': 'Supplier: from the supplier register row, which has no record page of its own; a message about a supplier opens the register on that supplier.',
+    'MAIL-07': 'Project: from the project overview.',
+  };
+  for (const [id, scope] of Object.entries(subject)) {
+    const c = caps.find(c=>c.id===id);
+    c.classification = 'COMPLETE';
+    c.currentBehavior = `${scope} ${shared}`;
+    Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
+    // actualOutput stays as it was: a link produces no document.
+  }
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

@@ -1,4 +1,4 @@
-import type { MailAttachment, MailRecord } from './mail-domain';
+import type { MailAttachment, MailLink, MailRecord, MailRecordType } from './mail-domain';
 import { normaliseAddress } from './mail-domain';
 import type { DispatchRecord, MailFilter, MailStore } from './mail-store';
 
@@ -16,6 +16,8 @@ export class InMemoryMailStore implements MailStore {
   private readonly cursors = new Map<string, string>();
   /** Stands in for aura_comms_attachments (owner_type 'mail'): `${tenantId}::${mailId}` -> rows. */
   private readonly attachments = new Map<string, MailAttachment[]>();
+  /** Stands in for aura_comms_mail_links: `${tenantId}::${mailId}` -> rows. */
+  private readonly links = new Map<string, MailLink[]>();
 
   private box(tenantId: string): Map<string, MailRecord> {
     let box = this.mail.get(tenantId);
@@ -44,6 +46,7 @@ export class InMemoryMailStore implements MailStore {
     const reads = this.readsFor(tenantId);
     const copy = structuredClone(mail);
     copy.attachments = structuredClone(this.attachments.get(`${tenantId}::${mail.id}`) ?? []);
+    copy.links = structuredClone(this.links.get(`${tenantId}::${mail.id}`) ?? []);
     for (const participant of copy.participants) {
       participant.readAt = participant.role === 'from'
         ? null
@@ -60,6 +63,7 @@ export class InMemoryMailStore implements MailStore {
     // Attachments are owned by their own methods, exactly as in Postgres; a save carrying a list
     // must not be able to replace it.
     delete clean.attachments;
+    delete clean.links;
     this.box(tenantId).set(mail.id, clean);
   }
 
@@ -109,6 +113,26 @@ export class InMemoryMailStore implements MailStore {
   async remove(tenantId: string, mailId: string): Promise<void> {
     this.box(tenantId).delete(mailId);
     this.attachments.delete(`${tenantId}::${mailId}`);
+    this.links.delete(`${tenantId}::${mailId}`);
+  }
+
+  async addLink(tenantId: string, mailId: string, link: MailLink): Promise<boolean> {
+    const key = `${tenantId}::${mailId}`;
+    const list = this.links.get(key) ?? [];
+    if (list.some((l) => l.recordType === link.recordType && l.recordId === link.recordId)) return false;
+    this.links.set(key, [...list, structuredClone(link)]);
+    return true;
+  }
+
+  async listByRecord(tenantId: string, recordType: MailRecordType, recordId: string): Promise<MailRecord[]> {
+    const ids = [...this.links.entries()]
+      .filter(([key, rows]) => key.startsWith(`${tenantId}::`) && rows.some((l) => l.recordType === recordType && l.recordId === recordId))
+      .map(([key]) => key.slice(tenantId.length + 2));
+    return ids
+      .map((id) => this.box(tenantId).get(id))
+      .filter((mail): mail is MailRecord => Boolean(mail))
+      .sort((a, b) => (b.sentAt ?? b.createdAt).localeCompare(a.sentAt ?? a.createdAt))
+      .map((mail) => this.hydrate(tenantId, mail));
   }
 
   async addAttachment(tenantId: string, mailId: string, attachment: MailAttachment): Promise<boolean> {

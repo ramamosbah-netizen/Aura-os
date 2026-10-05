@@ -4,14 +4,14 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 69 |
+| COMPLETE | 74 |
 | PARTIAL | 77 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
 | DUPLICATED | 0 |
 | WRONG_AUTHORITY | 0 |
-| DISCONNECTED | 5 |
+| DISCONNECTED | 0 |
 | WRONG_BEHAVIOR | 0 |
 | UNREACHABLE | 0 |
 | UNVERIFIED | 25 |
@@ -161,11 +161,11 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | OUT-09 | Generated output access control | UNVERIFIED | Owning record + document rendering | N-SOURCE |
 | MAIL-01 | External send | PARTIAL | Communication mail / linked business records | N-MAIL |
 | MAIL-02 | External receive | UNVERIFIED | Communication mail / linked business records | N-MAIL |
-| MAIL-03 | Customer and contact linking | DISCONNECTED | Communication mail / linked business records | N-MAIL |
-| MAIL-04 | Enquiry and opportunity linking | DISCONNECTED | Communication mail / linked business records | N-MAIL |
-| MAIL-05 | Tender linking | DISCONNECTED | Communication mail / linked business records | N-MAIL |
-| MAIL-06 | Supplier linking | DISCONNECTED | Communication mail / linked business records | N-MAIL |
-| MAIL-07 | Project linking | DISCONNECTED | Communication mail / linked business records | N-MAIL |
+| MAIL-03 | Customer and contact linking | COMPLETE | Communication mail / linked business records | N-MAIL |
+| MAIL-04 | Enquiry and opportunity linking | COMPLETE | Communication mail / linked business records | N-MAIL |
+| MAIL-05 | Tender linking | COMPLETE | Communication mail / linked business records | N-MAIL |
+| MAIL-06 | Supplier linking | COMPLETE | Communication mail / linked business records | N-MAIL |
+| MAIL-07 | Project linking | COMPLETE | Communication mail / linked business records | N-MAIL |
 | MAIL-08 | Attachments and download | COMPLETE | Communication mail / linked business records | N-MAIL |
 | MAIL-09 | Communication history and threading | PARTIAL | Communication mail / linked business records | N-MAIL |
 | MAIL-10 | Delivery failure and retry | UNVERIFIED | Communication mail / linked business records | N-MAIL |

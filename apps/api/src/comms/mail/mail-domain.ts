@@ -77,6 +77,33 @@ export interface MailAttachment {
   createdAt: string;
 }
 
+/**
+ * WHAT A MESSAGE IS ABOUT (MAIL-03…MAIL-07): a typed reference to a business record — written when a
+ * message is composed from that record, or linked to it by someone who can see the message. A link is
+ * not a copy and not a grant: a record lists only the linked messages its viewer could already read.
+ */
+export const MAIL_RECORD_TYPES = [
+  'crm.account', 'crm.contact', 'crm.lead', 'crm.opportunity', 'tendering.tender', 'procurement.supplier', 'projects.project',
+] as const;
+export type MailRecordType = (typeof MAIL_RECORD_TYPES)[number];
+
+export function isMailRecordType(value: unknown): value is MailRecordType {
+  return typeof value === 'string' && (MAIL_RECORD_TYPES as readonly string[]).includes(value);
+}
+
+export interface MailRecordRef {
+  recordType: MailRecordType;
+  recordId: string;
+}
+
+export interface MailLink extends MailRecordRef {
+  id: string;
+  /** What the record was called when it was linked — a snapshot, not a join. */
+  recordLabel: string | null;
+  linkedBy: string;
+  linkedAt: string;
+}
+
 export interface MailRecord {
   id: string;
   tenantId: string;
@@ -116,6 +143,8 @@ export interface MailRecord {
    * replaces a message's envelope wholesale and must not be able to drop or forge an attachment.
    */
   attachments?: MailAttachment[];
+  /** Hydrated by the store, written ONLY through `addLink` — never by `save`. */
+  links?: MailLink[];
   createdAt: string;
   updatedAt: string;
 }

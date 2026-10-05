@@ -4,8 +4,8 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 
 | Classification | Capability count |
 | --- | --- |
-| COMPLETE | 75 |
-| PARTIAL | 85 |
+| COMPLETE | 76 |
+| PARTIAL | 86 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -14,7 +14,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | DISCONNECTED | 0 |
 | WRONG_BEHAVIOR | 0 |
 | UNREACHABLE | 0 |
-| UNVERIFIED | 16 |
+| UNVERIFIED | 14 |
 | NOT_AUDITED | 0 |
 
 ## Capabilities
@@ -116,7 +116,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | QHS-03 | NCR and correction | COMPLETE | Quality / HSE | R-J26 |
 | QHS-04 | Method statement and risk assessment | PARTIAL | Quality / HSE | R-J26 |
 | QHS-05 | Permit issue and expiry | PARTIAL | Quality / HSE | R-J26 |
-| QHS-06 | Incident and escalation | UNVERIFIED | Quality / HSE | R-J26 |
+| QHS-06 | Incident and escalation | PARTIAL | Quality / HSE | R-J26 |
 | QHS-07 | Inspection evidence and signature | COMPLETE | Quality / HSE | R-J26 |
 | COM-01 | Variation valuation and approval | PARTIAL | Contracts / Finance / Projects changes | R-J26 |
 | COM-02 | Claims and notices | UNVERIFIED | Contracts / Finance / Projects changes | R-J26 |
@@ -137,7 +137,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | TC-07 | Witness signature and attachments | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-08 | Defect and corrective action | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-09 | Retest history | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
-| TC-10 | Controlled certificate | UNVERIFIED | Commissioning / Quality / DocControl | N-TC; R-J26 |
+| TC-10 | Controlled certificate | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | TC-11 | Readiness rollup | COMPLETE | Commissioning / Quality / DocControl | N-TC; R-J26 |
 | HO-01 | As-built dossier | COMPLETE | Handover / DocControl / AMC / Projects | R-J26 |
 | HO-02 | O&M manuals | COMPLETE | Handover / DocControl / AMC / Projects | R-J26 |

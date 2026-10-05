@@ -3142,7 +3142,7 @@
       "stages": [
         "QA/QC & HSE"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Quality / HSE",
       "evidence": [
         "R-J26"
@@ -3150,16 +3150,17 @@
       "source": "apps/web/components/inspection-request-client.tsx",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative QA/QC, HSE, Site Engineer role executes Incident and escalation in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative QA/QC, HSE, Site Engineer role executes Incident and escalation in the canonical Quality / HSE context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED AND PROVED 2026-10-05. The HSE register now shows, per incident, who reported it, who investigated it and from when, and who closed it on what root cause. PROVED in hse-incident-escalation.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-site reports a MAJOR incident on the HSE screen and it reads back after a reload with 'Reported by u-e2e-site'; the reporter is refused investigating and closing it (403); while it is open the project's cross-domain health is Critical in HSE's own words ('major incident … under investigation', owned by hse) for u-e2e-pm on Project 360 — HSE decides what an incident means, Project 360 reports it; u-e2e-hse investigates and closes it on screen on a stated cause, and after a reload the register names the investigator, the closer and the cause; the Critical condition clears. NOT PROVED: an incident report as an output (no print or document exists); escalation is the project-health signal, not a notification to a named person — who must be told of a major incident, and how fast, is an HSE policy the owner has not set; QA/QC, named on the row, has no incident act (quality escalation is TC-08's, proved in quality-escalation.spec.ts)."
     },
     {
       "id": "QHS-07",
@@ -3829,7 +3830,7 @@
       "stages": [
         "T&C"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "COMPLETE",
       "authority": "Commissioning / Quality / DocControl",
       "evidence": [
         "N-TC",
@@ -3838,16 +3839,17 @@
       "source": "modules/commissioning/src/domain/commissioning-test-run.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "COMPLETE",
+        "browser": "COMPLETE",
+        "handoff": "COMPLETE"
       },
-      "acceptanceProof": "Representative T&C Engineer, QA/QC, Design / Technical Engineer role executes Controlled certificate in the canonical Commissioning / Quality / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative T&C Engineer, QA/QC, Design / Technical Engineer role executes Controlled certificate in the canonical Commissioning / Quality / DocControl context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from TC-GATE-10's build. T&C produces the evidence; Document Control registers the certificate; T&C records that the register entry IS the system's certificate — refused before the system is commissioned, refused for a reference the register does not hold, one per system (commissioning-certificate-link.spec.ts). PROVED BY ROLE in commissioning-certificate-roles.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-doccon registers the certificate in the controlled register; u-e2e-qaqc and u-e2e-eng, who read commissioning records, are refused linking it (403) and QA/QC is refused withdrawing one (403); u-e2e-tc links it on the Certificates screen and it survives a reload; the printed evidence pack states it is registered as that document; u-e2e-eng reads the same pack citing it; u-e2e-fm finds it, with its revision, in the handover dossier. Supersession in the register is shown on the surface (commissioning-certificate-link.spec.ts). LIMIT: the certificate's file is Document Control's register entry; AURA's own output is the printable evidence pack that cites it."
     },
     {
       "id": "TC-11",
@@ -9422,8 +9424,8 @@
   "totals": {
     "capabilities": 180,
     "classification": {
-      "COMPLETE": 75,
-      "PARTIAL": 85,
+      "COMPLETE": 76,
+      "PARTIAL": 86,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9432,7 +9434,7 @@
       "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 16,
+      "UNVERIFIED": 14,
       "NOT_AUDITED": 0
     },
     "gaps": 77,

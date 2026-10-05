@@ -1807,6 +1807,30 @@ defects.push({
   Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'UNVERIFIED', browser:'COMPLETE', handoff:'COMPLETE' });
 }
 
+/**
+ * TC-10 CONTROLLED CERTIFICATE (2026-10-05). UNVERIFIED with no finding. The mechanism was built by
+ * TC-GATE-10 and proved as an administrator; this row asks for the roles. Proved by role here, with
+ * no code change — the existing permissions already held.
+ */
+{
+  const c = caps.find(c=>c.id==='TC-10');
+  c.classification = 'COMPLETE';
+  c.currentBehavior = "RECONCILED 2026-10-05 from TC-GATE-10's build. T&C produces the evidence; Document Control registers the certificate; T&C records that the register entry IS the system's certificate — refused before the system is commissioned, refused for a reference the register does not hold, one per system (commissioning-certificate-link.spec.ts). PROVED BY ROLE in commissioning-certificate-roles.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-doccon registers the certificate in the controlled register; u-e2e-qaqc and u-e2e-eng, who read commissioning records, are refused linking it (403) and QA/QC is refused withdrawing one (403); u-e2e-tc links it on the Certificates screen and it survives a reload; the printed evidence pack states it is registered as that document; u-e2e-eng reads the same pack citing it; u-e2e-fm finds it, with its revision, in the handover dossier. Supersession in the register is shown on the surface (commissioning-certificate-link.spec.ts). LIMIT: the certificate's file is Document Control's register entry; AURA's own output is the printable evidence pack that cites it.";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
+}
+
+/**
+ * QHS-06 INCIDENT AND ESCALATION (2026-10-05). UNVERIFIED with no finding. The incident lifecycle
+ * existed (reported → investigating → closed on a root cause, reopenable; investigator and closer
+ * recorded) with no role-based proof, and the register screen showed a status and nobody behind it.
+ */
+{
+  const c = caps.find(c=>c.id==='QHS-06');
+  c.classification = 'PARTIAL';
+  c.currentBehavior = "RECONCILED AND PROVED 2026-10-05. The HSE register now shows, per incident, who reported it, who investigated it and from when, and who closed it on what root cause. PROVED in hse-incident-escalation.spec.ts (browser, Auth ON, PostgreSQL): u-e2e-site reports a MAJOR incident on the HSE screen and it reads back after a reload with 'Reported by u-e2e-site'; the reporter is refused investigating and closing it (403); while it is open the project's cross-domain health is Critical in HSE's own words ('major incident … under investigation', owned by hse) for u-e2e-pm on Project 360 — HSE decides what an incident means, Project 360 reports it; u-e2e-hse investigates and closes it on screen on a stated cause, and after a reload the register names the investigator, the closer and the cause; the Critical condition clears. NOT PROVED: an incident report as an output (no print or document exists); escalation is the project-health signal, not a notification to a named person — who must be told of a major incident, and how fast, is an HSE policy the owner has not set; QA/QC, named on the row, has no incident act (quality escalation is TC-08's, proved in quality-escalation.spec.ts).";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'UNVERIFIED', browser:'COMPLETE', handoff:'COMPLETE' });
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

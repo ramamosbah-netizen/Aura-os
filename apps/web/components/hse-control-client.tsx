@@ -34,6 +34,12 @@ interface HseIncident {
   description: string;
   locationDetail: string;
   status: 'reported' | 'investigating' | 'closed';
+  /** Who is investigating and since when; the cause it closed on, and who closed it (QHS-06). */
+  investigatedBy?: string | null;
+  investigationStartedAt?: string | null;
+  rootCause?: string | null;
+  closedBy?: string | null;
+  closedAt?: string | null;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
@@ -248,14 +254,14 @@ export default function HseControlClient({
               <table style={st.table}>
                 <thead>
                   <tr>
-                    {['Date', 'Severity', 'Project', 'Location', 'Description', 'Status', 'Actions'].map((h) => (
+                    {['Date', 'Severity', 'Project', 'Location', 'Description', 'Status', 'Record', 'Actions'].map((h) => (
                       <th key={h} style={st.th}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {incidents.map((i) => (
-                    <tr key={i.id}>
+                    <tr key={i.id} data-testid={`incident-row-${i.id}`}>
                       <td style={st.tdCode}>{i.date}</td>
                       <td style={st.td}>
                         <span style={i.severity === 'near_miss' ? st.tagInbound : i.severity === 'minor' ? st.tagPending : st.tagOutbound}>
@@ -266,13 +272,20 @@ export default function HseControlClient({
                       <td style={st.tdMuted}>{i.locationDetail}</td>
                       <td style={st.td}>{i.description}</td>
                       <td style={st.td}>
-                        <span style={i.status === 'closed' ? st.tagApproved : st.tagPending}>
+                        <span style={i.status === 'closed' ? st.tagApproved : st.tagPending} data-testid={`incident-status-${i.id}`}>
                           {i.status}
                         </span>
+                      </td>
+                      {/* WHO, at each step — the register showed a status and nobody behind it. */}
+                      <td style={st.tdMuted} data-testid={`incident-record-${i.id}`}>
+                        <div>Reported by {i.createdBy ?? 'not recorded'}</div>
+                        {i.investigatedBy && <div>Investigated by {i.investigatedBy}{i.investigationStartedAt ? ` from ${i.investigationStartedAt.slice(0, 10)}` : ''}</div>}
+                        {i.status === 'closed' && <div>Closed by {i.closedBy ?? 'not recorded'}{i.closedAt ? ` on ${i.closedAt.slice(0, 10)}` : ''} — cause: {i.rootCause ?? 'not recorded'}</div>}
                       </td>
                       <td style={st.td}>
                         {i.status !== 'closed' && (
                           <button
+                            data-testid={`incident-close-${i.id}`}
                             onClick={() => handleCloseIncident(i.id, i.status)}
                             style={st.btnApprove}
                           >

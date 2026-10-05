@@ -47,18 +47,18 @@
 | Sales | XOP-16 | PARTIAL |
 | Sales | XOP-17 | PARTIAL |
 | Sales | MGT-01 | COMPLETE |
-| Sales | MGT-02 | UNVERIFIED |
+| Sales | MGT-02 | PARTIAL |
 | Sales | MGT-03 | PARTIAL |
-| Sales | MGT-04 | UNVERIFIED |
-| Sales | MGT-05 | UNVERIFIED |
-| Sales | MGT-06 | UNVERIFIED |
+| Sales | MGT-04 | PARTIAL |
+| Sales | MGT-05 | PARTIAL |
+| Sales | MGT-06 | PARTIAL |
 | Sales | MGT-07 | BACKEND_ONLY |
 | Sales | MGT-08 | PARTIAL |
-| Sales | MGT-09 | UNVERIFIED |
+| Sales | MGT-09 | PARTIAL |
 | Sales | MGT-10 | BACKEND_ONLY |
 | Sales | MGT-11 | PARTIAL |
-| Sales | MGT-12 | UNVERIFIED |
-| Sales | MGT-13 | UNVERIFIED |
+| Sales | MGT-12 | PARTIAL |
+| Sales | MGT-13 | PARTIAL |
 | Sales | MGT-14 | PARTIAL |
 | Sales | MGT-15 | PARTIAL |
 | Pre-Sales | STU-01 | COMPLETE |
@@ -182,18 +182,18 @@
 | Award | XOP-16 | PARTIAL |
 | Award | XOP-17 | PARTIAL |
 | Award | MGT-01 | COMPLETE |
-| Award | MGT-02 | UNVERIFIED |
+| Award | MGT-02 | PARTIAL |
 | Award | MGT-03 | PARTIAL |
-| Award | MGT-04 | UNVERIFIED |
-| Award | MGT-05 | UNVERIFIED |
-| Award | MGT-06 | UNVERIFIED |
+| Award | MGT-04 | PARTIAL |
+| Award | MGT-05 | PARTIAL |
+| Award | MGT-06 | PARTIAL |
 | Award | MGT-07 | BACKEND_ONLY |
 | Award | MGT-08 | PARTIAL |
-| Award | MGT-09 | UNVERIFIED |
+| Award | MGT-09 | PARTIAL |
 | Award | MGT-10 | BACKEND_ONLY |
 | Award | MGT-11 | PARTIAL |
-| Award | MGT-12 | UNVERIFIED |
-| Award | MGT-13 | UNVERIFIED |
+| Award | MGT-12 | PARTIAL |
+| Award | MGT-13 | PARTIAL |
 | Award | MGT-14 | PARTIAL |
 | Award | MGT-15 | PARTIAL |
 | Mobilisation | AWD-01 | PARTIAL |
@@ -240,18 +240,18 @@
 | Mobilisation | XOP-16 | PARTIAL |
 | Mobilisation | XOP-17 | PARTIAL |
 | Mobilisation | MGT-01 | COMPLETE |
-| Mobilisation | MGT-02 | UNVERIFIED |
+| Mobilisation | MGT-02 | PARTIAL |
 | Mobilisation | MGT-03 | PARTIAL |
-| Mobilisation | MGT-04 | UNVERIFIED |
-| Mobilisation | MGT-05 | UNVERIFIED |
-| Mobilisation | MGT-06 | UNVERIFIED |
+| Mobilisation | MGT-04 | PARTIAL |
+| Mobilisation | MGT-05 | PARTIAL |
+| Mobilisation | MGT-06 | PARTIAL |
 | Mobilisation | MGT-07 | BACKEND_ONLY |
 | Mobilisation | MGT-08 | PARTIAL |
-| Mobilisation | MGT-09 | UNVERIFIED |
+| Mobilisation | MGT-09 | PARTIAL |
 | Mobilisation | MGT-10 | BACKEND_ONLY |
 | Mobilisation | MGT-11 | PARTIAL |
-| Mobilisation | MGT-12 | UNVERIFIED |
-| Mobilisation | MGT-13 | UNVERIFIED |
+| Mobilisation | MGT-12 | PARTIAL |
+| Mobilisation | MGT-13 | PARTIAL |
 | Mobilisation | MGT-14 | PARTIAL |
 | Mobilisation | MGT-15 | PARTIAL |
 | Engineering | STU-01 | COMPLETE |
@@ -305,18 +305,18 @@
 | Engineering | XOP-16 | PARTIAL |
 | Engineering | XOP-17 | PARTIAL |
 | Engineering | MGT-01 | COMPLETE |
-| Engineering | MGT-02 | UNVERIFIED |
+| Engineering | MGT-02 | PARTIAL |
 | Engineering | MGT-03 | PARTIAL |
-| Engineering | MGT-04 | UNVERIFIED |
-| Engineering | MGT-05 | UNVERIFIED |
-| Engineering | MGT-06 | UNVERIFIED |
+| Engineering | MGT-04 | PARTIAL |
+| Engineering | MGT-05 | PARTIAL |
+| Engineering | MGT-06 | PARTIAL |
 | Engineering | MGT-07 | BACKEND_ONLY |
 | Engineering | MGT-08 | PARTIAL |
-| Engineering | MGT-09 | UNVERIFIED |
+| Engineering | MGT-09 | PARTIAL |
 | Engineering | MGT-10 | BACKEND_ONLY |
 | Engineering | MGT-11 | PARTIAL |
-| Engineering | MGT-12 | UNVERIFIED |
-| Engineering | MGT-13 | UNVERIFIED |
+| Engineering | MGT-12 | PARTIAL |
+| Engineering | MGT-13 | PARTIAL |
 | Engineering | MGT-14 | PARTIAL |
 | Engineering | MGT-15 | PARTIAL |
 | Planning | PLN-01 | PARTIAL |
@@ -372,18 +372,18 @@
 | Planning | XOP-16 | PARTIAL |
 | Planning | XOP-17 | PARTIAL |
 | Planning | MGT-01 | COMPLETE |
-| Planning | MGT-02 | UNVERIFIED |
+| Planning | MGT-02 | PARTIAL |
 | Planning | MGT-03 | PARTIAL |
-| Planning | MGT-04 | UNVERIFIED |
-| Planning | MGT-05 | UNVERIFIED |
-| Planning | MGT-06 | UNVERIFIED |
+| Planning | MGT-04 | PARTIAL |
+| Planning | MGT-05 | PARTIAL |
+| Planning | MGT-06 | PARTIAL |
 | Planning | MGT-07 | BACKEND_ONLY |
 | Planning | MGT-08 | PARTIAL |
-| Planning | MGT-09 | UNVERIFIED |
+| Planning | MGT-09 | PARTIAL |
 | Planning | MGT-10 | BACKEND_ONLY |
 | Planning | MGT-11 | PARTIAL |
-| Planning | MGT-12 | UNVERIFIED |
-| Planning | MGT-13 | UNVERIFIED |
+| Planning | MGT-12 | PARTIAL |
+| Planning | MGT-13 | PARTIAL |
 | Planning | MGT-14 | PARTIAL |
 | Planning | MGT-15 | PARTIAL |
 | Procurement | SUP-01 | COMPLETE |
@@ -445,18 +445,18 @@
 | Procurement | XOP-16 | PARTIAL |
 | Procurement | XOP-17 | PARTIAL |
 | Procurement | MGT-01 | COMPLETE |
-| Procurement | MGT-02 | UNVERIFIED |
+| Procurement | MGT-02 | PARTIAL |
 | Procurement | MGT-03 | PARTIAL |
-| Procurement | MGT-04 | UNVERIFIED |
-| Procurement | MGT-05 | UNVERIFIED |
-| Procurement | MGT-06 | UNVERIFIED |
+| Procurement | MGT-04 | PARTIAL |
+| Procurement | MGT-05 | PARTIAL |
+| Procurement | MGT-06 | PARTIAL |
 | Procurement | MGT-07 | BACKEND_ONLY |
 | Procurement | MGT-08 | PARTIAL |
-| Procurement | MGT-09 | UNVERIFIED |
+| Procurement | MGT-09 | PARTIAL |
 | Procurement | MGT-10 | BACKEND_ONLY |
 | Procurement | MGT-11 | PARTIAL |
-| Procurement | MGT-12 | UNVERIFIED |
-| Procurement | MGT-13 | UNVERIFIED |
+| Procurement | MGT-12 | PARTIAL |
+| Procurement | MGT-13 | PARTIAL |
 | Procurement | MGT-14 | PARTIAL |
 | Procurement | MGT-15 | PARTIAL |
 | Site | SIT-01 | UNVERIFIED |
@@ -603,18 +603,18 @@
 | Progress | XOP-16 | PARTIAL |
 | Progress | XOP-17 | PARTIAL |
 | Progress | MGT-01 | COMPLETE |
-| Progress | MGT-02 | UNVERIFIED |
+| Progress | MGT-02 | PARTIAL |
 | Progress | MGT-03 | PARTIAL |
-| Progress | MGT-04 | UNVERIFIED |
-| Progress | MGT-05 | UNVERIFIED |
-| Progress | MGT-06 | UNVERIFIED |
+| Progress | MGT-04 | PARTIAL |
+| Progress | MGT-05 | PARTIAL |
+| Progress | MGT-06 | PARTIAL |
 | Progress | MGT-07 | BACKEND_ONLY |
 | Progress | MGT-08 | PARTIAL |
-| Progress | MGT-09 | UNVERIFIED |
+| Progress | MGT-09 | PARTIAL |
 | Progress | MGT-10 | BACKEND_ONLY |
 | Progress | MGT-11 | PARTIAL |
-| Progress | MGT-12 | UNVERIFIED |
-| Progress | MGT-13 | UNVERIFIED |
+| Progress | MGT-12 | PARTIAL |
+| Progress | MGT-13 | PARTIAL |
 | Progress | MGT-14 | PARTIAL |
 | Progress | MGT-15 | PARTIAL |
 | Commercial / Certification | COM-01 | PARTIAL |
@@ -664,18 +664,18 @@
 | Commercial / Certification | XOP-16 | PARTIAL |
 | Commercial / Certification | XOP-17 | PARTIAL |
 | Commercial / Certification | MGT-01 | COMPLETE |
-| Commercial / Certification | MGT-02 | UNVERIFIED |
+| Commercial / Certification | MGT-02 | PARTIAL |
 | Commercial / Certification | MGT-03 | PARTIAL |
-| Commercial / Certification | MGT-04 | UNVERIFIED |
-| Commercial / Certification | MGT-05 | UNVERIFIED |
-| Commercial / Certification | MGT-06 | UNVERIFIED |
+| Commercial / Certification | MGT-04 | PARTIAL |
+| Commercial / Certification | MGT-05 | PARTIAL |
+| Commercial / Certification | MGT-06 | PARTIAL |
 | Commercial / Certification | MGT-07 | BACKEND_ONLY |
 | Commercial / Certification | MGT-08 | PARTIAL |
-| Commercial / Certification | MGT-09 | UNVERIFIED |
+| Commercial / Certification | MGT-09 | PARTIAL |
 | Commercial / Certification | MGT-10 | BACKEND_ONLY |
 | Commercial / Certification | MGT-11 | PARTIAL |
-| Commercial / Certification | MGT-12 | UNVERIFIED |
-| Commercial / Certification | MGT-13 | UNVERIFIED |
+| Commercial / Certification | MGT-12 | PARTIAL |
+| Commercial / Certification | MGT-13 | PARTIAL |
 | Commercial / Certification | MGT-14 | PARTIAL |
 | Commercial / Certification | MGT-15 | PARTIAL |
 | Finance / Collection | COM-01 | PARTIAL |
@@ -725,18 +725,18 @@
 | Finance / Collection | XOP-16 | PARTIAL |
 | Finance / Collection | XOP-17 | PARTIAL |
 | Finance / Collection | MGT-01 | COMPLETE |
-| Finance / Collection | MGT-02 | UNVERIFIED |
+| Finance / Collection | MGT-02 | PARTIAL |
 | Finance / Collection | MGT-03 | PARTIAL |
-| Finance / Collection | MGT-04 | UNVERIFIED |
-| Finance / Collection | MGT-05 | UNVERIFIED |
-| Finance / Collection | MGT-06 | UNVERIFIED |
+| Finance / Collection | MGT-04 | PARTIAL |
+| Finance / Collection | MGT-05 | PARTIAL |
+| Finance / Collection | MGT-06 | PARTIAL |
 | Finance / Collection | MGT-07 | BACKEND_ONLY |
 | Finance / Collection | MGT-08 | PARTIAL |
-| Finance / Collection | MGT-09 | UNVERIFIED |
+| Finance / Collection | MGT-09 | PARTIAL |
 | Finance / Collection | MGT-10 | BACKEND_ONLY |
 | Finance / Collection | MGT-11 | PARTIAL |
-| Finance / Collection | MGT-12 | UNVERIFIED |
-| Finance / Collection | MGT-13 | UNVERIFIED |
+| Finance / Collection | MGT-12 | PARTIAL |
+| Finance / Collection | MGT-13 | PARTIAL |
 | Finance / Collection | MGT-14 | PARTIAL |
 | Finance / Collection | MGT-15 | PARTIAL |
 | T&C | TC-01 | PARTIAL |
@@ -928,17 +928,17 @@
 | Closeout | XOP-16 | PARTIAL |
 | Closeout | XOP-17 | PARTIAL |
 | Closeout | MGT-01 | COMPLETE |
-| Closeout | MGT-02 | UNVERIFIED |
+| Closeout | MGT-02 | PARTIAL |
 | Closeout | MGT-03 | PARTIAL |
-| Closeout | MGT-04 | UNVERIFIED |
-| Closeout | MGT-05 | UNVERIFIED |
-| Closeout | MGT-06 | UNVERIFIED |
+| Closeout | MGT-04 | PARTIAL |
+| Closeout | MGT-05 | PARTIAL |
+| Closeout | MGT-06 | PARTIAL |
 | Closeout | MGT-07 | BACKEND_ONLY |
 | Closeout | MGT-08 | PARTIAL |
-| Closeout | MGT-09 | UNVERIFIED |
+| Closeout | MGT-09 | PARTIAL |
 | Closeout | MGT-10 | BACKEND_ONLY |
 | Closeout | MGT-11 | PARTIAL |
-| Closeout | MGT-12 | UNVERIFIED |
-| Closeout | MGT-13 | UNVERIFIED |
+| Closeout | MGT-12 | PARTIAL |
+| Closeout | MGT-13 | PARTIAL |
 | Closeout | MGT-14 | PARTIAL |
 | Closeout | MGT-15 | PARTIAL |

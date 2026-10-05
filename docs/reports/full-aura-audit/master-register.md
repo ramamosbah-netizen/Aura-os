@@ -5,7 +5,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | Classification | Capability count |
 | --- | --- |
 | COMPLETE | 74 |
-| PARTIAL | 77 |
+| PARTIAL | 84 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -14,7 +14,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | DISCONNECTED | 0 |
 | WRONG_BEHAVIOR | 0 |
 | UNREACHABLE | 0 |
-| UNVERIFIED | 25 |
+| UNVERIFIED | 18 |
 | NOT_AUDITED | 0 |
 
 ## Capabilities
@@ -187,18 +187,18 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | XOP-16 | AI extraction | PARTIAL | Shared services with functional owners | N-SOURCE |
 | XOP-17 | Human review before truth mutation | PARTIAL | Shared services with functional owners | N-SOURCE |
 | MGT-01 | Pipeline quality and conversion | COMPLETE | Canonical portfolio projections | N-SOURCE |
-| MGT-02 | Awarded backlog | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
+| MGT-02 | Awarded backlog | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-03 | Project health | PARTIAL | Canonical portfolio projections | N-SOURCE |
-| MGT-04 | Schedule performance | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
-| MGT-05 | Resource utilization | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
-| MGT-06 | Procurement exposure | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
+| MGT-04 | Schedule performance | PARTIAL | Canonical portfolio projections | N-SOURCE |
+| MGT-05 | Resource utilization | PARTIAL | Canonical portfolio projections | N-SOURCE |
+| MGT-06 | Procurement exposure | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-07 | Revenue recognition | BACKEND_ONLY | Canonical portfolio projections | N-SOURCE |
 | MGT-08 | Cost and commitments | PARTIAL | Canonical portfolio projections | N-SOURCE |
-| MGT-09 | Margin and forecast | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
+| MGT-09 | Margin and forecast | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-10 | Cash and receivables | BACKEND_ONLY | Canonical portfolio projections | N-SOURCE |
 | MGT-11 | Major risks and issues | PARTIAL | Canonical portfolio projections | N-SOURCE |
-| MGT-12 | Variations and claims | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
-| MGT-13 | Forecast completion | UNVERIFIED | Canonical portfolio projections | N-SOURCE |
+| MGT-12 | Variations and claims | PARTIAL | Canonical portfolio projections | N-SOURCE |
+| MGT-13 | Forecast completion | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-14 | Closeout exposure | PARTIAL | Canonical portfolio projections | N-SOURCE |
 | MGT-15 | KPI drilldown and freshness | PARTIAL | Canonical portfolio projections | N-SOURCE |
 

@@ -383,18 +383,18 @@
 | Project Manager | XOP-16 | PARTIAL | UNVERIFIED |
 | Project Manager | XOP-17 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-01 | COMPLETE | UNVERIFIED |
-| Project Manager | MGT-02 | UNVERIFIED | UNVERIFIED |
+| Project Manager | MGT-02 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-03 | PARTIAL | UNVERIFIED |
-| Project Manager | MGT-04 | UNVERIFIED | UNVERIFIED |
-| Project Manager | MGT-05 | UNVERIFIED | UNVERIFIED |
-| Project Manager | MGT-06 | UNVERIFIED | UNVERIFIED |
+| Project Manager | MGT-04 | PARTIAL | UNVERIFIED |
+| Project Manager | MGT-05 | PARTIAL | UNVERIFIED |
+| Project Manager | MGT-06 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-07 | BACKEND_ONLY | UNVERIFIED |
 | Project Manager | MGT-08 | PARTIAL | UNVERIFIED |
-| Project Manager | MGT-09 | UNVERIFIED | UNVERIFIED |
+| Project Manager | MGT-09 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-10 | BACKEND_ONLY | UNVERIFIED |
 | Project Manager | MGT-11 | PARTIAL | UNVERIFIED |
-| Project Manager | MGT-12 | UNVERIFIED | UNVERIFIED |
-| Project Manager | MGT-13 | UNVERIFIED | UNVERIFIED |
+| Project Manager | MGT-12 | PARTIAL | UNVERIFIED |
+| Project Manager | MGT-13 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-14 | PARTIAL | UNVERIFIED |
 | Project Manager | MGT-15 | PARTIAL | UNVERIFIED |
 | Technical Manager | STU-01 | COMPLETE | UNVERIFIED |
@@ -481,18 +481,18 @@
 | Technical Manager | XOP-16 | PARTIAL | UNVERIFIED |
 | Technical Manager | XOP-17 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-01 | COMPLETE | UNVERIFIED |
-| Technical Manager | MGT-02 | UNVERIFIED | UNVERIFIED |
+| Technical Manager | MGT-02 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-03 | PARTIAL | UNVERIFIED |
-| Technical Manager | MGT-04 | UNVERIFIED | UNVERIFIED |
-| Technical Manager | MGT-05 | UNVERIFIED | UNVERIFIED |
-| Technical Manager | MGT-06 | UNVERIFIED | UNVERIFIED |
+| Technical Manager | MGT-04 | PARTIAL | UNVERIFIED |
+| Technical Manager | MGT-05 | PARTIAL | UNVERIFIED |
+| Technical Manager | MGT-06 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-07 | BACKEND_ONLY | UNVERIFIED |
 | Technical Manager | MGT-08 | PARTIAL | UNVERIFIED |
-| Technical Manager | MGT-09 | UNVERIFIED | UNVERIFIED |
+| Technical Manager | MGT-09 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-10 | BACKEND_ONLY | UNVERIFIED |
 | Technical Manager | MGT-11 | PARTIAL | UNVERIFIED |
-| Technical Manager | MGT-12 | UNVERIFIED | UNVERIFIED |
-| Technical Manager | MGT-13 | UNVERIFIED | UNVERIFIED |
+| Technical Manager | MGT-12 | PARTIAL | UNVERIFIED |
+| Technical Manager | MGT-13 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-14 | PARTIAL | UNVERIFIED |
 | Technical Manager | MGT-15 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | EST-01 | PARTIAL | UNVERIFIED |
@@ -582,18 +582,18 @@
 | Commercial Manager / QS | XOP-16 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | XOP-17 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-01 | COMPLETE | UNVERIFIED |
-| Commercial Manager / QS | MGT-02 | UNVERIFIED | UNVERIFIED |
+| Commercial Manager / QS | MGT-02 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-03 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | MGT-04 | UNVERIFIED | UNVERIFIED |
-| Commercial Manager / QS | MGT-05 | UNVERIFIED | UNVERIFIED |
-| Commercial Manager / QS | MGT-06 | UNVERIFIED | UNVERIFIED |
+| Commercial Manager / QS | MGT-04 | PARTIAL | UNVERIFIED |
+| Commercial Manager / QS | MGT-05 | PARTIAL | UNVERIFIED |
+| Commercial Manager / QS | MGT-06 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-07 | BACKEND_ONLY | UNVERIFIED |
 | Commercial Manager / QS | MGT-08 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | MGT-09 | UNVERIFIED | UNVERIFIED |
+| Commercial Manager / QS | MGT-09 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-10 | BACKEND_ONLY | UNVERIFIED |
 | Commercial Manager / QS | MGT-11 | PARTIAL | UNVERIFIED |
-| Commercial Manager / QS | MGT-12 | UNVERIFIED | UNVERIFIED |
-| Commercial Manager / QS | MGT-13 | UNVERIFIED | UNVERIFIED |
+| Commercial Manager / QS | MGT-12 | PARTIAL | UNVERIFIED |
+| Commercial Manager / QS | MGT-13 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-14 | PARTIAL | UNVERIFIED |
 | Commercial Manager / QS | MGT-15 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | SUP-01 | COMPLETE | UNVERIFIED |
@@ -655,18 +655,18 @@
 | Procurement Manager / Buyer | XOP-16 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | XOP-17 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-01 | COMPLETE | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-02 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-02 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-03 | PARTIAL | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-04 | UNVERIFIED | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-05 | UNVERIFIED | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-06 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-04 | PARTIAL | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-05 | PARTIAL | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-06 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-07 | BACKEND_ONLY | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-08 | PARTIAL | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-09 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-09 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-10 | BACKEND_ONLY | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-11 | PARTIAL | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-12 | UNVERIFIED | UNVERIFIED |
-| Procurement Manager / Buyer | MGT-13 | UNVERIFIED | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-12 | PARTIAL | UNVERIFIED |
+| Procurement Manager / Buyer | MGT-13 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-14 | PARTIAL | UNVERIFIED |
 | Procurement Manager / Buyer | MGT-15 | PARTIAL | UNVERIFIED |
 | Storekeeper | BUY-01 | COMPLETE | UNVERIFIED |
@@ -948,18 +948,18 @@
 | Senior Management | XOP-16 | PARTIAL | UNVERIFIED |
 | Senior Management | XOP-17 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-01 | COMPLETE | UNVERIFIED |
-| Senior Management | MGT-02 | UNVERIFIED | UNVERIFIED |
+| Senior Management | MGT-02 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-03 | PARTIAL | UNVERIFIED |
-| Senior Management | MGT-04 | UNVERIFIED | UNVERIFIED |
-| Senior Management | MGT-05 | UNVERIFIED | UNVERIFIED |
-| Senior Management | MGT-06 | UNVERIFIED | UNVERIFIED |
+| Senior Management | MGT-04 | PARTIAL | UNVERIFIED |
+| Senior Management | MGT-05 | PARTIAL | UNVERIFIED |
+| Senior Management | MGT-06 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-07 | BACKEND_ONLY | UNVERIFIED |
 | Senior Management | MGT-08 | PARTIAL | UNVERIFIED |
-| Senior Management | MGT-09 | UNVERIFIED | UNVERIFIED |
+| Senior Management | MGT-09 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-10 | BACKEND_ONLY | UNVERIFIED |
 | Senior Management | MGT-11 | PARTIAL | UNVERIFIED |
-| Senior Management | MGT-12 | UNVERIFIED | UNVERIFIED |
-| Senior Management | MGT-13 | UNVERIFIED | UNVERIFIED |
+| Senior Management | MGT-12 | PARTIAL | UNVERIFIED |
+| Senior Management | MGT-13 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-14 | PARTIAL | UNVERIFIED |
 | Senior Management | MGT-15 | PARTIAL | UNVERIFIED |
 | CEO | OUT-01 | PARTIAL | UNVERIFIED |
@@ -989,17 +989,17 @@
 | CEO | XOP-16 | PARTIAL | UNVERIFIED |
 | CEO | XOP-17 | PARTIAL | UNVERIFIED |
 | CEO | MGT-01 | COMPLETE | UNVERIFIED |
-| CEO | MGT-02 | UNVERIFIED | UNVERIFIED |
+| CEO | MGT-02 | PARTIAL | UNVERIFIED |
 | CEO | MGT-03 | PARTIAL | UNVERIFIED |
-| CEO | MGT-04 | UNVERIFIED | UNVERIFIED |
-| CEO | MGT-05 | UNVERIFIED | UNVERIFIED |
-| CEO | MGT-06 | UNVERIFIED | UNVERIFIED |
+| CEO | MGT-04 | PARTIAL | UNVERIFIED |
+| CEO | MGT-05 | PARTIAL | UNVERIFIED |
+| CEO | MGT-06 | PARTIAL | UNVERIFIED |
 | CEO | MGT-07 | BACKEND_ONLY | UNVERIFIED |
 | CEO | MGT-08 | PARTIAL | UNVERIFIED |
-| CEO | MGT-09 | UNVERIFIED | UNVERIFIED |
+| CEO | MGT-09 | PARTIAL | UNVERIFIED |
 | CEO | MGT-10 | BACKEND_ONLY | UNVERIFIED |
 | CEO | MGT-11 | PARTIAL | UNVERIFIED |
-| CEO | MGT-12 | UNVERIFIED | UNVERIFIED |
-| CEO | MGT-13 | UNVERIFIED | UNVERIFIED |
+| CEO | MGT-12 | PARTIAL | UNVERIFIED |
+| CEO | MGT-13 | PARTIAL | UNVERIFIED |
 | CEO | MGT-14 | PARTIAL | UNVERIFIED |
 | CEO | MGT-15 | PARTIAL | UNVERIFIED |

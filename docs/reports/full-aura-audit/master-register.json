@@ -6449,7 +6449,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6459,14 +6459,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Awarded backlog in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Awarded backlog in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'backlog'. Awarded backlog: 'Still to bill' and 'Active contracts', from contracts' awarded value against customer invoices billed ex-VAT. PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-03",
@@ -6536,7 +6537,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6546,14 +6547,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Schedule performance in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Schedule performance in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'schedule'. Schedule performance: 'Activities later than baseline' and 'Largest slip', from project schedules against their baselines; SPI is stated as not computable (no time-phased planned value exists) rather than invented. PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-05",
@@ -6579,7 +6581,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6589,14 +6591,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Resource utilization in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Resource utilization in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'resources'. Resource utilisation: 'Commitments in conflict', 'Capacity unknown' and 'Held commitments', from resource bookings and their live feasibility (F-08 made an out-of-service vehicle a named conflict). PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-06",
@@ -6622,7 +6625,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6632,14 +6635,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Procurement exposure in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Procurement exposure in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'procurement'. Procurement exposure: 'Committed, not yet received' and 'Open purchase orders', from purchase orders in an open committed status. PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-07",
@@ -6753,7 +6757,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6763,14 +6767,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Margin and forecast in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Margin and forecast in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'margin'. Margin and forecast: 'Forecast margin', 'Projects forecast to lose money' and 'Expected loss', from contract value against the CBS forecast at completion — the revenue-recognition computation Finance reports. PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-10",
@@ -6884,7 +6889,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6894,14 +6899,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Variations and claims in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Variations and claims in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'variations'. Variations and claims: 'Variations awaiting decision', their net value, and 'Time claims awaiting decision', from project variations and EOT claims (the API proof asserts a submitted variation of 40,000). PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-13",
@@ -6927,7 +6933,7 @@
         "Finance / Collection",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Canonical portfolio projections",
       "evidence": [
         "N-SOURCE"
@@ -6937,14 +6943,15 @@
       "layers": {
         "domain": "UNVERIFIED",
         "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
+        "api": "COMPLETE",
+        "permissions": "PARTIAL",
+        "ui": "COMPLETE",
         "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Forecast completion in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Senior Management, CEO role executes Forecast completion in the canonical Canonical portfolio projections context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "RECONCILED 2026-10-05 from F-10's decision 'forecast'. Forecast completion: 'Projects heading past baseline' and the worst lateness in working days, from the schedule forecast to completion against the baseline. PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision."
     },
     {
       "id": "MGT-14",
@@ -9414,7 +9421,7 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 74,
-      "PARTIAL": 77,
+      "PARTIAL": 84,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9423,7 +9430,7 @@
       "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 25,
+      "UNVERIFIED": 18,
       "NOT_AUDITED": 0
     },
     "gaps": 77,

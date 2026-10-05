@@ -1754,6 +1754,33 @@ defects.push({
   }
 }
 
+/**
+ * MGT-02/04/05/06/09/12/13 RECONCILED (2026-10-05). F-10 built one governed decision per management
+ * capability (MGT-01…MGT-14) and these seven rows were never written after it: blank and UNVERIFIED.
+ * Each is set from what is proved for its OWN decision — no further. PARTIAL, not COMPLETE: the rows
+ * name Project Manager, Technical Manager, QS and Procurement Manager views, and the decision set is
+ * Senior Management's (intelligence.executive-decision.read: r-executive, r-admin); there is no
+ * export or print; and nothing here is written, so "save/reload" has nothing to prove.
+ */
+{
+  const read = {
+    'MGT-02': ['backlog', "Awarded backlog: 'Still to bill' and 'Active contracts', from contracts' awarded value against customer invoices billed ex-VAT."],
+    'MGT-04': ['schedule', "Schedule performance: 'Activities later than baseline' and 'Largest slip', from project schedules against their baselines; SPI is stated as not computable (no time-phased planned value exists) rather than invented."],
+    'MGT-05': ['resources', "Resource utilisation: 'Commitments in conflict', 'Capacity unknown' and 'Held commitments', from resource bookings and their live feasibility (F-08 made an out-of-service vehicle a named conflict)."],
+    'MGT-06': ['procurement', "Procurement exposure: 'Committed, not yet received' and 'Open purchase orders', from purchase orders in an open committed status."],
+    'MGT-09': ['margin', "Margin and forecast: 'Forecast margin', 'Projects forecast to lose money' and 'Expected loss', from contract value against the CBS forecast at completion — the revenue-recognition computation Finance reports."],
+    'MGT-12': ['variations', "Variations and claims: 'Variations awaiting decision', their net value, and 'Time claims awaiting decision', from project variations and EOT claims (the API proof asserts a submitted variation of 40,000)."],
+    'MGT-13': ['forecast', "Forecast completion: 'Projects heading past baseline' and the worst lateness in working days, from the schedule forecast to completion against the baseline."],
+  };
+  const proof = "PROVED for Senior Management, re-run 2026-10-05 against PostgreSQL with Auth ON: GET intelligence/executive-decisions as u-e2e-exec reports this decision MEASURED, with its source; executive-decisions.e2e-spec.ts (every decision's record count equals its counted population, one as-of across all, Sales refused) and executive-decisions.spec.ts (u-e2e-exec reaches /executive by clicking; the tile states its source and population and its drill names exactly that population; the Command Center's CEO perspective shows the same set). NOT PROVED: the Project Manager, Technical Manager, QS and Procurement Manager roles this capability names — they do not hold the decision set's permission, and whether they should is the owner's permission-catalogue decision; an export or print of the decision.";
+  for (const [id, [decision, text]] of Object.entries(read)) {
+    const c = caps.find(c=>c.id===id);
+    c.classification = 'PARTIAL';
+    c.currentBehavior = `RECONCILED 2026-10-05 from F-10's decision '${decision}'. ${text} ${proof}`;
+    Object.assign(c.layers, { api:'COMPLETE', ui:'COMPLETE', browser:'COMPLETE', permissions:'PARTIAL', handoff:'PARTIAL' });
+  }
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

@@ -5,7 +5,7 @@ import type {
   MailProviderAdapter,
   ProviderHealth,
 } from './mail-delivery';
-import { CapabilityUnsupportedError } from './mail-delivery';
+import { CapabilityUnsupportedError, PermanentDeliveryError } from './mail-delivery';
 import type { MailRecord } from './mail-domain';
 
 /**
@@ -51,6 +51,17 @@ export class AuraInternalMailAdapter implements MailProviderAdapter {
   }
 
   async send(_account: MailAccountRef, mail: MailRecord): Promise<DeliveryResult> {
+    // NOTHING CARRIES MAIL OUT OF AURA (MAIL-10). This adapter reported success for every
+    // recipient, so a message to client@example.com read "sent" in the sender's folder while no
+    // transport existed to take it anywhere — the one lie a mail system must never tell. A recipient
+    // with no AURA user is now a PERMANENT refusal: retrying will not connect a mail account.
+    const outside = mail.participants.filter((p) => p.role !== 'from' && !p.userId).map((p) => p.address ?? 'an unnamed recipient');
+    if (outside.length > 0) {
+      throw new PermanentDeliveryError(
+        `AURA internal mail reaches AURA users only — ${outside.join(', ')} ${outside.length === 1 ? 'is' : 'are'} outside AURA, ` +
+          'and no external mail account is connected to carry it. Nothing was delivered to anyone.',
+      );
+    }
     return {
       providerMessageId: `aura-internal:${mail.id}`,
       providerThreadId: `aura-internal:${mail.threadId}`,

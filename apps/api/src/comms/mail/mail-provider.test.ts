@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AuraInternalMailAdapter } from './aura-internal-adapter';
 import {
   CapabilityUnsupportedError,
+  PermanentDeliveryError,
   MailProviderRegistry,
   effectiveCapabilities,
   requireCapability,
@@ -29,9 +30,10 @@ const account = (over: Partial<MailAccountRef> = {}): MailAccountRef => ({
   ...over,
 });
 
-const draft = (): MailRecord => makeDraft({
+/** Internal mail is addressed to AURA users — the only recipients the internal provider can reach. */
+const draft = (to: MailRecord['participants'] | string[] = [{ role: 'to', address: null, userId: 'u-bob' }]): MailRecord => makeDraft({
   tenantId: 'tenant-a', fromUser: 'u-alice', fromAddress: 'alice@aura.example',
-  to: ['client@example.com'], subject: 'Hello', body: 'Body',
+  to, subject: 'Hello', body: 'Body',
 });
 
 /** A stand-in for a provider that can read a mailbox but is connected read-only. */
@@ -92,6 +94,15 @@ describe('aura-internal reference adapter', () => {
     const health = await new AuraInternalMailAdapter().health(account({ status: 'disabled' }));
     expect(health.status).toBe('disabled');
     expect(health.detail).toBeTruthy();
+  });
+
+  it('refuses, permanently, a recipient outside AURA — nothing carries it, so it is never "sent" (MAIL-10)', async () => {
+    const outside = draft(['client@example.com']);
+    await expect(new AuraInternalMailAdapter().send(account(), outside)).rejects.toBeInstanceOf(PermanentDeliveryError);
+    await expect(new AuraInternalMailAdapter().send(account(), outside)).rejects.toThrow(/client@example.com is outside AURA/);
+    // One outside recipient refuses the message: half-delivering it would leave the sender unable to say who got it.
+    const mixed = draft([{ role: 'to', address: null, userId: 'u-bob' }, { role: 'cc', address: 'client@example.com', userId: null }]);
+    await expect(new AuraInternalMailAdapter().send(account(), mixed)).rejects.toThrow(/Nothing was delivered to anyone/);
   });
 
   it('returns the provider identifiers a sync needs to stay idempotent', async () => {

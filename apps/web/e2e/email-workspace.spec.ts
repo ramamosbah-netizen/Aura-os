@@ -76,12 +76,24 @@ test('draft → save → reload → reopen → schedule → cancel', async ({ pa
   await expect(page.getByTestId('mail-row').filter({ hasText: subject })).toHaveCount(0);
 });
 
+/** An AURA colleague — the only recipient AURA internal mail can reach (MAIL-10). */
+const COLLEAGUE = 'u-e2e-salesmgr';
+
+async function addColleague(page: Page) {
+  const select = page.getByTestId('mail-colleague-select');
+  await expect(select.locator(`option[value="${COLLEAGUE}"]`)).toHaveCount(1, { timeout: 30_000 });
+  await select.selectOption(COLLEAGUE);
+  await expect(page.getByTestId(`mail-colleague-${COLLEAGUE}`)).toBeVisible();
+}
+
 test('compose → send now → Sent → open → reply', async ({ page }) => {
   await openEmail(page);
 
   const subject = `c35-send-${Date.now()}`;
   await page.getByTestId('mail-compose').click();
-  await page.getByTestId('mail-to').fill('client@example.com');
+  // A colleague, not an outside address: nothing carries mail out of AURA yet, and the test below
+  // proves that an outside address now FAILS rather than reading "sent".
+  await addColleague(page);
   await page.getByTestId('mail-subject').fill(subject);
   await page.getByTestId('mail-body').fill('Going out now.');
   await page.getByTestId('mail-send-now').click();
@@ -128,6 +140,62 @@ test('compose → send now → Sent → open → reply', async ({ page }) => {
 
   // Everything happened inside Communication.
   expect(page.url()).toContain('/my-work/communication');
+});
+
+/**
+ * MAIL-10 — an address outside AURA used to read "sent" while no transport existed to carry it. It
+ * now fails, says why, lands in Needs review, and its sender takes it back, corrects it and sends it.
+ */
+test('an outside address fails honestly, and the sender takes it back, corrects it and sends it', async ({ page }) => {
+  test.setTimeout(240_000);
+  await openEmail(page);
+  const subject = `mail10-outside-${Date.now()}`;
+  await page.getByTestId('mail-compose').click();
+  await page.getByTestId('mail-to').fill('client@example.com');
+  await expect(page.getByTestId('mail-outside-warning'), 'the composer says it will not reach them').toContainText('outside AURA');
+  await page.getByTestId('mail-subject').fill(subject);
+  await page.getByTestId('mail-body').fill('This cannot leave AURA yet.');
+  await page.getByTestId('mail-send-now').click();
+  await expect(page.getByRole('status')).toContainText('Queued to send');
+
+  // The worker refuses it on its first attempt — a permanent refusal is not retried.
+  const row = page.getByTestId('mail-row').filter({ hasText: subject }).first();
+  await expect(async () => {
+    await page.goto(EMAIL, { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('mail-folder-needs-review').click();
+    await expect(row).toBeVisible({ timeout: Number(process.env.E2E_FOLDER_TIMEOUT ?? 10_000) });
+  }).toPass({ timeout: Number(process.env.E2E_DISPATCH_TIMEOUT ?? 90_000) });
+  await row.click();
+  await expect(page.getByTestId('mail-failed')).toContainText('client@example.com is outside AURA');
+  await expect(page.getByTestId('mail-failed')).toContainText('Nothing was delivered to anyone');
+
+  // It is never drawn as Sent.
+  await page.getByTestId('mail-folder-sent').click();
+  await expect(page.getByTestId('mail-row').filter({ hasText: subject })).toHaveCount(0);
+
+  // Back to drafts, corrected on screen to a colleague, and sent.
+  await page.getByTestId('mail-folder-needs-review').click();
+  await row.click();
+  await page.getByTestId('mail-return-to-draft').click();
+  await expect(page.getByRole('status')).toContainText('Returned to Drafts');
+  await page.getByTestId('mail-folder-drafts').click();
+  await page.getByTestId('mail-row').filter({ hasText: subject }).first().click();
+  await page.getByTestId('mail-edit-draft').click();
+  await expect(page.getByTestId('mail-to')).toHaveValue('client@example.com');
+  await page.getByTestId('mail-to').fill('');
+  await expect(page.getByTestId('mail-outside-warning')).toHaveCount(0);
+  await addColleague(page);
+  await page.getByTestId('mail-send-now').click();
+  await expect(page.getByRole('status')).toContainText('Queued to send');
+
+  await expect(async () => {
+    await page.goto(EMAIL, { waitUntil: 'domcontentloaded' });
+    await page.getByTestId('mail-folder-sent').click();
+    await expect(page.getByTestId('mail-row').filter({ hasText: subject }).first()).toBeVisible({ timeout: Number(process.env.E2E_FOLDER_TIMEOUT ?? 10_000) });
+  }).toPass({ timeout: Number(process.env.E2E_DISPATCH_TIMEOUT ?? 90_000) });
+  await page.getByTestId('mail-row').filter({ hasText: subject }).first().click();
+  await expect(page.getByTestId('mail-message')).toContainText(COLLEAGUE);
+  await expect(page.getByTestId('mail-message')).not.toContainText('client@example.com');
 });
 
 test('the sender picker offers only accounts that can actually send', async ({ page }) => {

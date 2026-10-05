@@ -130,6 +130,41 @@ describe('lifecycle authority', () => {
   });
 });
 
+/**
+ * MAIL-10 — a failed or uncertain message is not a dead end. It sat in Needs review with nothing its
+ * sender could do: `failed` could not be sent again, and neither state could be edited.
+ */
+describe('returning a failed or uncertain message to drafts', () => {
+  it('takes a failed message back to drafts, clears the failure, and lets it be corrected and sent again', async () => {
+    const { svc, store } = service();
+    const draft = await svc.createDraft(ALICE, { to: ['client@example.com'], subject: 'Quote', body: 'x' });
+    await store.save(ALICE.tenantId, { ...draft, state: 'failed', failedReason: 'client@example.com is outside AURA' });
+
+    const back = await svc.returnToDraft(ALICE, draft.id);
+    expect(back).toMatchObject({ state: 'draft', failedReason: null, deliveryStartedAt: null });
+    const corrected = await svc.updateDraft(ALICE, draft.id, { to: [{ role: 'to', address: null, userId: 'u-bob' }] });
+    expect(corrected.participants.filter((p) => p.role === 'to').map((p) => p.userId)).toEqual(['u-bob']);
+    expect((await svc.queueForSend(ALICE, draft.id)).state).toBe('queued');
+  });
+
+  it('takes an uncertain one back too — sending it again is the sender’s deliberate choice', async () => {
+    const { svc, store } = service();
+    const draft = await svc.createDraft(ALICE, { to: [{ role: 'to', address: null, userId: 'u-bob' }], body: 'x' });
+    await store.save(ALICE.tenantId, { ...draft, state: 'needs_review', deliveryStartedAt: new Date().toISOString() });
+    expect((await svc.returnToDraft(ALICE, draft.id)).state).toBe('draft');
+  });
+
+  it('refuses anything that is not failed or uncertain, and anyone but its author', async () => {
+    const { svc, store } = service();
+    const draft = await svc.createDraft(ALICE, { to: [{ role: 'to', address: null, userId: 'u-bob' }], body: 'x' });
+    await expect(svc.returnToDraft(ALICE, draft.id)).rejects.toThrow(/only a failed or uncertain one/);
+    await store.save(ALICE.tenantId, { ...draft, state: 'sent', sentAt: new Date().toISOString() });
+    await expect(svc.returnToDraft(ALICE, draft.id)).rejects.toThrow(/A sent message cannot be returned to drafts/);
+    await store.save(ALICE.tenantId, { ...draft, state: 'failed', failedReason: 'x' });
+    await expect(svc.returnToDraft(BOB, draft.id)).rejects.toThrow(/not found/);
+  });
+});
+
 describe('reply, reply-all and forward', () => {
   async function inbound(store: InMemoryMailStore): Promise<MailRecord> {
     const id = newId();

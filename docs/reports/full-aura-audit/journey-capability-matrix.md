@@ -28,7 +28,7 @@
 | Sales | MAIL-07 | COMPLETE |
 | Sales | MAIL-08 | COMPLETE |
 | Sales | MAIL-09 | PARTIAL |
-| Sales | MAIL-10 | UNVERIFIED |
+| Sales | MAIL-10 | PARTIAL |
 | Sales | XOP-01 | PARTIAL |
 | Sales | XOP-02 | PARTIAL |
 | Sales | XOP-03 | PARTIAL |
@@ -120,7 +120,7 @@
 | Pre-Sales | MAIL-07 | COMPLETE |
 | Pre-Sales | MAIL-08 | COMPLETE |
 | Pre-Sales | MAIL-09 | PARTIAL |
-| Pre-Sales | MAIL-10 | UNVERIFIED |
+| Pre-Sales | MAIL-10 | PARTIAL |
 | Pre-Sales | XOP-01 | PARTIAL |
 | Pre-Sales | XOP-02 | PARTIAL |
 | Pre-Sales | XOP-03 | PARTIAL |
@@ -163,7 +163,7 @@
 | Award | MAIL-07 | COMPLETE |
 | Award | MAIL-08 | COMPLETE |
 | Award | MAIL-09 | PARTIAL |
-| Award | MAIL-10 | UNVERIFIED |
+| Award | MAIL-10 | PARTIAL |
 | Award | XOP-01 | PARTIAL |
 | Award | XOP-02 | PARTIAL |
 | Award | XOP-03 | PARTIAL |
@@ -221,7 +221,7 @@
 | Mobilisation | MAIL-07 | COMPLETE |
 | Mobilisation | MAIL-08 | COMPLETE |
 | Mobilisation | MAIL-09 | PARTIAL |
-| Mobilisation | MAIL-10 | UNVERIFIED |
+| Mobilisation | MAIL-10 | PARTIAL |
 | Mobilisation | XOP-01 | PARTIAL |
 | Mobilisation | XOP-02 | PARTIAL |
 | Mobilisation | XOP-03 | PARTIAL |
@@ -286,7 +286,7 @@
 | Engineering | MAIL-07 | COMPLETE |
 | Engineering | MAIL-08 | COMPLETE |
 | Engineering | MAIL-09 | PARTIAL |
-| Engineering | MAIL-10 | UNVERIFIED |
+| Engineering | MAIL-10 | PARTIAL |
 | Engineering | XOP-01 | PARTIAL |
 | Engineering | XOP-02 | PARTIAL |
 | Engineering | XOP-03 | PARTIAL |
@@ -353,7 +353,7 @@
 | Planning | MAIL-07 | COMPLETE |
 | Planning | MAIL-08 | COMPLETE |
 | Planning | MAIL-09 | PARTIAL |
-| Planning | MAIL-10 | UNVERIFIED |
+| Planning | MAIL-10 | PARTIAL |
 | Planning | XOP-01 | PARTIAL |
 | Planning | XOP-02 | PARTIAL |
 | Planning | XOP-03 | PARTIAL |
@@ -426,7 +426,7 @@
 | Procurement | MAIL-07 | COMPLETE |
 | Procurement | MAIL-08 | COMPLETE |
 | Procurement | MAIL-09 | PARTIAL |
-| Procurement | MAIL-10 | UNVERIFIED |
+| Procurement | MAIL-10 | PARTIAL |
 | Procurement | XOP-01 | PARTIAL |
 | Procurement | XOP-02 | PARTIAL |
 | Procurement | XOP-03 | PARTIAL |
@@ -483,7 +483,7 @@
 | Site | MAIL-07 | COMPLETE |
 | Site | MAIL-08 | COMPLETE |
 | Site | MAIL-09 | PARTIAL |
-| Site | MAIL-10 | UNVERIFIED |
+| Site | MAIL-10 | PARTIAL |
 | Site | XOP-01 | PARTIAL |
 | Site | XOP-02 | PARTIAL |
 | Site | XOP-03 | PARTIAL |
@@ -526,7 +526,7 @@
 | QA/QC & HSE | MAIL-07 | COMPLETE |
 | QA/QC & HSE | MAIL-08 | COMPLETE |
 | QA/QC & HSE | MAIL-09 | PARTIAL |
-| QA/QC & HSE | MAIL-10 | UNVERIFIED |
+| QA/QC & HSE | MAIL-10 | PARTIAL |
 | QA/QC & HSE | XOP-01 | PARTIAL |
 | QA/QC & HSE | XOP-02 | PARTIAL |
 | QA/QC & HSE | XOP-03 | PARTIAL |
@@ -584,7 +584,7 @@
 | Progress | MAIL-07 | COMPLETE |
 | Progress | MAIL-08 | COMPLETE |
 | Progress | MAIL-09 | PARTIAL |
-| Progress | MAIL-10 | UNVERIFIED |
+| Progress | MAIL-10 | PARTIAL |
 | Progress | XOP-01 | PARTIAL |
 | Progress | XOP-02 | PARTIAL |
 | Progress | XOP-03 | PARTIAL |
@@ -645,7 +645,7 @@
 | Commercial / Certification | MAIL-07 | COMPLETE |
 | Commercial / Certification | MAIL-08 | COMPLETE |
 | Commercial / Certification | MAIL-09 | PARTIAL |
-| Commercial / Certification | MAIL-10 | UNVERIFIED |
+| Commercial / Certification | MAIL-10 | PARTIAL |
 | Commercial / Certification | XOP-01 | PARTIAL |
 | Commercial / Certification | XOP-02 | PARTIAL |
 | Commercial / Certification | XOP-03 | PARTIAL |
@@ -706,7 +706,7 @@
 | Finance / Collection | MAIL-07 | COMPLETE |
 | Finance / Collection | MAIL-08 | COMPLETE |
 | Finance / Collection | MAIL-09 | PARTIAL |
-| Finance / Collection | MAIL-10 | UNVERIFIED |
+| Finance / Collection | MAIL-10 | PARTIAL |
 | Finance / Collection | XOP-01 | PARTIAL |
 | Finance / Collection | XOP-02 | PARTIAL |
 | Finance / Collection | XOP-03 | PARTIAL |
@@ -768,7 +768,7 @@
 | T&C | MAIL-07 | COMPLETE |
 | T&C | MAIL-08 | COMPLETE |
 | T&C | MAIL-09 | PARTIAL |
-| T&C | MAIL-10 | UNVERIFIED |
+| T&C | MAIL-10 | PARTIAL |
 | T&C | XOP-01 | PARTIAL |
 | T&C | XOP-02 | PARTIAL |
 | T&C | XOP-03 | PARTIAL |
@@ -815,7 +815,7 @@
 | Handover | MAIL-07 | COMPLETE |
 | Handover | MAIL-08 | COMPLETE |
 | Handover | MAIL-09 | PARTIAL |
-| Handover | MAIL-10 | UNVERIFIED |
+| Handover | MAIL-10 | PARTIAL |
 | Handover | XOP-01 | PARTIAL |
 | Handover | XOP-02 | PARTIAL |
 | Handover | XOP-03 | PARTIAL |
@@ -862,7 +862,7 @@
 | Warranty / Service | MAIL-07 | COMPLETE |
 | Warranty / Service | MAIL-08 | COMPLETE |
 | Warranty / Service | MAIL-09 | PARTIAL |
-| Warranty / Service | MAIL-10 | UNVERIFIED |
+| Warranty / Service | MAIL-10 | PARTIAL |
 | Warranty / Service | XOP-01 | PARTIAL |
 | Warranty / Service | XOP-02 | PARTIAL |
 | Warranty / Service | XOP-03 | PARTIAL |
@@ -909,7 +909,7 @@
 | Closeout | MAIL-07 | COMPLETE |
 | Closeout | MAIL-08 | COMPLETE |
 | Closeout | MAIL-09 | PARTIAL |
-| Closeout | MAIL-10 | UNVERIFIED |
+| Closeout | MAIL-10 | PARTIAL |
 | Closeout | XOP-01 | PARTIAL |
 | Closeout | XOP-02 | PARTIAL |
 | Closeout | XOP-03 | PARTIAL |

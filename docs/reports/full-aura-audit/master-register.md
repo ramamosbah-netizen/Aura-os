@@ -5,7 +5,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | Classification | Capability count |
 | --- | --- |
 | COMPLETE | 78 |
-| PARTIAL | 87 |
+| PARTIAL | 88 |
 | BACKEND_ONLY | 4 |
 | UI_ONLY | 0 |
 | ABSENT | 0 |
@@ -14,7 +14,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | DISCONNECTED | 0 |
 | WRONG_BEHAVIOR | 0 |
 | UNREACHABLE | 0 |
-| UNVERIFIED | 11 |
+| UNVERIFIED | 10 |
 | NOT_AUDITED | 0 |
 
 ## Capabilities
@@ -168,7 +168,7 @@ DISCOVERY SCOPE FROZEN. 180 capability leaves; 77 gap records (34 reused + 12 ne
 | MAIL-07 | Project linking | COMPLETE | Communication mail / linked business records | N-MAIL |
 | MAIL-08 | Attachments and download | COMPLETE | Communication mail / linked business records | N-MAIL |
 | MAIL-09 | Communication history and threading | PARTIAL | Communication mail / linked business records | N-MAIL |
-| MAIL-10 | Delivery failure and retry | UNVERIFIED | Communication mail / linked business records | N-MAIL |
+| MAIL-10 | Delivery failure and retry | PARTIAL | Communication mail / linked business records | N-MAIL |
 | XOP-01 | Notifications | PARTIAL | Shared services with functional owners | N-SOURCE |
 | XOP-02 | Reminders | PARTIAL | Shared services with functional owners | N-SOURCE |
 | XOP-03 | Assignments and acceptance | PARTIAL | Shared services with functional owners | N-SOURCE |

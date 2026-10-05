@@ -183,6 +183,13 @@ export class MailboxController {
     return this.present(await this.mail.schedule(this.caller(), id, { localDateTime: dto.localDateTime, timezone: dto.timezone }));
   }
 
+  /** A failed or uncertain message goes back to its author's drafts (MAIL-10). */
+  @Post('message/:id/return-to-draft')
+  @Permissions('comms.mail.send')
+  async returnToDraft(@Param('id') id: string): Promise<MailRecord> {
+    return this.present(await this.mail.returnToDraft(this.caller(), id));
+  }
+
   @Post('message/:id/cancel')
   @Permissions('comms.mail.send')
   async cancel(@Param('id') id: string): Promise<MailRecord> {

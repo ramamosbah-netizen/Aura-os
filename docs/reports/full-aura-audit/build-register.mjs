@@ -1867,6 +1867,14 @@ defects.push({
   Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'COMPLETE', browser:'COMPLETE', handoff:'COMPLETE' });
 }
 
+/** MAIL-10 DELIVERY FAILURE AND RETRY (2026-10-05). Built: an outside address read "sent" with no transport. */
+{
+  const c = caps.find(c=>c.id==='MAIL-10');
+  c.classification = 'PARTIAL';
+  c.currentBehavior = "BUILT 2026-10-05. The dispatch worker retries with backoff, dead-letters after its attempt cap or at once on a permanent refusal, and parks an ambiguous crash for review (mail-dispatch.worker.test.ts). MEASURED DEFECT FIXED: AURA internal mail reported every recipient delivered, so a message to an outside address read 'sent' while nothing carried it; the internal adapter now refuses any recipient outside AURA permanently, the composer warns before sending, and the message fails with that reason in Needs review. A failed or uncertain message can be returned to Drafts by its author, reopened in the composer, corrected and sent (POST comms/mailbox/message/:id/return-to-draft). PROVED: mail-provider.test.ts, mail.service.test.ts, and email-workspace.spec.ts (browser, Auth ON, PostgreSQL): an outside address fails on screen with its reason, never appears in Sent, is returned to Drafts, edited to a colleague and delivered. NOT PROVED: retry and failure against a real external provider — none is connected (F-05).";
+  Object.assign(c.layers, { domain:'COMPLETE', persistence:'COMPLETE', api:'COMPLETE', permissions:'COMPLETE', ui:'COMPLETE', actualOutput:'PARTIAL', browser:'COMPLETE', handoff:'PARTIAL' });
+}
+
 const gaps=[...prior,...additions,...defects];
 const statuses=['COMPLETE','PARTIAL','BACKEND_ONLY','UI_ONLY','ABSENT','DUPLICATED','WRONG_AUTHORITY','DISCONNECTED','WRONG_BEHAVIOR','UNREACHABLE','UNVERIFIED','NOT_AUDITED'];
 const count=(rows,field='classification')=>Object.fromEntries(statuses.map(s=>[s,rows.filter(r=>r[field]===s).length]));

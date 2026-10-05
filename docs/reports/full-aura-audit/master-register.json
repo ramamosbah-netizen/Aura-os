@@ -5315,7 +5315,7 @@
         "Warranty / Service",
         "Closeout"
       ],
-      "classification": "UNVERIFIED",
+      "classification": "PARTIAL",
       "authority": "Communication mail / linked business records",
       "evidence": [
         "N-MAIL"
@@ -5323,16 +5323,17 @@
       "source": "apps/api/src/comms/mail/mail-dispatch.worker.ts",
       "evidenceScope": "Group evidence is a discovery pointer; it does not prove every leaf capability. Individual execution proof remains required.",
       "layers": {
-        "domain": "UNVERIFIED",
-        "persistence": "UNVERIFIED",
-        "api": "UNVERIFIED",
-        "permissions": "UNVERIFIED",
-        "ui": "UNVERIFIED",
-        "actualOutput": "UNVERIFIED",
-        "browser": "NOT_AUDITED",
-        "handoff": "UNVERIFIED"
+        "domain": "COMPLETE",
+        "persistence": "COMPLETE",
+        "api": "COMPLETE",
+        "permissions": "COMPLETE",
+        "ui": "COMPLETE",
+        "actualOutput": "PARTIAL",
+        "browser": "COMPLETE",
+        "handoff": "PARTIAL"
       },
-      "acceptanceProof": "Representative Sales, Pre-Sales / Estimator, Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Finance, Handover / FM role executes Delivery failure and retry in the canonical Communication mail / linked business records context; save/reload, applicable permission denials, actual output and next-role receipt are proved."
+      "acceptanceProof": "Representative Sales, Pre-Sales / Estimator, Project Manager, Technical Manager, Commercial Manager / QS, Procurement Manager / Buyer, Finance, Handover / FM role executes Delivery failure and retry in the canonical Communication mail / linked business records context; save/reload, applicable permission denials, actual output and next-role receipt are proved.",
+      "currentBehavior": "BUILT 2026-10-05. The dispatch worker retries with backoff, dead-letters after its attempt cap or at once on a permanent refusal, and parks an ambiguous crash for review (mail-dispatch.worker.test.ts). MEASURED DEFECT FIXED: AURA internal mail reported every recipient delivered, so a message to an outside address read 'sent' while nothing carried it; the internal adapter now refuses any recipient outside AURA permanently, the composer warns before sending, and the message fails with that reason in Needs review. A failed or uncertain message can be returned to Drafts by its author, reopened in the composer, corrected and sent (POST comms/mailbox/message/:id/return-to-draft). PROVED: mail-provider.test.ts, mail.service.test.ts, and email-workspace.spec.ts (browser, Auth ON, PostgreSQL): an outside address fails on screen with its reason, never appears in Sent, is returned to Drafts, edited to a colleague and delivered. NOT PROVED: retry and failure against a real external provider — none is connected (F-05)."
     },
     {
       "id": "XOP-01",
@@ -9428,7 +9429,7 @@
     "capabilities": 180,
     "classification": {
       "COMPLETE": 78,
-      "PARTIAL": 87,
+      "PARTIAL": 88,
       "BACKEND_ONLY": 4,
       "UI_ONLY": 0,
       "ABSENT": 0,
@@ -9437,7 +9438,7 @@
       "DISCONNECTED": 0,
       "WRONG_BEHAVIOR": 0,
       "UNREACHABLE": 0,
-      "UNVERIFIED": 11,
+      "UNVERIFIED": 10,
       "NOT_AUDITED": 0
     },
     "gaps": 77,

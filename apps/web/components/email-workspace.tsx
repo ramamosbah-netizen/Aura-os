@@ -135,6 +135,8 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
     ? { recordType: params.get('relatedType')!, recordId: params.get('relatedId')!, label: params.get('relatedLabel') || params.get('relatedId')! }
     : null;
   const [composing, setComposing] = useState(params.get('compose') === '1');
+  // A saved draft reopened for editing (MAIL-10) — null when composing a new message.
+  const [editing, setEditing] = useState<MailView | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   const load = useCallback(async (which: FolderId, search: string) => {
@@ -199,7 +201,7 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
         <button
           type="button"
           className={styles.compose}
-          onClick={() => { setComposing(true); setOpenId(null); syncUrl(null); }}
+          onClick={() => { setEditing(null); setComposing(true); setOpenId(null); syncUrl(null); }}
           data-testid="mail-compose"
         >
           Compose
@@ -276,12 +278,15 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
       <section className={styles.reader} aria-label="Message">
         {composing ? (
           <Composer
+            key={editing?.id ?? 'new'}
             me={me}
             accounts={accounts}
-            about={about}
-            onCancel={() => setComposing(false)}
+            about={editing ? null : about}
+            draft={editing}
+            onCancel={() => { setComposing(false); setEditing(null); }}
             onDone={async (message, mailId) => {
               setComposing(false);
+              setEditing(null);
               setNotice(message);
               await refresh();
               // Open what was just created, so the user is looking at the thing they acted on.
@@ -299,6 +304,7 @@ export default function EmailWorkspace({ me, accounts, initialMailId = null }: {
             thread={thread}
             accounts={accounts}
             onChanged={async (message) => { setNotice(message); await refresh(); }}
+            onEdit={(draft) => { setEditing(draft); setComposing(true); }}
           />
         )}
         {notice ? <p className={styles.notice} role="status">{notice}</p> : null}
@@ -324,11 +330,13 @@ function useViewerTimeZone(): string {
   return zone;
 }
 
-function MessageReader({ mail, thread, accounts, onChanged }: {
+function MessageReader({ mail, thread, accounts, onChanged, onEdit }: {
   mail: MailView;
   thread: MailView[] | null;
   accounts: MailAccountView[];
   onChanged: (message: string) => Promise<void>;
+  /** Reopen a saved draft in the composer — the only way to correct one on screen. */
+  onEdit?: (draft: MailView) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [replyBody, setReplyBody] = useState('');
@@ -378,7 +386,20 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
         </p>
       ) : null}
       {mail.state === 'failed' && mail.failedReason ? (
-        <p className={styles.failed} role="alert">{mail.failedReason}</p>
+        <p className={styles.failed} role="alert" data-testid="mail-failed">{mail.failedReason}</p>
+      ) : null}
+      {/* THE WAY OUT OF NEEDS REVIEW (MAIL-10). A failed or uncertain message sat there with nothing
+          its sender could do; it goes back to Drafts so it can be corrected and sent deliberately. */}
+      {mail.state === 'failed' || mail.state === 'needs_review' ? (
+        <p className={styles.hint}>
+          <button type="button" disabled={busy} data-testid="mail-return-to-draft"
+            onClick={() => void act(`message/${mail.id}/return-to-draft`, {}, 'Returned to Drafts — correct it, then send it again.')}>
+            Return to Drafts
+          </button>{' '}
+          {mail.state === 'needs_review'
+            ? 'It may already have arrived — sending it again may give the recipient a second copy.'
+            : 'Correct what stopped it, then send it again.'}
+        </p>
       ) : null}
 
       <div className={styles.body}>{mail.body}</div>
@@ -446,6 +467,9 @@ function MessageReader({ mail, thread, accounts, onChanged }: {
       ) : null}
 
       <div className={styles.actions}>
+        {mail.state === 'draft' && onEdit ? (
+          <button type="button" disabled={busy} onClick={() => onEdit(mail)} data-testid="mail-edit-draft">Edit</button>
+        ) : null}
         {mail.state === 'draft' ? (
           <button type="button" disabled={busy} onClick={() => void act(`message/${mail.id}/send`, {}, 'Queued to send.')} data-testid="mail-send-draft">Send</button>
         ) : null}
@@ -520,8 +544,10 @@ async function callWithReason<T>(path: string, init?: RequestInit): Promise<{ ok
 const sizeLabel = (bytes: number): string =>
   bytes >= 1_048_576 ? `${(bytes / 1_048_576).toFixed(1)} MB` : bytes >= 1024 ? `${Math.round(bytes / 1024)} KB` : `${bytes} B`;
 
-function Composer({ me, accounts, about, onDone, onCancel }: {
+function Composer({ me, accounts, about, draft = null, onDone, onCancel }: {
   me: string; accounts: MailAccountView[]; onDone: (message: string, mailId: string) => Promise<void>;
+  /** A saved draft to continue — its recipients, subject, body and attachments are where it left them. */
+  draft?: MailView | null;
   /** The record this message is composed from (MAIL-03…07); linked when the draft is created. */
   about?: ComposeAbout | null;
   /** Abandon the message. A composer you cannot back out of traps the user in it. */
@@ -536,12 +562,15 @@ function Composer({ me, accounts, about, onDone, onCancel }: {
     [sendable],
   );
 
-  const [accountId, setAccountId] = useState(sendable[0]?.id ?? '');
-  const [to, setTo] = useState('');
-  const [cc, setCc] = useState('');
-  const [bcc, setBcc] = useState('');
-  const [subject, setSubject] = useState('');
-  const [body, setBody] = useState('');
+  // Addresses typed by hand are the participants with no AURA user; colleagues are the ones with one.
+  const typed = (role: string) => (draft?.participants ?? [])
+    .filter((p) => p.role === role && !p.userId && p.address).map((p) => p.address).join(', ');
+  const [accountId, setAccountId] = useState(draft?.accountId ?? sendable[0]?.id ?? '');
+  const [to, setTo] = useState(typed('to'));
+  const [cc, setCc] = useState(typed('cc'));
+  const [bcc, setBcc] = useState(typed('bcc'));
+  const [subject, setSubject] = useState(draft?.subject ?? '');
+  const [body, setBody] = useState(draft?.body ?? '');
   const [when, setWhen] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -550,7 +579,9 @@ function Composer({ me, accounts, about, onDone, onCancel }: {
 
   // ── AURA colleagues, addressed as users rather than as strings that look like addresses ──
   const [people, setPeople] = useState<DirectoryPerson[] | null>(null);
-  const [colleagues, setColleagues] = useState<string[]>([]);
+  const [colleagues, setColleagues] = useState<string[]>(
+    (draft?.participants ?? []).filter((p) => p.role === 'to' && p.userId).map((p) => p.userId as string),
+  );
   useEffect(() => {
     let live = true;
     void callWithReason<DirectoryPerson[]>('/api/comms/people').then((result) => {
@@ -560,8 +591,8 @@ function Composer({ me, accounts, about, onDone, onCancel }: {
   }, []);
 
   // ── Governed attachments (F-09) ──
-  const [draftId, setDraftId] = useState<string | null>(null);
-  const [attachments, setAttachments] = useState<MailAttachmentView[]>([]);
+  const [draftId, setDraftId] = useState<string | null>(draft?.id ?? null);
+  const [attachments, setAttachments] = useState<MailAttachmentView[]>(draft?.attachments ?? []);
   const [access, setAccess] = useState<AttachmentAccessView[] | null>(null);
   const [picking, setPicking] = useState(false);
   const [documents, setDocuments] = useState<DocumentSummary[] | null>(null);
@@ -769,6 +800,14 @@ function Composer({ me, accounts, about, onDone, onCancel }: {
         </p>
       ) : null}
 
+      {/* NOTHING CARRIES MAIL OUT OF AURA YET (MAIL-10). Typed addresses are outside AURA; on internal
+          mail they would fail at delivery, so the composer says so before the user relies on it. */}
+      {accountId === 'aura-internal' && [to, cc, bcc].some((v) => v.trim()) ? (
+        <p className={styles.failed} role="note" data-testid="mail-outside-warning">
+          AURA internal mail reaches AURA users only. The addresses typed below are outside AURA, and no external
+          mail account is connected to carry them — the message will fail for them. Choose colleagues above instead.
+        </p>
+      ) : null}
       <label>To (email addresses)<input value={to} onChange={(event) => setTo(event.target.value)} onBlur={() => void recheck()} placeholder="name@example.com" aria-label="To" data-testid="mail-to" /></label>
       <label>CC<input value={cc} onChange={(event) => setCc(event.target.value)} onBlur={() => void recheck()} aria-label="CC" data-testid="mail-cc" /></label>
       <label>BCC<input value={bcc} onChange={(event) => setBcc(event.target.value)} onBlur={() => void recheck()} aria-label="BCC" data-testid="mail-bcc" /></label>

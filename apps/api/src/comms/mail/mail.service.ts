@@ -448,6 +448,25 @@ export class MailService {
     return this.schedule(caller, mailId, when);
   }
 
+  /**
+   * TAKE A FAILED OR UNCERTAIN MESSAGE BACK (MAIL-10).
+   *
+   * A message the worker gave up on, or parked because it cannot say whether it went out, sat in
+   * Needs review with nothing its sender could do: `failed` cannot be sent again and neither state
+   * can be edited. Returning it to drafts is the author's own act — a user may move a message to
+   * draft — so the recipient can be corrected and the message sent again as a deliberate choice.
+   * For an uncertain one that choice may duplicate a message that did arrive; the screen says so.
+   */
+  async returnToDraft(caller: MailCaller, mailId: string): Promise<MailRecord> {
+    const mail = await this.authored(caller, mailId);
+    if (mail.state !== 'failed' && mail.state !== 'needs_review') {
+      throw new BadRequestException(`A ${mail.state} message cannot be returned to drafts — only a failed or uncertain one`);
+    }
+    const next: MailRecord = { ...mail, state: 'draft', failedReason: null, deliveryStartedAt: null, updatedAt: new Date().toISOString() };
+    await this.store.save(caller.tenantId, next);
+    return next;
+  }
+
   async cancel(caller: MailCaller, mailId: string): Promise<MailRecord> {
     const mail = await this.authored(caller, mailId);
     if (mail.state !== 'scheduled' && mail.state !== 'queued') {

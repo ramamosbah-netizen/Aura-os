@@ -32,6 +32,15 @@ export function subcontractFormSchema(projects: ProjectOption[] = []): FormSchem
       { name: 'subcontractorName', label: 'Subcontractor', kind: 'text', required: true, placeholder: 'e.g. Al Futtaim Engineering' },
       { name: 'value', label: 'Value (AED)', kind: 'number', required: true, placeholder: '0' },
       {
+        // COST-CODE-01: where the subcontract's commitment and its certified claims are charged. A
+        // subcontract with no cost line never reaches the Cost Ledger, and the register says so.
+        name: 'cbsNodeId',
+        label: 'Cost line (CBS)',
+        kind: 'project-cost-line',
+        span: 2,
+        hint: 'Its commitment on award and each certified claim post to this line. Left empty, the subcontract is reported as not charged.',
+      },
+      {
         name: 'retentionPercentage',
         label: 'Retention',
         kind: 'percent',

@@ -308,6 +308,7 @@ function FieldView({ name, engine, busy }: { name: string; engine: FormEngine; b
         id: fieldId,
         describedBy,
         required: st?.required === true,
+        values: engine.values,
         lines: field.kind === 'lines' ? engine.lines[field.name] : undefined,
         onLinesChange: field.kind === 'lines' ? (rows) => engine.setLines(field.name, rows) : undefined,
       })}

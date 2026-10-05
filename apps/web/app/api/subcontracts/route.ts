@@ -30,6 +30,9 @@ export async function POST(request: Request): Promise<Response> {
     subcontractorName?: unknown;
     value?: unknown;
     retentionPercentage?: unknown;
+    /** COST-CODE-01 — the cost line. This route rebuilds the body field by field, so a field it does
+     * not name is silently dropped: the form sent the line and the subcontract was saved uncoded. */
+    cbsNodeId?: unknown;
   };
 
   const title = typeof body.title === 'string' ? body.title.trim() : '';
@@ -51,6 +54,7 @@ export async function POST(request: Request): Promise<Response> {
         subcontractorName,
         value: typeof body.value === 'number' ? body.value : Number(body.value) || 0,
         retentionPercentage: typeof body.retentionPercentage === 'number' ? body.retentionPercentage : undefined,
+        cbsNodeId: typeof body.cbsNodeId === 'string' && body.cbsNodeId ? body.cbsNodeId : undefined,
       }),
       cache: 'no-store',
     });

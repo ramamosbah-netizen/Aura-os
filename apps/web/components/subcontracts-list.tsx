@@ -13,6 +13,8 @@ interface Subcontract {
   status: 'draft' | 'active' | 'closed';
   value: number;
   retentionPercentage: number;
+  /** The cost line its commitment and certified claims are charged to (COST-CODE-01). */
+  cbsNodeId?: string | null;
   createdAt: string;
 }
 
@@ -184,6 +186,7 @@ export default function SubcontractsList({
               <th style={s.th}>Subcontractor</th>
               <th style={s.th}>Value</th>
               <th style={s.th}>Retention</th>
+              <th style={s.th}>Cost line</th>
               <th style={s.th}>Status</th>
               <th style={s.th}>Actions</th>
             </tr>
@@ -210,6 +213,10 @@ export default function SubcontractsList({
                     <td style={s.td}>{sub.subcontractorName}</td>
                     <td style={s.td}>{money(sub.value)}</td>
                     <td style={s.tdMuted}>{sub.retentionPercentage}%</td>
+                    {/* COST-CODE-01: an uncoded subcontract never reaches the Cost Ledger — said, not hidden. */}
+                    <td style={s.tdMuted} data-testid={`subcontract-costing-${sub.id}`}>
+                      {sub.cbsNodeId ? 'charged to a cost line' : <span style={{ color: 'var(--warn, #b45309)' }}>not charged (uncoded)</span>}
+                    </td>
                     <td style={s.td}>
                       <span style={s.tag(sub.status)}>{sub.status}</span>
                     </td>
@@ -269,7 +276,7 @@ export default function SubcontractsList({
                   {/* Inline claim creation form */}
                   {showClaimFormId === sub.id && (
                     <tr key={`claim-form-${sub.id}`} style={s.expandedBg}>
-                      <td colSpan={7} style={s.claimFormCell}>
+                      <td colSpan={8} style={s.claimFormCell}>
                         <div style={s.claimFormContainer}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                             <h4 style={{ margin: 0, fontSize: 13, color: 'var(--accent)' }}>
@@ -335,7 +342,7 @@ export default function SubcontractsList({
                   {/* Claims List Expansion */}
                   {isExpanded && (
                     <tr key={`claims-list-${sub.id}`} style={s.expandedBg}>
-                      <td colSpan={7} style={s.expandedCell}>
+                      <td colSpan={8} style={s.expandedCell}>
                         <div style={s.claimsHeader}>
                           <h3>Interim Payment Certificates (IPCs) & Retention Releases</h3>
                         </div>

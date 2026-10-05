@@ -1,6 +1,6 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { type AccessTarget, type Id, type OrgLevel, type Page, type PageParams, makeEvent } from '@aura/shared';
-import { AccessService, EVENT_STORE, type EventStore } from '@aura/core';
+import { AccessService, EVENT_STORE, type EventStore, ProjectResolverRegistry } from '@aura/core';
 import { type Subcontract, type SubcontractStatus, makeSubcontract, SUBCONTRACT_EVENT } from './domain/subcontract';
 import { type Claim, type ClaimStatus, makeClaim, certifyClaim, certificationSeparation, payClaim, CLAIM_EVENT } from './domain/claim';
 import { type SubcontractVariation, type VariationType, makeSubcontractVariation, approveVariation, rejectVariation, signedAmount, VARIATION_EVENT } from './domain/variation';
@@ -15,6 +15,12 @@ export class SubcontractsService {
     @Inject(SUBCONTRACT_STORE) private readonly store: SubcontractStore,
     @Inject(EVENT_STORE) private readonly events: EventStore,
     private readonly access: AccessService,
+    /**
+     * Which project a cost line belongs to (COST-CODE-01). Optional and LAST — tests build this
+     * service positionally — and an explicit @Inject, because a union-typed optional parameter is
+     * otherwise silently null. Unbound, a cost line is REFUSED rather than taken on trust.
+     */
+    @Optional() @Inject(ProjectResolverRegistry) private readonly projectScope: ProjectResolverRegistry | null = null,
   ) {}
 
   // ── SUBCONTRACTS ─────────────────────────────────────────────────────────
@@ -37,6 +43,19 @@ export class SubcontractsService {
       // how a subcontractor payment certificate came to require an invoice-approval authority.
       const target: AccessTarget = { permission: 'subcontracts.subcontract.create', orgPath };
       this.access.assert(input.createdBy, target);
+    }
+
+    /**
+     * COST-CODE-01 — the cost line the commitment and every certified claim will be charged to must be
+     * one of THIS project's. It was taken as sent: a line of another project would carry this
+     * subcontract's commitment and its claims onto that project's books.
+     */
+    if (input.cbsNodeId) {
+      if (!this.projectScope) throw new Error('cost line attribution is unavailable: no project resolver is registered');
+      const owner = await this.projectScope.projectOf('projects', 'cb', input.cbsNodeId);
+      if (owner !== input.projectId) {
+        throw new Error(`cost line ${input.cbsNodeId} does not belong to project ${input.projectId}`);
+      }
     }
 
     const subcontract = makeSubcontract({

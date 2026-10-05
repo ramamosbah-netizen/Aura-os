@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+
 // App-level form-engine plugins. This file is the worked example of the
 // plugin contract: a custom field type, a custom validator, and a custom
 // formula function — registered against the engine without modifying it.
@@ -32,6 +34,47 @@ registerFieldRenderer('percent', ({ field, value, onChange, disabled, invalid })
     </span>
   </div>
 ));
+
+/* Custom field kind: 'project-cost-line' — a cost line (CBS) of the project chosen in the same form
+   (COST-CODE-01). Its choices are read for that project only; when the project changes, a line of the
+   old one is cleared rather than carried across. Empty is a real answer — "not charged to a cost
+   line" — and the form says so instead of leaving a blank that reads as forgotten. */
+function ProjectCostLineField({ field, value, onChange, disabled, invalid, id, describedBy, values }: Parameters<Parameters<typeof registerFieldRenderer>[1]>[0]) {
+  const projectId = values?.projectId ?? '';
+  const [lines, setLines] = useState<Array<{ id: string; code: string; title: string }>>([]);
+  useEffect(() => {
+    let live = true;
+    setLines([]);
+    if (!projectId) return;
+    void fetch(`/api/projects/cbs?projectId=${encodeURIComponent(projectId)}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((rows: Array<{ id: string; code: string; title: string }>) => {
+        if (!live) return;
+        setLines(rows ?? []);
+        if (value && !(rows ?? []).some((row) => row.id === value)) onChange('');
+      })
+      .catch(() => undefined);
+    return () => { live = false; };
+    // The project is the dependency; the current value is checked against the lines it loads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
+  return (
+    <select
+      id={id}
+      data-testid={`field-${field.name}`}
+      className={`select${invalid ? ' input-error' : ''}`}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      disabled={disabled || !projectId}
+      aria-invalid={invalid}
+      aria-describedby={describedBy}
+    >
+      <option value="">{projectId ? 'Not charged to a cost line' : 'Choose the project first'}</option>
+      {lines.map((line) => <option key={line.id} value={line.id}>{line.code} · {line.title}</option>)}
+    </select>
+  );
+}
+registerFieldRenderer('project-cost-line', (props) => <ProjectCostLineField {...props} />);
 
 /* Custom validator: UAE Tax Registration Number (15 digits). */
 registerFormValidator('uae-trn', (value) =>

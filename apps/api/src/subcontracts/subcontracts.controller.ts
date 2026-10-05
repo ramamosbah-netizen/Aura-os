@@ -77,7 +77,7 @@ export class SubcontractsController {
       tenantId: ctx.tenantId,
       projectId: dto.projectId,
       projectName: dto.projectName,
-      cbsNodeId: dto.cbsNodeId ?? null,
+      cbsNodeId: dto.cbsNodeId || null,
       title: dto.title,
       subcontractorName: dto.subcontractorName,
       value: dto.value,

@@ -17,6 +17,12 @@ export interface FieldRendererProps {
   id: string;
   describedBy?: string;
   required: boolean;
+  /**
+   * The form's current values, for a custom kind whose choices depend on another field — a cost line
+   * belongs to the PROJECT chosen above it, and offering every project's lines would invite a mismatch
+   * the server then has to refuse. Read-only: a renderer changes only its own field, through onChange.
+   */
+  values?: Readonly<Record<string, string>>;
   /** only provided for line-item kinds */
   lines?: FormLineItem[];
   onLinesChange?: (rows: FormLineItem[]) => void;
